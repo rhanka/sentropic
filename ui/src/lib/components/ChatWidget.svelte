@@ -61,15 +61,11 @@
     canChatPlacementMenuOwnPlacement,
     coerceChatWidgetTab,
     resolveChatWidgetJobBadge,
-    resolveChatWidgetPanelVisibility,
     shouldAutoCloseChatWidget,
     type ChatWidgetJobBadge,
-    type ChatWidgetPanelVisibility,
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
-  import ChatWidgetPager from '@sentropic/chat-ui/components/ChatWidgetPager.svelte';
-  import ChatWidgetTabBar from '@sentropic/chat-ui/components/ChatWidgetTabBar.svelte';
   import ChatPlacementDropZones from '@sentropic/chat-ui/components/ChatPlacementDropZones.svelte';
   import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
@@ -1961,18 +1957,6 @@
     commentContext?.type ?? null,
     commentSectionKey,
   );
-  let panelVisibility: ChatWidgetPanelVisibility =
-    resolveChatWidgetPanelVisibility({
-      activeTab,
-      isPluginMode,
-      hasCommentContext: false,
-    });
-  $: panelVisibility = resolveChatWidgetPanelVisibility({
-    activeTab,
-    isPluginMode,
-    hasCommentContext: Boolean(commentContext?.id && commentContext?.type),
-  });
-
   $: if (commentContext?.id && commentContext?.type) {
     const nextKey = `${commentContext.type}:${commentContext.id}`;
     if (nextKey !== lastCommentContextKey) {
@@ -2344,20 +2328,7 @@
   </button>
 {/snippet}
 
-{#snippet renderAppChatWidgetShell()}
-      <!-- Dialog body: header + content area (backdrop and dialog container are in ChatDock) -->
-      <!-- Header commun (tabs) — doubles as the placement drag grip -->
-      <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <div
-        class="px-4 h-14 border-b border-gray-200 flex items-center"
-        class:cursor-grab={placementMenuOwnsPlacement && !headerGripDragging}
-        class:cursor-grabbing={headerGripDragging}
-        data-chat-header-grip={placementMenuOwnsPlacement ? 'true' : undefined}
-        on:pointerdown={onHeaderPointerDown}
-      >
-        <div class="flex w-full items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            {#snippet renderHeaderLeadingHost()}
+{#snippet renderHeaderLeadingHost()}
             {#if isDocked && isMobileViewport && !isSidePanelHost}
               <button
                 class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
@@ -2372,24 +2343,8 @@
               </button>
             {/if}
             {/snippet}
-            {@render renderHeaderLeadingHost()}
 
-            <div class="flex items-center gap-2">
-              <ChatWidgetTabBar
-                variant="extension"
-                showJobsBadge={false}
-                showCommentsTab={!isPluginMode}
-                activeTab={activeTab}
-                chatTabLabel={$_('chat.tabs.chat')}
-                commentsTabLabel={$_('chat.tabs.comments')}
-                queueTabLabel={$_('chat.tabs.jobs')}
-                onSelect={(tab: ChatWidgetTab) => (activeTab = tab)}
-              />
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2">
-            {#snippet renderHeaderActionsHost()}
+{#snippet renderHeaderActionsHost()}
             {#if isExtensionConfigAvailable()}
               <MenuPopover
                 bind:open={showExtensionConfigMenu}
@@ -3155,13 +3110,172 @@
               </button>
             {/if}
             {/snippet}
-            {@render renderHeaderActionsHost()}
-          </div>
-        </div>
-      </div>
 
-      <!-- Contenu (QueueMonitor inchangé hors header) -->
-      <div class="flex-1 min-h-0">
+{#snippet renderJobsPanelHost()}
+            <div class="h-full min-h-0 flex flex-col">
+              <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
+                <div class="min-w-0 text-xs text-slate-500 truncate">{$_('chat.tabs.jobs')}</div>
+                <button
+                  class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                  on:click={handlePurgeMyJobs}
+                  title={$_('chat.queue.purgeMine')}
+                  aria-label={$_('chat.queue.purgeMine')}
+                  type="button"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+              <div class="flex-1 min-h-0">
+                <QueueMonitor />
+              </div>
+            </div>
+          {/snippet}
+
+{#snippet renderCommentsPanelHost()}
+            <div class="h-full min-h-0 overflow-hidden">
+              {#if commentContext?.id && commentContext?.type}
+                <ChatPanel
+                  mode="comments"
+                  bind:commentThreadId
+                  bind:commentLoading
+                  {commentSectionKey}
+                  {commentSectionLabel}
+                  commentContextType={commentContext.type}
+                  commentContextId={commentContext.id}
+                  {contextStore}
+                />
+              {:else}
+                <div
+                  class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500"
+                >
+                  {$_('chat.comments.noContext')}
+                </div>
+              {/if}
+            </div>
+          {/snippet}
+
+{#snippet renderAgentsListHeaderHost()}
+                  <div class="flex items-center justify-end gap-3">
+                    <Toggle
+                      label={$_('chat.agents.scope.allWorkspaces')}
+                      checked={showAllWorkspaceSessions}
+                      onchange={handleAllWorkspaceScopeChange}
+                    />
+                    <IconButton
+                      size="sm"
+                      aria-label={$_('chat.sessions.new')}
+                      title={$_('chat.sessions.new')}
+                      onclick={() => {
+                        showAgentsConversation(chatSessionId ?? undefined);
+                        handleNewSession();
+                      }}
+                    >
+                      <Plus class="w-4 h-4" />
+                    </IconButton>
+                  </div>
+            {/snippet}
+
+{#snippet renderChatSessionsMenu(p: {
+              sessions: readonly { id: string; title?: string | null }[];
+              sessionId: string | null;
+              loading: boolean;
+              formatLabel: (s: { id: string; title?: string | null }) => string;
+              onNew: () => void;
+            })}
+                <MenuPopover bind:open={showSessionMenu} bind:triggerRef={sessionMenuButtonRef}>
+                  <svelte:fragment slot="trigger" let:toggle>
+                    <button
+                      class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                      on:click={toggle}
+                      title={$_('chat.sessions.choose')}
+                      aria-label={$_('chat.sessions.choose')}
+                      type="button"
+                      bind:this={sessionMenuButtonRef}
+                    >
+                      <List class="w-4 h-4" />
+                    </button>
+                  </svelte:fragment>
+                  <svelte:fragment slot="menu" let:close>
+                    <button
+                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
+                      type="button"
+                      on:click={() => {
+                        close();
+                        handleNewSession();
+                      }}
+                    >
+                      {$_('chat.sessions.new')}
+                    </button>
+                    <div class="border-t border-slate-100 my-1"></div>
+                    {#if chatLoadingSessions}
+                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('common.loading')}</div>
+                    {:else if chatSessions.length === 0}
+                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.sessions.none')}</div>
+                    {:else}
+                      <div class="max-h-48 overflow-auto slim-scroll">
+                        {#each chatSessions as s (s.id)}
+                          <button
+                            class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId === s.id ? 'text-slate-900 font-semibold' : 'text-slate-600'}"
+                            type="button"
+                            on:click={() => {
+                              close();
+                              void handleSelectSession(s.id);
+                            }}
+                          >
+                            {formatSessionLabel(s)}
+                          </button>
+                        {/each}
+                      </div>
+                    {/if}
+                  </svelte:fragment>
+                </MenuPopover>
+            {/snippet}
+
+{#snippet renderSessionsPlusIcon()}<Plus class="w-4 h-4" />{/snippet}
+
+{#snippet renderSessionsTrashIcon()}<Trash2 class="w-4 h-4" />{/snippet}
+
+{#snippet renderConversationHeaderHost()}
+            <ChatSessionsBar
+              sessions={chatSessions}
+              sessionId={chatSessionId}
+              loading={chatLoadingSessions}
+              barLabels={{
+                none: $_('chat.sessions.none'),
+                loading: $_('common.loading'),
+                defaultTitle: (id: string) => $_('chat.sessions.defaultTitle', { values: { id } }),
+              }}
+              labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
+              onNewSession={handleNewSession}
+              onBack={canAgentsListBeDefaultView ? returnToAgentsList : undefined}
+              backLabel={$_('chat.agents.back')}
+              bind:deleteConfirmPending={pendingChatSessionDeleteConfirm}
+              onConfirmDelete={async () => {
+                pendingChatSessionDeleteConfirm = false;
+                await chatPanelRef?.deleteCurrentSession?.();
+              }}
+              renderSessionsMenu={canAgentsListBeDefaultView ? undefined : renderChatSessionsMenu}
+              renderPlusIcon={renderSessionsPlusIcon}
+              renderTrashIcon={renderSessionsTrashIcon}
+            />
+            {/snippet}
+
+{#snippet renderChatBodyHost()}
+            <div class="flex-1 min-h-0 overflow-hidden">
+              {#if !extensionChatGateState.blockChatPanel}
+                <ChatPanel
+                  bind:this={chatPanelRef}
+                  bind:sessions={chatSessions}
+                  bind:sessionId={chatSessionId}
+                  bind:draft={chatDraft}
+                  bind:loadingSessions={chatLoadingSessions}
+                  {contextStore}
+                />
+              {/if}
+            </div>
+            {/snippet}
+
+{#snippet renderContentGateHost(renderReady: import('svelte').Snippet<[]>)}
         {#if extensionChatGateState.showLoadingState}
           <div class="h-full min-h-0 flex items-center justify-center px-4 py-6">
             <div
@@ -3240,194 +3354,8 @@
             </div>
           </div>
         {:else}
-          {#snippet renderJobsPanelHost()}
-          {#if panelVisibility.showQueuePanel}
-            <div class="h-full min-h-0 flex flex-col">
-              <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
-                <div class="min-w-0 text-xs text-slate-500 truncate">{$_('chat.tabs.jobs')}</div>
-                <button
-                  class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
-                  on:click={handlePurgeMyJobs}
-                  title={$_('chat.queue.purgeMine')}
-                  aria-label={$_('chat.queue.purgeMine')}
-                  type="button"
-                >
-                  <Trash2 class="w-4 h-4" />
-                </button>
-              </div>
-              <div class="flex-1 min-h-0">
-                <QueueMonitor />
-              </div>
-            </div>
-          {/if}
-          {/snippet}
-          {@render renderJobsPanelHost()}
-          {#snippet renderCommentsPanelHost()}
-          {#if panelVisibility.showCommentsPanel}
-            <div class="h-full min-h-0 overflow-hidden">
-              {#if panelVisibility.showCommentsContext && commentContext?.id}
-                <ChatPanel
-                  mode="comments"
-                  bind:commentThreadId
-                  bind:commentLoading
-                  {commentSectionKey}
-                  {commentSectionLabel}
-                  commentContextType={commentContext.type}
-                  commentContextId={commentContext.id}
-                  {contextStore}
-                />
-              {:else}
-                <div
-                  class="h-full rounded border border-slate-200 bg-white p-4 text-sm text-slate-500"
-                >
-                  {$_('chat.comments.noContext')}
-                </div>
-              {/if}
-            </div>
-          {/if}
-          {/snippet}
-          {@render renderCommentsPanelHost()}
-          {#snippet renderChatPanelHost()}
-          <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            {#snippet renderAgentsListHeaderHost()}
-                  <div class="flex items-center justify-end gap-3">
-                    <Toggle
-                      label={$_('chat.agents.scope.allWorkspaces')}
-                      checked={showAllWorkspaceSessions}
-                      onchange={handleAllWorkspaceScopeChange}
-                    />
-                    <IconButton
-                      size="sm"
-                      aria-label={$_('chat.sessions.new')}
-                      title={$_('chat.sessions.new')}
-                      onclick={() => {
-                        showAgentsConversation(chatSessionId ?? undefined);
-                        handleNewSession();
-                      }}
-                    >
-                      <Plus class="w-4 h-4" />
-                    </IconButton>
-                  </div>
-            {/snippet}
-              <!-- Gold shell adoption (S6b): sessions bar renders via the
-                       @sentropic/chat-ui ChatSessionsBar component; the host keeps the
-                       popover menu (MenuPopover) and icons as snippets. -->
-              {#snippet renderChatSessionsMenu(p: {
-              sessions: readonly { id: string; title?: string | null }[];
-              sessionId: string | null;
-              loading: boolean;
-              formatLabel: (s: { id: string; title?: string | null }) => string;
-              onNew: () => void;
-            })}
-                <MenuPopover bind:open={showSessionMenu} bind:triggerRef={sessionMenuButtonRef}>
-                  <svelte:fragment slot="trigger" let:toggle>
-                    <button
-                      class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                      on:click={toggle}
-                      title={$_('chat.sessions.choose')}
-                      aria-label={$_('chat.sessions.choose')}
-                      type="button"
-                      bind:this={sessionMenuButtonRef}
-                    >
-                      <List class="w-4 h-4" />
-                    </button>
-                  </svelte:fragment>
-                  <svelte:fragment slot="menu" let:close>
-                    <button
-                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                      type="button"
-                      on:click={() => {
-                        close();
-                        handleNewSession();
-                      }}
-                    >
-                      {$_('chat.sessions.new')}
-                    </button>
-                    <div class="border-t border-slate-100 my-1"></div>
-                    {#if chatLoadingSessions}
-                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('common.loading')}</div>
-                    {:else if chatSessions.length === 0}
-                      <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.sessions.none')}</div>
-                    {:else}
-                      <div class="max-h-48 overflow-auto slim-scroll">
-                        {#each chatSessions as s (s.id)}
-                          <button
-                            class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {chatSessionId === s.id ? 'text-slate-900 font-semibold' : 'text-slate-600'}"
-                            type="button"
-                            on:click={() => {
-                              close();
-                              void handleSelectSession(s.id);
-                            }}
-                          >
-                            {formatSessionLabel(s)}
-                          </button>
-                        {/each}
-                      </div>
-                    {/if}
-                  </svelte:fragment>
-                </MenuPopover>
-            {/snippet}
-            {#snippet renderSessionsPlusIcon()}<Plus class="w-4 h-4" />{/snippet}
-            {#snippet renderSessionsTrashIcon()}<Trash2 class="w-4 h-4" />{/snippet}
-            {#snippet renderConversationHeaderHost()}
-            <ChatSessionsBar
-              sessions={chatSessions}
-              sessionId={chatSessionId}
-              loading={chatLoadingSessions}
-              barLabels={{
-                none: $_('chat.sessions.none'),
-                loading: $_('common.loading'),
-                defaultTitle: (id: string) => $_('chat.sessions.defaultTitle', { values: { id } }),
-              }}
-              labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
-              onNewSession={handleNewSession}
-              onBack={canAgentsListBeDefaultView ? returnToAgentsList : undefined}
-              backLabel={$_('chat.agents.back')}
-              bind:deleteConfirmPending={pendingChatSessionDeleteConfirm}
-              onConfirmDelete={async () => {
-                pendingChatSessionDeleteConfirm = false;
-                await chatPanelRef?.deleteCurrentSession?.();
-              }}
-              renderSessionsMenu={canAgentsListBeDefaultView ? undefined : renderChatSessionsMenu}
-              renderPlusIcon={renderSessionsPlusIcon}
-              renderTrashIcon={renderSessionsTrashIcon}
-            />
-            {/snippet}
-            {#snippet renderChatBodyHost()}
-            <div class="flex-1 min-h-0 overflow-hidden">
-              {#if !extensionChatGateState.blockChatPanel}
-                <ChatPanel
-                  bind:this={chatPanelRef}
-                  bind:sessions={chatSessions}
-                  bind:sessionId={chatSessionId}
-                  bind:draft={chatDraft}
-                  bind:loadingSessions={chatLoadingSessions}
-                  {contextStore}
-                />
-              {/if}
-            </div>
-            {/snippet}
-            <ChatWidgetPager
-              {agentsView}
-              {canAgentsListBeDefaultView}
-              agentsList={{
-                rows: agentsRows,
-                activeId: chatSessionId ?? undefined,
-                onSelect: handleSelectAgentsEntry,
-                onAction: handleAgentsAction,
-                labels: (key: string) => $_(key),
-                formatRelative: formatAgentsRelative,
-              }}
-              renderAgentsListHeader={renderAgentsListHeaderHost}
-              renderConversationHeader={renderConversationHeaderHost}
-              renderChatPanel={renderChatBodyHost}
-              {agentsViewAnnouncement}
-            />
-          </div>
-          {/snippet}
-          {@render renderChatPanelHost()}
+          {@render renderReady()}
         {/if}
-      </div>
 {/snippet}
 
 {#snippet renderAppDockContent(_dockParams: { isDocked: boolean; isMobileViewport: boolean })}
@@ -3437,7 +3365,33 @@
     failedJobsCount={failedJobsCount}
     queueTabLabel={$_('chat.tabs.jobs')}
     onPurgeJobs={handlePurgeMyJobs}
-    renderShell={renderAppChatWidgetShell}
+    chatTabLabel={$_('chat.tabs.chat')}
+    commentsTabLabel={$_('chat.tabs.comments')}
+    widgetLabel={$_('chat.widget.bubbleLabel')}
+    tabBarVariant="extension"
+    showJobsBadge={false}
+    showCommentsTab={!isPluginMode}
+    onActiveTabChange={(tab: ChatWidgetTab) => (activeTab = tab)}
+    headerGrip={{ enabled: placementMenuOwnsPlacement, dragging: headerGripDragging, onPointerDown: onHeaderPointerDown }}
+    renderHeaderLeading={renderHeaderLeadingHost}
+    renderHeaderActions={renderHeaderActionsHost}
+    renderContentGate={renderContentGateHost}
+    renderJobsPanel={renderJobsPanelHost}
+    renderCommentsPanel={renderCommentsPanelHost}
+    renderChatPanel={renderChatBodyHost}
+    renderAgentsListHeader={renderAgentsListHeaderHost}
+    renderConversationHeader={renderConversationHeaderHost}
+    {agentsView}
+    {canAgentsListBeDefaultView}
+    agentsList={{
+      rows: agentsRows,
+      activeId: chatSessionId ?? undefined,
+      onSelect: handleSelectAgentsEntry,
+      onAction: handleAgentsAction,
+      labels: (key: string) => $_(key),
+      formatRelative: formatAgentsRelative,
+    }}
+    {agentsViewAnnouncement}
   />
 {/snippet}
 

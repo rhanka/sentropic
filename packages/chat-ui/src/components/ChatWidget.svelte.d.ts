@@ -1,8 +1,9 @@
 import type { Component, Snippet } from 'svelte';
+import type { ChatWidgetPagerProps } from './ChatWidgetPager.svelte';
 
 export type ChatWidgetTab = 'chat' | 'queue' | 'comments';
 
-export type ChatWidgetProps = {
+export type ChatWidgetProps = ChatWidgetPagerProps & {
   activeTab?: ChatWidgetTab;
   activeJobsCount?: number;
   failedJobsCount?: number;
@@ -15,7 +16,8 @@ export type ChatWidgetProps = {
   showJobsBadge?: boolean;
   onActiveTabChange?: (tab: ChatWidgetTab) => void;
   onPurgeJobs?: () => void | Promise<void>;
-  renderShell?: Snippet<[]>;
+  /** Host auth/onboarding gate; invokes ready exactly once when content is allowed. */
+  renderContentGate?: Snippet<[Snippet<[]>]>;
   renderJobsPanel?: Snippet<[]>;
   renderCommentsPanel?: Snippet<[]>;
   renderChatPanel?: Snippet<[]>;
