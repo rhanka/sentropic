@@ -155,6 +155,8 @@ jobs:
       # checked out) so it costs no extra runner.
       - name: Assert change-filters cover the image content-hash inputs
         run: make check-ci-version-filters
+      - name: Assert every numbered E2E spec has a CI lane
+        run: make check-e2e-inventory
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -1044,7 +1046,7 @@ jobs:
       matrix:
         include:
           - group: group-a
-            e2e_groups: "00 02 06"
+            e2e_groups: "00 02 06 10"
           - group: group-b
             e2e_groups: "01 04"
           - group: group-c
