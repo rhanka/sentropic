@@ -48,7 +48,8 @@ export class ServiceAuthVerifyToken implements VerifyToken {
       const auth = this.options.auth;
       const identity = await runAuthBridge(createRequireServiceAuth(auth), normalized, context, c => {
         const verified = c.get(auth.contextKey ?? 'serviceClient') as ServiceAuthContext;
-        return { kind: 'service' as const, issuer: auth.issuer, resource: auth.resource,
+        // Match mcp-auth's trimTrailingSlash projection; verification stays in its middleware.
+        return { kind: 'service' as const, issuer: auth.issuer.replace(/\/+$/u, ''), resource: auth.resource,
           clientId: verified.clientId, scopes: [...verified.scopes], jkt: verified.jkt };
       });
       if (!identity || !identity.clientId || (scheme === 'DPoP' && !identity.jkt)) return undefined;

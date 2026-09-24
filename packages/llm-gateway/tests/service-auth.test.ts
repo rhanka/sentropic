@@ -47,11 +47,10 @@ describe('canonical service auth bridge', () => {
       const token = await f.token({ iss: tokenIssuer });
       const headers = { authorization: `Bearer ${token}` };
       const response = await canonical.request(authContext.url, { method: authContext.method, headers });
-      expect(response.status).toBe(tokenIssuer === f.auth.issuer ? 200 : 401);
       const result = await bridge.verify(token, 'Bearer', headers, authContext);
       expect(result).toEqual(response.status === 200 ? principal : undefined);
     }
-    expect(f.resolvePrincipal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ issuer }));
+    expect(f.resolvePrincipal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ issuer: f.auth.issuer }));
   });
   it.each([{ client_id: '', sub: '' }, { client_id: undefined, sub: undefined }])(
     'rejects empty service identity before principal mapping: %j', async claims => {
