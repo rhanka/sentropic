@@ -1,5 +1,7 @@
 # Test change register — L-C-shell
 
+- ADD `packages/chat-ui/tests/chat-widget-assembly.dom.spec.ts` and `tests/fixtures/ChatWidgetGateHarness.svelte`: exercise the final package assembly, all routes, plugin comments suppression, single bar/composer, persistent draft, slot ordering, unclipped header and gate transitions. Fixture supplies only host gate states; actual package routing/pager execute. Mount/dispose counters prove ready is not duplicated.
+
 Every entry requires independent astra-xhigh review. No timeout, skip or E2E assertion changes are authorized.
 
 | File | Hunk summary | Why | Behavior retained or added |

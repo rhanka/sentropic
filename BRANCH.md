@@ -51,6 +51,7 @@
   - [x] Atomic activation exceeds 150 changed lines because host snippet promotion and removal of the public override must move together.
   - [x] Package header composes TabBar, uses app grip/cursors, gray border and unclipped content.
 - [ ] S8 tests: assembly/gate DOM suites, boundary/export assertions, updated ui/tests/components/chat/ChatWidget-*.test.ts; register each hunk.
+  - [x] Add assembly and gate DOM coverage with real package routing and mount/dispose counters.
 - [ ] UAT web: floating/docked/fullscreen geometry, mobile burger, list/conversation/Back/focus, all-workspaces, jobs/comments and settings overflow.
 - [ ] UAT Chrome: overlay/sidepanel, comments suppression, auth/settings, single composer.
 - [ ] UAT VSCode: loading/auth/onboarding actions and theme parity.
