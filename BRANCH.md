@@ -35,6 +35,7 @@
 - [x] D-FL7 | Branch: Lot D | Owner: conductor/deployment operator | Severity: future execution gate | Status: attention | Repro: F9 scope reconciliation | Expected: bounded build exceptions | Actual: EX1 includes preprod rollout-status and operator bundle, EX3 narrows CI, EX4 deploy, EX5 ratified G1a; EX2 dropped; B1 root manifests conditional, .security only for a later new image; custody write identity stays cross-lane | Evidence: spec sections 8-11 | Rationale: no pending irreversible Lot D decision; future scoped edits/G3 checks remain execution gates, prod seats deferred.
 - [x] D-FL8 | Branch: Lot D | Owner: gateway/mesh/ledger maintainers | Severity: design | Status: attention | Repro: F6/F7/F10 admission review | Expected: enforced caps without duplicate rows | Actual: no recordLlmUsage in standalone; shared key upsert if composed observation remains; Retry-After capped at 60s; quote seam decided in B0, B3 split by owner | Evidence: spec D5/B0/B3a-c | Rationale: preserve frozen wire and one settlement row; any mapping change needs a separate wire-contract decision.
 - [x] D-FL9 | Branch: Lot D | Owner: backup maintainer | Severity: residual risk | Status: attention | Repro: F11 inspect deploy/k8s/base/70-pgbackup-cronjob.yaml | Expected: owner's no-Python rule | Actual: existing amazon/aws-cli:2.34.53 runtime uses Python | Evidence: spec D7 | Rationale: flag existing backup dependency only; remediation is outside the two-file scope.
+- [x] D-FL10 | Branch: Lot D | Owner: cluster/gateway maintainers | Severity: build dependency | Status: attention | Repro: re-read both revised sibling specs on resume | Expected: matching service/session auth leaves | Actual: gateway separates /auth and /auth-hono; lazy-surface still describes a shared /gateway/auth-hono bridge | Evidence: spec sections 0/D4/B0 | Rationale: require cluster leaves/loaders matching Lot 2 and isolated packed tests before B1; preserve one loading path and edit neither sibling here.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only branch; no provider calls or runtime tests.
@@ -48,14 +49,14 @@
 - [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot D — Revision round 1 (F1-F11)**
-  - [x] Read required rules/template and both sibling specs read-only; branch check passed; starting tree clean.
+- [x] **Lot D — Revision round 1 (F1-F11)**
+  - [x] Re-read required rules/template and both sibling specs read-only; mechanical branch check passed. Resume found F1/O-D1..3 committed at 4d0d79484 and two staged files, no unstaged edits; preserved and committed that fix group at 5606bb36b.
   - [x] Record O-D1/O-D2/O-D3 as direct owner decisions; later decisions supersede earlier review requests.
   - [x] F1: cluster-mesh loading/mounting, per-tenant identity partition, existing composition-root cutover record, h2a host retirement and dependency handoff.
   - [x] F5/F6/F7/F10: ratified G1a, deferred G1b, one ledger row, bounded retry hint and split admission lots with B0 quote decision.
   - [x] F3/F4/F8/F11: current custody source/refresher/projection resolver, preprod-only write identity, operator DB-secret channel and backup residual risk.
   - [x] F2/F9/F10: reuse API image, narrow exceptions/CI, manual G3 network gate and reconcile build/acceptance plan.
-  - [ ] Review final diff and requested findings; run scope check before each commit, cleanup/status, and collect final history. Independent review remains conductor-owned.
+  - [x] Reviewed F1-F11 and final diff; branch and whitespace checks passed, scope passed before each fix-group commit, cleanup/ps passed again with no services. Final staged scope gate repeats before the handoff commit; collect its history/status. Independent review remains conductor-owned; no pending irreversible Lot D decision.
 - [x] **Lot 0 — Evidence and scope**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, project overview and relevant plan context.
   - [x] Create this file before the specification; verify branch mechanically and inspect make targets.
@@ -67,7 +68,7 @@
   - [x] Specify which h2a responsibilities move upstream and which stay consumer-owned.
   - [x] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` passed on preceding process/admission commits; repeat before each remaining commit.
 - [x] **Lot 2 — Admission, identity, and delivery plan**
-  - [x] Specify ledger-backed over-budget emission, identity table ownership/storage/schema, and seat-secret consumption.
+  - [x] Specify ledger-backed over-budget emission and seat consumption; revision round 1 supersedes the initial identity-table proposal with v0 directories, ratified G1a and deferred G1b.
   - [x] Specify CI image build/publish, future `BRxx-EXn` exceptions, lot dependencies, file-level tests and operational UAT.
   - [x] Classify reversible defaults and irreversible future gates; record decisions in Feedback Loop.
   - [x] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` passed on preceding delivery commit; repeat before final commit.
@@ -77,4 +78,4 @@
   - [x] `make scope-check ENV=test-llm-deployable-process` passed before each preceding commit; final staged scope gate is required again for this completion commit.
   - [x] Commit only the two allowed files via `make commit`; preserve `BRANCH.md` for conductor handoff; no push/PR/merge/publication.
   - [x] Cleanup passed: `make down API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process`; `make ps API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process` returned no services. Compose only warned that `DISABLE_RATE_LIMIT` is unset; no service was started.
-  - [x] Prepare handoff with exact checks, D-FL1..8, G1-G4 risks, two-file scope, and final `git log --oneline origin/main..HEAD`.
+  - [x] Prepare handoff with exact checks, O-D1..3/D-FL1..10, G1a/G1b/G2-G4 risks, two-file scope, and final `git log --oneline origin/main..HEAD`.
