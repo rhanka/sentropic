@@ -25,6 +25,8 @@ import type { AccountTransportOutcome } from '@sentropic/llm-mesh';
 
 import type { GatewayConfig } from './config.js';
 import type { CostContext } from './ports/cost-context.js';
+import type { CallerAuthRequestContext } from './ports/caller-auth.js';
+import { authenticateCaller } from './internal/caller-auth.js';
 import type {
   GatewayDispatchRequest,
   GatewayDispatchResponse,
@@ -99,6 +101,7 @@ export interface GatewayFlowDeps {
 
 /** Inputs the router hands the flow per request. */
 export interface GatewayFlowRequest {
+  readonly authContext: CallerAuthRequestContext;
   readonly wire: GatewayWire;
   readonly headers: Readonly<Record<string, string>>;
   readonly body: unknown;
@@ -142,7 +145,7 @@ const prepare = async (
   }
 
   // 1. caller-auth -> CostContext (from the VERIFIED identity, never the body).
-  const auth = await config.callerAuth.verify(request.headers);
+  const auth = await authenticateCaller(config.callerAuth, request.headers, request.authContext);
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
