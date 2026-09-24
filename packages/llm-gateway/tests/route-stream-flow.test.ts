@@ -57,6 +57,40 @@ const collect = async (stream: AsyncIterable<{ raw: string }>) => {
 };
 
 describe('route stream flow', () => {
+  it('records only one cancellation when abort, pending next and return race', async () => {
+    const controller = new AbortController(); const hooks: string[] = []; const settleRoute = vi.fn();
+    let entered!: () => void;
+    const waiting = new Promise<void>(resolve => { entered = resolve; });
+    let calls = 0;
+    const close = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const iterator: AsyncIterator<StreamEvent> = {
+      next: async () => {
+        if (++calls === 1) return { done: false, value: { type: 'content_delta', data: { delta: 'first' } } };
+        entered();
+        await new Promise<void>(resolve => controller.signal.addEventListener('abort', () => resolve(), { once: true }));
+        return { done: true, value: undefined };
+      }, return: close,
+    };
+    const source = attempt(() => ({ [Symbol.asyncIterator]: () => iterator }), hooks);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } },
+      { ...request, signal: controller.signal });
+    await result.stream.next(); await result.stream.next();
+    const pending = result.stream.next();
+    await waiting;
+    controller.abort();
+    await Promise.allSettled([pending, result.stream.return(undefined)]);
+    expect(hooks).toEqual(['committed', 'cancelled']);
+    expect(close).toHaveBeenCalledTimes(1); expect(settleRoute).toHaveBeenCalledTimes(1);
+  });
+  it('preserves typed usage on a pre-commit provider failure', async () => {
+    const settleRoute = vi.fn();
+    const source = attempt(async function* () {
+      throw { status: 401, usage: { inputTokens: 7, outputTokens: 0, estimated: false } };
+      yield { type: 'done', data: { finishReason: 'stop' } };
+    }, []);
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request)).rejects.toThrow();
+    expect(settleRoute.mock.calls[0]![0].usage).toEqual({ inputTokens: 7, outputTokens: 0, estimated: false });
+  });
   it('releases a stream returned before first consumer iteration exactly once', async () => {
     const hooks: string[] = [];
     const closed = vi.fn(); const settleRoute = vi.fn();
