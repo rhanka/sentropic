@@ -48,12 +48,12 @@
   - [x] Verify branch and mechanical harness branch gate.
   - [x] Re-verify CI masking, omitted DOM suite, and omitted spec prefixes.
 - [ ] **Lot 1 — Truthful CI**
-  - [ ] Aggregate invocation exit codes and print a final group summary.
-  - [ ] Remove E2E continue-on-error and preserve the five matrix jobs.
-  - [ ] Run `test-chat-ui-dom`; include `07_comment_assistant` and all `09-*`.
+  - [x] Aggregate invocation exit codes and print a final group summary.
+  - [x] Remove E2E continue-on-error and preserve the five matrix jobs.
+  - [x] Run `test-chat-ui-dom`; include `07_comment_assistant` and all `09-*`.
   - [ ] Validate node and DOM suites using make and isolated unit ports.
 - [ ] **Lot 2 — Hidden failure investigation**
-  - [ ] `e2e/tests/02-auth-oauth-revoke.spec.ts:18`: inspect consent navigation failure.
+  - [x] `e2e/tests/02-auth-oauth-revoke.spec.ts:18`: stored covering grant bypasses consent correctly; fixture now requests `prompt=consent`, preserving every assertion. CI retest pending.
   - [ ] `e2e/tests/01-organizations-detail.spec.ts:279`: inspect presence predicate and lock retry.
   - [ ] `e2e/tests/08-document-summary-formats.spec.ts:28`: inspect PDF failed status.
   - [ ] `e2e/tests/05-i18n.spec.ts:184`: inspect missing matrix empty state.
