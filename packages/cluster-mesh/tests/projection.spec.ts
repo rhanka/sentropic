@@ -11,6 +11,36 @@ const reference: SignedProjectionReference = {
 };
 
 describe('W-A local projection', () => {
+  it.each([undefined, 1001])('should accept legacy or unexpired references (%s)', async expiresAt => {
+    const ref = { ...reference, ...(expiresAt === undefined ? {} : { expiresAt }) };
+    const local = { create: vi.fn(async () => ref), verify: vi.fn(async () => true), resolve: vi.fn(async () => 'identity') };
+    const domain = createLocalProjectionDomain({ homeNodeId: ref.homeNodeId, local, now: () => 1000 });
+    await expect(domain.project('agent_identity', 'agent')).resolves.toBe(ref);
+    await expect(domain.resolve(ref)).resolves.toBe('identity');
+    expect(local.verify).toHaveBeenCalledWith(ref);
+  });
+
+  it.each([999, 1000, NaN, Infinity, 1000.5, '2000', null])('should reject expired or malformed expiry on both paths (%s)', async expiresAt => {
+    const ref = { ...reference, expiresAt } as SignedProjectionReference;
+    const local = { create: vi.fn(async () => ref), verify: vi.fn(async () => true), resolve: vi.fn() };
+    const domain = createLocalProjectionDomain({ homeNodeId: ref.homeNodeId, local, now: () => 1000 });
+    await expect(domain.project('agent_identity', 'agent')).rejects.toMatchObject({ code: 'invalid_projection_reference' });
+    await expect(domain.resolve(ref)).rejects.toMatchObject({ code: 'invalid_projection_reference' });
+    expect(local.resolve).not.toHaveBeenCalled();
+  });
+
+  it('should check expiry after verification and reject a tampered future expiry', async () => {
+    let now = 1000;
+    const ref = { ...reference, expiresAt: 1001 };
+    const local = { create: vi.fn(async () => ref), verify: vi.fn(async () => { now = 1001; return true; }), resolve: vi.fn() };
+    const domain = createLocalProjectionDomain({ homeNodeId: ref.homeNodeId, local, now: () => now });
+    await expect(domain.resolve(ref)).rejects.toThrow();
+    local.verify.mockResolvedValue(false);
+    await expect(domain.resolve({ ...ref, expiresAt: 9999 })).rejects.toThrow();
+    await expect(domain.project('agent_identity', 'agent')).rejects.toThrow();
+    expect(local.resolve).not.toHaveBeenCalled();
+  });
+
   it('should resolve a verified signed reference on its home node', async () => {
     const local = {
       create: vi.fn(async () => reference),

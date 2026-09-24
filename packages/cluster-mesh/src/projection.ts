@@ -11,6 +11,8 @@ export interface SignedProjectionReference {
   readonly issuer: string;
   readonly keyId: string;
   readonly signature: string;
+  /** Unix milliseconds; when present, must be authenticated by the local verifier. */
+  readonly expiresAt?: number;
 }
 
 export interface LocalProjectionPort {
@@ -29,7 +31,15 @@ export interface ProjectionDomain {
 export function createLocalProjectionDomain(input: {
   readonly homeNodeId: ClusterNodeId;
   readonly local: LocalProjectionPort;
+  readonly now?: () => number;
 }): ProjectionDomain {
+  function requireUnexpired(reference: SignedProjectionReference) {
+    if (reference.expiresAt === undefined) return;
+    const now = (input.now ?? Date.now)();
+    if (!Number.isSafeInteger(reference.expiresAt) || !Number.isFinite(now) || reference.expiresAt <= now) {
+      throw new InvalidProjectionReferenceError();
+    }
+  }
   function requireAvailable() {
     if (input.local.availability === 'gated') throw new CapabilityGatedError('local_projection');
   }
@@ -40,6 +50,7 @@ export function createLocalProjectionDomain(input: {
       if (reference.homeNodeId !== input.homeNodeId || !(await input.local.verify(reference))) {
         throw new InvalidProjectionReferenceError();
       }
+      requireUnexpired(reference);
       return reference;
     },
     async resolve(reference) {
@@ -48,6 +59,7 @@ export function createLocalProjectionDomain(input: {
         throw new CapabilityGatedError('remote_projection');
       }
       if (!(await input.local.verify(reference))) throw new InvalidProjectionReferenceError();
+      requireUnexpired(reference);
       return input.local.resolve(reference);
     },
   };
