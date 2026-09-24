@@ -1,5 +1,5 @@
 import type { PreparedRouteAttempt, RoutePlanner, StreamEvent } from '@sentropic/llm-mesh';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runRouteStreamFlow } from '../src/route-stream-flow.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
@@ -57,6 +57,17 @@ const collect = async (stream: AsyncIterable<{ raw: string }>) => {
 };
 
 describe('route stream flow', () => {
+  it('uses the injected adapter for the exact prepared stream attempt', async () => {
+    const hooks: string[] = [];
+    const source = attempt(async function* () { yield { type: 'done', data: { finishReason: 'stop' } }; }, hooks);
+    const dispatch = { generate: vi.fn(), stream: vi.fn(async (input: import("../src/ports/dispatch.js").RouteAttemptDispatchRequest) => input.attempt.stream(input.request)) };
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), dispatch,
+      metering: { settleRoute() {} } }, request);
+    await collect(result.stream);
+    expect(dispatch.stream).toHaveBeenCalledTimes(1);
+    expect(dispatch.stream.mock.calls[0]![0].attempt).toBe(source);
+    expect(hooks).toEqual(['committed', 'completed']);
+  });
   it('separates Anthropic compaction usage from provider settlement', async () => {
     const run = async (imageData: string) => {
       const settlements: RouteRequestSettlement[] = [];

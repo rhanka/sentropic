@@ -1,5 +1,5 @@
 import type { PreparedRouteAttempt, RoutePlanner } from '@sentropic/llm-mesh';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
@@ -51,6 +51,21 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
 });
 
 describe('route JSON flow', () => {
+  it('uses the injected opaque adapter without calling native ports', async () => {
+    const source = { attemptRef: 'exact', generate: vi.fn(async () => ({
+      id: 'r', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop' as const,
+    })), stream: vi.fn(), complete: vi.fn(), recordOutcome: vi.fn(), markCommitted: vi.fn(), releaseCancelled: vi.fn() };
+    const dispatch = { generate: vi.fn(async (input: import("../src/ports/dispatch.js").RouteAttemptDispatchRequest) => input.attempt.generate(input.request)), stream: vi.fn() };
+    const forbidden = vi.fn(() => { throw Error('native port called'); });
+    await runRouteJsonFlow({ config: { ...config, pool: { ...config.pool, select: forbidden },
+      authResolver: { resolve: forbidden }, dispatch: { dispatch: forbidden, dispatchStream: forbidden } },
+    routePlanner: routePlanner([source]), dispatch, metering: { settleRoute() {} } }, request);
+    expect(dispatch.generate).toHaveBeenCalledTimes(1);
+    expect(dispatch.generate.mock.calls[0]![0].attempt).toBe(source);
+    expect(source.complete).toHaveBeenCalledTimes(1);
+    expect(forbidden).not.toHaveBeenCalled();
+  });
   it('settles once when planning fails after trusted route input starts the request', async () => {
     const settlements: RouteRequestSettlement[] = [];
     let routeInputCalls = 0;

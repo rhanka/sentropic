@@ -88,7 +88,7 @@
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
 - [ ] **I3 — Opaque mesh adapter**
   - [x] Implement route-attempt-dispatch, dispatch port, root export, routed flow/router integration with no native fallback; reject own auth fields and incomplete routeDispatch configuration.
-  - [ ] Add route-attempt-dispatch tests; update route-json-flow, route-stream-flow and router tests for exact attempts, cancellation, tools and terminal outcomes.
+  - [x] Add route-attempt-dispatch tests; update route-json-flow and route-stream-flow for injected exact-attempt dispatch and single terminal outcome; constructor test covers incomplete router wiring. Existing routed-router tests retain native-stub exclusion.
 - [ ] **I4 — Lifecycle and wire integration**
   - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
   - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
