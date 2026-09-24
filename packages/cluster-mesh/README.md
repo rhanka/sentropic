@@ -25,6 +25,15 @@ and coordinate the release. The CI gate is a release requirement; this additive
 release does not claim to install that cross-repository CI. Deprecated fields
 remain throughout the supported window and cannot be removed in a minor release.
 
+Reusable public-contract fixtures live in `tests/conformance/h2a-contract.json`,
+with the executable runner `tests/conformance/h2a-contract.spec.ts`. They cover
+the h2a-facing boundaries, capabilities, projections, devices, NHI mapping and
+federal gates through public exports. For h2a EX-12, copy both files, redirect the
+runner's package import to the pinned release, and run the `N/N-1 baseline` suite
+on both supported lines; run `since 0.11` only on 0.11+. JSON fixtures have an
+explicit format version and contain no private keys. This supplies Sentropic's
+fixtures; cross-repository CI wiring remains a separate release gate.
+
 ## Upstream bindings in 0.11
 
 `LocalDeviceAttachmentPort` and `LocalProjectionPort` accept optional readonly
