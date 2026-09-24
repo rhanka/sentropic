@@ -9,7 +9,7 @@ export interface CommandRunnerPort {
 }
 
 export interface NhiLifecyclePort {
-  attest(input: { instance: string; privateKey: string; root?: string }): Promise<CommandResult>;
+  attest(input: { instance: string; privateKey: string; root?: string; role?: string; scope?: string }): Promise<CommandResult>;
   offboard(input: { instance: string; root?: string }): Promise<CommandResult>;
   exportBundle(input: {
     instance: string;
@@ -28,6 +28,8 @@ export function createH2aNhiLifecycle(runner: CommandRunnerPort): NhiLifecyclePo
     attest(input) {
       return runner.run('h2a', withRoot([
         'nhi', 'attest', '--instance', input.instance, '--private-key', input.privateKey,
+        ...(input.role !== undefined ? ['--role', input.role] : []),
+        ...(input.scope !== undefined ? ['--scope', input.scope] : []),
       ], input.root));
     },
     offboard(input) {

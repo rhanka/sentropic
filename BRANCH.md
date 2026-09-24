@@ -42,7 +42,7 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline**: read rules, template, h2a spec and historical consumer; mechanical branch check passed; published version is 0.10.1.
 - [x] **Lot 1 — Bindings**: mesh.ts runtime capabilities and injectable NHI; mesh.spec.ts and bindings.spec.ts compatibility, gated bindings, injection and failure tests; bump package.json to 0.11.0.
-- [ ] **Lot 2 — Attestation and devices**: nhi.ts optional role/scope and device.ts optional denial; nhi.spec.ts/device.spec.ts positive and negative delegation tests.
+- [x] **Lot 2 — Attestation and devices**: nhi.ts optional role/scope and device.ts optional denial; nhi.spec.ts/device.spec.ts positive and negative delegation tests.
 - [ ] **Lot 3 — Projection and export**: projection.ts expiry and index.ts verifier export; projection.spec.ts expiry boundaries/invalid signatures and custody-export.spec.ts cryptographic positive/negative tests.
 - [ ] **Lot 4 — Documentation**: README.md SemVer/N-1 and binding contracts; CHANGELOG.md 0.10.0/0.10.1 from history and 0.11.0.
 - [ ] **Lot 5 — Validation**: package typecheck, lint, full tests, final diff review, scope-check, environment cleanup and committed handoff.

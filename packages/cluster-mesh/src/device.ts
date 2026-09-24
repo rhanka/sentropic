@@ -31,6 +31,7 @@ export interface LocalDeviceAttachmentPort {
     role: string,
     deviceName?: string | null,
   ): DeviceApprovalResult;
+  denyDeviceCode?(userCode: string): DeviceApprovalResult;
 }
 
 export interface DeviceDomain extends LocalDeviceAttachmentPort {}
@@ -52,6 +53,11 @@ export function createLocalDeviceDomain(port: LocalDeviceAttachmentPort): Device
     approveDeviceCode(userCode, userId, role, deviceName) {
       requireAvailable();
       return port.approveDeviceCode(userCode, userId, role, deviceName);
+    },
+    denyDeviceCode(userCode) {
+      requireAvailable();
+      if (!port.denyDeviceCode) throw new CapabilityGatedError('device_denial');
+      return port.denyDeviceCode(userCode);
     },
   };
 }
