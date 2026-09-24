@@ -79,6 +79,7 @@
   - [x] Implement service /auth and session /auth-hono with separately cached lazy imports, trusted principal projection, required service configuration and unbound-DPoP rejection.
   - [x] Add fixtures/auth-hono.ts with real signed access/session tokens and DPoP proofs, deterministic clock, JWKS, replay and session stores.
   - [x] Add service-auth tests for signature/claims, DPoP bindings/replay, configuration, concurrent identity projection and public-router scope-denial/store-outage isolation.
+  - [x] Add auth-hono tests for signed sessions, explicit-token aliases, DPoP/cookie denial, revocation/expiry/accountPolicy 403-to-401, and session/user/policy store 503 isolation.
   - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
 - [ ] **I3 — Opaque mesh adapter**

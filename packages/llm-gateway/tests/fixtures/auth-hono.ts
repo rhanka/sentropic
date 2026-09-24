@@ -41,14 +41,14 @@ export const authFixture = async () => {
   return { auth, token, proof, jkt };
 };
 
-export const sessionFixture = async () => {
+export const sessionFixture = async (id = 'user') => {
   const secret = new TextEncoder().encode('fixture-signing-secret-with-at-least-32-bytes');
-  const claims: AuthHonoSessionClaims = { userId: 'user', sessionId: 'session', role: 'user' };
+  const claims: AuthHonoSessionClaims = { userId: id, sessionId: `session-${id}`, role: 'user' };
   const token = await new SignJWT(claims as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: 'HS256' }).setExpirationTime(now.getTime() / 1000 + 900).sign(secret);
   const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-  const session = { id: 'session', userId: 'user', expiresAt: clock.addSeconds(now, 900), revokedAt: null as Date | null };
-  const user = { id: 'user', role: 'user', accountStatus: 'active' };
+  const session = { id: `session-${id}`, userId: id, expiresAt: clock.addSeconds(now, 900), revokedAt: null as Date | null };
+  const user = { id, role: 'user', accountStatus: 'active' };
   const ports = {
     clock, cookies: { readSessionToken: () => null },
     tokens: { hashSecret: hash, async verifySessionToken(value: string) {
