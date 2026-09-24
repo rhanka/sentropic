@@ -1,6 +1,6 @@
 # SPEC_EVOL — LLM gateway Lot 2: verified callers, cost context, mesh dispatch
 
-Status: PROPOSED DESIGN, 2026-09-23 — planning only; conductor independent review pending.
+Status: PROPOSED DESIGN, revised 2026-09-24 — Lot C review round 1; planning only; conductor independent review pending.
 
 Branch: Lot C `spec/llm-gateway-lot2`, base `origin/main` `75032fc85`.
 
@@ -286,7 +286,8 @@ the production resolver's correlation policy are runtime changes even where Type
 
 Publish the implementation as gateway **0.18.0**, the next 0.x minor after 0.17.1. The explicit
 pre-1.0 source breaks above must not ship as 0.17.2. Keep mesh source unchanged at **0.21.2** and
-raise the gateway's mesh floor to **^0.21.2**, the baseline being qualified. Add auth-hono **^0.15.2**
+raise the gateway's mesh floor to **^0.21.2**, the baseline being qualified. h2a's **^0.21.0** range
+admits 0.21.2, but its lockfile must resolve at least that floor (section 3). Add auth-hono **^0.15.2**
 and the corresponding lockfile resolution; consume its public exports and existing peer requirements.
 Do not bump auth-hono just to use it. This documentation branch changes no package version.
 
@@ -299,44 +300,39 @@ then gateway after dependency visibility. No branch publication, push, PR or mer
 
 ## 3. h2a consumer inventory and migration
 
-Evidence is the read-only checkout `/home/antoinefa/src/h2a`, HEAD `0d6b2eaf`, inspected 2026-09-23.
-Both `apps/llm-gateway/src/index.ts` and
-`packages/h2a-runtime/src/llm-gateway-runtime/index.ts` currently import local `handleMessages` and
-`acquireSession`; neither imports any of the five gateway symbols named in the brief. A source search
-under both apps/packages trees finds no occurrences of those five symbols. Both package manifests
-declare gateway `^0.10.0`. Do not present a newer consumer as measured on this checkout.
+Evidence is `/home/antoinefa/src/h2a` **origin/main**, fetched and inspected 2026-09-24 at
+`75c1dc61e034aceeca5deb6541af2905e445d941`. The brief's import list was correct; the earlier
+inventory used a stale local HEAD. Reads use the remote-tracking ref without changing h2a files:
 
-Actual gateway import sites (paths relative to that h2a root):
+```sh
+git -C /home/antoinefa/src/h2a fetch origin -q
+git -C /home/antoinefa/src/h2a grep -n "@sentropic/llm-gateway" origin/main -- packages apps
+```
 
-| Import site | Imported symbol | Lot 2 effect |
+Actual gateway import sites, one row per site (paths relative to that h2a root):
+
+| Import site | Imported symbols | Measured Lot 2 effect |
 |---|---|---|
-| `apps/llm-gateway/src/proxy-openai.ts:19` | `CODEX_RESPONSES_URL` | No type change |
-| `packages/h2a-runtime/src/llm-gateway-runtime/proxy-openai.ts:19` | `CODEX_RESPONSES_URL` | No type change |
-| `apps/llm-gateway/src/model-catalog.ts:1` | `describeCanonicalTargetRoutes` | No type change |
-| `packages/h2a-runtime/src/llm-gateway-runtime/model-catalog.ts:1` | `describeCanonicalTargetRoutes` | No type change |
-| `apps/llm-gateway/src/model-catalog.test.ts:2` | `describeCanonicalTargetRoutes` | No type change |
-| `packages/h2a/test/runtime-status-contract.test.js:4` | `describeCanonicalTargetRoutes` | No type change |
+| `apps/llm-gateway/src/index.ts:29-34` | `createGatewayRouter`, `stubGatewayConfig`, `CallerAuthPort`, `RouteMeteringSink` | Router signature, stub spread and settlement sink unchanged. Inline `async verify(headers)` at 149-166 stays assignable: literal success includes cost, literal failure has no cost, and ignoring context is valid; typecheck-only confirmation required. `routeInput` at 174-182 already supplies `affinityKey`, independent of request correlation. |
+| `packages/h2a-runtime/src/llm-gateway-runtime/index.ts:16-21` | `createGatewayRouter`, `stubGatewayConfig`, `CallerAuthPort`, `RouteMeteringSink` | Same unchanged signatures; inline `async verify(headers)` at 106-123 satisfies the discriminated union without a rewrite; typecheck-only confirmation required. `routeInput` at 133-143 already supplies `affinityKey`, so the correlation change does not affect sticky routing. |
+| `apps/llm-gateway/src/session-ledger.ts:6` | `RouteRequestSettlement` | Lines 122-127 read `settlement.cost.principalId`; both settlement and cost shapes are unchanged. No ledger migration. |
+| `packages/h2a-runtime/src/llm-gateway-runtime/session-ledger.ts:6` | `RouteRequestSettlement` | Lines 122-127 read `settlement.cost.principalId`; both settlement and cost shapes are unchanged. No ledger migration. |
 
-Expected newer integration named by the brief, to recheck at **each** of
-`apps/llm-gateway/src/index.ts` and `packages/h2a-runtime/src/llm-gateway-runtime/index.ts` before release:
-
-| Consumer import | Exact impact if present at either site |
-|---|---|
-| `createGatewayRouter` | Import/call signature preserved; router supplies auth context automatically; optional routeDispatch needs no consumer change |
-| `stubGatewayConfig` | Export and GatewayConfig shape preserved; spreading it remains valid; it supplies no real authentication or metering |
-| `CallerAuthPort` | Update header-only verify invocations to pass context; annotate result or return literal discriminants; custom implementations ignoring context can still compile |
-| `RouteMeteringSink` | Signature unchanged; keep one aggregate settleRoute, no per-attempt financial write |
-| `RouteRequestSettlement` | All fields unchanged; production resolver supplies request correlation and stable enrollment owner, so recheck ledger/affinity assumptions |
+`apps/llm-gateway/package.json:14-15` and `packages/h2a-runtime/package.json:18-19` both declare
+gateway `^0.17.0` and mesh `^0.21.0`. The 0.x caret **excludes gateway 0.18.0**, requiring a manual
+range bump. Mesh 0.21.2 is within h2a's range; refresh and qualify its lockfile against gateway's
+raised `^0.21.2` floor, avoiding an older or duplicate mesh resolution. No consumer compilation
+has run on this documentation branch; these are source findings and explicit I5 acceptance checks.
 
 Migration sequence for the consumer owner:
 
-1. Record the actual target h2a SHA and re-run the import inventory. The observed `^0.10.0` ranges
-   cannot receive 0.18.0 automatically. Qualify prior BR-73 migrations separately; this spec is an
-   exhaustive **0.17.1 to 0.18.0** delta, not proof of a safe direct 0.10 upgrade.
+1. Recheck the target h2a SHA against this origin/main inventory. This spec enumerates the
+   **0.17.1 to 0.18.0** delta; both `^0.17.0` ranges require a manual bump to `^0.18.0` at cutover.
 2. Integrate the exact candidate gateway tarball and its declared dependencies in an isolated h2a
-   worktree. Change the two package manifests/lockfile to the reviewed 0.18.x release only at cutover.
-3. Update custom CallerAuthPort/VerifyToken implementations and all direct calls per D1; preserve
-   stable principal/enrollment owner mapping. Never replace an opaque `gw-*` token verifier by an
+   worktree. Resolve mesh to at least 0.21.2 and record both package manifests and lockfile changes.
+3. Typecheck both unchanged inline CallerAuthPort implementations against D1; update direct calls
+   only if new sites need context. Preserve stable principal/enrollment owner mapping.
+   Never replace an opaque `gw-*` token verifier by an
    OAuth verifier without also changing its issuer. Existing local token lifecycle stays host-owned.
 4. For auth-hono deployments, configure issuer/resource/scopes/replay store or session ports, trusted
    principal mapping and VerifiedCostContextResolver. Supply stable affinity separately via routeInput.
@@ -427,7 +423,7 @@ Make command with ENV last, then run make down on that same isolated project.
 | O2 | Reversible / deployment owner | Supply actual issuer, audience, scopes, public-URL reconstruction and shared replay-store configuration at composition. Missing configuration refuses startup; do not weaken verification to launch. |
 | O3 | Reversible / deployment owner | Map service client or session user through trusted directory state; keep per-user OBO out of this lot because current service context cannot express it. |
 | O4 | Reversible / gateway owner | Keep native contracts and add the opaque adapter. Reconsider removing native exports only in a separate migration brief; no implicit dual dispatch. |
-| O5 | Reversible / h2a conductor | Re-inventory the actual consumer candidate; the supplied checkout and described five-import integration differ. Qualify both entrypoints at the target SHA. |
+| O5 | Reversible / h2a conductor | Use measured origin/main `75c1dc61`; the brief's imports are correct. Recheck the release candidate SHA, typecheck both unchanged inline verifiers, manually bump gateway ranges and qualify mesh >=0.21.2. |
 | O6 | Irreversible scope gate / implementation owner | I0 Makefile changes require a separately approved exception before implementation. This specification records the dependency gap and does not authorize touching infrastructure. |
 | O7 | Irreversible contract/security gate / owner | Any additional published break, new DB migration, changed wire, cross-user activation or per-user OBO claim exposure requires a new decision. Conservative default: none. |
 
