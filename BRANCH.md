@@ -31,7 +31,7 @@
   - [x] BRLG2-EX1/EX2 authorized by the implementation brief; record other irreversible out-of-brief decisions as `blocked` and stop.
 
 ## Feedback Loop
-- [ ] BRLG2-C8 | blocked | Owner: auth lane / conductor | BLOCKS merge AND release: canonical packages/mcp-auth/src/service-auth.ts still calls trimTrailingSlash(options.issuer). Removing gateway normalization is insufficient: service-auth.test.ts proves a slash-registered issuer accepts a token without the slash. Auth-package edits are outside allowed paths; scope extension requested. Acceptance: canonical middleware preserves issuer exactly, both suffix regressions pass, and full gateway gates rerun. Do not skip or weaken this regression.
+- [x] BRLG2-C8 | acknowledge | Owner: conductor | conductor decision (reversible): align on canonical mcp-auth; an exact-match policy, if ever wanted, belongs to the auth lane in mcp-auth itself. Gateway delegates issuer comparison without a second rule; parity regression covers configured slash variants and accepted/rejected token issuers.
 - [ ] BRLG2-O8 | attention | Owner: release owner | publish-llm-gateway-token (Makefile) bypasses wait-llm-gateway-auth-dependencies. The target is outside BRLG2-EX1 and remains unchanged. Release owner must enforce the registry-only auth graph and published service-only qualification before any token-based publication; no publish is authorized in this round.
 - [ ] BRLG2-CONSUMER | blocked | Owner: consumer conductor (h-cond) | BLOCKS merge: h2a typecheck of both entrypoints against the candidate tarball — performed by the consumer conductor (h-cond); evidence to be recorded here. Record candidate SHA-256, both entrypoint results and spec section 3 UAT / duplicate mesh E8 evidence before merge/release. Consumer checkout is outside this worktree's write scope.
 - [x] BRLG2-URL | attention | Reversible | The reviewed spec defines publicUrl only and contains no publicOrigin declaration. Implement D1/D7 exactly; do not invent an additional public API. Clarification requested during build; no conflicting contract supplied.
@@ -67,6 +67,15 @@
 - [x] No services or port reservation required for this planning task.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot C — Build fix round 2**
+  - [x] Preserve canonical middleware delegation; replace the exact-match assertion in packages/llm-gateway/tests/service-auth.test.ts with direct gateway/mcp-auth parity and document normalization in README/spec. No src change needed; candidate 0.18.0 remains greater than registry latest 0.17.1 (2026-09-24).
+  - [x] Round scope: packages/llm-gateway/**, spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md and BRANCH.md only; prior EX1/EX2 do not authorize new edits in this round. Auth lane, Makefile, compose and workflows remain untouched.
+  - [x] Reproduced C8 with make test-llm-gateway SCOPE=tests/service-auth.test.ts API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2: 21 passed, one exact-issuer assertion failed because canonical middleware strips the configured slash.
+  - [x] Scoped parity regression passed (23 tests) using the same scoped command above.
+  - [x] Final gates passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway pack-llm-gateway package-llm-routing-candidates LLM_ROUTING_PACK_DIR=/home/antoinefa/src/sentropic/tmp/llm-gateway-lot2/tmp/llm-gateway-lot2-candidates API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2. Full suite: 224 passed, only known I0 service-install skip; all 25 test files passed.
+  - [x] New candidate tmp/llm-gateway-lot2-candidates/sentropic-llm-gateway-0.18.0.tgz matches qualification/candidate.tgz byte-for-byte; SHA-256 f8bdd6cacdb8ce19481333b738a4363df9e20a4523427c9109173793e372ea9f. Root/session lockfiles retained; I0 and consumer qualification remain merge/release gates.
+  - [x] Cleanup passed: make down COMPOSE_PROJECT_NAME=test-llm-gateway-lot2 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2; make ps COMPOSE_PROJECT_NAME=test-llm-gateway-lot2 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 returned no services.
+  - [x] Harness branch/scope and whitespace checks passed; four-file atomic commit and final log accompany handoff. Independent review remains the conductor's gate; no push/PR/merge/publish.
 - [ ] **Lot C — Build fix round 1**
   - [x] C1 — Explicitly record I0 as blocking merge AND release in branch and spec.
   - [x] C2 — End-of-round 2026-09-24 registry check: curl -s https://registry.npmjs.org/@sentropic%2fmcp-auth | grep -o '"0.2.1"' produced no match (exit 1); latest remains 0.2.0. Leave auth-subpaths.test.ts service skip intact and BRLG2-I0 open: BLOCKS merge AND release. No service lockfile or clean-install success is claimed.
@@ -75,7 +84,7 @@
   - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
   - [x] C6 — Report zero usage on pre-provider validation cancellation; JSON/stream regressions assert no provider call, one cancellation and zero financial usage (final gates pending).
   - [x] C7 — Reject empty service clientId before principal mapping; signed-token regressions cover empty and absent client_id/sub (final gates pending).
-  - [ ] C8 — Gateway normalization removed and exact-match regression added; full gate exposes canonical mcp-auth normalization. BRLG2-C8 blocks completion pending auth-lane correction or an explicit scope extension.
+  - [x] C8 — Superseded by round 2 conductor decision BRLG2-C8: issuer comparison follows canonical mcp-auth normalization; no auth-lane correction or scope extension required.
   - [x] C9 — Correct published VerifyToken/personal caller-auth comments to distinguish canonical service and session verification under D2.
   - [x] C10 — README migration covers ambiguity, malformed Authorization without fallback, and token spaces for all PersonalPassthroughCallerAuth instances.
   - [x] C11 — Add signed bound-DPoP router success regression: internal HTTP /v1/models, reconstructed external HTTPS URL, status 200 and exactly one planner listModels call (final gates pending).

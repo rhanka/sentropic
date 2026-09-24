@@ -31,9 +31,7 @@ shared replay store. Session mode rejects DPoP and never reads cookies.
 Supply registered service issuer/resource/scopes and map the verified service
 client or session user through trusted directory state. Service context does not
 expose per-user OBO claims; do not decode raw JWTs to invent those mappings.
-Issuer and resource must be absolute HTTP(S) URLs and match their registered
-values exactly. No normalization is performed: a trailing-slash issuer is accepted
-only when registered with that trailing slash.
+Issuer comparison follows `@sentropic/mcp-auth` normalization (trailing slashes stripped from the configured issuer).
 
 ```ts
 import { PersonalPassthroughCallerAuth, VerifiedCostContextResolver } from '@sentropic/llm-gateway';
