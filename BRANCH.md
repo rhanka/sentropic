@@ -34,6 +34,8 @@
 - [x] C-FL2 | attention | Owner: conductor | Reversible | Keep planning and review evidence in these two files; harness recorder/Track writes and separate review artifacts exceed the explicit scope. Independent review remains the conductor's handoff gate.
 - [x] C-FL3 | attention | Owner: conductor | Reversible | h2a checkout `0d6b2eaf` differs from the brief: both named index files mount local proxies; record observed imports separately from the expected newer consumer.
 - [x] C-FL4 | attention | Owner: implementation conductor | Reversible | Preserve native dispatch types; add opaque mesh dispatch using BR-73 attempts, keeping provider credentials inside mesh.
+- [x] C-FL5 | attention | Owner: implementation conductor | Reversible | Select explicit service or session verification; use trusted identity mapping because auth-hono service context does not expose tenant/OBO claims.
+- [x] C-FL6 | attention | Owner: implementation conductor | Irreversible future gate | Real auth-hono integration requires an approved Makefile dependency-wiring exception on the implementation branch; this branch does not grant or perform it.
 
 ## AI Flaky tests
 - [x] Not applicable: design-only branch; no provider calls or test execution required.
@@ -52,9 +54,9 @@
   - [x] Discover Makefile targets and confirm clean initial worktree.
   - [x] Read gateway/BR-73 specs, all three ports, implementations/tests, auth-hono, pool AuthResolver, and both h2a import sites.
   - [x] Inventory exported contracts and distinguish caller credentials from provider credentials.
-- [ ] **Lot 1 — Caller authentication and cost context**
+- [x] **Lot 1 — Caller authentication and cost context**
   - [x] Write Status / Branch / Extends and numbered decisions in `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md`.
-  - [ ] Define verifier wiring, claim trust, failure semantics, and cost-context interfaces.
+  - [x] Define verifier wiring, claim trust, failure semantics, and cost-context interfaces.
 - [ ] **Lot 2 — Mesh dispatch**
   - [ ] Define the adapter, payload/wire contract, cancellation, errors, and settlement behavior.
   - [ ] Identify any required llm-mesh changes and release consequences.
