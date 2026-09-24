@@ -15,6 +15,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./auth": {
+      "types": "./dist/caller-auth/service-auth.d.ts",
+      "import": "./dist/caller-auth/service-auth.js"
+    },
+    "./auth-hono": {
+      "types": "./dist/caller-auth/auth-hono.d.ts",
+      "import": "./dist/caller-auth/auth-hono.js"
     }
   },
   "files": [
