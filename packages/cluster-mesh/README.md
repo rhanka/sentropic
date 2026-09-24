@@ -52,7 +52,12 @@ capability type for older providers; this adapter always supplies it.
 
 `createDegenerateClusterMesh` accepts `nhi?: NhiLifecyclePort`. It takes precedence
 over `nhiRunner`; without injection, the runner retains its existing mapping.
-At least one is required. `attest` accepts optional string `role` and `scope`,
+At least one is required. Construction checks that an injected port's `attest`,
+`offboard` and `exportBundle` methods are functions; malformed ports throw
+`TypeError`, even when a runner is also supplied. An injected port is trusted by
+design: the host owns its authorization, input validation and effects. Shape
+validation does not establish behavioral equivalence to the command adapter.
+`attest` accepts optional string `role` and `scope`,
 forwarded as separate `--role` and `--scope` arguments before `--root`; h2a remains
 the validation authority and its errors/results pass through unchanged.
 The runner adapter rejects empty/whitespace-only or leading-hyphen `instance`,
