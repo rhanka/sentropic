@@ -75,6 +75,7 @@
   - [x] Verify public URL/default/invalid/spoofed forwarded headers, both wires/models, auth rejection/outage and compile-time invalid contracts. Full lot gate passed (146 tests): make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
 - [ ] **I2 — Concrete verification and cost**
   - [x] Add trusted cost resolver and explicit-resolver correlation exclusivity; retain legacy custom-verifier projection only when no resolver is selected.
+  - [x] Add private auth-bridge helper for strict case-insensitive explicit credentials and bodyless Hono probes with per-request error/identity capture; no optional peer imports in shared helpers.
   - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
 - [ ] **I3 — Opaque mesh adapter**
