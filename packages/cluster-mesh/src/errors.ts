@@ -36,3 +36,12 @@ export class InvalidProjectionReferenceError extends Error {
     this.name = 'InvalidProjectionReferenceError';
   }
 }
+
+export class InvalidNhiArgumentError extends Error {
+  readonly code = 'invalid_nhi_argument';
+
+  constructor(public readonly argument: 'instance' | 'role' | 'scope') {
+    super(`NHI ${argument} must be nonempty and must not start with '-'`);
+    this.name = 'InvalidNhiArgumentError';
+  }
+}
