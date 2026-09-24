@@ -23,9 +23,12 @@
   - [x] Future `BRxx-EXn` proposals must state reason, impact, rollback, and approval gate; none authorizes a change here.
 
 ## Feedback Loop
+- [x] O-D1 | direct owner decision | Owner: product owner via conductor | Date: 2026-09-24 | Status: acknowledge | Seat delivery (a) maintained with full knowledge: the scheduled GitHub Actions job updates the GitHub Secret and pushes the fresh access token into k8s; this is the first automated CI→cluster Secret write, with no CI precedent.
+- [x] O-D2 | direct owner decision | Owner: product owner via conductor | Date: 2026-09-24 | Status: acknowledge | IRREVERSIBLE G1a BR-47 budget migration is ratified now and part of Lot D's build design; real over-budget HTTP 429 is required. G1b identity bindings remain deferred; v0 uses memberships and service_clients. No migration is executed on this planning branch.
+- [x] O-D3 | direct owner decision | Owner: product owner via conductor | Date: 2026-09-24 | Status: acknowledge | Preprod first using KUBE_CONFIG_DATA_PREPROD; no production Role design now. Production seat delivery and its new security gate return to the owner only after the IP-change spike passes and the refresh/delivery loop is stable.
 - [x] D-FL1 | Branch: Lot D | Owner: conductor | Severity: process | Status: attention | Repro: harness recorder/review writes extra artifacts | Expected: two-file scope | Actual: record design here and defer independent review to conductor | Evidence: owner brief | Rationale: preserve explicit planning scope; no consensus claimed.
 - [x] D-FL2 | Branch: Lot D | Owner: conductor | Severity: evidence | Status: attention | Repro: search supplied roots for validation id/original phrase | Expected: original conductor artifact | Actual: no match | Evidence: spec section 0 | Rationale: retain brief attribution and independently verified code findings.
-- [x] D-FL3 | Branch: Lot D | Owner: gateway maintainer | Severity: design | Status: attention | Repro: compare package and h2a entry points | Expected: autonomous host | Actual: select thin private Node app, port 3001, same router factory | Evidence: spec D1-D3 | Rationale: reversible composition without a new published CLI contract.
+- [x] D-FL3 | Branch: Lot D | Owner: gateway/cluster maintainer | Severity: design | Status: attention | Repro: reconcile F1 with lazy-surface E1/E7 | Expected: one loading and mounting path | Actual: private Node host on port 3001 uses cluster-mesh registry/loaders/namespace module; product and external identities are partitioned per tenant | Evidence: spec D1-D3 | Rationale: preserve domain independence and existing cutover storage without another dispatcher.
 - [x] D-FL4 | Branch: Lot D | Owner: ledger/identity maintainer + conductor | Severity: build gate | Status: blocked (future build only) | Repro: compare BR-47 to current schema | Expected: durable admission and generic bindings | Actual: proposed G1 requires migration ratification | Evidence: spec D4-D5 | Rationale: design delivered; no schema mutation authorized here.
 - [x] D-FL5 | Branch: Lot D | Owner: deployment maintainer | Severity: design | Status: attention | Repro: inspect base manifests | Expected: independently deployable gateway | Actual: select dedicated Node image, internal Service, one replica/Recreate | Evidence: spec D6 | Rationale: conservative reversible rollout, with quota and egress validation before activation.
 - [x] D-FL6 | Branch: Lot D | Owner: custody maintainer | Severity: design | Status: attention | Repro: reconcile custody section 4 with BR-73 | Expected: current own-seat credentials without competing refreshers | Actual: access-only Secret projection and fenced Postgres hydration; external sole refresher | Evidence: spec D7 | Rationale: reversible binding prevents rotating-token races; runtime refresh disabled only for custody-managed seats.
@@ -44,6 +47,14 @@
 - [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot D — Revision round 1 (F1-F11)**
+  - [x] Read required rules/template and both sibling specs read-only; branch check passed; starting tree clean.
+  - [x] Record O-D1/O-D2/O-D3 as direct owner decisions; later decisions supersede earlier review requests.
+  - [x] F1: cluster-mesh loading/mounting, per-tenant identity partition, existing composition-root cutover record, h2a host retirement and dependency handoff.
+  - [ ] F5/F6/F7/F10: ratified G1a, deferred G1b, one ledger row, bounded retry hint and split admission lots with B0 quote decision.
+  - [ ] F3/F4/F8/F11: current custody source/refresher/projection resolver, preprod-only write identity, operator DB-secret channel and backup residual risk.
+  - [ ] F2/F9/F10: reuse API image, narrow exceptions/CI, manual G3 network gate and reconcile build/acceptance plan.
+  - [ ] Review final diff and requested findings; run scope check before each commit, cleanup/status, and collect final history. Independent review remains conductor-owned.
 - [x] **Lot 0 — Evidence and scope**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, project overview and relevant plan context.
   - [x] Create this file before the specification; verify branch mechanically and inspect make targets.
