@@ -69,7 +69,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot C — Build fix round 1**
   - [x] C1 — Explicitly record I0 as blocking merge AND release in branch and spec.
-  - [ ] C2 — Recheck mcp-auth 0.2.1 at round end; qualify published service-only install or retain the open blocker and skip.
+  - [x] C2 — End-of-round 2026-09-24 registry check: curl -s https://registry.npmjs.org/@sentropic%2fmcp-auth | grep -o '"0.2.1"' produced no match (exit 1); latest remains 0.2.0. Leave auth-subpaths.test.ts service skip intact and BRLG2-I0 open: BLOCKS merge AND release. No service lockfile or clean-install success is claimed.
   - [x] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate; execution remains open in BRLG2-CONSUMER.
   - [x] C4 — Buffer through the first upstream-derived frame before commitment, delaying done completion until encoding resumes; scoped stream suite passed (18 tests), including both-wire encoding failures and C5 pre-commit ledger rejection. Candidate 0.18.0 remains greater than registry latest 0.17.1 (2026-09-24).
   - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
