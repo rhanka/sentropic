@@ -290,7 +290,10 @@
         return;
       }
       if (evt?.type === 'ping') {
+        // A ping is sent once the SSE subscription is ready: re-assert a lock this page
+        // believes it holds, in case it was cleared while the subscription was not live.
         void updatePresence();
+        void refreshLock();
       }
     });
   };
