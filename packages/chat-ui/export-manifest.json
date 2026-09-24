@@ -1,5 +1,5 @@
 {
-  "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes.",
+  "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes. 0.34.0 breaking change: ChatWidget whole-shell override removed; use typed header/content/pager snippets. ChatPanel override remains.",
   "_generated": "2026-07-25",
   "_version": "0.34.0",
   "subpaths": {
@@ -489,7 +489,7 @@
       "kind": "svelte",
       "file": "dist/components/ChatWidget.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "Props: activeTab? (ChatWidgetTab), activeJobsCount? (number), failedJobsCount? (number), chatTabLabel? (string), commentsTabLabel? (string), queueTabLabel? (string), widgetLabel? (string), showCommentsTab? (boolean), tabBarVariant? ('default'|'extension'), showJobsBadge? (boolean), onActiveTabChange? (fn), onPurgeJobs? (fn), renderJobsPanel? (Snippet<[]>), renderCommentsPanel? (Snippet<[]>), renderChatPanel? (Snippet<[]>), renderHeaderLeading? (Snippet<[]>), renderHeaderActions? (Snippet<[]>), headerGrip? ({enabled?,dragging?,onPointerDown?}), renderContentGate? (Snippet<[Snippet<[]>]>), agentsView? ('list'|'conversation'), canAgentsListBeDefaultView? (boolean), agentsList? (AgentsListProps), renderAgentsListHeader? (Snippet<[]>), renderConversationHeader? (Snippet<[]>), agentsViewAnnouncement? (string). Header/tabs outside gate; chat remains mounted across tab/list changes."
     },
     "./components/StreamMessage.svelte": {
       "kind": "svelte",

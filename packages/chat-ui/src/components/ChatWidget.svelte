@@ -2,6 +2,10 @@
   import type { Snippet } from 'svelte';
   import ChatWidgetTabBar from './ChatWidgetTabBar.svelte';
 
+  import ChatWidgetPager from './ChatWidgetPager.svelte';
+  import type { AgentsListProps } from './AgentsList.svelte';
+  import { resolveChatWidgetPanelVisibility } from '../state/chatWidgetShell.js';
+
   type ChatWidgetTab = 'chat' | 'queue' | 'comments';
 
   export let activeTab: ChatWidgetTab = 'chat';
@@ -18,7 +22,13 @@
     | ((tab: ChatWidgetTab) => void)
     | undefined = undefined;
   export let onPurgeJobs: (() => void | Promise<void>) | undefined = undefined;
-  export let renderShell: Snippet<[]> | undefined = undefined;
+  export let renderContentGate: Snippet<[Snippet<[]>]> | undefined = undefined;
+  export let agentsView: 'list' | 'conversation' = 'conversation';
+  export let canAgentsListBeDefaultView = false;
+  export let agentsList: AgentsListProps | undefined = undefined;
+  export let renderAgentsListHeader: Snippet<[]> | undefined = undefined;
+  export let renderConversationHeader: Snippet<[]> | undefined = undefined;
+  export let agentsViewAnnouncement = '';
   export let renderJobsPanel: Snippet<[]> | undefined = undefined;
   export let renderCommentsPanel: Snippet<[]> | undefined = undefined;
   export let renderChatPanel: Snippet<[]> | undefined = undefined;
@@ -28,6 +38,9 @@
     | { enabled?: boolean; dragging?: boolean; onPointerDown?: (event: PointerEvent) => void }
     | undefined = undefined;
 
+  $: panelVisibility = resolveChatWidgetPanelVisibility({
+    activeTab, isPluginMode: !showCommentsTab, hasCommentContext: false,
+  });
   let totalJobsCount = 0;
   $: totalJobsCount = activeJobsCount + failedJobsCount;
 
@@ -41,9 +54,6 @@
   };
 </script>
 
-{#if renderShell}
-  {@render renderShell()}
-{:else}
   <section
     class="chat-widget-shell flex h-full min-h-0 flex-col"
     aria-label={widgetLabel}
@@ -88,7 +98,12 @@
     </header>
 
     <div class="min-h-0 flex-1">
-      {#if activeTab === 'queue'}
+      {#if renderContentGate}{@render renderContentGate(renderReady)}{:else}{@render renderReady()}{/if}
+    </div>
+  </section>
+
+{#snippet renderReady()}
+      {#if panelVisibility.showQueuePanel}
         {#if renderJobsPanel}
           {@render renderJobsPanel()}
         {:else}
@@ -96,7 +111,7 @@
             {queueTabLabel}
           </div>
         {/if}
-      {:else if activeTab === 'comments'}
+      {:else if panelVisibility.showCommentsPanel}
         {#if renderCommentsPanel}
           {@render renderCommentsPanel()}
         {:else}
@@ -104,13 +119,20 @@
             {commentsTabLabel}
           </div>
         {/if}
-      {:else if renderChatPanel}
-        {@render renderChatPanel()}
-      {:else}
-        <div class="flex h-full items-center justify-center p-4 text-xs text-slate-500">
-          {chatTabLabel}
-        </div>
       {/if}
-    </div>
-  </section>
-{/if}
+      <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
+        <ChatWidgetPager
+          {agentsView}
+          {canAgentsListBeDefaultView}
+          {agentsList}
+          {renderAgentsListHeader}
+          {renderConversationHeader}
+          renderChatPanel={renderChatPanel ?? renderDefaultChatPanel}
+          {agentsViewAnnouncement}
+        />
+      </div>
+{/snippet}
+
+{#snippet renderDefaultChatPanel()}
+  <div class="flex h-full items-center justify-center p-4 text-xs text-slate-500">{chatTabLabel}</div>
+{/snippet}
