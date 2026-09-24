@@ -5,7 +5,7 @@ import {
   affinityRef, mergeRoutePolicy, RoutePlanError, SequentialIdFactory,
   routingOwnerRef, subjectRef, type StoredAffinity, type StoredPlan,
 } from './route-planner-state.js';
-import { selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
+import { resolveRequestedTargets, selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
 import type {
   AccountDirectoryPort, AffinityDescription, Clock, IdFactory, PreparedRouteAttempt,
   AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
@@ -134,7 +134,24 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         .slice(0, policy.maxAttempts);
     }
     if (candidates.length === 0) {
-      const diagnostic = (await this.options.directory.listDiagnostics?.(subject))?.[0];
+      // A diagnostic is only pertinent when it belongs to the requested
+      // route's transports. Surfacing listDiagnostics[0] unfiltered once
+      // prescribed a `muse reauthenticate` for an explicit codex request.
+      // The model-derived resolution ignores `explicit`, so an explicit
+      // transport restriction wins over it here.
+      const explicitTransport = input.explicit?.transportProviderId;
+      const resolution = resolveRequestedTargets(input);
+      const transports = new Set<string>(
+        explicitTransport
+          ? [explicitTransport]
+          : resolution.kind === 'known'
+            ? resolution.targets
+              .map((target) => target.transportProviderId)
+              .filter((transport): transport is string => typeof transport === 'string')
+            : [],
+      );
+      const diagnostics = await this.options.directory.listDiagnostics?.(subject) ?? [];
+      const diagnostic = diagnostics.find((entry) => transports.has(entry.transportProviderId));
       throw new RoutePlanError(
         diagnostic?.message ?? 'No eligible route',
         'no-route',

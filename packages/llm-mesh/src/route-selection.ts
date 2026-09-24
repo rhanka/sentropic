@@ -44,7 +44,7 @@ const selectorMatches = (
   && (!selector.diagnosticAccountRef
     || selector.diagnosticAccountRef === candidate.account.diagnosticAccountRef);
 
-type RequestedTargetResolution =
+export type RequestedTargetResolution =
   | { readonly kind: 'known'; readonly targets: readonly {
   providerId: string;
   model: string;
@@ -65,7 +65,7 @@ const sameTarget = (left: {
   && left.model === right.model
   && left.effort === right.effort;
 
-const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolution => {
+export const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolution => {
   const { requestedModel } = request;
   const canonicalTargets = resolveCanonicalTargets(requestedModel);
   const profile = modelProfiles.find((candidate) => candidate.modelId === requestedModel);

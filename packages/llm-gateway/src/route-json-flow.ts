@@ -2,7 +2,7 @@ import type { PreparedRouteAttempt, RouteAttemptUsage } from '@sentropic/llm-mes
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage,
+  aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { GatewayError } from './router/errors.js';
@@ -78,8 +78,10 @@ export const runRouteJsonFlow = async (
         cost: prepared.cost, wire: request.wire, requestedModel: request.model,
         outcome, usage: aggregateUsage(attempts), attempts,
       });
-      throw new GatewayError(
-        'pooled-account-unavailable', 'all planned routes failed', undefined, servedTargetFor(diagnostic),
+      // Terminal refusal keeps its upstream class (400/401/429) instead of
+      // collapsing into pooled-account-unavailable (503).
+      throw terminalGatewayError(
+        classification, servedTargetFor(diagnostic), 'all planned routes failed',
       );
     }
   }
