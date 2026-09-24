@@ -38,6 +38,7 @@
 - [x] BRLG2-EX2 | acknowledge | Owner: conductor | I0 requires root `package-lock.json` gateway metadata alignment with 0.18.0, mesh floor and optional auth peers. Root package.json unchanged unless required. Impact: gateway dependency metadata only. Rollback: git revert.
 - [ ] BRLG2-I0 | blocked | Owner: auth lane / conductor | BLOCKS merge AND release. Merging to main triggers publish-llm-gateway (.github/workflows/ci.yml), which fails while @sentropic/mcp-auth@0.2.1 is E404. Registry latest is mcp-auth 0.2.0 on 2026-09-24; published 0.2.1 service-only clean-install evidence remains required. Develop against workspace without pinning 0.2.0.
 - [x] BRLG2-SCOPE | acknowledge | Implementation brief supersedes historical planning-only guardrails below. Single writer; no Track writes, push, PR, merge or publish. ENV=test-llm-gateway-lot2; API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480; ports verified free. Independent review/consumer qualification remain conductor gates.
+- [x] BRLG2-C6 | attention | Reversible | Adapter validation reports exact zero usage on cancellation before provider invocation; preserve attempt identity and the dispatch port contract without adding a callback. JSON/stream error usage already overrides estimates.
 - [x] C-FL1 | attention | Owner: conductor | Reversible | Use the EVOL rung directly: the brief fixes the three adapters and authorizes the Lot 2 type migration.
 - [x] C-FL2 | attention | Owner: conductor | Reversible | Keep planning and review evidence in these two files; harness recorder/Track writes and separate review artifacts exceed the explicit scope. Independent review remains the conductor's handoff gate.
 - [x] C-FL3 | attention | Owner: conductor | Reversible | Measured h2a origin/main `75c1dc61`: both inline verifiers remain assignable, affinity and ledger identity are unchanged, and `^0.17.0` requires a manual 0.18.0 range bump. Its lockfile already resolves mesh 0.21.2; lazy-surface E8 qualifies duplicate mesh resolution when gateway 0.18.0 and cluster-mesh are installed together.
@@ -70,7 +71,7 @@
   - [x] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate; execution remains open in BRLG2-CONSUMER.
   - [x] C4 — Buffer through the first upstream-derived frame before commitment, delaying done completion until encoding resumes; scoped stream suite passed (18 tests), including both-wire encoding failures and C5 pre-commit ledger rejection. Candidate 0.18.0 remains greater than registry latest 0.17.1 (2026-09-24).
   - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
-  - [ ] C6 — Zero usage for cancellation during dispatch validation before provider invocation; JSON/stream regressions.
+  - [x] C6 — Report zero usage on pre-provider validation cancellation; JSON/stream regressions assert no provider call, one cancellation and zero financial usage (final gates pending).
   - [ ] C7 — Reject empty service clientId before principal mapping; service-auth.test.ts regression.
   - [ ] C8 — Preserve exact registered issuer/resource strings; document and test trailing-slash matching.
   - [ ] C9 — Correct personal caller-auth declaration comments to match D2.

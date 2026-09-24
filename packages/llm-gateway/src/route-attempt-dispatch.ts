@@ -2,7 +2,12 @@ import type { RouteAttemptDispatchPort, RouteAttemptDispatchRequest } from './po
 
 const validate = (input: RouteAttemptDispatchRequest): void => {
   if (Object.hasOwn(input.request, 'auth')) throw new TypeError('Routed auth injection is forbidden');
-  input.request.signal?.throwIfAborted();
+  if (input.request.signal?.aborted) {
+    // The adapter has not invoked the provider; flows must not estimate billable input.
+    throw Object.assign(new Error('Route cancelled before provider invocation', {
+      cause: input.request.signal.reason,
+    }), { usage: { inputTokens: 0, outputTokens: 0, estimated: false } });
+  }
 };
 
 /** Delegation only: the flow retains planning, retries, lifecycle and metering. */

@@ -1,6 +1,7 @@
 import type { PreparedRouteAttempt, RoutePlanner, StreamEvent } from '@sentropic/llm-mesh';
 import { describe, expect, it, vi } from 'vitest';
 import { runRouteStreamFlow } from '../src/route-stream-flow.js';
+import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import { parseSse } from '../src/wire.js';
@@ -57,6 +58,22 @@ const collect = async (stream: AsyncIterable<{ raw: string }>) => {
 };
 
 describe('route stream flow', () => {
+  it('settles zero usage when dispatch validation cancels before the provider call', async () => {
+    const controller = new AbortController(); const settleRoute = vi.fn(); const hooks: string[] = [];
+    const source = attempt(async function* () {}, hooks); source.stream = vi.fn();
+    const adapter = new RouteAttemptDispatch();
+    const dispatch = { generate: vi.fn(), stream: (input: import('../src/ports/dispatch.js').RouteAttemptDispatchRequest) => {
+      controller.abort(); return adapter.stream(input);
+    } };
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source]), dispatch,
+      metering: { settleRoute } }, { ...request, signal: controller.signal })).rejects.toThrow();
+    expect(source.stream).not.toHaveBeenCalled();
+    expect(hooks).toEqual(['cancelled']);
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'cancelled',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: false },
+      attempts: [expect.objectContaining({ usage: { inputTokens: 0, outputTokens: 0, estimated: false } })],
+    }));
+  });
   it.each(['openai-chat-completions', 'anthropic-messages'] as const)(
     'rejects a first-event encoding failure before committing %s', async wire => {
       const hooks: string[] = []; const settleRoute = vi.fn(); const closed = vi.fn();
