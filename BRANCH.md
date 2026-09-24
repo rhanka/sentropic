@@ -48,6 +48,7 @@
 - [x] S6: adopt package pager in app; preserve ChatPanel binding and focus callbacks; remove app list/motion containers.
 - [ ] S7: typed renderContentGate; host loading/auth/onboarding actions; package header/tabs outside gate.
 - [ ] S8: package header, TabBar, routing and pager composition; promote host snippets; remove widget takeover; preserve grip and overflow.
+  - [x] Package header composes TabBar, uses app grip/cursors, gray border and unclipped content.
 - [ ] S8 tests: assembly/gate DOM suites, boundary/export assertions, updated ui/tests/components/chat/ChatWidget-*.test.ts; register each hunk.
 - [ ] UAT web: floating/docked/fullscreen geometry, mobile burger, list/conversation/Back/focus, all-workspaces, jobs/comments and settings overflow.
 - [ ] UAT Chrome: overlay/sidepanel, comments suppression, auth/settings, single composer.

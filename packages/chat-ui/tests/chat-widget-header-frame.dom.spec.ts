@@ -68,7 +68,9 @@ describe('ChatWidget header frame (S2)', () => {
       props: { activeTab: 'chat', headerGrip: { enabled: true, dragging: true, onPointerDown } },
     });
     const header = container.querySelector('header')!;
-    expect(header.getAttribute('data-header-grip')).toBe('true');
+    expect(header.getAttribute('data-chat-header-grip')).toBe('true');
+    expect(header.classList.contains('cursor-grabbing')).toBe(true);
+    expect(header.classList.contains('cursor-grab')).toBe(false);
     expect(header.getAttribute('data-dragging')).toBe('true');
     await fireEvent.pointerDown(header);
     expect(onPointerDown).toHaveBeenCalledTimes(1);
