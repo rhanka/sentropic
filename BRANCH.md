@@ -28,12 +28,14 @@
   - `ui/src/**`
   - `api/tests/api/cluster-mesh-streams-cutover.test.ts`
   - `api/tests/unit/document-text-office-extension.test.ts`
+  - `api/tests/unit/auth/magic-link.test.ts`
   - `package-lock.json`
   - `api/package-lock.json`
 - **Exception process**:
   - [x] Declare evidence, impact, and rollback before minimal product fixes.
 
 ## Feedback Loop
+- [x] BR600-EX4 — CI 35956955660 rejects the isolated lock owner session because the new-user magic-link service leaves emailVerified false after validating the token. Allow the one-field creation fix in `api/src/services/magic-link.ts` and a unit assertion; impact: a successfully proven email permits session validation, preserving pending admin approval; rollback: revert this change.
 - [x] BR600-EX3 — PDF failure in CI 35953479640 is missing `@napi-rs/canvas`, causing `DOMMatrix is not defined`. Both lockfiles omit pdfjs-dist 5.5.207 optional dependencies present in registry metadata. Allow restoring that dependency closure in both lockfiles; impact: PDF.js Node polyfills installed in production; rollback: revert lockfile repair. Generated platform records exceed the usual 150-line commit budget and stay atomic to preserve a complete dependency graph.
 - [x] BR600-EX2 — presence startup race proven in CI 35953479640: both POST presence requests precede SSE connection; A retains its one-user snapshot. Allow `api/src/routes/namespaces/streams.ts` and its cutover regression test to send an initial heartbeat after LISTEN is ready. Impact: existing presence clients immediately reannounce on connection; rollback: revert this change.
 - [x] BR600-EX1 — owner-authorized Makefile and `.github/workflows/ci.yml` exception: “E2E green in CI” requires truthful failure propagation, DOM execution, and complete selection. Impact: formerly green checks may fail; CI executes additional tests. Rollback: revert these changes.
@@ -61,6 +63,7 @@
   - [x] Run `test-chat-ui-dom`; include `07_comment_assistant` and all `09-*`.
   - [x] Validate node and DOM suites using make and isolated unit ports: 1015 node tests and 204 DOM tests passed.
 - [ ] **Lot 2 — Hidden failure investigation**
+  - [x] CI 35956955660 confirms organization avatar presence, PDF summaries and all 09 scenarios pass without retries. New isolated editor exposed missing emailVerified in magic-link user creation; corrected with unit regression (8/8 passed). Lock-on-leave CI verification remains pending.
   - [x] CI 35956955660 exposed an initiative lock waiter matching presence POST 200. Match the exact acquisition route before navigation; preserve the 201 assertion. API logs prove acquisition 201 precedes the post-SSE presence heartbeat. CI retest pending.
   - [x] `e2e/tests/02-auth-oauth-revoke.spec.ts:18`: stored covering grant bypasses consent correctly; fixture now requests `prompt=consent`, preserving every assertion. CI retest pending.
   - [ ] `e2e/tests/01-organizations-detail.spec.ts:279`: inspect presence predicate and lock retry.
