@@ -2,7 +2,7 @@ import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage,
+  aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { GatewayError } from './router/errors.js';
@@ -154,15 +154,11 @@ export const runRouteStreamFlow = async (
         outcome: classification.reason === 'cancelled' ? 'cancelled' : 'failed',
         usage: aggregateUsage(attempts), attempts,
       });
-      // Same invalid-refusal preservation as the JSON flow: a terminal
-      // upstream 400 surfaces as bad-request, never as pooled 503.
-      throw classification.reason === 'invalid-request'
-        ? new GatewayError(
-          'bad-request', 'upstream refused the request as invalid', undefined, servedTargetFor(diagnostic),
-        )
-        : new GatewayError(
-          'pooled-account-unavailable', 'all planned streams failed', undefined, servedTargetFor(diagnostic),
-        );
+      // Same terminal-class preservation as the JSON flow: a terminal
+      // upstream refusal keeps its class, never a pooled 503.
+      throw terminalGatewayError(
+        classification, servedTargetFor(diagnostic), 'all planned streams failed',
+      );
     }
   }
   throw new GatewayError('no-eligible-account', 'route plan has no candidates');
