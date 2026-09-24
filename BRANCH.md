@@ -62,8 +62,8 @@
   - [x] Identify any required llm-mesh changes and release consequences: no mesh source change required.
 - [ ] **Lot 3 — Compatibility and implementation handoff**
   - [x] Freeze the exhaustive existing-type delta and the nine additive exports in decision D7.
-  - [ ] Enumerate every proposed public type change and impact at each h2a import site.
-  - [ ] Specify gateway `0.17.1` to `0.18.0`, conditional mesh bump, and migration sequence.
+  - [x] Enumerate every proposed public type change and impact at each h2a import site.
+  - [x] Specify gateway `0.17.1` to `0.18.0`, conditional mesh bump, and migration sequence.
   - [ ] Provide ordered implementation lots with existing/new test paths and Make gates.
   - [ ] Classify open decisions as reversible or irreversible and record conservative defaults.
 - [ ] **Lot 4 — Final validation**
