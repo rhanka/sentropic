@@ -121,6 +121,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
   async function waitForQueueJobSettled(
     api: import('@playwright/test').APIRequestContext,
     jobId: string,
+    workspaceId: string,
     timeout = 240_000,
   ) {
     if (!jobId) return '';
@@ -128,7 +129,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
     await expect
       .poll(
         async () => {
-          const res = await api.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+          const res = await api.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}?workspace_id=${encodeURIComponent(workspaceId)}`);
           if (!res.ok()) return `http-${res.status()}`;
           const data = await res.json().catch(() => null);
           status = String(data?.status ?? '');
@@ -344,7 +345,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       chatJobId = String((sendJson as any)?.jobId ?? '');
 
       // 3. Wait for the run to COMPLETE — poll the queue job (like other specs).
-      const jobStatus = await waitForQueueJobSettled(page.request as any, chatJobId);
+      const jobStatus = await waitForQueueJobSettled(page.request as any, chatJobId, workspaceId);
       // The run must terminate (completed). A failed job means no demonstrative answer.
       expect(jobStatus, `chat run job settled (status=${jobStatus})`).toBe('completed');
 
@@ -392,7 +393,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       expect(followUpResponse.status()).toBeLessThan(400);
       const followUpJson = await followUpResponse.json().catch(() => null);
       const followUpJobId = String((followUpJson as any)?.jobId ?? '');
-      const followUpStatus = await waitForQueueJobSettled(page.request as any, followUpJobId);
+      const followUpStatus = await waitForQueueJobSettled(page.request as any, followUpJobId, workspaceId);
       expect(followUpStatus, `follow-up run job settled (status=${followUpStatus})`).toBe('completed');
       await waitForComposerIdle(page);
 
