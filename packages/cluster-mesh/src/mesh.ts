@@ -45,6 +45,13 @@ export function createDegenerateClusterMesh(input: {
   readonly nhi?: NhiLifecyclePort;
   readonly devices: LocalDeviceAttachmentPort;
 }): ClusterMesh {
+  if (input.nhi !== undefined) {
+    for (const method of ['attest', 'offboard', 'exportBundle'] as const) {
+      if (typeof input.nhi?.[method] !== 'function') {
+        throw new TypeError(`nhi.${method} must be a function`);
+      }
+    }
+  }
   const nhi = input.nhi ?? (input.nhiRunner ? createH2aNhiLifecycle(input.nhiRunner) : undefined);
   if (!nhi) throw new TypeError('nhi or nhiRunner is required');
   const boundaries = createBoundaryDomain({
