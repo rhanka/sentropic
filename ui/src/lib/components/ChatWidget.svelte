@@ -68,7 +68,7 @@
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
-  import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte';
+  import ChatWidgetPager from '@sentropic/chat-ui/components/ChatWidgetPager.svelte';
   import ChatWidgetTabBar from '@sentropic/chat-ui/components/ChatWidgetTabBar.svelte';
   import ChatPlacementDropZones from '@sentropic/chat-ui/components/ChatPlacementDropZones.svelte';
   import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
@@ -3289,12 +3289,7 @@
           {@render renderCommentsPanelHost()}
           {#snippet renderChatPanelHost()}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            {#if canAgentsListBeDefaultView && agentsView === 'list'}
-              <section
-                class="h-full min-h-0 flex flex-col"
-                class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}
-              >
-                <div class="shrink-0 p-3">
+            {#snippet renderAgentsListHeaderHost()}
                   <div class="flex items-center justify-end gap-3">
                     <Toggle
                       label={$_('chat.agents.scope.allWorkspaces')}
@@ -3313,24 +3308,7 @@
                       <Plus class="w-4 h-4" />
                     </IconButton>
                   </div>
-                </div>
-                <div class="min-h-0 flex-1 overflow-y-auto p-3">
-                  <AgentsList
-                    rows={agentsRows}
-                    activeId={chatSessionId ?? undefined}
-                    onSelect={handleSelectAgentsEntry}
-                    onAction={handleAgentsAction}
-                    labels={(key: string) => $_(key)}
-                    formatRelative={formatAgentsRelative}
-                  />
-                </div>
-              </section>
-            {/if}
-            <div
-              class="h-full min-h-0 flex flex-col"
-              class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}
-              class:chat-agents-view-slide-from-inline-end={canAgentsListBeDefaultView && agentsView === 'conversation'}
-            >
+            {/snippet}
               <!-- Gold shell adoption (S6b): sessions bar renders via the
                        @sentropic/chat-ui ChatSessionsBar component; the host keeps the
                        popover menu (MenuPopover) and icons as snippets. -->
@@ -3415,7 +3393,6 @@
               renderTrashIcon={renderSessionsTrashIcon}
             />
             {/snippet}
-            {@render renderConversationHeaderHost()}
             {#snippet renderChatBodyHost()}
             <div class="flex-1 min-h-0 overflow-hidden">
               {#if !extensionChatGateState.blockChatPanel}
@@ -3430,11 +3407,22 @@
               {/if}
             </div>
             {/snippet}
-            {@render renderChatBodyHost()}
-            </div>
-            <div class="sr-only" aria-live="polite" aria-atomic="true">
+            <ChatWidgetPager
+              {agentsView}
+              {canAgentsListBeDefaultView}
+              agentsList={{
+                rows: agentsRows,
+                activeId: chatSessionId ?? undefined,
+                onSelect: handleSelectAgentsEntry,
+                onAction: handleAgentsAction,
+                labels: (key: string) => $_(key),
+                formatRelative: formatAgentsRelative,
+              }}
+              renderAgentsListHeader={renderAgentsListHeaderHost}
+              renderConversationHeader={renderConversationHeaderHost}
+              renderChatPanel={renderChatBodyHost}
               {agentsViewAnnouncement}
-            </div>
+            />
           </div>
           {/snippet}
           {@render renderChatPanelHost()}
@@ -3485,47 +3473,3 @@
     labelForPlacement={placementDragZoneLabel}
   />
 {/if}
-
-<style>
-  .chat-agents-view-slide-from-inline-start,
-  .chat-agents-view-slide-from-inline-end {
-    position: relative;
-    animation-duration: 180ms;
-    animation-timing-function: ease-out;
-  }
-
-  .chat-agents-view-slide-from-inline-start {
-    animation-name: chat-agents-view-slide-from-inline-start;
-  }
-
-  .chat-agents-view-slide-from-inline-end {
-    animation-name: chat-agents-view-slide-from-inline-end;
-  }
-
-  @keyframes chat-agents-view-slide-from-inline-start {
-    from {
-      inset-inline-start: -24px;
-    }
-
-    to {
-      inset-inline-start: 0;
-    }
-  }
-
-  @keyframes chat-agents-view-slide-from-inline-end {
-    from {
-      inset-inline-end: -24px;
-    }
-
-    to {
-      inset-inline-end: 0;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .chat-agents-view-slide-from-inline-start,
-    .chat-agents-view-slide-from-inline-end {
-      animation: none;
-    }
-  }
-</style>
