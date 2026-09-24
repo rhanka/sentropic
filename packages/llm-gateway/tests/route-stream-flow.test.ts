@@ -57,6 +57,31 @@ const collect = async (stream: AsyncIterable<{ raw: string }>) => {
 };
 
 describe('route stream flow', () => {
+  it.each(['openai-chat-completions', 'anthropic-messages'] as const)(
+    'rejects a first-event encoding failure before committing %s', async wire => {
+      const hooks: string[] = []; const settleRoute = vi.fn(); const closed = vi.fn();
+      const source = attempt(async function* () {
+        try { yield { type: 'tool_call_start', data: { toolCallId: 't',
+          get name(): string { throw Error('cannot encode'); } } } as StreamEvent; }
+        finally { closed(); }
+      }, hooks);
+      await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source]),
+        metering: { settleRoute } }, { ...request, wire })).rejects.toThrow();
+      expect(hooks).toEqual(['outcome:provider-5xx']);
+      expect(closed).toHaveBeenCalledTimes(1);
+      expect(settleRoute).toHaveBeenCalledTimes(1);
+    });
+  it('does not repeat terminal accounting when priming encounters a ledger failure', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn(async (_value: RouteRequestSettlement) => { throw Error('ledger failure'); });
+    const source = attempt(async function* () {
+      yield { type: 'content_delta', data: { get delta(): string { throw Error('invalid event'); } } };
+    }, hooks);
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source, source]),
+      metering: { settleRoute } }, request)).rejects.toThrow('ledger failure');
+    expect(hooks).toEqual(['outcome:provider-5xx']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+    expect(settleRoute.mock.calls[0]![0].attempts).toHaveLength(1);
+  });
   it('records only one cancellation when abort, pending next and return race', async () => {
     const controller = new AbortController(); const hooks: string[] = []; const settleRoute = vi.fn();
     let entered!: () => void;

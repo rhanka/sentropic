@@ -7,6 +7,7 @@ import {
 } from './route-flow-core.js';
 import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
+import type { GatewayDispatchStreamEvent } from './ports/dispatch.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown): SettleUsage | undefined => {
@@ -38,6 +39,7 @@ const trackedExecution = (input: {
   let finishing: Promise<void> | undefined;
   let closing: Promise<unknown> | undefined;
   let outputCharacters = 0;
+  let firstObserved = false;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
   const isCancelled = () => terminal === 'cancelled';
   const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
@@ -79,8 +81,9 @@ const trackedExecution = (input: {
         if (event.type === 'error') throw event.data;
         if (event.type === 'done') {
           if (event.data.usage) reported = routeUsage(event.data.usage);
-          await finish({ reason: 'success', retryable: false, healthScope: 'route' });
+          firstObserved = true;
           yield event;
+          await finish({ reason: 'success', retryable: false, healthScope: 'route' });
           return;
         }
         if (event.type === 'content_delta' || event.type === 'reasoning_delta' || event.type === 'tool_call_delta') {
@@ -88,6 +91,7 @@ const trackedExecution = (input: {
         }
         if (event.type === 'tool_call_start') outputCharacters = Math.min(4_000_000,
           outputCharacters + (event.data.argumentsText?.length ?? 0));
+        firstObserved = true;
         yield event;
         next = await iterator.next();
       }
@@ -106,14 +110,18 @@ const trackedExecution = (input: {
   const encoded = encodeGatewayStream(request.wire, target.model, input.responseId, tracked,
     request.wire === 'anthropic-messages'
       ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) } : undefined);
-  const expose = (first: IteratorResult<import('./ports/dispatch.js').GatewayDispatchStreamEvent>) => {
+  const expose = (buffered: readonly GatewayDispatchStreamEvent[]) => {
     signal?.addEventListener('abort', onAbort, { once: true });
     if (signal?.aborted) onAbort();
     const stream = (async function* () {
       try {
         signal?.throwIfAborted();
         if (isCancelled()) return;
-        if (!first.done) yield first.value;
+        for (const frame of buffered) {
+          signal?.throwIfAborted();
+          if (isCancelled()) return;
+          yield frame;
+        }
         for await (const frame of encoded) {
           signal?.throwIfAborted();
           if (isCancelled()) return;
@@ -130,7 +138,7 @@ const trackedExecution = (input: {
     stream.return = async value => { await cancel(); await encoded.return(undefined); return originalReturn(value); };
     return stream;
   };
-  return { encoded, expose, get terminal() { return terminal; } };
+  return { encoded, expose, get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
 };
 
 export const runRouteStreamFlow = async (
@@ -190,12 +198,19 @@ export const runRouteStreamFlow = async (
       if (first.value.type === 'done') responseId = first.value.data.responseId ?? responseId;
       execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
         prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId, settle });
-      const frame = await execution.encoded.next();
-      if (frame.done || typeof frame.value.raw !== "string" || !frame.value.raw) throw Error("empty encoded stream");
+      const buffered: GatewayDispatchStreamEvent[] = [];
+      do {
+        const frame = await execution.encoded.next();
+        if (execution.terminal) throw terminalGatewayError(
+          { reason: execution.terminal, retryable: false, healthScope: 'route' },
+          servedTargetFor(diagnostic), 'stream failed before commitment');
+        if (frame.done || typeof frame.value.raw !== 'string' || !frame.value.raw) throw Error('empty encoded stream');
+        buffered.push(frame.value);
+      } while (!execution.firstObserved);
       committed = true;
       await preparedAttempt.markCommitted();
       signal?.throwIfAborted();
-      return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(frame) };
+      return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(buffered) };
     } catch (error) {
       if (execution?.terminal) throw error;
       try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
