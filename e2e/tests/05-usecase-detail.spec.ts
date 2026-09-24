@@ -638,6 +638,11 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
     await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
 
+    // Loading the initiative acquires its lock before the first field is clicked.
+    const acquiredByA = pageA.waitForResponse(
+      (res) => new URL(res.url()).pathname === '/api/v1/locks' && res.request().method() === 'POST',
+      { timeout: 10_000 },
+    );
     await pageA.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     const waitForUseCaseViewA = async () => {
@@ -679,10 +684,6 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     const editableFieldA = pageA.locator('input:not([type="file"]):not(.hidden), textarea').first();
     await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
-    const acquiredByA = pageA.waitForResponse(
-      (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
-      { timeout: 10_000 },
-    );
     await editableFieldA.click();
     expect((await acquiredByA).status()).toBe(201);
     await waitForNoLocker(pageA);
