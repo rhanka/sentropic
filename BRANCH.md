@@ -24,6 +24,8 @@
 
 ## Feedback Loop
 - [x] D-FL1 | Branch: Lot D | Owner: conductor | Severity: process | Status: attention | Repro: harness recorder/review writes extra artifacts | Expected: two-file scope | Actual: record design here and defer independent review to conductor | Evidence: owner brief | Rationale: preserve explicit planning scope; no consensus claimed.
+- [x] D-FL2 | Branch: Lot D | Owner: conductor | Severity: evidence | Status: attention | Repro: search supplied roots for validation id/original phrase | Expected: original conductor artifact | Actual: no match | Evidence: spec section 0 | Rationale: retain brief attribution and independently verified code findings.
+- [x] D-FL3 | Branch: Lot D | Owner: gateway maintainer | Severity: design | Status: attention | Repro: compare package and h2a entry points | Expected: autonomous host | Actual: select thin private Node app, port 3001, same router factory | Evidence: spec D1-D3 | Rationale: reversible composition without a new published CLI contract.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only branch; no provider calls or runtime tests.
@@ -37,15 +39,15 @@
 - [ ] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Evidence and scope**
+- [x] **Lot 0 — Evidence and scope**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, project overview and relevant plan context.
   - [x] Create this file before the specification; verify branch mechanically and inspect make targets.
-  - [ ] Read package exports/router/stubs, h2a entry point, deployment manifests/readme, quota/metering/routing/control-plane specs, and in-progress seat custody.
-  - [ ] Locate original conductor wording or document an explicit evidence limitation.
-  - [ ] Gate: `make scope-check ENV=test-llm-deployable-process` before commit.
+  - [x] Read package exports/router/stubs, h2a entry point, deployment manifests/readme, quota/metering/routing/control-plane specs, and in-progress seat custody.
+  - [x] Locate original conductor wording or document an explicit evidence limitation (D-FL2).
+  - [x] Gate: `make scope-check ENV=test-llm-deployable-process` passed before the initial plan commit.
 - [ ] **Lot 1 — Process and deployment design**
   - [ ] Write `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: evidence, numbered decisions, entry point ownership, image, namespaces, probes, k8s and secrets.
-  - [ ] Specify which h2a responsibilities move upstream and which stay consumer-owned.
+  - [x] Specify which h2a responsibilities move upstream and which stay consumer-owned.
   - [ ] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` before commit.
 - [ ] **Lot 2 — Admission, identity, and delivery plan**
   - [ ] Specify ledger-backed over-budget emission, identity table ownership/storage/schema, and seat-secret consumption.
