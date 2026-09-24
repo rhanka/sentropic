@@ -67,6 +67,7 @@ export const prepareRouteFlow = async (
     throw new GatewayError('cross-user-disabled', 'cross-user pooling is disabled');
   }
   const auth = await authenticateCaller(deps.config.callerAuth, request.headers, request.authContext);
+  request.signal?.throwIfAborted();
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
