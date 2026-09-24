@@ -63,6 +63,7 @@
   - [x] `e2e/tests/02-auth-oauth-revoke.spec.ts:18`: stored covering grant bypasses consent correctly; fixture now requests `prompt=consent`, preserving every assertion. CI retest pending.
   - [ ] `e2e/tests/01-organizations-detail.spec.ts:279`: inspect presence predicate and lock retry.
   - [x] CI 35953479640 proves presence startup notification loss; initial SSE heartbeat and regression added. Lock-on-leave fixture isolates its departing user from parallel SSE sessions; CI verification pending.
+  - [x] Push presence changes for parallel CI qualification while the isolated local API image finishes building; scoped regression gate remains pending and is not claimed passed.
   - [ ] `e2e/tests/08-document-summary-formats.spec.ts:28`: inspect PDF failed status.
   - [x] Restore the missing PDF.js optional dependency closure; Docker Node 24 Alpine clean workspace npm ci then production prune extracts 312 characters from the real PDF fixture. CI summary verification pending.
   - [x] `e2e/tests/05-i18n.spec.ts:184`: stale “use cases” warning strings conflict with shipped “initiatives” translations; corrected exact text, registered for independent review. CI retest pending.
