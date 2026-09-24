@@ -47,7 +47,6 @@
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
-  let suppressAutoLock = false;
   const lockRenewal = createLockRenewal();
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
@@ -207,10 +206,7 @@
         lock = evt?.data?.lock ?? null;
         lockRenewal.observed(organizationId, previousLock, lock, $session.user?.id);
         if (!lock && !$workspaceReadOnlyScope) {
-          if (suppressAutoLock) {
-            suppressAutoLock = false;
-            return;
-          }
+          if (!lockRenewal.autoAcquireAllowed(organizationId)) return;
           void syncLock();
         }
         return;
@@ -458,7 +454,7 @@
         targetId,
         userId,
         () => acquireLock('organization', targetId),
-        () => releaseLock('organization', targetId)
+        (lockId) => releaseLock('organization', targetId, lockId)
       );
       if (res) lock = res.lock;
     } catch {
@@ -467,7 +463,7 @@
   };
 
   const releaseCurrentLock = async () => {
-    lockRenewal.release();
+    lockRenewal.release(lockTargetId);
     if (!lockTargetId || !isLockedByMe) return;
     try {
       await releaseLock('organization', lockTargetId);
@@ -500,12 +496,10 @@
   const handleReleaseLock = async () => {
     if (!lockTargetId) return;
     if (lock?.unlockRequestedByUserId) {
-      suppressAutoLock = true;
-      lockRenewal.release();
+      lockRenewal.release(lockTargetId);
       await acceptUnlock('organization', lockTargetId);
       return;
     }
-    suppressAutoLock = true;
     await releaseCurrentLock();
   };
 
