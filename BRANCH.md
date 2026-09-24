@@ -37,15 +37,15 @@
 - [x] Mono-branch, single author; no delegated implementation, cherry-picks or cross-repository edits.
 
 ## UAT Management (in orchestration context)
-- [x] Web, Chrome and VSCode UAT not applicable; acceptance is source-backed design coverage, scope checks and two atomic documentation commits.
+- [x] Web, Chrome and VSCode UAT not applicable; acceptance is source-backed design coverage, scope checks and atomic documentation commits.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline**: read required rules/template, README/TODO/PLAN context, control-plane decisions, package exports, registration gates, F1–F7 branch and h2a imports at `75c1dc61`; create this branch plan first.
 - [x] **Lot 1 — New specification**: decide loader/type/version/error contracts; map every h2a symbol and MCP import; reconcile namespace mounting and F1; specify migration and implementation lots with file-level tests; commit spec with this checklist.
 - [x] **Lot 2 — Amendment**: append dated verbatim decision, translation, preserved D1 and strengthened D14 with spec link; original 495 lines compare byte-for-byte equal; commit amendment with this checklist.
-- [x] **Final validation**: PASS `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` before each commit; exact diff/whitespace review; only allowed paths in the two-commit delivery.
-- [x] **Cleanup**: PASS `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; PASS `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` (no services).
+- [x] **Initial validation**: PASS `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` before each initial commit; exact diff/whitespace review; only allowed paths in the initial two-commit delivery.
+- [x] **Initial cleanup**: PASS `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; PASS `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` (no services).
 - [x] **Revision R1a — Consumer contract**: answer all three orientations with arguments; choose static leaves/separate loaders; enumerate all measured h2a sites including node; align Lot C auth isolation and E2–E7.
 - [x] **Revision R1b — Upgrade and shipment**: pin gateway 0.18 compatibility; document cluster-mesh 0.9 → 0.10 → 0.11 → lazy minor; ship LLM/gateway before building MCP; revise file-level acceptance.
-- [ ] **Revision R1c — Authority and validation**: append consumer clarification inside the amendment only; scope-check each atomic commit, inspect final diff/history and clean up the reserved environment.
+- [x] **Revision R1c — Authority and validation**: append consumer clarification inside the amendment only; preserve resumed work; PASS branch/scope and whitespace checks, original 495 control-plane lines byte-identical, reviewed diff/history; PASS reserved-environment `make down` and `make ps` with the ports/ENV above (no services). Commit each remaining revision atomically with this checklist; independent review/delivery stays pending below.
 - [ ] **Review/delivery gate (conductor-owned)**: independent Opus 5.5 design review passes; only then deliver the reviewed contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor.
