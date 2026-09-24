@@ -408,12 +408,37 @@ several atomic commits under approximately 150 lines; none is separately publish
 
 | Lot | Implementation files | Tests and acceptance |
 |---|---|---|
-| I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed Makefile exception only after owner approval | Confirm auth-hono public exports and peers load in the gateway's isolated Docker toolset. Existing Make recipes only install mesh/Hono; add dependency build/link/install wiring through an approved exception before I1. No compose/workflow changes required by this design. |
+| I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed reversible Makefile exception only after owner approval | Qualify published mcp-auth `/hono` and auth-hono `/middleware` plus peers in the isolated Docker toolset. Apply the exact target changes below before I1; verify clean tarball installs as well as workspace links. No compose/workflow changes required. |
 | I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/ports/pool.ts` (native-only AuthResolver comment), `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/errors.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Test default/custom public URL for both wires/models, trusted TLS ingress versus spoofed forwarded headers, invalid URL/callback throw; both 503 wire mappings and exhaustive failure handling. Header-only direct calls and invalid result variants fail typechecking. |
 | I2 — Concrete verification and cost | New `src/caller-auth/service-auth.ts`, `src/caller-auth/auth-hono.ts`, `src/cost-context.ts`; update `src/ports/cost-context.ts`, `src/personal-passthrough/caller-auth.ts`, `src/index.ts`, `src/ports/index.ts`, `package.json` subpath exports | New `tests/service-auth.test.ts`, `tests/auth-hono.test.ts`, `tests/auth-subpaths.test.ts`, `tests/cost-context.test.ts`, `tests/fixtures/auth-hono.ts`. Real mcp-auth service and auth-hono session middleware with deterministic clock/JWKS/stores; validate the matrix below. Root runtime/declarations load without auth peers; service loads without auth-hono; session loads without mcp-auth; missing selected peer fails closed. Update `tests/caller-ownership.test.ts` for forgery and enrolled-owner matching. |
 | I3 — Opaque mesh adapter | New `src/route-attempt-dispatch.ts`; update `src/ports/dispatch.ts`, `src/index.ts`, `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`, `src/router/index.ts` | New `tests/route-attempt-dispatch.test.ts`; update `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/router.test.ts`. Exact attempt, signal/tools preservation, no auth injection, default adapter, no native-port calls, cancellation and one terminal outcome. |
 | I4 — Lifecycle and wire integration | Same routed flow/router files; only directly required fixes in `src/canonical-ingress.ts`, `src/canonical-egress.ts`, `src/canonical-stream.ts` | Update `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/contract-snapshot.test.ts`; new `tests/lot2-router-integration.test.ts`. Cross-wire fixtures, pre/post-commit failure, empty plan/stream, iterator cleanup, settlement rejection without redispatch, missing usage and redaction. |
-| I5 — Release and consumer qualification | `package.json` at 0.18.0, root lockfile, `README.md`, final spec/branch evidence; h2a owner edits its own repository | All gateway tests/typecheck/lint/pack; auth-hono reference tests; mesh regressions below; exact-candidate h2a compilation/UAT for both named entrypoints. Release only after independent review and consumer evidence. |
+| I5 — Release and consumer qualification | `package.json` at 0.18.0, root lockfile, `README.md`, final spec/branch evidence; h2a owner edits its own repository | All gateway tests/typecheck/lint/pack; auth dependency tests; mesh regressions below; exact-candidate h2a compilation/UAT for both named entrypoints. Release only after independent review, consumer evidence and O8 owner approval. |
+
+I0's proposed Makefile exception is limited to these targets; it is **reversible by git revert**.
+The implementation branch must record its approved exception with this scope, impact and rollback.
+This design branch does not touch Makefile or grant that exception.
+
+| Exact target | Planned dependency wiring / acceptance |
+|---|---|
+| `typecheck-llm-gateway` | Add `build-oauth-verify`, `build-mcp-auth` and `build-auth-hono` prerequisites alongside mesh; link those packages and install/link their peers in the isolated toolset. Typecheck source, tests and each subpath. |
+| `build-llm-gateway` | Use the same auth prerequisites and links to emit both bridge subpaths; keep gateway root runtime/declarations independent of optional auth peers. |
+| `test-llm-gateway` | Use the same auth prerequisites and links for middleware fixtures; exercise separate root-without-auth, service-only and session-only installs, so a full workspace cannot mask eager dependencies. |
+| `package-llm-routing-candidates` | Include exact oauth-verify, mcp-auth and session auth-hono tarballs with gateway/mesh; print SHA-256 for all five and retain qualified peer versions/lockfile. Use the published auth floors for release qualification; local auth-hono 0.15.2 is not evidence for published 0.15.0. |
+| `wait-llm-gateway-auth-dependencies` (new), `publish-llm-gateway` | Add a bounded, fail-closed registry wait and make publication depend on it alongside `wait-llm-gateway-mesh-dependency`. Read every declared auth dependency/optional-peer floor and its transitive auth requirements, including oauth-verify; require npm visibility before publication, as D8 requires. |
+
+Reuse existing auth build targets; preserve their cleanup and make linked packages able to resolve
+their peers from their own paths. Service fixtures need only hono and jose plus oauth-verify/mcp-auth;
+session fixtures additionally qualify auth-hono's zod, @hono/zod-validator and @simplewebauthn/server
+peers. Selecting mcp-auth makes the **service** exception smaller: no session/WebAuthn/Zod dependency
+wiring in that fixture or deployment. Full gateway build/typecheck still covers both optional subpaths.
+
+Registry metadata checked 2026-09-24 declares mcp-auth 0.2.0's oauth-verify dependency as
+`file:../oauth-verify`. I0 must prove installation of the exact published tarballs outside the monorepo
+without sibling links or undeclared overrides; npm visibility alone is insufficient evidence.
+If this reference prevents installation, the mcp-auth owner must publish a registry-resolvable
+dependency manifest and the implementation conductor must trace the compatible floor update under O1
+before I5 can pass. This branch changes neither auth sources nor the selected service API.
 
 I2 verification matrix in `tests/service-auth.test.ts` and `tests/auth-hono.test.ts`: Bearer and x-api-key, valid bound DPoP,
 wrong signature/issuer/audience/expiry/scope, wrong htm/htu/ath/jkt, stale/future proof iat, missing
@@ -440,6 +465,8 @@ requires adaptation; these prove unchanged passthrough bytes/headers and termina
 
 Dependency regression files (no source changes planned):
 
+- `packages/mcp-auth/tests/service-auth.test.ts`, `tests/hono.test.ts` (both under mcp-auth),
+  and `packages/oauth-verify/tests/verify-dpop-proof.test.ts`: canonical service middleware and replay behavior.
 - `packages/auth-hono/tests/service-auth-middleware.test.ts`, `tests/middleware.test.ts`,
   `tests/oauth-dpop-proof.test.ts` (all three under auth-hono): existing signature/session/replay behavior.
 - `packages/llm-mesh/tests/route-planner.test.ts`, `tests/route-selection.test.ts`,
@@ -450,13 +477,17 @@ Dependency regression files (no source changes planned):
 Use existing package targets, after I0 dependency wiring is approved and implemented:
 
 ```sh
+make test-llm-gateway SCOPE=tests/service-auth.test.ts ENV=test-llm-gateway-lot2
 make test-llm-gateway SCOPE=tests/auth-hono.test.ts ENV=test-llm-gateway-lot2
+make test-llm-gateway SCOPE=tests/auth-subpaths.test.ts ENV=test-llm-gateway-lot2
 make test-llm-gateway SCOPE=tests/cost-context.test.ts ENV=test-llm-gateway-lot2
 make test-llm-gateway SCOPE=tests/route-attempt-dispatch.test.ts ENV=test-llm-gateway-lot2
 make test-llm-gateway SCOPE=tests/lot2-router-integration.test.ts ENV=test-llm-gateway-lot2
 make typecheck-llm-gateway ENV=test-llm-gateway-lot2
 make lint-llm-gateway ENV=test-llm-gateway-lot2
 make test-llm-gateway ENV=test-llm-gateway-lot2
+make test-mcp-auth ENV=test-llm-gateway-lot2
+make test-oauth-verify SCOPE=tests/verify-dpop-proof.test.ts ENV=test-llm-gateway-lot2
 make test-auth-hono ENV=test-llm-gateway-lot2
 make test-llm-mesh SCOPE=tests/route-planner.test.ts ENV=test-llm-gateway-lot2
 make test-llm-mesh SCOPE=tests/route-selection.test.ts ENV=test-llm-gateway-lot2
@@ -469,8 +500,8 @@ make package-llm-routing-candidates LLM_ROUTING_PACK_DIR="$PWD/tmp/llm-gateway-l
 ```
 
 These commands are the implementation plan, **not executed design-branch checks**. Run from the
-implementation worktree root; the candidate directory is bind-mounted by Docker. Pin candidate
-auth-hono dependencies from the lockfile as well as the gateway/mesh tarballs. No live credentials
+implementation worktree root; the candidate directory is bind-mounted by Docker. Pin all five
+candidate tarballs and their peers from the qualified lockfile. No live credentials
 are needed for package tests. No API/UI/browser E2E files change; the Hono integration fixture tests
 HTTP/SSE in process. Consumer live UAT is the separate I5 gate from section 3, including compaction.
 If later qualification starts services, allocate/check all three ports and pass them on every service
@@ -485,8 +516,9 @@ Make command with ENV last, then run make down on that same isolated project.
 | O3 | Reversible / deployment owner | Map service client or session user through trusted directory state; keep per-user OBO out of this lot because current service context cannot express it. |
 | O4 | Reversible / gateway owner | Keep native contracts and add the opaque adapter. Reconsider removing native exports only in a separate migration brief; no implicit dual dispatch. |
 | O5 | Reversible / h2a conductor | Use measured origin/main `75c1dc61`; the brief's imports are correct. Recheck the release candidate SHA, typecheck both unchanged inline verifiers, manually bump gateway ranges and qualify mesh >=0.21.2. |
-| O6 | Irreversible scope gate / implementation owner | I0 Makefile changes require a separately approved exception before implementation. This specification records the dependency gap and does not authorize touching infrastructure. |
+| O6 | Reversible scope exception / implementation owner | Approve only I0's named typecheck/build/test, candidate packaging and auth registry-wait/publication wiring; mcp-auth keeps the service fixture smaller. Roll back via git revert. This specification does not authorize Makefile edits. |
 | O7 | Irreversible contract/security gate / owner | Any additional published break, new DB migration, changed wire, cross-user activation or per-user OBO claim exposure requires a new decision. Conservative default: none. Quota admission remains BR-47 / deployable-process Lot D: budgetScope is carried only, no quota hook exists, and Lot 2 emits no over-budget failure. |
+| O8 | Irreversible publication gate / release owner | npm publication of gateway 0.18.0 freezes D1/D7's enumerated breaks publicly. Require explicit owner release approval after dependency visibility/install qualification, independent review and I5 consumer evidence; publish only through regular CD. Reverting a Makefile commit or pinning a prior consumer version cannot undo publication. |
 
 D1/D7's enumerated TypeScript breaks and D8's 0.x minor boundary are within the supplied brief;
 no further irreversible choice is taken here. Open deployment values do not prevent this design
