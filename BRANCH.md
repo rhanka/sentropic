@@ -38,6 +38,7 @@
 - [x] C-FL6 | attention | Owner: implementation conductor | Irreversible future gate | Real auth-hono integration requires an approved Makefile dependency-wiring exception on the implementation branch; this branch does not grant or perform it.
 - [x] C-FL7 | attention | Owner: implementation conductor | Reversible | Production uses request-generated cost correlation and a separately supplied stable affinity; existing custom verifiers retain their published options.
 - [x] C-FL8 | attention | Owner: conductor | Reversible | Registry reads confirm gateway 0.17.1 and mesh 0.21.2; independent review, implementation tests and h2a UAT remain future gates, not claimed results.
+- [x] C-FL9 | attention | Owner: implementation conductor | Reversible design | Add trusted `publicUrl` and the enumerated `caller-auth-unavailable` union member; private Hono onError preserves store outages as 503, while the deliberate RFC 6750 403-to-401 provider mapping gets separate tests.
 
 ## AI Flaky tests
 - [x] Not applicable: design-only branch; no provider calls or test execution required.
@@ -54,7 +55,7 @@
 - [ ] **Review round 1 — Focused fix groups**
   - [x] R1 — Re-inventory h2a origin/main, correct C-FL3 and document gateway/mesh range effects (findings 1, 11).
   - [x] R2 — Use published canonical service auth and isolate optional auth peers behind subpaths; require npm visibility for all auth dependency floors (findings 2, 3).
-  - [ ] R3 — Complete public URL/error contracts, Hono failure classification and RFC 6750 deviation tests (findings 4, 5, 12).
+  - [x] R3 — Complete public URL/error contracts, Hono failure classification and RFC 6750 deviation tests (findings 4, 5, 12).
   - [ ] R4 — Correct quota boundary, dispatch naming and native-only refresh comment (findings 6, 7, 8).
   - [ ] R5 — Enumerate future Makefile wiring and publish order; classify reversible changes versus owner-gated publication (findings 9, 10).
   - [ ] Run scope/whitespace checks per fix group; commit both files; verify final scope, cleanup and log.
