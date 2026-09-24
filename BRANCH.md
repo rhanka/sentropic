@@ -45,7 +45,7 @@
 - [x] Lot 0: read rules, template and audit; verify clean baseline and mechanical branch check.
 - [x] S5: export typed package ChatWidgetPager with conditional list, persistent conversation, live region and 180ms reduced-motion-aware CSS.
 - [x] S5 tests: add packages/chat-ui/tests/chat-widget-pager.dom.spec.ts for mount identity, draft, eligibility, headers and announcements; DOM gate running.
-- [ ] S6: adopt package pager in app; preserve ChatPanel binding and focus callbacks; remove app list/motion containers.
+- [x] S6: adopt package pager in app; preserve ChatPanel binding and focus callbacks; remove app list/motion containers.
 - [ ] S7: typed renderContentGate; host loading/auth/onboarding actions; package header/tabs outside gate.
 - [ ] S8: package header, TabBar, routing and pager composition; promote host snippets; remove widget takeover; preserve grip and overflow.
 - [ ] S8 tests: assembly/gate DOM suites, boundary/export assertions, updated ui/tests/components/chat/ChatWidget-*.test.ts; register each hunk.
