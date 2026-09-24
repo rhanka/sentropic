@@ -35,6 +35,8 @@
 - [x] BRCI-A6 | deferred | Owner: conductor | Branch: current | 2026-09-24 | Independent review remains the conductor handoff. No agents launched without the OK required by rules/subagents.md; no peer consensus claimed. Harness review dossiers/recorder files are outside this two-file scope.
 - [x] BRCI-R1-H1 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): derive P' and bootstrap-all selection from Docker registry lookups of packed versions; lookup failures are ERROR because unknown existence cannot safely select severity.
 - [x] BRCI-R1-H2 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): keep the inventory as a required PR check without publisher needs; skip existing versions with WARN before candidate packing/strict checks, while every actual publication checks its own archive.
+- [x] BRCI-R1-M3 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): BLOCK candidates at an existing registry version fail with "bump required" when packed runtime/peer/optional maps differ from that published artifact; dependency-only repairs must reach consumers.
+- [x] BRCI-R1-M4 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): qualify PR candidates with guarded BLOCK sibling archives; report remaining confirmed unpublished siblings as pending-sibling-publish (non-blocking in PR, blocking after publication), never as a successful registry install.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only; no AI or runtime tests are executed or waived.
@@ -65,6 +67,6 @@
   - [x] Handoff includes exact checks, explicit NOT RUN install replays, final scope verification, and `git log --oneline origin/main..HEAD`.
 - [ ] **Lot G-R1 — Design review revisions**
   - [x] HIGH: correct root-lock/bootstrap classification, registry failure semantics, publisher independence, and skip ordering in the spec; update A5 and acceptance cases.
-  - [ ] MEDIUM: specify dependency-map bump enforcement and same-PR sibling archive qualification.
+  - [x] MEDIUM: specify dependency-map bump enforcement and same-PR sibling archive qualification, including fixtures and report evidence.
   - [ ] LOW: tighten trimmed ranges, isolate file-list/filter outputs, gate all three lint jobs on baseline evidence, and require first-CI publication compatibility evidence.
   - [ ] Re-run available Make checks, review only the two allowed files, clean the reserved environment, and report commits for independent review.
