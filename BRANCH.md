@@ -24,6 +24,7 @@
 - [x] B-01 | attention | owner: implementation | Refresh unknown/invalid expiry as well as expiry within 60 seconds; unknown freshness cannot establish a usable token.
 - [x] B-02 | attention | owner: implementation | Preserve optional profile lookup and existing project normalization; require discovery and onboarding before storage.
 - [x] B-03 | attention | owner: implementation | Skip harness event recorders because their writes fall outside the explicit allowed paths; mechanical branch/scope checks remain required.
+- [x] B-04 | attention | owner: implementation | Concurrent initial `up-api-test` and `typecheck-api lint-api` collided in shared dependency installation (`ENOTEMPTY`/`ENOENT`); sequential startup retry passed, scoped tests passed; remaining gates run sequentially.
 
 ## AI Flaky tests
 - [x] No flaky acceptance authorized.
@@ -40,9 +41,9 @@
 - [x] **Lot 1 — Import correction**
   - [x] Refresh stale credentials with existing helper and persist returned tokens/expiry.
   - [x] Surface typed refresh/discovery/onboarding failures and explicit missing project failure.
-- [ ] **Lot 2 — Regression tests**
-  - [ ] Add `api/tests/unit/antigravity-import.test.ts`: expired/near/unknown/fresh expiry, stored token, refresh/discovery/onboarding failures, missing project.
-  - [ ] Run scoped tests including `api/tests/unit/antigravity-provider-auth.test.ts`.
+- [x] **Lot 2 — Regression tests**
+  - [x] Add `api/tests/unit/antigravity-import.test.ts`: expired/near/unknown/fresh expiry, stored token, refresh/discovery/onboarding failures, missing project.
+  - [x] PASS (30 tests): `make test-api-unit SCOPE="tests/unit/antigravity-import.test.ts tests/unit/antigravity-provider-auth.test.ts tests/unit/antigravity-routing.test.ts" API_PORT=9410 UI_PORT=5610 MAILDEV_UI_PORT=1510 ENV=test-antigravity-import-v2`.
 - [ ] **Lot 3 — Final validation**
   - [ ] API suite gate, API typecheck and lint.
   - [ ] Review final diff and mechanical scope; commit specific files with plan checkboxes.
