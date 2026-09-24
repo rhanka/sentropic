@@ -86,8 +86,8 @@
   - [x] Add auth-hono tests for signed sessions, explicit-token aliases, DPoP/cookie denial, revocation/expiry/accountPolicy 403-to-401, and session/user/policy store 503 isolation.
   - [x] Add Docker-run clean npm consumer fixtures in auth-subpaths.test.ts: root without auth, published session-only, and service-only with jose and transitive oauth-verify. Only mcp-auth 0.2.1 E404 marks service qualification pending; network/metadata failures fail.
   - [x] Add enrolled-owner projection and malformed/ambiguous credential regressions. Initial I2 typecheck/lint and 180 runtime tests passed; standalone root/session declaration checks failed and diagnostics are being investigated; service clean install remains pending.
-  - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
-  - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
+  - [x] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
+  - [x] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the authentication matrix locally. Published service-only qualification remains BRLG2-I0.
 - [x] **I3 — Opaque mesh adapter**
   - [x] Full lot gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (197 passed, one approved pending service-install gate).
   - [x] Correct adapter fixture metadata to the published mesh correlationId field after typecheck rejected an invented field; no mesh contract change.
@@ -109,12 +109,15 @@
   - [x] Auth regression suites passed: make test-mcp-auth test-oauth-verify test-auth-hono API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (46 / 21 / 173 tests). Service registry recheck still reports 0.2.0; gateway latest remains 0.17.1 < candidate 0.18.0.
   - [x] Document 0.18.0 migration, optional subpath peers, trusted publicUrl/ownership, RFC 6750 deviation, stable affinity, dispatch and settlement boundaries in README.
   - [x] Retain exact fixture tarball/hash and root/session/service consumer lockfiles in ignored tmp/llm-gateway-qualification; approved candidate-pack target copies evidence and compares tarball bytes. Build fixture uses the normal dist output path for identical sourcemaps.
-  - [ ] Update README, spec build evidence and candidate package metadata; pack exact candidates; run auth and six specified mesh regression scopes.
+  - [x] Update README, spec build evidence and candidate package metadata; pack exact candidates; run auth and six specified mesh regression scopes.
+  - [x] Final combined gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway pack-llm-gateway package-llm-routing-candidates LLM_ROUTING_PACK_DIR=/home/antoinefa/src/sentropic/tmp/llm-gateway-lot2/tmp/llm-gateway-lot2-candidates API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (212 passed, one pending service install). Gateway tarball byte comparison passed; SHA-256 18f711cbb5113a537a2b50681fb72d3cc58b3506c90cb1e9ced745009c576909.
+  - [x] Six mesh regressions passed using make test-llm-mesh SCOPE=<path> API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2: tests/route-planner.test.ts (19), tests/route-selection.test.ts (15), tests/route-health.test.ts (4), tests/routing-policy.test.ts (7), tests/service/facade.test.ts (5), tests/transport/codex-runtime-wire.test.ts (3).
+  - [x] Candidate artifacts and root/session consumer lockfiles retained under tmp/llm-gateway-lot2-candidates/qualification. Workspace mcp-auth 0.2.0/auth-hono 0.15.2 tarballs are development evidence only; no service release qualification or 0.2.0 pin is claimed.
   - [ ] Consumer owner: exact-candidate h2a compilation/UAT at both entrypoints and independent review; no external repository edits authorized here.
-  - [ ] Final scope/diff/log and cleanup: make down API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
+  - [x] Final branch check passed; cleanup and empty service list confirmed by make down and make ps COMPOSE_PROJECT_NAME=test-llm-gateway-lot2 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2. Final scope/diff/log accompanies handoff.
 - [ ] **Build lot gates (I0–I5)**
-  - [ ] Each lot: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
-  - [ ] Before each atomic commit: make scope-check ENV=test-llm-gateway-lot2; selective staging and separate make commit; update checklist in each commit.
+  - [x] Each implemented lot: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2. Registry/consumer release gates remain explicitly open.
+  - [x] Before each atomic commit: make scope-check ENV=test-llm-gateway-lot2; selective staging and separate make commit; update checklist in each commit.
 - [x] **Review round 2 — Prescribed corrections N1–N5**
   - [x] N1/N3/N4 — Record one registry measurement date; require Lot F mcp-auth 0.2.1, transitive registry-only auth manifests, and service-only installation with required jose.
   - [x] N2/N5 — Specify both cluster-mesh auth mirrors and the measured h2a mesh lockfile resolution, with duplicate resolution covered by lazy-surface E8.

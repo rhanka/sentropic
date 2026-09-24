@@ -1,6 +1,6 @@
 # SPEC_EVOL — LLM gateway Lot 2: verified callers, cost context, mesh dispatch
 
-Status: PROPOSED DESIGN, revised 2026-09-24 — Lot C review round 2; planning only; conductor independent review pending.
+Status: IMPLEMENTED CANDIDATE, 2026-09-24 — 0.18.0 local qualification passed; published service clean-install and conductor consumer/review gates pending.
 
 Branch: Lot C `spec/llm-gateway-lot2`, base `origin/main` `75032fc85`.
 
@@ -8,6 +8,25 @@ Extends:
 
 - `spec/SPEC_EVOL_LLM_GATEWAY.md` (caller auth, financial attribution, provider wire).
 - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` (BR-73 opaque attempts, routing and refresh ownership).
+
+## Build status — 2026-09-24
+
+- [x] I0 workspace dependency/harness readiness; approved Makefile and root lockfile exceptions recorded in BRANCH.md before edits.
+- [ ] I0 registry service-only qualification: mcp-auth 0.2.1 still returns E404; continue against workspace per conductor, never pin 0.2.0.
+- [x] I1 request-bound contracts, publicUrl and generic 503 caller-auth-unavailable.
+- [x] I2 concrete service/session auth, trusted cost projection, isolated root and published session consumer qualification.
+- [ ] I2 published service consumer qualification awaits I0 registry gate.
+- [x] I3 RouteAttemptDispatch adapter and routed integration without native credentials.
+- [x] I4 JSON/SSE lifecycle, cancellation, settlement and both-wire integration.
+- [x] I5 local documentation, typecheck/lint, 212 passing gateway tests (one pending service install), 240 auth dependency tests and 53 scoped mesh tests; packaging passed.
+- [ ] I5 exact-candidate h2a entrypoint compilation/UAT, duplicate mesh E8 and independent review remain conductor gates.
+
+Exact gateway candidate SHA-256: `18f711cbb5113a537a2b50681fb72d3cc58b3506c90cb1e9ced745009c576909`.
+Tarballs and clean-consumer evidence: `tmp/llm-gateway-lot2-candidates/qualification`; tested and packaged gateway tarball bytes match.
+Workspace auth tarballs are development artifacts, not published service qualification.
+Implementation deviations are limited to private package helpers (`internal/caller-auth.ts`, `internal/auth-bridge.ts`, registry validation script/tests) and centralized type/auth integration tests; no added public contract beyond D7.
+Strict standalone declarations use TypeScript 5.9.3 for published Hono declarations; repository compiler unchanged (BRLG2-FIXTURE).
+The implementation uses the specified `publicUrl`; no `publicOrigin` contract exists in the reviewed design (BRLG2-URL).
 
 ## 1. Measured baseline and boundaries
 
