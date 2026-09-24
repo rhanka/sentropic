@@ -31,6 +31,7 @@
   - [x] BRLG2-EX1/EX2 authorized by the implementation brief; record other irreversible out-of-brief decisions as `blocked` and stop.
 
 ## Feedback Loop
+- [ ] BRLG2-C8 | blocked | Owner: auth lane / conductor | BLOCKS merge AND release: canonical packages/mcp-auth/src/service-auth.ts still calls trimTrailingSlash(options.issuer). Removing gateway normalization is insufficient: service-auth.test.ts proves a slash-registered issuer accepts a token without the slash. Auth-package edits are outside allowed paths; scope extension requested. Acceptance: canonical middleware preserves issuer exactly, both suffix regressions pass, and full gateway gates rerun. Do not skip or weaken this regression.
 - [ ] BRLG2-O8 | attention | Owner: release owner | publish-llm-gateway-token (Makefile) bypasses wait-llm-gateway-auth-dependencies. The target is outside BRLG2-EX1 and remains unchanged. Release owner must enforce the registry-only auth graph and published service-only qualification before any token-based publication; no publish is authorized in this round.
 - [ ] BRLG2-CONSUMER | blocked | Owner: consumer conductor (h-cond) | BLOCKS merge: h2a typecheck of both entrypoints against the candidate tarball — performed by the consumer conductor (h-cond); evidence to be recorded here. Record candidate SHA-256, both entrypoint results and spec section 3 UAT / duplicate mesh E8 evidence before merge/release. Consumer checkout is outside this worktree's write scope.
 - [x] BRLG2-URL | attention | Reversible | The reviewed spec defines publicUrl only and contains no publicOrigin declaration. Implement D1/D7 exactly; do not invent an additional public API. Clarification requested during build; no conflicting contract supplied.
@@ -74,7 +75,7 @@
   - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
   - [x] C6 — Report zero usage on pre-provider validation cancellation; JSON/stream regressions assert no provider call, one cancellation and zero financial usage (final gates pending).
   - [x] C7 — Reject empty service clientId before principal mapping; signed-token regressions cover empty and absent client_id/sub (final gates pending).
-  - [x] C8 — Remove issuer normalization; document exact registered absolute HTTP(S) values and test both trailing-slash configurations (final gates pending).
+  - [ ] C8 — Gateway normalization removed and exact-match regression added; full gate exposes canonical mcp-auth normalization. BRLG2-C8 blocks completion pending auth-lane correction or an explicit scope extension.
   - [x] C9 — Correct published VerifyToken/personal caller-auth comments to distinguish canonical service and session verification under D2.
   - [x] C10 — README migration covers ambiguity, malformed Authorization without fallback, and token spaces for all PersonalPassthroughCallerAuth instances.
   - [x] C11 — Add signed bound-DPoP router success regression: internal HTTP /v1/models, reconstructed external HTTPS URL, status 200 and exactly one planner listModels call (final gates pending).
