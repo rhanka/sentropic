@@ -69,7 +69,7 @@
   - [ ] C2 — Recheck mcp-auth 0.2.1 at round end; qualify published service-only install or retain the open blocker and skip.
   - [x] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate; execution remains open in BRLG2-CONSUMER.
   - [ ] C4 — Validate encoding derived from the first upstream event before commitment; route-stream-flow.test.ts regression.
-  - [ ] C5 — Honor claimed stream terminal outcomes in the outer catch; route-stream-flow.test.ts regression.
+  - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
   - [ ] C6 — Zero usage for cancellation during dispatch validation before provider invocation; JSON/stream regressions.
   - [ ] C7 — Reject empty service clientId before principal mapping; service-auth.test.ts regression.
   - [ ] C8 — Preserve exact registered issuer/resource strings; document and test trailing-slash matching.
