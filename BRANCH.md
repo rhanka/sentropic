@@ -31,6 +31,7 @@
   - [x] BRLG2-EX1/EX2 authorized by the implementation brief; record other irreversible out-of-brief decisions as `blocked` and stop.
 
 ## Feedback Loop
+- [x] BRLG2-FIXTURE | attention | Reversible | Standalone declaration qualification uses TypeScript 5.9.3 with skipLibCheck disabled, exact hono 4.10.7/mesh 0.21.2 and Node types 22.20.1. Evidence: consumer Hono declarations use generic Uint8Array unsupported by repository compiler 5.4.5. Repository build compiler unchanged; fixture-only qualification pins avoid suppressing declaration failures. Rollback: git revert.
 - [x] BRLG2-EX1 | acknowledge | Owner: conductor | Approved before edits: Makefile `typecheck-llm-gateway`, `build-llm-gateway`, `test-llm-gateway` gain oauth-verify/mcp-auth/auth-hono build prerequisites and peer links; `package-llm-routing-candidates` adds auth tarballs; new `wait-llm-gateway-auth-dependencies` and `publish-llm-gateway` enforce recursive registry visibility. Reason: compile/qualify isolated optional auth subpaths. Impact: isolated toolset dependencies and publication ordering only. Rollback: git revert. No other Makefile, compose or workflow changes.
 - [x] BRLG2-EX2 | acknowledge | Owner: conductor | I0 requires root `package-lock.json` gateway metadata alignment with 0.18.0, mesh floor and optional auth peers. Root package.json unchanged unless required. Impact: gateway dependency metadata only. Rollback: git revert.
 - [ ] BRLG2-I0 | attention | Owner: auth lane / conductor | Registry latest is mcp-auth 0.2.0 on 2026-09-24; 0.2.1 clean service-only install remains pending. Develop against workspace without pinning 0.2.0; proceed with I1+ per conductor.
@@ -81,6 +82,7 @@
   - [x] Add service-auth tests for signature/claims, DPoP bindings/replay, configuration, concurrent identity projection and public-router scope-denial/store-outage isolation.
   - [x] Add auth-hono tests for signed sessions, explicit-token aliases, DPoP/cookie denial, revocation/expiry/accountPolicy 403-to-401, and session/user/policy store 503 isolation.
   - [x] Add Docker-run clean npm consumer fixtures in auth-subpaths.test.ts: root without auth, published session-only, and service-only with jose and transitive oauth-verify. Only mcp-auth 0.2.1 E404 marks service qualification pending; network/metadata failures fail.
+  - [x] Add enrolled-owner projection and malformed/ambiguous credential regressions. Initial I2 typecheck/lint and 180 runtime tests passed; standalone root/session declaration checks failed and diagnostics are being investigated; service clean install remains pending.
   - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
 - [ ] **I3 — Opaque mesh adapter**

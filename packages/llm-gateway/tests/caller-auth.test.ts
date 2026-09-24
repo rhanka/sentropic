@@ -14,6 +14,18 @@ const send = (app: ReturnType<typeof createGatewayRouter>, path: string) => app.
 );
 
 describe('request-bound caller authentication', () => {
+  it.each([
+    { authorization: 'Basic malformed', 'x-api-key': 'token' },
+    { authorization: '', 'x-api-key': 'token' },
+    { authorization: 'Bearer token', Authorization: 'Bearer other' },
+    { authorization: 'Bearer token extra' }, { 'x-api-key': ' ' }, {},
+  ])('rejects ambiguous or malformed credentials without verification: %j', async headers => {
+    const verify = vi.fn(() => undefined);
+    const auth = new PersonalPassthroughCallerAuth({ verifyToken: { verify } });
+    expect(await auth.verify(headers as Record<string, string>,
+      { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'r' })).toMatchObject({ ok: false });
+    expect(verify).not.toHaveBeenCalled();
+  });
   it.each(paths)('passes actual method and URL without trusting forwarded headers: %s', async path => {
     const verify = vi.fn(async (): Promise<CallerAuthResult> => ({ ok: false }));
     const app = createGatewayRouter({ config: { ...stubGatewayConfig, callerAuth: { verify } },
