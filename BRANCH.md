@@ -48,7 +48,7 @@
   - [x] R4: Public-contract JSON fixtures and runner in `tests/conformance/`; baseline N/N-1 and since-0.11 suites document reuse for EX-12. Cross-repo CI remains conductor-owned.
   - [x] R5: Typed NHI argument rejection and negative `tests/nhi.spec.ts` cases; reject whitespace-only and whitespace-prefixed options conservatively before invoking the runner.
   - [x] R6: Injected NHI shape validation, trust documentation and `tests/bindings.spec.ts` cases; malformed injection fails construction even with a runner, preserving valid injected port identity.
-  - [ ] R7: Changelog type widenings, denial feature detection and 0.9 migration guidance.
+  - [x] R7: Changelog type widenings, denial feature detection and 0.9 migration guidance; custody export explicitly does not close h2a-internal F8.
   - [ ] R8: Replace bare rejection assertions with specific error codes.
   - [ ] Final round-one gate: full package typecheck/tests, scope checks, environment shutdown and commit log.
 - [x] **Lot 0 — Baseline**: read rules, template, h2a spec and historical consumer; mechanical branch check passed; published version is 0.10.1.
