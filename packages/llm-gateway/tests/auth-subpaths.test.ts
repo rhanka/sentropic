@@ -10,11 +10,17 @@ const temp = mkdtempSync(join(tmpdir(), 'gateway-auth-isolation-'));
 const candidate = join(temp, 'candidate');
 const toolModules = dirname(realpathSync('node_modules/vitest'));
 const tsc = join(toolModules, 'typescript/bin/tsc');
-const run = (command: string, args: string[], cwd: string) => execFileSync(command, args, {
+const run = (command: string, args: string[], cwd: string) => {
+  try { return execFileSync(command, args, {
   cwd, encoding: 'utf8', timeout: 120_000,
   env: { ...process.env, NODE_PATH: '', npm_config_cache: join(temp, 'cache') },
   stdio: ['ignore', 'pipe', 'pipe'],
-});
+  }); } catch (error) {
+    const failure = error as Error & { stdout?: string; stderr?: string };
+    failure.message += `\n${failure.stdout ?? ''}\n${failure.stderr ?? ''}`;
+    throw failure;
+  }
+};
 let tarball: string;
 let servicePublished = false;
 
@@ -38,12 +44,12 @@ const install = (mode: string, peers: string[] = []) => {
   const dir = mkdtempSync(join(temp, `${mode}-`));
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
   run('npm', ['install', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund',
-    tarball, '@types/node@22.20.1', ...peers], dir);
+    tarball, '@types/node@22.20.1', 'typescript@5.9.3', 'hono@4.10.7', '@sentropic/llm-mesh@0.21.2', ...peers], dir);
   return dir;
 };
 const check = (dir: string, source: string) => {
   writeFileSync(join(dir, 'check.mts'), source);
-  run(process.execPath, [tsc, '--noEmit', '--strict', '--module', 'NodeNext', '--moduleResolution',
+  run(process.execPath, [join(dir, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--module', 'NodeNext', '--moduleResolution',
     'NodeNext', '--target', 'ES2022', 'check.mts'], dir);
   return run(process.execPath, ['--input-type=module', '-e', source], dir);
 };
