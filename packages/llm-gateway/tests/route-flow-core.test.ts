@@ -24,7 +24,7 @@ describe('route flow core', () => {
       ...stubGatewayConfig,
       callerAuth: { async verify() {
         return {
-          ok: true,
+          ok: true as const,
           cost: {
             tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'user-1',
             ownerScopeRef: 'cli:stable-owner', source: 'test', correlationId: 'session-1',
@@ -36,7 +36,7 @@ describe('route flow core', () => {
     await prepareRouteFlow({
       config, routePlanner, metering: { settleRoute() {} },
     }, {
-      wire: 'openai-chat-completions', headers: {}, model: 'gpt-5.6-terra', stream: false,
+      wire: 'openai-chat-completions', headers: {}, authContext: { method: "POST", url: "https://gateway.test/v1/chat/completions", requestId: "req-test" }, model: 'gpt-5.6-terra', stream: false,
       body: {
         model: 'gpt-5.6-terra', ownerScopeRef: 'attacker',
         messages: [{ role: 'user', content: 'hello' }],
@@ -74,7 +74,7 @@ describe('route flow core', () => {
         ...stubGatewayConfig,
         callerAuth: { async verify() {
           return {
-            ok: true,
+            ok: true as const,
             cost: {
               tenantId: 'tenant-legacy', principalId: 'principal-legacy',
               source: 'test', correlationId: 'session-legacy',
@@ -85,7 +85,7 @@ describe('route flow core', () => {
       routePlanner,
       metering: { settleRoute() {} },
     }, {
-      wire: 'openai-chat-completions', headers: {}, model: 'gpt-5.6-terra', stream: false,
+      wire: 'openai-chat-completions', headers: {}, authContext: { method: "POST", url: "https://gateway.test/v1/chat/completions", requestId: "req-test" }, model: 'gpt-5.6-terra', stream: false,
       body: { model: 'gpt-5.6-terra', messages: [{ role: 'user', content: 'hello' }] },
     });
 

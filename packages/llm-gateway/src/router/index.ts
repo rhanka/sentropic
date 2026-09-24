@@ -37,6 +37,8 @@ import {
   type ProviderShapedError,
 } from './errors.js';
 import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
+import { authenticateCaller, validateAuthContext } from '../internal/caller-auth.js';
+import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -44,6 +46,8 @@ export interface ReadinessProbe {
 }
 
 export interface CreateGatewayRouterOptions {
+  /** Trusted ingress reconstruction, including external scheme and rewritten path. */
+  readonly publicUrl?: (req: Request) => string;
   readonly config: GatewayConfig;
   /** Optional readiness probe; defaults to always-ready in the v0 scaffold. */
   readonly readiness?: ReadinessProbe;
@@ -165,6 +169,19 @@ export const createGatewayRouter = (
   const { config, readiness, resolveTarget, metering } = options;
   const requestId = options.requestId ?? defaultRequestId;
   const app = new Hono();
+  const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
+    try {
+      const context = {
+        method: req.method, url: options.publicUrl?.(req) ?? req.url,
+        requestId: id, signal: req.signal,
+      };
+      validateAuthContext(context);
+      return context;
+    } catch {
+      req.signal.throwIfAborted();
+      throw new GatewayError('caller-auth-unavailable', 'public URL unavailable');
+    }
+  };
 
   // --- Health (real) ---
   app.get('/healthz', (c) => c.json({ status: 'ok', mode: config.mode }));
@@ -214,8 +231,14 @@ export const createGatewayRouter = (
 
     const headers = readHeaders(c.req.raw.headers);
     const stream = readStream(body);
+    let authContext: CallerAuthRequestContext;
+    try {
+      authContext = authContextFor(c.req.raw, id);
+    } catch (error) {
+      return sendError(c, toProviderShapedError(wire, error), id);
+    }
     const flowRequest = {
-      wire, headers, body, model, stream,
+      wire, headers, body, model, stream, authContext,
       signal: c.req.raw.signal,
     };
 
@@ -278,7 +301,14 @@ export const createGatewayRouter = (
     const id = requestId();
     // Filtered by caller/pool policy (spec §3). Caller-auth gates the catalog:
     // an unauthenticated caller gets a provider-shaped 401, never the pool.
-    const auth = await config.callerAuth.verify(readHeaders(c.req.raw.headers));
+    let auth: CallerAuthResult;
+    try {
+      auth = await authenticateCaller(
+        config.callerAuth, readHeaders(c.req.raw.headers), authContextFor(c.req.raw, id),
+      );
+    } catch (error) {
+      return sendError(c, toProviderShapedError('openai-chat-completions', error), id);
+    }
     if (!auth.ok || !auth.cost) {
       return sendError(
         c,
