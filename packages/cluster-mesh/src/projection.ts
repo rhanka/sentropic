@@ -27,6 +27,8 @@ export function canonicalProjectionReferenceBytes(ref: SignedProjectionReference
 
 export interface LocalProjectionPort {
   readonly availability?: 'available' | 'gated';
+  /** Omission supports all kinds; an empty list supports none. */
+  readonly supportedKinds?: readonly ProjectionKind[];
   create(kind: ProjectionKind, localId: string): Promise<SignedProjectionReference>;
   verify(reference: SignedProjectionReference): Promise<boolean>;
   resolve<T>(reference: SignedProjectionReference): Promise<T>;
@@ -63,12 +65,15 @@ export function createLocalProjectionDomain(input: {
       throw new InvalidProjectionReferenceError();
     }
   }
-  function requireAvailable() {
-    if (input.local.availability === 'gated') throw new CapabilityGatedError('local_projection');
+  function requireAvailable(kind: ProjectionKind) {
+    if (input.local.availability === 'gated' ||
+        (input.local.supportedKinds !== undefined && !input.local.supportedKinds.includes(kind))) {
+      throw new CapabilityGatedError('local_projection');
+    }
   }
   return {
     async project(kind, localId) {
-      requireAvailable();
+      requireAvailable(kind);
       const reference = await input.local.create(kind, localId);
       if (reference.homeNodeId !== input.homeNodeId || !(await input.local.verify(reference))) {
         throw new InvalidProjectionReferenceError();
@@ -77,7 +82,7 @@ export function createLocalProjectionDomain(input: {
       return reference;
     },
     async resolve(reference) {
-      requireAvailable();
+      requireAvailable(reference.kind);
       if (reference.homeNodeId !== input.homeNodeId) {
         throw new CapabilityGatedError('remote_projection');
       }
