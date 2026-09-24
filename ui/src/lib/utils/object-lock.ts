@@ -62,13 +62,8 @@ export async function acquireLock(
   }
 }
 
-export async function releaseLock(
-  objectType: LockObjectType,
-  objectId: string,
-  lockId?: string
-): Promise<void> {
-  // With lockId, the server releases only that exact lock and only while this user holds it.
-  const qs = new URLSearchParams(lockId ? { objectType, objectId, lockId } : { objectType, objectId }).toString();
+export async function releaseLock(objectType: LockObjectType, objectId: string): Promise<void> {
+  const qs = new URLSearchParams({ objectType, objectId }).toString();
   await apiDelete(`/locks?${qs}`);
 }
 
