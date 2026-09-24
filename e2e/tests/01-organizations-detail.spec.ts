@@ -234,7 +234,7 @@ test.describe('Détail des organisations', () => {
       const lockObjectId = lockJson?.lock?.objectId ?? '';
       const lockedBy = lockJson?.lock?.lockedBy?.userId ?? '';
       expect(lockObjectId).toBe(organizationId);
-      expect(lockedBy).toBe(userAId);
+      expect(lockedBy).toBe(memberA.userId);
     }
     await pageA.waitForResponse(
       (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
