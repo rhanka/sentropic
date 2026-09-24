@@ -32,6 +32,7 @@
   import { Lock } from '@lucide/svelte';
   import { normalizeMarkdownLineEndings } from '$lib/utils/markdown';
   import { buildLockScopeKey } from '$lib/utils/lock-scope';
+  import { createLockRenewal } from '$lib/utils/lock-renewal';
 
   let organization: Organization | null = null;
   let error = '';
@@ -47,6 +48,7 @@
   let lockLoading = false;
   let lockError: string | null = null;
   let suppressAutoLock = false;
+  const lockRenewal = createLockRenewal();
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   let commentCounts: Record<string, number> = {};
@@ -201,7 +203,9 @@
       if (evt?.type === 'lock_update') {
         if (evt.objectType !== 'organization') return;
         if (evt.objectId !== organizationId) return;
+        const previousLock = lock;
         lock = evt?.data?.lock ?? null;
+        lockRenewal.observed(organizationId, previousLock, lock, $session.user?.id);
         if (!lock && !$workspaceReadOnlyScope) {
           if (suppressAutoLock) {
             suppressAutoLock = false;
@@ -222,7 +226,7 @@
       }
       if (evt?.type === 'ping') {
         // A ping is sent once the SSE subscription is ready: re-assert a lock this page
-        // believes it holds, in case it was cleared while the subscription was not live.
+        // still intends to hold, in case it was cleared while the subscription was not live.
         void updatePresence();
         void refreshLock();
       }
@@ -422,6 +426,7 @@
       } else {
         const res = await acquireLock('organization', lockTargetId);
         lock = res.lock;
+        lockRenewal.acquired(lockTargetId, lock, $session.user?.id);
       }
       scheduleLockRefresh();
     } catch (e: any) {
@@ -444,17 +449,25 @@
   }
 
   const refreshLock = async () => {
-    if (!lockTargetId || !$session.user) return;
+    const targetId = lockTargetId;
+    const userId = $session.user?.id;
+    if (!targetId || !userId) return;
     if (!isLockedByMe) return;
     try {
-      const res = await acquireLock('organization', lockTargetId);
-      lock = res.lock;
+      const res = await lockRenewal.renew(
+        targetId,
+        userId,
+        () => acquireLock('organization', targetId),
+        () => releaseLock('organization', targetId)
+      );
+      if (res) lock = res.lock;
     } catch {
       // ignore refresh errors
     }
   };
 
   const releaseCurrentLock = async () => {
+    lockRenewal.release();
     if (!lockTargetId || !isLockedByMe) return;
     try {
       await releaseLock('organization', lockTargetId);
@@ -488,6 +501,7 @@
     if (!lockTargetId) return;
     if (lock?.unlockRequestedByUserId) {
       suppressAutoLock = true;
+      lockRenewal.release();
       await acceptUnlock('organization', lockTargetId);
       return;
     }
