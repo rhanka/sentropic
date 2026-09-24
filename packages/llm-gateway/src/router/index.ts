@@ -172,7 +172,7 @@ export const createGatewayRouter = (
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
     try {
       const context = {
-        method: req.method, url: options.publicUrl?.(req) ?? req.url,
+        method: req.method, url: options.publicUrl ? options.publicUrl(req) : req.url,
         requestId: id, signal: req.signal,
       };
       validateAuthContext(context);
