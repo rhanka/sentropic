@@ -2,6 +2,7 @@ import { test, expect, request, type Page } from '@playwright/test';
 import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { createIsolatedMember } from '../helpers/isolated-user';
 
 test.describe('Détail des cas d\'usage', () => {
   test.describe.configure({ mode: 'serial', retries: 0 });
@@ -10,7 +11,6 @@ test.describe('Détail des cas d\'usage', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
-  const USER_C_STATE = './.auth/user-victim.json';
   let workspaceAId = '';
   let workspaceName = '';
   let useCaseId = '';
@@ -28,6 +28,11 @@ test.describe('Détail des cas d\'usage', () => {
   };
 
   const useCaseNameField = (page: Page) => page.locator('input:not([type="file"]):not(.hidden), textarea').first();
+
+  // Lock/presence holders use fresh accounts: the server clears a user's locks and presence when
+  // that user's last SSE connection closes, which parallel specs sharing seeded accounts trigger.
+  const isolatedMember = (label: string) =>
+    createIsolatedMember({ apiBaseUrl: API_BASE_URL, ownerStatePath: USER_A_STATE, workspaceId: workspaceAId, label });
 
   const waitForInitiativeReady = async (page: Page, initiativeId: string, workspaceId: string) => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -616,12 +621,9 @@ test.describe('Détail des cas d\'usage', () => {
   test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
     test.setTimeout(90_000);
 
-    const userAContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
-    });
-    const userBContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-    });
+    const [memberA, memberB] = await Promise.all([isolatedMember('uc-lock-a'), isolatedMember('uc-lock-b')]);
+    const userAContext = await browser.newContext({ storageState: memberA.storageState });
+    const userBContext = await browser.newContext({ storageState: memberB.storageState });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
 
@@ -760,12 +762,9 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
     test.setTimeout(60_000);
-    const userAContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
-    });
-    const userBContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-    });
+    const [memberA, memberB] = await Promise.all([isolatedMember('uc-presence-a'), isolatedMember('uc-presence-b')]);
+    const userAContext = await browser.newContext({ storageState: memberA.storageState });
+    const userBContext = await browser.newContext({ storageState: memberB.storageState });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
 
@@ -811,8 +810,8 @@ test.describe('Détail des cas d\'usage', () => {
     await badgeB.hover({ force: true });
     await expect(pageB.locator('[role="tooltip"]')).toContainText('utilisateur', { timeout: 10_000 });
 
-    const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
-    const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
+    const avatarAInB = pageB.locator(`[aria-label="Verrou du document"] [title="${memberA.displayName}"]`);
+    const avatarBInA = pageA.locator(`[aria-label="Verrou du document"] [title="${memberB.displayName}"]`);
     await expect
       .poll(async () => {
         const [aInB, bInA] = await Promise.all([avatarAInB.count(), avatarBInA.count()]);
@@ -858,15 +857,14 @@ test.describe('Détail des cas d\'usage', () => {
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,
     });
-    const userAContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
-    });
-    const userBContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-    });
-    const userCContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_C_STATE, workspaceAId),
-    });
+    const [memberA, memberB, memberC] = await Promise.all([
+      isolatedMember('uc-3users-a'),
+      isolatedMember('uc-3users-b'),
+      isolatedMember('uc-3users-c'),
+    ]);
+    const userAContext = await browser.newContext({ storageState: memberA.storageState });
+    const userBContext = await browser.newContext({ storageState: memberB.storageState });
+    const userCContext = await browser.newContext({ storageState: memberC.storageState });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
     const pageC = await userCContext.newPage();
