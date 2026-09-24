@@ -60,6 +60,10 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 401, type: 'authentication_error', message: 'authentication failed' },
     openai: { status: 401, type: 'invalid_request_error', message: 'authentication failed', code: 'invalid_api_key' },
   },
+  'caller-auth-unavailable': {
+    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+  },
   'over-budget': {
     anthropic: { status: 429, type: 'rate_limit_error', message: 'rate limit exceeded' },
     openai: { status: 429, type: 'rate_limit_error', message: 'rate limit exceeded', code: 'rate_limit_exceeded' },

@@ -69,6 +69,7 @@
   - [ ] Qualify published mcp-auth 0.2.1 service-only install and auth-hono 0.15.0 session-only install (pending BRLG2-I0).
 - [ ] **I1 — Request-bound auth contracts**
   - [x] Implement request context, discriminated auth result, generic unavailable mapping and trusted router URL projection; internal/caller-auth.ts shares validation across boundaries (private helper within package scope).
+  - [x] Add caller-auth/lot2-types tests; update contract-snapshot exhaustive error map in I1 because its Record correctly rejects the new union member until mapped. Test undefined publicUrl callback results fail closed.
   - [ ] Update caller-auth/pool ports, personal auth, flow, route core, router/errors and stubs; bump gateway to 0.18.0.
   - [ ] Update fixtures/harness, router, errors, models, route-flow-core, route-json-flow, route-stream-flow tests; add caller-auth and lot2-types tests.
   - [ ] Verify public URL/default/invalid/spoofed forwarded headers, both wires/models, auth rejection/outage and compile-time invalid contracts.
