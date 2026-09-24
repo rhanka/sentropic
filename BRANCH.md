@@ -49,6 +49,9 @@ Fix the three codex-proven gateway defects (env:send:6e98bd1e): (D1) Codex trans
 - `acknowledge` BR77-D1 (codex env:send:6e98bd1e, owner-ordered): 3 defects with A/B proofs against installed 0.21.1/0.15.0 — (1) max_output_tokens 400, (2) 400→503 masking (fake 529), (3) parasite muse diagnostic. Minimal fixes + regressions, demo + versions for h2a after.
 - `acknowledge` BR77-D2 (evidence): D1 root confirmed on origin/main (`codex-runtime-wire.ts:84-85` emits the param, no strip); D2 confirmed (`route-stream-flow.ts` throws pooled-account-unavailable after exhausting, discarding classification); D3 confirmed (`route-planner.ts:137` takes `listDiagnostics[0]` unrelated to request).
 - `acknowledge` BR77-D3 (self-audit): TEST2-era "Meta capacity" reading was wrong on masked 400s; stale-branch reads corrected — verify on origin/main always.
+- `acknowledge` BR77-R1 (astra xhigh review, VERDICT: KO): 3 blocking P2 beyond D1-D3 — (a) planner ignores `input.explicit` (parasite muse persists on explicit codex), (b) terminal 401/403/429 collapse to pooled 503 + Retry-After lost, (c) pre-content SSE `response.failed` invalid_request_error classified provider-5xx. 25 probes: 8 pass, 17 fail.
+- `resolve` BR77-R1 (TDD red→green, commit 99d38bea0): (a) explicit transport restriction wins in planner empty-branch; (b) shared `terminalGatewayError` helper + new `upstream-auth-failed`/`upstream-rate-limited` classes (401 auth_error / 429 rate_limit + Retry-After, both wires); (c) code-based invalid classification (`invalid_request*`, `invalid_api_key` excluded). Probes 25/25 green; suites mesh 253 + gateway 121; typechecks + lints green; scope PASS; contract-snapshot golden extended in same PR.
+- `acknowledge` BR77-R2 (astra xhigh re-review, VERDICT: OK): all 4 points FIXED with evidence, round-1 fix maintained, no out-of-scope change. Merge authorized by owner on review OK.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -79,6 +82,7 @@ Fix the three codex-proven gateway defects (env:send:6e98bd1e): (D1) Codex trans
   - [x] Fix in `route-planner.ts`.
   - [x] Lot gate: mesh 252/252, gateway 116/116, typechecks + lints green.
 - [ ] **Lot N — Final validation**
-  - [x] Full mesh (252) + gateway (116) suites, typechecks, lints green. Bumps 0.21.2/0.17.1.
+  - [x] Full mesh (253) + gateway (121) suites, typechecks, lints green. Bumps 0.21.2/0.17.1.
+  - [x] Astra xhigh review R2: VERDICT OK (R1 KO resolved). Merge authorized by owner on review OK.
   - [ ] Live demo (scratch): short Claude→gateway→Codex + error preservation (owner GO needed for live calls).
-  - [ ] Bumps (patch), push, PR, CI green — merge/publish only on owner GO.
+  - [ ] Push, PR, CI green — publish only on owner GO.
