@@ -18,6 +18,7 @@ export * from './persistence/ports.js';
 export * from './runtime/admission.js';
 export * from './runtime/bounded-local-custody-source.js';
 export * from './runtime/custody-invocation-verifier.js';
+export { verifyCustodySignature } from './runtime/custody-crypto.js';
 export * from './runtime/custody-types.js';
 export * from './runtime/custody-state.js';
 export * from './runtime/custody-wire.js';
