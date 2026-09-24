@@ -3,6 +3,99 @@
 Injectable Cluster Mesh control-plane contracts and a functional single-instance
 runtime.
 
+## Compatibility and releases
+
+Sentropic owns this package and its releases in `rhanka/sentropic`. Starting with
+0.11.0, releases follow SemVer: patches fix defects without changing contracts,
+minor releases add backward-compatible functionality, and incompatible changes
+require a major release. This compatibility commitment also applies during 0.x;
+the historical breaking 0.9/0.10 changes predate this policy.
+
+The supported compatibility window is N and N-1: the current and immediately
+preceding minor release lines within the current major (initially 0.11.x and
+0.10.x). Existing N-1 consumer inputs, ports and signed references remain valid
+on N; new optional features require capability detection. This is an API and
+contract compatibility promise, not an automatic upgrade or indefinite security
+maintenance promise. Consumers should pin exact versions and lock integrity;
+an older peer need not understand new optional features.
+
+Before any major bump or field removal, Sentropic and h2a must pass cross-consumer
+conformance CI against both supported lines, document migration and deprecation,
+and coordinate the release. The CI gate is a release requirement; this additive
+release does not claim to install that cross-repository CI. Deprecated fields
+remain throughout the supported window and cannot be removed in a minor release.
+
+Reusable public-contract fixtures live in `tests/conformance/h2a-contract.json`,
+with the executable runner `tests/conformance/h2a-contract.spec.ts`. They cover
+the h2a-facing boundaries, capabilities, projections, devices, NHI mapping and
+federal gates through public exports. For h2a EX-12, copy both files, redirect the
+runner's package import to the pinned release, and run the `N/N-1 baseline` suite
+on both supported lines; run `since 0.11` only on 0.11+. JSON fixtures have an
+explicit format version and contain no private keys. This supplies Sentropic's
+fixtures; cross-repository CI wiring remains a separate release gate.
+
+## Upstream bindings in 0.11
+
+`LocalDeviceAttachmentPort` and `LocalProjectionPort` accept optional readonly
+`availability: 'available' | 'gated'`, including a getter for live binding state.
+Omission retains the existing available behavior. `mesh.capabilities` reads the
+current values; local operations reject gated bindings with `CapabilityGatedError`
+before delegation. Federal capabilities remain gated. Hosts must report whether
+their concrete bindings are usable; the mesh cannot probe opaque port internals.
+
+Projection ports may provide `supportedKinds?: readonly ProjectionKind[]`; omission
+supports all three kinds and an empty list supports none. Unsupported kinds fail
+with `CapabilityGatedError('local_projection')` before creation or resolution.
+`mesh.capabilities.localProjectionKinds` exposes the current effective kinds
+(empty when the whole binding is gated). The field is optional in the public
+capability type for older providers; this adapter always supplies it.
+
+`createDegenerateClusterMesh` accepts `nhi?: NhiLifecyclePort`. It takes precedence
+over `nhiRunner`; without injection, the runner retains its existing mapping.
+At least one is required. Construction checks that an injected port's `attest`,
+`offboard` and `exportBundle` methods are functions; malformed ports throw
+`TypeError`, even when a runner is also supplied. An injected port is trusted by
+design: the host owns its authorization, input validation and effects. Shape
+validation does not establish behavioral equivalence to the command adapter.
+`attest` accepts optional string `role` and `scope`,
+forwarded as separate `--role` and `--scope` arguments before `--root`; h2a remains
+the validation authority and its errors/results pass through unchanged.
+The runner adapter rejects empty/whitespace-only or leading-hyphen `instance`,
+`role` and `scope` values before building a command, with `InvalidNhiArgumentError`
+(`code: 'invalid_nhi_argument'`, `argument` identifies the field).
+
+Devices may implement `denyDeviceCode(userCode)`, returning `DeviceApprovalResult`.
+The adapter delegates denial with the port as receiver. Hosts own the state
+transition to `denied` and subsequent poll outcomes. Legacy ports remain valid;
+calling denial without a binding throws `CapabilityGatedError('device_denial')`.
+The method stays optional on the public domain interface for compatibility.
+
+`SignedProjectionReference` accepts optional Unix-millisecond `expiresAt` and
+`issuedAt`. Hosts must sign and verify `canonicalProjectionReferenceBytes(ref)`:
+UTF-8 JSON in the fixed order `kind`, `reference`, `homeNodeId`, `issuer`, `keyId`,
+`expiresAt`, `issuedAt`, omitting undefined timestamps and excluding `signature`.
+Both project and resolve validate timestamps after verification and before delegation.
+Legacy mode still accepts references without timestamps. `createLocalProjectionDomain`
+accepts `requireExpiry: true` for strict mode, `maxTtlMs` to bound expiry minus
+issued time (or current time when issued time is absent), and `clockSkewMs`
+(default zero) to tolerate clock differences at expiry and issuance boundaries.
+TTL must be positive; skew must be nonnegative; both are safe integer milliseconds.
+`now?: () => number` defaults to `Date.now`; strict mode rejects non-finite clocks.
+With zero skew, expiry equal to now is rejected; issuance after now is rejected.
+
+Expiry is advisory unless strict mode AND an authenticating verifier are used.
+It bounds the replay window (plus allowed clock skew), but does not prevent replay
+inside it. Full G3 closure per D13 also requires a server challenge on the h2a side,
+outside this package. Signing ownership (F5) remains unchanged.
+
+`verifyCustodySignature` is exported from the package root for standalone Ed25519
+verification; it returns false for malformed keys, signatures, or verification
+failure. It does not enforce custody authorization, lifetime, or replay policy.
+
+Package checks from the repository root:
+`make typecheck-cluster-mesh ENV=<slug>` and
+`make test-cluster-mesh ENV=<slug>` (use an isolated test environment).
+
 Version 0.9 makes verified custody mandatory and adds action-aware authorization,
 required instruction-resolution and target-liveness ports, and explicit actuation
 outcomes to the existing central control-plane contracts. It retains the degenerate

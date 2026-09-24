@@ -25,6 +25,7 @@ import {
   storeClaudeCodeAccountTransport,
   storeCodexAccountTransport,
   storeMuseAccountTransport,
+  TOKEN_REFRESH_SKEW_MS,
   type AntigravityAccountTransportAcquisition,
   type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
@@ -40,7 +41,9 @@ import {
   exchangeAntigravityAuthorizationCode,
   fetchAntigravityUserInfo,
   loadCodeAssist,
+  normalizeAntigravityExpiresAt,
   onboardAntigravityUser,
+  refreshAntigravityAccessToken,
   startAntigravityAuthorization,
 } from './antigravity-provider-auth';
 import { env } from '../config/env';
@@ -1347,23 +1350,45 @@ export const disconnectMuseEnrollment = async (input: {
 // ONBOARD the account (onboardUser) so the cloudcode-pa fleet is callable.
 // ---------------------------------------------------------------------------
 
+export class AntigravityEnrollmentError extends Error {
+  constructor(
+    readonly code: 'refresh_failed' | 'discovery_failed' | 'missing_project' | 'onboarding_failed',
+    message: string,
+    cause?: unknown,
+  ) {
+    super(message, { cause });
+    this.name = 'AntigravityEnrollmentError';
+  }
+}
+
 const discoverAntigravityAccount = async (
   accessToken: string,
-): Promise<{ project: string | null; tier: string | null; externalAccountId: string; accountLabel: string | null }> => {
-  const discovery = await loadCodeAssist({ accessToken }).catch(() => null);
-  const userInfo = await fetchAntigravityUserInfo({ accessToken }).catch(() => null);
-  if (discovery?.project) {
+): Promise<{ project: string; tier: string | null; externalAccountId: string; accountLabel: string | null }> => {
+  let discovery;
+  try {
+    discovery = await loadCodeAssist({ accessToken });
+  } catch (cause) {
+    throw new AntigravityEnrollmentError('discovery_failed', 'Antigravity project discovery failed.', cause);
+  }
+  if (!discovery.project) {
+    throw new AntigravityEnrollmentError('missing_project', 'Antigravity discovery returned no cloudaicompanionProject.');
+  }
+  try {
     await onboardAntigravityUser({
       accessToken,
       project: discovery.project,
       ...(discovery.tier ? { tierId: discovery.tier } : {}),
-    }).catch(() => undefined);
+    });
+  } catch (cause) {
+    throw new AntigravityEnrollmentError('onboarding_failed', 'Antigravity onboarding failed.', cause);
   }
+  // Profile metadata is optional after required discovery and onboarding succeed.
+  const userInfo = await fetchAntigravityUserInfo({ accessToken }).catch(() => null);
   const accountLabel = userInfo?.email || userInfo?.name || null;
   const externalAccountId = userInfo?.sub || accountLabel || createId();
   return {
-    project: discovery?.project ?? null,
-    tier: discovery?.tier ?? null,
+    project: discovery.project,
+    tier: discovery.tier,
     externalAccountId,
     accountLabel,
   };
@@ -1487,7 +1512,16 @@ export const importAntigravityEnrollment = async (input: {
     throw new Error('Antigravity import requires both an access token and a refresh token.');
   }
 
-  const discovered = await discoverAntigravityAccount(accessToken);
+  let tokens = { accessToken, refreshToken, expiresAt: normalizeAntigravityExpiresAt(input.expiresAt) };
+  // Unlike transport acquisition, import refreshes unknown/invalid expiry because freshness is unproven.
+  if (!tokens.expiresAt || Date.parse(tokens.expiresAt) <= Date.now() + TOKEN_REFRESH_SKEW_MS) {
+    try {
+      tokens = await refreshAntigravityAccessToken({ refreshToken });
+    } catch (cause) {
+      throw new AntigravityEnrollmentError('refresh_failed', 'Antigravity token refresh failed.', cause);
+    }
+  }
+  const discovered = await discoverAntigravityAccount(tokens.accessToken);
   const project = normalizeOptionalText(input.project) ?? discovered.project;
   const requestedAccountLabel = normalizeOptionalText(input.accountLabel);
   const connectedAccountLabel = discovered.accountLabel || requestedAccountLabel;
@@ -1510,9 +1544,9 @@ export const importAntigravityEnrollment = async (input: {
       ownerUserId: input.updatedByUserId,
       accountLabel: connectedAccountLabel,
       externalAccountId: discovered.externalAccountId,
-      accessToken,
-      refreshToken,
-      expiresAt: normalizeOptionalText(input.expiresAt),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
       project,
       tier: discovered.tier,
     }),
