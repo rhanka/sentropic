@@ -25,6 +25,7 @@ import {
   storeClaudeCodeAccountTransport,
   storeCodexAccountTransport,
   storeMuseAccountTransport,
+  TOKEN_REFRESH_SKEW_MS,
   type AntigravityAccountTransportAcquisition,
   type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
@@ -1362,7 +1363,7 @@ export class AntigravityEnrollmentError extends Error {
 
 const discoverAntigravityAccount = async (
   accessToken: string,
-): Promise<{ project: string | null; tier: string | null; externalAccountId: string; accountLabel: string | null }> => {
+): Promise<{ project: string; tier: string | null; externalAccountId: string; accountLabel: string | null }> => {
   let discovery;
   try {
     discovery = await loadCodeAssist({ accessToken });
@@ -1512,8 +1513,8 @@ export const importAntigravityEnrollment = async (input: {
   }
 
   let tokens = { accessToken, refreshToken, expiresAt: normalizeAntigravityExpiresAt(input.expiresAt) };
-  // Match the transport's one-minute refresh skew; unknown expiry is not proof of freshness.
-  if (!tokens.expiresAt || Date.parse(tokens.expiresAt) <= Date.now() + 60_000) {
+  // Unlike transport acquisition, import refreshes unknown/invalid expiry because freshness is unproven.
+  if (!tokens.expiresAt || Date.parse(tokens.expiresAt) <= Date.now() + TOKEN_REFRESH_SKEW_MS) {
     try {
       tokens = await refreshAntigravityAccessToken({ refreshToken });
     } catch (cause) {
