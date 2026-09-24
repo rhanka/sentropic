@@ -22,29 +22,17 @@ import { withWorkspaceStorageState } from '../helpers/workspace-scope';
  * Driven tool chain (observed in the run): documents (read attached org
  * document) + web_search/web_extract (Tavily) + organization_update.
  *
- * MODEL: gemini-3.5-flash (advanced reasoning tier in @sentropic/llm-mesh
- * catalog), selected via the chat model selector (#chat-model-selection →
- * gemini::gemini-3.5-flash).
+ * MODEL: openai::gpt-5.4-nano, also exercised by the CI chat suite.
  *
- * WHY NOT OpenAI: this run was authored against an environment whose OpenAI
- * account is over quota (every OpenAI completion returns HTTP 429
- * `insufficient_quota`, verified against gpt-4.1-nano AND gpt-5-nano). The
- * default e2e model (gpt-4.1-nano) also reproducibly mis-calls
- * organization_update and does not chain tools (see 08-chat-org-update-tool
- * header). Gemini 3.5 Flash is a live, reasoning, tool-calling model that
- * reliably orchestrates web_search + organization_update. The freeze /
- * field-update fixes are model-agnostic; the goal is a demonstrative,
- * COMPLETING multi-tool conversation with a visible answer — which this proves.
+ * The original Gemini choice worked around an author's local OpenAI quota.
+ * CI has working OpenAI credentials; its Gemini credential is rejected.
+ * This scenario qualifies the model-agnostic multi-tool workflow, with the
+ * same completed jobs, visible answer, tool activity, and persisted mutation.
  *
  * NOTE ON THE DOCUMENT-SUMMARY TOOL: the platform's document-summary worker is
- * hardcoded to OpenAI `gpt-5-nano` (FORCED_DOCUMENT_MODEL in
- * api/src/services/context-document.ts) and is therefore quota-blocked in this
- * environment. The spec STILL attaches a real .docx to the organization
- * context (so the `documents` tool has a real document to act on) but does NOT
- * gate on an OpenAI-produced summary being `ready`. The demonstrative core the
- * owner demanded — visible final answer + no freeze + a real multi-tool run +
- * the org field actually changing — is fully proven via the web + org_update
- * chain. Re-enable the doc-summary leg once OpenAI quota is restored.
+ * bound to OpenAI in api/src/services/context-document.ts. This scenario
+ * attaches a real .docx and requires its summary job to be enqueued; the
+ * dedicated 08 document suites require ready status and non-empty summaries.
  *
  * Watchable artifact: trace forced ON so the run can be stitched into an mp4
  * showing the rendered assistant response and the updated org field.
@@ -55,7 +43,7 @@ import { withWorkspaceStorageState } from '../helpers/workspace-scope';
  *    — composer returns idle, no perpetual spinner, under a real multi-tool load
  *  - document-summary docx/pdf (resolveOfficeExtension + fail-loud enqueue)
  *    — the .docx upload is enqueued (not a silent orphan); the summary itself
- *      depends on OpenAI gpt-5-nano (quota-blocked here, see note above).
+ *      is independently qualified by the document-summary suites.
  */
 test.use({ trace: 'on' });
 
@@ -65,7 +53,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const SEED_TECHNOLOGIES = 'Legacy mainframe';
-  const CHAT_MODEL = 'gemini::gemini-3.5-flash';
+  const CHAT_MODEL = 'openai::gpt-5.4-nano';
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -121,6 +109,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
   async function waitForQueueJobSettled(
     api: import('@playwright/test').APIRequestContext,
     jobId: string,
+    workspaceId: string,
     timeout = 240_000,
   ) {
     if (!jobId) return '';
@@ -128,7 +117,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
     await expect
       .poll(
         async () => {
-          const res = await api.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+          const res = await api.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}?workspace_id=${encodeURIComponent(workspaceId)}`);
           if (!res.ok()) return `http-${res.status()}`;
           const data = await res.json().catch(() => null);
           status = String(data?.status ?? '');
@@ -288,8 +277,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       const composer = page.locator('[role="textbox"][aria-label="Composer"]');
       await expect(composer).toBeVisible({ timeout: 10_000 });
 
-      // Select gemini-3.5-flash — a live, reasoning, tool-calling model that
-      // reliably chains web_search + organization_update (OpenAI is over quota).
+      // Use the live model already exercised by the CI chat suite.
       const modelSelect = page.locator('#chat-model-selection');
       await expect(
         modelSelect.locator(`option[value="${CHAT_MODEL}"]`),
@@ -344,7 +332,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       chatJobId = String((sendJson as any)?.jobId ?? '');
 
       // 3. Wait for the run to COMPLETE — poll the queue job (like other specs).
-      const jobStatus = await waitForQueueJobSettled(page.request as any, chatJobId);
+      const jobStatus = await waitForQueueJobSettled(page.request as any, chatJobId, workspaceId);
       // The run must terminate (completed). A failed job means no demonstrative answer.
       expect(jobStatus, `chat run job settled (status=${jobStatus})`).toBe('completed');
 
@@ -392,7 +380,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       expect(followUpResponse.status()).toBeLessThan(400);
       const followUpJson = await followUpResponse.json().catch(() => null);
       const followUpJobId = String((followUpJson as any)?.jobId ?? '');
-      const followUpStatus = await waitForQueueJobSettled(page.request as any, followUpJobId);
+      const followUpStatus = await waitForQueueJobSettled(page.request as any, followUpJobId, workspaceId);
       expect(followUpStatus, `follow-up run job settled (status=${followUpStatus})`).toBe('completed');
       await waitForComposerIdle(page);
 
