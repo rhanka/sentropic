@@ -69,6 +69,6 @@
 - [x] Final validation: typecheck-ui, 0 errors / 6 warnings; lint-ui, 0 errors.
 - [x] Final validation: test-ui, 489 passed / 0 failed across 83 files.
 - [x] Final validation: test-chat-ui, 1032 passed / 0 failed across 52 files, confirmed on final CSS.
-- [x] Final validation: test-chat-ui-dom, 216 passed / 0 failed across 19 files.
-- [x] UI commands require REGISTRY=local and allocated ports; final run used `make -o up-ui typecheck-ui lint-ui test-ui` in the healthy isolated stack after a rebuild logged live .h2a archive drift and failed with `lease does not exist`. No tests skipped; clean rebuild remains unverified.
+- [x] Fix-pass final validation: test-chat-ui-dom, 219 passed / 0 failed across 21 files; typecheck-ui, lint-ui, test-ui and test-chat-ui all passed again after restart on 7e21bbe56.
+- [x] Recovery validation used all five exact requested make targets with REGISTRY=local, allocated ports and ENV=lcshell-v2 last. Fresh UI rebuilds succeeded without prerequisite overrides; no test skips, timeout changes or assertion weakening.
 - [x] Final cleanup: make down ENV=lcshell-v2 succeeded; slices pushed; build REPORT.md records exact results and unverified acceptance items.
