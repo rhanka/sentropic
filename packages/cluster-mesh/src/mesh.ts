@@ -8,7 +8,7 @@ import {
   type MembershipDomain,
 } from './membership.js';
 import { createH2aNhiLifecycle, type CommandRunnerPort, type NhiLifecyclePort } from './nhi.js';
-import { createLocalProjectionDomain, type LocalProjectionPort, type ProjectionDomain } from './projection.js';
+import { createLocalProjectionDomain, type LocalProjectionPort, type ProjectionDomain, type ProjectionKind } from './projection.js';
 import { createGatedTrustDomain, type TrustDomain } from './trust.js';
 
 export interface WrapDomain {
@@ -27,6 +27,8 @@ export interface ClusterMesh {
     readonly mode: 'single-node';
     readonly localDevices: 'available' | 'gated';
     readonly localProjection: 'available' | 'gated';
+    /** Effective kinds; optional for compatibility with older capability providers. */
+    readonly localProjectionKinds?: readonly ProjectionKind[];
     readonly interServerDirectory: 'gated';
     readonly tokenExchange: 'gated';
     readonly memoryReplication: 'gated';
@@ -63,6 +65,10 @@ export function createDegenerateClusterMesh(input: {
       mode: 'single-node',
       get localDevices() { return input.devices.availability ?? 'available'; },
       get localProjection() { return input.projections.availability ?? 'available'; },
+      get localProjectionKinds(): readonly ProjectionKind[] {
+        if (input.projections.availability === 'gated') return [];
+        return [...(input.projections.supportedKinds ?? ['human_identity', 'agent_identity', 'memory_snapshot'])];
+      },
       interServerDirectory: 'gated',
       tokenExchange: 'gated',
       memoryReplication: 'gated',

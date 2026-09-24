@@ -34,6 +34,13 @@ current values; local operations reject gated bindings with `CapabilityGatedErro
 before delegation. Federal capabilities remain gated. Hosts must report whether
 their concrete bindings are usable; the mesh cannot probe opaque port internals.
 
+Projection ports may provide `supportedKinds?: readonly ProjectionKind[]`; omission
+supports all three kinds and an empty list supports none. Unsupported kinds fail
+with `CapabilityGatedError('local_projection')` before creation or resolution.
+`mesh.capabilities.localProjectionKinds` exposes the current effective kinds
+(empty when the whole binding is gated). The field is optional in the public
+capability type for older providers; this adapter always supplies it.
+
 `createDegenerateClusterMesh` accepts `nhi?: NhiLifecyclePort`. It takes precedence
 over `nhiRunner`; without injection, the runner retains its existing mapping.
 At least one is required. `attest` accepts optional string `role` and `scope`,
