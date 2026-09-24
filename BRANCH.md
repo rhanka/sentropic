@@ -68,7 +68,7 @@
   - [x] C1 — Explicitly record I0 as blocking merge AND release in branch and spec.
   - [ ] C2 — Recheck mcp-auth 0.2.1 at round end; qualify published service-only install or retain the open blocker and skip.
   - [x] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate; execution remains open in BRLG2-CONSUMER.
-  - [ ] C4 — Validate encoding derived from the first upstream event before commitment; route-stream-flow.test.ts regression.
+  - [x] C4 — Buffer through the first upstream-derived frame before commitment, delaying done completion until encoding resumes; scoped stream suite passed (18 tests), including both-wire encoding failures and C5 pre-commit ledger rejection. Candidate 0.18.0 remains greater than registry latest 0.17.1 (2026-09-24).
   - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
   - [ ] C6 — Zero usage for cancellation during dispatch validation before provider invocation; JSON/stream regressions.
   - [ ] C7 — Reject empty service clientId before principal mapping; service-auth.test.ts regression.
