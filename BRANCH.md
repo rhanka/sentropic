@@ -68,13 +68,16 @@
 - [x] No services or port reservation required for this planning task.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot C — Polish round**
+- [x] **Lot C — Polish round**
   - [x] Confirm branch with harness, clean starting worktree, required rules and free ports 9380/5580/1480; current round writes remain limited to packages/llm-gateway/**, spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md and BRANCH.md.
   - [x] Close encoded/upstream iterators after a claimed-terminal ledger failure without repeating accounting; regress mesh finally in tests/route-stream-flow.test.ts.
   - [x] Remove duplicated issuer acceptance expectations; regress normalized identity in tests/service-auth.test.ts and document the projection.
   - [x] Scoped red/green evidence: make test-llm-gateway SCOPE=tests/route-stream-flow.test.ts API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 failed with finally called zero times, then passed all 20 tests; the same command with SCOPE=tests/service-auth.test.ts failed on two slash identities, then passed all 23 tests. Initial combined SCOPE="tests/route-stream-flow.test.ts tests/service-auth.test.ts" failed to select files; corrected to separate invocations.
   - [x] Align consumer merge/release wording and close round-1 gates using recorded round-2 evidence.
-  - [ ] Run typecheck, lint, full tests (only I0 skip), pack and candidate packaging; record new SHA-256, scope checks and cleanup.
+  - [x] Gates passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway pack-llm-gateway package-llm-routing-candidates LLM_ROUTING_PACK_DIR=/home/antoinefa/src/sentropic/tmp/llm-gateway-lot2/tmp/llm-gateway-lot2-candidates API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2. Full suite: 224 passed across 25 files, only the known I0 service-install skip.
+  - [x] New candidate tmp/llm-gateway-lot2-candidates/sentropic-llm-gateway-0.18.0.tgz matches qualification/candidate.tgz byte-for-byte; SHA-256 af57176c239dd411cdf092b32a8adf0832eb951220fa2ac2bdc756e88f7a04e2. I0 and exact-candidate consumer qualification remain open and BLOCK merge AND release.
+  - [x] Cleanup passed: make down COMPOSE_PROJECT_NAME=test-llm-gateway-lot2 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2; make ps COMPOSE_PROJECT_NAME=test-llm-gateway-lot2 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 returned no services.
+  - [x] Implementation commit 971452c2d passed make scope-check ENV=test-llm-gateway-lot2 and git diff --check; final evidence committed separately. No new scope exception; no push/PR/merge/publish.
 - [x] **Lot C — Build fix round 2**
   - [x] Preserve canonical middleware delegation; replace the exact-match assertion in packages/llm-gateway/tests/service-auth.test.ts with direct gateway/mcp-auth parity and document normalization in README/spec. No src change needed; candidate 0.18.0 remains greater than registry latest 0.17.1 (2026-09-24).
   - [x] Round scope: packages/llm-gateway/**, spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md and BRANCH.md only; prior EX1/EX2 do not authorize new edits in this round. Auth lane, Makefile, compose and workflows remain untouched.
