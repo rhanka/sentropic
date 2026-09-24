@@ -86,11 +86,13 @@
   - [x] Add enrolled-owner projection and malformed/ambiguous credential regressions. Initial I2 typecheck/lint and 180 runtime tests passed; standalone root/session declaration checks failed and diagnostics are being investigated; service clean install remains pending.
   - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
-- [ ] **I3 — Opaque mesh adapter**
+- [x] **I3 — Opaque mesh adapter**
+  - [x] Full lot gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (197 passed, one approved pending service-install gate).
   - [x] Correct adapter fixture metadata to the published mesh correlationId field after typecheck rejected an invented field; no mesh contract change.
   - [x] Implement route-attempt-dispatch, dispatch port, root export, routed flow/router integration with no native fallback; reject own auth fields and incomplete routeDispatch configuration.
   - [x] Add route-attempt-dispatch tests; update route-json-flow and route-stream-flow for injected exact-attempt dispatch and single terminal outcome; constructor test covers incomplete router wiring. Existing routed-router tests retain native-stub exclusion.
 - [ ] **I4 — Lifecycle and wire integration**
+  - [x] Isolate JSON completion/settlement hooks from retry handling; settle empty plans; check cancellation before provider calls; estimate missing usage without replacing reported zeros.
   - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
   - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
 - [ ] **I5 — Release and consumer qualification**
