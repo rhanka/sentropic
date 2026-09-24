@@ -2,6 +2,7 @@ import { test, expect, request } from '@playwright/test';
 import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { waitForMagicLinkToken } from '../helpers/maildev';
 
 test.describe('Détail des organisations', () => {
   const FILE_TAG = 'e2e:organizations-detail.spec.ts';
@@ -340,8 +341,40 @@ test.describe('Détail des organisations', () => {
     });
 
     test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
+      // Lock release on disconnect requires the user's last SSE connection.
+      // Other parallel scenarios use the seeded A account, so isolate this owner.
+      const email = `e2e-lock-leave-${crypto.randomUUID()}@example.com`;
+      const origin = process.env.UI_BASE_URL || 'http://localhost:5173';
+      const isolatedApi = await request.newContext({ baseURL: API_BASE_URL });
+      let sessionToken: string;
+      try {
+        const requested = await isolatedApi.post('/api/v1/auth/magic-link/request', { data: { email } });
+        if (!requested.ok()) throw new Error(`Isolated login request failed: ${requested.status()}`);
+        const token = await waitForMagicLinkToken(email, 60_000);
+        const verified = await isolatedApi.post('/api/v1/auth/magic-link/verify', {
+          data: { token }, headers: { origin },
+        });
+        if (!verified.ok()) throw new Error(`Isolated login verification failed: ${verified.status()}`);
+        sessionToken = (await verified.json()).sessionToken;
+        if (!sessionToken) throw new Error('Isolated login did not return a session');
+      } finally {
+        await isolatedApi.dispose();
+      }
+      const ownerApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+      try {
+        const added = await ownerApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
+          data: { email, role: 'editor' },
+        });
+        if (!added.ok()) throw new Error(`Isolated editor membership failed: ${added.status()}`);
+      } finally {
+        await ownerApi.dispose();
+      }
       const userAContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
+        storageState: {
+          cookies: [{ name: 'session', value: sessionToken, domain: new URL(origin).hostname,
+            path: '/', httpOnly: true, secure: false, sameSite: 'Lax', expires: -1 }],
+          origins: [{ origin, localStorage: [{ name: 'workspaceScopeId', value: workspaceAId }] }],
+        },
       });
       const userBContext = await browser.newContext({
         storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
