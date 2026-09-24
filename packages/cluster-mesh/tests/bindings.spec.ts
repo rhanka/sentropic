@@ -87,4 +87,17 @@ describe('runtime bindings', () => {
   it('should reject construction without a lifecycle or runner', () => {
     expect(() => createDegenerateClusterMesh({ ...bindings(), nhiRunner: undefined })).toThrow('nhi or nhiRunner');
   });
+
+  it.each(['attest', 'offboard', 'exportBundle'] as const)('should reject a malformed injected %s even with a runner', method => {
+    for (const value of [undefined, null, 'command', 1]) {
+      const nhi = { attest: vi.fn(), offboard: vi.fn(), exportBundle: vi.fn(), [method]: value } as unknown as NhiLifecyclePort;
+      expect(() => createDegenerateClusterMesh({ ...bindings(), nhi }))
+        .toThrowError(new TypeError(`nhi.${method} must be a function`));
+    }
+  });
+
+  it.each([null, {}, false])('should reject malformed lifecycle objects (%j)', nhi => {
+    expect(() => createDegenerateClusterMesh({ ...bindings(), nhi: nhi as unknown as NhiLifecyclePort }))
+      .toThrowError(new TypeError('nhi.attest must be a function'));
+  });
 });
