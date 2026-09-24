@@ -567,6 +567,11 @@ Make command with ENV last, then run make down on that same isolated project.
 | O7 | Irreversible contract/security gate / owner | Any additional published break, new DB migration, changed wire, cross-user activation or per-user OBO claim exposure requires a new decision. Conservative default: none. Quota admission remains BR-47 / deployable-process Lot D: budgetScope is carried only, no quota hook exists, and Lot 2 emits no over-budget failure. |
 | O8 | Irreversible publication gate / release owner | npm publication of gateway 0.18.0 freezes D1/D7's enumerated breaks publicly. Require Lot F mcp-auth 0.2.1 publication, a registry-only transitive auth graph and service-only clean-install qualification with required jose, then explicit owner release approval after independent review and I5 consumer evidence. Regular CD order: mcp-auth 0.2.1 → mesh only if changed → gateway 0.18.0. Reverting a Makefile commit or pinning a prior consumer version cannot undo publication. |
 
+O8 release-owner risk: `publish-llm-gateway-token` in Makefile bypasses
+`wait-llm-gateway-auth-dependencies`. That target is outside BRLG2-EX1 and remains
+unchanged; the release owner must enforce the same dependency and service-only
+qualification gates before token-based publication.
+
 D1/D7's enumerated TypeScript breaks and D8's 0.x minor boundary are within the supplied brief;
 no further irreversible choice is taken here. Open deployment values do not prevent this design
 handoff, but their fail-closed checks are release acceptance criteria. There is no new data migration.
