@@ -43,6 +43,7 @@
 - [ ] UAT and CI qualify the final integrated revision; no local E2E.
 
 ## Plan / Todo (lot-based)
+- [x] Independent test authority required fix 1: require the exact motion class token in the conditional list section's actual class attribute; preserve all mount/order/negative-transition guards.
 - [x] Fix pass slice 4 continued: composer invariants checked after every route including Comments; pager/assembly now render nonempty rows.
 - [x] Fix pass slice 4: nonempty production app-to-list forwarding and exact callbacks; register all four reference-validation changes and limits.
 - [x] Fix pass slice 3: production gate action, availability, busy/error and mount/disposal assertions added.

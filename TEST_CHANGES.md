@@ -11,7 +11,7 @@
 
 - ADD required 2/3 harness infrastructure: `tests/fixtures/production-widget-snippets.ts`, `ProductionWidgetHarness.svelte`, `ProductionChatPanelMock.svelte` and `vitest.dom.config.ts` compile the app's current dock call, content gate and body snippets verbatim. No copied gate logic; missing snippets fail compilation. Host state/callbacks/translations and ChatPanel side effects are doubles. This executes production markup/wiring, not app startup, store derivation, network effects, real ChatPanel or browser extension bridges; those remain CI/UAT limits. The existing handwritten gate fixture and source guards remain supplementary coverage.
 
-- FIX required 1 `ui/tests/components/chat/ChatWidget-agents-list.test.ts`: constrain motion-class assertion to the actual conditional section opening tag and its class attribute. CSS-only or unrelated-node occurrences cannot satisfy it. Conditional mounting, ordering and negative transition assertions remain unchanged.
+- FIX required 1 `ui/tests/components/chat/ChatWidget-agents-list.test.ts`: extract the whitespace-preceded `class` attribute from the actual conditional section opening tag, split on whitespace, and require the exact `chat-agents-view-slide-from-inline-start` token. Missing, CSS-only, unrelated-node, `data-class`, and prefixed/suffixed token occurrences cannot satisfy it. Conditional mounting, ordering and negative transition assertions remain unchanged.
 
 - FIX `ui/tests/components/chat/ChatWidget-tab-bar.test.ts`: correct the new single-bar regexp from a literal backslash-b to a word boundary. The exact count-one assertion remains; the first full UI run exposed this test-authoring error (488 passed, 1 failed).
 
