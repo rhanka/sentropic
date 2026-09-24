@@ -2059,7 +2059,11 @@ run-e2e:
 .PHONY: e2e-set-queue
 # Defaults for CI
 QUEUE_CONCURRENCY ?= 30
-E2E_GROUPS ?= 00 01 02 03 04 05 06 07
+E2E_GROUPS ?= 00 01 02 03 04 05 06 07 08 09 10
+
+.PHONY: check-e2e-inventory
+check-e2e-inventory: ## Fail when a numbered E2E spec has no default group or CI lane
+	@./e2e/scripts/check-spec-lanes.sh "$(E2E_GROUPS)"
 
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Playwright (scope with E2E_SPEC)
@@ -2069,7 +2073,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	# - MAX_FAILURES (optional)    -> if set, pass --max-failures=<n> (otherwise show all failures)
 	# - QUEUE_CONCURRENCY (default: 30) -> upsert settings.ai_concurrency before running tests
 	# - QUEUE_PROCESSING_INTERVAL (optional) -> upsert settings.queue_processing_interval (ms)
-	# - E2E_GROUPS (default: "00 01 02 03 04 05 06 07") -> list of groups to run
+	# - E2E_GROUPS (default: "00 01 02 03 04 05 06 07 08 09 10") -> list of groups to run
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps \
 	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
 	  e2e sh -lc ' \
@@ -2077,21 +2081,26 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	    retries="$${RETRIES:-2}"; \
 	    max_fail="$${MAX_FAILURES:-}"; \
 	    extra=""; \
+	    status=0; summary=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
 	    if [ -n "$$E2E_SPEC" ]; then \
 	      spec_path="$$E2E_SPEC"; \
 	      spec_path="$${spec_path#e2e/}"; \
 	      echo "▶ Running scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	      npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra; \
+	      code=0; npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
+	      summary="$$spec_path: exit $$code"; status=$$code; \
 	    else \
 	      echo "▶ Running Playwright by groups: $$E2E_GROUPS (workers=$$workers retries=$$retries $${extra:-})"; \
 	      for g in $$E2E_GROUPS; do \
-	        for pattern in "tests/$${g}-.*.spec.ts"; do \
-	          echo "▶ Running group $$g: $$pattern"; \
-	          npx playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra; \
-	        done; \
+	        pattern="tests/$${g}[-_].*\\.spec\\.ts$$"; \
+	        echo "▶ Running group $$g: $$pattern"; \
+	        code=0; npx playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
+	        summary="$${summary}$${summary:+; }$$g: exit $$code"; \
+	        if [ "$$code" -ne 0 ]; then status=1; fi; \
 	      done; \
-	    fi'
+	    fi; \
+	    echo "Playwright invocation summary: $$summary"; \
+	    exit "$$status"'
 	@echo "🛑 Stopping services..."
 	# @$(DOCKER_COMPOSE) down
 
