@@ -16,6 +16,17 @@ const fixture = async () => {
 };
 
 describe('canonical service auth bridge', () => {
+  it.each(['', '/'])('matches the registered issuer exactly with suffix %j', async suffix => {
+    const f = await fixture();
+    const issuer = `${f.auth.issuer}${suffix}`;
+    const bridge = new ServiceAuthVerifyToken({ auth: { ...f.auth, issuer }, resolvePrincipal: f.resolvePrincipal });
+    for (const tokenSuffix of ['', '/']) {
+      const token = await f.token({ iss: `${f.auth.issuer}${tokenSuffix}` });
+      const result = await bridge.verify(token, 'Bearer', { authorization: `Bearer ${token}` }, authContext);
+      expect(result).toEqual(tokenSuffix === suffix ? principal : undefined);
+    }
+    expect(f.resolvePrincipal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ issuer }));
+  });
   it.each([{ client_id: '', sub: '' }, { client_id: undefined, sub: undefined }])(
     'rejects empty service identity before principal mapping: %j', async claims => {
       const f = await fixture();
