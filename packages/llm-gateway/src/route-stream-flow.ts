@@ -6,6 +6,8 @@ import {
   type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { GatewayError } from './router/errors.js';
+import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
+const defaultDispatch = new RouteAttemptDispatch();
 
 const usageFromEvent = (event: StreamEvent): SettleUsage | undefined =>
   event.type === 'done' ? routeUsage(event.data.usage) : undefined;
@@ -36,10 +38,10 @@ export const runRouteStreamFlow = async (
         prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
       );
       const preparedAttempt = attempt;
-      const source = await preparedAttempt.stream({
+      const source = await (deps.dispatch ?? defaultDispatch).stream({ attempt: preparedAttempt, request: {
         ...prepared.canonical.request,
         ...(request.signal ? { signal: request.signal } : {}),
-      });
+      } });
       iterator = source[Symbol.asyncIterator]();
       let first = await iterator.next();
       while (!first.done && (first.value.type === 'status' || first.value.type === 'tool_call_result')) {
