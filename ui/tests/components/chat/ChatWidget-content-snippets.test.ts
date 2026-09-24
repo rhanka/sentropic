@@ -4,23 +4,18 @@ import { describe, expect, it } from 'vitest';
 
 const widgetPath = resolve(process.cwd(), 'src/lib/components/ChatWidget.svelte');
 
-/**
- * L-C-shell S3 (app side): the gate-ready content branch's three panels (jobs, comments, chat)
- * are wrapped in host snippets and rendered IN PLACE, ready to be handed to the package's
- * renderJobsPanel/renderCommentsPanel/renderChatPanel slots at S8. QueueMonitor stays inside the
- * jobs snippet (app-only — the package boundary test forbids importing it). No visible change (I4),
- * no rename (L-A').
- */
+/** Domain panels stay host-owned; the package owns their routing. */
 describe('ChatWidget content panel host snippets (L-C-shell S3)', () => {
   it('exists', () => {
     expect(existsSync(widgetPath)).toBe(true);
   });
 
-  it('wraps jobs/comments/chat panels in host snippets, rendered in place', () => {
+  it('passes jobs/comments/chat panels as package slots', () => {
     const source = readFileSync(widgetPath, 'utf8');
-    for (const name of ['renderJobsPanelHost', 'renderCommentsPanelHost', 'renderChatPanelHost']) {
+    for (const name of ['renderJobsPanelHost', 'renderCommentsPanelHost', 'renderChatBodyHost']) {
       expect(source).toContain(`{#snippet ${name}()}`);
-      expect(source).toContain(`{@render ${name}()}`);
+      const slot = name === 'renderChatBodyHost' ? 'renderChatPanel' : name.replace('Host', '');
+      expect(source).toContain(`${slot}={${name}}`);
     }
   });
 

@@ -4,27 +4,22 @@ import { describe, expect, it } from 'vitest';
 
 const widgetPath = resolve(process.cwd(), 'src/lib/components/ChatWidget.svelte');
 
-/**
- * L-C-shell S2 (app side): the app header's leading (mobile menu) and trailing (settings /
- * side-switch / placement / close) blocks are wrapped in host snippets and rendered IN PLACE,
- * ready to be handed to the package's renderHeaderLeading/renderHeaderActions slots at S8.
- * No visible change here (I4) — the blocks are wrapped, not moved or removed. No rename (L-A').
- */
+/** Host header controls are passed to the package-owned header frame. */
 describe('ChatWidget header host snippets (L-C-shell S2)', () => {
   it('exists', () => {
     expect(existsSync(widgetPath)).toBe(true);
   });
 
-  it('wraps the leading (mobile menu) block in renderHeaderLeadingHost, rendered in place', () => {
+  it('wraps the leading (mobile menu) block in renderHeaderLeadingHost, passed as a slot', () => {
     const source = readFileSync(widgetPath, 'utf8');
     expect(source).toContain('{#snippet renderHeaderLeadingHost()}');
-    expect(source).toContain('{@render renderHeaderLeadingHost()}');
+    expect(source).toContain('renderHeaderLeading={renderHeaderLeadingHost}');
   });
 
-  it('wraps the trailing actions block in renderHeaderActionsHost, rendered in place', () => {
+  it('wraps the trailing actions block in renderHeaderActionsHost, passed as a slot', () => {
     const source = readFileSync(widgetPath, 'utf8');
     expect(source).toContain('{#snippet renderHeaderActionsHost()}');
-    expect(source).toContain('{@render renderHeaderActionsHost()}');
+    expect(source).toContain('renderHeaderActions={renderHeaderActionsHost}');
   });
 
   it('keeps every header control inside the snippets (wrapped, not removed) — I4', () => {

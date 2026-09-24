@@ -16,6 +16,15 @@ describe('ChatWidget app wrapper', () => {
     expect(source).toContain('failedJobsCount={failedJobsCount}');
     expect(source).toContain("queueTabLabel={$_('chat.tabs.jobs')}");
     expect(source).toContain('onPurgeJobs={handlePurgeMyJobs}');
-    expect(source).toContain('renderShell={renderAppChatWidgetShell}');
+    expect(source).not.toContain('renderAppChatWidgetShell');
+    expect(source).not.toContain('renderShell=');
+    for (const slot of ['renderHeaderLeading', 'renderHeaderActions', 'renderJobsPanel', 'renderCommentsPanel', 'renderContentGate', 'renderConversationHeader', 'renderAgentsListHeader']) {
+      expect(source).toContain(`${slot}={${slot}Host}`);
+    }
+    expect(source).toContain('renderChatPanel={renderChatBodyHost}');
+    const shell = readFileSync(resolve(process.cwd(), '../packages/chat-ui/src/components/ChatWidget.svelte'), 'utf8');
+    expect(shell).toContain('<ChatWidgetPager');
+    expect(shell).toContain('<ChatWidgetTabBar');
+    expect(shell).toContain('{@render renderContentGate(renderReady)}');
   });
 });
