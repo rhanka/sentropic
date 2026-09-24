@@ -859,6 +859,12 @@
       "file": "dist/components/ChatPlacementDropZones.svelte",
       "exists": true,
       "_propSnapshot": "Props: zones? (DropZone[]), hovered? (ChatPlacement | null), labelForPlacement (required callback). Renders a pointer-events-none, reduced-motion-safe viewport overlay of host-computed drop zones; the hovered zone uses the active highlight."
+    },
+    "./components/ChatWidgetPager.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatWidgetPager.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: agentsView? ('list'|'conversation'), canAgentsListBeDefaultView? (boolean), agentsList? (AgentsListProps), renderAgentsListHeader? (Snippet<[]>), renderConversationHeader? (Snippet<[]>), renderChatPanel? (Snippet<[]>), agentsViewAnnouncement? (string). List unmounts on conversation view; conversation stays mounted while hidden."
     }
   }
 }
