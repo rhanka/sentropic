@@ -27,6 +27,7 @@
   - `api/src/**`
   - `ui/src/**`
   - `api/tests/api/cluster-mesh-streams-cutover.test.ts`
+  - `api/tests/unit/document-text-office-extension.test.ts`
   - `package-lock.json`
   - `api/package-lock.json`
 - **Exception process**:
@@ -66,6 +67,8 @@
   - [x] Push presence changes for parallel CI qualification while the isolated local API image finishes building; scoped regression gate remains pending and is not claimed passed.
   - [ ] `e2e/tests/08-document-summary-formats.spec.ts:28`: inspect PDF failed status.
   - [x] Restore the missing PDF.js optional dependency closure; Docker Node 24 Alpine clean workspace npm ci then production prune extracts 312 characters from the real PDF fixture. CI summary verification pending.
+  - [x] Add a source-level PDF extraction regression using the unchanged E2E fixture to catch missing Node PDF.js polyfills before E2E execution.
+  - [x] Local scoped validation: streams cutover 5/5 passed; clean Docker PDF/docx unit suite 4/4 passed. Initial shared-workspace PDF attempt failed after concurrent dependency preparation removed officeparser; isolated clean install passed without code or assertion changes.
   - [x] `e2e/tests/05-i18n.spec.ts:184`: stale “use cases” warning strings conflict with shipped “initiatives” translations; corrected exact text, registered for independent review. CI retest pending.
   - [ ] Apply only evidenced product/fixture fixes and register assertion changes.
   - [x] Diagnose new 09 failures from run 35952497610: scope both multi-tool queue polls to the created workspace; align steering timeline locator with the shipped spacing class. CI retest pending.
