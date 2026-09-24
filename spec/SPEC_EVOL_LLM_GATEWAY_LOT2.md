@@ -281,3 +281,70 @@ Unchanged field shapes/signatures: `CostContext`, `VerifiedPrincipal`, `CallerAu
 `routingSubjectForCost` retains its current fallback for trusted custom consumers; the production
 resolver supplies an explicit enrollment owner. Changes to validation, auth failure handling and
 the production resolver's correlation policy are runtime changes even where TypeScript still compiles.
+
+### D8 — Release boundary
+
+Publish the implementation as gateway **0.18.0**, the next 0.x minor after 0.17.1. The explicit
+pre-1.0 source breaks above must not ship as 0.17.2. Keep mesh source unchanged at **0.21.2** and
+raise the gateway's mesh floor to **^0.21.2**, the baseline being qualified. Add auth-hono **^0.15.2**
+and the corresponding lockfile resolution; consume its public exports and existing peer requirements.
+Do not bump auth-hono just to use it. This documentation branch changes no package version.
+
+If implementation proves a mesh source fix necessary, version **0.21.3** for an internal compatible
+fix or **0.22.0** for new public functionality/authorized pre-1.0 type changes; update the gateway
+floor accordingly. Unlisted mesh contract breaks require owner review, not silent expansion of D7.
+Check registry latest before implementation bumps and after every rebase; advance the candidate if
+any named version has since been published. Publish only through regular CD, mesh first if changed,
+then gateway after dependency visibility. No branch publication, push, PR or merge is authorized here.
+
+## 3. h2a consumer inventory and migration
+
+Evidence is the read-only checkout `/home/antoinefa/src/h2a`, HEAD `0d6b2eaf`, inspected 2026-09-23.
+Both `apps/llm-gateway/src/index.ts` and
+`packages/h2a-runtime/src/llm-gateway-runtime/index.ts` currently import local `handleMessages` and
+`acquireSession`; neither imports any of the five gateway symbols named in the brief. A source search
+under both apps/packages trees finds no occurrences of those five symbols. Both package manifests
+declare gateway `^0.10.0`. Do not present a newer consumer as measured on this checkout.
+
+Actual gateway import sites (paths relative to that h2a root):
+
+| Import site | Imported symbol | Lot 2 effect |
+|---|---|---|
+| `apps/llm-gateway/src/proxy-openai.ts:19` | `CODEX_RESPONSES_URL` | No type change |
+| `packages/h2a-runtime/src/llm-gateway-runtime/proxy-openai.ts:19` | `CODEX_RESPONSES_URL` | No type change |
+| `apps/llm-gateway/src/model-catalog.ts:1` | `describeCanonicalTargetRoutes` | No type change |
+| `packages/h2a-runtime/src/llm-gateway-runtime/model-catalog.ts:1` | `describeCanonicalTargetRoutes` | No type change |
+| `apps/llm-gateway/src/model-catalog.test.ts:2` | `describeCanonicalTargetRoutes` | No type change |
+| `packages/h2a/test/runtime-status-contract.test.js:4` | `describeCanonicalTargetRoutes` | No type change |
+
+Expected newer integration named by the brief, to recheck at **each** of
+`apps/llm-gateway/src/index.ts` and `packages/h2a-runtime/src/llm-gateway-runtime/index.ts` before release:
+
+| Consumer import | Exact impact if present at either site |
+|---|---|
+| `createGatewayRouter` | Import/call signature preserved; router supplies auth context automatically; optional routeDispatch needs no consumer change |
+| `stubGatewayConfig` | Export and GatewayConfig shape preserved; spreading it remains valid; it supplies no real authentication or metering |
+| `CallerAuthPort` | Update header-only verify invocations to pass context; annotate result or return literal discriminants; custom implementations ignoring context can still compile |
+| `RouteMeteringSink` | Signature unchanged; keep one aggregate settleRoute, no per-attempt financial write |
+| `RouteRequestSettlement` | All fields unchanged; production resolver supplies request correlation and stable enrollment owner, so recheck ledger/affinity assumptions |
+
+Migration sequence for the consumer owner:
+
+1. Record the actual target h2a SHA and re-run the import inventory. The observed `^0.10.0` ranges
+   cannot receive 0.18.0 automatically. Qualify prior BR-73 migrations separately; this spec is an
+   exhaustive **0.17.1 to 0.18.0** delta, not proof of a safe direct 0.10 upgrade.
+2. Integrate the exact candidate gateway tarball and its declared dependencies in an isolated h2a
+   worktree. Change the two package manifests/lockfile to the reviewed 0.18.x release only at cutover.
+3. Update custom CallerAuthPort/VerifyToken implementations and all direct calls per D1; preserve
+   stable principal/enrollment owner mapping. Never replace an opaque `gw-*` token verifier by an
+   OAuth verifier without also changing its issuer. Existing local token lifecycle stays host-owned.
+4. For auth-hono deployments, configure issuer/resource/scopes/replay store or session ports, trusted
+   principal mapping and VerifiedCostContextResolver. Supply stable affinity separately via routeInput.
+   Wire routePlanner and routeMetering together, plus a real readiness probe. The routed path does
+   not invoke native stubs even if config was assembled from stubGatewayConfig.
+5. Verify both ingress wires, SDK x-api-key/Bearer, DPoP replay, models ownership, revocation, JSON/SSE,
+   cancellation, bounded fallback, Codex refusal classes and Anthropic compaction continuation. Assert
+   one aggregate settlement and no secrets. Record candidate SHA, tarball hashes and test evidence.
+6. Consumer owner signs off before implementation merge. Roll back by pinning the prior gateway and
+   consumer code together; no data/credential re-enrollment migration is introduced by Lot 2. No h2a
+   file is modified by this specification branch.
