@@ -1,9 +1,9 @@
-import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
+import type { PreparedRouteAttempt, StreamEvent, RouteFailureClassification } from '@sentropic/llm-mesh';
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage, terminalGatewayError,
-  type RouteAttemptSettlement, type RouteFlowDeps,
+  type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
@@ -21,6 +21,111 @@ const servedTargetFor = (diagnostic: {
   transportProviderId: diagnostic.actualTransportProviderId,
   model: diagnostic.actualModelId,
 });
+
+/** Claim the terminal outcome before awaiting any callback or iterator cleanup. */
+const trackedExecution = (input: {
+  attempt: PreparedRouteAttempt; iterator: AsyncIterator<StreamEvent>; first: StreamEvent;
+  prepared: PreparedRouteFlow; request: GatewayFlowRequest; target: ResolvedTarget;
+  candidateRef: string; attempts: RouteAttemptSettlement[]; responseId: string;
+  settle: (outcome: 'success' | 'failed' | 'cancelled') => Promise<void>;
+}) => {
+  const { attempt, iterator, prepared, request, target } = input;
+  const signal = request.signal ?? request.authContext.signal;
+  let terminal: RouteFailureClassification['reason'] | undefined;
+  let finishing: Promise<void> | undefined;
+  let closing: Promise<unknown> | undefined;
+  let outputCharacters = 0;
+  let reported: SettleUsage | undefined;
+  const isCancelled = () => terminal === 'cancelled';
+  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
+  const usage = (): SettleUsage => reported ?? ({
+    inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
+    outputTokens: Math.min(1_000_000, Math.ceil(outputCharacters / 4)), estimated: true,
+  });
+  const finish = (classification: RouteFailureClassification): Promise<void> => {
+    if (terminal) return finishing ?? Promise.resolve();
+    terminal = classification.reason;
+    signal?.removeEventListener('abort', onAbort);
+    const finalUsage = usage();
+    input.attempts.push({ candidateRef: input.candidateRef, providerId: target.providerId,
+      modelId: target.model, transportProviderId: target.transportProviderId,
+      outcome: terminal, usage: finalUsage });
+    finishing = (async () => {
+      try {
+        if (terminal === 'success') await attempt.complete(attemptUsage(finalUsage));
+        else if (terminal === 'cancelled') await attempt.releaseCancelled();
+        else await attempt.recordOutcome(classification, attemptUsage(finalUsage));
+      } finally {
+        await input.settle(terminal === 'success' ? 'success' : terminal === 'cancelled' ? 'cancelled' : 'failed');
+      }
+    })();
+    return finishing;
+  };
+  const cancel = async () => {
+    const result = finish({ reason: 'cancelled', retryable: false, healthScope: 'route' });
+    await Promise.all([result, close()]);
+  };
+  const onAbort = () => { void cancel().catch(() => undefined); };
+  const tracked = (async function* (): AsyncGenerator<StreamEvent> {
+    try {
+      let next: IteratorResult<StreamEvent> = { done: false, value: input.first };
+      while (!next.done) {
+        signal?.throwIfAborted();
+        if (isCancelled()) return;
+        const event = next.value;
+        if (event.type === 'error') throw event.data;
+        if (event.type === 'done') {
+          if (event.data.usage) reported = routeUsage(event.data.usage);
+          await finish({ reason: 'success', retryable: false, healthScope: 'route' });
+          yield event;
+          return;
+        }
+        if (event.type === 'content_delta' || event.type === 'reasoning_delta' || event.type === 'tool_call_delta') {
+          outputCharacters = Math.min(4_000_000, outputCharacters + event.data.delta.length);
+        }
+        yield event;
+        next = await iterator.next();
+      }
+      throw new Error('stream ended without terminal event');
+    } catch (error) {
+      if (terminal) throw error; // callback failure: never record/settle again
+      const classification = classifyRouteError(error, signal?.aborted);
+      await finish(classification);
+      if (classification.reason !== 'cancelled') yield { type: 'error', data: {
+        providerId: target.providerId as never,
+        message: 'stream failed after commitment', retryable: false,
+      } };
+    } finally { await close(); }
+  })();
+  const encoded = encodeGatewayStream(request.wire, target.model, input.responseId, tracked,
+    request.wire === 'anthropic-messages'
+      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) } : undefined);
+  const expose = (first: IteratorResult<import('./ports/dispatch.js').GatewayDispatchStreamEvent>) => {
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    const stream = (async function* () {
+      try {
+        signal?.throwIfAborted();
+        if (isCancelled()) return;
+        if (!first.done) yield first.value;
+        for await (const frame of encoded) {
+          signal?.throwIfAborted();
+          if (isCancelled()) return;
+          yield frame;
+        }
+      } finally {
+        await encoded.return(undefined);
+        if (!terminal) await cancel();
+        else await close();
+        signal?.removeEventListener('abort', onAbort);
+      }
+    })();
+    const originalReturn = stream.return.bind(stream);
+    stream.return = async value => { await cancel(); await encoded.return(undefined); return originalReturn(value); };
+    return stream;
+  };
+  return { encoded, expose };
+};
 
 export const runRouteStreamFlow = async (
   deps: RouteFlowDeps,

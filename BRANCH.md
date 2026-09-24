@@ -94,6 +94,7 @@
 - [ ] **I4 — Lifecycle and wire integration**
   - [x] Isolate JSON completion/settlement hooks from retry handling; settle empty plans; check cancellation before provider calls; estimate missing usage without replacing reported zeros.
   - [x] Add JSON regressions for empty plans, missing versus genuine zero usage, and settlement rejection without redispatch or duplicate operational outcomes.
+  - [x] Add private trackedExecution helper in route-stream-flow.ts to claim terminal outcomes before async work, preserve reported zero usage, estimate missing usage, sanitize stream errors and handle unstarted consumer return. Wiring follows in the next atomic commit.
   - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
   - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
 - [ ] **I5 — Release and consumer qualification**
