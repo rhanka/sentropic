@@ -93,6 +93,7 @@
   - [x] Add route-attempt-dispatch tests; update route-json-flow and route-stream-flow for injected exact-attempt dispatch and single terminal outcome; constructor test covers incomplete router wiring. Existing routed-router tests retain native-stub exclusion.
 - [ ] **I4 — Lifecycle and wire integration**
   - [x] Isolate JSON completion/settlement hooks from retry handling; settle empty plans; check cancellation before provider calls; estimate missing usage without replacing reported zeros.
+  - [x] Add JSON regressions for empty plans, missing versus genuine zero usage, and settlement rejection without redispatch or duplicate operational outcomes.
   - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
   - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
 - [ ] **I5 — Release and consumer qualification**
