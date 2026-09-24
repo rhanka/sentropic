@@ -265,12 +265,18 @@ export const createGatewayRouter = (
     // (first frame buffered). A failure BEFORE any byte (auth/select/dispatch/
     // first-frame) REJECTS here -> provider-shaped HTTP error, never an empty 200
     // (#6). A mid-stream failure is settled inside the stream (no retry, §2).
+    const cancellation = new AbortController();
+    const abort = () => cancellation.abort(c.req.raw.signal.reason);
+    c.req.raw.signal.addEventListener('abort', abort, { once: true });
+    if (c.req.raw.signal.aborted) abort();
+    flowRequest.signal = cancellation.signal;
     let streamResult;
     try {
       streamResult = routeFlowDeps
         ? await runRouteStreamFlow(routeFlowDeps, flowRequest)
         : await runStreamFlow(flowDeps!, flowRequest);
     } catch (error) {
+      c.req.raw.signal.removeEventListener('abort', abort);
       return sendError(c, toProviderShapedError(wire, error), id, servedTargetForError(error));
     }
 
@@ -282,17 +288,25 @@ export const createGatewayRouter = (
     // B3: relay provider frames VERBATIM. The gateway synthesizes NO terminator —
     // a real OpenAI transport emits its own `[DONE]`; Anthropic uses message_stop.
     // On a mid-stream error the stream simply ends (no synthetic [DONE]).
+    let closed = false;
+    const detach = () => c.req.raw.signal.removeEventListener('abort', abort);
     return c.body(
       new ReadableStream<Uint8Array>({
-        async start(controller) {
-          const encoder = new TextEncoder();
+        async pull(controller) {
           try {
-            for await (const event of streamResult.stream) {
-              controller.enqueue(encoder.encode(event.raw));
-            }
-          } finally {
-            controller.close();
+            const next = await streamResult.stream.next();
+            if (closed) return;
+            if (next.done) { closed = true; detach(); controller.close(); }
+            else controller.enqueue(new TextEncoder().encode(next.value.raw));
+          } catch (error) {
+            if (!closed) { closed = true; detach(); controller.error(error); }
           }
+        },
+        async cancel(reason) {
+          closed = true;
+          cancellation.abort(reason);
+          try { await streamResult.stream.return(undefined); }
+          finally { detach(); }
         },
       }),
     );
