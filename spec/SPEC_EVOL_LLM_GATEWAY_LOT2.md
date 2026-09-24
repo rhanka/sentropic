@@ -1,6 +1,6 @@
 # SPEC_EVOL — LLM gateway Lot 2: verified callers, cost context, mesh dispatch
 
-Status: PROPOSED DESIGN, revised 2026-09-24 — Lot C review round 1; planning only; conductor independent review pending.
+Status: PROPOSED DESIGN, revised 2026-09-24 — Lot C review round 2; planning only; conductor independent review pending.
 
 Branch: Lot C `spec/llm-gateway-lot2`, base `origin/main` `75032fc85`.
 
@@ -11,10 +11,16 @@ Extends:
 
 ## 1. Measured baseline and boundaries
 
-The gateway is `0.17.1`; mesh is `0.21.2` (manifests and npm `latest`, checked 2026-09-23).
-The gateway dependency floor is currently mesh `^0.21.0`. Local auth-hono is `0.15.2`, but npm
-latest is **0.15.0**; `^0.15.2` is not published. Service mode selects published **mcp-auth 0.2.0**
-via `/hono`; session mode alone uses published auth-hono 0.15.0 via `/middleware` (checked 2026-09-24).
+All registry facts below were measured on **2026-09-24**. Gateway is `0.17.1`; mesh is `0.21.2`
+(manifests and npm `latest`). The gateway dependency floor is currently mesh `^0.21.0`.
+Local auth-hono is `0.15.2`, but npm latest is **0.15.0**; `^0.15.2` is not published.
+npm latest **mcp-auth 0.2.0** declares dependency `@sentropic/oauth-verify: file:../oauth-verify`,
+optional peer `hono ^4.10.7`, and required peer `jose ^5.10.0`. That manifest is disqualified.
+Service mode requires **Lot F / mcp-auth 0.2.1**, replacing the dependency with `^0.1.0`, via `/hono`;
+session mode alone uses published auth-hono 0.15.0 via `/middleware`.
+Lot F is already in progress on `fix/mcp-auth-oauth-verify-dep` in `tmp/mcp-auth-dep-fix`:
+owner **auth lane**, executor **mesh lane**; the auth owner gave GO and confirmed `^0.1.0`.
+Its manifest fix and package-local regression test publish through CI at merge; this is a hard prerequisite.
 The three `src/ports/{caller-auth,cost-context,dispatch}.ts` comments still describe v0 seams.
 The actual baseline already contains `PersonalPassthroughCallerAuth`, `PassthroughDispatch`,
 `runRouteJsonFlow` and `runRouteStreamFlow`; this is completion and composition, not a new gateway.
@@ -80,11 +86,13 @@ only from `@sentropic/llm-gateway/auth`, using `createRequireServiceAuth` from `
 Add `src/caller-auth/auth-hono.ts`, exporting session-only `AuthHonoVerifyToken implements VerifyToken`
 only from `@sentropic/llm-gateway/auth-hono`, using `createRequireAuth` from `@sentropic/auth-hono/middleware`.
 Do not build on auth-hono's service compat wrapper scheduled for removal in 1.0 or private helpers.
-Declare mcp-auth `^0.2.0` and auth-hono `^0.15.0` as OPTIONAL peers (`peerDependenciesMeta.optional`).
+Declare mcp-auth `^0.2.1`, jose `^5.10.0` and auth-hono `^0.15.0` as OPTIONAL gateway peers
+(`peerDependenciesMeta.optional`). Selecting `/auth` requires both mcp-auth and jose;
+jose remains a required peer of mcp-auth. Package-level optionality preserves root-only consumers.
 Neither runtime code nor declarations at the gateway root/ports barrels may import or re-export these
-bridges or optional peer types. Each subpath's declarations reference only its own auth peer. Load its
+bridges or optional peer types. Each subpath's declarations reference only its mode's peers. Load its
 middleware with a cached async `import()` on verification; a missing peer fails closed without trying
-the other mode. Root import/typecheck must work with neither auth peer installed, matching
+the other mode. Root import/typecheck must work without mcp-auth, auth-hono or jose installed, matching
 `spec/cluster-mesh-lazy-surface`'s optional peers, async loaders and provider-free root declarations.
 Select one configured credential family per bridge instance; never try session auth after failed
 service auth or guess a JWT family from unverified claims. Local h2a session verifiers can continue
@@ -120,7 +128,8 @@ export interface AuthHonoVerifyTokenOptions {
 Construction validates service issuer, audience/resource and a nonempty required-scope set;
 the deployment supplies registered values, not values guessed from tokens. The service replay
 store is mandatory and shared across replicas; an unavailable store never disables replay checks.
-Service middleware needs only the hono/jose peers plus oauth-verify; auth-hono itself needs no changes.
+Service middleware requires hono (already a gateway dependency), jose `^5.10.0` and mcp-auth `^0.2.1`
+with its registry-resolved oauth-verify dependency; auth-hono itself needs no changes.
 Session dependencies are confined to the session subpath; install/qualify that peer's declared peers.
 
 For each verification, construct a bodyless in-process Hono request at the exact context URL and
@@ -324,6 +333,10 @@ New `/auth` exports, exactly: `ServiceAuthCallerIdentity`, `ServiceAuthVerifyTok
 `ServiceAuthVerifyToken`. New `/auth-hono` exports, exactly: `AuthHonoCallerIdentity`,
 `AuthHonoVerifyTokenOptions`, `AuthHonoVerifyToken`. Each verifier constructor takes its own options;
 verify implements D1 and returns `Promise<VerifiedPrincipal | undefined>`. Add both subpath export maps.
+cluster-mesh must mirror **both** gateway auth subpaths, preserving mode and peer isolation:
+`@sentropic/llm-gateway/auth` is service mode (`ServiceAuthVerifyToken`, required mcp-auth `^0.2.1`
+and jose `^5.10.0` peers); `@sentropic/llm-gateway/auth-hono` is session mode
+(`AuthHonoVerifyToken`, auth-hono peer). The lazy-surface spec is amended separately to match.
 
 Unchanged field shapes/signatures: `CostContext`, `VerifiedPrincipal`, `CallerAuthScheme`,
 `CorrelationSource`, `GatewayConfig`, `AuthResolver`, pool/authz types, all native dispatch types,
@@ -338,19 +351,23 @@ the production resolver's correlation policy are runtime changes even where Type
 Publish the implementation as gateway **0.18.0**, the next 0.x minor after 0.17.1. The explicit
 pre-1.0 source breaks above must not ship as 0.17.2. Keep mesh source unchanged at **0.21.2** and
 raise the gateway's mesh floor to **^0.21.2**, the baseline being qualified. h2a's **^0.21.0** range
-admits 0.21.2, but its lockfile must resolve at least that floor (section 3). Add OPTIONAL peers
-**mcp-auth ^0.2.0** (service) and **auth-hono ^0.15.0** (session), with qualified lockfile resolutions.
+admits 0.21.2 and its measured lockfile already resolves it (section 3). Add OPTIONAL gateway peers
+**mcp-auth ^0.2.1** and **jose ^5.10.0** (both required for service `/auth`), plus
+**auth-hono ^0.15.0** (session), with qualified lockfile resolutions.
 Use published public exports; do not require unpublished auth-hono 0.15.2 or bump it just to use it.
 The gateway release waits until **every declared auth dependency/peer floor is visible on npm**,
 including transitive oauth-verify; optional status does not waive this publish-order gate.
+Lot F's mcp-auth **0.2.1** publication is mandatory even if a combined workspace install succeeds.
+`wait-llm-gateway-auth-dependencies` rejects non-registry specs anywhere in that graph (section 4).
 This documentation branch changes no package version.
 
 If implementation proves a mesh source fix necessary, version **0.21.3** for an internal compatible
 fix or **0.22.0** for new public functionality/authorized pre-1.0 type changes; update the gateway
 floor accordingly. Unlisted mesh contract breaks require owner review, not silent expansion of D7.
 Check registry latest before implementation bumps and after every rebase; advance the candidate if
-any named version has since been published. Publish only through regular CD, mesh first if changed,
-then gateway after dependency visibility. No branch publication, push, PR or merge is authorized here.
+any named version has since been published. Publish only through regular CD in this order:
+**Lot F mcp-auth 0.2.1 → llm-mesh only if changed → llm-gateway 0.18.0**, after all dependency gates.
+No branch publication, push, PR or merge is authorized here.
 
 ## 3. h2a consumer inventory and migration
 
@@ -374,21 +391,25 @@ Actual gateway import sites, one row per site (paths relative to that h2a root):
 
 `apps/llm-gateway/package.json:14-15` and `packages/h2a-runtime/package.json:18-19` both declare
 gateway `^0.17.0` and mesh `^0.21.0`. The 0.x caret **excludes gateway 0.18.0**, requiring a manual
-range bump. Mesh 0.21.2 is within h2a's range; refresh and qualify its lockfile against gateway's
-raised `^0.21.2` floor, avoiding an older or duplicate mesh resolution. No consumer compilation
-has run on this documentation branch; these are source findings and explicit I5 acceptance checks.
+range bump. At measured `75c1dc61`, h2a's lockfile **already resolves mesh 0.21.2**, satisfying the
+raised `^0.21.2` floor. The remaining risk is duplicate mesh resolution after gateway 0.18.0 and
+cluster-mesh are installed together; `spec/cluster-mesh-lazy-surface` **E8** covers that qualification.
+No consumer compilation has run on this documentation branch; these are source findings and
+explicit I5 acceptance checks.
 
 Migration sequence for the consumer owner:
 
 1. Recheck the target h2a SHA against this origin/main inventory. This spec enumerates the
    **0.17.1 to 0.18.0** delta; both `^0.17.0` ranges require a manual bump to `^0.18.0` at cutover.
 2. Integrate the exact candidate gateway tarball and its declared dependencies in an isolated h2a
-   worktree. Resolve mesh to at least 0.21.2 and record both package manifests and lockfile changes.
+   worktree. Qualify the existing mesh 0.21.2 resolution in the new dependency graph, recording
+   manifest/lockfile changes; exercise lazy-surface E8 with gateway 0.18.0 and cluster-mesh together.
 3. Typecheck both unchanged inline CallerAuthPort implementations against D1; update direct calls
    only if new sites need context. Preserve stable principal/enrollment owner mapping.
    Never replace an opaque `gw-*` token verifier by an
    OAuth verifier without also changing its issuer. Existing local token lifecycle stays host-owned.
-4. For `/auth` service or `/auth-hono` session deployments, install the selected optional peer and
+4. For `/auth` service deployments, install mcp-auth `^0.2.1` and required jose `^5.10.0`;
+   for `/auth-hono` session deployments, install auth-hono and its declared peers. Then
    configure issuer/resource/scopes/replay store or session ports, trusted
    principal mapping and VerifiedCostContextResolver. Supply stable affinity separately via routeInput.
    Wire routePlanner and routeMetering together, plus a real readiness probe. The routed path does
@@ -408,7 +429,7 @@ several atomic commits under approximately 150 lines; none is separately publish
 
 | Lot | Implementation files | Tests and acceptance |
 |---|---|---|
-| I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed reversible Makefile exception only after owner approval | Qualify published mcp-auth `/hono` and auth-hono `/middleware` plus peers in the isolated Docker toolset. Apply the exact target changes below before I1; verify clean tarball installs as well as workspace links. No compose/workflow changes required. |
+| I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed reversible Makefile exception only after owner approval | Require Lot F mcp-auth 0.2.1 on npm, then qualify its `/hono` with required jose in a clean service-only Docker fixture without auth-hono. Qualify auth-hono `/middleware` and peers separately. Apply the exact target changes below before I1; workspace links cannot satisfy clean-install qualification. No compose/workflow changes required. |
 | I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/ports/pool.ts` (native-only AuthResolver comment), `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/errors.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Test default/custom public URL for both wires/models, trusted TLS ingress versus spoofed forwarded headers, invalid URL/callback throw; both 503 wire mappings and exhaustive failure handling. Header-only direct calls and invalid result variants fail typechecking. |
 | I2 — Concrete verification and cost | New `src/caller-auth/service-auth.ts`, `src/caller-auth/auth-hono.ts`, `src/cost-context.ts`; update `src/ports/cost-context.ts`, `src/personal-passthrough/caller-auth.ts`, `src/index.ts`, `src/ports/index.ts`, `package.json` subpath exports | New `tests/service-auth.test.ts`, `tests/auth-hono.test.ts`, `tests/auth-subpaths.test.ts`, `tests/cost-context.test.ts`, `tests/fixtures/auth-hono.ts`. Real mcp-auth service and auth-hono session middleware with deterministic clock/JWKS/stores; validate the matrix below. Root runtime/declarations load without auth peers; service loads without auth-hono; session loads without mcp-auth; missing selected peer fails closed. Update `tests/caller-ownership.test.ts` for forgery and enrolled-owner matching. |
 | I3 — Opaque mesh adapter | New `src/route-attempt-dispatch.ts`; update `src/ports/dispatch.ts`, `src/index.ts`, `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`, `src/router/index.ts` | New `tests/route-attempt-dispatch.test.ts`; update `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/router.test.ts`. Exact attempt, signal/tools preservation, no auth injection, default adapter, no native-port calls, cancellation and one terminal outcome. |
@@ -425,20 +446,26 @@ This design branch does not touch Makefile or grant that exception.
 | `build-llm-gateway` | Use the same auth prerequisites and links to emit both bridge subpaths; keep gateway root runtime/declarations independent of optional auth peers. |
 | `test-llm-gateway` | Use the same auth prerequisites and links for middleware fixtures; exercise separate root-without-auth, service-only and session-only installs, so a full workspace cannot mask eager dependencies. |
 | `package-llm-routing-candidates` | Include exact oauth-verify, mcp-auth and session auth-hono tarballs with gateway/mesh; print SHA-256 for all five and retain qualified peer versions/lockfile. Use the published auth floors for release qualification; local auth-hono 0.15.2 is not evidence for published 0.15.0. |
-| `wait-llm-gateway-auth-dependencies` (new), `publish-llm-gateway` | Add a bounded, fail-closed registry wait and make publication depend on it alongside `wait-llm-gateway-mesh-dependency`. Read every declared auth dependency/optional-peer floor and its transitive auth requirements, including oauth-verify; require npm visibility before publication, as D8 requires. |
+| `wait-llm-gateway-auth-dependencies` (new), `publish-llm-gateway` | Add a bounded, fail-closed registry wait and make publication depend on it alongside `wait-llm-gateway-mesh-dependency`. Traverse every declared auth dependency and peer recursively, including optional edges and oauth-verify; require registry-resolvable version/range specs and npm visibility at every floor. Reject any non-registry spec anywhere in the transitive auth graph: `file:`, `link:`, `workspace:`, git (including hosted shorthand), relative/absolute paths or direct tarball URLs. Metadata/lookup failure also closes the gate. |
 
 Reuse existing auth build targets; preserve their cleanup and make linked packages able to resolve
-their peers from their own paths. Service fixtures need only hono and jose plus oauth-verify/mcp-auth;
-session fixtures additionally qualify auth-hono's zod, @hono/zod-validator and @simplewebauthn/server
+their peers from their own paths. Service fixtures require hono and jose `^5.10.0` plus mcp-auth `^0.2.1`
+and its transitive oauth-verify; session fixtures additionally qualify auth-hono's zod,
+@hono/zod-validator and @simplewebauthn/server
 peers. Selecting mcp-auth makes the **service** exception smaller: no session/WebAuthn/Zod dependency
 wiring in that fixture or deployment. Full gateway build/typecheck still covers both optional subpaths.
 
-Registry metadata checked 2026-09-24 declares mcp-auth 0.2.0's oauth-verify dependency as
-`file:../oauth-verify`. I0 must prove installation of the exact published tarballs outside the monorepo
-without sibling links or undeclared overrides; npm visibility alone is insufficient evidence.
-If this reference prevents installation, the mcp-auth owner must publish a registry-resolvable
-dependency manifest and the implementation conductor must trace the compatible floor update under O1
-before I5 can pass. This branch changes neither auth sources nor the selected service API.
+The section 1 mcp-auth 0.2.0 manifest is unconditionally rejected; Lot F mcp-auth 0.2.1 is required
+before I0 qualification. In `tests/auth-subpaths.test.ts`, install the exact gateway candidate with
+published mcp-auth 0.2.1 and required jose `^5.10.0` in a clean **service-only** fixture outside the
+monorepo, without auth-hono, sibling/workspace links, ambient node_modules or dependency overrides.
+Resolve oauth-verify only through mcp-auth's declared registry dependency; do not preinstall it.
+Assert auth-hono is absent, jose resolves at its qualified version, and `/auth` typechecks and verifies
+a service token. A missing required jose must fail closed. This prevents oauth-verify supplied by
+auth-hono or fixture setup from masking a broken mcp-auth manifest. Qualify session mode separately.
+The registry gate must reject a non-registry edge at any depth even if an install happens to succeed;
+cover mcp-auth 0.2.0 and each rejected spec family, including a deeper transitive edge.
+This branch changes neither auth sources nor the selected service API.
 
 I2 verification matrix in `tests/service-auth.test.ts` and `tests/auth-hono.test.ts`: Bearer and x-api-key, valid bound DPoP,
 wrong signature/issuer/audience/expiry/scope, wrong htm/htu/ath/jkt, stale/future proof iat, missing
@@ -501,7 +528,8 @@ make package-llm-routing-candidates LLM_ROUTING_PACK_DIR="$PWD/tmp/llm-gateway-l
 
 These commands are the implementation plan, **not executed design-branch checks**. Run from the
 implementation worktree root; the candidate directory is bind-mounted by Docker. Pin all five
-candidate tarballs and their peers from the qualified lockfile. No live credentials
+candidate tarballs and their peers from the qualified lockfile across the separate fixtures;
+the service-only fixture resolves oauth-verify transitively and never installs auth-hono. No live credentials
 are needed for package tests. No API/UI/browser E2E files change; the Hono integration fixture tests
 HTTP/SSE in process. Consumer live UAT is the separate I5 gate from section 3, including compaction.
 If later qualification starts services, allocate/check all three ports and pass them on every service
@@ -511,14 +539,14 @@ Make command with ENV last, then run make down on that same isolated project.
 
 | ID | Reversibility / owner | Decision or gate |
 |---|---|---|
-| O1 | Reversible / implementation conductor | Use published mcp-auth 0.2.0 `/hono` for service mode via gateway `/auth`; auth-hono 0.15.0 `/middleware` only for session mode via `/auth-hono`. Optional peers and isolated declarations avoid the retiring compat wrapper and eager auth-hono root dependencies. |
+| O1 | Hard prerequisite / auth lane owner, mesh lane executor; implementation conductor qualifies | Lot F `fix/mcp-auth-oauth-verify-dep` must publish mcp-auth 0.2.1 with oauth-verify `^0.1.0` and its package-local regression test; auth owner GO/range confirmed. Gateway `/auth` requires mcp-auth `^0.2.1` and jose `^5.10.0`, qualified without auth-hono. Session-only `/auth-hono` uses auth-hono 0.15.0 `/middleware`. mcp-auth 0.2.0 is disqualified regardless of install outcome. |
 | O2 | Reversible / deployment owner | Supply actual issuer, audience, scopes, public-URL reconstruction and shared replay-store configuration at composition. Missing configuration refuses startup; do not weaken verification to launch. |
 | O3 | Reversible / deployment owner | Map service client or session user through trusted directory state; keep per-user OBO out of this lot because current service context cannot express it. |
 | O4 | Reversible / gateway owner | Keep native contracts and add the opaque adapter. Reconsider removing native exports only in a separate migration brief; no implicit dual dispatch. |
-| O5 | Reversible / h2a conductor | Use measured origin/main `75c1dc61`; the brief's imports are correct. Recheck the release candidate SHA, typecheck both unchanged inline verifiers, manually bump gateway ranges and qualify mesh >=0.21.2. |
+| O5 | Reversible / h2a conductor | Use measured origin/main `75c1dc61`; its lockfile already resolves mesh 0.21.2. Recheck the release candidate SHA, typecheck both unchanged inline verifiers and manually bump gateway ranges. Qualify duplicate mesh resolution with gateway 0.18.0 plus cluster-mesh under lazy-surface E8. |
 | O6 | Reversible scope exception / implementation owner | Approve only I0's named typecheck/build/test, candidate packaging and auth registry-wait/publication wiring; mcp-auth keeps the service fixture smaller. Roll back via git revert. This specification does not authorize Makefile edits. |
 | O7 | Irreversible contract/security gate / owner | Any additional published break, new DB migration, changed wire, cross-user activation or per-user OBO claim exposure requires a new decision. Conservative default: none. Quota admission remains BR-47 / deployable-process Lot D: budgetScope is carried only, no quota hook exists, and Lot 2 emits no over-budget failure. |
-| O8 | Irreversible publication gate / release owner | npm publication of gateway 0.18.0 freezes D1/D7's enumerated breaks publicly. Require explicit owner release approval after dependency visibility/install qualification, independent review and I5 consumer evidence; publish only through regular CD. Reverting a Makefile commit or pinning a prior consumer version cannot undo publication. |
+| O8 | Irreversible publication gate / release owner | npm publication of gateway 0.18.0 freezes D1/D7's enumerated breaks publicly. Require Lot F mcp-auth 0.2.1 publication, a registry-only transitive auth graph and service-only clean-install qualification with required jose, then explicit owner release approval after independent review and I5 consumer evidence. Regular CD order: mcp-auth 0.2.1 → mesh only if changed → gateway 0.18.0. Reverting a Makefile commit or pinning a prior consumer version cannot undo publication. |
 
 D1/D7's enumerated TypeScript breaks and D8's 0.x minor boundary are within the supplied brief;
 no further irreversible choice is taken here. Open deployment values do not prevent this design
