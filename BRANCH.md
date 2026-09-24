@@ -59,6 +59,7 @@
 - [ ] UAT Chrome: overlay/sidepanel, comments suppression, auth/settings, single composer.
 - [ ] UAT VSCode: loading/auth/onboarding actions and theme parity.
 - [ ] Docs: final manifest/declarations/reference ownership, 0.34.0 breaking-change note, TEST_CHANGES.md and build REPORT.md.
+  - [x] Synchronize only chat-ui versions in root/UI lock metadata; regenerate missing grip cursor utilities without unrelated CSS drift.
 - [ ] Final validation: make typecheck-ui ENV=lcshell-v2.
 - [ ] Final validation: make lint-ui ENV=lcshell-v2.
 - [ ] Final validation: make test-ui ENV=lcshell-v2.

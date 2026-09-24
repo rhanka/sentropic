@@ -1,5 +1,7 @@
 # Test change register — L-C-shell
 
+- FIX `ui/tests/components/chat/ChatWidget-tab-bar.test.ts`: correct the new single-bar regexp from a literal backslash-b to a word boundary. The exact count-one assertion remains; the first full UI run exposed this test-authoring error (488 passed, 1 failed).
+
 - ADD `ui/tests/components/chat/ChatWidget-content-gate.test.ts`: verify ordered loading/auth/workspace/ready branches, one ready call, settings mouse/click actions, create/use-existing/defer controls, busy/error state and blockChatPanel fence. Complements gate DOM tests; does not claim browser onboarding coverage.
 
 - ADD assertions to `packages/chat-ui/tests/export-surface.spec.ts`: runtime/declaration/snapshot agreement for widget header/gate and every pager prop, using the existing anchored contract table; no existing contracts changed.

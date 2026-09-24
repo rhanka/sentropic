@@ -16,7 +16,7 @@ describe('ChatWidget tab bar wiring (L-C-shell S1)', () => {
     expect(source).not.toContain('import ChatWidgetTabBar');
     const shell = readFileSync(resolve(process.cwd(), '../packages/chat-ui/src/components/ChatWidget.svelte'), 'utf8');
     expect(shell).toContain("import ChatWidgetTabBar from './ChatWidgetTabBar.svelte'");
-    expect(shell.match(/<ChatWidgetTabBar\\b/g)).toHaveLength(1);
+    expect(shell.match(/<ChatWidgetTabBar\b/g)).toHaveLength(1);
   });
 
   it('renders the tab bar through the primitive: extension variant, badge off, comments gated (I4)', () => {
