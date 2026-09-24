@@ -1,6 +1,7 @@
 import type { PreparedRouteAttempt, RoutePlanner } from '@sentropic/llm-mesh';
 import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
+import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 
@@ -51,6 +52,23 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
 });
 
 describe('route JSON flow', () => {
+  it('settles zero usage when dispatch validation cancels before the provider call', async () => {
+    const controller = new AbortController(); const settleRoute = vi.fn();
+    const source = { generate: vi.fn(), releaseCancelled: vi.fn(), recordOutcome: vi.fn() } as unknown as PreparedRouteAttempt;
+    const adapter = new RouteAttemptDispatch();
+    const dispatch = { stream: vi.fn(), generate: (input: import('../src/ports/dispatch.js').RouteAttemptDispatchRequest) => {
+      controller.abort(); return adapter.generate(input);
+    } };
+    await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([source]), dispatch,
+      metering: { settleRoute } }, { ...request, signal: controller.signal })).rejects.toThrow();
+    expect(source.generate).not.toHaveBeenCalled();
+    expect(source.releaseCancelled).toHaveBeenCalledTimes(1);
+    expect(source.recordOutcome).not.toHaveBeenCalled();
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'cancelled',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: false },
+      attempts: [expect.objectContaining({ usage: { inputTokens: 0, outputTokens: 0, estimated: false } })],
+    }));
+  });
   it('settles an empty plan exactly once with zero usage', async () => {
     const settleRoute = vi.fn();
     await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([]), metering: { settleRoute } }, request))
