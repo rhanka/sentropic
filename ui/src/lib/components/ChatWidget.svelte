@@ -69,6 +69,7 @@
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
   import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte';
+  import ChatWidgetTabBar from '@sentropic/chat-ui/components/ChatWidgetTabBar.svelte';
   import ChatPlacementDropZones from '@sentropic/chat-ui/components/ChatPlacementDropZones.svelte';
   import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
@@ -2356,6 +2357,7 @@
       >
         <div class="flex w-full items-center justify-between gap-2">
           <div class="flex items-center gap-2">
+            {#snippet renderHeaderLeadingHost()}
             {#if isDocked && isMobileViewport && !isSidePanelHost}
               <button
                 class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
@@ -2369,46 +2371,25 @@
                 <Menu class="h-5 w-5" aria-hidden="true" />
               </button>
             {/if}
+            {/snippet}
+            {@render renderHeaderLeadingHost()}
 
             <div class="flex items-center gap-2">
-              <div class="extension-main-tabs flex items-center gap-1 rounded bg-slate-50 p-1">
-                {#if !isPluginMode}
-                  <button
-                    class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
-                    'comments'
-                      ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'}"
-                    type="button"
-                    on:click={() => (activeTab = 'comments')}
-                  >
-                    {$_('chat.tabs.comments')}
-                  </button>
-                {/if}
-                <button
-                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
-                  'chat'
-                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'}"
-                  type="button"
-                  on:click={() => (activeTab = 'chat')}
-                >
-                  {$_('chat.tabs.chat')}
-                </button>
-                <button
-                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
-                  'queue'
-                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'}"
-                  type="button"
-                  on:click={() => (activeTab = 'queue')}
-                >
-                  {$_('chat.tabs.jobs')}
-                </button>
-              </div>
+              <ChatWidgetTabBar
+                variant="extension"
+                showJobsBadge={false}
+                showCommentsTab={!isPluginMode}
+                activeTab={activeTab}
+                chatTabLabel={$_('chat.tabs.chat')}
+                commentsTabLabel={$_('chat.tabs.comments')}
+                queueTabLabel={$_('chat.tabs.jobs')}
+                onSelect={(tab: ChatWidgetTab) => (activeTab = tab)}
+              />
             </div>
           </div>
 
           <div class="flex items-center gap-2">
+            {#snippet renderHeaderActionsHost()}
             {#if isExtensionConfigAvailable()}
               <MenuPopover
                 bind:open={showExtensionConfigMenu}
@@ -3173,6 +3154,8 @@
                 <X class="w-5 h-5" />
               </button>
             {/if}
+            {/snippet}
+            {@render renderHeaderActionsHost()}
           </div>
         </div>
       </div>
@@ -3257,6 +3240,7 @@
             </div>
           </div>
         {:else}
+          {#snippet renderJobsPanelHost()}
           {#if panelVisibility.showQueuePanel}
             <div class="h-full min-h-0 flex flex-col">
               <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
@@ -3276,6 +3260,9 @@
               </div>
             </div>
           {/if}
+          {/snippet}
+          {@render renderJobsPanelHost()}
+          {#snippet renderCommentsPanelHost()}
           {#if panelVisibility.showCommentsPanel}
             <div class="h-full min-h-0 overflow-hidden">
               {#if panelVisibility.showCommentsContext && commentContext?.id}
@@ -3298,6 +3285,9 @@
               {/if}
             </div>
           {/if}
+          {/snippet}
+          {@render renderCommentsPanelHost()}
+          {#snippet renderChatPanelHost()}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
             {#if canAgentsListBeDefaultView && agentsView === 'list'}
               <section
@@ -3401,6 +3391,7 @@
             {/snippet}
             {#snippet renderSessionsPlusIcon()}<Plus class="w-4 h-4" />{/snippet}
             {#snippet renderSessionsTrashIcon()}<Trash2 class="w-4 h-4" />{/snippet}
+            {#snippet renderConversationHeaderHost()}
             <ChatSessionsBar
               sessions={chatSessions}
               sessionId={chatSessionId}
@@ -3423,6 +3414,9 @@
               renderPlusIcon={renderSessionsPlusIcon}
               renderTrashIcon={renderSessionsTrashIcon}
             />
+            {/snippet}
+            {@render renderConversationHeaderHost()}
+            {#snippet renderChatBodyHost()}
             <div class="flex-1 min-h-0 overflow-hidden">
               {#if !extensionChatGateState.blockChatPanel}
                 <ChatPanel
@@ -3435,11 +3429,15 @@
                 />
               {/if}
             </div>
+            {/snippet}
+            {@render renderChatBodyHost()}
             </div>
             <div class="sr-only" aria-live="polite" aria-atomic="true">
               {agentsViewAnnouncement}
             </div>
           </div>
+          {/snippet}
+          {@render renderChatPanelHost()}
         {/if}
       </div>
 {/snippet}
