@@ -1,7 +1,7 @@
 # Feature: LLM gateway Lot 2 specification
 
 ## Objective
-- [ ] Specify concrete caller authentication, cost-context resolution, and mesh dispatch with exact consumer compatibility and an executable build plan.
+- [x] Specify concrete caller authentication, cost-context resolution, and mesh dispatch with exact consumer compatibility and an executable build plan.
 
 ## Scope / Guardrails
 - [x] Planning only on `spec/llm-gateway-lot2`, worktree `tmp/llm-gateway-lot2`, base `origin/main` at `75032fc85`.
@@ -36,6 +36,8 @@
 - [x] C-FL4 | attention | Owner: implementation conductor | Reversible | Preserve native dispatch types; add opaque mesh dispatch using BR-73 attempts, keeping provider credentials inside mesh.
 - [x] C-FL5 | attention | Owner: implementation conductor | Reversible | Select explicit service or session verification; use trusted identity mapping because auth-hono service context does not expose tenant/OBO claims.
 - [x] C-FL6 | attention | Owner: implementation conductor | Irreversible future gate | Real auth-hono integration requires an approved Makefile dependency-wiring exception on the implementation branch; this branch does not grant or perform it.
+- [x] C-FL7 | attention | Owner: implementation conductor | Reversible | Production uses request-generated cost correlation and a separately supplied stable affinity; existing custom verifiers retain their published options.
+- [x] C-FL8 | attention | Owner: conductor | Reversible | Registry reads confirm gateway 0.17.1 and mesh 0.21.2; independent review, implementation tests and h2a UAT remain future gates, not claimed results.
 
 ## AI Flaky tests
 - [x] Not applicable: design-only branch; no provider calls or test execution required.
@@ -60,14 +62,16 @@
 - [x] **Lot 2 — Mesh dispatch**
   - [x] Define the adapter, payload/wire contract, cancellation, errors, and settlement behavior.
   - [x] Identify any required llm-mesh changes and release consequences: no mesh source change required.
-- [ ] **Lot 3 — Compatibility and implementation handoff**
+- [x] **Lot 3 — Compatibility and implementation handoff**
   - [x] Freeze the exhaustive existing-type delta and the nine additive exports in decision D7.
   - [x] Enumerate every proposed public type change and impact at each h2a import site.
   - [x] Specify gateway `0.17.1` to `0.18.0`, conditional mesh bump, and migration sequence.
-  - [ ] Provide ordered implementation lots with existing/new test paths and Make gates.
-  - [ ] Classify open decisions as reversible or irreversible and record conservative defaults.
-- [ ] **Lot 4 — Final validation**
-  - [ ] Review spec consistency against code and both consumer sites; record limitations.
-  - [ ] Run `make scope-check ENV=test-llm-gateway-lot2` before each commit.
-  - [ ] Check whitespace, exact file scope, commit messages, clean status, and final branch log.
-  - [ ] Commit both allowed files through `make commit`; hand off without pushing.
+  - [x] Provide ordered implementation lots with existing/new test paths and Make gates.
+  - [x] Classify open decisions as reversible or irreversible and record conservative defaults.
+- [x] **Lot 4 — Final validation**
+  - [x] Review spec consistency against code and both consumer sites; record limitations.
+  - [x] Run `make scope-check ENV=test-llm-gateway-lot2` before each commit; PASS C2. Explicit full-file harness scope check also passed.
+  - [x] Check whitespace, exact file scope and English commit messages; final clean-status/log verification accompanies handoff.
+  - [x] Commit both allowed files through `make commit`; hand off without pushing.
+  - [x] Cleanup passed: `make down COMPOSE_PROJECT_NAME=test-llm-gateway-lot2 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2`; no application services were started.
+  - [x] Cleanup confirmed: `make ps COMPOSE_PROJECT_NAME=test-llm-gateway-lot2 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2` passed with an empty service list.

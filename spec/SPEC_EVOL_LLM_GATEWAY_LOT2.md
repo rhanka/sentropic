@@ -348,3 +348,96 @@ Migration sequence for the consumer owner:
 6. Consumer owner signs off before implementation merge. Roll back by pinning the prior gateway and
    consumer code together; no data/credential re-enrollment migration is introduced by Lot 2. No h2a
    file is modified by this specification branch.
+
+## 4. Ordered implementation lots and file-level verification
+
+These are future implementation tasks, not changes authorized on this two-file design branch.
+Paths below are relative to `packages/llm-gateway/` unless explicitly qualified. Each lot may use
+several atomic commits under approximately 150 lines; none is separately published before final gates.
+
+| Lot | Implementation files | Tests and acceptance |
+|---|---|---|
+| I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed Makefile exception only after owner approval | Confirm auth-hono public exports and peers load in the gateway's isolated Docker toolset. Existing Make recipes only install mesh/Hono; add dependency build/link/install wiring through an approved exception before I1. No compose/workflow changes required by this design. |
+| I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Both wires and models receive the actual method/URL/id; header-only direct calls and invalid result variants fail typechecking. |
+| I2 — Concrete verification and cost | New `src/caller-auth/auth-hono.ts`, new `src/cost-context.ts`; update `src/ports/cost-context.ts`, `src/personal-passthrough/caller-auth.ts`, `src/index.ts`, `src/ports/index.ts` | New `tests/auth-hono.test.ts`, `tests/cost-context.test.ts`, `tests/fixtures/auth-hono.ts`. Real in-process auth-hono with deterministic clock/JWKS/session stores, not a fake success verifier; validate the matrix below. Update `tests/caller-ownership.test.ts` for body/header forgery and stable enrolled-owner matching. |
+| I3 — Opaque mesh adapter | New `src/mesh-dispatch.ts`; update `src/ports/dispatch.ts`, `src/index.ts`, `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`, `src/router/index.ts` | New `tests/mesh-dispatch.test.ts`; update `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/router.test.ts`. Exact attempt, signal/tools preservation, no auth injection, default adapter, no native-port calls, cancellation and one terminal outcome. |
+| I4 — Lifecycle and wire integration | Same routed flow/router files; only directly required fixes in `src/canonical-ingress.ts`, `src/canonical-egress.ts`, `src/canonical-stream.ts` | Update `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/contract-snapshot.test.ts`; new `tests/lot2-router-integration.test.ts`. Cross-wire fixtures, pre/post-commit failure, empty plan/stream, iterator cleanup, settlement rejection without redispatch, missing usage and redaction. |
+| I5 — Release and consumer qualification | `package.json` at 0.18.0, root lockfile, `README.md`, final spec/branch evidence; h2a owner edits its own repository | All gateway tests/typecheck/lint/pack; auth-hono reference tests; mesh regressions below; exact-candidate h2a compilation/UAT for both named entrypoints. Release only after independent review and consumer evidence. |
+
+I2 verification matrix in `tests/auth-hono.test.ts`: Bearer and x-api-key, valid bound DPoP,
+wrong signature/issuer/audience/expiry/scope, wrong htm/htu/ath/jkt, stale/future proof iat, missing
+proof, reused jti, unbound DPoP scheme, replay-store outage, authorization/key ambiguity, and session
+revocation/expiry/disabled account. Check concurrent requests cannot exchange verified identities.
+`tests/cost-context.test.ts` covers missing/empty trusted fields, explicit owner mapping, optional
+workspace/budget projection, spoofed body/header fields, request correlation versus stable affinity,
+resolver denial/exception, and rejection of conflicting correlation configuration.
+
+I4 retains the complete existing gateway regression file set, without rewriting unrelated tests:
+`tests/canonical-ingress.test.ts`, `tests/canonical-egress.test.ts`, `tests/canonical-stream.test.ts`,
+`tests/caller-ownership.test.ts`, `tests/codex.test.ts`, `tests/contract-snapshot.test.ts`,
+`tests/errors.test.ts`, `tests/models.test.ts`, `tests/passthrough.test.ts`, `tests/redaction.test.ts`,
+`tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`,
+`tests/router.test.ts`, `tests/sticky.test.ts`, `tests/target.test.ts`.
+Keep native fixtures `tests/fixtures/{anthropic,openai,transport}.ts` intact unless an assertion
+requires adaptation; these prove unchanged passthrough bytes/headers and terminator ownership.
+
+Dependency regression files (no source changes planned):
+
+- `packages/auth-hono/tests/service-auth-middleware.test.ts`, `tests/middleware.test.ts`,
+  `tests/oauth-dpop-proof.test.ts` (all three under auth-hono): existing signature/session/replay behavior.
+- `packages/llm-mesh/tests/route-planner.test.ts`, `tests/route-selection.test.ts`,
+  `tests/route-health.test.ts`, `tests/routing-policy.test.ts`, `tests/service/facade.test.ts`,
+  `tests/transport/codex-runtime-wire.test.ts` (all six under llm-mesh): owner binding, expiry,
+  bounded policy, health, released attempts and Codex refusal semantics.
+
+Use existing package targets, after I0 dependency wiring is approved and implemented:
+
+```sh
+make test-llm-gateway SCOPE=tests/auth-hono.test.ts ENV=test-llm-gateway-lot2
+make test-llm-gateway SCOPE=tests/cost-context.test.ts ENV=test-llm-gateway-lot2
+make test-llm-gateway SCOPE=tests/mesh-dispatch.test.ts ENV=test-llm-gateway-lot2
+make test-llm-gateway SCOPE=tests/lot2-router-integration.test.ts ENV=test-llm-gateway-lot2
+make typecheck-llm-gateway ENV=test-llm-gateway-lot2
+make lint-llm-gateway ENV=test-llm-gateway-lot2
+make test-llm-gateway ENV=test-llm-gateway-lot2
+make test-auth-hono ENV=test-llm-gateway-lot2
+make test-llm-mesh SCOPE=tests/route-planner.test.ts ENV=test-llm-gateway-lot2
+make test-llm-mesh SCOPE=tests/route-selection.test.ts ENV=test-llm-gateway-lot2
+make test-llm-mesh SCOPE=tests/route-health.test.ts ENV=test-llm-gateway-lot2
+make test-llm-mesh SCOPE=tests/routing-policy.test.ts ENV=test-llm-gateway-lot2
+make test-llm-mesh SCOPE=tests/service/facade.test.ts ENV=test-llm-gateway-lot2
+make test-llm-mesh SCOPE=tests/transport/codex-runtime-wire.test.ts ENV=test-llm-gateway-lot2
+make pack-llm-gateway ENV=test-llm-gateway-lot2
+make package-llm-routing-candidates LLM_ROUTING_PACK_DIR="$PWD/tmp/llm-gateway-lot2-candidates" ENV=test-llm-gateway-lot2
+```
+
+These commands are the implementation plan, **not executed design-branch checks**. Run from the
+implementation worktree root; the candidate directory is bind-mounted by Docker. Pin candidate
+auth-hono dependencies from the lockfile as well as the gateway/mesh tarballs. No live credentials
+are needed for package tests. No API/UI/browser E2E files change; the Hono integration fixture tests
+HTTP/SSE in process. Consumer live UAT is the separate I5 gate from section 3, including compaction.
+If later qualification starts services, allocate/check all three ports and pass them on every service
+Make command with ENV last, then run make down on that same isolated project.
+
+## 5. Open decisions, defaults and review handoff
+
+| ID | Reversibility / owner | Decision or gate |
+|---|---|---|
+| O1 | Reversible / implementation conductor | Use auth-hono's published wrapper now. Its future removal at auth-hono 1.0 requires a deliberate adapter migration, not a private import today. |
+| O2 | Reversible / deployment owner | Supply actual issuer, audience, scopes, public-URL reconstruction and shared replay-store configuration at composition. Missing configuration refuses startup; do not weaken verification to launch. |
+| O3 | Reversible / deployment owner | Map service client or session user through trusted directory state; keep per-user OBO out of this lot because current service context cannot express it. |
+| O4 | Reversible / gateway owner | Keep native contracts and add the opaque adapter. Reconsider removing native exports only in a separate migration brief; no implicit dual dispatch. |
+| O5 | Reversible / h2a conductor | Re-inventory the actual consumer candidate; the supplied checkout and described five-import integration differ. Qualify both entrypoints at the target SHA. |
+| O6 | Irreversible scope gate / implementation owner | I0 Makefile changes require a separately approved exception before implementation. This specification records the dependency gap and does not authorize touching infrastructure. |
+| O7 | Irreversible contract/security gate / owner | Any additional published break, new DB migration, changed wire, cross-user activation or per-user OBO claim exposure requires a new decision. Conservative default: none. |
+
+D1/D7's enumerated TypeScript breaks and D8's 0.x minor boundary are within the supplied brief;
+no further irreversible choice is taken here. Open deployment values do not prevent this design
+handoff, but their fail-closed checks are release acceptance criteria. There is no new data migration.
+
+Author review cross-checked public exports, existing tests, auth-hono verification limitations and
+both actual consumer entrypoints. No runtime test, peer consensus or h2a UAT is claimed on this branch.
+The conductor's independent review should challenge DPoP URL/replay handling, service identity mapping,
+no-credential mesh boundaries, callback failure isolation, stream cancellation and the exact D7 delta.
+Implementation acceptance requires successful package gates and exact-candidate consumer evidence;
+design acceptance does not prove those gates have run.
