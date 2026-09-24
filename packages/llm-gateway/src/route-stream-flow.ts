@@ -130,7 +130,7 @@ const trackedExecution = (input: {
     stream.return = async value => { await cancel(); await encoded.return(undefined); return originalReturn(value); };
     return stream;
   };
-  return { encoded, expose };
+  return { encoded, expose, get terminal() { return terminal; } };
 };
 
 export const runRouteStreamFlow = async (
@@ -154,6 +154,7 @@ export const runRouteStreamFlow = async (
     let iterator: AsyncIterator<StreamEvent> | undefined;
     let committed = false;
     let invoked = false;
+    let execution: ReturnType<typeof trackedExecution> | undefined;
     try {
       signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
@@ -187,7 +188,7 @@ export const runRouteStreamFlow = async (
       if (first.done) throw { code: 'empty_stream' };
       if (first.value.type === 'error') throw first.value.data;
       if (first.value.type === 'done') responseId = first.value.data.responseId ?? responseId;
-      const execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
+      execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
         prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId, settle });
       const frame = await execution.encoded.next();
       if (frame.done || typeof frame.value.raw !== "string" || !frame.value.raw) throw Error("empty encoded stream");
@@ -196,6 +197,7 @@ export const runRouteStreamFlow = async (
       signal?.throwIfAborted();
       return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(frame) };
     } catch (error) {
+      if (execution?.terminal) throw error;
       try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
       const classification = classifyRouteError(error, signal?.aborted);
       const usage = errorUsage(error) ?? (invoked ? {
