@@ -55,6 +55,9 @@ over `nhiRunner`; without injection, the runner retains its existing mapping.
 At least one is required. `attest` accepts optional string `role` and `scope`,
 forwarded as separate `--role` and `--scope` arguments before `--root`; h2a remains
 the validation authority and its errors/results pass through unchanged.
+The runner adapter rejects empty/whitespace-only or leading-hyphen `instance`,
+`role` and `scope` values before building a command, with `InvalidNhiArgumentError`
+(`code: 'invalid_nhi_argument'`, `argument` identifies the field).
 
 Devices may implement `denyDeviceCode(userCode)`, returning `DeviceApprovalResult`.
 The adapter delegates denial with the port as receiver. Hosts own the state

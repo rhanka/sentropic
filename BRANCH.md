@@ -46,7 +46,7 @@
   - [x] R2: Remove package lint recipe and published branch-specific commands; record root lint/CI deferral.
   - [x] R3: Per-kind projection support in port, capabilities and `tests/bindings.spec.ts`; optional capability field preserves older provider shapes, adapter always supplies effective kinds.
   - [x] R4: Public-contract JSON fixtures and runner in `tests/conformance/`; baseline N/N-1 and since-0.11 suites document reuse for EX-12. Cross-repo CI remains conductor-owned.
-  - [ ] R5: Typed NHI argument rejection and negative `tests/nhi.spec.ts` cases.
+  - [x] R5: Typed NHI argument rejection and negative `tests/nhi.spec.ts` cases; reject whitespace-only and whitespace-prefixed options conservatively before invoking the runner.
   - [ ] R6: Injected NHI shape validation, trust documentation and `tests/bindings.spec.ts` cases.
   - [ ] R7: Changelog type widenings, denial feature detection and 0.9 migration guidance.
   - [ ] R8: Replace bare rejection assertions with specific error codes.

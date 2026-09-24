@@ -4,6 +4,19 @@ import { createH2aNhiLifecycle, type CommandResult } from '../src/index.js';
 const success: CommandResult = { exitCode: 0, stdout: '{}', stderr: '' };
 
 describe('h2a NHI lifecycle', () => {
+  it.each(['', '  ', '-', '--root', ' --scope'])('should reject unsafe values before invoking h2a (%j)', async value => {
+    const run = vi.fn(async () => success);
+    const nhi = createH2aNhiLifecycle({ run });
+    for (const argument of ['instance', 'role', 'scope'] as const) {
+      await expect(nhi.attest({ instance: 'agent', privateKey: 'key', [argument]: value }))
+        .rejects.toMatchObject({ name: 'InvalidNhiArgumentError', code: 'invalid_nhi_argument', argument });
+    }
+    await expect(nhi.offboard({ instance: value })).rejects.toMatchObject({ code: 'invalid_nhi_argument', argument: 'instance' });
+    await expect(nhi.exportBundle({ instance: value, trustDomain: 'local.test' }))
+      .rejects.toMatchObject({ code: 'invalid_nhi_argument', argument: 'instance' });
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it.each([
     [{ role: 'AGENT' }, ['--role', 'AGENT']],
     [{ scope: 'workspace:one' }, ['--scope', 'workspace:one']],
