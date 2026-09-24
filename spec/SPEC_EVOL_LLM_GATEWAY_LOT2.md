@@ -59,9 +59,14 @@ export interface VerifyToken {
 
 `GatewayFlowRequest` gains required `authContext: CallerAuthRequestContext`; both flow families and
 `GET /v1/models` pass it. `createGatewayRouter` derives it from the actual request and its existing
-`requestId()` source. The trusted host must reconstruct the public URL before mounting the router;
-never trust arbitrary `Forwarded`/`X-Forwarded-*` values. Preserve method/path for DPoP; let auth-hono's
-shared verifier apply RFC URL normalization. Do not verify a rewritten internal probe URL.
+`requestId()` source. Add `readonly publicUrl?: (req: Request) => string` to
+`CreateGatewayRouterOptions`: call it with `c.req.raw`, defaulting to that request's URL. The host
+configures the callback to reconstruct the externally addressed URL behind TLS ingress, including
+any rewritten path. Validate an absolute HTTP(S) URL; a thrown callback or invalid result fails closed
+as unavailable before verification/routing. Never infer trust from arbitrary `Forwarded`/`X-Forwarded-*`
+values. Preserve the actual method and external path for DPoP verification through oauth-verify.
+Do not verify a rewritten internal probe URL. Direct flow callers supply the same
+trusted URL in `authContext`; a host using TLS termination must supply the callback at composition.
 Missing context fails closed at runtime for untyped callers. Custom verifiers may ignore unused
 context but must not claim DPoP support without validating method, URL, proof and token binding.
 
@@ -118,8 +123,13 @@ Session dependencies are confined to the session subpath; install/qualify that p
 For each verification, construct a bodyless in-process Hono request at the exact context URL and
 method, run the configured middleware, then capture only its verified context in the continuation.
 Use per-request storage, not a shared mutable result; no HTTP loopback call. A private catch-all
-route preserves the original path and method. Middleware denial or absence of continuation cannot
-produce a principal. Do not forward its internal JSON error envelope to the provider wire.
+route preserves the original path and method. Register a private Hono `onError` that records an
+unavailable outcome in per-request state and returns an internal 503. An unexpected verifier/store
+throw (including `recordDpopJti`) reaches this handler; do not let Hono's default 500 become a 401
+merely because continuation did not run. After the private request, inspect the recorded error and
+response status before accepting a captured identity. A middleware 401/403 is rejection; an exception,
+5xx or missing continuation without a known rejection is unavailable. Neither produces a principal.
+Do not forward the internal JSON envelope, exception text or authentication challenge to the provider wire.
 
 Service mode reads `serviceClient` (honoring `contextKey`), projects issuer/resource/clientId/scopes/jkt,
 then invokes `resolvePrincipal`. It verifies signature, issuer, audience, expiry and required scopes;
@@ -143,8 +153,18 @@ and empty credentials; never downgrade from an invalid Authorization header to a
 Header lookup is case-insensitive. Strip cookies from the private request: gateway authentication
 is explicit-token only. Auth denial, missing scope, disabled session and missing principal mapping
 use the existing provider-shaped 401; diagnostics retain a sanitized internal category only.
-Verifier/store exceptions fail closed as generic provider-shaped 503, without routing or settlement;
-they are not bad-credential verdicts. Cancellation stops processing and never initiates an attempt.
+This deliberately deviates from **RFC 6750**: service `403 insufficient_scope` (now from mcp-auth,
+formerly auth-hono) and auth-hono session `403 accountPolicy` rejection map to a provider-shaped
+**401**, without copying the middleware's WWW-Authenticate challenge. Preserve the existing provider
+wire convention and test both 403-to-401 cases explicitly; this bridge is not an RFC 6750 challenge surface.
+
+Add `'caller-auth-unavailable'` to public `GatewayFailureKind` and map it in `src/router/errors.ts`
+to generic provider-shaped **503**: Anthropic `overloaded_error`; OpenAI `rate_limit_error` with
+`code: 'overloaded'`; fixed message `service temporarily unavailable`, no exception detail.
+The bridge throws `GatewayError` with that kind after an unavailable private outcome; native/routed
+auth boundaries and `/v1/models` also translate unexpected verifier/resolver exceptions to this kind.
+Rejections remain `'caller-auth-failed'`/401. No routing, provider-account access or settlement occurs in either
+case. Cancellation stays distinct, stops processing and never initiates an attempt.
 
 ### D3 — A trusted, reusable cost-context resolver
 
@@ -283,9 +303,11 @@ This table is exhaustive for existing public declarations changed by Lot 2. No e
 | `CallerAuthResult` | Boolean/optional fields become the D1 discriminated union | Breaking for widened `ok: boolean`, success without cost, failure with cost, success with reason, or interfaces extending the old interface |
 | `VerifyToken.verify` | Required fourth context argument | Breaking for direct invocations; existing fixture methods ignoring extra arguments may compile unchanged |
 | `GatewayFlowRequest` | Add required `authContext` | Breaking for constructed requests to runJsonFlow/runStreamFlow/prepareRouteFlow/runRouteJsonFlow/runRouteStreamFlow |
+| `GatewayFailureKind` | Add `'caller-auth-unavailable'`; `router/errors.ts` maps verifier/store unavailability to provider-shaped 503 | Public union addition: breaking for exhaustive switches/records; existing variants unchanged |
 | `PersonalPassthroughCallerAuthOptions` | Add optional `costContextResolver?: CostContextResolver` | Additive; conflicting correlation options fail configuration only when the resolver is selected |
 | `RouteFlowDeps` | Add optional `dispatch?: MeshDispatchPort` | Additive; existing direct routed callers use the default adapter |
 | `CreateGatewayRouterOptions` | Add optional `routeDispatch?: MeshDispatchPort` | Additive; createGatewayRouter signature and Hono return type unchanged |
+| `CreateGatewayRouterOptions.publicUrl` | Add optional `publicUrl?: (req: Request) => string`, default request URL | Additive; trusted host callback supplies DPoP htu behind TLS ingress; invalid URL/throw fails closed |
 
 New root exports, exactly: `CallerAuthRequestContext`, `CostContextResolver`,
 `VerifiedCostContextResolver` (no-argument constructor), `MeshDispatchRequest`, `MeshDispatchPort`,
@@ -379,7 +401,7 @@ several atomic commits under approximately 150 lines; none is separately publish
 | Lot | Implementation files | Tests and acceptance |
 |---|---|---|
 | I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed Makefile exception only after owner approval | Confirm auth-hono public exports and peers load in the gateway's isolated Docker toolset. Existing Make recipes only install mesh/Hono; add dependency build/link/install wiring through an approved exception before I1. No compose/workflow changes required by this design. |
-| I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Both wires and models receive the actual method/URL/id; header-only direct calls and invalid result variants fail typechecking. |
+| I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/errors.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Test default/custom public URL for both wires/models, trusted TLS ingress versus spoofed forwarded headers, invalid URL/callback throw; both 503 wire mappings and exhaustive failure handling. Header-only direct calls and invalid result variants fail typechecking. |
 | I2 — Concrete verification and cost | New `src/caller-auth/service-auth.ts`, `src/caller-auth/auth-hono.ts`, `src/cost-context.ts`; update `src/ports/cost-context.ts`, `src/personal-passthrough/caller-auth.ts`, `src/index.ts`, `src/ports/index.ts`, `package.json` subpath exports | New `tests/service-auth.test.ts`, `tests/auth-hono.test.ts`, `tests/auth-subpaths.test.ts`, `tests/cost-context.test.ts`, `tests/fixtures/auth-hono.ts`. Real mcp-auth service and auth-hono session middleware with deterministic clock/JWKS/stores; validate the matrix below. Root runtime/declarations load without auth peers; service loads without auth-hono; session loads without mcp-auth; missing selected peer fails closed. Update `tests/caller-ownership.test.ts` for forgery and enrolled-owner matching. |
 | I3 — Opaque mesh adapter | New `src/mesh-dispatch.ts`; update `src/ports/dispatch.ts`, `src/index.ts`, `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`, `src/router/index.ts` | New `tests/mesh-dispatch.test.ts`; update `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/router.test.ts`. Exact attempt, signal/tools preservation, no auth injection, default adapter, no native-port calls, cancellation and one terminal outcome. |
 | I4 — Lifecycle and wire integration | Same routed flow/router files; only directly required fixes in `src/canonical-ingress.ts`, `src/canonical-egress.ts`, `src/canonical-stream.ts` | Update `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/contract-snapshot.test.ts`; new `tests/lot2-router-integration.test.ts`. Cross-wire fixtures, pre/post-commit failure, empty plan/stream, iterator cleanup, settlement rejection without redispatch, missing usage and redaction. |
@@ -389,6 +411,12 @@ I2 verification matrix in `tests/service-auth.test.ts` and `tests/auth-hono.test
 wrong signature/issuer/audience/expiry/scope, wrong htm/htu/ath/jkt, stale/future proof iat, missing
 proof, reused jti, unbound DPoP scheme, replay-store outage, authorization/key ambiguity, and session
 revocation/expiry/disabled account. Check concurrent requests cannot exchange verified identities.
+Service tests distinguish `recordDpopJti` returning false (replay rejection, 401) from throwing
+(store outage caught by private `onError`, 503), plus verifier/JWKS exceptions. Session tests distinguish
+denied account policy (401) from throwing session/user stores (503). Test missing scope and accountPolicy
+403-to-401 separately to lock the RFC 6750 deviation. Every rejection/outage asserts zero planner,
+dispatch and settlement calls; `tests/router.test.ts` exercises these mappings through the public router,
+including `/v1/models`, and verifies DPoP against the external HTTPS URL despite internal HTTP ingress.
 `tests/cost-context.test.ts` covers missing/empty trusted fields, explicit owner mapping, optional
 workspace/budget projection, spoofed body/header fields, request correlation versus stable affinity,
 resolver denial/exception, and rejection of conflicting correlation configuration.
