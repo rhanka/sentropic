@@ -72,7 +72,7 @@
   - [x] C4 — Buffer through the first upstream-derived frame before commitment, delaying done completion until encoding resumes; scoped stream suite passed (18 tests), including both-wire encoding failures and C5 pre-commit ledger rejection. Candidate 0.18.0 remains greater than registry latest 0.17.1 (2026-09-24).
   - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
   - [x] C6 — Report zero usage on pre-provider validation cancellation; JSON/stream regressions assert no provider call, one cancellation and zero financial usage (final gates pending).
-  - [ ] C7 — Reject empty service clientId before principal mapping; service-auth.test.ts regression.
+  - [x] C7 — Reject empty service clientId before principal mapping; signed-token regressions cover empty and absent client_id/sub (final gates pending).
   - [ ] C8 — Preserve exact registered issuer/resource strings; document and test trailing-slash matching.
   - [ ] C9 — Correct personal caller-auth declaration comments to match D2.
   - [ ] C10 — Document strict credential parsing for all personal caller-auth instances.

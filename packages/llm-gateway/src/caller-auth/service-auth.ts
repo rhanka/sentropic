@@ -52,7 +52,7 @@ export class ServiceAuthVerifyToken implements VerifyToken {
         return { kind: 'service' as const, issuer: auth.issuer, resource: auth.resource,
           clientId: verified.clientId, scopes: [...verified.scopes], jkt: verified.jkt };
       });
-      if (!identity || (scheme === 'DPoP' && !identity.jkt)) return undefined;
+      if (!identity || !identity.clientId || (scheme === 'DPoP' && !identity.jkt)) return undefined;
       const principal = await this.options.resolvePrincipal(identity);
       context.signal?.throwIfAborted();
       return principal;

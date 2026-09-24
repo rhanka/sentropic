@@ -16,6 +16,12 @@ const fixture = async () => {
 };
 
 describe('canonical service auth bridge', () => {
+  it.each([{ client_id: '', sub: '' }, { client_id: undefined, sub: undefined }])(
+    'rejects empty service identity before principal mapping: %j', async claims => {
+      const f = await fixture();
+      expect(await f.call(await f.token(claims))).toBeUndefined();
+      expect(f.resolvePrincipal).not.toHaveBeenCalled();
+    });
   it('accepts Bearer and SDK aliases, projects only verified service identity concurrently', async () => {
     const f = await fixture();
     const token = await f.token();
