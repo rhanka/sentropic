@@ -44,7 +44,7 @@
 - [ ] **Lot A — Review fix round 1**
   - [x] R1: Authenticate projection timestamps with canonical bytes; strict expiry/TTL/skew policy and Ed25519 regression tests in `tests/projection.spec.ts`.
   - [x] R2: Remove package lint recipe and published branch-specific commands; record root lint/CI deferral.
-  - [ ] R3: Per-kind projection support in port, capabilities and `tests/bindings.spec.ts`.
+  - [x] R3: Per-kind projection support in port, capabilities and `tests/bindings.spec.ts`; optional capability field preserves older provider shapes, adapter always supplies effective kinds.
   - [ ] R4: Public-contract fixtures and runner in `tests/conformance/`; document reuse for EX-12.
   - [ ] R5: Typed NHI argument rejection and negative `tests/nhi.spec.ts` cases.
   - [ ] R6: Injected NHI shape validation, trust documentation and `tests/bindings.spec.ts` cases.
