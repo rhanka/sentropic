@@ -16,6 +16,7 @@
 
 import type { CallerAuthPort, CallerAuthResult, CallerAuthRequestContext } from '../ports/caller-auth.js';
 import { validateAuthContext } from '../internal/caller-auth.js';
+import { parseCallerCredential } from '../internal/auth-bridge.js';
 import type { CostContext, CostContextResolver } from '../ports/cost-context.js';
 
 /**
@@ -59,29 +60,7 @@ export interface VerifyToken {
   ): Promise<VerifiedPrincipal | undefined> | VerifiedPrincipal | undefined;
 }
 
-const parseAuthorization = (
-  headers: Readonly<Record<string, string>>,
-): { scheme: CallerAuthScheme; token: string } | undefined => {
-  // Case-insensitive header lookup (Hono lowercases, but be defensive).
-  const raw =
-    headers['authorization'] ?? headers['Authorization'] ?? '';
-  const [scheme, ...rest] = raw.trim().split(/\s+/);
-  const token = rest.join(' ').trim();
-  if (token) {
-    if (scheme === 'Bearer') {
-      return { scheme: 'Bearer', token };
-    }
-    if (scheme === 'DPoP') {
-      return { scheme: 'DPoP', token };
-    }
-  }
-  // Anthropic-SDK drop-in (spec §3): the sentropic key arrives as `x-api-key`.
-  const apiKey = (headers['x-api-key'] ?? headers['X-Api-Key'] ?? '').trim();
-  if (apiKey) {
-    return { scheme: 'x-api-key', token: apiKey };
-  }
-  return undefined;
-};
+const parseAuthorization = parseCallerCredential;
 
 /**
  * A correlation-id source so the CostContext gets a request-unique id even when
