@@ -110,4 +110,17 @@ describe('route flow core', () => {
       reason: 'cancelled', retryable: false, healthScope: 'route',
     });
   });
+
+  it('classifies a pre-content provider invalid failure by code alone', () => {
+    // Live-proven: a Codex `response.failed` event carrying
+    // `invalid_request_error` arrives with no HTTP status — it must still
+    // surface as invalid-request, never as provider-5xx.
+    expect(classifyRouteError({ code: 'invalid_request_error' })).toEqual({
+      reason: 'invalid-request', retryable: false, healthScope: 'route',
+    });
+    // An auth-shaped code without a 401 status stays out of invalid-request.
+    expect(classifyRouteError({ code: 'invalid_api_key' })).toEqual({
+      reason: 'provider-5xx', retryable: false, healthScope: 'route',
+    });
+  });
 });
