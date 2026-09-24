@@ -74,7 +74,7 @@
   - [x] C6 — Report zero usage on pre-provider validation cancellation; JSON/stream regressions assert no provider call, one cancellation and zero financial usage (final gates pending).
   - [x] C7 — Reject empty service clientId before principal mapping; signed-token regressions cover empty and absent client_id/sub (final gates pending).
   - [x] C8 — Remove issuer normalization; document exact registered absolute HTTP(S) values and test both trailing-slash configurations (final gates pending).
-  - [ ] C9 — Correct personal caller-auth declaration comments to match D2.
+  - [x] C9 — Correct published VerifyToken/personal caller-auth comments to distinguish canonical service and session verification under D2.
   - [ ] C10 — Document strict credential parsing for all personal caller-auth instances.
   - [ ] C11 — Prove successful router DPoP verification after trusted publicUrl reconstruction.
   - [ ] C12 — Guard missing qualification directory and label workspace auth tarballs as development evidence.
