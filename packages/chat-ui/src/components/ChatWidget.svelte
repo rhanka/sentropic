@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import ChatWidgetTabBar from './ChatWidgetTabBar.svelte';
 
   type ChatWidgetTab = 'chat' | 'queue' | 'comments';
 
@@ -11,6 +12,8 @@
   export let queueTabLabel = 'Jobs';
   export let widgetLabel = 'Chat';
   export let showCommentsTab = true;
+  export let tabBarVariant: 'default' | 'extension' = 'default';
+  export let showJobsBadge = true;
   export let onActiveTabChange:
     | ((tab: ChatWidgetTab) => void)
     | undefined = undefined;
@@ -42,59 +45,31 @@
   {@render renderShell()}
 {:else}
   <section
-    class="chat-widget-shell flex h-full min-h-0 flex-col bg-white text-slate-900"
+    class="chat-widget-shell flex h-full min-h-0 flex-col"
     aria-label={widgetLabel}
   >
     <header
-      class="chat-widget-header flex h-14 items-center justify-between border-b border-slate-200 px-4"
-      data-header-grip={headerGrip?.enabled ? 'true' : undefined}
+      class="chat-widget-header flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4"
+      class:cursor-grab={headerGrip?.enabled && !headerGrip?.dragging}
+      class:cursor-grabbing={headerGrip?.dragging}
+      data-chat-header-grip={headerGrip?.enabled ? 'true' : undefined}
       data-dragging={headerGrip?.dragging ? 'true' : undefined}
       on:pointerdown={headerGrip?.onPointerDown}
     >
       <div class="flex items-center gap-2">
         {#if renderHeaderLeading}{@render renderHeaderLeading()}{/if}
-        <nav class="flex items-center gap-1 rounded bg-slate-50 p-1" aria-label={widgetLabel}>
-        {#if showCommentsTab}
-          <button
-            class="rounded px-2 py-1 text-xs transition {activeTab === 'comments'
-              ? 'bg-white font-semibold text-slate-900 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'}"
-            type="button"
-            aria-pressed={activeTab === 'comments'}
-            on:click={() => setActiveTab('comments')}
-          >
-            {commentsTabLabel}
-          </button>
-        {/if}
-        <button
-          class="rounded px-2 py-1 text-xs transition {activeTab === 'chat'
-            ? 'bg-white font-semibold text-slate-900 shadow-sm'
-            : 'text-slate-500 hover:text-slate-700'}"
-          type="button"
-          aria-pressed={activeTab === 'chat'}
-          on:click={() => setActiveTab('chat')}
-        >
+        <ChatWidgetTabBar
+          {activeTab}
+          {showCommentsTab}
           {chatTabLabel}
-        </button>
-        <button
-          class="rounded px-2 py-1 text-xs transition {activeTab === 'queue'
-            ? 'bg-white font-semibold text-slate-900 shadow-sm'
-            : 'text-slate-500 hover:text-slate-700'}"
-          type="button"
-          aria-pressed={activeTab === 'queue'}
-          on:click={() => setActiveTab('queue')}
-        >
-          <span>{queueTabLabel}</span>
-          {#if totalJobsCount > 0}
-            <span
-              class="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-slate-200 px-1 text-[10px] text-slate-700"
-              aria-label={`${totalJobsCount} jobs`}
-            >
-              {totalJobsCount}
-            </span>
-          {/if}
-        </button>
-        </nav>
+          {commentsTabLabel}
+          {queueTabLabel}
+          variant={tabBarVariant}
+          {showJobsBadge}
+          jobsBadgeCount={totalJobsCount}
+          ariaLabel={widgetLabel}
+          onSelect={setActiveTab}
+        />
       </div>
 
       <div class="flex items-center gap-2">
@@ -112,7 +87,7 @@
       </div>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-hidden">
+    <div class="min-h-0 flex-1">
       {#if activeTab === 'queue'}
         {#if renderJobsPanel}
           {@render renderJobsPanel()}

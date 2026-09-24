@@ -11,6 +11,8 @@ export type ChatWidgetProps = {
   queueTabLabel?: string;
   widgetLabel?: string;
   showCommentsTab?: boolean;
+  tabBarVariant?: 'default' | 'extension';
+  showJobsBadge?: boolean;
   onActiveTabChange?: (tab: ChatWidgetTab) => void;
   onPurgeJobs?: () => void | Promise<void>;
   renderShell?: Snippet<[]>;

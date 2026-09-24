@@ -14,3 +14,4 @@ Every entry requires independent astra-xhigh review. No timeout, skip or E2E ass
 | packages/chat-ui/tests/chat-core-host.spec.ts | Version literal updated by port | Align package 0.34.0 | Version agreement; all host assertions retained |
 | packages/chat-ui/tests/documents-module.spec.ts | Version literal updated by port | Align package 0.34.0 | Version agreement; all document assertions retained |
 | packages/chat-ui/tests/chat-widget-pager.dom.spec.ts | Add lifecycle test | Prove S5 hybrid mounting in DOM | List destruction/remount, eligibility, persistent conversation identity/draft, one header/body, live announcements, one subscription |
+| packages/chat-ui/tests/chat-widget-header-frame.dom.spec.ts | Replace data-header-grip expectation with data-chat-header-grip; add cursor assertions | Restore app contract without changing E2E selector | Pointer callback and dragging attribute retained; cursor parity added |
