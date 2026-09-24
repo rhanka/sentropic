@@ -63,7 +63,9 @@
 ## Plan / Todo (lot-based)
 - [ ] **I0 — Dependency and harness readiness**
   - [x] Verify branch, clean worktree, reviewed spec, rules, target discovery and ports; record approved exceptions.
-  - [ ] Update package.json and lockfile; wire only approved Makefile targets; test recursive registry validation and isolated dependency fixtures.
+  - [x] Update package.json and lockfile; wire only approved Makefile targets; recursive registry validation in scripts/auth-registry.mjs and tests/auth-registry.test.ts (bounded helper added within package scope).
+  - [x] I0 workspace gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (132 tests). Initial missing-semver-link failure corrected and rerun green.
+  - [x] Registry wait exercised: make wait-llm-gateway-auth-dependencies LLM_MESH_REGISTRY_WAIT_ATTEMPTS=1 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 fails closed on mcp-auth 0.2.1 E404, as required. Clean fixtures remain I2/I5 gates.
   - [ ] Qualify published mcp-auth 0.2.1 service-only install and auth-hono 0.15.0 session-only install (pending BRLG2-I0).
 - [ ] **I1 — Request-bound auth contracts**
   - [ ] Update caller-auth/pool ports, personal auth, flow, route core, router/errors and stubs; bump gateway to 0.18.0.
