@@ -91,7 +91,7 @@
   - [x] Correct adapter fixture metadata to the published mesh correlationId field after typecheck rejected an invented field; no mesh contract change.
   - [x] Implement route-attempt-dispatch, dispatch port, root export, routed flow/router integration with no native fallback; reject own auth fields and incomplete routeDispatch configuration.
   - [x] Add route-attempt-dispatch tests; update route-json-flow and route-stream-flow for injected exact-attempt dispatch and single terminal outcome; constructor test covers incomplete router wiring. Existing routed-router tests retain native-stub exclusion.
-- [ ] **I4 — Lifecycle and wire integration**
+- [x] **I4 — Lifecycle and wire integration**
   - [x] Isolate JSON completion/settlement hooks from retry handling; settle empty plans; check cancellation before provider calls; estimate missing usage without replacing reported zeros.
   - [x] Add JSON regressions for empty plans, missing versus genuine zero usage, and settlement rejection without redispatch or duplicate operational outcomes.
   - [x] Add private trackedExecution helper in route-stream-flow.ts to claim terminal outcomes before async work, preserve reported zero usage, estimate missing usage, sanitize stream errors and handle unstarted consumer return. Wiring follows in the next atomic commit.
@@ -101,9 +101,10 @@
   - [x] Add lot2-router-integration for both wires/JSON/SSE, stable affinity versus financial correlation, header allowlist, exact settlement and HTTP cancellation before/after first read.
   - [x] Preserve already-reported provider usage on conversion/error/cancellation paths and project only usage fields; include streamed tool argument characters in missing-usage estimates.
   - [x] Add deterministic abort/pending-next/return race and pre-commit typed-usage tests. Previous full gate passed with 210 tests plus one pending service install; final I4 rerun includes these last usage refinements.
-  - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
-  - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
+  - [x] Update routed flows/router only as required; canonical ingress/egress/stream unchanged. Existing conversion/compaction regressions pass.
+  - [x] Add lot2-router-integration tests; update routed flow tests and exhaustive contract snapshot. Final I4 gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (212 passed, one pending service clean install).
 - [ ] **I5 — Release and consumer qualification**
+  - [x] Retain exact fixture tarball/hash and root/session/service consumer lockfiles in ignored tmp/llm-gateway-qualification; approved candidate-pack target copies evidence and compares tarball bytes. Build fixture uses the normal dist output path for identical sourcemaps.
   - [ ] Update README, spec build evidence and candidate package metadata; pack exact candidates; run auth and six specified mesh regression scopes.
   - [ ] Consumer owner: exact-candidate h2a compilation/UAT at both entrypoints and independent review; no external repository edits authorized here.
   - [ ] Final scope/diff/log and cleanup: make down API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.

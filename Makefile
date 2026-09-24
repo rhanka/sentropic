@@ -663,6 +663,8 @@ package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for pkg in oauth-verify mcp-auth auth-hono; do (cd packages/$$pkg && npm pack --pack-destination /artifacts >/dev/null); done; for pkg in llm-mesh llm-gateway oauth-verify mcp-auth auth-hono; do version="$$(node -p "require(\"./packages/$$pkg/package.json\").version")"; sha256sum "/artifacts/sentropic-$$pkg-$$version.tgz"; done; cp package-lock.json /artifacts/workspace-package-lock.json'
 
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; mkdir -p /artifacts/qualification; cp -R tmp/llm-gateway-qualification/. /artifacts/qualification/; gateway="$$(node -p "require(\"./packages/llm-gateway/package.json\").version")"; cmp "/artifacts/sentropic-llm-gateway-$$gateway.tgz" /artifacts/qualification/candidate.tgz'
+
 LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 12
 LLM_MESH_REGISTRY_WAIT_SECONDS ?= 5
 
