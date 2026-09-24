@@ -1,4 +1,4 @@
-# Feature: LLM gateway Lot 2 specification
+# Feature: LLM gateway Lot 2 implementation
 
 ## Objective
 - [x] Specify concrete caller authentication, cost-context resolution, and mesh dispatch with exact consumer compatibility and an executable build plan.
@@ -14,22 +14,27 @@
 - [x] **Allowed Paths (implementation scope)**:
   - [x] `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md`
   - [x] `BRANCH.md`
+  - [x] `packages/llm-gateway/**`
+  - [x] `Makefile` (BRLG2-EX1 targets only)
+  - [x] `package-lock.json` (BRLG2-EX2 gateway entry only)
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `packages/**`
   - [x] `api/**`
   - [x] `ui/**`
-  - [x] `Makefile`
   - [x] `docker-compose*.yml`
   - [x] `.github/workflows/**`
   - [x] `.cursor/rules/**`
   - [x] `.track/**`
-  - [x] All paths other than the two explicit allowed files; the h2a checkout is read-only.
+  - [x] All paths other than the explicit allowed files; the h2a checkout is read-only.
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [x] None; any scope expansion requires a new conductor instruction.
+  - [x] Root `package.json` only if I0 requires it; no change currently needed.
 - [x] **Exception process**:
-  - [x] No exceptions authorized; record irreversible out-of-brief decisions as `blocked` and stop.
+  - [x] BRLG2-EX1/EX2 authorized by the implementation brief; record other irreversible out-of-brief decisions as `blocked` and stop.
 
 ## Feedback Loop
+- [x] BRLG2-EX1 | acknowledge | Owner: conductor | Approved before edits: Makefile `typecheck-llm-gateway`, `build-llm-gateway`, `test-llm-gateway` gain oauth-verify/mcp-auth/auth-hono build prerequisites and peer links; `package-llm-routing-candidates` adds auth tarballs; new `wait-llm-gateway-auth-dependencies` and `publish-llm-gateway` enforce recursive registry visibility. Reason: compile/qualify isolated optional auth subpaths. Impact: isolated toolset dependencies and publication ordering only. Rollback: git revert. No other Makefile, compose or workflow changes.
+- [x] BRLG2-EX2 | acknowledge | Owner: conductor | I0 requires root `package-lock.json` gateway metadata alignment with 0.18.0, mesh floor and optional auth peers. Root package.json unchanged unless required. Impact: gateway dependency metadata only. Rollback: git revert.
+- [ ] BRLG2-I0 | attention | Owner: auth lane / conductor | Registry latest is mcp-auth 0.2.0 on 2026-09-24; 0.2.1 clean service-only install remains pending. Develop against workspace without pinning 0.2.0; proceed with I1+ per conductor.
+- [x] BRLG2-SCOPE | acknowledge | Implementation brief supersedes historical planning-only guardrails below. Single writer; no Track writes, push, PR, merge or publish. ENV=test-llm-gateway-lot2; API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480; ports verified free. Independent review/consumer qualification remain conductor gates.
 - [x] C-FL1 | attention | Owner: conductor | Reversible | Use the EVOL rung directly: the brief fixes the three adapters and authorizes the Lot 2 type migration.
 - [x] C-FL2 | attention | Owner: conductor | Reversible | Keep planning and review evidence in these two files; harness recorder/Track writes and separate review artifacts exceed the explicit scope. Independent review remains the conductor's handoff gate.
 - [x] C-FL3 | attention | Owner: conductor | Reversible | Measured h2a origin/main `75c1dc61`: both inline verifiers remain assignable, affinity and ledger identity are unchanged, and `^0.17.0` requires a manual 0.18.0 range bump. Its lockfile already resolves mesh 0.21.2; lazy-surface E8 qualifies duplicate mesh resolution when gateway 0.18.0 and cluster-mesh are installed together.
@@ -56,6 +61,30 @@
 - [x] No services or port reservation required for this planning task.
 
 ## Plan / Todo (lot-based)
+- [ ] **I0 — Dependency and harness readiness**
+  - [x] Verify branch, clean worktree, reviewed spec, rules, target discovery and ports; record approved exceptions.
+  - [ ] Update package.json and lockfile; wire only approved Makefile targets; test recursive registry validation and isolated dependency fixtures.
+  - [ ] Qualify published mcp-auth 0.2.1 service-only install and auth-hono 0.15.0 session-only install (pending BRLG2-I0).
+- [ ] **I1 — Request-bound auth contracts**
+  - [ ] Update caller-auth/pool ports, personal auth, flow, route core, router/errors and stubs; bump gateway to 0.18.0.
+  - [ ] Update fixtures/harness, router, errors, models, route-flow-core, route-json-flow, route-stream-flow tests; add caller-auth and lot2-types tests.
+  - [ ] Verify public URL/default/invalid/spoofed forwarded headers, both wires/models, auth rejection/outage and compile-time invalid contracts.
+- [ ] **I2 — Concrete verification and cost**
+  - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
+  - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
+- [ ] **I3 — Opaque mesh adapter**
+  - [ ] Implement route-attempt-dispatch, dispatch port, root export, routed flow/router integration with no native fallback.
+  - [ ] Add route-attempt-dispatch tests; update route-json-flow, route-stream-flow and router tests for exact attempts, cancellation, tools and terminal outcomes.
+- [ ] **I4 — Lifecycle and wire integration**
+  - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
+  - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
+- [ ] **I5 — Release and consumer qualification**
+  - [ ] Update README, spec build evidence and candidate package metadata; pack exact candidates; run auth and six specified mesh regression scopes.
+  - [ ] Consumer owner: exact-candidate h2a compilation/UAT at both entrypoints and independent review; no external repository edits authorized here.
+  - [ ] Final scope/diff/log and cleanup: make down API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
+- [ ] **Build lot gates (I0–I5)**
+  - [ ] Each lot: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
+  - [ ] Before each atomic commit: make scope-check ENV=test-llm-gateway-lot2; selective staging and separate make commit; update checklist in each commit.
 - [x] **Review round 2 — Prescribed corrections N1–N5**
   - [x] N1/N3/N4 — Record one registry measurement date; require Lot F mcp-auth 0.2.1, transitive registry-only auth manifests, and service-only installation with required jose.
   - [x] N2/N5 — Specify both cluster-mesh auth mirrors and the measured h2a mesh lockfile resolution, with duplicate resolution covered by lazy-surface E8.
