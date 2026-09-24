@@ -173,3 +173,111 @@ refresh, leases and provider material. Caller auth must never depend on `AuthRes
 cost resolution must never see a provider token. No cross-user grant is added by a principal mapper.
 Lot 2 production composition uses personal-passthrough with the cross-user switch off; this design
 does not authorize activating cross-user mode, even when a host sets a boolean to true.
+
+### D5 — Mesh-backed dispatch is an opaque-attempt adapter
+
+Add the following exports to `ports/dispatch.ts` and `src/mesh-dispatch.ts` respectively:
+
+```ts
+import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult }
+  from '@sentropic/llm-mesh';
+export interface MeshDispatchRequest {
+  readonly attempt: Pick<PreparedRouteAttempt, 'generate' | 'stream'>;
+  readonly request: Omit<StreamRequest, 'auth'>;
+}
+export interface MeshDispatchPort {
+  generate(input: MeshDispatchRequest): Promise<GenerateResponse>;
+  stream(input: MeshDispatchRequest): Promise<StreamResult>;
+}
+export class MeshDispatch implements MeshDispatchPort {
+  generate(input: MeshDispatchRequest): Promise<GenerateResponse>;
+  stream(input: MeshDispatchRequest): Promise<StreamResult>;
+}
+// Additive fields (default to one concrete MeshDispatch):
+// RouteFlowDeps: readonly dispatch?: MeshDispatchPort;
+// CreateGatewayRouterOptions: readonly routeDispatch?: MeshDispatchPort;
+```
+
+`generate`/`stream` delegate to the exact prepared attempt, preserving canonical messages, tool
+definitions/results, images, reasoning, generation controls, metadata and AbortSignal. Reject an
+own `auth` property at runtime too; no cast can turn this API into credential injection. Mesh applies
+the planned provider/model/effort; untrusted payload fields cannot choose an account or override
+authentication. Normalization remains `normalizeGatewayIngress`; response conversion remains
+`encodeGatewayResponse`/`encodeGatewayStream`. Unsupported lossy conversion fails before commitment.
+
+Route flows call this adapter instead of calling attempt.generate/stream directly. It never plans,
+retries, resolves credentials, records outcomes or settles money. The flow owns those lifecycle
+calls, preventing double completion. Preserve thrown typed status/code/retryAfterMs/usage internally
+for existing classification; sanitize at the wire boundary, never expose arbitrary exception text.
+
+`GatewayDispatchPort`, `GatewayDispatchRequest`, `GatewayDispatchResponse`, `GatewayDispatchStream`,
+`GatewayDispatchStreamEvent`, `ProviderResponseHeaders`, `ProviderTransport`, `ProviderTransportRequest`,
+`PassthroughDispatch` and `PassthroughDispatchOptions` are unchanged. They describe native JSON/SSE
+and cannot truthfully represent mesh's normalized events. In particular, no synchronous-to-Promise
+change is imposed on native `dispatchStream`. Update its stale Lot 2 comment to point to this separate
+opaque seam. These are explicit contracts for different inputs, not automatic fallback paths.
+No new mesh API is needed: use the published `PreparedRouteAttempt.generate/stream`, not BR-73's
+earlier illustrative `execute` method, which does not exist in the current TypeScript interface.
+
+### D6 — Commitment, cancellation and metering remain flow-owned
+
+Authenticate once, resolve cost once, normalize, plan once, then prepare exact candidates from that
+bounded plan. The native `config.pool`, `config.authResolver`, and `config.dispatch` are never touched
+when routePlanner/routeMetering select routed execution. Missing one of those two routed dependencies
+is a configuration error when routeDispatch is supplied; it must not silently select native execution.
+No account rotation beyond mesh policy, no recursive plan and no retry after downstream commitment.
+
+Before commitment, skip non-visible status events, retain safe metadata and wait for a valid event.
+Empty streams, early terminal errors and cancellation fail before returning a 200 stream. Validate
+the first encoded frame before marking commitment; no fallback after markCommitted or HTTP output.
+Keep status/header/body commitment coupled. Provider 400/401/429 classification and Retry-After follow
+the `0.17.1` terminal mappings, including the Codex refusal fix at the base commit.
+
+Native SSE is relayed byte-for-byte with no added terminator. Routed SSE is encoded from mesh events:
+one Anthropic message_stop or OpenAI [DONE] on successful completion, neither after error/cancellation.
+Preserve tools, block order and reasoning signatures. Preserve BR-74 nonzero bounded Anthropic
+message_start input estimation; final message_delta contains output usage only. Billing uses actual
+provider usage, not that wire estimate. Headers remain restricted to the router's existing allowlist.
+For routed streams retain pre-commit status `data.metadata.responseHeaders` string values when present;
+absence is valid and must not lead to invented upstream headers. Late metadata cannot mutate sent headers.
+
+Propagate abort to every attempt; close iterators on early failure, HTTP disconnect and consumer return,
+including cancellation before first iteration. The Hono ReadableStream needs an explicit cancel path;
+do not rely only on a finally block inside an unstarted generator. Cancellation never falls back.
+Each prepared attempt has one terminal outcome/release, even when next/return/abort race.
+Record operational outcomes per attempt and invoke `RouteMeteringSink.settleRoute` once per request
+after authentication/planning admission; failures before any provider call may have zero usage and
+an empty attempts list. Requests rejected by auth have no financial event. Aggregate attempted
+provider usage across retries, using bounded request/output estimates when usage is missing and a
+provider call may have consumed tokens; preserve genuine reported zeros. Empty candidate plans settle
+once with failed/zero usage. Keep callback exceptions outside provider retry handling: a settlement
+failure cannot trigger another dispatch or second settlement. Durable sink delivery/reconciliation is
+the host's existing responsibility; this lot does not promise exactly-once database delivery.
+
+### D7 — Exact public type delta and compatibility classification
+
+This table is exhaustive for existing public declarations changed by Lot 2. No export is removed.
+
+| Declaration | Exact delta from 0.17.1 | Compatibility |
+|---|---|---|
+| `CallerAuthPort.verify` and `PersonalPassthroughCallerAuth.verify` | Required second `CallerAuthRequestContext` argument | Breaking for call sites that pass only headers; implementations accepting fewer args can remain structurally assignable |
+| `CallerAuthResult` | Boolean/optional fields become the D1 discriminated union | Breaking for widened `ok: boolean`, success without cost, failure with cost, success with reason, or interfaces extending the old interface |
+| `VerifyToken.verify` | Required fourth context argument | Breaking for direct invocations; existing fixture methods ignoring extra arguments may compile unchanged |
+| `GatewayFlowRequest` | Add required `authContext` | Breaking for constructed requests to runJsonFlow/runStreamFlow/prepareRouteFlow/runRouteJsonFlow/runRouteStreamFlow |
+| `PersonalPassthroughCallerAuthOptions` | Add optional `costContextResolver?: CostContextResolver` | Additive; conflicting correlation options fail configuration only when the resolver is selected |
+| `RouteFlowDeps` | Add optional `dispatch?: MeshDispatchPort` | Additive; existing direct routed callers use the default adapter |
+| `CreateGatewayRouterOptions` | Add optional `routeDispatch?: MeshDispatchPort` | Additive; createGatewayRouter signature and Hono return type unchanged |
+
+New root exports, exactly: `CallerAuthRequestContext`, `AuthHonoCallerIdentity`,
+`AuthHonoVerifyTokenOptions`, `AuthHonoVerifyToken` (constructor takes those options; verify implements
+the D1 signature and returns Promise<VerifiedPrincipal | undefined>), `CostContextResolver`,
+`VerifiedCostContextResolver` (no-argument constructor), `MeshDispatchRequest`, `MeshDispatchPort`,
+`MeshDispatch` (no-argument constructor). Export through the existing root/ports barrels; no subpath.
+
+Unchanged field shapes/signatures: `CostContext`, `VerifiedPrincipal`, `CallerAuthScheme`,
+`CorrelationSource`, `GatewayConfig`, `AuthResolver`, pool/authz types, all native dispatch types,
+`RouteMeteringSink`, `RouteRequestSettlement`, `RouteAttemptSettlement`, `SettleUsage`, `MeteringSink`,
+`stubGatewayConfig` and the target/Codex re-exports. Settlement types reference the unchanged CostContext.
+`routingSubjectForCost` retains its current fallback for trusted custom consumers; the production
+resolver supplies an explicit enrollment owner. Changes to validation, auth failure handling and
+the production resolver's correlation policy are runtime changes even where TypeScript still compiles.
