@@ -14,6 +14,7 @@ export interface SignedProjectionReference {
 }
 
 export interface LocalProjectionPort {
+  readonly availability?: 'available' | 'gated';
   create(kind: ProjectionKind, localId: string): Promise<SignedProjectionReference>;
   verify(reference: SignedProjectionReference): Promise<boolean>;
   resolve<T>(reference: SignedProjectionReference): Promise<T>;
@@ -29,8 +30,12 @@ export function createLocalProjectionDomain(input: {
   readonly homeNodeId: ClusterNodeId;
   readonly local: LocalProjectionPort;
 }): ProjectionDomain {
+  function requireAvailable() {
+    if (input.local.availability === 'gated') throw new CapabilityGatedError('local_projection');
+  }
   return {
     async project(kind, localId) {
+      requireAvailable();
       const reference = await input.local.create(kind, localId);
       if (reference.homeNodeId !== input.homeNodeId || !(await input.local.verify(reference))) {
         throw new InvalidProjectionReferenceError();
@@ -38,6 +43,7 @@ export function createLocalProjectionDomain(input: {
       return reference;
     },
     async resolve(reference) {
+      requireAvailable();
       if (reference.homeNodeId !== input.homeNodeId) {
         throw new CapabilityGatedError('remote_projection');
       }
