@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
+import { createRequireServiceAuth } from '@sentropic/mcp-auth/hono';
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 import { ServiceAuthVerifyToken, type ServiceAuthCallerIdentity } from '../src/caller-auth/service-auth.js';
 import { createGatewayRouter, PersonalPassthroughCallerAuth, stubGatewayConfig,
@@ -33,14 +35,21 @@ describe('canonical service auth bridge', () => {
     expect(listModels).toHaveBeenCalledTimes(1);
     expect(f.resolvePrincipal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientId: 'service', jkt: f.jkt }));
   });
-  it.each(['', '/'])('matches the registered issuer exactly with suffix %j', async suffix => {
+  it.each(['', '/', '///'])('should agree with canonical issuer normalization for configured suffix %j', async suffix => {
     const f = await fixture();
     const issuer = `${f.auth.issuer}${suffix}`;
-    const bridge = new ServiceAuthVerifyToken({ auth: { ...f.auth, issuer }, resolvePrincipal: f.resolvePrincipal });
-    for (const tokenSuffix of ['', '/']) {
-      const token = await f.token({ iss: `${f.auth.issuer}${tokenSuffix}` });
-      const result = await bridge.verify(token, 'Bearer', { authorization: `Bearer ${token}` }, authContext);
-      expect(result).toEqual(tokenSuffix === suffix ? principal : undefined);
+    const auth = { ...f.auth, issuer };
+    const bridge = new ServiceAuthVerifyToken({ auth, resolvePrincipal: f.resolvePrincipal });
+    const canonical = new Hono();
+    canonical.use('*', createRequireServiceAuth(auth));
+    canonical.post('*', c => c.text('verified'));
+    for (const tokenIssuer of [f.auth.issuer, `${f.auth.issuer}/`, 'https://wrong.test']) {
+      const token = await f.token({ iss: tokenIssuer });
+      const headers = { authorization: `Bearer ${token}` };
+      const response = await canonical.request(authContext.url, { method: authContext.method, headers });
+      expect(response.status).toBe(tokenIssuer === f.auth.issuer ? 200 : 401);
+      const result = await bridge.verify(token, 'Bearer', headers, authContext);
+      expect(result).toEqual(response.status === 200 ? principal : undefined);
     }
     expect(f.resolvePrincipal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ issuer }));
   });
