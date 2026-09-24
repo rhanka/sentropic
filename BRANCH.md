@@ -23,6 +23,8 @@
   - [x] Future `BRxx-EXn` proposals must state reason, impact, rollback, and approval gate; none authorizes a change here.
 
 ## Feedback Loop
+- [x] D-N4 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | New repo-scoped Actions-secret API credential in custody with rotation is OWNER PROVISIONING; GitHub update commits before idempotent k8s delivery, pre-commit failure requires reauth_required/alert, and all triggers share concurrency with an independent freshness alert. Rationale: preserve rotating refresh tokens despite delivery failure and best-effort cron; initial SLO is 40-minute delivery age/10-minute remaining validity, verified per provider.
+- [x] D-N5 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Only the custody job creates/updates sentropic-llm-seats; exclude every kustomization/secretGenerator/prune and require optional: false. Rationale: prevent apply/rollback from rewinding generation; B5 tests waiting for first delivery and subsequent apply preservation.
 - [x] D-N3 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Option (a): host image consumes/qualifies the monorepo workspace graph; E8's exact published tuple applies only to h2a. Rationale: qualify what api/Dockerfile actually builds and keep separate B5/B7 evidence.
 - [x] D-N6 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | B0 targets mesh 0.22.0, gateway 0.19.0 and cluster 0.13.0 with a new compatibility matrix before B3b; B3d qualifies it before B5/B7. Rationale: API additions exceed cluster 0.12's optional-peer ceilings; no patch assumption.
 - [x] D-N7 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Pin mcp-auth 0.2.1 and jose 5.10.0; Lot F publication and isolated service-only qualification block B0. Rationale: published 0.2.0 has broken file:../oauth-verify; cite fix/mcp-auth-oauth-verify-dep, currently in review.
@@ -55,11 +57,14 @@
 - [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot D — Revision round 2 (N1-N7 and minors)**
+- [x] **Lot D — Revision round 2 (N1-N7 and minors)**
   - [x] Routing group: extend B3c/product parity; separate partition configuration from dispatch generation; apply namespace, ingress and branch-wording minors.
   - [x] Qualification group: distinguish workspace image from h2a published tuple; freeze new minor compatibility targets and mcp-auth/jose prerequisites; cite the Lot F replacement.
-  - [ ] Custody group: specify owner-provisioned API credential, durable GitHub commit order, concurrency/freshness monitoring and job-only Secret ownership.
-  - [ ] Review all requested deltas; run branch/scope/whitespace checks, cleanup and service inventory; record final handoff.
+  - [x] Custody group: specify owner-provisioned API credential, durable GitHub commit order, concurrency/freshness monitoring and job-only Secret ownership, with B4/B5 acceptance evidence.
+  - [x] Reviewed N1-N7/minors across decisions, build dependencies and acceptance; recorded D-N1..7/D-M1 as attention conductor decisions (reversible), preserving O-D1/O-D2/O-D3.
+  - [x] Checks passed: `harness check branch`, `git diff --check origin/main`, and `make scope-check ENV=test-llm-deployable-process` for each revision group; only the spec and this file changed.
+  - [x] Cleanup passed: `make down API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process`; `make ps API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process` returned no services. Only the unset DISABLE_RATE_LIMIT Compose warning appeared; no services were started.
+  - [x] Planning-only validation: runtime tests/build qualification remain future-lot evidence, independent review stays conductor-owned, and publication/owner provisioning/manual preprod gates remain explicit. No scope exception, infrastructure edit, push, PR, merge or publication.
 - [x] **Lot D — Revision round 1 (F1-F11)**
   - [x] Re-read required rules/template and both sibling specs read-only; mechanical branch check passed. Resume found F1/O-D1..3 committed at 4d0d79484 and two staged files, no unstaged edits; preserved and committed that fix group at 5606bb36b.
   - [x] Record O-D1/O-D2/O-D3 as direct owner decisions; later decisions supersede earlier review requests.
