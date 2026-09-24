@@ -1,5 +1,7 @@
 # Test change register — L-C-shell
 
+- ADD `ui/tests/components/chat/ChatWidget-content-gate.test.ts`: verify ordered loading/auth/workspace/ready branches, one ready call, settings mouse/click actions, create/use-existing/defer controls, busy/error state and blockChatPanel fence. Complements gate DOM tests; does not claim browser onboarding coverage.
+
 - ADD assertions to `packages/chat-ui/tests/export-surface.spec.ts`: runtime/declaration/snapshot agreement for widget header/gate and every pager prop, using the existing anchored contract table; no existing contracts changed.
 - ADD assertions to `packages/chat-ui/tests/chat-widget-boundary.test.ts`: widget override absent from source/type/snapshot, separate ChatPanel override retained, package composition and unclipped routing. Existing queue/API/i18n boundary assertions unchanged.
 
