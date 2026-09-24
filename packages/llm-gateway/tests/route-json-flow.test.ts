@@ -69,7 +69,7 @@ describe('route JSON flow', () => {
     await runRouteJsonFlow({ config, routePlanner: routePlanner([source]), metering: { settleRoute } }, request);
     const settled = settleRoute.mock.calls[0]![0];
     expect(settled.usage.estimated).toBe(!usage);
-    expect(settled.usage.inputTokens).toBe(usage ? 0 : expect.any(Number));
+    expect(settled.usage.inputTokens).toEqual(usage ? 0 : expect.any(Number));
     if (!usage) expect(settled.usage.inputTokens).toBeGreaterThan(0);
   });
   it('never redispatches or completes twice after a settlement rejection', async () => {
