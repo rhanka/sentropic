@@ -8,7 +8,7 @@ describe('opaque route attempt dispatch', () => {
     const call = vi.fn(async () => result);
     const attempt = { generate: call, stream: call } as unknown as PreparedRouteAttempt;
     const controller = new AbortController();
-    const request = { messages: [], tools: [], signal: controller.signal, metadata: { trusted: true } };
+    const request = { messages: [], tools: [], signal: controller.signal, metadata: { correlationId: 'trusted' } };
     expect(await new RouteAttemptDispatch()[method]({ attempt, request })).toBe(result);
     expect(call).toHaveBeenCalledExactlyOnceWith(request);
     expect(call.mock.contexts[0]).toBe(attempt);
