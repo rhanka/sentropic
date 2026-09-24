@@ -75,6 +75,7 @@
   - [x] Update router, models, route-flow-core, route-json-flow, route-stream-flow and exhaustive contract-snapshot tests; add caller-auth and lot2-types tests. Existing errors tests remain unchanged and green.
   - [x] Verify public URL/default/invalid/spoofed forwarded headers, both wires/models, auth rejection/outage and compile-time invalid contracts. Full lot gate passed (146 tests): make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
 - [ ] **I2 — Concrete verification and cost**
+  - [x] I2 workspace and isolated root/session gates passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (189 passed, one service clean-install pending under BRLG2-I0). Scoped service-auth test target also passed (17 tests).
   - [x] Add trusted cost resolver and explicit-resolver correlation exclusivity; retain legacy custom-verifier projection only when no resolver is selected.
   - [x] Add private auth-bridge helper for strict case-insensitive explicit credentials and bodyless Hono probes with per-request error/identity capture; no optional peer imports in shared helpers.
   - [x] Implement service /auth and session /auth-hono with separately cached lazy imports, trusted principal projection, required service configuration and unbound-DPoP rejection.
@@ -86,7 +87,7 @@
   - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
 - [ ] **I3 — Opaque mesh adapter**
-  - [ ] Implement route-attempt-dispatch, dispatch port, root export, routed flow/router integration with no native fallback.
+  - [x] Implement route-attempt-dispatch, dispatch port, root export, routed flow/router integration with no native fallback; reject own auth fields and incomplete routeDispatch configuration.
   - [ ] Add route-attempt-dispatch tests; update route-json-flow, route-stream-flow and router tests for exact attempts, cancellation, tools and terminal outcomes.
 - [ ] **I4 — Lifecycle and wire integration**
   - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
