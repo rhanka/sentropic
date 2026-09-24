@@ -366,6 +366,30 @@ describe('opaque route planner', () => {
     expect(String((error as Error).message)).not.toContain('muse');
   });
 
+  it('never surfaces another transport diagnostic under an explicit transport restriction', async () => {
+    // The model-derived resolution ignores `explicit`: claude-fable-5
+    // resolves to muse-route transports, so without the restriction below
+    // the muse diagnostic would still match an explicit codex request.
+    const museReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'muse',
+      message: 'muse reauthenticate required',
+    };
+    const directory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly typeof museReauth[]>;
+    };
+    directory.listDiagnostics = async () => [museReauth];
+    const planner = new InMemoryRoutePlanner({ directory });
+
+    const error = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-fable-5', explicit: { transportProviderId: 'codex' },
+    }).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { code?: string }).code).toBe('no-route');
+    expect(String((error as Error).message)).toBe('No eligible route');
+  });
+
   it('keeps a diagnostic bound to the requested transport', async () => {
     const museReauth = {
       code: 'reauth-required' as const, transportProviderId: 'muse',

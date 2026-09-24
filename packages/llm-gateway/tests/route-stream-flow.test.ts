@@ -209,6 +209,25 @@ describe('route stream flow', () => {
     expect((error as { kind?: string }).kind).toBe('bad-request');
   });
 
+  it('surfaces a terminal upstream auth refusal as upstream-auth-failed before any content', async () => {
+    const failing = (): PreparedRouteAttempt => ({
+      attemptRef: 'attempt-401',
+      async generate() { throw new Error('unused'); },
+      async stream(): Promise<AsyncIterable<StreamEvent>> { throw { status: 401 }; },
+      async recordOutcome() {}, async markCommitted() {}, async complete() {},
+      async releaseCancelled() {},
+    });
+
+    const error = await runRouteStreamFlow({
+      config, routePlanner: plannerFor([failing()]),
+      metering: { settleRoute() {} },
+    }, request).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { kind?: string }).kind).toBe('upstream-auth-failed');
+  });
+
   it('releases and settles a committed stream when the consumer cancels', async () => {
     const hooks: string[] = [];
     const settlements: RouteRequestSettlement[] = [];
