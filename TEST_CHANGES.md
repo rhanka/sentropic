@@ -1,9 +1,11 @@
 # CI truthfulness test changes
 
-Existing assertion inputs changed: the two translated warning strings listed below. No assertion removed or weakened; no timeout or skip changes.
+Existing assertion inputs changed: the two translated warning strings and the steering timeline locator listed below. No assertion removed or weakened; no timeout or skip changes.
 
 | File / hunk | Change and evidence | Remaining coverage |
 |---|---|---|
 | `e2e/tests/02-auth-oauth-revoke.spec.ts`, `buildAuthorizeUrl` | Add `prompt=consent` to the request fixture. Run 35940218518 reached the callback directly on every attempt. `packages/auth-hono/src/oauth/authorize-handler.ts:114` intentionally bypasses consent for covering grants unless this prompt is supplied. | Consent screen, approval, callback/state/code, token exchange, scopes, userinfo success, revocation, and subsequent 401 assertions are unchanged. |
 | `e2e/tests/05-i18n.spec.ts`, `ensureMatrixWarningBanner` / `warningText` | Replace stale English “use cases” and French “cas d'usage” strings with “initiatives”, matching both shipped `ui/src/locales/{en,fr}.json:175` translations. The obsolete text made the helper demand the mutually exclusive empty state despite its configured matrix fixture. | Both languages still require the complete exact warning text; matrix empty/dialog fallback, folder labels, and dashboard ROI assertions remain unchanged. |
 | `e2e/tests/01-organizations-detail.spec.ts`, new failure-only `afterEach` | Log presence API status/snapshot and rendered badge/avatar text when the presence test fails; historical CI retained no browser artifacts or API diagnostics. | Every presence and lock assertion is unchanged. Diagnostics do not mutate product state. |
+| `e2e/tests/09-chat-multitool-demo.spec.ts`, `waitForQueueJobSettled` and both callers | Supply the created workspace in the queue URL. Run 35952497610 returned HTTP 404 for every poll; auth defaults to the user's own workspace without the query parameter. Matches the scoped queue polling in `09-chat-freeze-terminal.spec.ts`. | Both jobs must still complete; final answer, idle composer, tool activity, and organization mutation assertions unchanged. |
+| `e2e/tests/09-run-steering-core.spec.ts`, `timelineContainer` | Change exact spacing class from `space-y-2` to `space-y-3`, matching `ChatPanelShell.svelte:310`. Run 35952497610 failed this locator on all three attempts after steering succeeded. | Visible timeline and identical user/steer/assistant adjacency assertions retained. No product changes. |
