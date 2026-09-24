@@ -6,7 +6,7 @@
    * (no jobs badge), 'default' the package's plain styling (jobs badge). Callbacks are props, not
    * dispatched events, so hosts wire behaviour without a second grammar.
    */
-  type ChatWidgetTab = 'chat' | 'queue' | 'comments';
+  import type { ChatWidgetTab } from '../state/chatWidgetShell.js';
 
   export let activeTab: ChatWidgetTab;
   export let showCommentsTab = true;

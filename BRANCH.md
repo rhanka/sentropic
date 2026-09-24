@@ -28,6 +28,7 @@
   - [x] `e2e/tests/**` only if an existing selector cannot preserve meaning; avoid changes.
 
 ## Feedback Loop
+- [x] Opus 1/2/5/7 deferred per owner: controlled-tab refusal/coercion, showCommentsTab/plugin coupling, extension tab selected semantics, and optional agentsList object hoisting. Owner: orchestrator; status: follow-up; no behavior change in this fix pass.
 - [x] Owner explicitly requires TEST_CHANGES.md and chat-ui lock metadata; allowed above.
 - [x] CI selection and failure propagation belong to parallel branch fix/ci-e2e-truthful.
 - [ ] Independent astra-xhigh review of every registered test change remains an acceptance dependency.
@@ -42,6 +43,7 @@
 - [ ] UAT and CI qualify the final integrated revision; no local E2E.
 
 ## Plan / Todo (lot-based)
+- [x] Fix pass slice 1: restore conditional section motion assertion; remove redundant region; silence grip static-interaction warning; unify ChatWidgetTab; document header override and non-app 0.34.0 migration.
 - [x] Lot 0: read rules, template and audit; verify clean baseline and mechanical branch check.
 - [x] S5: export typed package ChatWidgetPager with conditional list, persistent conversation, live region and 180ms reduced-motion-aware CSS.
 - [x] S5 tests: add packages/chat-ui/tests/chat-widget-pager.dom.spec.ts for mount identity, draft, eligibility, headers and announcements; DOM gate passed.

@@ -91,9 +91,8 @@ describe('ChatWidget agents list wiring', () => {
     expect(conversationStart).toBeGreaterThan(listMountEnd);
     expect(viewsEnd).toBeGreaterThan(conversationStart);
     expect(listMount).not.toContain("class:hidden={agentsView !== 'list'}");
-    expect(listMount).toContain(
-      'chat-agents-view-slide-from-inline-start',
-    );
+    const sectionOpening = pagerSource.slice(listSectionStart, pagerSource.indexOf('>', listSectionStart) + 1);
+    expect(sectionOpening).toMatch(/class="[^"]*\bchat-agents-view-slide-from-inline-start\b[^"]*"/);
     expect(conversationLead.trim()).toBe('');
     expect(views).toContain(
       "class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}",

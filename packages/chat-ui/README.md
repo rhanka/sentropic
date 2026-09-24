@@ -33,6 +33,7 @@ The conversation remains mounted across tab and list transitions; closing the
 gate may unmount it. Pass agents data/callbacks through `agentsList`, and host
 view state through `agentsView` and `canAgentsListBeDefaultView`.
 The separate ChatPanel `renderShell` contract is unchanged.
+For non-app consumers, 0.34.0 also removes the default white background (`bg-white text-slate-900`) and content `overflow-hidden`, keeps chat mounted across tabs, and removes `renderShell` (breaking in 0.x).
 
 ## Non-Goals
 

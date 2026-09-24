@@ -1,6 +1,7 @@
 import type { Component } from 'svelte';
 
-export type ChatWidgetTab = 'chat' | 'queue' | 'comments';
+import type { ChatWidgetTab } from '../state/chatWidgetShell.js';
+export type { ChatWidgetTab } from '../state/chatWidgetShell.js';
 
 export type ChatWidgetTabBarProps = {
   /** Currently active tab; drives the pressed/active styling. */
