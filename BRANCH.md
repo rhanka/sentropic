@@ -29,6 +29,7 @@
 - [x] BRCI-A1 | attention | Owner: conductor | Branch: current | 2026-09-24 | Reversible: use BLOCK for changed/publish-selected packages and WARN for unrelated published packages, preserving the conductor's rollout decision.
 - [x] BRCI-A2 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | Install replays are mandatory BUILD closure evidence; SPEC cannot add or execute the nonexistent target. Expected: two successful reports; actual: pending implementation.
 - [x] BRCI-A3 | attention | Owner: conductor | Branch: current | 2026-09-24 | This two-file scope excludes harness/track recorder writes; branch and scope checks remain mandatory. Independent review precedes conductor push/PR/merge.
+- [x] BRCI-A4 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | Reversible: full candidate packs for BLOCK, lifecycle-free inventory snapshots for WARN; avoids unrelated native builds while every actual publication remains strict.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only; no AI or runtime tests are executed or waived.
@@ -47,7 +48,7 @@
   - [x] Create this scoped branch plan first.
   - [x] Document npm root cause, strict dependency rule, packed-artifact boundary, and placement recommendation in the new spec.
 - [ ] **Lot G1 — Exact BUILD contract**
-  - [ ] Specify root lint target, guard targets, CI jobs/steps, classification algorithm, and forbidden-spec regex.
+  - [x] Specify root lint target, guard targets, CI jobs/steps, classification algorithm, and forbidden-spec regex.
   - [ ] Specify clean install isolation, entry point imports, published/tarball inputs, and failure reporting.
 - [ ] **Lot G2 — Acceptance and handoff**
   - [ ] List file-level BUILD tests, exception requests, rollout sequence, known offenders, and unresolved owner decisions.
