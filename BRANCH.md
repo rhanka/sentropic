@@ -80,6 +80,7 @@
   - [x] `e2e/tests/05-i18n.spec.ts:184`: stale “use cases” warning strings conflict with shipped “initiatives” translations; corrected exact text, registered for independent review. CI retest pending.
   - [ ] Apply only evidenced product/fixture fixes and register assertion changes.
   - [x] Independent verdict (head 5cba6a0e1): lock renewal intent (EX6), lane 10 + inventory (EX7), execution-policy register and corrected coverage claims in `TEST_CHANGES.md`. CI retest pending.
+  - [x] CI 35999807751 first run of lane 10: session-control bodies sent obsolete `commandId`, rejected 400 before the 401 fence; renamed to `commandRef` (request input only, registered). CI retest pending.
   - [x] Diagnose new 09 failures from run 35952497610: scope both multi-tool queue polls to the created workspace; align steering timeline locator with the shipped spacing class. CI retest pending.
   - [x] Replace the multi-tool fixture's local Gemini quota workaround with the OpenAI model already exercised in CI; retain every behavior assertion and document the rejected Gemini credential separately. CI verification pending.
 - [ ] **Lot 3 — Docs consolidation**
