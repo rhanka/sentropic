@@ -4,6 +4,12 @@
 
 Every entry requires independent astra-xhigh review. No timeout, skip or E2E assertion changes are authorized.
 
+- CHANGE `ui/tests/components/chat/ChatWidget-{header-snippets,content-snippets,conversation-seams}.test.ts`: replace temporary in-place renders with explicit package slot arguments; chat body replaces temporary chat wrapper. Existing controls, QueueMonitor, sessions menu/icons, Back and ref assertions remain; mounted composition is covered by assembly/pager DOM tests.
+- CHANGE `ui/tests/components/chat/ChatWidget-tab-bar.test.ts`: verify package ChatWidget imports/mounts exactly one TabBar; app passes variant, badge, plugin and selection props. Raw-button exclusion remains. DOM suite retains order, selection and extension classes.
+- CHANGE `ui/tests/components/chat/ChatWidget-wrapper.test.ts`: reject takeover instead of requiring it; require every host slot and package composition. Existing label/count/purge wiring remains.
+- CHANGE `ui/tests/components/chat/ChatWidget-shell-state.test.ts`: move queue routing assertion to package and reject app duplication; tab coercion, badges, auto-close and new-session assertions remain.
+- CHANGE `ui/tests/components/chat/ChatWidget-agents-list.test.ts`: point lifecycle/motion/list-container assertions to the package pager; verify app data/callback object syntax and package injection instead of direct AgentsList. Preserve adapter, open-edge default, focus, Back and all-workspaces assertions. DOM lifecycle test additionally checks identity/draft/mount count.
+
 | File | Hunk summary | Why | Behavior retained or added |
 | --- | --- | --- | --- |
 | packages/chat-ui/tests/chat-widget-tab-bar.dom.spec.ts | S1 import in f1a844e76 | Port audited primitive coverage | Order, selection, comments suppression, extension classes and badge policy |

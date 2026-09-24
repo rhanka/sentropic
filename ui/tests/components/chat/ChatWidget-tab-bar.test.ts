@@ -10,21 +10,22 @@ const widgetPath = resolve(process.cwd(), 'src/lib/components/ChatWidget.svelte'
  * extension variant, jobs badge off, comments tab gated on !isPluginMode. No rename (L-A').
  */
 describe('ChatWidget tab bar wiring (L-C-shell S1)', () => {
-  it('imports the package-owned ChatWidgetTabBar primitive', () => {
+  it('delegates the single TabBar to package ChatWidget', () => {
     expect(existsSync(widgetPath)).toBe(true);
     const source = readFileSync(widgetPath, 'utf8');
-    expect(source).toContain(
-      "import ChatWidgetTabBar from '@sentropic/chat-ui/components/ChatWidgetTabBar.svelte'",
-    );
+    expect(source).not.toContain('import ChatWidgetTabBar');
+    const shell = readFileSync(resolve(process.cwd(), '../packages/chat-ui/src/components/ChatWidget.svelte'), 'utf8');
+    expect(shell).toContain("import ChatWidgetTabBar from './ChatWidgetTabBar.svelte'");
+    expect(shell.match(/<ChatWidgetTabBar\\b/g)).toHaveLength(1);
   });
 
   it('renders the tab bar through the primitive: extension variant, badge off, comments gated (I4)', () => {
     const source = readFileSync(widgetPath, 'utf8');
-    expect(source).toContain('<ChatWidgetTabBar');
-    expect(source).toContain('variant="extension"');
+    expect(source).toContain('<PackageChatWidget');
+    expect(source).toContain('tabBarVariant="extension"');
     expect(source).toContain('showJobsBadge={false}');
     expect(source).toContain('showCommentsTab={!isPluginMode}');
-    expect(source).toContain('onSelect={(tab: ChatWidgetTab) => (activeTab = tab)}');
+    expect(source).toContain('onActiveTabChange={(tab: ChatWidgetTab) => (activeTab = tab)}');
   });
 
   it('no longer owns the raw tab buttons — the primitive does', () => {
