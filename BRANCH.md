@@ -31,6 +31,7 @@
   - [x] BRLG2-EX1/EX2 authorized by the implementation brief; record other irreversible out-of-brief decisions as `blocked` and stop.
 
 ## Feedback Loop
+- [ ] BRLG2-O8 | attention | Owner: release owner | publish-llm-gateway-token (Makefile) bypasses wait-llm-gateway-auth-dependencies. The target is outside BRLG2-EX1 and remains unchanged. Release owner must enforce the registry-only auth graph and published service-only qualification before any token-based publication; no publish is authorized in this round.
 - [ ] BRLG2-CONSUMER | blocked | Owner: consumer conductor (h-cond) | BLOCKS merge: h2a typecheck of both entrypoints against the candidate tarball — performed by the consumer conductor (h-cond); evidence to be recorded here. Record candidate SHA-256, both entrypoint results and spec section 3 UAT / duplicate mesh E8 evidence before merge/release. Consumer checkout is outside this worktree's write scope.
 - [x] BRLG2-URL | attention | Reversible | The reviewed spec defines publicUrl only and contains no publicOrigin declaration. Implement D1/D7 exactly; do not invent an additional public API. Clarification requested during build; no conflicting contract supplied.
 - [x] BRLG2-FIXTURE | attention | Reversible | Standalone declaration qualification uses TypeScript 5.9.3 with skipLibCheck disabled, exact hono 4.10.7/mesh 0.21.2 and Node types 22.20.1. Evidence: consumer Hono declarations use generic Uint8Array unsupported by repository compiler 5.4.5. Repository build compiler unchanged; fixture-only qualification pins avoid suppressing declaration failures. Rollback: git revert.
@@ -78,7 +79,7 @@
   - [x] C10 — README migration covers ambiguity, malformed Authorization without fallback, and token spaces for all PersonalPassthroughCallerAuth instances.
   - [x] C11 — Add signed bound-DPoP router success regression: internal HTTP /v1/models, reconstructed external HTTPS URL, status 200 and exactly one planner listModels call (final gates pending).
   - [x] C12 — Within BRLG2-EX1, fail explicitly if qualification directory is absent; print and retain AUTH-EVIDENCE.txt labeling workspace mcp-auth 0.2.0/file: and auth-hono 0.15.2 as dev evidence, not release (pack gate pending).
-  - [ ] C13 — Record O8 token-publish bypass risk without editing the target.
+  - [x] C13 — Record release-owner O8 risk: publish-llm-gateway-token bypasses the auth dependency wait; target unchanged outside EX1.
   - [ ] Final gates — typecheck, lint, full test, pack, candidate SHA-256, scope and cleanup.
 - [ ] **I0 — Dependency and harness readiness**
   - [x] Verify branch, clean worktree, reviewed spec, rules, target discovery and ports; record approved exceptions.
