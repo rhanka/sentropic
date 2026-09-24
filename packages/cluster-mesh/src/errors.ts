@@ -1,4 +1,7 @@
 export type GatedCapability =
+  | 'local_devices'
+  | 'local_projection'
+  | 'device_denial'
   | 'inter_server_discovery'
   | 'inter_server_revocation'
   | 'rfc8693_token_exchange'
