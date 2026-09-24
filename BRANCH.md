@@ -23,6 +23,9 @@
   - [x] Future `BRxx-EXn` proposals must state reason, impact, rollback, and approval gate; none authorizes a change here.
 
 ## Feedback Loop
+- [x] D-N3 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Option (a): host image consumes/qualifies the monorepo workspace graph; E8's exact published tuple applies only to h2a. Rationale: qualify what api/Dockerfile actually builds and keep separate B5/B7 evidence.
+- [x] D-N6 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | B0 targets mesh 0.22.0, gateway 0.19.0 and cluster 0.13.0 with a new compatibility matrix before B3b; B3d qualifies it before B5/B7. Rationale: API additions exceed cluster 0.12's optional-peer ceilings; no patch assumption.
+- [x] D-N7 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Pin mcp-auth 0.2.1 and jose 5.10.0; Lot F publication and isolated service-only qualification block B0. Rationale: published 0.2.0 has broken file:../oauth-verify; cite fix/mcp-auth-oauth-verify-dep, currently in review.
 - [x] D-N1 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Option A: extend B3c to migrate product `gw.ts` to real admission, partition rejection, settlement and readiness; section 11 parity depends on it. Rationale: product identities must not bypass the standalone safeguards.
 - [x] D-N2 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Trusted server configuration owns partition assignments; cutover evidence retains only revision ids/hashes and cannot advance product dispatch generation. Rationale: separate authorization configuration from dispatch authority.
 - [x] D-M1 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Require B0 proof of `/gw` to `/` remapping; omit API-to-gateway ingress absent a real consumer; correct objective and completed-check wording. Rationale: preserve in-process product routing and accurate planning state.
@@ -54,7 +57,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot D — Revision round 2 (N1-N7 and minors)**
   - [x] Routing group: extend B3c/product parity; separate partition configuration from dispatch generation; apply namespace, ingress and branch-wording minors.
-  - [ ] Qualification group: distinguish workspace image from h2a published tuple; freeze new minor compatibility targets and mcp-auth/jose prerequisites.
+  - [x] Qualification group: distinguish workspace image from h2a published tuple; freeze new minor compatibility targets and mcp-auth/jose prerequisites; cite the Lot F replacement.
   - [ ] Custody group: specify owner-provisioned API credential, durable GitHub commit order, concurrency/freshness monitoring and job-only Secret ownership.
   - [ ] Review all requested deltas; run branch/scope/whitespace checks, cleanup and service inventory; record final handoff.
 - [x] **Lot D — Revision round 1 (F1-F11)**
