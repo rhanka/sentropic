@@ -67,13 +67,14 @@
   - [x] I0 workspace gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (132 tests). Initial missing-semver-link failure corrected and rerun green.
   - [x] Registry wait exercised: make wait-llm-gateway-auth-dependencies LLM_MESH_REGISTRY_WAIT_ATTEMPTS=1 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 fails closed on mcp-auth 0.2.1 E404, as required. Clean fixtures remain I2/I5 gates.
   - [ ] Qualify published mcp-auth 0.2.1 service-only install and auth-hono 0.15.0 session-only install (pending BRLG2-I0).
-- [ ] **I1 — Request-bound auth contracts**
+- [x] **I1 — Request-bound auth contracts**
   - [x] Implement request context, discriminated auth result, generic unavailable mapping and trusted router URL projection; internal/caller-auth.ts shares validation across boundaries (private helper within package scope).
   - [x] Add caller-auth/lot2-types tests; update contract-snapshot exhaustive error map in I1 because its Record correctly rejects the new union member until mapped. Test undefined publicUrl callback results fail closed.
-  - [ ] Update caller-auth/pool ports, personal auth, flow, route core, router/errors and stubs; bump gateway to 0.18.0.
-  - [ ] Update fixtures/harness, router, errors, models, route-flow-core, route-json-flow, route-stream-flow tests; add caller-auth and lot2-types tests.
-  - [ ] Verify public URL/default/invalid/spoofed forwarded headers, both wires/models, auth rejection/outage and compile-time invalid contracts.
+  - [x] Update caller-auth/pool ports, personal auth, flow, route core, router/errors and stubs; gateway is 0.18.0. Existing harness needs no change: router supplies context.
+  - [x] Update router, models, route-flow-core, route-json-flow, route-stream-flow and exhaustive contract-snapshot tests; add caller-auth and lot2-types tests. Existing errors tests remain unchanged and green.
+  - [x] Verify public URL/default/invalid/spoofed forwarded headers, both wires/models, auth rejection/outage and compile-time invalid contracts. Full lot gate passed (146 tests): make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
 - [ ] **I2 — Concrete verification and cost**
+  - [x] Add trusted cost resolver and explicit-resolver correlation exclusivity; retain legacy custom-verifier projection only when no resolver is selected.
   - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
 - [ ] **I3 — Opaque mesh adapter**
