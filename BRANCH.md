@@ -29,6 +29,7 @@
 - [x] E-A9 `attention`, owner: conductor, revised 2026-09-24: Opus 5.5 returned approve-with-fixes (architecture holds, four majors, no blocker); round 2 addresses those fixes, with final independent acceptance/build handoff still conductor-owned.
 - [x] E-A10 `attention`, owner: Lot E, 2026-09-24: release LLM/gateway first, then start MCP after h2a ships that flip; gateway's use of existing mcp-auth is not the later MCP server build.
 - [x] E-A11 `attention`, owner: h-cond, 2026-09-24: verify the full 0.9-to-0.10 wire/custody transition and 0.11 feedback before import substitution; the 0.9 changelog already names initial commandRef/custody requirements.
+- [x] E-A12 `attention`, owner: Lot E, 2026-09-24: selected auth loaders preload gateway-relative peers before bind; this catches Lot C's verification-time imports without changing static provider namespaces or auth ownership. Stable error `code` supports diagnosis across duplicate constructors.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only; runtime tests are specified for later implementation, not claimed as run.
@@ -49,6 +50,6 @@
 - [x] **Revision R1b — Upgrade and shipment**: pin gateway 0.18 compatibility; document cluster-mesh 0.9 → 0.10 → 0.11 → lazy minor; ship LLM/gateway before building MCP; revise file-level acceptance.
 - [x] **Revision R1c — Authority and validation**: append consumer clarification inside the amendment only; preserve resumed work; PASS branch/scope and whitespace checks, original 495 control-plane lines byte-identical, reviewed diff/history; PASS reserved-environment `make down` and `make ps` with the ports/ENV above (no services). Commit each remaining revision atomically with this checklist; independent review/delivery stays pending below.
 - [x] **Revision R2a — Auth entries and release prerequisite**: separate service/session leaves and loaders, require mcp-auth 0.2.1 publication for B3, update the tested tuple, amendment and E-A5/E-A7.
-- [ ] **Revision R2b — Startup refusal**: require gateway-relative auth resolution/preload before bind, document static-consumer preflight and the existing runtime-import diagnostic boundary, recognize errors by code, specify absent-peer startup tests.
+- [x] **Revision R2b — Startup refusal**: require gateway-relative auth resolution/preload before bind, document static-consumer preflight and the existing runtime-import diagnostic boundary, recognize errors by code, specify absent-peer startup tests.
 - [ ] **Revision R2c — Consumer topology and declarations**: require manifest-local selected peers and one physical cluster-mesh, update the 0.9 pin in the same artifact, specify global/separate-runtime and tsup/skipLibCheck fixtures, align leaf paths, hand the rule/test to h-cond and validate the three-file scope.
 - [ ] **Review/delivery gate (conductor-owned)**: independent acceptance of round 2 fixes; only then deliver the approved build contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor. The requested topology rule/test notice is informational, not build authorization.
