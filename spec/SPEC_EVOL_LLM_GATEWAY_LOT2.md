@@ -12,7 +12,7 @@ Extends:
 ## Build status — 2026-09-24
 
 - [x] I0 workspace dependency/harness readiness; approved Makefile and root lockfile exceptions recorded in BRANCH.md before edits.
-- [ ] I0 registry service-only qualification: mcp-auth 0.2.1 still returns E404; continue against workspace per conductor, never pin 0.2.0.
+- [ ] I0 registry service-only qualification: BLOCKS merge AND release. Merging to main triggers `publish-llm-gateway` in `.github/workflows/ci.yml`, which fails while mcp-auth 0.2.1 returns E404; continue against workspace per conductor, never pin 0.2.0.
 - [x] I1 request-bound contracts, publicUrl and generic 503 caller-auth-unavailable.
 - [x] I2 concrete service/session auth, trusted cost projection, isolated root and published session consumer qualification.
 - [ ] I2 published service consumer qualification awaits I0 registry gate.

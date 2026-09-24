@@ -36,7 +36,7 @@
 - [x] BRLG2-FIXTURE | attention | Reversible | Standalone declaration qualification uses TypeScript 5.9.3 with skipLibCheck disabled, exact hono 4.10.7/mesh 0.21.2 and Node types 22.20.1. Evidence: consumer Hono declarations use generic Uint8Array unsupported by repository compiler 5.4.5. Repository build compiler unchanged; fixture-only qualification pins avoid suppressing declaration failures. Rollback: git revert.
 - [x] BRLG2-EX1 | acknowledge | Owner: conductor | Approved before edits: Makefile `typecheck-llm-gateway`, `build-llm-gateway`, `test-llm-gateway` gain oauth-verify/mcp-auth/auth-hono build prerequisites and peer links; `package-llm-routing-candidates` adds auth tarballs; new `wait-llm-gateway-auth-dependencies` and `publish-llm-gateway` enforce recursive registry visibility. Reason: compile/qualify isolated optional auth subpaths. Impact: isolated toolset dependencies and publication ordering only. Rollback: git revert. No other Makefile, compose or workflow changes.
 - [x] BRLG2-EX2 | acknowledge | Owner: conductor | I0 requires root `package-lock.json` gateway metadata alignment with 0.18.0, mesh floor and optional auth peers. Root package.json unchanged unless required. Impact: gateway dependency metadata only. Rollback: git revert.
-- [ ] BRLG2-I0 | attention | Owner: auth lane / conductor | Registry latest is mcp-auth 0.2.0 on 2026-09-24; 0.2.1 clean service-only install remains pending. Develop against workspace without pinning 0.2.0; proceed with I1+ per conductor.
+- [ ] BRLG2-I0 | blocked | Owner: auth lane / conductor | BLOCKS merge AND release. Merging to main triggers publish-llm-gateway (.github/workflows/ci.yml), which fails while @sentropic/mcp-auth@0.2.1 is E404. Registry latest is mcp-auth 0.2.0 on 2026-09-24; published 0.2.1 service-only clean-install evidence remains required. Develop against workspace without pinning 0.2.0.
 - [x] BRLG2-SCOPE | acknowledge | Implementation brief supersedes historical planning-only guardrails below. Single writer; no Track writes, push, PR, merge or publish. ENV=test-llm-gateway-lot2; API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480; ports verified free. Independent review/consumer qualification remain conductor gates.
 - [x] C-FL1 | attention | Owner: conductor | Reversible | Use the EVOL rung directly: the brief fixes the three adapters and authorizes the Lot 2 type migration.
 - [x] C-FL2 | attention | Owner: conductor | Reversible | Keep planning and review evidence in these two files; harness recorder/Track writes and separate review artifacts exceed the explicit scope. Independent review remains the conductor's handoff gate.
@@ -64,6 +64,21 @@
 - [x] No services or port reservation required for this planning task.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot C — Build fix round 1**
+  - [x] C1 — Explicitly record I0 as blocking merge AND release in branch and spec.
+  - [ ] C2 — Recheck mcp-auth 0.2.1 at round end; qualify published service-only install or retain the open blocker and skip.
+  - [ ] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate.
+  - [ ] C4 — Validate encoding derived from the first upstream event before commitment; route-stream-flow.test.ts regression.
+  - [ ] C5 — Honor claimed stream terminal outcomes in the outer catch; route-stream-flow.test.ts regression.
+  - [ ] C6 — Zero usage for cancellation during dispatch validation before provider invocation; JSON/stream regressions.
+  - [ ] C7 — Reject empty service clientId before principal mapping; service-auth.test.ts regression.
+  - [ ] C8 — Preserve exact registered issuer/resource strings; document and test trailing-slash matching.
+  - [ ] C9 — Correct personal caller-auth declaration comments to match D2.
+  - [ ] C10 — Document strict credential parsing for all personal caller-auth instances.
+  - [ ] C11 — Prove successful router DPoP verification after trusted publicUrl reconstruction.
+  - [ ] C12 — Guard missing qualification directory and label workspace auth tarballs as development evidence.
+  - [ ] C13 — Record O8 token-publish bypass risk without editing the target.
+  - [ ] Final gates — typecheck, lint, full test, pack, candidate SHA-256, scope and cleanup.
 - [ ] **I0 — Dependency and harness readiness**
   - [x] Verify branch, clean worktree, reviewed spec, rules, target discovery and ports; record approved exceptions.
   - [x] Update package.json and lockfile; wire only approved Makefile targets; recursive registry validation in scripts/auth-registry.mjs and tests/auth-registry.test.ts (bounded helper added within package scope).
