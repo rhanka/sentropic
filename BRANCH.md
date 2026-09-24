@@ -1,7 +1,7 @@
 # Feature: Deployable LLM process specification (Lot D)
 
 ## Objective
-- [x] Specify an autonomous Node/TypeScript LLM gateway process, deployment, budget admission, identity binding, and seat-secret consumption; deliver design only.
+- [x] Specify an autonomous Node/TypeScript LLM gateway process, deployment, budget admission, identity resolution through existing stores (G1b deferred), and seat-secret consumption; deliver design only.
 
 ## Scope / Guardrails
 - [x] Branch `spec/llm-deployable-process`; worktree `tmp/llm-deployable-process`; requested base `origin/main` at `75032fc85`.
@@ -23,6 +23,9 @@
   - [x] Future `BRxx-EXn` proposals must state reason, impact, rollback, and approval gate; none authorizes a change here.
 
 ## Feedback Loop
+- [x] D-N1 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Option A: extend B3c to migrate product `gw.ts` to real admission, partition rejection, settlement and readiness; section 11 parity depends on it. Rationale: product identities must not bypass the standalone safeguards.
+- [x] D-N2 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Trusted server configuration owns partition assignments; cutover evidence retains only revision ids/hashes and cannot advance product dispatch generation. Rationale: separate authorization configuration from dispatch authority.
+- [x] D-M1 | conductor decision (reversible) | Owner: conductor | Date: 2026-09-24 | Status: attention | Require B0 proof of `/gw` to `/` remapping; omit API-to-gateway ingress absent a real consumer; correct objective and completed-check wording. Rationale: preserve in-process product routing and accurate planning state.
 - [x] O-D1 | direct owner decision | Owner: product owner via conductor | Date: 2026-09-24 | Status: acknowledge | Seat delivery (a) maintained with full knowledge: the scheduled GitHub Actions job updates the GitHub Secret and pushes the fresh access token into k8s; this is the first automated CI→cluster Secret write, with no CI precedent.
 - [x] O-D2 | direct owner decision | Owner: product owner via conductor | Date: 2026-09-24 | Status: acknowledge | IRREVERSIBLE G1a BR-47 budget migration is ratified now and part of Lot D's build design; real over-budget HTTP 429 is required. G1b identity bindings remain deferred; v0 uses memberships and service_clients. No migration is executed on this planning branch.
 - [x] O-D3 | direct owner decision | Owner: product owner via conductor | Date: 2026-09-24 | Status: acknowledge | Preprod first using KUBE_CONFIG_DATA_PREPROD; no production Role design now. Production seat delivery and its new security gate return to the owner only after the IP-change spike passes and the refresh/delivery loop is stable.
@@ -49,6 +52,11 @@
 - [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot D — Revision round 2 (N1-N7 and minors)**
+  - [x] Routing group: extend B3c/product parity; separate partition configuration from dispatch generation; apply namespace, ingress and branch-wording minors.
+  - [ ] Qualification group: distinguish workspace image from h2a published tuple; freeze new minor compatibility targets and mcp-auth/jose prerequisites.
+  - [ ] Custody group: specify owner-provisioned API credential, durable GitHub commit order, concurrency/freshness monitoring and job-only Secret ownership.
+  - [ ] Review all requested deltas; run branch/scope/whitespace checks, cleanup and service inventory; record final handoff.
 - [x] **Lot D — Revision round 1 (F1-F11)**
   - [x] Re-read required rules/template and both sibling specs read-only; mechanical branch check passed. Resume found F1/O-D1..3 committed at 4d0d79484 and two staged files, no unstaged edits; preserved and committed that fix group at 5606bb36b.
   - [x] Record O-D1/O-D2/O-D3 as direct owner decisions; later decisions supersede earlier review requests.
@@ -56,7 +64,7 @@
   - [x] F5/F6/F7/F10: ratified G1a, deferred G1b, one ledger row, bounded retry hint and split admission lots with B0 quote decision.
   - [x] F3/F4/F8/F11: current custody source/refresher/projection resolver, preprod-only write identity, operator DB-secret channel and backup residual risk.
   - [x] F2/F9/F10: reuse API image, narrow exceptions/CI, manual G3 network gate and reconcile build/acceptance plan.
-  - [x] Reviewed F1-F11 and final diff; branch and whitespace checks passed, scope passed before each fix-group commit, cleanup/ps passed again with no services. Final staged scope gate repeats before the handoff commit; collect its history/status. Independent review remains conductor-owned; no pending irreversible Lot D decision.
+  - [x] Reviewed F1-F11 and final diff; branch and whitespace checks passed, scope passed before each fix-group and handoff commit, cleanup/ps passed with no services; collected history/status. Independent review remained conductor-owned; no pending irreversible Lot D decision.
 - [x] **Lot 0 — Evidence and scope**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, project overview and relevant plan context.
   - [x] Create this file before the specification; verify branch mechanically and inspect make targets.
