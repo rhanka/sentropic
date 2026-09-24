@@ -1,21 +1,23 @@
 import { test, expect, request } from '@playwright/test';
 import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
-import { withWorkspaceStorageState } from '../helpers/workspace-scope';
-import { waitForMagicLinkToken } from '../helpers/maildev';
+import { createIsolatedMember } from '../helpers/isolated-user';
 
 test.describe('Détail des organisations', () => {
   const FILE_TAG = 'e2e:organizations-detail.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
-  const USER_B_STATE = './.auth/user-b.json';
-  const USER_C_STATE = './.auth/user-victim.json';
   let workspaceAId = '';
   let workspaceName = '';
   let organizationId = '';
   let userAId = '';
   let userBId = '';
   let userCId = '';
+
+  // Lock/presence holders use fresh accounts: the server clears a user's locks and presence when
+  // that user's last SSE connection closes, which parallel specs sharing seeded accounts trigger.
+  const isolatedMember = (label: string) =>
+    createIsolatedMember({ apiBaseUrl: API_BASE_URL, ownerStatePath: USER_A_STATE, workspaceId: workspaceAId, label });
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({
@@ -196,12 +198,9 @@ test.describe('Détail des organisations', () => {
 
   test.describe('Lock/presence', () => {
     test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
-    const userAContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
-    });
-    const userBContext = await browser.newContext({
-      storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-    });
+    const [memberA, memberB] = await Promise.all([isolatedMember('org-lock-a'), isolatedMember('org-lock-b')]);
+    const userAContext = await browser.newContext({ storageState: memberA.storageState });
+    const userBContext = await browser.newContext({ storageState: memberB.storageState });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
 
@@ -299,12 +298,9 @@ test.describe('Détail des organisations', () => {
 
     test('presence: avatars apparaissent et disparaissent au départ', async ({ browser }) => {
       test.setTimeout(60_000);
-      const userAContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
-      });
-      const userBContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-      });
+      const [memberA, memberB] = await Promise.all([isolatedMember('org-presence-a'), isolatedMember('org-presence-b')]);
+      const userAContext = await browser.newContext({ storageState: memberA.storageState });
+      const userBContext = await browser.newContext({ storageState: memberB.storageState });
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
@@ -324,8 +320,8 @@ test.describe('Détail des organisations', () => {
       await expect(pageA.locator('h1')).toBeVisible({ timeout: 2_000 });
       await expect(pageB.locator('h1')).toBeVisible({ timeout: 2_000 });
 
-      const avatarAInB = pageB.locator('[aria-label="Verrou du document"] [title="E2E User A"]');
-      const avatarBInA = pageA.locator('[aria-label="Verrou du document"] [title="E2E User B"]');
+      const avatarAInB = pageB.locator(`[aria-label="Verrou du document"] [title="${memberA.displayName}"]`);
+      const avatarBInA = pageA.locator(`[aria-label="Verrou du document"] [title="${memberB.displayName}"]`);
       await expect
         .poll(async () => {
           const [aInB, bInA] = await Promise.all([avatarAInB.count(), avatarBInA.count()]);
@@ -341,44 +337,9 @@ test.describe('Détail des organisations', () => {
     });
 
     test('lock breaks on leave: User A quitte → lock libéré → User B locke', async ({ browser }) => {
-      // Lock release on disconnect requires the user's last SSE connection.
-      // Other parallel scenarios use the seeded A account, so isolate this owner.
-      const email = `e2e-lock-leave-${crypto.randomUUID()}@example.com`;
-      const origin = process.env.UI_BASE_URL || 'http://localhost:5173';
-      const isolatedApi = await request.newContext({ baseURL: API_BASE_URL });
-      let sessionToken: string;
-      try {
-        const requested = await isolatedApi.post('/api/v1/auth/magic-link/request', { data: { email } });
-        if (!requested.ok()) throw new Error(`Isolated login request failed: ${requested.status()}`);
-        const token = await waitForMagicLinkToken(email, 60_000);
-        const verified = await isolatedApi.post('/api/v1/auth/magic-link/verify', {
-          data: { token }, headers: { origin },
-        });
-        if (!verified.ok()) throw new Error(`Isolated login verification failed: ${verified.status()}`);
-        sessionToken = (await verified.json()).sessionToken;
-        if (!sessionToken) throw new Error('Isolated login did not return a session');
-      } finally {
-        await isolatedApi.dispose();
-      }
-      const ownerApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-      try {
-        const added = await ownerApi.post(`/api/v1/workspaces/${workspaceAId}/members`, {
-          data: { email, role: 'editor' },
-        });
-        if (!added.ok()) throw new Error(`Isolated editor membership failed: ${added.status()}`);
-      } finally {
-        await ownerApi.dispose();
-      }
-      const userAContext = await browser.newContext({
-        storageState: {
-          cookies: [{ name: 'session', value: sessionToken, domain: new URL(origin).hostname,
-            path: '/', httpOnly: true, secure: false, sameSite: 'Lax', expires: -1 }],
-          origins: [{ origin, localStorage: [{ name: 'workspaceScopeId', value: workspaceAId }] }],
-        },
-      });
-      const userBContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-      });
+      const [memberA, memberB] = await Promise.all([isolatedMember('org-leave-a'), isolatedMember('org-leave-b')]);
+      const userAContext = await browser.newContext({ storageState: memberA.storageState });
+      const userBContext = await browser.newContext({ storageState: memberB.storageState });
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
       const getOrgNameField = (page: typeof pageA) =>
@@ -400,10 +361,13 @@ test.describe('Détail des organisations', () => {
     });
 
     test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
+      const [memberA, memberB, memberC] = await Promise.all([
+        isolatedMember('org-3users-a'),
+        isolatedMember('org-3users-b'),
+        isolatedMember('org-3users-c'),
+      ]);
       // User A opens the page to maintain SSE connection
-      const userAContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
-      });
+      const userAContext = await browser.newContext({ storageState: memberA.storageState });
       const pageA = await userAContext.newPage();
       await pageA.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageA.waitForLoadState('domcontentloaded');
@@ -417,9 +381,7 @@ test.describe('Détail des organisations', () => {
       // Wait for User A to acquire the lock (UI-driven)
       await waitForNoLocker(pageA);
 
-      const userBContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
-      });
+      const userBContext = await browser.newContext({ storageState: memberB.storageState });
       const pageB = await userBContext.newPage();
       await pageB.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageB.waitForLoadState('domcontentloaded');
@@ -440,9 +402,7 @@ test.describe('Détail des organisations', () => {
         }, { timeout: 15_000 })
         .toBe(1);
 
-      const userCContext = await browser.newContext({
-        storageState: await withWorkspaceStorageState(USER_C_STATE, workspaceAId),
-      });
+      const userCContext = await browser.newContext({ storageState: memberC.storageState });
       const pageC = await userCContext.newPage();
       await pageC.goto(`/organizations/${encodeURIComponent(organizationId)}`);
       await pageC.waitForLoadState('domcontentloaded');
