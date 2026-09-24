@@ -51,6 +51,39 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
 });
 
 describe('route JSON flow', () => {
+  it('settles an empty plan exactly once with zero usage', async () => {
+    const settleRoute = vi.fn();
+    await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([]), metering: { settleRoute } }, request))
+      .rejects.toMatchObject({ kind: 'no-eligible-account' });
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      outcome: 'failed', attempts: [], usage: { inputTokens: 0, outputTokens: 0, estimated: false },
+    }));
+  });
+  it.each([undefined, { inputTokens: 0, outputTokens: 0 }])('preserves reported zero and estimates only missing usage: %j', async usage => {
+    const source = { generate: vi.fn(async () => ({
+      id: 'r', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'response' }, text: 'response', toolCalls: [],
+      finishReason: 'stop' as const, usage,
+    })), complete: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn();
+    await runRouteJsonFlow({ config, routePlanner: routePlanner([source]), metering: { settleRoute } }, request);
+    const settled = settleRoute.mock.calls[0]![0];
+    expect(settled.usage.estimated).toBe(!usage);
+    expect(settled.usage.inputTokens).toBe(usage ? 0 : expect.any(Number));
+    if (!usage) expect(settled.usage.inputTokens).toBeGreaterThan(0);
+  });
+  it('never redispatches or completes twice after a settlement rejection', async () => {
+    const generate = vi.fn(async () => ({ id: 'r', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop' as const }));
+    const source = { generate, complete: vi.fn(), recordOutcome: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn(async () => { throw Object.assign(Error('ledger'), { status: 502 }); });
+    await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([source, source]), metering: { settleRoute } }, request))
+      .rejects.toThrow('ledger');
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(source.complete).toHaveBeenCalledTimes(1);
+    expect(source.recordOutcome).not.toHaveBeenCalled();
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+  });
   it('uses the injected opaque adapter without calling native ports', async () => {
     const source = { attemptRef: 'exact', generate: vi.fn(async () => ({
       id: 'r', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
