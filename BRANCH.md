@@ -20,7 +20,10 @@ Fix the three codex-proven gateway defects (env:send:6e98bd1e): (D1) Codex trans
   - `packages/llm-mesh/src/route-selection.ts` (export-only: resolver reuse for D3)
   - `packages/llm-gateway/src/route-stream-flow.ts`
   - `packages/llm-gateway/src/route-json-flow.ts`
+  - `packages/llm-gateway/src/route-flow-core.ts` (shared terminal-class helper + pre-content invalid classification, BR77 §2)
   - `packages/llm-gateway/src/router/errors.ts`
+  - `packages/llm-gateway/tests/errors.test.ts` (mapper unit shapes for new terminal classes)
+  - `packages/llm-gateway/tests/contract-snapshot.test.ts` (freeze golden for new §3b rows, same-PR edit)
   - `packages/llm-mesh/tests/transport/codex-runtime-wire.test.ts`
   - `packages/llm-mesh/tests/route-planner*.test.ts`
   - `packages/llm-gateway/tests/route-*.test.ts`

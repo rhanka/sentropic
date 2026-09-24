@@ -137,13 +137,18 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       // A diagnostic is only pertinent when it belongs to the requested
       // route's transports. Surfacing listDiagnostics[0] unfiltered once
       // prescribed a `muse reauthenticate` for an explicit codex request.
+      // The model-derived resolution ignores `explicit`, so an explicit
+      // transport restriction wins over it here.
+      const explicitTransport = input.explicit?.transportProviderId;
       const resolution = resolveRequestedTargets(input);
-      const transports = new Set(
-        resolution.kind === 'known'
-          ? resolution.targets
-            .map((target) => target.transportProviderId)
-            .filter((transport): transport is string => typeof transport === 'string')
-          : [],
+      const transports = new Set<string>(
+        explicitTransport
+          ? [explicitTransport]
+          : resolution.kind === 'known'
+            ? resolution.targets
+              .map((target) => target.transportProviderId)
+              .filter((transport): transport is string => typeof transport === 'string')
+            : [],
       );
       const diagnostics = await this.options.directory.listDiagnostics?.(subject) ?? [];
       const diagnostic = diagnostics.find((entry) => transports.has(entry.transportProviderId));

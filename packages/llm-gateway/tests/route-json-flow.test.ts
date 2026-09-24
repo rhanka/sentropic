@@ -177,10 +177,35 @@ describe('route JSON flow', () => {
       async markCommitted() {}, async complete() {}, async releaseCancelled() {},
     });
 
-    await expect(runRouteJsonFlow({
+    // A terminal upstream 401 keeps its auth class (401 authentication_error),
+    // never a pooled 503 — and stays non-retryable across candidates.
+    const error = await runRouteJsonFlow({
       config, routePlanner: routePlanner([failed(401), failed(200)]),
       metering: { settleRoute() {} },
-    }, request)).rejects.toThrow(/all planned routes failed/);
+    }, request).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { kind?: string }).kind).toBe('upstream-auth-failed');
     expect(secondCalls).toBe(0);
+  });
+
+  it('surfaces a terminal upstream rate limit with its Retry-After', async () => {
+    const limited: PreparedRouteAttempt = {
+      attemptRef: 'attempt-429',
+      async generate() { throw { status: 429, retryAfterMs: 9_000 }; },
+      async stream() { throw new Error('unused'); }, async recordOutcome() {},
+      async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+    };
+
+    const error = await runRouteJsonFlow({
+      config, routePlanner: routePlanner([limited]),
+      metering: { settleRoute() {} },
+    }, request).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { kind?: string }).kind).toBe('upstream-rate-limited');
+    expect((error as { retryAfterSeconds?: number }).retryAfterSeconds).toBe(9);
   });
 });

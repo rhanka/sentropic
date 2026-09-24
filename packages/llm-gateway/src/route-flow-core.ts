@@ -4,7 +4,7 @@ import type {
 } from '@sentropic/llm-mesh';
 import type { GatewayConfig } from './config.js';
 import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonical-ingress.js';
-import type { GatewayFlowRequest, SettleUsage } from './flow.js';
+import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
 
@@ -112,6 +112,13 @@ export const classifyRouteError = (
     return { reason: 'auth-failed', retryable: false, healthScope: 'account' };
   }
   if (status === 400) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
+  // A pre-content provider failure event (e.g. Codex `response.failed`) has
+  // no HTTP status: its code alone must still classify an invalid refusal
+  // as invalid-request, never as provider-5xx. `invalid_api_key` is
+  // deliberately excluded — without a 401 status it stays unclassified here.
+  if (code.includes('invalid_request') || code === 'invalid-request' || code === 'bad_request') {
+    return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
+  }
   if (status === 404 || code.includes('unsupported_model')) {
     return { reason: 'unsupported-model', retryable: false, healthScope: 'provider-model' };
   }
@@ -122,6 +129,39 @@ export const classifyRouteError = (
     return { reason: 'network-unavailable', retryable: true, healthScope: 'transport' };
   }
   return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
+};
+
+/**
+ * Map a terminal (no more candidates) route classification to the public
+ * GatewayError. A terminal upstream invalid refusal is the caller's request,
+ * not pool exhaustion: it surfaces as bad-request (400). Terminal upstream
+ * auth/quota refusals keep their class (401/429 + Retry-After) instead of
+ * collapsing into pooled-account-unavailable (503). Only genuine
+ * unavailability falls back to the pooled 503.
+ */
+export const terminalGatewayError = (
+  classification: RouteFailureClassification,
+  target: ResolvedTarget,
+  fallbackMessage: string,
+): GatewayError => {
+  if (classification.reason === 'invalid-request') {
+    return new GatewayError(
+      'bad-request', 'upstream refused the request as invalid', undefined, target,
+    );
+  }
+  if (classification.reason === 'auth-failed') {
+    return new GatewayError(
+      'upstream-auth-failed', 'upstream account authentication failed', undefined, target,
+    );
+  }
+  if (classification.reason === 'rate-limited') {
+    return new GatewayError(
+      'upstream-rate-limited', 'upstream rate limit exceeded',
+      classification.retryAfterMs !== undefined ? classification.retryAfterMs / 1000 : undefined,
+      target,
+    );
+  }
+  return new GatewayError('pooled-account-unavailable', fallbackMessage, undefined, target);
 };
 
 export const routeUsage = (usage?: {

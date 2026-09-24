@@ -5,7 +5,9 @@
  *
  * Mapping (spec §3b):
  *   401  caller-auth-fail                -> provider auth-error
+ *   401  upstream-auth-failed (BR77)     -> provider auth-error (NOT pooled 503)
  *   429  over-budget (BR-47)             -> provider rate-limit + Retry-After
+ *   429  upstream-rate-limited (BR77)    -> provider rate-limit + Retry-After
  *   429  no-eligible-account             -> provider overloaded + Retry-After
  *   503  pooled-account-unavailable      -> provider overloaded (NOT pool detail)
  *   400  bad-request / unsupported-model -> provider invalid-request
@@ -32,6 +34,8 @@ export type GatewayFailureKind =
   | 'over-budget'
   | 'no-eligible-account'
   | 'pooled-account-unavailable'
+  | 'upstream-auth-failed'
+  | 'upstream-rate-limited'
   | 'bad-request'
   | 'cross-user-disabled';
 
@@ -113,6 +117,16 @@ export const mapGatewayError = (
       return anthropic
         ? anthropicError(503, 'overloaded_error', 'service temporarily unavailable', retry)
         : openAiError(503, 'rate_limit_error', 'service temporarily unavailable', 'overloaded', retry);
+
+    case 'upstream-auth-failed':
+      return anthropic
+        ? anthropicError(401, 'authentication_error', 'authentication failed')
+        : openAiError(401, 'authentication_error', 'authentication failed', 'invalid_api_key');
+
+    case 'upstream-rate-limited':
+      return anthropic
+        ? anthropicError(429, 'rate_limit_error', 'rate limit exceeded', retry)
+        : openAiError(429, 'rate_limit_error', 'rate limit exceeded', 'rate_limit_exceeded', retry);
 
     case 'cross-user-disabled':
       // Surfaced as a plain bad-request — never reveal the kill-switch internal.
