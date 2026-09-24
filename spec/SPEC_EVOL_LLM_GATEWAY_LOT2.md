@@ -12,7 +12,9 @@ Extends:
 ## 1. Measured baseline and boundaries
 
 The gateway is `0.17.1`; mesh is `0.21.2` (manifests and npm `latest`, checked 2026-09-23).
-The gateway dependency floor is currently mesh `^0.21.0`; auth-hono is present at `0.15.2`.
+The gateway dependency floor is currently mesh `^0.21.0`. Local auth-hono is `0.15.2`, but npm
+latest is **0.15.0**; `^0.15.2` is not published. Service mode selects published **mcp-auth 0.2.0**
+via `/hono`; session mode alone uses published auth-hono 0.15.0 via `/middleware` (checked 2026-09-24).
 The three `src/ports/{caller-auth,cost-context,dispatch}.ts` comments still describe v0 seams.
 The actual baseline already contains `PersonalPassthroughCallerAuth`, `PassthroughDispatch`,
 `runRouteJsonFlow` and `runRouteStreamFlow`; this is completion and composition, not a new gateway.
@@ -63,39 +65,55 @@ shared verifier apply RFC URL normalization. Do not verify a rewritten internal 
 Missing context fails closed at runtime for untyped callers. Custom verifiers may ignore unused
 context but must not claim DPoP support without validating method, URL, proof and token binding.
 
-### D2 — Concrete auth-hono bridge; no new crypto implementation
+### D2 — Optional auth bridges; canonical service middleware, no new crypto
 
-Add `src/caller-auth/auth-hono.ts`, exporting `AuthHonoVerifyToken implements VerifyToken`.
-It imports the existing public `createRequireServiceAuth` and `createRequireAuth` factories.
-The former is an auth-hono compatibility wrapper over `@sentropic/oauth-verify`; the canonical
-resource-server middleware now lives in mcp-auth. Do not deep-import private verification helpers.
+Add `src/caller-auth/service-auth.ts`, exporting `ServiceAuthVerifyToken implements VerifyToken`
+only from `@sentropic/llm-gateway/auth`, using `createRequireServiceAuth` from `@sentropic/mcp-auth/hono`.
+Add `src/caller-auth/auth-hono.ts`, exporting session-only `AuthHonoVerifyToken implements VerifyToken`
+only from `@sentropic/llm-gateway/auth-hono`, using `createRequireAuth` from `@sentropic/auth-hono/middleware`.
+Do not build on auth-hono's service compat wrapper scheduled for removal in 1.0 or private helpers.
+Declare mcp-auth `^0.2.0` and auth-hono `^0.15.0` as OPTIONAL peers (`peerDependenciesMeta.optional`).
+Neither runtime code nor declarations at the gateway root/ports barrels may import or re-export these
+bridges or optional peer types. Each subpath's declarations reference only its own auth peer. Load its
+middleware with a cached async `import()` on verification; a missing peer fails closed without trying
+the other mode. Root import/typecheck must work with neither auth peer installed, matching
+`spec/cluster-mesh-lazy-surface`'s optional peers, async loaders and provider-free root declarations.
 Select one configured credential family per bridge instance; never try session auth after failed
 service auth or guess a JWT family from unverified claims. Local h2a session verifiers can continue
 to implement `CallerAuthPort` explicitly; opaque local bearers are not OAuth access tokens.
 
 ```ts
 import type {
-  CreateRequireServiceAuthOptions, CreateAuthMiddlewareOptions, ServiceAuthPorts,
-} from '@sentropic/auth-hono';
-export type AuthHonoCallerIdentity =
-  | { readonly kind: 'service'; readonly issuer: string; readonly resource: string;
-      readonly clientId: string; readonly scopes: readonly string[]; readonly jkt: string | null }
-  | { readonly kind: 'session'; readonly userId: string; readonly sessionId: string };
-export type AuthHonoVerifyTokenOptions = (
-  | { readonly kind: 'service'; readonly auth: CreateRequireServiceAuthOptions & {
+  CreateRequireServiceAuthOptions, ServiceAuthPorts,
+} from '@sentropic/mcp-auth/hono'; // /auth declarations only
+export type ServiceAuthCallerIdentity = {
+  readonly kind: 'service'; readonly issuer: string; readonly resource: string;
+  readonly clientId: string; readonly scopes: readonly string[]; readonly jkt: string | null;
+};
+export interface ServiceAuthVerifyTokenOptions {
+  readonly auth: CreateRequireServiceAuthOptions & {
       readonly ports: ServiceAuthPorts & {
-        readonly dpopReplay: NonNullable<ServiceAuthPorts['dpopReplay']> } } }
-  | { readonly kind: 'session'; readonly auth: CreateAuthMiddlewareOptions }
-) & {
+        readonly dpopReplay: NonNullable<ServiceAuthPorts['dpopReplay']> } };
+  readonly resolvePrincipal: (identity: ServiceAuthCallerIdentity) =>
+    Promise<VerifiedPrincipal | undefined> | VerifiedPrincipal | undefined;
+}
+// Separate /auth-hono declarations; never imported by /auth or the gateway root:
+import type { CreateAuthMiddlewareOptions } from '@sentropic/auth-hono/middleware';
+export type AuthHonoCallerIdentity = {
+  readonly kind: 'session'; readonly userId: string; readonly sessionId: string;
+};
+export interface AuthHonoVerifyTokenOptions {
+  readonly auth: CreateAuthMiddlewareOptions;
   readonly resolvePrincipal: (identity: AuthHonoCallerIdentity) =>
     Promise<VerifiedPrincipal | undefined> | VerifiedPrincipal | undefined;
-};
+}
 ```
 
 Construction validates service issuer, audience/resource and a nonempty required-scope set;
 the deployment supplies registered values, not values guessed from tokens. The service replay
 store is mandatory and shared across replicas; an unavailable store never disables replay checks.
-The gateway dependency becomes `@sentropic/auth-hono: ^0.15.2`; auth-hono itself needs no changes.
+Service middleware needs only the hono/jose peers plus oauth-verify; auth-hono itself needs no changes.
+Session dependencies are confined to the session subpath; install/qualify that peer's declared peers.
 
 For each verification, construct a bodyless in-process Hono request at the exact context URL and
 method, run the configured middleware, then capture only its verified context in the continuation.
@@ -105,7 +123,7 @@ produce a principal. Do not forward its internal JSON error envelope to the prov
 
 Service mode reads `serviceClient` (honoring `contextKey`), projects issuer/resource/clientId/scopes/jkt,
 then invokes `resolvePrincipal`. It verifies signature, issuer, audience, expiry and required scopes;
-bound tokens also require DPoP htm/htu/ath/iat/jti and matching cnf.jkt. Auth-hono currently permits
+bound tokens also require DPoP htm/htu/ath/iat/jti and matching cnf.jkt. The service middleware permits
 the DPoP scheme with an unbound token: the bridge additionally requires a non-null verified jkt for
 that scheme. A replay failure or key mismatch returns failure before any route/account operation.
 Service context exposes clientId, not full subject/tenant/OBO claims. Map an allowlisted
@@ -155,8 +173,9 @@ The canonical owner must match enrollment's ownerScopeRef exactly; never synthes
 format during deployment. Existing optional owner fields remain optional for custom consumers;
 the production bridge plus this resolver always supplies them, avoiding the tenant:principal fallback.
 
-Production composition is `PersonalPassthroughCallerAuth({ verifyToken: new AuthHonoVerifyToken(...),
-costContextResolver: new VerifiedCostContextResolver() })`. Extract the current inline projection
+Production composition is `PersonalPassthroughCallerAuth({ verifyToken: new ServiceAuthVerifyToken(...),
+costContextResolver: new VerifiedCostContextResolver() })`, with the verifier imported from `/auth`;
+session deployments explicitly select `AuthHonoVerifyToken` from `/auth-hono`. Extract the inline projection
 into a private helper for callers that omit the new option: existing `correlation`, `correlationHeader`
 and trusted custom-verifier behavior remain. That helper is not a fallback after resolver denial.
 With an explicit resolver, it alone controls correlation; reject configuration also supplying the
@@ -268,11 +287,13 @@ This table is exhaustive for existing public declarations changed by Lot 2. No e
 | `RouteFlowDeps` | Add optional `dispatch?: MeshDispatchPort` | Additive; existing direct routed callers use the default adapter |
 | `CreateGatewayRouterOptions` | Add optional `routeDispatch?: MeshDispatchPort` | Additive; createGatewayRouter signature and Hono return type unchanged |
 
-New root exports, exactly: `CallerAuthRequestContext`, `AuthHonoCallerIdentity`,
-`AuthHonoVerifyTokenOptions`, `AuthHonoVerifyToken` (constructor takes those options; verify implements
-the D1 signature and returns Promise<VerifiedPrincipal | undefined>), `CostContextResolver`,
+New root exports, exactly: `CallerAuthRequestContext`, `CostContextResolver`,
 `VerifiedCostContextResolver` (no-argument constructor), `MeshDispatchRequest`, `MeshDispatchPort`,
-`MeshDispatch` (no-argument constructor). Export through the existing root/ports barrels; no subpath.
+`MeshDispatch` (no-argument constructor). Keep auth implementation/dependency types out of these barrels.
+New `/auth` exports, exactly: `ServiceAuthCallerIdentity`, `ServiceAuthVerifyTokenOptions`,
+`ServiceAuthVerifyToken`. New `/auth-hono` exports, exactly: `AuthHonoCallerIdentity`,
+`AuthHonoVerifyTokenOptions`, `AuthHonoVerifyToken`. Each verifier constructor takes its own options;
+verify implements D1 and returns `Promise<VerifiedPrincipal | undefined>`. Add both subpath export maps.
 
 Unchanged field shapes/signatures: `CostContext`, `VerifiedPrincipal`, `CallerAuthScheme`,
 `CorrelationSource`, `GatewayConfig`, `AuthResolver`, pool/authz types, all native dispatch types,
@@ -287,9 +308,12 @@ the production resolver's correlation policy are runtime changes even where Type
 Publish the implementation as gateway **0.18.0**, the next 0.x minor after 0.17.1. The explicit
 pre-1.0 source breaks above must not ship as 0.17.2. Keep mesh source unchanged at **0.21.2** and
 raise the gateway's mesh floor to **^0.21.2**, the baseline being qualified. h2a's **^0.21.0** range
-admits 0.21.2, but its lockfile must resolve at least that floor (section 3). Add auth-hono **^0.15.2**
-and the corresponding lockfile resolution; consume its public exports and existing peer requirements.
-Do not bump auth-hono just to use it. This documentation branch changes no package version.
+admits 0.21.2, but its lockfile must resolve at least that floor (section 3). Add OPTIONAL peers
+**mcp-auth ^0.2.0** (service) and **auth-hono ^0.15.0** (session), with qualified lockfile resolutions.
+Use published public exports; do not require unpublished auth-hono 0.15.2 or bump it just to use it.
+The gateway release waits until **every declared auth dependency/peer floor is visible on npm**,
+including transitive oauth-verify; optional status does not waive this publish-order gate.
+This documentation branch changes no package version.
 
 If implementation proves a mesh source fix necessary, version **0.21.3** for an internal compatible
 fix or **0.22.0** for new public functionality/authorized pre-1.0 type changes; update the gateway
@@ -334,7 +358,8 @@ Migration sequence for the consumer owner:
    only if new sites need context. Preserve stable principal/enrollment owner mapping.
    Never replace an opaque `gw-*` token verifier by an
    OAuth verifier without also changing its issuer. Existing local token lifecycle stays host-owned.
-4. For auth-hono deployments, configure issuer/resource/scopes/replay store or session ports, trusted
+4. For `/auth` service or `/auth-hono` session deployments, install the selected optional peer and
+   configure issuer/resource/scopes/replay store or session ports, trusted
    principal mapping and VerifiedCostContextResolver. Supply stable affinity separately via routeInput.
    Wire routePlanner and routeMetering together, plus a real readiness probe. The routed path does
    not invoke native stubs even if config was assembled from stubGatewayConfig.
@@ -355,12 +380,12 @@ several atomic commits under approximately 150 lines; none is separately publish
 |---|---|---|
 | I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed Makefile exception only after owner approval | Confirm auth-hono public exports and peers load in the gateway's isolated Docker toolset. Existing Make recipes only install mesh/Hono; add dependency build/link/install wiring through an approved exception before I1. No compose/workflow changes required by this design. |
 | I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Both wires and models receive the actual method/URL/id; header-only direct calls and invalid result variants fail typechecking. |
-| I2 — Concrete verification and cost | New `src/caller-auth/auth-hono.ts`, new `src/cost-context.ts`; update `src/ports/cost-context.ts`, `src/personal-passthrough/caller-auth.ts`, `src/index.ts`, `src/ports/index.ts` | New `tests/auth-hono.test.ts`, `tests/cost-context.test.ts`, `tests/fixtures/auth-hono.ts`. Real in-process auth-hono with deterministic clock/JWKS/session stores, not a fake success verifier; validate the matrix below. Update `tests/caller-ownership.test.ts` for body/header forgery and stable enrolled-owner matching. |
+| I2 — Concrete verification and cost | New `src/caller-auth/service-auth.ts`, `src/caller-auth/auth-hono.ts`, `src/cost-context.ts`; update `src/ports/cost-context.ts`, `src/personal-passthrough/caller-auth.ts`, `src/index.ts`, `src/ports/index.ts`, `package.json` subpath exports | New `tests/service-auth.test.ts`, `tests/auth-hono.test.ts`, `tests/auth-subpaths.test.ts`, `tests/cost-context.test.ts`, `tests/fixtures/auth-hono.ts`. Real mcp-auth service and auth-hono session middleware with deterministic clock/JWKS/stores; validate the matrix below. Root runtime/declarations load without auth peers; service loads without auth-hono; session loads without mcp-auth; missing selected peer fails closed. Update `tests/caller-ownership.test.ts` for forgery and enrolled-owner matching. |
 | I3 — Opaque mesh adapter | New `src/mesh-dispatch.ts`; update `src/ports/dispatch.ts`, `src/index.ts`, `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`, `src/router/index.ts` | New `tests/mesh-dispatch.test.ts`; update `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/router.test.ts`. Exact attempt, signal/tools preservation, no auth injection, default adapter, no native-port calls, cancellation and one terminal outcome. |
 | I4 — Lifecycle and wire integration | Same routed flow/router files; only directly required fixes in `src/canonical-ingress.ts`, `src/canonical-egress.ts`, `src/canonical-stream.ts` | Update `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/contract-snapshot.test.ts`; new `tests/lot2-router-integration.test.ts`. Cross-wire fixtures, pre/post-commit failure, empty plan/stream, iterator cleanup, settlement rejection without redispatch, missing usage and redaction. |
 | I5 — Release and consumer qualification | `package.json` at 0.18.0, root lockfile, `README.md`, final spec/branch evidence; h2a owner edits its own repository | All gateway tests/typecheck/lint/pack; auth-hono reference tests; mesh regressions below; exact-candidate h2a compilation/UAT for both named entrypoints. Release only after independent review and consumer evidence. |
 
-I2 verification matrix in `tests/auth-hono.test.ts`: Bearer and x-api-key, valid bound DPoP,
+I2 verification matrix in `tests/service-auth.test.ts` and `tests/auth-hono.test.ts`: Bearer and x-api-key, valid bound DPoP,
 wrong signature/issuer/audience/expiry/scope, wrong htm/htu/ath/jkt, stale/future proof iat, missing
 proof, reused jti, unbound DPoP scheme, replay-store outage, authorization/key ambiguity, and session
 revocation/expiry/disabled account. Check concurrent requests cannot exchange verified identities.
@@ -419,7 +444,7 @@ Make command with ENV last, then run make down on that same isolated project.
 
 | ID | Reversibility / owner | Decision or gate |
 |---|---|---|
-| O1 | Reversible / implementation conductor | Use auth-hono's published wrapper now. Its future removal at auth-hono 1.0 requires a deliberate adapter migration, not a private import today. |
+| O1 | Reversible / implementation conductor | Use published mcp-auth 0.2.0 `/hono` for service mode via gateway `/auth`; auth-hono 0.15.0 `/middleware` only for session mode via `/auth-hono`. Optional peers and isolated declarations avoid the retiring compat wrapper and eager auth-hono root dependencies. |
 | O2 | Reversible / deployment owner | Supply actual issuer, audience, scopes, public-URL reconstruction and shared replay-store configuration at composition. Missing configuration refuses startup; do not weaken verification to launch. |
 | O3 | Reversible / deployment owner | Map service client or session user through trusted directory state; keep per-user OBO out of this lot because current service context cannot express it. |
 | O4 | Reversible / gateway owner | Keep native contracts and add the opaque adapter. Reconsider removing native exports only in a separate migration brief; no implicit dual dispatch. |
