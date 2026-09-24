@@ -88,7 +88,7 @@ describe('route stream flow', () => {
   it('sanitizes a mid-stream error and emits no success terminator', async () => {
     const source = attempt(async function* () {
       yield { type: 'content_delta', data: { delta: 'hello' } };
-      yield { type: 'error', data: { providerId: 'openai', message: 'SECRET-TOKEN', code: 'SECRET-CODE' } };
+      yield { type: 'error', data: { providerId: 'openai', message: 'SECRET-TOKEN', code: 'SECRET-CODE', retryable: false } };
     }, []);
     const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute() {} } }, request);
     const wire = await collect(result.stream);
