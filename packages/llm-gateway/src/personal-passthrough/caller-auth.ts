@@ -16,7 +16,7 @@
 
 import type { CallerAuthPort, CallerAuthResult, CallerAuthRequestContext } from '../ports/caller-auth.js';
 import { validateAuthContext } from '../internal/caller-auth.js';
-import type { CostContext } from '../ports/cost-context.js';
+import type { CostContext, CostContextResolver } from '../ports/cost-context.js';
 
 /**
  * The verified SENTROPIC principal. In personal-passthrough this principal is
@@ -97,6 +97,7 @@ const defaultCorrelation: CorrelationSource = {
 };
 
 export interface PersonalPassthroughCallerAuthOptions {
+  readonly costContextResolver?: CostContextResolver;
   readonly verifyToken: VerifyToken;
   readonly correlation?: CorrelationSource;
   /** Header carrying a caller-supplied correlation id (e.g. `x-correlation-id`). */
@@ -111,8 +112,13 @@ export class PersonalPassthroughCallerAuth implements CallerAuthPort {
   private readonly verifyToken: VerifyToken;
   private readonly correlation: CorrelationSource;
   private readonly correlationHeader: string;
+  private readonly costContextResolver?: CostContextResolver;
 
   constructor(options: PersonalPassthroughCallerAuthOptions) {
+    if (options.costContextResolver && (options.correlation !== undefined || options.correlationHeader !== undefined)) {
+      throw new Error('costContextResolver cannot be combined with correlation options');
+    }
+    this.costContextResolver = options.costContextResolver;
     this.verifyToken = options.verifyToken;
     this.correlation = options.correlation ?? defaultCorrelation;
     this.correlationHeader = options.correlationHeader ?? 'x-correlation-id';
@@ -133,6 +139,14 @@ export class PersonalPassthroughCallerAuth implements CallerAuthPort {
       return { ok: false, reason: 'token verification failed' };
     }
 
+    const cost = this.costContextResolver
+      ? await this.costContextResolver.resolve(principal, context)
+      : this.projectLegacyCost(principal, headers);
+    context.signal?.throwIfAborted();
+    return cost ? { ok: true, cost } : { ok: false, reason: 'cost context denied' };
+  }
+
+  private projectLegacyCost(principal: VerifiedPrincipal, headers: Readonly<Record<string, string>>): CostContext {
     const correlationId =
       headers[this.correlationHeader]?.trim() || this.correlation.next();
 
@@ -147,6 +161,6 @@ export class PersonalPassthroughCallerAuth implements CallerAuthPort {
       callSite: 'llm-gateway',
     };
 
-    return { ok: true, cost };
+    return cost;
   }
 }
