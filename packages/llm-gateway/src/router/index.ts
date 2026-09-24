@@ -28,7 +28,7 @@ import {
   type RouteFlowDeps,
   type RouteMeteringSink,
 } from '../route-flow-core.js';
-import type { GatewayWire, ProviderResponseHeaders } from '../ports/dispatch.js';
+import type { GatewayWire, ProviderResponseHeaders, RouteAttemptDispatchPort } from '../ports/dispatch.js';
 import {
   mapGatewayError,
   notImplemented,
@@ -46,6 +46,7 @@ export interface ReadinessProbe {
 }
 
 export interface CreateGatewayRouterOptions {
+  readonly routeDispatch?: RouteAttemptDispatchPort;
   /** Trusted ingress reconstruction, including external scheme and rewritten path. */
   readonly publicUrl?: (req: Request) => string;
   readonly config: GatewayConfig;
@@ -167,6 +168,9 @@ export const createGatewayRouter = (
   options: CreateGatewayRouterOptions,
 ): Hono => {
   const { config, readiness, resolveTarget, metering } = options;
+  if (options.routeDispatch && (!options.routePlanner || !options.routeMetering)) {
+    throw new Error('routeDispatch requires routePlanner and routeMetering');
+  }
   const requestId = options.requestId ?? defaultRequestId;
   const app = new Hono();
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
@@ -203,6 +207,7 @@ export const createGatewayRouter = (
   const routeFlowDeps: RouteFlowDeps | undefined = options.routePlanner && options.routeMetering
     ? {
         config, routePlanner: options.routePlanner, metering: options.routeMetering,
+        ...(options.routeDispatch ? { dispatch: options.routeDispatch } : {}),
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
       }
     : undefined;

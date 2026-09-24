@@ -6,6 +6,8 @@ import {
   type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { GatewayError } from './router/errors.js';
+import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
+const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown): SettleUsage => {
   if (!error || typeof error !== 'object') return routeUsage();
@@ -41,10 +43,10 @@ export const runRouteJsonFlow = async (
       attempt = await deps.routePlanner.prepareAttempt(
         prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
       );
-      const response = await attempt.generate({
+      const response = await (deps.dispatch ?? defaultDispatch).generate({ attempt, request: {
         ...prepared.canonical.request,
         ...(request.signal ? { signal: request.signal } : {}),
-      });
+      } });
       const usage = routeUsage(response.usage);
       await attempt.complete(attemptUsage(usage));
       attempts.push({

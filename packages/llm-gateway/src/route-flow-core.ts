@@ -8,6 +8,7 @@ import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js'
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
 import { authenticateCaller } from './internal/caller-auth.js';
+import type { RouteAttemptDispatchPort } from './ports/dispatch.js';
 
 export interface RouteAttemptSettlement {
   readonly candidateRef: string;
@@ -32,6 +33,7 @@ export interface RouteMeteringSink {
 }
 
 export interface RouteFlowDeps {
+  readonly dispatch?: RouteAttemptDispatchPort;
   readonly config: GatewayConfig;
   readonly routePlanner: RoutePlanner;
   readonly metering: RouteMeteringSink;
