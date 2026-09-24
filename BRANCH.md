@@ -87,6 +87,7 @@
   - [ ] Implement separate caller-auth/service-auth and auth-hono subpaths, cost-context resolver, ports/barrels and exports.
   - [ ] Add service-auth, auth-hono, auth-subpaths, cost-context tests and fixtures/auth-hono; update caller-ownership tests; cover the full section 4 authentication matrix and isolated optional peers.
 - [ ] **I3 — Opaque mesh adapter**
+  - [x] Correct adapter fixture metadata to the published mesh correlationId field after typecheck rejected an invented field; no mesh contract change.
   - [x] Implement route-attempt-dispatch, dispatch port, root export, routed flow/router integration with no native fallback; reject own auth fields and incomplete routeDispatch configuration.
   - [x] Add route-attempt-dispatch tests; update route-json-flow and route-stream-flow for injected exact-attempt dispatch and single terminal outcome; constructor test covers incomplete router wiring. Existing routed-router tests retain native-stub exclusion.
 - [ ] **I4 — Lifecycle and wire integration**
