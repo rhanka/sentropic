@@ -51,12 +51,12 @@
   - [x] Aggregate invocation exit codes and print a final group summary.
   - [x] Remove E2E continue-on-error and preserve the five matrix jobs.
   - [x] Run `test-chat-ui-dom`; include `07_comment_assistant` and all `09-*`.
-  - [ ] Validate node and DOM suites using make and isolated unit ports.
+  - [x] Validate node and DOM suites using make and isolated unit ports: 1015 node tests and 204 DOM tests passed.
 - [ ] **Lot 2 — Hidden failure investigation**
   - [x] `e2e/tests/02-auth-oauth-revoke.spec.ts:18`: stored covering grant bypasses consent correctly; fixture now requests `prompt=consent`, preserving every assertion. CI retest pending.
   - [ ] `e2e/tests/01-organizations-detail.spec.ts:279`: inspect presence predicate and lock retry.
   - [ ] `e2e/tests/08-document-summary-formats.spec.ts:28`: inspect PDF failed status.
-  - [ ] `e2e/tests/05-i18n.spec.ts:184`: inspect missing matrix empty state.
+  - [x] `e2e/tests/05-i18n.spec.ts:184`: stale “use cases” warning strings conflict with shipped “initiatives” translations; corrected exact text, registered for independent review. CI retest pending.
   - [ ] Apply only evidenced product/fixture fixes and register assertion changes.
 - [ ] **Lot 3 — Docs consolidation**
   - [ ] Record root causes, test changes, and unresolved risks.
