@@ -20,6 +20,7 @@ Re-exports the TypeScript surface; Svelte components are package-exported separa
 - `@sentropic/chat-ui/components/ChatPanel.svelte` — package-owned session/timeline shell.
 - `@sentropic/chat-ui/components/ChatWidget.svelte` — package-owned header, tabs, content gate, routing and pager.
 - `@sentropic/chat-ui/components/ChatWidgetPager.svelte` — conditional agents list with a persistently mounted conversation.
+- `@sentropic/chat-ui/components/StreamMessage.svelte` — package-owned stream renderer.
 
 ### 0.34.0 shell migration (breaking change in 0.x)
 
@@ -32,7 +33,6 @@ The conversation remains mounted across tab and list transitions; closing the
 gate may unmount it. Pass agents data/callbacks through `agentsList`, and host
 view state through `agentsView` and `canAgentsListBeDefaultView`.
 The separate ChatPanel `renderShell` contract is unchanged.
-- `@sentropic/chat-ui/components/StreamMessage.svelte` — package-owned stream renderer.
 
 ## Non-Goals
 
