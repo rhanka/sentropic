@@ -1,5 +1,7 @@
 # Test change register — L-C-shell
 
+- ADD required 3 `packages/chat-ui/tests/chat-widget-production-gate.dom.spec.ts`: execute production loading/auth/onboarding precedence, settings mousedown/click and stopPropagation, create/defer exact zero-argument calls, use-existing state writes, workspace availability, all busy controls and error rendering. Exercise ready to/from every gate plus blockChatPanel with exact mount/disposal counts. Host derivation and action side effects remain mocked as described below; no E2E changed.
+
 - ADD required 2/3 harness infrastructure: `tests/fixtures/production-widget-snippets.ts`, `ProductionWidgetHarness.svelte`, `ProductionChatPanelMock.svelte` and `vitest.dom.config.ts` compile the app's current dock call, content gate and body snippets verbatim. No copied gate logic; missing snippets fail compilation. Host state/callbacks/translations and ChatPanel side effects are doubles. This executes production markup/wiring, not app startup, store derivation, network effects, real ChatPanel or browser extension bridges; those remain CI/UAT limits. The existing handwritten gate fixture and source guards remain supplementary coverage.
 
 - FIX required 1 `ui/tests/components/chat/ChatWidget-agents-list.test.ts`: constrain motion-class assertion to the actual conditional section opening tag and its class attribute. CSS-only or unrelated-node occurrences cannot satisfy it. Conditional mounting, ordering and negative transition assertions remain unchanged.

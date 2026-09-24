@@ -43,6 +43,7 @@
 - [ ] UAT and CI qualify the final integrated revision; no local E2E.
 
 ## Plan / Todo (lot-based)
+- [x] Fix pass slice 3: production gate action, availability, busy/error and mount/disposal assertions added.
 - [x] Fix pass slice 2: compile production app dock/gate/body snippets in DOM harness with controlled host state and ChatPanel lifecycle double.
 - [x] Fix pass slice 1: restore conditional section motion assertion; remove redundant region; silence grip static-interaction warning; unify ChatWidgetTab; document header override and non-app 0.34.0 migration.
 - [x] Lot 0: read rules, template and audit; verify clean baseline and mechanical branch check.
