@@ -57,6 +57,67 @@ const collect = async (stream: AsyncIterable<{ raw: string }>) => {
 };
 
 describe('route stream flow', () => {
+  it('releases a stream returned before first consumer iteration exactly once', async () => {
+    const hooks: string[] = [];
+    const closed = vi.fn(); const settleRoute = vi.fn();
+    const source = attempt(async function* () {
+      try { yield { type: 'content_delta', data: { delta: 'first' } }; }
+      finally { closed(); }
+    }, hooks);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request);
+    await Promise.all([result.stream.return(undefined), result.stream.return(undefined)]);
+    expect(hooks).toEqual(['committed', 'cancelled']);
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+    expect(settleRoute.mock.calls[0]![0].usage.inputTokens).toBeGreaterThan(0);
+  });
+  it('does not redispatch, record again or settle again when the ledger rejects', async () => {
+    const hooks: string[] = [];
+    const source = attempt(async function* () {
+      yield { type: 'done', data: { finishReason: 'stop', usage: { inputTokens: 0, outputTokens: 0 } } };
+    }, hooks);
+    const settleRoute = vi.fn(async () => { throw Error('ledger failure'); });
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source, source]), metering: { settleRoute } }, request);
+    await expect(collect(result.stream)).rejects.toThrow('ledger failure');
+    expect(hooks).toEqual(['committed', 'completed']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+    expect(settleRoute.mock.calls[0]).toEqual([expect.objectContaining({
+      usage: { inputTokens: 0, outputTokens: 0, estimated: false },
+    })]);
+  });
+  it('sanitizes a mid-stream error and emits no success terminator', async () => {
+    const source = attempt(async function* () {
+      yield { type: 'content_delta', data: { delta: 'hello' } };
+      yield { type: 'error', data: { providerId: 'openai', message: 'SECRET-TOKEN', code: 'SECRET-CODE' } };
+    }, []);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute() {} } }, request);
+    const wire = await collect(result.stream);
+    expect(wire).not.toContain('SECRET'); expect(wire).not.toContain('[DONE]');
+    expect(wire.match(/stream failed after commitment/g)).toHaveLength(1);
+  });
+  it('retains only pre-commit string metadata headers', async () => {
+    const source = attempt(async function* () {
+      yield { type: 'status', data: { status: 'started', metadata: { responseHeaders: { 'X-Request-ID': 'early', count: 1 } } } };
+      yield { type: 'content_delta', data: { delta: 'hello' } };
+      yield { type: 'status', data: { status: 'started', metadata: { responseHeaders: { 'X-Request-ID': 'late' } } } };
+      yield { type: 'done', data: { finishReason: 'stop' } };
+    }, []);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute() {} } }, request);
+    await collect(result.stream);
+    expect(result.headers).toEqual({ 'x-request-id': 'early' });
+  });
+  it('settles empty plans and closes empty streams before commitment', async () => {
+    const settleRoute = vi.fn();
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([]), metering: { settleRoute } }, request))
+      .rejects.toMatchObject({ kind: 'no-eligible-account' });
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+    const hooks: string[] = [];
+    const source = attempt(async function* () {}, hooks);
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request))
+      .rejects.toMatchObject({ kind: 'pooled-account-unavailable' });
+    expect(hooks).toEqual(['outcome:provider-5xx']);
+    expect(settleRoute).toHaveBeenCalledTimes(2);
+  });
   it('uses the injected adapter for the exact prepared stream attempt', async () => {
     const hooks: string[] = [];
     const source = attempt(async function* () { yield { type: 'done', data: { finishReason: 'stop' } }; }, hooks);
