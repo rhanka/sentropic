@@ -85,10 +85,10 @@ describe('W-A local projection', () => {
     const ref = { ...reference, expiresAt: 1001 };
     const local = { create: vi.fn(async () => ref), verify: vi.fn(async () => { now = 1001; return true; }), resolve: vi.fn() };
     const domain = createLocalProjectionDomain({ homeNodeId: ref.homeNodeId, local, now: () => now });
-    await expect(domain.resolve(ref)).rejects.toThrow();
+    await expect(domain.resolve(ref)).rejects.toMatchObject({ code: 'invalid_projection_reference' });
     local.verify.mockResolvedValue(false);
-    await expect(domain.resolve({ ...ref, expiresAt: 9999 })).rejects.toThrow();
-    await expect(domain.project('agent_identity', 'agent')).rejects.toThrow();
+    await expect(domain.resolve({ ...ref, expiresAt: 9999 })).rejects.toMatchObject({ code: 'invalid_projection_reference' });
+    await expect(domain.project('agent_identity', 'agent')).rejects.toMatchObject({ code: 'invalid_projection_reference' });
     expect(local.resolve).not.toHaveBeenCalled();
   });
 
