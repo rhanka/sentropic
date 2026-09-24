@@ -1,7 +1,7 @@
 # Feature: CI publishable manifest guard — Lot G SPEC
 
 ## Objective
-- [x] Deliver the design for cluster-mesh CI lint, packed-manifest enforcement, and clean consumer installation qualification.
+- [x] Deliver the design for baseline-qualified package CI lint, packed-manifest enforcement, and clean consumer installation qualification.
 
 ## Scope / Guardrails
 - [x] Planning only on `ci/publishable-manifest-guard`, worktree `tmp/ci-manifest-guard`; baseline `273bff382` equals local `origin/main` at entry.
@@ -37,6 +37,11 @@
 - [x] BRCI-R1-H2 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): keep the inventory as a required PR check without publisher needs; skip existing versions with WARN before candidate packing/strict checks, while every actual publication checks its own archive.
 - [x] BRCI-R1-M3 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): BLOCK candidates at an existing registry version fail with "bump required" when packed runtime/peer/optional maps differ from that published artifact; dependency-only repairs must reach consumers.
 - [x] BRCI-R1-M4 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): qualify PR candidates with guarded BLOCK sibling archives; report remaining confirmed unpublished siblings as pending-sibling-publish (non-blocking in PR, blocking after publication), never as a successful registry install.
+- [x] BRCI-R1-L5 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): require dependency strings to be non-empty after trim before validRange; the positive allow-rule decides and npm aliases remain deliberately rejected.
+- [x] BRCI-R1-L6 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): emit JSON file lists from a separate dorny step with only publishable_package_files; avoids multiplying file outputs across roughly 45 filters near the 1 MB job-output limit.
+- [x] BRCI-R1-L7 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): use a dedicated manifest_guard filter for scripts/ci, never global; the new job runs via always() without causing full API/UI/E2E builds on guard edits.
+- [x] BRCI-R1-L8 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | conductor decision (reversible): wire cluster-mesh, llm-mesh, and llm-gateway lint independently only after each passes on base; baseline failures become out-of-scope debt, unwired and unfixed here. Baseline lint is NOT RUN in SPEC.
+- [x] BRCI-R1-L9 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | conductor decision (reversible): verify tarball publication preserves provenance and publishConfig on the first real CI publication; no manual/test publication and no evidence claimed from an existing-version skip.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only; no AI or runtime tests are executed or waived.
@@ -65,8 +70,11 @@
   - [x] `make down API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` passes.
   - [x] `make ps API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` passes with no services; Compose reports only an unset DISABLE_RATE_LIMIT warning.
   - [x] Handoff includes exact checks, explicit NOT RUN install replays, final scope verification, and `git log --oneline origin/main..HEAD`.
-- [ ] **Lot G-R1 — Design review revisions**
+- [x] **Lot G-R1 — Design review revisions**
   - [x] HIGH: correct root-lock/bootstrap classification, registry failure semantics, publisher independence, and skip ordering in the spec; update A5 and acceptance cases.
   - [x] MEDIUM: specify dependency-map bump enforcement and same-PR sibling archive qualification, including fixtures and report evidence.
-  - [ ] LOW: tighten trimmed ranges, isolate file-list/filter outputs, gate all three lint jobs on baseline evidence, and require first-CI publication compatibility evidence.
-  - [ ] Re-run available Make checks, review only the two allowed files, clean the reserved environment, and report commits for independent review.
+  - [x] LOW: tighten trimmed ranges, isolate file-list/filter outputs, gate all three lint jobs on baseline evidence, and require first-CI publication compatibility evidence.
+  - [x] Review all nine findings and updated acceptance cases; only the two allowed files changed, with no BUILD exceptions activated.
+  - [x] `make scope-check ENV=test-ci-manifest-guard` passes before each group commit; `make check-ci-version-filters ENV=test-ci-manifest-guard` passes; mechanical branch and Git whitespace checks pass.
+  - [x] `make down API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` and `make ps API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` pass; no services remain, with only the unset DISABLE_RATE_LIMIT warning.
+  - [x] Baseline lint, new guard fixtures, install replays, and real CI provenance/publishConfig verification remain NOT RUN in SPEC; conductor owns BUILD evidence and independent review.
