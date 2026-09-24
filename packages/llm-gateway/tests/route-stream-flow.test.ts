@@ -153,13 +153,28 @@ describe('route stream flow', () => {
       yield { type: 'done', data: { finishReason: 'stop', usage: { inputTokens: 0, outputTokens: 0 } } };
     }, hooks);
     const settleRoute = vi.fn(async () => { throw Error('ledger failure'); });
-    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source, source]), metering: { settleRoute } }, request);
-    await expect(collect(result.stream)).rejects.toThrow('ledger failure');
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source, source]), metering: { settleRoute } }, request))
+      .rejects.toThrow('ledger failure');
     expect(hooks).toEqual(['committed', 'completed']);
     expect(settleRoute).toHaveBeenCalledTimes(1);
     expect(settleRoute.mock.calls[0]).toEqual([expect.objectContaining({
       usage: { inputTokens: 0, outputTokens: 0, estimated: false },
     })]);
+  });
+  it('does not emit a success terminator when settlement fails after content', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn(async () => { throw Error('ledger failure'); });
+    const source = attempt(async function* () {
+      yield { type: 'content_delta', data: { delta: 'hello' } };
+      yield { type: 'done', data: { finishReason: 'stop' } };
+    }, hooks);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request);
+    let raw = '';
+    await expect((async () => { for await (const frame of result.stream) raw += frame.raw; })())
+      .rejects.toThrow('ledger failure');
+    expect(raw).not.toContain('[DONE]');
+    expect(raw).not.toContain('"finish_reason":"stop"');
+    expect(hooks).toEqual(['committed', 'completed']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
   });
   it('sanitizes a mid-stream error and emits no success terminator', async () => {
     const source = attempt(async function* () {
