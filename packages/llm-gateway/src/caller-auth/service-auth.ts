@@ -34,7 +34,6 @@ export class ServiceAuthVerifyToken implements VerifyToken {
       throw new Error('Service authentication requires scopes and a shared DPoP replay store');
     }
     this.options = { ...options, auth: { ...options.auth,
-      issuer: options.auth.issuer.replace(/\/+$/u, ''),
       requiredScopes: [...options.auth.requiredScopes], ports: { ...options.auth.ports },
     } };
   }
