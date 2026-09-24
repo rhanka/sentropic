@@ -63,6 +63,10 @@ and `PersonalPassthroughCallerAuth.verify` (second argument), `VerifyToken.verif
 must contain cost; failed results cannot. Header-only custom implementations remain
 structurally assignable. Exhaustive GatewayFailureKind switches must handle the new
 unavailable member. Consumer `^0.17.0` ranges must explicitly move to `^0.18.0`.
+All `PersonalPassthroughCallerAuth` instances, including custom verifiers, now use
+`parseCallerCredential`: Authorization together with x-api-key is rejected,
+malformed Authorization never falls back to x-api-key, and tokens containing
+spaces are rejected. This parsing change applies beyond the optional auth bridges.
 
 ## Provider-compatible surface
 
