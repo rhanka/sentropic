@@ -25,8 +25,8 @@ export interface ClusterMesh {
   readonly boundaries: BoundaryDomain;
   readonly capabilities: {
     readonly mode: 'single-node';
-    readonly localDevices: 'available';
-    readonly localProjection: 'available';
+    readonly localDevices: 'available' | 'gated';
+    readonly localProjection: 'available' | 'gated';
     readonly interServerDirectory: 'gated';
     readonly tokenExchange: 'gated';
     readonly memoryReplication: 'gated';
@@ -39,9 +39,12 @@ export function createDegenerateClusterMesh(input: {
   readonly workstations: LocalWorkstationDirectoryPort;
   readonly memberships: ValidatedMembershipPort;
   readonly projections: LocalProjectionPort;
-  readonly nhiRunner: CommandRunnerPort;
+  readonly nhiRunner?: CommandRunnerPort;
+  readonly nhi?: NhiLifecyclePort;
   readonly devices: LocalDeviceAttachmentPort;
 }): ClusterMesh {
+  const nhi = input.nhi ?? (input.nhiRunner ? createH2aNhiLifecycle(input.nhiRunner) : undefined);
+  if (!nhi) throw new TypeError('nhi or nhiRunner is required');
   const boundaries = createBoundaryDomain({
     homeNodeId: input.self.nodeId,
     memberships: input.memberships,
@@ -51,15 +54,15 @@ export function createDegenerateClusterMesh(input: {
     trust: createGatedTrustDomain(),
     wrap: {
       projections: createLocalProjectionDomain({ homeNodeId: input.self.nodeId, local: input.projections }),
-      nhi: createH2aNhiLifecycle(input.nhiRunner),
+      nhi,
       memoryReplication: createGatedMemoryReplication(),
     },
     devices: createLocalDeviceDomain(input.devices),
     boundaries,
     capabilities: {
       mode: 'single-node',
-      localDevices: 'available',
-      localProjection: 'available',
+      get localDevices() { return input.devices.availability ?? 'available'; },
+      get localProjection() { return input.projections.availability ?? 'available'; },
       interServerDirectory: 'gated',
       tokenExchange: 'gated',
       memoryReplication: 'gated',
