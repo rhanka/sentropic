@@ -57,10 +57,11 @@
 - [x] **Lot 1 — Caller authentication and cost context**
   - [x] Write Status / Branch / Extends and numbered decisions in `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md`.
   - [x] Define verifier wiring, claim trust, failure semantics, and cost-context interfaces.
-- [ ] **Lot 2 — Mesh dispatch**
-  - [ ] Define the adapter, payload/wire contract, cancellation, errors, and settlement behavior.
-  - [ ] Identify any required llm-mesh changes and release consequences.
+- [x] **Lot 2 — Mesh dispatch**
+  - [x] Define the adapter, payload/wire contract, cancellation, errors, and settlement behavior.
+  - [x] Identify any required llm-mesh changes and release consequences: no mesh source change required.
 - [ ] **Lot 3 — Compatibility and implementation handoff**
+  - [x] Freeze the exhaustive existing-type delta and the nine additive exports in decision D7.
   - [ ] Enumerate every proposed public type change and impact at each h2a import site.
   - [ ] Specify gateway `0.17.1` to `0.18.0`, conditional mesh bump, and migration sequence.
   - [ ] Provide ordered implementation lots with existing/new test paths and Make gates.
