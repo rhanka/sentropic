@@ -43,7 +43,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, template and audit; verify clean baseline and mechanical branch check.
-- [ ] S5: export typed package ChatWidgetPager with conditional list, persistent conversation, live region and 180ms reduced-motion-aware CSS.
+- [x] S5: export typed package ChatWidgetPager with conditional list, persistent conversation, live region and 180ms reduced-motion-aware CSS.
 - [ ] S5 tests: add packages/chat-ui/tests/chat-widget-pager.dom.spec.ts for mount identity, draft, eligibility, headers and announcements.
 - [ ] S6: adopt package pager in app; preserve ChatPanel binding and focus callbacks; remove app list/motion containers.
 - [ ] S7: typed renderContentGate; host loading/auth/onboarding actions; package header/tabs outside gate.

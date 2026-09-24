@@ -171,6 +171,12 @@
       "dogfoodedBy": [
         "ui/src/lib/components/ChatWidget.svelte"
       ]
+    },
+    "ChatWidgetPager.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": [
+        "packages/chat-ui/src/components/ChatWidget.svelte"
+      ]
     }
   }
 }

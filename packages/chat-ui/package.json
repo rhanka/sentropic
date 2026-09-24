@@ -342,6 +342,11 @@
       "types": "./src/state/chatPlacementMenu.ts",
       "svelte": "./src/state/chatPlacementMenu.ts",
       "import": "./src/state/chatPlacementMenu.ts"
+    },
+    "./components/ChatWidgetPager.svelte": {
+      "types": "./src/components/ChatWidgetPager.svelte.d.ts",
+      "svelte": "./src/components/ChatWidgetPager.svelte",
+      "import": "./src/components/ChatWidgetPager.svelte"
     }
   },
   "files": [
