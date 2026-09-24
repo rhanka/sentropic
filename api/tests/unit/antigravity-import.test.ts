@@ -4,7 +4,8 @@ import { storeAntigravityAccountTransport } from '../../src/services/llm-account
 import { settingsService } from '../../src/services/settings';
 import { db } from '../../src/db/client';
 
-vi.mock('../../src/services/llm-account-transports', () => ({
+vi.mock('../../src/services/llm-account-transports', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../src/services/llm-account-transports')>(),
   storeAntigravityAccountTransport: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('../../src/services/settings', () => ({ settingsService: { set: vi.fn() } }));
@@ -49,6 +50,20 @@ describe('Antigravity import', () => {
       expect(Date.parse(stored.expiresAt!)).toBeGreaterThanOrEqual(started + 3_600_000);
     },
   );
+
+  it('should retain the imported refresh token when Google refreshes without rotation', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response({ access_token: 'fresh-access', expires_in: 3600 }))
+      .mockResolvedValueOnce(response({ cloudaicompanionProject: 'project' }))
+      .mockResolvedValueOnce(response({}))
+      .mockResolvedValueOnce(response({ sub: 'account' }));
+
+    await importAntigravityEnrollment(input);
+
+    expect(storeAntigravityAccountTransport).toHaveBeenCalledWith(expect.objectContaining({
+      accessToken: 'fresh-access', refreshToken: 'imported-refresh', project: 'project',
+    }));
+  });
 
   it('should retain a fresh imported token and tolerate unavailable optional profile metadata', async () => {
     fetchMock
