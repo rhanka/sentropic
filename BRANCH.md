@@ -43,13 +43,14 @@
   - [x] Root image-size override 2.0.3; root lockfile audit has zero HIGH/CRITICAL.
   - [x] API xmldom, Hono, form-data and image-size updated; API lockfile audit has zero HIGH/CRITICAL.
   - [x] Remove both image-size allowlist entries and the five corresponding vulnerability-register records.
-- [ ] Lot 2 — Patch UI dependencies including critical Vitest; update mail mock Nodemailer.
+- [x] Lot 2 — Patch UI dependencies including critical Vitest; update mail mock Nodemailer.
+  - [x] Regenerated UI lockfile is one atomic generated artifact (541 changed lines); no application source changes.
 - [ ] Lot 3 — Validate existing tests without source/test changes.
-  - [ ] `make typecheck-ui` and `make lint-ui`.
-  - [ ] `make test-ui` (existing UI TypeScript suite).
+  - [x] `make typecheck-ui` and `make lint-ui`.
+  - [x] `make test-ui` (78 files, 474 tests passed).
   - [ ] `make typecheck-api` and `make lint-api`.
   - [ ] `make test-api-unit` (existing `api/tests/unit/**`).
-  - [ ] Audit affected resolved trees and verify remaining exceptions.
+  - [x] Root/API/UI full lockfile audits: zero HIGH/CRITICAL; audit gate passes with empty allowlist.
   - [ ] `make down ENV=sec-deps`.
 - [ ] Lot 4 — Scope check, atomic commits, non-draft PR with advisory table, CI logs and incremental report.
   - [ ] All CI green at final head; hand off to orchestrator without merging.
