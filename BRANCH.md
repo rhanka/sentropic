@@ -61,6 +61,7 @@
   - [x] Run `test-chat-ui-dom`; include `07_comment_assistant` and all `09-*`.
   - [x] Validate node and DOM suites using make and isolated unit ports: 1015 node tests and 204 DOM tests passed.
 - [ ] **Lot 2 — Hidden failure investigation**
+  - [x] CI 35956955660 exposed an initiative lock waiter matching presence POST 200. Match the exact acquisition route before navigation; preserve the 201 assertion. API logs prove acquisition 201 precedes the post-SSE presence heartbeat. CI retest pending.
   - [x] `e2e/tests/02-auth-oauth-revoke.spec.ts:18`: stored covering grant bypasses consent correctly; fixture now requests `prompt=consent`, preserving every assertion. CI retest pending.
   - [ ] `e2e/tests/01-organizations-detail.spec.ts:279`: inspect presence predicate and lock retry.
   - [x] CI 35953479640 proves presence startup notification loss; initial SSE heartbeat and regression added. Lock-on-leave fixture isolates its departing user from parallel SSE sessions; CI verification pending.
