@@ -4,23 +4,18 @@ import { describe, expect, it } from 'vitest';
 
 const widgetPath = resolve(process.cwd(), 'src/lib/components/ChatWidget.svelte');
 
-/**
- * L-C-shell S4 (app side): inside the chat panel host snippet, the conversation header
- * (ChatSessionsBar) and the conversation body (ChatPanel) are cut into their own host snippets
- * and rendered IN PLACE — ready for the package renderConversationHeader/renderChatPanel seams at
- * S8. The sessions menu + Plus/Trash icon snippets stay app-owned, no composer code moves, and the
- * mounted chatPanelRef binding is preserved. No visible change (I4), no rename (L-A').
- */
+/** Conversation content and callbacks remain app-owned inside package pager slots. */
 describe('ChatWidget conversation host seams (L-C-shell S4)', () => {
   it('exists', () => {
     expect(existsSync(widgetPath)).toBe(true);
   });
 
-  it('cuts ChatSessionsBar (header) and ChatPanel (body) into host snippets, rendered in place', () => {
+  it('cuts ChatSessionsBar (header) and ChatPanel (body) into host snippets, passed as package slots', () => {
     const source = readFileSync(widgetPath, 'utf8');
     for (const name of ['renderConversationHeaderHost', 'renderChatBodyHost']) {
       expect(source).toContain(`{#snippet ${name}()}`);
-      expect(source).toContain(`{@render ${name}()}`);
+      const slot = name === 'renderChatBodyHost' ? 'renderChatPanel' : 'renderConversationHeader';
+      expect(source).toContain(`${slot}={${name}}`);
     }
   });
 
