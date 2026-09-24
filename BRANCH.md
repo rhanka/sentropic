@@ -75,7 +75,7 @@
   - [x] C7 — Reject empty service clientId before principal mapping; signed-token regressions cover empty and absent client_id/sub (final gates pending).
   - [x] C8 — Remove issuer normalization; document exact registered absolute HTTP(S) values and test both trailing-slash configurations (final gates pending).
   - [x] C9 — Correct published VerifyToken/personal caller-auth comments to distinguish canonical service and session verification under D2.
-  - [ ] C10 — Document strict credential parsing for all personal caller-auth instances.
+  - [x] C10 — README migration covers ambiguity, malformed Authorization without fallback, and token spaces for all PersonalPassthroughCallerAuth instances.
   - [ ] C11 — Prove successful router DPoP verification after trusted publicUrl reconstruction.
   - [ ] C12 — Guard missing qualification directory and label workspace auth tarballs as development evidence.
   - [ ] C13 — Record O8 token-publish bypass risk without editing the target.
