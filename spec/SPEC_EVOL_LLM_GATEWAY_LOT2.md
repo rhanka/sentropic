@@ -147,6 +147,7 @@ export interface AuthHonoVerifyTokenOptions {
 Construction validates service issuer, audience/resource and a nonempty required-scope set;
 the deployment supplies registered values, not values guessed from tokens. The service replay
 store is mandatory and shared across replicas; an unavailable store never disables replay checks.
+Issuer comparison follows `@sentropic/mcp-auth` normalization (trailing slashes stripped from the configured issuer).
 Service middleware requires hono (already a gateway dependency), jose `^5.10.0` and mcp-auth `^0.2.1`
 with its registry-resolved oauth-verify dependency; auth-hono itself needs no changes.
 Session dependencies are confined to the session subpath; install/qualify that peer's declared peers.
