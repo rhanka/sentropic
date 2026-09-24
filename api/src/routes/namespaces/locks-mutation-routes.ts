@@ -5,6 +5,7 @@ import {
   acquireLockSchema,
   isLocksHttpError,
   lockScopeSchema,
+  releaseLockSchema,
   requestUnlockSchema,
 } from './locks-contracts';
 import type { LocksNamespacePorts } from './locks-ports';
@@ -31,12 +32,14 @@ export const registerLocksMutationRoutes = (
     });
     return result.acquired ? context.json(result, 201) : context.json(result, 409);
   });
-  router.delete('/locks', requireEditor, zValidator('query', lockScopeSchema), async (context) => {
+  router.delete('/locks', requireEditor, zValidator('query', releaseLockSchema), async (context) => {
     const principal = lockPrincipal(context);
+    const query = context.req.valid('query');
     try {
       return context.json(await ports.locks.release({
-        ...lockScope(principal, context.req.valid('query')),
+        ...lockScope(principal, query),
         userId: principal.userId,
+        lockId: query.lockId,
       }));
     } catch (error) {
       if (isLocksHttpError(error) && error.status === 403) {

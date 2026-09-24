@@ -122,6 +122,35 @@ describe('Locks API', () => {
     expect(payload.lock?.lockedBy?.userId).toBe(userB.id);
   });
 
+  it('conditional DELETE with lockId never removes a lock handed over by an admin', async () => {
+    const body = { objectType: 'organization', objectId: 'org-cond-release' };
+    const qs = `workspace_id=${workspaceId}&objectType=organization&objectId=org-cond-release`;
+    const acquired = await authenticatedRequest(
+      app, 'POST', `/api/v1/locks?workspace_id=${workspaceId}`, admin.sessionToken, body,
+    );
+    expect(acquired.status).toBe(201);
+    const lockId = (await acquired.json()).lock.id as string;
+    expect((await authenticatedRequest(
+      app, 'POST', `/api/v1/locks/request-unlock?workspace_id=${workspaceId}`, userB.sessionToken, body,
+    )).status).toBe(200);
+    expect((await authenticatedRequest(
+      app, 'POST', `/api/v1/locks/accept-unlock?workspace_id=${workspaceId}`, admin.sessionToken, body,
+    )).status).toBe(200);
+
+    const cleanup = await authenticatedRequest(
+      app, 'DELETE', `/api/v1/locks?${qs}&lockId=${lockId}`, admin.sessionToken,
+    );
+    expect(cleanup.status).toBe(200);
+    expect(await cleanup.json()).toEqual({ released: false });
+    const current = await authenticatedRequest(app, 'GET', `/api/v1/locks?${qs}`, userB.sessionToken);
+    expect((await current.json()).lock?.lockedBy?.userId).toBe(userB.id);
+
+    const own = await authenticatedRequest(
+      app, 'DELETE', `/api/v1/locks?${qs}&lockId=${lockId}`, userB.sessionToken,
+    );
+    expect(await own.json()).toEqual({ released: true });
+  });
+
   it('allows force unlock only for a workspace admin', async () => {
     const body = { objectType: 'initiative', objectId: 'admin-scope' };
     expect((await authenticatedRequest(

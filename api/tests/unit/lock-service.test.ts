@@ -127,4 +127,41 @@ describe('lock-service', () => {
     const lock = await getActiveLock(workspaceId, objectType, objectId);
     expect(lock).toBeNull();
   });
+
+  it('conditional release deletes only the exact lock still held by the caller', async () => {
+    const objectType = 'initiative';
+    const objectId = `initiative_cond_${Date.now()}`;
+    const own = await acquireLock({ userId: editor.id, workspaceId, objectType, objectId });
+    const lockId = own.lock.id;
+
+    const wrongId = await releaseLock({ userId: editor.id, workspaceId, objectType, objectId, lockId: 'lock_other' });
+    expect(wrongId.released).toBe(false);
+    expect((await getActiveLock(workspaceId, objectType, objectId))?.id).toBe(lockId);
+
+    const released = await releaseLock({ userId: editor.id, workspaceId, objectType, objectId, lockId });
+    expect(released.released).toBe(true);
+    expect(await getActiveLock(workspaceId, objectType, objectId)).toBeNull();
+  });
+
+  it('conditional release by an admin never deletes a lock handed over to another editor', async () => {
+    const objectType = 'folder';
+    const objectId = `folder_cond_${Date.now()}`;
+    const own = await acquireLock({ userId: adminMember.id, workspaceId, objectType, objectId });
+    await requestUnlock({ userId: editorB.id, workspaceId, objectType, objectId });
+    await acceptUnlock({ userId: adminMember.id, workspaceId, objectType, objectId });
+    const handedOver = await getActiveLock(workspaceId, objectType, objectId);
+    expect(handedOver?.id).toBe(own.lock.id);
+    expect(handedOver?.lockedBy.userId).toBe(editorB.id);
+
+    // Late cleanup of the admin's stale renewal carries the same lock id.
+    const cleanup = await releaseLock({
+      userId: adminMember.id, workspaceId, objectType, objectId, lockId: own.lock.id,
+    });
+    expect(cleanup.released).toBe(false);
+    expect((await getActiveLock(workspaceId, objectType, objectId))?.lockedBy.userId).toBe(editorB.id);
+
+    // The unconditional admin release keeps its existing behavior.
+    const adminRelease = await releaseLock({ userId: adminMember.id, workspaceId, objectType, objectId });
+    expect(adminRelease.released).toBe(true);
+  });
 });

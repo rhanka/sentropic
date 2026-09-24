@@ -16,6 +16,10 @@ export const acquireLockSchema = lockScopeSchema.extend({
   ttlMs: z.number().int().min(5_000).max(60_000).optional(),
 });
 
+export const releaseLockSchema = lockScopeSchema.extend({
+  lockId: z.string().min(1).optional(),
+});
+
 export const requestUnlockSchema = lockScopeSchema.extend({
   message: z.string().max(500).optional(),
 });
