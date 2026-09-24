@@ -96,6 +96,7 @@
   - [x] Add JSON regressions for empty plans, missing versus genuine zero usage, and settlement rejection without redispatch or duplicate operational outcomes.
   - [x] Add private trackedExecution helper in route-stream-flow.ts to claim terminal outcomes before async work, preserve reported zero usage, estimate missing usage, sanitize stream errors and handle unstarted consumer return. Wiring follows in the next atomic commit.
   - [x] Replace the old inline stream lifecycle with trackedExecution; buffer/validate the first encoded frame before commitment, retain pre-commit string response headers, settle empty plans and prevent post-commit fallback. JSON scoped run caught only a matcher misuse (toBe versus asymmetric toEqual), corrected.
+  - [x] Wire router ReadableStream pull/cancel to a propagated AbortSignal and explicit generator return; detach request listeners on completion, cancellation or pre-stream failure.
   - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
   - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
 - [ ] **I5 — Release and consumer qualification**
