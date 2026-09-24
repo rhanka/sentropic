@@ -12,6 +12,12 @@
         "ui/src/lib/components/ChatWidget.svelte"
       ]
     },
+    "ChatWidgetTabBar.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": [
+        "ui/src/lib/components/ChatWidget.svelte"
+      ]
+    },
     "ChatPlacementMenuButton.svelte": {
       "class": "primitive",
       "dogfoodedBy": [
