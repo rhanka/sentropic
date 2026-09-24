@@ -32,6 +32,7 @@ Supply registered service issuer/resource/scopes and map the verified service
 client or session user through trusted directory state. Service context does not
 expose per-user OBO claims; do not decode raw JWTs to invent those mappings.
 Issuer comparison follows `@sentropic/mcp-auth` normalization (trailing slashes stripped from the configured issuer).
+The service identity emits that same normalized configured issuer for stable principal mapping.
 
 ```ts
 import { PersonalPassthroughCallerAuth, VerifiedCostContextResolver } from '@sentropic/llm-gateway';

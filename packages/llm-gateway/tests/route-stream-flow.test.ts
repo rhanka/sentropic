@@ -148,14 +148,16 @@ describe('route stream flow', () => {
     expect(settleRoute.mock.calls[0]![0].usage.inputTokens).toBeGreaterThan(0);
   });
   it('does not redispatch, record again or settle again when the ledger rejects', async () => {
-    const hooks: string[] = [];
+    const hooks: string[] = []; const closed = vi.fn();
     const source = attempt(async function* () {
-      yield { type: 'done', data: { finishReason: 'stop', usage: { inputTokens: 0, outputTokens: 0 } } };
+      try { yield { type: 'done', data: { finishReason: 'stop', usage: { inputTokens: 0, outputTokens: 0 } } }; }
+      finally { closed(); }
     }, hooks);
     const settleRoute = vi.fn(async () => { throw Error('ledger failure'); });
     await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source, source]), metering: { settleRoute } }, request))
       .rejects.toThrow('ledger failure');
     expect(hooks).toEqual(['committed', 'completed']);
+    expect(closed).toHaveBeenCalledTimes(1);
     expect(settleRoute).toHaveBeenCalledTimes(1);
     expect(settleRoute.mock.calls[0]).toEqual([expect.objectContaining({
       usage: { inputTokens: 0, outputTokens: 0, estimated: false },

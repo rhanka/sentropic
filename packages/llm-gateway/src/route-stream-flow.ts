@@ -218,7 +218,10 @@ export const runRouteStreamFlow = async (
       await execution.commit();
       return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(buffered) };
     } catch (error) {
-      if (execution?.terminal) throw error;
+      if (execution?.terminal) {
+        try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
+        throw error;
+      }
       try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
       const classification = classifyRouteError(error, signal?.aborted);
       const usage = errorUsage(error) ?? (invoked ? {
