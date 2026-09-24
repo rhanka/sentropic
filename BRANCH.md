@@ -1,0 +1,60 @@
+# Feature: Deployable LLM process specification (Lot D)
+
+## Objective
+- [ ] Specify an autonomous Node/TypeScript LLM gateway process, deployment, budget admission, identity binding, and seat-secret consumption; deliver design only.
+
+## Scope / Guardrails
+- [x] Branch `spec/llm-deployable-process`; worktree `tmp/llm-deployable-process`; requested base `origin/main` at `75032fc85`.
+- [x] Read mandatory rules and template; `harness check branch` passed before editing.
+- [x] No implementation, migration, package bump, publication, push, PR, or merge in this branch.
+- [x] Make-only validation/commits; selective staging; English text; approximately 150 changed lines per commit.
+- [x] Environment `test-llm-deployable-process`; reserved cleanup arguments `API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560`; no services planned or started.
+- [x] `ENV` is last in every make command; root development environment remains untouched.
+
+## Branch Scope Boundaries (MANDATORY)
+- [x] **Allowed Paths (implementation scope)**:
+  - [x] `BRANCH.md`
+  - [x] `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`
+- [x] **Forbidden Paths (must not change in this branch)**:
+  - [x] All files outside the two allowed paths, including code, `.track/**`, `Makefile`, `docker-compose*`, `.github/workflows/**`, `deploy/**`, `.cursor/rules/**`, and `plan/**`.
+- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] None in this branch; future build exceptions are proposals only.
+- [x] **Exception process**:
+  - [x] Future `BRxx-EXn` proposals must state reason, impact, rollback, and approval gate; none authorizes a change here.
+
+## Feedback Loop
+- [x] D-FL1 | Branch: Lot D | Owner: conductor | Severity: process | Status: attention | Repro: harness recorder/review writes extra artifacts | Expected: two-file scope | Actual: record design here and defer independent review to conductor | Evidence: owner brief | Rationale: preserve explicit planning scope; no consensus claimed.
+
+## AI Flaky tests
+- [x] Not applicable: documentation-only branch; no provider calls or runtime tests.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch, single writer; no cherry-pick or delegated implementation.
+- [x] Multi-branch execution is deferred to the conductor for future build lots.
+
+## UAT Management (in orchestration context)
+- [x] No web, Chrome, or VSCode behavior changes; user-interface UAT is not applicable here.
+- [ ] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
+
+## Plan / Todo (lot-based)
+- [ ] **Lot 0 — Evidence and scope**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, project overview and relevant plan context.
+  - [x] Create this file before the specification; verify branch mechanically and inspect make targets.
+  - [ ] Read package exports/router/stubs, h2a entry point, deployment manifests/readme, quota/metering/routing/control-plane specs, and in-progress seat custody.
+  - [ ] Locate original conductor wording or document an explicit evidence limitation.
+  - [ ] Gate: `make scope-check ENV=test-llm-deployable-process` before commit.
+- [ ] **Lot 1 — Process and deployment design**
+  - [ ] Write `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: evidence, numbered decisions, entry point ownership, image, namespaces, probes, k8s and secrets.
+  - [ ] Specify which h2a responsibilities move upstream and which stay consumer-owned.
+  - [ ] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` before commit.
+- [ ] **Lot 2 — Admission, identity, and delivery plan**
+  - [ ] Specify ledger-backed over-budget emission, identity table ownership/storage/schema, and seat-secret consumption.
+  - [ ] Specify CI image build/publish, future `BRxx-EXn` exceptions, lot dependencies, file-level tests and operational UAT.
+  - [ ] Classify reversible defaults and irreversible future gates; record decisions in Feedback Loop.
+  - [ ] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` before commit.
+- [ ] **Lot 3 — Consolidation and final validation**
+  - [ ] Reconcile all requested deliverables against existing contracts and mark unresolved dependencies explicitly.
+  - [ ] Review every diff hunk and run `make scope-check ENV=test-llm-deployable-process`; runtime typecheck/lint/test not applicable to prose.
+  - [ ] Commit only the two allowed files via `make commit`; preserve `BRANCH.md` for conductor handoff.
+  - [ ] Run cleanup `make down API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process` and inspect `make ps API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process`.
+  - [ ] Report exact checks, feedback, risks, scope, and `git log --oneline origin/main..HEAD`.
