@@ -40,6 +40,8 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read rules, verify branch mechanically, inventory Dependabot, inspect audit policy and Make targets.
 - [ ] Lot 1 — Patch API/root dependency resolutions; reassess image-size fixes.
+  - [x] Root image-size override 2.0.3; root lockfile audit has zero HIGH/CRITICAL.
+  - [x] API xmldom, Hono, form-data and image-size updated; API lockfile audit has zero HIGH/CRITICAL.
 - [ ] Lot 2 — Patch UI dependencies including critical Vitest; update mail mock Nodemailer.
 - [ ] Lot 3 — Validate existing tests without source/test changes.
   - [ ] `make typecheck-ui` and `make lint-ui`.
