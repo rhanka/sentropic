@@ -222,27 +222,8 @@ export async function releaseLock(options: {
   workspaceId: string;
   objectType: LockObjectType;
   objectId: string;
-  /** Conditional release: only this exact lock, only while held by the caller (no admin override). */
-  lockId?: string;
 }): Promise<{ released: boolean }> {
   const now = new Date();
-  if (options.lockId) {
-    const deleted = await db
-      .delete(objectLocks)
-      .where(
-        and(
-          eq(objectLocks.id, options.lockId),
-          eq(objectLocks.workspaceId, options.workspaceId),
-          eq(objectLocks.objectType, options.objectType),
-          eq(objectLocks.objectId, options.objectId),
-          eq(objectLocks.lockedByUserId, options.userId)
-        )
-      )
-      .returning({ id: objectLocks.id });
-    if (deleted.length === 0) return { released: false };
-    await notifyLockEvent(options.workspaceId, options.objectType, options.objectId);
-    return { released: true };
-  }
   const [existing] = await db
     .select({ id: objectLocks.id, lockedByUserId: objectLocks.lockedByUserId })
     .from(objectLocks)

@@ -20,7 +20,7 @@ export interface LocksDomainPort {
     lock: unknown;
     acquired: boolean;
   }>;
-  release(input: LockScope & { userId: string; lockId?: string }): Promise<{ released: boolean }>;
+  release(input: LockScope & { userId: string }): Promise<{ released: boolean }>;
   requestUnlock(input: LockScope & { userId: string; message?: string }): Promise<{
     requested: boolean;
     lock: unknown | null;
