@@ -6,7 +6,7 @@
   import type { AgentsListProps } from './AgentsList.svelte';
   import { resolveChatWidgetPanelVisibility } from '../state/chatWidgetShell.js';
 
-  type ChatWidgetTab = 'chat' | 'queue' | 'comments';
+  import type { ChatWidgetTab } from '../state/chatWidgetShell.js';
 
   export let activeTab: ChatWidgetTab = 'chat';
   export let activeJobsCount = 0;
@@ -54,10 +54,10 @@
   };
 </script>
 
-  <section
+  <div
     class="chat-widget-shell flex h-full min-h-0 flex-col"
-    aria-label={widgetLabel}
   >
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <header
       class="chat-widget-header flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4"
       class:cursor-grab={headerGrip?.enabled && !headerGrip?.dragging}
@@ -100,7 +100,7 @@
     <div class="min-h-0 flex-1">
       {#if renderContentGate}{@render renderContentGate(renderReady)}{:else}{@render renderReady()}{/if}
     </div>
-  </section>
+  </div>
 
 {#snippet renderReady()}
       {#if panelVisibility.showQueuePanel}
