@@ -2059,7 +2059,11 @@ run-e2e:
 .PHONY: e2e-set-queue
 # Defaults for CI
 QUEUE_CONCURRENCY ?= 30
-E2E_GROUPS ?= 00 01 02 03 04 05 06 07 08 09
+E2E_GROUPS ?= 00 01 02 03 04 05 06 07 08 09 10
+
+.PHONY: check-e2e-inventory
+check-e2e-inventory: ## Fail when a numbered E2E spec has no default group or CI lane
+	@./e2e/scripts/check-spec-lanes.sh "$(E2E_GROUPS)"
 
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Playwright (scope with E2E_SPEC)
@@ -2069,7 +2073,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	# - MAX_FAILURES (optional)    -> if set, pass --max-failures=<n> (otherwise show all failures)
 	# - QUEUE_CONCURRENCY (default: 30) -> upsert settings.ai_concurrency before running tests
 	# - QUEUE_PROCESSING_INTERVAL (optional) -> upsert settings.queue_processing_interval (ms)
-	# - E2E_GROUPS (default: "00 01 02 03 04 05 06 07 08 09") -> list of groups to run
+	# - E2E_GROUPS (default: "00 01 02 03 04 05 06 07 08 09 10") -> list of groups to run
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps \
 	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
 	  e2e sh -lc ' \
