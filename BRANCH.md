@@ -28,6 +28,8 @@
 - [x] D-FL3 | Branch: Lot D | Owner: gateway maintainer | Severity: design | Status: attention | Repro: compare package and h2a entry points | Expected: autonomous host | Actual: select thin private Node app, port 3001, same router factory | Evidence: spec D1-D3 | Rationale: reversible composition without a new published CLI contract.
 - [x] D-FL4 | Branch: Lot D | Owner: ledger/identity maintainer + conductor | Severity: build gate | Status: blocked (future build only) | Repro: compare BR-47 to current schema | Expected: durable admission and generic bindings | Actual: proposed G1 requires migration ratification | Evidence: spec D4-D5 | Rationale: design delivered; no schema mutation authorized here.
 - [x] D-FL5 | Branch: Lot D | Owner: deployment maintainer | Severity: design | Status: attention | Repro: inspect base manifests | Expected: independently deployable gateway | Actual: select dedicated Node image, internal Service, one replica/Recreate | Evidence: spec D6 | Rationale: conservative reversible rollout, with quota and egress validation before activation.
+- [x] D-FL6 | Branch: Lot D | Owner: custody maintainer | Severity: design | Status: attention | Repro: reconcile custody section 4 with BR-73 | Expected: current own-seat credentials without competing refreshers | Actual: access-only Secret projection and fenced Postgres hydration; external sole refresher | Evidence: spec D7 | Rationale: reversible binding prevents rotating-token races; runtime refresh disabled only for custody-managed seats.
+- [x] D-FL7 | Branch: Lot D | Owner: conductor/deployment operator | Severity: build gate | Status: blocked (future build only) | Repro: enumerate forbidden paths and live delivery dependencies | Expected: approved build scope | Actual: BRDP-EX1..5 proposed; G2 promotion and G3 egress evidence pending | Evidence: spec sections 8-9 | Rationale: no infrastructure edits or approvals implied by this spec.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only branch; no provider calls or runtime tests.
@@ -47,14 +49,14 @@
   - [x] Read package exports/router/stubs, h2a entry point, deployment manifests/readme, quota/metering/routing/control-plane specs, and in-progress seat custody.
   - [x] Locate original conductor wording or document an explicit evidence limitation (D-FL2).
   - [x] Gate: `make scope-check ENV=test-llm-deployable-process` passed before the initial plan commit.
-- [ ] **Lot 1 — Process and deployment design**
-  - [ ] Write `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: evidence, numbered decisions, entry point ownership, image, namespaces, probes, k8s and secrets.
+- [x] **Lot 1 — Process and deployment design**
+  - [x] Write `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: evidence, numbered decisions, entry point ownership, image, namespaces, probes, k8s and secrets.
   - [x] Specify which h2a responsibilities move upstream and which stay consumer-owned.
-  - [ ] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` before commit.
+  - [x] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` passed on preceding process/admission commits; repeat before each remaining commit.
 - [ ] **Lot 2 — Admission, identity, and delivery plan**
-  - [ ] Specify ledger-backed over-budget emission, identity table ownership/storage/schema, and seat-secret consumption.
+  - [x] Specify ledger-backed over-budget emission, identity table ownership/storage/schema, and seat-secret consumption.
   - [ ] Specify CI image build/publish, future `BRxx-EXn` exceptions, lot dependencies, file-level tests and operational UAT.
-  - [ ] Classify reversible defaults and irreversible future gates; record decisions in Feedback Loop.
+  - [x] Classify reversible defaults and irreversible future gates; record decisions in Feedback Loop.
   - [ ] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` before commit.
 - [ ] **Lot 3 — Consolidation and final validation**
   - [ ] Reconcile all requested deliverables against existing contracts and mark unresolved dependencies explicitly.
