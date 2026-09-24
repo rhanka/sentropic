@@ -73,6 +73,26 @@ test.describe('Détail des organisations', () => {
   test.beforeEach(async ({ page }, testInfo) => {
   });
 
+  test.afterEach(async ({ browser }, testInfo) => {
+    if (testInfo.status === testInfo.expectedStatus || !testInfo.title.startsWith('presence:')) return;
+    for (const context of browser.contexts()) {
+      for (const page of context.pages()) {
+        if (!page.url().includes(`/organizations/${organizationId}`)) continue;
+        const response = await page.request.get(
+          `${API_BASE_URL}/api/v1/locks/presence?objectType=organization&objectId=${encodeURIComponent(organizationId)}&workspace_id=${encodeURIComponent(workspaceAId)}`
+        );
+        console.log('Organization presence failure state', JSON.stringify({
+          status: response.status(),
+          presence: await response.json(),
+          badges: await page.locator('[role="group"]').allTextContents(),
+          avatarTitles: await page.locator('[role="group"] [title]').evaluateAll(
+            (elements) => elements.map((element) => element.getAttribute('title'))
+          ),
+        }));
+      }
+    }
+  });
+
   test('devrait afficher la page de détail d\'une organisation', async ({ page }) => {
     // D'abord aller à la liste des organisations
     await page.goto('/organizations');

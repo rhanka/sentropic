@@ -1097,10 +1097,10 @@ jobs:
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           E2E_GROUPS: ${{ matrix.e2e_groups }}
-        run: make test-e2e
+        run: make test-e2e ENV=e2e-ci
       - name: E2E service diagnostics
         if: failure()
-        run: make logs-api TAIL=400
+        run: make logs-api ENV=e2e-ci
 
   e2e-vscode:
     runs-on: ubuntu-latest
@@ -1151,7 +1151,7 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        run: make test-e2e-vscode
+        run: make test-e2e-vscode ENV=e2e-vscode-ci
       - name: Upload VSCode E2E artifacts
         if: always()
         uses: actions/upload-artifact@v7

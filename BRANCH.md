@@ -31,6 +31,8 @@
 
 ## Feedback Loop
 - [x] BRCI-EX1 — owner-authorized Makefile and `.github/workflows/ci.yml` exception: “E2E green in CI” requires truthful failure propagation, DOM execution, and complete selection. Impact: formerly green checks may fail; CI executes additional tests. Rollback: revert these changes.
+- [x] Aggregation verified in Docker with simulated first/last failures, all successes, and scoped failure; all 55 numbered specs match, including five `09-*` specs. No local E2E executed.
+- [x] Presence failure-only diagnostics read the API snapshot and rendered avatar titles without altering assertions; CI uses explicit `e2e-ci` / `e2e-vscode-ci` environments.
 
 ## AI Flaky tests
 - [x] No exemptions accepted. All test invocations block CI.
