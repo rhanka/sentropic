@@ -1098,6 +1098,9 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           E2E_GROUPS: ${{ matrix.e2e_groups }}
         run: make test-e2e
+      - name: E2E service diagnostics
+        if: failure()
+        run: make logs-api TAIL=400
 
   e2e-vscode:
     runs-on: ubuntu-latest
