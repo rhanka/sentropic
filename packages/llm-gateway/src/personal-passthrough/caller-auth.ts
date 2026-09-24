@@ -7,11 +7,11 @@
  *   2. resolves the caller's OWN provider identity (caller == provider);
  *   3. resolves the `CostContext` from the VERIFIED identity, NEVER the body.
  *
- * The actual OIDC/session signature verification (`auth-hono`
- * service-auth-middleware: iss/aud/scope/ath/jti) is an EDGE we stub behind a
- * `VerifyToken` port: production injects the auth-hono verifier; v0 + tests
- * inject a deterministic verifier over fixtures. The FLOW (header parse ->
- * verify -> identity -> CostContext) is real.
+ * Signature verification is supplied through `VerifyToken`. Service mode uses
+ * `ServiceAuthVerifyToken` from /auth with canonical mcp-auth/hono verification
+ * and bound DPoP. Session mode uses `AuthHonoVerifyToken` from /auth-hono with
+ * auth-hono/middleware and rejects DPoP. Trusted custom verifiers and deterministic
+ * test fixtures implement the same port; identity mapping stays host-owned.
  */
 
 import type { CallerAuthPort, CallerAuthResult, CallerAuthRequestContext } from '../ports/caller-auth.js';
@@ -47,9 +47,10 @@ export interface VerifiedPrincipal {
 export type CallerAuthScheme = 'Bearer' | 'DPoP' | 'x-api-key';
 
 /**
- * Token verification port — the documented stub seam for the OIDC/session edge.
- * Production binds this to `auth-hono` (iss/aud/scope/ath/jti). It resolves the
- * VERIFIED principal from a bearer/DPoP/x-api-key token, or `undefined` when invalid.
+ * Token verification port for one explicitly selected credential family.
+ * Service /auth verifies through mcp-auth/hono; session /auth-hono verifies
+ * through auth-hono/middleware. Resolve a trusted principal or return undefined
+ * on denial; unavailable verification throws. No cross-family fallback.
  */
 export interface VerifyToken {
   verify(
