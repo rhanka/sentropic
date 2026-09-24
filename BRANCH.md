@@ -1,7 +1,7 @@
 # Feature: Deployable LLM process specification (Lot D)
 
 ## Objective
-- [ ] Specify an autonomous Node/TypeScript LLM gateway process, deployment, budget admission, identity binding, and seat-secret consumption; deliver design only.
+- [x] Specify an autonomous Node/TypeScript LLM gateway process, deployment, budget admission, identity binding, and seat-secret consumption; deliver design only.
 
 ## Scope / Guardrails
 - [x] Branch `spec/llm-deployable-process`; worktree `tmp/llm-deployable-process`; requested base `origin/main` at `75032fc85`.
@@ -30,6 +30,7 @@
 - [x] D-FL5 | Branch: Lot D | Owner: deployment maintainer | Severity: design | Status: attention | Repro: inspect base manifests | Expected: independently deployable gateway | Actual: select dedicated Node image, internal Service, one replica/Recreate | Evidence: spec D6 | Rationale: conservative reversible rollout, with quota and egress validation before activation.
 - [x] D-FL6 | Branch: Lot D | Owner: custody maintainer | Severity: design | Status: attention | Repro: reconcile custody section 4 with BR-73 | Expected: current own-seat credentials without competing refreshers | Actual: access-only Secret projection and fenced Postgres hydration; external sole refresher | Evidence: spec D7 | Rationale: reversible binding prevents rotating-token races; runtime refresh disabled only for custody-managed seats.
 - [x] D-FL7 | Branch: Lot D | Owner: conductor/deployment operator | Severity: build gate | Status: blocked (future build only) | Repro: enumerate forbidden paths and live delivery dependencies | Expected: approved build scope | Actual: BRDP-EX1..5 proposed; G2 promotion and G3 egress evidence pending | Evidence: spec sections 8-9 | Rationale: no infrastructure edits or approvals implied by this spec.
+- [x] D-FL8 | Branch: Lot D | Owner: gateway/mesh/ledger maintainers | Severity: design | Status: attention | Repro: inspect route admission and settlement | Expected: enforced caps without duplicate billing | Actual: select pure liability quote, pre-acquisition reservation and one aggregate settlement | Evidence: spec D5 | Rationale: reversible port design preserves existing ledger/wire and prevents unreserved fallback.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only branch; no provider calls or runtime tests.
@@ -40,7 +41,7 @@
 
 ## UAT Management (in orchestration context)
 - [x] No web, Chrome, or VSCode behavior changes; user-interface UAT is not applicable here.
-- [ ] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
+- [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Evidence and scope**
@@ -53,14 +54,15 @@
   - [x] Write `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: evidence, numbered decisions, entry point ownership, image, namespaces, probes, k8s and secrets.
   - [x] Specify which h2a responsibilities move upstream and which stay consumer-owned.
   - [x] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` passed on preceding process/admission commits; repeat before each remaining commit.
-- [ ] **Lot 2 — Admission, identity, and delivery plan**
+- [x] **Lot 2 — Admission, identity, and delivery plan**
   - [x] Specify ledger-backed over-budget emission, identity table ownership/storage/schema, and seat-secret consumption.
-  - [ ] Specify CI image build/publish, future `BRxx-EXn` exceptions, lot dependencies, file-level tests and operational UAT.
+  - [x] Specify CI image build/publish, future `BRxx-EXn` exceptions, lot dependencies, file-level tests and operational UAT.
   - [x] Classify reversible defaults and irreversible future gates; record decisions in Feedback Loop.
-  - [ ] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` before commit.
-- [ ] **Lot 3 — Consolidation and final validation**
-  - [ ] Reconcile all requested deliverables against existing contracts and mark unresolved dependencies explicitly.
-  - [ ] Review every diff hunk and run `make scope-check ENV=test-llm-deployable-process`; runtime typecheck/lint/test not applicable to prose.
-  - [ ] Commit only the two allowed files via `make commit`; preserve `BRANCH.md` for conductor handoff.
-  - [ ] Run cleanup `make down API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process` and inspect `make ps API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process`.
-  - [ ] Report exact checks, feedback, risks, scope, and `git log --oneline origin/main..HEAD`.
+  - [x] Gate: source-contract review and `make scope-check ENV=test-llm-deployable-process` passed on preceding delivery commit; repeat before final commit.
+- [x] **Lot 3 — Consolidation and final validation**
+  - [x] Reconcile all requested deliverables against existing contracts; spec sections 0-11 name evidence, decisions, file-level build tests, future exceptions and unresolved dependencies.
+  - [x] Review every diff hunk; `git diff --check origin/main` and `harness check branch` passed. Runtime typecheck/lint/test are not applicable to prose; future recipes are explicitly marked unexecuted.
+  - [x] `make scope-check ENV=test-llm-deployable-process` passed before each preceding commit; final staged scope gate is required again for this completion commit.
+  - [x] Commit only the two allowed files via `make commit`; preserve `BRANCH.md` for conductor handoff; no push/PR/merge/publication.
+  - [x] Cleanup passed: `make down API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process`; `make ps API_PORT=9460 UI_PORT=5660 MAILDEV_UI_PORT=1560 ENV=test-llm-deployable-process` returned no services. Compose only warned that `DISABLE_RATE_LIMIT` is unset; no service was started.
+  - [x] Prepare handoff with exact checks, D-FL1..8, G1-G4 risks, two-file scope, and final `git log --oneline origin/main..HEAD`.
