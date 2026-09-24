@@ -43,6 +43,8 @@
 - [ ] UAT and CI qualify the final integrated revision; no local E2E.
 
 ## Plan / Todo (lot-based)
+- [x] Fix pass slice 4 continued: composer invariants checked after every route including Comments; pager/assembly now render nonempty rows.
+- [x] Fix pass slice 4: nonempty production app-to-list forwarding and exact callbacks; register all four reference-validation changes and limits.
 - [x] Fix pass slice 3: production gate action, availability, busy/error and mount/disposal assertions added.
 - [x] Fix pass slice 2: compile production app dock/gate/body snippets in DOM harness with controlled host state and ChatPanel lifecycle double.
 - [x] Fix pass slice 1: restore conditional section motion assertion; remove redundant region; silence grip static-interaction warning; unify ChatWidgetTab; document header override and non-app 0.34.0 migration.
