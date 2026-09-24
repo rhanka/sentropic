@@ -46,14 +46,23 @@ transition to `denied` and subsequent poll outcomes. Legacy ports remain valid;
 calling denial without a binding throws `CapabilityGatedError('device_denial')`.
 The method stays optional on the public domain interface for compatibility.
 
-`SignedProjectionReference.expiresAt?: number` is an absolute Unix-millisecond
-deadline. Omitted expiry retains legacy behavior. Both project and resolve reject
-malformed or elapsed deadlines (including equality), after signature verification
-and before returning or resolving the reference. `createLocalProjectionDomain`
-accepts `now?: () => number` for deterministic clocks, defaulting to `Date.now`.
-The local signer/verifier must authenticate the expiry as part of its signed
-payload and reject tampering, including removal. Expiry bounds a validity window;
-it does not provide single-use replay prevention or change signing ownership (F5).
+`SignedProjectionReference` accepts optional Unix-millisecond `expiresAt` and
+`issuedAt`. Hosts must sign and verify `canonicalProjectionReferenceBytes(ref)`:
+UTF-8 JSON in the fixed order `kind`, `reference`, `homeNodeId`, `issuer`, `keyId`,
+`expiresAt`, `issuedAt`, omitting undefined timestamps and excluding `signature`.
+Both project and resolve validate timestamps after verification and before delegation.
+Legacy mode still accepts references without timestamps. `createLocalProjectionDomain`
+accepts `requireExpiry: true` for strict mode, `maxTtlMs` to bound expiry minus
+issued time (or current time when issued time is absent), and `clockSkewMs`
+(default zero) to tolerate clock differences at expiry and issuance boundaries.
+TTL must be positive; skew must be nonnegative; both are safe integer milliseconds.
+`now?: () => number` defaults to `Date.now`; strict mode rejects non-finite clocks.
+With zero skew, expiry equal to now is rejected; issuance after now is rejected.
+
+Expiry is advisory unless strict mode AND an authenticating verifier are used.
+It bounds the replay window (plus allowed clock skew), but does not prevent replay
+inside it. Full G3 closure per D13 also requires a server challenge on the h2a side,
+outside this package. Signing ownership (F5) remains unchanged.
 
 `verifyCustodySignature` is exported from the package root for standalone Ed25519
 verification; it returns false for malformed keys, signatures, or verification

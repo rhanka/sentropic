@@ -13,6 +13,16 @@ export interface SignedProjectionReference {
   readonly signature: string;
   /** Unix milliseconds; when present, must be authenticated by the local verifier. */
   readonly expiresAt?: number;
+  /** Unix milliseconds; authenticated with the expiry by the host. */
+  readonly issuedAt?: number;
+}
+
+/** Hosts must sign/verify these UTF-8 JSON bytes; signature is deliberately excluded. */
+export function canonicalProjectionReferenceBytes(ref: SignedProjectionReference): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify({
+    kind: ref.kind, reference: ref.reference, homeNodeId: ref.homeNodeId,
+    issuer: ref.issuer, keyId: ref.keyId, expiresAt: ref.expiresAt, issuedAt: ref.issuedAt,
+  }));
 }
 
 export interface LocalProjectionPort {
@@ -32,11 +42,24 @@ export function createLocalProjectionDomain(input: {
   readonly homeNodeId: ClusterNodeId;
   readonly local: LocalProjectionPort;
   readonly now?: () => number;
+  readonly requireExpiry?: boolean;
+  readonly maxTtlMs?: number;
+  readonly clockSkewMs?: number;
 }): ProjectionDomain {
+  const skew = input.clockSkewMs ?? 0;
+  if (!Number.isSafeInteger(skew) || skew < 0 || (input.maxTtlMs !== undefined &&
+      (!Number.isSafeInteger(input.maxTtlMs) || input.maxTtlMs <= 0))) {
+    throw new TypeError('Projection TTL must be positive and clock skew nonnegative safe milliseconds');
+  }
   function requireUnexpired(reference: SignedProjectionReference) {
-    if (reference.expiresAt === undefined) return;
+    const { expiresAt, issuedAt } = reference;
+    if (!input.requireExpiry && expiresAt === undefined && issuedAt === undefined) return;
     const now = (input.now ?? Date.now)();
-    if (!Number.isSafeInteger(reference.expiresAt) || !Number.isFinite(now) || reference.expiresAt <= now) {
+    if (!Number.isFinite(now) || (input.requireExpiry && expiresAt === undefined) ||
+        (issuedAt !== undefined && (!Number.isSafeInteger(issuedAt) || issuedAt > now + skew)) ||
+        (expiresAt !== undefined && (!Number.isSafeInteger(expiresAt) || expiresAt <= now - skew ||
+          (issuedAt !== undefined && expiresAt <= issuedAt) ||
+          (input.maxTtlMs !== undefined && expiresAt - (issuedAt ?? now) > input.maxTtlMs)))) {
       throw new InvalidProjectionReferenceError();
     }
   }
