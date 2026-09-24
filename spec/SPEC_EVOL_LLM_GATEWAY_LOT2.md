@@ -26,7 +26,10 @@ The native dispatch port carries `SecretAuthMaterial`; BR-73 attempts already ex
 BR-73 supersedes the older gateway-owned refresh/pool architecture for routed execution.
 Lot 2 must not feed a routed attempt through `AuthResolver`, reselect accounts or copy route policy.
 DB/KMS provisioning, BR-47 reservation storage, cross-user activation, new endpoints and provider
-transports are outside this lot. Existing quota/settlement hooks remain; no new database migration.
+transports are outside this lot. No quota admission hook exists. `budgetScope` is only carried;
+no source path raises `over-budget`, and Lot 2 emits it nowhere. The existing error union/mapping
+does not enforce a budget. Quota admission stays with BR-47 / deployable-process Lot D; settlement
+hooks remain as described in D6. No new database migration.
 Native transport exports remain supported as explicitly selected APIs; a failed mesh route never
 falls back to them. Removing those published exports is a separate owner decision.
 
@@ -210,31 +213,36 @@ Caller tokens authenticate a Sentropic principal; provider material authenticate
 native-path types. Routed production uses mesh `RoutePlanner.prepareAttempt` exclusively; mesh owns
 refresh, leases and provider material. Caller auth must never depend on `AuthResolver.resolve`, and
 cost resolution must never see a provider token. No cross-user grant is added by a principal mapper.
+Update the `AuthResolver` comment in `src/ports/pool.ts`: gateway-owned refresh applies to the
+**native path only**; BR-73 routed refresh is mesh-owned. Remove its blanket "NEVER delegated to
+llm-mesh" claim without changing the interface.
 Lot 2 production composition uses personal-passthrough with the cross-user switch off; this design
 does not authorize activating cross-user mode, even when a host sets a boolean to true.
 
 ### D5 — Mesh-backed dispatch is an opaque-attempt adapter
 
-Add the following exports to `ports/dispatch.ts` and `src/mesh-dispatch.ts` respectively:
+Add the following exports to `ports/dispatch.ts` and `src/route-attempt-dispatch.ts` respectively.
+Use `RouteAttemptDispatch*` names to avoid `@sentropic/chat-core/src/mesh-port.ts:126`'s unrelated
+`MeshDispatchPort` invocation contract:
 
 ```ts
 import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult }
   from '@sentropic/llm-mesh';
-export interface MeshDispatchRequest {
+export interface RouteAttemptDispatchRequest {
   readonly attempt: Pick<PreparedRouteAttempt, 'generate' | 'stream'>;
   readonly request: Omit<StreamRequest, 'auth'>;
 }
-export interface MeshDispatchPort {
-  generate(input: MeshDispatchRequest): Promise<GenerateResponse>;
-  stream(input: MeshDispatchRequest): Promise<StreamResult>;
+export interface RouteAttemptDispatchPort {
+  generate(input: RouteAttemptDispatchRequest): Promise<GenerateResponse>;
+  stream(input: RouteAttemptDispatchRequest): Promise<StreamResult>;
 }
-export class MeshDispatch implements MeshDispatchPort {
-  generate(input: MeshDispatchRequest): Promise<GenerateResponse>;
-  stream(input: MeshDispatchRequest): Promise<StreamResult>;
+export class RouteAttemptDispatch implements RouteAttemptDispatchPort {
+  generate(input: RouteAttemptDispatchRequest): Promise<GenerateResponse>;
+  stream(input: RouteAttemptDispatchRequest): Promise<StreamResult>;
 }
-// Additive fields (default to one concrete MeshDispatch):
-// RouteFlowDeps: readonly dispatch?: MeshDispatchPort;
-// CreateGatewayRouterOptions: readonly routeDispatch?: MeshDispatchPort;
+// Additive fields (default to one concrete RouteAttemptDispatch):
+// RouteFlowDeps: readonly dispatch?: RouteAttemptDispatchPort;
+// CreateGatewayRouterOptions: readonly routeDispatch?: RouteAttemptDispatchPort;
 ```
 
 `generate`/`stream` delegate to the exact prepared attempt, preserving canonical messages, tool
@@ -305,13 +313,13 @@ This table is exhaustive for existing public declarations changed by Lot 2. No e
 | `GatewayFlowRequest` | Add required `authContext` | Breaking for constructed requests to runJsonFlow/runStreamFlow/prepareRouteFlow/runRouteJsonFlow/runRouteStreamFlow |
 | `GatewayFailureKind` | Add `'caller-auth-unavailable'`; `router/errors.ts` maps verifier/store unavailability to provider-shaped 503 | Public union addition: breaking for exhaustive switches/records; existing variants unchanged |
 | `PersonalPassthroughCallerAuthOptions` | Add optional `costContextResolver?: CostContextResolver` | Additive; conflicting correlation options fail configuration only when the resolver is selected |
-| `RouteFlowDeps` | Add optional `dispatch?: MeshDispatchPort` | Additive; existing direct routed callers use the default adapter |
-| `CreateGatewayRouterOptions` | Add optional `routeDispatch?: MeshDispatchPort` | Additive; createGatewayRouter signature and Hono return type unchanged |
+| `RouteFlowDeps` | Add optional `dispatch?: RouteAttemptDispatchPort` | Additive; existing direct routed callers use the default adapter |
+| `CreateGatewayRouterOptions` | Add optional `routeDispatch?: RouteAttemptDispatchPort` | Additive; createGatewayRouter signature and Hono return type unchanged |
 | `CreateGatewayRouterOptions.publicUrl` | Add optional `publicUrl?: (req: Request) => string`, default request URL | Additive; trusted host callback supplies DPoP htu behind TLS ingress; invalid URL/throw fails closed |
 
 New root exports, exactly: `CallerAuthRequestContext`, `CostContextResolver`,
-`VerifiedCostContextResolver` (no-argument constructor), `MeshDispatchRequest`, `MeshDispatchPort`,
-`MeshDispatch` (no-argument constructor). Keep auth implementation/dependency types out of these barrels.
+`VerifiedCostContextResolver` (no-argument constructor), `RouteAttemptDispatchRequest`, `RouteAttemptDispatchPort`,
+`RouteAttemptDispatch` (no-argument constructor). Keep auth implementation/dependency types out of these barrels.
 New `/auth` exports, exactly: `ServiceAuthCallerIdentity`, `ServiceAuthVerifyTokenOptions`,
 `ServiceAuthVerifyToken`. New `/auth-hono` exports, exactly: `AuthHonoCallerIdentity`,
 `AuthHonoVerifyTokenOptions`, `AuthHonoVerifyToken`. Each verifier constructor takes its own options;
@@ -401,9 +409,9 @@ several atomic commits under approximately 150 lines; none is separately publish
 | Lot | Implementation files | Tests and acceptance |
 |---|---|---|
 | I0 — Dependency and harness readiness | `package.json`, root `package-lock.json`; proposed Makefile exception only after owner approval | Confirm auth-hono public exports and peers load in the gateway's isolated Docker toolset. Existing Make recipes only install mesh/Hono; add dependency build/link/install wiring through an approved exception before I1. No compose/workflow changes required by this design. |
-| I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/errors.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Test default/custom public URL for both wires/models, trusted TLS ingress versus spoofed forwarded headers, invalid URL/callback throw; both 503 wire mappings and exhaustive failure handling. Header-only direct calls and invalid result variants fail typechecking. |
+| I1 — Request-bound auth contracts | `src/ports/caller-auth.ts`, `src/ports/pool.ts` (native-only AuthResolver comment), `src/personal-passthrough/caller-auth.ts`, `src/flow.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`, `src/stubs.ts` | Update `tests/fixtures/harness.ts`, `tests/router.test.ts`, `tests/errors.test.ts`, `tests/models.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`; add `tests/caller-auth.test.ts` and `tests/lot2-types.test.ts`. Test default/custom public URL for both wires/models, trusted TLS ingress versus spoofed forwarded headers, invalid URL/callback throw; both 503 wire mappings and exhaustive failure handling. Header-only direct calls and invalid result variants fail typechecking. |
 | I2 — Concrete verification and cost | New `src/caller-auth/service-auth.ts`, `src/caller-auth/auth-hono.ts`, `src/cost-context.ts`; update `src/ports/cost-context.ts`, `src/personal-passthrough/caller-auth.ts`, `src/index.ts`, `src/ports/index.ts`, `package.json` subpath exports | New `tests/service-auth.test.ts`, `tests/auth-hono.test.ts`, `tests/auth-subpaths.test.ts`, `tests/cost-context.test.ts`, `tests/fixtures/auth-hono.ts`. Real mcp-auth service and auth-hono session middleware with deterministic clock/JWKS/stores; validate the matrix below. Root runtime/declarations load without auth peers; service loads without auth-hono; session loads without mcp-auth; missing selected peer fails closed. Update `tests/caller-ownership.test.ts` for forgery and enrolled-owner matching. |
-| I3 — Opaque mesh adapter | New `src/mesh-dispatch.ts`; update `src/ports/dispatch.ts`, `src/index.ts`, `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`, `src/router/index.ts` | New `tests/mesh-dispatch.test.ts`; update `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/router.test.ts`. Exact attempt, signal/tools preservation, no auth injection, default adapter, no native-port calls, cancellation and one terminal outcome. |
+| I3 — Opaque mesh adapter | New `src/route-attempt-dispatch.ts`; update `src/ports/dispatch.ts`, `src/index.ts`, `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`, `src/router/index.ts` | New `tests/route-attempt-dispatch.test.ts`; update `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/router.test.ts`. Exact attempt, signal/tools preservation, no auth injection, default adapter, no native-port calls, cancellation and one terminal outcome. |
 | I4 — Lifecycle and wire integration | Same routed flow/router files; only directly required fixes in `src/canonical-ingress.ts`, `src/canonical-egress.ts`, `src/canonical-stream.ts` | Update `tests/route-flow-core.test.ts`, `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`, `tests/contract-snapshot.test.ts`; new `tests/lot2-router-integration.test.ts`. Cross-wire fixtures, pre/post-commit failure, empty plan/stream, iterator cleanup, settlement rejection without redispatch, missing usage and redaction. |
 | I5 — Release and consumer qualification | `package.json` at 0.18.0, root lockfile, `README.md`, final spec/branch evidence; h2a owner edits its own repository | All gateway tests/typecheck/lint/pack; auth-hono reference tests; mesh regressions below; exact-candidate h2a compilation/UAT for both named entrypoints. Release only after independent review and consumer evidence. |
 
@@ -444,7 +452,7 @@ Use existing package targets, after I0 dependency wiring is approved and impleme
 ```sh
 make test-llm-gateway SCOPE=tests/auth-hono.test.ts ENV=test-llm-gateway-lot2
 make test-llm-gateway SCOPE=tests/cost-context.test.ts ENV=test-llm-gateway-lot2
-make test-llm-gateway SCOPE=tests/mesh-dispatch.test.ts ENV=test-llm-gateway-lot2
+make test-llm-gateway SCOPE=tests/route-attempt-dispatch.test.ts ENV=test-llm-gateway-lot2
 make test-llm-gateway SCOPE=tests/lot2-router-integration.test.ts ENV=test-llm-gateway-lot2
 make typecheck-llm-gateway ENV=test-llm-gateway-lot2
 make lint-llm-gateway ENV=test-llm-gateway-lot2
@@ -478,7 +486,7 @@ Make command with ENV last, then run make down on that same isolated project.
 | O4 | Reversible / gateway owner | Keep native contracts and add the opaque adapter. Reconsider removing native exports only in a separate migration brief; no implicit dual dispatch. |
 | O5 | Reversible / h2a conductor | Use measured origin/main `75c1dc61`; the brief's imports are correct. Recheck the release candidate SHA, typecheck both unchanged inline verifiers, manually bump gateway ranges and qualify mesh >=0.21.2. |
 | O6 | Irreversible scope gate / implementation owner | I0 Makefile changes require a separately approved exception before implementation. This specification records the dependency gap and does not authorize touching infrastructure. |
-| O7 | Irreversible contract/security gate / owner | Any additional published break, new DB migration, changed wire, cross-user activation or per-user OBO claim exposure requires a new decision. Conservative default: none. |
+| O7 | Irreversible contract/security gate / owner | Any additional published break, new DB migration, changed wire, cross-user activation or per-user OBO claim exposure requires a new decision. Conservative default: none. Quota admission remains BR-47 / deployable-process Lot D: budgetScope is carried only, no quota hook exists, and Lot 2 emits no over-budget failure. |
 
 D1/D7's enumerated TypeScript breaks and D8's 0.x minor boundary are within the supplied brief;
 no further irreversible choice is taken here. Open deployment values do not prevent this design
