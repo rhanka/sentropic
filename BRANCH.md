@@ -49,7 +49,7 @@
   - [x] R5: Typed NHI argument rejection and negative `tests/nhi.spec.ts` cases; reject whitespace-only and whitespace-prefixed options conservatively before invoking the runner.
   - [x] R6: Injected NHI shape validation, trust documentation and `tests/bindings.spec.ts` cases; malformed injection fails construction even with a runner, preserving valid injected port identity.
   - [x] R7: Changelog type widenings, denial feature detection and 0.9 migration guidance; custody export explicitly does not close h2a-internal F8.
-  - [ ] R8: Replace bare rejection assertions with specific error codes.
+  - [x] R8: Replace all three bare rejection assertions with `invalid_projection_reference`; no bare `rejects.toThrow()` remains in package tests.
   - [ ] Final round-one gate: full package typecheck/tests, scope checks, environment shutdown and commit log.
 - [x] **Lot 0 — Baseline**: read rules, template, h2a spec and historical consumer; mechanical branch check passed; published version is 0.10.1.
 - [x] **Lot 1 — Bindings**: mesh.ts runtime capabilities and injectable NHI; mesh.spec.ts and bindings.spec.ts compatibility, gated bindings, injection and failure tests; bump package.json to 0.11.0.
