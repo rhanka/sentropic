@@ -493,3 +493,22 @@ inventory found only dead middleware/URL emission.
 - Runtime and adapters: `packages/cluster-mesh/src/**`, `api/src/services/cluster-mesh-adapter.ts`, `api/src/index.ts`.
 - Real reusable Hono factories: `packages/auth-hono/src/router.ts`, `packages/auth-hono/src/oauth/router.ts`, `packages/auth-hono/src/oauth/wellknown-handler.ts`, `packages/mcp-auth/src/hono.ts`, `packages/llm-gateway/src/router/index.ts`, `packages/chat-server/src/index.ts`.
 - Provider/application sources: `packages/{mcp-platform,mcp-auth,llm-gateway,llm-mesh,connector-host,focus,flow,chat-core,chat-server,comments,auth-hono,auth-client,oauth-verify,harness}/**`, `api/src/services/{app-control-plane,catalog,resource-plane,flow,focus}/**` and the 56 route files.
+
+## Amendment 2026-09-23 — Single lazy integration surface
+
+Authority: owner decision dated 2026-09-23, relayed by the product conductor for Lot E. This append-only amendment preserves the existing decision record and strengthens the integration responsibility in D14. The implementation design is [Cluster Mesh as the Single Lazy Integration Surface](SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md).
+
+Owner decision, verbatim:
+
+> "cluster-mesh DOIT embarquer en lazy TOUTES les possibilités, pour éviter l'intégration au tiers. donc h2a DOIT déléguer le maximum de fonctions à cluster-mesh : le mcp, le llm-mesh, etc."
+
+Translation:
+
+> cluster-mesh MUST embed ALL capabilities lazily, to avoid third-party integration; h2a MUST delegate the maximum of functions to cluster-mesh: MCP, llm-mesh, etc.
+
+Ratified reading:
+
+- **D1 preserves dependency direction.** llm-mesh, llm-gateway, MCP and other provider/domain modules remain autonomous, independently publishable and usable without cluster-mesh. They never acquire a dependency on cluster-mesh. Integration ownership does not transfer their domain implementations or authorization responsibilities.
+- **D14 establishes the single lazy integration surface.** cluster-mesh composes all capabilities for consumers, including h2a, through optional module installation and on-demand loading. A bare cluster-mesh installation does not pull every provider or its dependencies. h2a delegates the maximum integration work to cluster-mesh rather than importing each domain package's API directly; selected optional peers still require explicit deployment provisioning.
+- **One composition mechanism remains.** The existing Hono namespace registry, `/llm-mesh`, `/gw` and `/mcp` projections, D3 responsibility split, D11 single-author cutover and D15 MCP authority remain intact. Lazy SDK acquisition and namespace preparation share cluster-mesh's module registry; the synchronous plugin remains the mounting boundary. Application-owned factories stay injected until independently extracted, with no package-to-application dependency.
+- **Additive follow-through.** The new spec defines optional-peer/dynamic-import and declaration behavior, exact h2a symbol/MCP mappings, typed fail-closed refusal with F1-compatible diagnostics, version-skew rules, the 0.12.0 target after 0.11.0, the h-cond migration handoff and file-level implementation tests. The parallel `feat/cluster-mesh-upstream-feedback` F1–F7 contract is preserved. Lot E delivers design only; implementation and consumer migration remain separate work.
