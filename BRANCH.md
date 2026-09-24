@@ -18,12 +18,15 @@
 - [x] **Exception process**: record `blocked` and stop for an irreversible contract change, migration or infrastructure change; no exceptions authorized.
 
 ## Feedback Loop
-- [x] E-A1 `attention`, owner: Lot E, 2026-09-23: optional peers plus async loaders preserve native constructors; root declarations stay provider-free, selected leaf types require the peer.
+- [x] E-A1 `attention`, owner: Lot E, revised 2026-09-24: select static provider leaves for import substitution and separate additive loaders; native ESM leaf failures cannot provide the loader's typed refusal.
 - [x] E-A2 `attention`, owner: Lot E, 2026-09-23: h2a MCP inventory includes external `@sentropic/track/mcp`; private broker/connectors remain gated until publishable contracts exist.
 - [x] E-A3 `attention`, owner: conductor, 2026-09-23: independent review remains conductor-owned per brief; no cross-host review or Track recorder artifacts outside the three allowed files, and no consensus claimed.
 - [x] E-A4 `attention`, owner: Lot E, 2026-09-23: keep synchronous plugin mounting after async preparation; inject the existing product LLM router because llm-mesh does not export it; preserve D1 and M05.
 - [x] E-A5 `attention`, owner: build conductor, 2026-09-23: MCP auth's local oauth-verify dependency needs a public-tarball install gate; refuse activation if unresolved rather than vendor or publish private proofs.
 - [x] E-A6 `attention`, owner: Lot E, 2026-09-23: accept tested provider patch ranges within one 0.x minor and reject duplicate LLM instances; widen only with a new compatibility matrix/minor.
+- [x] E-A7 `attention`, owner: Lot E, 2026-09-24: preserve Lot C's auth bridge only at `/gateway/auth-hono`; gateway root JS/types must not pull session auth, keeping service-only consumers independent.
+- [x] E-A8 `attention`, owner: h-cond, 2026-09-24: the fifth gateway file at `75c1dc61` is a resolution-test comment, not an import; map all measured files without inventing a fifth import.
+- [x] E-A9 `attention`, owner: conductor, 2026-09-24: Opus 5.5 design review must pass on the revised contract before delivery to h-cond/product conductor; no review pass or delivery claimed here.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only; runtime tests are specified for later implementation, not claimed as run.
@@ -40,3 +43,7 @@
 - [x] **Lot 2 — Amendment**: append dated verbatim decision, translation, preserved D1 and strengthened D14 with spec link; original 495 lines compare byte-for-byte equal; commit amendment with this checklist.
 - [x] **Final validation**: PASS `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` before each commit; exact diff/whitespace review; only allowed paths in the two-commit delivery.
 - [x] **Cleanup**: PASS `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; PASS `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` (no services).
+- [x] **Revision R1a — Consumer contract**: answer all three orientations with arguments; choose static leaves/separate loaders; enumerate all measured h2a sites including node; align Lot C auth isolation and E2–E7.
+- [ ] **Revision R1b — Upgrade and shipment**: pin gateway 0.18 compatibility; document cluster-mesh 0.9 → 0.10 → 0.11 → lazy minor; ship LLM/gateway before building MCP; revise file-level acceptance.
+- [ ] **Revision R1c — Authority and validation**: append consumer clarification inside the amendment only; scope-check each atomic commit, inspect final diff/history and clean up the reserved environment.
+- [ ] **Review/delivery gate (conductor-owned)**: independent Opus 5.5 design review passes; only then deliver the reviewed contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor.
