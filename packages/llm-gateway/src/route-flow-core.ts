@@ -7,6 +7,7 @@ import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonica
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
+import { authenticateCaller } from './internal/caller-auth.js';
 
 export interface RouteAttemptSettlement {
   readonly candidateRef: string;
@@ -63,7 +64,7 @@ export const prepareRouteFlow = async (
   if (deps.config.mode === 'cross-user-pool' && !deps.config.crossUserPoolEnabled) {
     throw new GatewayError('cross-user-disabled', 'cross-user pooling is disabled');
   }
-  const auth = await deps.config.callerAuth.verify(request.headers);
+  const auth = await authenticateCaller(deps.config.callerAuth, request.headers, request.authContext);
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }

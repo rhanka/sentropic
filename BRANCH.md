@@ -68,6 +68,7 @@
   - [x] Registry wait exercised: make wait-llm-gateway-auth-dependencies LLM_MESH_REGISTRY_WAIT_ATTEMPTS=1 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 fails closed on mcp-auth 0.2.1 E404, as required. Clean fixtures remain I2/I5 gates.
   - [ ] Qualify published mcp-auth 0.2.1 service-only install and auth-hono 0.15.0 session-only install (pending BRLG2-I0).
 - [ ] **I1 — Request-bound auth contracts**
+  - [x] Implement request context, discriminated auth result, generic unavailable mapping and trusted router URL projection; internal/caller-auth.ts shares validation across boundaries (private helper within package scope).
   - [ ] Update caller-auth/pool ports, personal auth, flow, route core, router/errors and stubs; bump gateway to 0.18.0.
   - [ ] Update fixtures/harness, router, errors, models, route-flow-core, route-json-flow, route-stream-flow tests; add caller-auth and lot2-types tests.
   - [ ] Verify public URL/default/invalid/spoofed forwarded headers, both wires/models, auth rejection/outage and compile-time invalid contracts.

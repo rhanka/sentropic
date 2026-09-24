@@ -14,7 +14,8 @@
  * verify -> identity -> CostContext) is real.
  */
 
-import type { CallerAuthPort, CallerAuthResult } from '../ports/caller-auth.js';
+import type { CallerAuthPort, CallerAuthResult, CallerAuthRequestContext } from '../ports/caller-auth.js';
+import { validateAuthContext } from '../internal/caller-auth.js';
 import type { CostContext } from '../ports/cost-context.js';
 
 /**
@@ -54,6 +55,7 @@ export interface VerifyToken {
     token: string,
     scheme: CallerAuthScheme,
     headers: Readonly<Record<string, string>>,
+    context: CallerAuthRequestContext,
   ): Promise<VerifiedPrincipal | undefined> | VerifiedPrincipal | undefined;
 }
 
@@ -118,13 +120,15 @@ export class PersonalPassthroughCallerAuth implements CallerAuthPort {
 
   async verify(
     headers: Readonly<Record<string, string>>,
+    context: CallerAuthRequestContext,
   ): Promise<CallerAuthResult> {
+    validateAuthContext(context);
     const parsed = parseAuthorization(headers);
     if (!parsed) {
       return { ok: false, reason: 'missing or malformed Authorization header' };
     }
 
-    const principal = await this.verifyToken.verify(parsed.token, parsed.scheme, headers);
+    const principal = await this.verifyToken.verify(parsed.token, parsed.scheme, headers, context);
     if (!principal) {
       return { ok: false, reason: 'token verification failed' };
     }

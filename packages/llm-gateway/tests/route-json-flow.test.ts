@@ -11,7 +11,7 @@ const policy = {
 };
 
 const request = {
-  wire: 'openai-chat-completions' as const, headers: {}, model: 'gpt-5.6-terra', stream: false,
+  wire: 'openai-chat-completions' as const, headers: {}, authContext: { method: "POST", url: "https://gateway.test/v1/chat/completions", requestId: "req-test" }, model: 'gpt-5.6-terra', stream: false,
   body: { model: 'gpt-5.6-terra', messages: [{ role: 'user', content: 'hello' }] },
 };
 
@@ -19,7 +19,7 @@ const config = {
   ...stubGatewayConfig,
   callerAuth: { async verify() {
     return {
-      ok: true,
+      ok: true as const,
       cost: {
         tenantId: 'tenant-1', principalId: 'user-1', source: 'test', correlationId: 'request-1',
       },
