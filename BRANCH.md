@@ -27,7 +27,7 @@
 - [x] A3 `attention`: Strict expiry is opt-in for legacy compatibility; hosts authenticate canonical bytes. TTL is bounded without adding skew; skew only affects issuance/expiry boundaries. D13 still needs an h2a server challenge; no F5 change.
 - [x] A4 `attention`: Device denial is optional on legacy ports and fails closed when absent.
 - [x] A5 `attention`: Consumer source missing in h2a checkout; read historical source at `6cf208f7` from local git history instead.
-- [x] A6 `attention`: No root cluster-mesh lint target exists; use package-local Docker target `lint.mk` within allowed scope, matching the existing LLM package lint rules.
+- [x] A6 `attention`: root `lint-cluster-mesh` target + CI wiring deferred to a dedicated Makefile/CI branch (forbidden paths here). The duplicate package recipe is removed; conductor owns the follow-up, accepted when the root target runs in CI.
 - [x] A7 `attention`: Use this BRANCH.md for decisions and progress; no out-of-scope spec or Track writes. Independent review is conductor-owned.
 - [x] A8 `attention` resolved: Multi-file SCOPE was interpreted as one filter and found no tests; the subsequent full suite passed both files. No test failure or product fix was involved.
 
@@ -43,7 +43,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot A — Review fix round 1**
   - [x] R1: Authenticate projection timestamps with canonical bytes; strict expiry/TTL/skew policy and Ed25519 regression tests in `tests/projection.spec.ts`.
-  - [ ] R2: Remove package lint recipe and published branch-specific commands; record root lint/CI deferral.
+  - [x] R2: Remove package lint recipe and published branch-specific commands; record root lint/CI deferral.
   - [ ] R3: Per-kind projection support in port, capabilities and `tests/bindings.spec.ts`.
   - [ ] R4: Public-contract fixtures and runner in `tests/conformance/`; document reuse for EX-12.
   - [ ] R5: Typed NHI argument rejection and negative `tests/nhi.spec.ts` cases.
