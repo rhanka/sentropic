@@ -31,7 +31,7 @@
   - [x] BRLG2-EX1/EX2 authorized by the implementation brief; record other irreversible out-of-brief decisions as `blocked` and stop.
 
 ## Feedback Loop
-- [ ] BRLG2-CONSUMER | attention | Owner: h2a conductor / release owner | Exact-candidate compilation/UAT for both named h2a entrypoints, duplicate mesh E8 qualification and independent review remain external owner gates. This worktree cannot edit or qualify the consumer checkout under the supplied scope. Acceptance: owner records candidate hash, both entrypoint typechecks and the spec section 3 UAT evidence before merge/release.
+- [ ] BRLG2-CONSUMER | blocked | Owner: consumer conductor (h-cond) | BLOCKS merge: h2a typecheck of both entrypoints against the candidate tarball — performed by the consumer conductor (h-cond); evidence to be recorded here. Record candidate SHA-256, both entrypoint results and spec section 3 UAT / duplicate mesh E8 evidence before merge/release. Consumer checkout is outside this worktree's write scope.
 - [x] BRLG2-URL | attention | Reversible | The reviewed spec defines publicUrl only and contains no publicOrigin declaration. Implement D1/D7 exactly; do not invent an additional public API. Clarification requested during build; no conflicting contract supplied.
 - [x] BRLG2-FIXTURE | attention | Reversible | Standalone declaration qualification uses TypeScript 5.9.3 with skipLibCheck disabled, exact hono 4.10.7/mesh 0.21.2 and Node types 22.20.1. Evidence: consumer Hono declarations use generic Uint8Array unsupported by repository compiler 5.4.5. Repository build compiler unchanged; fixture-only qualification pins avoid suppressing declaration failures. Rollback: git revert.
 - [x] BRLG2-EX1 | acknowledge | Owner: conductor | Approved before edits: Makefile `typecheck-llm-gateway`, `build-llm-gateway`, `test-llm-gateway` gain oauth-verify/mcp-auth/auth-hono build prerequisites and peer links; `package-llm-routing-candidates` adds auth tarballs; new `wait-llm-gateway-auth-dependencies` and `publish-llm-gateway` enforce recursive registry visibility. Reason: compile/qualify isolated optional auth subpaths. Impact: isolated toolset dependencies and publication ordering only. Rollback: git revert. No other Makefile, compose or workflow changes.
@@ -67,7 +67,7 @@
 - [ ] **Lot C — Build fix round 1**
   - [x] C1 — Explicitly record I0 as blocking merge AND release in branch and spec.
   - [ ] C2 — Recheck mcp-auth 0.2.1 at round end; qualify published service-only install or retain the open blocker and skip.
-  - [ ] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate.
+  - [x] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate; execution remains open in BRLG2-CONSUMER.
   - [ ] C4 — Validate encoding derived from the first upstream event before commitment; route-stream-flow.test.ts regression.
   - [ ] C5 — Honor claimed stream terminal outcomes in the outer catch; route-stream-flow.test.ts regression.
   - [ ] C6 — Zero usage for cancellation during dispatch validation before provider invocation; JSON/stream regressions.
