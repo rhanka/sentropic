@@ -1,7 +1,7 @@
 # Feature: Cluster mesh upstream feedback 0.11.0
 
 ## Objective
-- [ ] Deliver additive F1/F2/F3/F4/F6/F7 and the custody verifier export for h2a.
+- [x] Deliver additive F1/F2/F3/F4/F6/F7 and the custody verifier export for h2a.
 
 ## Scope / Guardrails
 - [x] Worktree `tmp/cm-upstream-feedback`, branch `feat/cluster-mesh-upstream-feedback`, base `75032fc85`.
@@ -27,8 +27,9 @@
 - [x] A3 `attention`: Projection expiry uses optional Unix milliseconds, checked after verification; verifiers must authenticate expiry with the signed payload; no replay registry or F5 change.
 - [x] A4 `attention`: Device denial is optional on legacy ports and fails closed when absent.
 - [x] A5 `attention`: Consumer source missing in h2a checkout; read historical source at `6cf208f7` from local git history instead.
-- [x] A6 `attention`: No root cluster-mesh lint target exists; add a package-local Docker lint Makefile within allowed scope.
+- [x] A6 `attention`: No root cluster-mesh lint target exists; use package-local Docker target `lint.mk` within allowed scope, matching the existing LLM package lint rules.
 - [x] A7 `attention`: Use this BRANCH.md for decisions and progress; no out-of-scope spec or Track writes. Independent review is conductor-owned.
+- [x] A8 `attention` resolved: Multi-file SCOPE was interpreted as one filter and found no tests; the subsequent full suite passed both files. No test failure or product fix was involved.
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic package unit tests only.
@@ -44,5 +45,12 @@
 - [x] **Lot 1 — Bindings**: mesh.ts runtime capabilities and injectable NHI; mesh.spec.ts and bindings.spec.ts compatibility, gated bindings, injection and failure tests; bump package.json to 0.11.0.
 - [x] **Lot 2 — Attestation and devices**: nhi.ts optional role/scope and device.ts optional denial; nhi.spec.ts/device.spec.ts positive and negative delegation tests.
 - [x] **Lot 3 — Projection and export**: projection.ts expiry and index.ts verifier export; projection.spec.ts expiry boundaries/invalid signatures and custody-export.spec.ts cryptographic positive/negative tests.
-- [ ] **Lot 4 — Documentation**: README.md SemVer/N-1 and binding contracts; CHANGELOG.md 0.10.0/0.10.1 from history and 0.11.0.
-- [ ] **Lot 5 — Validation**: package typecheck, lint, full tests, final diff review, scope-check, environment cleanup and committed handoff.
+- [x] **Lot 4 — Documentation**: README.md SemVer/N-1 and binding contracts; CHANGELOG.md 0.10.0/0.10.1 from history and 0.11.0.
+- [x] **Lot 5 — Validation**: package typecheck, lint, 39 files / 249 tests passed; final diff review and scope checks passed; isolated environment stopped.
+  - [x] PASS: `make test-cluster-mesh SCOPE=tests/bindings.spec.ts API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (3 tests).
+  - [x] FAILED invocation, superseded: `make test-cluster-mesh SCOPE='tests/nhi.spec.ts tests/device.spec.ts' API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (no matching files; A8).
+  - [x] PASS: `make typecheck-cluster-mesh test-cluster-mesh API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (249 tests).
+  - [x] PASS: `make -f packages/cluster-mesh/lint.mk lint-cluster-mesh API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback`.
+  - [x] PASS before each commit: `make scope-check API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback`.
+  - [x] PASS: `make down API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback`.
+  - [x] Read set: `rules/{MASTER,workflow,subagents,testing}.md`, `plan/BRANCH_TEMPLATE.md`, root README/TODO/PLAN context, package README/changelog and affected source/tests, h2a integration spec sections 7/feedback, historical consumer `6cf208f7`, h2a CLI NHI flags, release implementation commits.
