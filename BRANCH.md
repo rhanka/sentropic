@@ -30,6 +30,8 @@
 - [x] A6 `attention`: root `lint-cluster-mesh` target + CI wiring deferred to a dedicated Makefile/CI branch (forbidden paths here). The duplicate package recipe is removed; conductor owns the follow-up, accepted when the root target runs in CI.
 - [x] A7 `attention`: Use this BRANCH.md for decisions and progress; no out-of-scope spec or Track writes. Independent review is conductor-owned.
 - [x] A8 `attention` resolved: Multi-file SCOPE was interpreted as one filter and found no tests; the subsequent full suite passed both files. No test failure or product fix was involved.
+- [x] A9 `attention`: Keep `localProjectionKinds` optional in the public capability type to preserve older providers; the adapter always returns effective kinds. Reject whitespace-only and whitespace-prefixed NHI options conservatively.
+- [x] A10 `attention`: Gate 5 fixtures are delivered; h2a EX-12 cross-repository CI remains conductor-owned and must run both pinned supported lines before a major bump or field removal. No claim of complete gate 5 closure.
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic package unit tests only.
@@ -41,7 +43,7 @@
 - [x] No UI, Chrome, or VSCode changes; package contract tests are the local acceptance surface.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot A — Review fix round 1**
+- [x] **Lot A — Review fix round 1**
   - [x] R1: Authenticate projection timestamps with canonical bytes; strict expiry/TTL/skew policy and Ed25519 regression tests in `tests/projection.spec.ts`.
   - [x] R2: Remove package lint recipe and published branch-specific commands; record root lint/CI deferral.
   - [x] R3: Per-kind projection support in port, capabilities and `tests/bindings.spec.ts`; optional capability field preserves older provider shapes, adapter always supplies effective kinds.
@@ -50,7 +52,15 @@
   - [x] R6: Injected NHI shape validation, trust documentation and `tests/bindings.spec.ts` cases; malformed injection fails construction even with a runner, preserving valid injected port identity.
   - [x] R7: Changelog type widenings, denial feature detection and 0.9 migration guidance; custody export explicitly does not close h2a-internal F8.
   - [x] R8: Replace all three bare rejection assertions with `invalid_projection_reference`; no bare `rejects.toThrow()` remains in package tests.
-  - [ ] Final round-one gate: full package typecheck/tests, scope checks, environment shutdown and commit log.
+  - [x] Final round-one gate: full package typecheck/tests (40 files / 279 tests), scope checks, environment shutdown and commit log; all eight numbered requests committed independently, version remains 0.11.0 > published 0.10.1.
+  - [x] PASS: `make test-cluster-mesh SCOPE=tests/projection.spec.ts API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (22 tests).
+  - [x] PASS: `make test-cluster-mesh SCOPE=tests/bindings.spec.ts API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (4 tests after R3; 10 after R6).
+  - [x] PASS: `make test-cluster-mesh SCOPE=tests/conformance API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (9 tests).
+  - [x] PASS: `make test-cluster-mesh SCOPE=tests/nhi.spec.ts API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (10 tests).
+  - [x] PASS: `make typecheck-cluster-mesh test-cluster-mesh API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` (40 files / 279 tests).
+  - [x] PASS before each commit: `make scope-check API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback`; mechanical branch C1 and diff whitespace checks also pass.
+  - [x] PASS: `make down API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback`; `make ps API_PORT=9405 UI_PORT=5605 MAILDEV_UI_PORT=1505 ENV=test-cm-upstream-feedback` confirms no remaining services.
+  - [x] No round-one check failures; lint deferred under A6. Independent post-fix review remains conductor-owned per A7. F5 and the package naming question remain untouched.
 - [x] **Lot 0 — Baseline**: read rules, template, h2a spec and historical consumer; mechanical branch check passed; published version is 0.10.1.
 - [x] **Lot 1 — Bindings**: mesh.ts runtime capabilities and injectable NHI; mesh.spec.ts and bindings.spec.ts compatibility, gated bindings, injection and failure tests; bump package.json to 0.11.0.
 - [x] **Lot 2 — Attestation and devices**: nhi.ts optional role/scope and device.ts optional denial; nhi.spec.ts/device.spec.ts positive and negative delegation tests.
