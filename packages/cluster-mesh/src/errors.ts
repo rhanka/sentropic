@@ -1,4 +1,7 @@
 export type GatedCapability =
+  | 'local_devices'
+  | 'local_projection'
+  | 'device_denial'
   | 'inter_server_discovery'
   | 'inter_server_revocation'
   | 'rfc8693_token_exchange'
@@ -31,5 +34,14 @@ export class InvalidProjectionReferenceError extends Error {
   constructor() {
     super('The signed projection reference is invalid');
     this.name = 'InvalidProjectionReferenceError';
+  }
+}
+
+export class InvalidNhiArgumentError extends Error {
+  readonly code = 'invalid_nhi_argument';
+
+  constructor(public readonly argument: 'instance' | 'role' | 'scope') {
+    super(`NHI ${argument} must be nonempty and must not start with '-'`);
+    this.name = 'InvalidNhiArgumentError';
   }
 }

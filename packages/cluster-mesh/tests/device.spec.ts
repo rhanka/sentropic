@@ -2,6 +2,28 @@ import { describe, expect, it, vi } from 'vitest';
 import { createLocalDeviceDomain } from '../src/index.js';
 
 describe('local device attachment', () => {
+  it('should delegate denial and preserve all failure outcomes', () => {
+    const port = {
+      issueDeviceCode: vi.fn(), pollDeviceCode: vi.fn(), approveDeviceCode: vi.fn(),
+      denyDeviceCode: vi.fn(),
+      availability: 'available' as 'available' | 'gated',
+    };
+    const devices = createLocalDeviceDomain(port);
+    for (const result of [{ ok: true }, ...['not_found', 'expired', 'already_resolved'].map(reason => ({ ok: false, reason }))]) {
+      port.denyDeviceCode.mockReturnValueOnce(result);
+      expect(devices.denyDeviceCode?.('PAIR-CODE')).toBe(result);
+      expect(port.denyDeviceCode).toHaveBeenLastCalledWith('PAIR-CODE');
+    }
+    port.denyDeviceCode.mockClear();
+    port.availability = 'gated';
+    expect(() => devices.denyDeviceCode?.('PAIR-CODE')).toThrow('local_devices');
+    expect(port.denyDeviceCode).not.toHaveBeenCalled();
+    const legacy = createLocalDeviceDomain({
+      issueDeviceCode: vi.fn(), pollDeviceCode: vi.fn(), approveDeviceCode: vi.fn(),
+    });
+    expect(() => legacy.denyDeviceCode?.('PAIR-CODE')).toThrow('device_denial');
+  });
+
   it('should delegate the existing issue, poll and approve lifecycle without translation', () => {
     const issued = {
       deviceCode: 'device-code',
