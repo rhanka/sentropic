@@ -19,6 +19,11 @@
   export let renderJobsPanel: Snippet<[]> | undefined = undefined;
   export let renderCommentsPanel: Snippet<[]> | undefined = undefined;
   export let renderChatPanel: Snippet<[]> | undefined = undefined;
+  export let renderHeaderLeading: Snippet<[]> | undefined = undefined;
+  export let renderHeaderActions: Snippet<[]> | undefined = undefined;
+  export let headerGrip:
+    | { enabled?: boolean; dragging?: boolean; onPointerDown?: (event: PointerEvent) => void }
+    | undefined = undefined;
 
   let totalJobsCount = 0;
   $: totalJobsCount = activeJobsCount + failedJobsCount;
@@ -40,8 +45,15 @@
     class="chat-widget-shell flex h-full min-h-0 flex-col bg-white text-slate-900"
     aria-label={widgetLabel}
   >
-    <header class="flex h-14 items-center justify-between border-b border-slate-200 px-4">
-      <nav class="flex items-center gap-1 rounded bg-slate-50 p-1" aria-label={widgetLabel}>
+    <header
+      class="chat-widget-header flex h-14 items-center justify-between border-b border-slate-200 px-4"
+      data-header-grip={headerGrip?.enabled ? 'true' : undefined}
+      data-dragging={headerGrip?.dragging ? 'true' : undefined}
+      on:pointerdown={headerGrip?.onPointerDown}
+    >
+      <div class="flex items-center gap-2">
+        {#if renderHeaderLeading}{@render renderHeaderLeading()}{/if}
+        <nav class="flex items-center gap-1 rounded bg-slate-50 p-1" aria-label={widgetLabel}>
         {#if showCommentsTab}
           <button
             class="rounded px-2 py-1 text-xs transition {activeTab === 'comments'
@@ -82,9 +94,13 @@
             </span>
           {/if}
         </button>
-      </nav>
+        </nav>
+      </div>
 
-      {#if activeTab === 'queue' && onPurgeJobs}
+      <div class="flex items-center gap-2">
+        {#if renderHeaderActions}
+          {@render renderHeaderActions()}
+        {:else if activeTab === 'queue' && onPurgeJobs}
         <button
           class="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
           type="button"
@@ -92,7 +108,8 @@
         >
           Purge
         </button>
-      {/if}
+        {/if}
+      </div>
     </header>
 
     <div class="min-h-0 flex-1 overflow-hidden">
