@@ -1,7 +1,7 @@
 {
-  "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes.",
+  "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes. 0.34.0 breaking change: ChatWidget whole-shell override removed; use typed header/content/pager snippets. ChatPanel override remains.",
   "_generated": "2026-07-25",
-  "_version": "0.33.3",
+  "_version": "0.34.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -467,6 +467,12 @@
       "exists": true,
       "_propSnapshot": "Props: rows? (AgentsListRow[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn), onAction? (fn), formatRelative? (fn)."
     },
+    "./components/ChatWidgetTabBar.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatWidgetTabBar.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: activeTab (ChatWidgetTab='chat'|'queue'|'comments'), showCommentsTab? (boolean), chatTabLabel? (string), commentsTabLabel? (string), queueTabLabel? (string), onSelect (fn(tab)), showJobsBadge? (boolean), jobsBadgeCount? (number), variant? ('default'|'extension'), ariaLabel? (string). Two faithful looks: 'extension' = app extension-main-tab classes, no badge; 'default' = package plain, jobs badge."
+    },
     "./components/ChatPlacementMenuButton.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatPlacementMenuButton.svelte",
@@ -483,7 +489,7 @@
       "kind": "svelte",
       "file": "dist/components/ChatWidget.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "Props: activeTab? (ChatWidgetTab), activeJobsCount? (number), failedJobsCount? (number), chatTabLabel? (string), commentsTabLabel? (string), queueTabLabel? (string), widgetLabel? (string), showCommentsTab? (boolean), tabBarVariant? ('default'|'extension'), showJobsBadge? (boolean), onActiveTabChange? (fn), onPurgeJobs? (fn), renderJobsPanel? (Snippet<[]>), renderCommentsPanel? (Snippet<[]>), renderChatPanel? (Snippet<[]>), renderHeaderLeading? (Snippet<[]>), renderHeaderActions? (Snippet<[]>), headerGrip? ({enabled?,dragging?,onPointerDown?}), renderContentGate? (Snippet<[Snippet<[]>]>), agentsView? ('list'|'conversation'), canAgentsListBeDefaultView? (boolean), agentsList? (AgentsListProps), renderAgentsListHeader? (Snippet<[]>), renderConversationHeader? (Snippet<[]>), agentsViewAnnouncement? (string). Header/tabs outside gate; chat remains mounted across tab/list changes."
     },
     "./components/StreamMessage.svelte": {
       "kind": "svelte",
@@ -853,6 +859,12 @@
       "file": "dist/components/ChatPlacementDropZones.svelte",
       "exists": true,
       "_propSnapshot": "Props: zones? (DropZone[]), hovered? (ChatPlacement | null), labelForPlacement (required callback). Renders a pointer-events-none, reduced-motion-safe viewport overlay of host-computed drop zones; the hovered zone uses the active highlight."
+    },
+    "./components/ChatWidgetPager.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatWidgetPager.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: agentsView? ('list'|'conversation'), canAgentsListBeDefaultView? (boolean), agentsList? (AgentsListProps), renderAgentsListHeader? (Snippet<[]>), renderConversationHeader? (Snippet<[]>), renderChatPanel? (Snippet<[]>), agentsViewAnnouncement? (string). List unmounts on conversation view; conversation stays mounted while hidden."
     }
   }
 }
