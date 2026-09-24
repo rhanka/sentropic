@@ -26,13 +26,15 @@
 - [x] **Exception process**: propose `BRCI-EXn` with reason, impact, rollback for BUILD only; no exception is activated here.
 
 ## Feedback Loop
-- [x] BRCI-A1 | attention | Owner: conductor | Branch: current | 2026-09-24 | Reversible: use BLOCK for changed/publish-selected packages and WARN for unrelated published packages, preserving the conductor's rollout decision.
+- [x] BRCI-A1 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): BLOCK changed packages, absent packed versions selected for publication, and explicit bootstrap targets; WARN unrelated existing versions to avoid root-lock debt fanout.
 - [x] BRCI-A2 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | Install replays are mandatory BUILD closure evidence; SPEC cannot add or execute the nonexistent target. Expected: two successful reports; actual: pending implementation.
 - [x] BRCI-A3 | attention | Owner: conductor | Branch: current | 2026-09-24 | This two-file scope excludes harness/track recorder writes; branch and scope checks remain mandatory. Independent review precedes conductor push/PR/merge.
 - [x] BRCI-A4 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | Reversible: full candidate packs for BLOCK, lifecycle-free inventory snapshots for WARN; avoids unrelated native builds while every actual publication remains strict.
 - [x] BRCI-EX1 / BRCI-EX2 / BRCI-EX3 / BRCI-EX4 | attention | Owner: BUILD conductor | Branch: future BUILD | 2026-09-24 | Proposed only: Makefile, ci.yml, named scripts/tests, Package Publication rule; reason/impact/rollback in spec section 12. None applied here.
-- [x] BRCI-A5 | deferred | Owner: conductor | Branch: cowork remediation | 2026-09-24 | Cowork-desktop owner remains unassigned; warning debt becomes blocking when changed or publication-selected, including root-lock fanout.
+- [x] BRCI-A5 | attention | Owner: conductor | Branch: cowork remediation | 2026-09-24 | conductor decision (reversible): cowork-desktop owner remains unassigned; root-only changes and bootstrap all leave existing packed versions WARN; changed cowork, absent selected versions, and explicit cowork bootstrap stay BLOCK.
 - [x] BRCI-A6 | deferred | Owner: conductor | Branch: current | 2026-09-24 | Independent review remains the conductor handoff. No agents launched without the OK required by rules/subagents.md; no peer consensus claimed. Harness review dossiers/recorder files are outside this two-file scope.
+- [x] BRCI-R1-H1 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): derive P' and bootstrap-all selection from Docker registry lookups of packed versions; lookup failures are ERROR because unknown existence cannot safely select severity.
+- [x] BRCI-R1-H2 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): keep the inventory as a required PR check without publisher needs; skip existing versions with WARN before candidate packing/strict checks, while every actual publication checks its own archive.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation-only; no AI or runtime tests are executed or waived.
@@ -61,3 +63,8 @@
   - [x] `make down API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` passes.
   - [x] `make ps API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` passes with no services; Compose reports only an unset DISABLE_RATE_LIMIT warning.
   - [x] Handoff includes exact checks, explicit NOT RUN install replays, final scope verification, and `git log --oneline origin/main..HEAD`.
+- [ ] **Lot G-R1 — Design review revisions**
+  - [x] HIGH: correct root-lock/bootstrap classification, registry failure semantics, publisher independence, and skip ordering in the spec; update A5 and acceptance cases.
+  - [ ] MEDIUM: specify dependency-map bump enforcement and same-PR sibling archive qualification.
+  - [ ] LOW: tighten trimmed ranges, isolate file-list/filter outputs, gate all three lint jobs on baseline evidence, and require first-CI publication compatibility evidence.
+  - [ ] Re-run available Make checks, review only the two allowed files, clean the reserved environment, and report commits for independent review.
