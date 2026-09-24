@@ -40,6 +40,7 @@ const trackedExecution = (input: {
   let closing: Promise<unknown> | undefined;
   let outputCharacters = 0;
   let firstObserved = false;
+  let priming = true;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
   const isCancelled = () => terminal === 'cancelled';
   const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
@@ -81,9 +82,9 @@ const trackedExecution = (input: {
         if (event.type === 'error') throw event.data;
         if (event.type === 'done') {
           if (event.data.usage) reported = routeUsage(event.data.usage);
+          if (!priming) await finish({ reason: 'success', retryable: false, healthScope: 'route' });
           firstObserved = true;
           yield event;
-          await finish({ reason: 'success', retryable: false, healthScope: 'route' });
           return;
         }
         if (event.type === 'content_delta' || event.type === 'reasoning_delta' || event.type === 'tool_call_delta') {
@@ -138,7 +139,11 @@ const trackedExecution = (input: {
     stream.return = async value => { await cancel(); await encoded.return(undefined); return originalReturn(value); };
     return stream;
   };
-  return { encoded, expose, get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
+  const commit = async () => {
+    priming = false;
+    if (input.first.type === 'done') await finish({ reason: 'success', retryable: false, healthScope: 'route' });
+  };
+  return { encoded, expose, commit, get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
 };
 
 export const runRouteStreamFlow = async (
@@ -210,6 +215,7 @@ export const runRouteStreamFlow = async (
       committed = true;
       await preparedAttempt.markCommitted();
       signal?.throwIfAborted();
+      await execution.commit();
       return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(buffered) };
     } catch (error) {
       if (execution?.terminal) throw error;
