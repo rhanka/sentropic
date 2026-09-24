@@ -104,6 +104,7 @@
   - [x] Update routed flows/router only as required; canonical ingress/egress/stream unchanged. Existing conversion/compaction regressions pass.
   - [x] Add lot2-router-integration tests; update routed flow tests and exhaustive contract snapshot. Final I4 gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (212 passed, one pending service clean install).
 - [ ] **I5 — Release and consumer qualification**
+  - [x] Document 0.18.0 migration, optional subpath peers, trusted publicUrl/ownership, RFC 6750 deviation, stable affinity, dispatch and settlement boundaries in README.
   - [x] Retain exact fixture tarball/hash and root/session/service consumer lockfiles in ignored tmp/llm-gateway-qualification; approved candidate-pack target copies evidence and compares tarball bytes. Build fixture uses the normal dist output path for identical sourcemaps.
   - [ ] Update README, spec build evidence and candidate package metadata; pack exact candidates; run auth and six specified mesh regression scopes.
   - [ ] Consumer owner: exact-candidate h2a compilation/UAT at both entrypoints and independent review; no external repository edits authorized here.
