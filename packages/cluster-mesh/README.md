@@ -69,9 +69,8 @@ verification; it returns false for malformed keys, signatures, or verification
 failure. It does not enforce custody authorization, lifetime, or replay policy.
 
 Package checks from the repository root:
-`make typecheck-cluster-mesh ENV=test-cm-upstream-feedback`,
-`make test-cluster-mesh ENV=test-cm-upstream-feedback`, and
-`make -f packages/cluster-mesh/lint.mk lint-cluster-mesh ENV=test-cm-upstream-feedback`.
+`make typecheck-cluster-mesh ENV=<slug>` and
+`make test-cluster-mesh ENV=<slug>` (use an isolated test environment).
 
 Version 0.9 makes verified custody mandatory and adds action-aware authorization,
 required instruction-resolution and target-liveness ports, and explicit actuation
