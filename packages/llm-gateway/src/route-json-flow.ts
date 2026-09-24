@@ -13,7 +13,7 @@ const defaultDispatch = new RouteAttemptDispatch();
 const errorUsage = (error: unknown, fallback: SettleUsage): SettleUsage => {
   if (!error || typeof error !== 'object') return fallback;
   const usage = (error as { usage?: RouteAttemptUsage }).usage;
-  return usage ? { ...usage } : fallback;
+  return usage ? { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, estimated: usage.estimated } : fallback;
 };
 
 export interface RouteGatewayJsonResult extends CanonicalGatewayResponse {
@@ -52,6 +52,7 @@ export const runRouteJsonFlow = async (
     let response: GenerateResponse;
     let encoded: CanonicalGatewayResponse;
     let invoked = false;
+    let observedUsage: SettleUsage | undefined;
     try {
       signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
@@ -63,11 +64,12 @@ export const runRouteJsonFlow = async (
         ...prepared.canonical.request,
         ...(signal ? { signal } : {}),
       } });
+      if (response.usage) observedUsage = routeUsage(response.usage);
       signal?.throwIfAborted();
       encoded = encodeGatewayResponse(request.wire, response);
     } catch (error) {
       const classification = classifyRouteError(error, signal?.aborted);
-      const usage = errorUsage(error, invoked ? estimate() : routeUsage());
+      const usage = errorUsage(error, observedUsage ?? (invoked ? estimate() : routeUsage()));
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,

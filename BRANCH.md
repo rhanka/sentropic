@@ -99,6 +99,8 @@
   - [x] Wire router ReadableStream pull/cancel to a propagated AbortSignal and explicit generator return; detach request listeners on completion, cancellation or pre-stream failure.
   - [x] Add streaming regressions for unstarted/concurrent returns, ledger rejection, reported zero usage, error redaction/no terminator, pre-commit headers and empty streams/plans.
   - [x] Add lot2-router-integration for both wires/JSON/SSE, stable affinity versus financial correlation, header allowlist, exact settlement and HTTP cancellation before/after first read.
+  - [x] Preserve already-reported provider usage on conversion/error/cancellation paths and project only usage fields; include streamed tool argument characters in missing-usage estimates.
+  - [x] Add deterministic abort/pending-next/return race and pre-commit typed-usage tests. Previous full gate passed with 210 tests plus one pending service install; final I4 rerun includes these last usage refinements.
   - [ ] Update routed flows/router only as required; canonical ingress/egress/stream only for evidenced defects.
   - [ ] Add lot2-router-integration tests; update route-flow-core, route-json-flow, route-stream-flow and contract-snapshot for cross-wire, cleanup, settlement, missing usage and redaction.
 - [ ] **I5 — Release and consumer qualification**

@@ -9,6 +9,12 @@ import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
+const errorUsage = (error: unknown): SettleUsage | undefined => {
+  const usage = error && typeof error === 'object' ? (error as { usage?: SettleUsage }).usage : undefined;
+  return usage ? { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0,
+    estimated: usage.estimated ?? false } : undefined;
+};
+
 const servedTargetFor = (diagnostic: {
   readonly actualProviderId: string;
   readonly actualTransportProviderId: string;
@@ -32,7 +38,7 @@ const trackedExecution = (input: {
   let finishing: Promise<void> | undefined;
   let closing: Promise<unknown> | undefined;
   let outputCharacters = 0;
-  let reported: SettleUsage | undefined;
+  let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
   const isCancelled = () => terminal === 'cancelled';
   const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
   const usage = (): SettleUsage => reported ?? ({
@@ -80,12 +86,15 @@ const trackedExecution = (input: {
         if (event.type === 'content_delta' || event.type === 'reasoning_delta' || event.type === 'tool_call_delta') {
           outputCharacters = Math.min(4_000_000, outputCharacters + event.data.delta.length);
         }
+        if (event.type === 'tool_call_start') outputCharacters = Math.min(4_000_000,
+          outputCharacters + (event.data.argumentsText?.length ?? 0));
         yield event;
         next = await iterator.next();
       }
       throw new Error('stream ended without terminal event');
     } catch (error) {
       if (terminal) throw error; // callback failure: never record/settle again
+      reported = errorUsage(error) ?? reported;
       const classification = classifyRouteError(error, signal?.aborted);
       await finish(classification);
       if (classification.reason !== 'cancelled') yield { type: 'error', data: {
@@ -189,10 +198,10 @@ export const runRouteStreamFlow = async (
     } catch (error) {
       try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
       const classification = classifyRouteError(error, signal?.aborted);
-      const usage = invoked ? {
+      const usage = errorUsage(error) ?? (invoked ? {
         inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
         outputTokens: 0, estimated: true,
-      } : routeUsage();
+      } : routeUsage());
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,
