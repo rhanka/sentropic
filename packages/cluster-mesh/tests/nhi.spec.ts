@@ -16,6 +16,8 @@ describe('h2a NHI lifecycle', () => {
     expect(run).toHaveBeenCalledWith('h2a', [
       'nhi', 'attest', '--instance', 'agent', '--private-key', 'key', ...flags, '--root', '/root',
     ]);
+    run.mockResolvedValueOnce(success);
+    await expect(nhi.attest({ instance: 'agent', privateKey: 'key', ...context })).resolves.toBe(success);
     run.mockRejectedValueOnce(new Error('runner unavailable'));
     await expect(nhi.attest({ instance: 'agent', privateKey: 'key', ...context })).rejects.toThrow('runner unavailable');
   });
