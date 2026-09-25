@@ -569,7 +569,7 @@ QUALIFY_REGISTRY := https://registry.npmjs.org
 .PHONY: qualify-published-install test-qualify-published-install
 qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBALL=<path> [SIBLING_ARCHIVES_FILE=<receipts.json>] [PEERS=a@1,b@2] in a clean consumer
 	@if [ -n "$(PKG)" ] && [ -n "$(TARBALL)" ] || [ -z "$(PKG)$(TARBALL)" ]; then echo "ERROR: exactly one of PKG=<name>@<exact-version> or TARBALL=<path> is required"; exit 1; fi
-	@printf '%s' "$(PKG)$(PEERS)$(QUALIFY_MODE)" | grep -Eq '^[@a-z0-9._/,+-]*$$' || { echo "ERROR: PKG/PEERS/QUALIFY_MODE contain unsupported characters"; exit 1; }
+	@v="$(PKG)$(PEERS)$(QUALIFY_MODE)"; [ -z "$$v" ] || printf '%s' "$$v" | grep -Eq '^[@a-z0-9._/,+-]*$$' || { echo "ERROR: PKG/PEERS/QUALIFY_MODE contain unsupported characters"; exit 1; }
 	@if [ -n "$(TARBALL)" ]; then test -f "$(TARBALL)" || { echo "ERROR: TARBALL $(TARBALL) is not a file"; exit 1; }; fi
 	@if [ -n "$(SIBLING_ARCHIVES_FILE)" ]; then test -f "$(SIBLING_ARCHIVES_FILE)" && [ "$$(basename "$(SIBLING_ARCHIVES_FILE)")" = receipts.json ] || { echo "ERROR: SIBLING_ARCHIVES_FILE must be an existing receipts.json"; exit 1; }; fi
 	@mkdir -p "$(REPORT_DIR)"

@@ -15,9 +15,10 @@
   - `packages/cluster-mesh/**` (incl. `packaging.mk`, `tests/packaging/**`, fixtures, README, CHANGELOG)
   - `BRANCH.md`
   - `.github/workflows/ci.yml` (BRDP-EX10 only: train publish barrier, strict chain, concurrency, lock-sync, sibling-first lazy qualification, healed post-publication qualification, `verify-train-lock-integrity`)
-  - `scripts/ci/publishable-ci-wiring.test.mjs` (BRDP-EX10 wiring assertions only)
+  - `scripts/ci/publishable-ci-wiring.test.mjs` (BRDP-EX10 wiring assertions and the BRDP-EX11 guard test only)
+  - `Makefile` (BRDP-EX11 only: the `qualify-published-install` character-guard line)
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
+  - `Makefile` other than the BRDP-EX11 line
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**` other than the BRDP-EX10 `ci.yml` hunks
@@ -53,6 +54,7 @@
 - `attention`: post-merge checklist — verify the 3 published manifests (provenance, gitHead = merge commit, peer ranges, dist.integrity); `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=<env>` green (and the `verify-train-lock-integrity` job); lock-refresh follow-up PR (`refresh-lazy-package-lock` without siblings) with an empty diff, else a traced pack-drift repair.
 - `attention`: deviation from train design §5 (conductor-requested, fix round 1) — the three train publishers and `verify-train-lock-integrity` start with `!cancelled()` instead of `always()`, so a manual cancel stops the chain; the rest of each condition stays literal; rollback = restore `always()` and the wiring assertions.
 - `attention`: `verify-train-lock-integrity` passes `REQUIRE_PUBLISHED` = packages whose publish job result is `success` in this run (retried 12 x 5 s, then red); cluster-mesh post-publication heal of a `skipped` receipt runs only when `GITHUB_RUN_ATTEMPT` > 1 (first attempt: notice, exit 0).
+- `attention`: BRDP-EX11 (conductor-approved) — reason: `qualify-published-install` refused TARBALL mode without PEERS/QUALIFY_MODE because `printf` of an empty string gives `grep` no line (exit 1, CI run 36201194206 job validate-cluster-mesh); the character check now runs only on a non-empty value; impact: one Makefile recipe line, non-empty invalid values still refused; rollback: revert the Makefile line and its wiring test.
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic unit and packed-install tests, no provider call.
@@ -103,3 +105,7 @@
   - [x] EX10 `ci.yml`: skipped-receipt heal only on a re-run (`github.run_attempt > 1`), dead `qualify-report.json` test removed; `!cancelled()` replaces the leading `always()` of the three train publishers and `verify-train-lock-integrity`; wiring assertions.
   - [x] Gate PASS: `test-publishable-manifests` (73), `check-ci-version-filters`, `check-eradicated-packages`, `typecheck/lint/test/build/pack-cluster-mesh` (52 files, 389 tests; pack PASS block), `pack-candidate-siblings` (2 receipts at `c7909d843`), packed `test-lazy-package` with `SIBLING_ARCHIVES_FILE` (9 files, 58 tests), `scope-check` PASS C2; empty receipts `[]` at the exact path: accepted, all registry, fails at `selected` `npm ci` 404 (0.22.0 unpublished, expected; per-package expectation proven by unit rows).
   - [x] Candidates (not published, unchanged: only unpacked test files, `packaging.mk` and `ci.yml` moved): cluster-mesh 0.13.0 sha256 `6d091489ea2d5e62bd0f0e7d30de00d5b3b9fcb4296379f4a139e0b49f10cc54`, llm-mesh 0.22.0 `91fce7217da6abb60b93d6af04db7a873df4a7826795f6893970f15c77810751`, llm-gateway 0.19.0 `0b8d0f5ca790b45472df76c8280ca628c64ccaa9c8f33387899e2493ca48db89`.
+- [x] **Lot 7 — BRDP-EX11 qualification guard fix**
+  - [x] `qualify-published-install`: the PKG/PEERS/QUALIFY_MODE character check is skipped on an empty value (TARBALL mode without PEERS/QUALIFY_MODE); non-empty invalid values still refused.
+  - [x] Wiring test runs the host guard lines with `sh`: empty value passes, missing tarball fails on "is not a file", invalid PEERS refused, valid PEERS/QUALIFY_MODE pass; mutation (old line) makes it fail.
+  - [x] Gate PASS: `test-publishable-manifests` (74), `test-qualify-published-install` (11), `check-ci-version-filters`, `scope-check`.
