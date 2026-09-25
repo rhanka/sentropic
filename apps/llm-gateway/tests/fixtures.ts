@@ -27,20 +27,28 @@ export const fixtureCallerAuth: CallerAuthPort = {
   },
 };
 
-/** A provider stream that emits `one`, then waits for `release()` (or the abort signal) before `two`. */
-export const gatedStream = () => {
+/** Resolves on `gate`, or rejects on the request abort signal unless `ignoreAbort`. */
+const waitGate = (gate: Promise<void>, request: unknown, ignoreAbort = false): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    void gate.then(resolve);
+    const signal = (request as { signal?: AbortSignal }).signal;
+    if (!ignoreAbort) signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+  });
+
+/**
+ * A provider stream that emits `one`, then waits for `release()` (or the abort signal) before `two`.
+ * `beforeFirst` gates before `one`; `ignoreAbort` models a provider that ignores cancellation.
+ */
+export const gatedStream = (options: { beforeFirst?: boolean; ignoreAbort?: boolean } = {}) => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   const finished = vi.fn();
   const stream = vi.fn(async (_subject: unknown, _workspace: unknown, _target: unknown, request: StreamRequest) =>
     (async function* (): AsyncGenerator<StreamEvent> {
       try {
+        if (options.beforeFirst) await waitGate(gate, request, options.ignoreAbort);
         yield { type: 'content_delta', data: { delta: 'one' } };
-        await new Promise<void>((resolve, reject) => {
-          void gate.then(resolve);
-          const signal = (request as { signal?: AbortSignal }).signal;
-          signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
-        });
+        if (!options.beforeFirst) await waitGate(gate, request, options.ignoreAbort);
         yield { type: 'content_delta', data: { delta: 'two' } };
         yield { type: 'done', data: { finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 2 } } };
       } finally {
@@ -50,13 +58,30 @@ export const gatedStream = () => {
   return { stream, release: () => release(), finished };
 };
 
-export const fixtureDependencies = (stream = gatedStream().stream) => {
+const fixtureResponse = (): GenerateResponse => ({
+  id: 'fixture-response', providerId: 'openai' as const, modelId: 'gpt-fixture',
+  message: { role: 'assistant' as const, content: 'fixture answer' }, text: 'fixture answer',
+  toolCalls: [], finishReason: 'stop' as const, usage: { inputTokens: 2, outputTokens: 1 },
+});
+
+type Generate = (subject: unknown, workspace: unknown, target: unknown, request: unknown) => Promise<GenerateResponse>;
+
+/** A provider generate call that answers once `release()` is called, or rejects on abort. */
+export const gatedGenerate = () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const generate = vi.fn<Generate>(async (_subject, _workspace, _target, request) => {
+    await waitGate(gate, request);
+    return fixtureResponse();
+  });
+  return { generate, release: () => release() };
+};
+
+export const fixtureDependencies = (
+  stream = gatedStream().stream,
+  generate = vi.fn<Generate>(async () => fixtureResponse()),
+) => {
   const settlements: RouteRequestSettlement[] = [];
-  const generate = vi.fn(async (): Promise<GenerateResponse> => ({
-    id: 'fixture-response', providerId: 'openai' as const, modelId: 'gpt-fixture',
-    message: { role: 'assistant' as const, content: 'fixture answer' }, text: 'fixture answer',
-    toolCalls: [], finishReason: 'stop' as const, usage: { inputTokens: 2, outputTokens: 1 },
-  }));
   const dependencies: HostDependencies = {
     identity: { callerAuth: fixtureCallerAuth, ready: async () => true },
     routing: createRoutingDependency({
