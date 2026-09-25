@@ -560,6 +560,13 @@ check-publishable-manifest: ## Strictly inspect one real archive TARBALL=<path> 
 check-publishable-manifests: ## Inventory all public manifests; full-pack BLOCK packages (needs MANIFEST_CONTEXT_FILE or CI context)
 	@./scripts/ci/check-publishable-manifests.sh "$(ENV)"
 
+.PHONY: publishable-manifests-inventory
+publishable-manifests-inventory: ## Internal step of check-publishable-manifests: classify packages, audit WARN snapshots
+	@mkdir -p "$(MANIFEST_REPORT_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs inventory --report-dir /reports'
+
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs)'
@@ -604,7 +611,7 @@ build-cluster-mesh: build-events ## Build @sentropic/cluster-mesh dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf dist; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,cluster-mesh)
 
 publish-cluster-mesh: build-cluster-mesh ## Publish @sentropic/cluster-mesh from CI OIDC trusted publishing
 	@docker run --rm \
@@ -699,7 +706,7 @@ build-llm-gateway: build-llm-mesh build-oauth-verify build-mcp-auth build-auth-h
 
 .PHONY: pack-llm-gateway
 pack-llm-gateway: build-llm-gateway ## Validate @sentropic/llm-gateway npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,llm-gateway)
 
 LLM_ROUTING_PACK_DIR ?= /tmp/sentropic-llm-routing-pack
 
@@ -773,7 +780,7 @@ build-flow: install-internal-packages ## Build @sentropic/flow dist package
 
 .PHONY: pack-llm-mesh
 pack-llm-mesh: build-llm-mesh ## Validate @sentropic/llm-mesh npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,llm-mesh)
 
 CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE ?=
 AGY_BINARY ?=
@@ -866,12 +873,12 @@ build-chat-ui: ## Build @sentropic/chat-ui preprocessed dist via svelte-package 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund "@sveltejs/package@2.3.9" "svelte-preprocess@6.0.3" svelte@5.55.7 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sveltejs; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/package" node_modules/@sveltejs/package; ln -sfn "$$tool_dir/node_modules/svelte-preprocess" node_modules/svelte-preprocess; trap "cp /tmp/svelte.config.orig.js svelte.config.js; rm -rf node_modules" EXIT; cp svelte.config.js /tmp/svelte.config.orig.js; printf "import sveltePreprocess from '\''svelte-preprocess'\'';\nexport default { preprocess: sveltePreprocess({ typescript: true }) };\n" > svelte.config.js; "$$tool_dir/node_modules/.bin/svelte-package" -i src -o dist; find dist -name "*.svelte" -exec sed -i "s/<script lang=\"ts\">/<script>/g; s/<script lang=.ts.>/<script>/g" {} +'
 
 # BR-PKG-EX1 (Makefile exception): pack-chat-ui transiently rewrites package.json to dist-form,
-# runs npm pack --dry-run, then restores the src-form package.json.
+# runs the guarded real pack (BRCI-EX1), then restores the src-form package.json.
 # The committed repo package.json always stays src-form (exports -> ./src/...).
 .PHONY: pack-chat-ui
 pack-chat-ui: build-chat-ui ## Validate @sentropic/chat-ui npm package contents without publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; echo "--- dist sanity check ---"; if grep -rl "lang=\"ts\"" dist/components/*.svelte 2>/dev/null | grep -q .; then echo "FAIL: dist .svelte files still contain lang=ts -- svelte-package did not preprocess"; exit 1; fi; test -f dist/index.js || { echo "FAIL: dist/index.js missing"; exit 1; }; echo "PASS: no lang=ts in dist/components/*.svelte + dist/index.js exists"'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; echo "--- packed package.json exports (dist-form) ---"; node -e "const p=require(\"./package.json\"); console.log(JSON.stringify({main:p.main,types:p.types,files:p.files,exports_root:p.exports[\".\"]},null,2))"; npm pack --dry-run'
+	$(call manifest_guard_pack,chat-ui,$(MANIFEST_DIST_FORM))
 
 .PHONY: typecheck-auth-hono
 typecheck-auth-hono: build-oauth-verify ## Run @sentropic/auth-hono type checks
@@ -887,7 +894,7 @@ build-auth-hono: build-oauth-verify ## Build @sentropic/auth-hono dist package
 
 .PHONY: pack-auth-hono
 pack-auth-hono: build-auth-hono ## Validate @sentropic/auth-hono npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,auth-hono)
 
 .PHONY: publish-auth-hono
 publish-auth-hono: build-auth-hono ## Publish @sentropic/auth-hono from CI OIDC trusted publishing
@@ -940,7 +947,7 @@ build-auth-client: ## Build @sentropic/auth-client dist package
 
 .PHONY: pack-auth-client
 pack-auth-client: build-auth-client ## Validate @sentropic/auth-client npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,auth-client)
 
 .PHONY: publish-auth-client
 publish-auth-client: build-auth-client ## Publish @sentropic/auth-client from CI OIDC trusted publishing
@@ -999,7 +1006,7 @@ test-oauth-verify: ## Run @sentropic/oauth-verify tests
 
 .PHONY: pack-oauth-verify
 pack-oauth-verify: build-oauth-verify ## Validate @sentropic/oauth-verify npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,oauth-verify)
 
 .PHONY: publish-oauth-verify
 publish-oauth-verify: build-oauth-verify ## Publish @sentropic/oauth-verify from CI OIDC trusted publishing
@@ -1058,7 +1065,7 @@ test-mcp-auth: build-oauth-verify ## Run @sentropic/mcp-auth tests
 
 .PHONY: pack-mcp-auth
 pack-mcp-auth: build-mcp-auth ## Validate @sentropic/mcp-auth npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,mcp-auth)
 
 .PHONY: publish-mcp-auth
 publish-mcp-auth: build-mcp-auth ## Publish @sentropic/mcp-auth from CI OIDC trusted publishing
@@ -1123,7 +1130,7 @@ api-extract-mcp-platform: install-internal-packages ## Verify @sentropic/mcp-pla
 
 .PHONY: pack-mcp-platform
 pack-mcp-platform: build-mcp-platform ## Validate @sentropic/mcp-platform npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,mcp-platform)
 
 .PHONY: publish-mcp-platform
 publish-mcp-platform: build-mcp-platform ## Publish @sentropic/mcp-platform from CI OIDC trusted publishing
@@ -1173,7 +1180,7 @@ build-auth-ui: ## Build @sentropic/auth-ui dist package
 
 .PHONY: pack-auth-ui
 pack-auth-ui: build-auth-ui ## Validate @sentropic/auth-ui npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,auth-ui)
 
 .PHONY: publish-auth-ui
 publish-auth-ui: build-auth-ui ## Publish @sentropic/auth-ui from CI OIDC trusted publishing
@@ -1269,7 +1276,7 @@ build-cowork-bridge: ## Build @sentropic/cowork-bridge dist package
 
 .PHONY: pack-cowork-bridge
 pack-cowork-bridge: build-cowork-bridge ## Validate @sentropic/cowork-bridge npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-bridge $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,cowork-bridge)
 
 .PHONY: publish-cowork-bridge
 publish-cowork-bridge: build-cowork-bridge ## Publish @sentropic/cowork-bridge from CI OIDC trusted publishing
@@ -1326,7 +1333,7 @@ build-build-cli: ## Build @sentropic/build-cli dist package
 
 .PHONY: pack-build-cli
 pack-build-cli: build-build-cli ## Validate @sentropic/build-cli npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,build-cli)
 
 # --- @sentropic/harness (BR42h-EX1: additive lane; tooling-only, pure-TS, node test env) ---
 .PHONY: typecheck-harness test-harness build-harness pack-harness
@@ -1343,7 +1350,7 @@ build-harness: ## Build @sentropic/harness dist package
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 pack-harness: build-harness ## Validate @sentropic/harness npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,harness)
 
 # --- @sentropic/focus (BR-FOCUS-EX (Makefile): focus gained its first real runtime dep
 #     @sentropic/track, so it builds via the WORKSPACE node_modules — the install-internal-packages
@@ -1362,7 +1369,7 @@ build-focus: install-internal-packages ## Build @sentropic/focus dist package (r
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
 
 pack-focus: build-focus ## Validate @sentropic/focus npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,focus)
 
 publish-focus: build-focus ## Publish @sentropic/focus from CI OIDC trusted publishing
 	@docker run --rm \
@@ -1459,7 +1466,7 @@ build-cli: ## Build @sentropic/cli dist package
 
 .PHONY: pack-cli
 pack-cli: build-cli ## Validate @sentropic/cli npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,cli)
 
 .PHONY: publish-build-cli
 publish-build-cli: build-build-cli ## Publish @sentropic/build-cli from CI OIDC trusted publishing
@@ -1552,7 +1559,7 @@ build-cowork-desktop: ## Build @sentropic/cowork-desktop dist package
 
 .PHONY: pack-cowork-desktop
 pack-cowork-desktop: build-cowork-desktop ## Validate @sentropic/cowork-desktop npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,cowork-desktop)
 
 .PHONY: publish-cowork-desktop
 publish-cowork-desktop: build-cowork-desktop ## Publish @sentropic/cowork-desktop from CI OIDC trusted publishing
@@ -1675,27 +1682,27 @@ typecheck-comments: build-contracts ## Run @sentropic/comments type checks (requ
 
 .PHONY: pack-contracts
 pack-contracts: build-contracts ## Validate @sentropic/contracts npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,contracts)
 
 .PHONY: pack-events
 pack-events: build-events ## Validate @sentropic/events npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,events)
 
 .PHONY: pack-chat-core
 pack-chat-core: build-chat-core ## Validate @sentropic/chat-core npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,chat-core)
 
 .PHONY: pack-chat-server
 pack-chat-server: build-chat-server ## Validate @sentropic/chat-server npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,chat-server)
 
 .PHONY: pack-comments
 pack-comments: build-comments ## Validate @sentropic/comments npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,comments)
 
 .PHONY: pack-flow
 pack-flow: build-flow ## Validate @sentropic/flow npm package contents without publishing
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+	$(call manifest_guard_pack,flow)
 
 .PHONY: publish-contracts
 publish-contracts: build-contracts ## Publish @sentropic/contracts from CI OIDC trusted publishing
@@ -3407,7 +3414,7 @@ build-cited-source-viewer: ## Build @sentropic/cited-source-viewer publishable d
 .PHONY: pack-cited-source-viewer
 pack-cited-source-viewer: build-cited-source-viewer ## Validate @sentropic/cited-source-viewer npm package contents without publishing (dist-form tarball via transient package.json rewrite — BR-CSVP-EX1)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; echo "--- dist sanity check ---"; test -f dist/index.js || { echo "FAIL: dist/index.js missing"; exit 1; }; test -f dist/index.d.ts || { echo "FAIL: dist/index.d.ts missing"; exit 1; }; test -f dist/CitedSourceViewer.svelte || { echo "FAIL: dist/CitedSourceViewer.svelte missing"; exit 1; }; test -f dist/CitedSourceViewer.svelte.d.ts || { echo "FAIL: dist/CitedSourceViewer.svelte.d.ts missing"; exit 1; }; test -f dist/bodies/PdfBody.svelte || { echo "FAIL: dist/bodies/PdfBody.svelte missing"; exit 1; }; if grep -rl "lang=\"ts\"" dist --include "*.svelte" 2>/dev/null | grep -q .; then echo "FAIL: dist .svelte files contain lang=ts"; exit 1; fi; echo "PASS: dist complete (js + d.ts + plain-JS svelte)"'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; echo "--- packed package.json exports (dist-form) ---"; node -e "const p=require(\"./package.json\"); console.log(JSON.stringify({main:p.main,types:p.types,files:p.files,exports_root:p.exports[\".\"]},null,2))"; npm pack --dry-run'
+	$(call manifest_guard_pack,cited-source-viewer,$(MANIFEST_DIST_FORM))
 
 # BR-CSVP-EX1: publish-cited-source-viewer transiently rewrites package.json to dist-form,
 # runs npm publish (OIDC trusted publishing), then restores the src-form package.json.
