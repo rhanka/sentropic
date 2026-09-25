@@ -77,7 +77,7 @@ export class PackageTree {
 
 export const MESH_MEMBERS = ['createLlmMesh', 'createProviderRegistry'] as const;
 
-export function fakeMesh(label: string, version = '0.21.2'): FakePackage {
+export function fakeMesh(label: string, version = '0.22.0'): FakePackage {
   return {
     name: '@sentropic/llm-mesh',
     version,
@@ -91,7 +91,7 @@ export function fakeMesh(label: string, version = '0.21.2'): FakePackage {
   };
 }
 
-export function fakeGateway(label: string, version = '0.18.0', authSource?: { service?: string; session?: string }): FakePackage {
+export function fakeGateway(label: string, version = '0.19.0', authSource?: { service?: string; session?: string }): FakePackage {
   return {
     name: '@sentropic/llm-gateway',
     version,

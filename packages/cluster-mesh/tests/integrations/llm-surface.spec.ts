@@ -59,7 +59,7 @@ describe('llm-mesh static leaves', () => {
     expect(Object.keys(enrollment)).toEqual(Object.keys(enrollmentProvider));
     expect(node.InMemoryKeyring).toBe(nodeProvider.InMemoryKeyring);
     expect(cloudCode.CloudCodeProviderAdapter).toBe(cloudCodeProvider.CloudCodeProviderAdapter);
-    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: '0.21.2' });
+    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: '0.22.0' });
   });
 
   it('should pass the explicit topology preflight for the workspace tree', () => {
