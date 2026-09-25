@@ -343,3 +343,35 @@ export function quoteRoute(input: RouteQuoteInput, options?: {
 Duplicate-mount protection: the registry rejects a second module for one namespace (`src/runtime/namespace-registry.ts:28`, `duplicate_cluster_mesh_namespace`). No mount-path collision guard is proposed: the product deliberately maps several namespaces to `'/'` (`api/src/app.ts:325-326,431`). A second direct mount stays a host rule, tested in B1 (`autonomy.test.ts`: one `createGatewayRouter` call) and B3c. Product `gw.ts` currently bypasses `createGatewayNamespaceModule` and builds the router itself with the stub config (`gw.ts:101-147`); B3c migrates it.
 
 Minimal cluster-owned B3d change: add a `namespace-loading.spec.ts` case for `{ '/gw': '/' }` asserting the five exact paths and 404 on `/gw/healthz`, plus a README line; no `src` change is needed for remapping.
+
+### 12.4 Auth leaves reconciliation (published cluster-mesh 0.12.0)
+
+Confirmed isolated. Registry manifest exports separate `./gateway/auth`, `./gateway/auth-hono`, `./loaders/gateway/auth`, `./loaders/gateway/auth-hono`. In the published tarball, `dist/compose/gateway.js:15-16` loads the service leaf only for `authMode === 'service'` and the session leaf only for `'session'`; `dist/integrations/gateway/auth.js` re-exports only `@sentropic/llm-gateway/auth`; `dist/modules/catalog.js:4-9` carries the ranges above. Source matches: `src/compose/gateway.ts:17,44-46`, `src/modules/catalog.ts:43-50,69-71` (service peers mcp-auth `./hono` plus jose resolved from mcp-auth; session peer auth-hono `./middleware`). Each gateway leaf imports only its own peer (`packages/llm-gateway/src/caller-auth/service-auth.ts:1`, `auth-hono.ts:1`); `host` mode selects neither. The lazy-surface shared-bridge wording (section 0) is superseded by this published state (D-FL11).
+
+| B0 isolated auth test | Source-level (fake package tree) | Packed tarball (`test-lazy-package`, `ci.yml:548`) | Missing |
+|---|---|---|---|
+| Service without session peer | `tests/integrations/gateway-auth-isolation.spec.ts:118-128` | `tests/packaging/optional-install.spec.ts:70-96` (`selected` has no auth-hono) | none |
+| Root without either | `gateway-auth-isolation.spec.ts:34`; `tests/packaging/types-and-bundlers.spec.ts:69` | `optional-install.spec.ts:13-40` (`bare`) | none |
+| Missing jose refusal | `gateway-auth-isolation.spec.ts:105-108` | absent: packed refusal covers only a removed oauth-verify (`optional-install.spec.ts:98-107`) | packed `selected` minus jose case |
+| Session without service peers | `gateway-auth-isolation.spec.ts:130-134` | `tests/packaging/release-matrix.spec.ts:46` | none |
+
+Still missing, all in `packages/cluster-mesh/tests/packaging/` and owned by B3d: (1) packed missing-jose refusal (`optional-install.spec.ts`, cloning `selected` like the oauth-verify case); (2) packed rejection of the old 0.21.2/0.18.0 tuple by 0.13.0 (analogue of the gateway 0.17 case, `optional-install.spec.ts:109`); (3) regenerated `selected`/`selected-session` tuples at mesh 0.22.0/gateway 0.19.0 via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`. Runtime service-only qualification of the published tuple also runs through `make qualify-published-install` in CI (`ci.yml:567`).
+
+### 12.5 G1a migration inventory (no SQL written)
+
+Next free control migration: **`api/drizzle/control/0008_llm_admission.sql`**. The journal ends at idx 7 `0007_cluster_mesh_r13` (`api/drizzle/control/meta/_journal.json`); no `0008*` control file exists on any local or remote ref (`git log --all -- 'api/drizzle/control/0008*'` is empty). Generate through `make db-generate-control` (`Makefile:2539`), producing the SQL, journal idx 8 and `meta/0008_snapshot.json`. The control stream applies after the public stream into `public.__drizzle_control_migrations` (`api/src/db/run-migrations.ts:49-70`), and the API runs it at boot (`api/src/index.ts:76`); the gateway host never migrates.
+
+| Object | Current state | G1a expand-first shape |
+|---|---|---|
+| `control.cost_ledger` | `control-schema.ts:371-416`; migration 0005; unique `idempotency_key`; CHECK `operation IN ('generate','stream')`; nullable usage/cost | Add nullable attribution only: `principal_kind`, `principal_key`, `budget_strategy_id`, `pricing_version`, `result`, `hold_id`, `reconciliation_state`, redacted `attempts` jsonb. Keep the CHECK, unique index and null history; settlement idempotency reuses `idempotency_key` = server request id. |
+| `control.event_outbox` | `control-schema.ts:33` | Reused unchanged for the settlement outbox event in the same transaction. |
+| `control.tenant_budget_strategy` | absent | New; per-tenant strategy (QUOTA_LEDGER §6). |
+| `control.budgets` | absent | New; explicit `tenant_id`/`workspace_id`, scope kind/key, period, cap/reserved/spent `bigint`, `reset_at`; tenant-qualified unique; non-negative CHECKs. |
+| `control.model_pricing` | absent | New; immutable effective-dated component rates; non-overlap per provider/model. |
+| `control.budget_holds` | absent | New; unique hold id, deadline, dispatch-start marker, fenced owner, quote/pricing refs. |
+| `control.blocked_attempts` | absent | New; audit only, no cost. |
+| `control.cluster_mesh_namespace_cutovers` | CHECK `composition_root IN ('product','auth-idp')` (`control-schema.ts:612-646`) | Untouched (section 2: no `standalone` row). |
+
+Expand-first rules: only new tables, new nullable or defaulted columns and new indexes; no drop, rename, type change, CHECK tightening, backfill that rewrites historical cost, or down-migration. Identity tables (`workspace_memberships`, `tenant_memberships`, `service_clients`, `api/src/db/schema.ts:441,845,882`) are read-only; G1b stays deferred. No existing control migration creates a Postgres extension; a GiST exclusion for pricing non-overlap needs `btree_gist`, so the schema owner either verifies that extension on every tier or enforces non-overlap with a unique `(provider_id, model_id, effective_from)` plus a checked insert path.
+
+Schema-owner check before rollout, on a disposable environment only (never `ENV=dev`): obtain a tier dump through the operator-run `make db-backup-prod` (`Makefile:2645`); `make db-restore BACKUP_FILE=<dump> API_PORT=<a> UI_PORT=<u> MAILDEV_UI_PORT=<m> ENV=<disposable>` (`Makefile:2662`, approval prompt); `make db-migrate … ENV=<disposable>` (`Makefile:2547`). Verify that `__drizzle_control_migrations` gains exactly 0008, that pre-existing `cost_ledger` row count and null `cost_micro_usd` rows are unchanged, and that new tables start empty. Then prove rollback-by-restore of the pre-migration dump and a clean dump/restore of the migrated database. This is a schema-owner execution gate for B2; the k8s/platform lane does not operate application backups.
