@@ -66,9 +66,10 @@ export function tsc(dir: string, name: string, source: string, options: TscCase)
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-export function esbuild(dir: string, entry: string, outfile: string, externals: readonly string[]): Run {
+export function esbuild(dir: string, entry: string, outfile: string, externals: readonly string[],
+  extra: readonly string[] = []): Run {
   const args = [entry, '--bundle', '--platform=node', '--format=esm', `--outfile=${outfile}`,
-    ...externals.map((name) => `--external:${name}`)];
+    ...externals.map((name) => `--external:${name}`), ...extra];
   const result = spawnSync(join(ROOT, 'tools/node_modules/.bin/esbuild'), args, { cwd: dir, encoding: 'utf8' });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }

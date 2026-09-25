@@ -73,7 +73,7 @@
 - [x] **Final gates**: PASS `make typecheck-cluster-mesh test-cluster-mesh pack-cluster-mesh` (47 files, 344 passed, 24 packaging skipped outside packaging.mk; pack 339 files); PASS `make -f packages/cluster-mesh/packaging.mk test-lazy-package` (24 passed); PASS `make scope-check`; PASS `make down` (ports/ENV above).
 - [x] **Fix round 1 — F1 root graph**: registry imports the metadata-resolved file only (no literal provider `import()` in `catalog.ts`); jose resolved from mcp-auth; test `gateway-auth-isolation.spec.ts`.
 - [x] **Fix round 1 — F2 topology**: registry dedupe by normalized module URL; non-file URL fallback; guard import in `compose/disabled.ts`; tests `tests/modules/topology.spec.ts`.
-- [ ] **Fix round 1 — F3 packed matrix**: API-like root bundle, frozen `selected` lockfile (`npm ci`), session-mode positive, latest-in-range, global consumer + separately installed runtime (P2/P3/P4).
+- [x] **Fix round 1 — F3 packed matrix**: API-like root bundle, frozen `selected` lockfile (`npm ci`), session-mode positive, latest-in-range, global consumer + separately installed runtime (P2/P3/P4).
 - [ ] **Fix round 1 — F4 build/CI exceptions**: BRE-EX1 hardening (`trap` EXIT INT TERM, `docker run --init`), BRE-EX2 CI step, BRE-EX3 Dockerfile order + lockfile refresh; PASS `make build-api`.
 - [ ] **Fix round 1 — F5 docs**: README (HMR/test runners, per-thread guard, llm-mesh-only limit, npm only, tested bundlers, TS >= 5.7), spec E8/E10 amendments, E-A17 update.
 - [ ] **Review/delivery gate (conductor-owned)**: independent acceptance of round 2 fixes; only then deliver the approved build contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor. The requested topology rule/test notice is informational, not build authorization.

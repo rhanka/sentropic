@@ -1,4 +1,5 @@
-import { cpSync, mkdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { cpSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cloneFixture, enabled, fixtureDir, nodeJson, runNode } from './helpers.js';
@@ -42,5 +43,48 @@ describe.skipIf(!enabled)('packed consumer topology (npm, single process)', () =
       const { loadGateway } = await import('@sentropic/cluster-mesh/loaders/gateway').catch((caught) => ({ guard: caught }));
       console.log(JSON.stringify({ loaderImportFailed: loadGateway === undefined }));`);
     expect(loader.stdout).toContain('"loaderImportFailed":true');
+  });
+});
+
+/** Physical cluster-mesh copies installed under a global prefix. */
+function installedCopies(prefix: string): string[] {
+  const found: string[] = [];
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (!statSync(path).isDirectory()) continue;
+      if (path.endsWith(join('node_modules', '@sentropic', 'cluster-mesh'))) found.push(path);
+      else walk(path);
+    }
+  };
+  walk(join(prefix, 'lib/node_modules'));
+  return found.sort();
+}
+
+function runBin(prefix: string, bin: string): { status: number | null; stdout: string; stderr: string } {
+  const result = spawnSync(join(prefix, 'bin', bin), [], { encoding: 'utf8' });
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+describe.skipIf(!enabled)('packed global consumer + separately installed runtime (npm global prefix)', () => {
+  it('should load leaves through exactly one physical cluster-mesh carried by the runtime', () => {
+    const prefix = fixtureDir('global');
+    const copies = installedCopies(prefix);
+    expect(copies).toEqual([join(prefix, 'lib/node_modules/fixture-separate-runtime/node_modules/@sentropic/cluster-mesh')]);
+    const run = runBin(prefix, 'fixture-global-consumer');
+    expect(run.status, run.stderr).toBe(0);
+    const report = JSON.parse(run.stdout.trim()) as Record<string, unknown>;
+    expect(report).toMatchObject({ instances: copies, leaf: 'function', service: 'function', health: 200 });
+    expect(report.gatewayLlmMesh).toBe(report.llmMesh);
+  });
+
+  it('should refuse a consumer that keeps its own nested cluster-mesh copy', () => {
+    const prefix = fixtureDir('global-pinned');
+    expect(installedCopies(prefix)).toHaveLength(2);
+    const run = runBin(prefix, 'fixture-global-consumer-pinned');
+    expect(run.status, run.stderr).toBe(0);
+    const result = JSON.parse(run.stdout.trim()) as { code: string; reason: string; paths: string[]; preflight: string };
+    expect(result).toMatchObject({ code: 'cluster_mesh_topology_invalid', reason: 'duplicate_instance', preflight: 'duplicate_instance' });
+    expect(result.paths.sort()).toEqual(installedCopies(prefix));
   });
 });
