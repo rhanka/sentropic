@@ -37,6 +37,8 @@
 - [x] E-A15 `attention`, owner: conductor, 2026-09-24: build handoff received; MCP lot B5 sequenced after the h2a LLM/gateway flip; `api/**` product follow-up excluded; B4/B8 are h-cond consumer lots.
 - [x] E-A16 `attention` conductor decision (reversible), 2026-09-24: automatic per-process topology guard; each leaf/loader/compose module evaluates a guard before its `export *`, counting evaluated cluster-mesh copies by unique token and comparing llm-mesh realpaths from cluster-mesh and gateway; root exports explicit `verifyClusterMeshTopology()`; leaf modules declared in `sideEffects`; cross-process consistency stays with install gates.
 - [x] BRE-EX1 `attention`, owner: Lot E, 2026-09-24: `Makefile` targets `typecheck-cluster-mesh`, `test-cluster-mesh`, `build-cluster-mesh` build llm-gateway/llm-mesh/mcp-auth/auth-hono dists and link them as dev-time peers inside the container (removed on exit), because provider leaves need provider declarations and runtime modules. Impact: those targets take longer and depend on `build-llm-gateway`. Rollback: revert the three target edits together with the leaves.
+- [x] E-A17 `attention` pending gates, owner: Lot E / conductor, 2026-09-24: not reproduced here — pnpm isolated/peer-variant layout and global consumer + separately installed runtime (npm single-tree only), Rollup and tsup (esbuild only), session mode against a public auth-hono tarball, latest-within-range beyond the floor tuple. `skipLibCheck: false` consumers need TypeScript >= 5.7 for hono declarations (packed checks use 5.9.3; 5.4.5 fails in hono, not in cluster-mesh).
+- [x] E-A18 `attention`, owner: Lot E, 2026-09-24: `package-lock.json` untouched; optional peers only, and `install-internal-packages` (`npm ci`) passes with the new manifest.
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic package tests only; no AI/provider calls.
@@ -65,8 +67,8 @@
 - [x] **Lot B1 — Registry and errors**: `src/modules/{contracts,catalog,registry,errors,resolution,semver}.ts`, root exports, optional `modules` on `createDegenerateClusterMesh`; tests `tests/modules/{registry,capabilities}.spec.ts`, updated `tests/{mesh,bindings}.spec.ts`.
 - [x] **Lot B1t — Topology guard (E-A16)**: `src/modules/topology.ts`, root `verifyClusterMeshTopology()`; tests `tests/modules/topology.spec.ts`; spec E8 paragraph.
 - [x] **Lot B2 — LLM/gateway leaves and composition**: `src/integrations/**`, `src/loaders/**`, `src/compose/{llm-mesh,gateway}.ts`, manifest exports/optional peers/`sideEffects`; BRE-EX1 Makefile; tests `tests/integrations/{llm-surface,gateway-surface,gateway-auth-isolation}.spec.ts`, `tests/modules/namespace-loading.spec.ts`, `tests/fixtures/types/llm-consumer.ts`.
-- [ ] **Lot B3 — Packed release gate (package side)**: `packaging.mk`, `tests/packaging/**`, fixtures; publication stays conductor-owned.
-- [ ] **Release notes**: version 0.12.0, CHANGELOG and README consumer migration notes.
+- [x] **Lot B3 — Packed release gate (package side)**: `packaging.mk`, `tests/packaging/{prepare.sh,helpers.ts,optional-install,types-and-bundlers,consumer-topology}.spec.ts`; PASS `make -f packages/cluster-mesh/packaging.mk test-lazy-package` (24 tests, public tuple); remaining matrix pending (E-A17); publication stays conductor-owned.
+- [x] **Release notes**: version 0.12.0, CHANGELOG and README consumer migration notes.
 - [ ] **Lot B5 — MCP leaves**: deferred until the h2a LLM/gateway flip ships (E-A15); not built in this branch.
 - [ ] **Final gates**: typecheck/test/pack cluster-mesh, scope-check, `make down`.
 - [ ] **Review/delivery gate (conductor-owned)**: independent acceptance of round 2 fixes; only then deliver the approved build contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor. The requested topology rule/test notice is informational, not build authorization.
