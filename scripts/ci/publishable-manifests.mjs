@@ -40,13 +40,16 @@ export const publishFilter = (slug) => `${slug.replace(/-/g, '_')}_publish`;
 
 export class GuardError extends Error {
   constructor(message, { transient = false } = {}) {
-    super(transient ? `${message} (${TRANSIENT_HINT})` : message);
+    // A wrapped transient cause already carries the hint; never repeat it.
+    super(transient && !message.includes(TRANSIENT_HINT) ? `${message} (${TRANSIENT_HINT})` : message);
     this.transient = transient;
   }
 }
 
 // Only network/registry failures are transient; broken manifests and pack errors are real errors.
-export const TRANSIENT_ERROR = /\b(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|ESOCKETTIMEDOUT|EAI_AGAIN|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|EPIPE|socket hang up|HTTP (?:429|5\d\d))\b/;
+export const TRANSIENT_ERROR = /\b(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|ESOCKETTIMEDOUT|ERR_SOCKET_TIMEOUT|UND_ERR_[A-Z_]+|EAI_AGAIN|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|fetch failed|socket hang up|HTTP (?:408|429|5\d\d)|E429|E5\d\d)\b/;
+// Registry HTTP statuses worth retrying; any other non-404 failure (400/401/403...) is permanent.
+const TRANSIENT_STATUS = (status) => status === 408 || status === 429 || status >= 500;
 export const isTransientError = (error) =>
   (error instanceof GuardError && error.transient === true) || TRANSIENT_ERROR.test(String(error?.message ?? error));
 
@@ -189,19 +192,22 @@ export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fet
   const packuments = new Map();
   async function request(url, accept) {
     let lastError;
+    let transient = true;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         const response = await fetchImpl(url, { headers: { accept }, cache: 'no-store' });
         if (response.status === 404) return { status: 404 };
         if (response.ok) return { status: response.status, response };
         lastError = `HTTP ${response.status}`;
-        if (response.status < 500 && response.status !== 429) break;
+        transient = TRANSIENT_STATUS(response.status);
+        if (!transient) break;
       } catch (error) {
         lastError = error.message;
+        transient = true;
       }
       if (attempt < attempts) await new Promise((r) => setTimeout(r, delayMs * attempt));
     }
-    throw new GuardError(`registry request failed for ${url}: ${lastError}`, { transient: true });
+    throw new GuardError(`registry request failed for ${url}: ${lastError}`, { transient });
   }
   async function packument(name, { fresh = false } = {}) {
     if (!fresh && packuments.has(name)) return packuments.get(name);

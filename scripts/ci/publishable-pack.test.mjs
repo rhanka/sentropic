@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
-import { commandPack, commandPublish, createRegistry, diffDependencyMaps, runNpmPack, sha256File, withManifestTransform } from './publishable-manifests.mjs';
+import { GuardError, TRANSIENT_HINT, commandPack, commandPublish, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, withManifestTransform } from './publishable-manifests.mjs';
 
 const sink = () => {
   const chunks = [];
@@ -219,4 +219,46 @@ test('registry cache: present packuments are reused for listed versions only; fr
   assert.equal((await registry.lookup('@fx/a', '1.1.0')).status, 'present', 'unlisted version refetched');
   await registry.lookup('@fx/a', '1.0.0', { fresh: true });
   assert.equal(calls.length, 3);
+});
+
+test('registry request: 400/401/403 are permanent (no retry); 408/429/5xx and network exceptions are transient', async () => {
+  const run = async (answer) => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      if (answer instanceof Error) throw answer;
+      return { status: answer, ok: false };
+    };
+    const registry = createRegistry({ registry: 'http://registry.test', fetchImpl, attempts: 3, delayMs: 0 });
+    const error = await registry.lookup('@fx/a', '1.0.0').then(() => null, (e) => e);
+    assert.ok(error instanceof GuardError);
+    return { error, calls };
+  };
+  for (const status of [400, 401, 403]) {
+    const { error, calls } = await run(status);
+    assert.equal(error.transient, false, `HTTP ${status}`);
+    assert.equal(calls, 1, `HTTP ${status} is not retried`);
+    assert.doesNotMatch(error.message, /re-run, not debt/);
+    assert.equal(isTransientError(error), false);
+  }
+  for (const answer of [408, 429, 500, 503, new TypeError('fetch failed')]) {
+    const { error, calls } = await run(answer);
+    assert.equal(error.transient, true, String(answer));
+    assert.equal(calls, 3, `${answer} is retried`);
+    assert.equal(error.message.split(TRANSIENT_HINT).length, 2, 'hint appears exactly once');
+  }
+});
+
+test('transient message classifier: node/undici/npm network codes only', () => {
+  for (const msg of ['TypeError: fetch failed', 'ERR_SOCKET_TIMEOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'HTTP 408', 'HTTP 429', 'HTTP 502',
+    'npm error code E429', 'npm error code E503', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN']) assert.ok(isTransientError(new Error(msg)), msg);
+  for (const msg of ['write EPIPE', 'HTTP 403', 'HTTP 401', 'npm error code E404', 'npm error code E403', 'npm error code EJSONPARSE', 'E4290 unrelated'])
+    assert.equal(isTransientError(new Error(msg)), false, msg);
+});
+
+test('GuardError wrapping a transient cause carries the re-run hint once', () => {
+  const inner = new GuardError('registry request failed: HTTP 503', { transient: true });
+  const outer = new GuardError(`cannot resolve packed identity of x: ${inner.message}`, { transient: true });
+  assert.equal(outer.message.split(TRANSIENT_HINT).length, 2);
+  assert.equal(outer.transient, true);
 });
