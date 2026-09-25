@@ -2,8 +2,9 @@
 # Prepare B3 packed-qualification fixtures in container scratch space.
 # Invoked by packaging.mk inside the Node image (npm only); never on the host.
 # REFRESH_LOCK=1 regenerates the frozen `selected` lockfile instead of `npm ci`.
-# CLUSTER_MESH_SIBLING_RECEIPTS=<receipts.json> (release train): same-PR sibling archives verified by
-# sha256 and packed identity replace the registry for exactly the name@version they carry; every other
+# CLUSTER_MESH_SIBLING_RECEIPTS=<receipts.json> (release train): same-PR sibling archives validated by
+# scripts/ci loadSiblings (sha256, packed identity and guard, head sha CLUSTER_MESH_HEAD_SHA, no unlisted
+# archive) replace the registry for exactly the name@version they carry; every other
 # package (and every version without a receipt) comes from the registry. Each fixture records its
 # sources in sources.txt.
 set -eu
@@ -14,20 +15,26 @@ rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
 quiet="--no-audit --no-fund --loglevel=error"
 siblings="$work/siblings"
+
+# Qualification tools, isolated from every fixture tree (semver: the pinned guard semver of loadSiblings).
+npm install --prefix "$work/tools" $quiet vitest@4.1.5 typescript@5.9.3 @types/node@22 esbuild@0.25.12 semver@7.7.2 >/dev/null
 if [ -n "${CLUSTER_MESH_SIBLING_RECEIPTS:-}" ]; then
-  node "$here/siblings.mjs" verify "$CLUSTER_MESH_SIBLING_RECEIPTS" "$siblings"
+  MANIFEST_GUARD_TOOL_DIR="$work/tools" node "$here/siblings.mjs" verify "$CLUSTER_MESH_SIBLING_RECEIPTS" "$siblings"
 fi
 
 # Train tuple of this release; the old tuple is only used by the refusal fixture.
 MESH=0.22.0
 GATEWAY=0.19.0
 
-# Candidate tarball, packed exactly as published (files/exports/sideEffects).
+# Candidate tarball, packed exactly as published (files/exports/sideEffects). A verified receipt for
+# cluster-mesh itself replaces it: the qualified bytes are then exactly the bytes that will be published.
 npm pack --silent --pack-destination "$work" >/dev/null
 tgz="$(ls "$work"/sentropic-cluster-mesh-*.tgz)"
-
-# Qualification tools, isolated from every fixture tree.
-npm install --prefix "$work/tools" $quiet vitest@4.1.5 typescript@5.9.3 @types/node@22 esbuild@0.25.12 >/dev/null
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/cluster-mesh "$(node -p "require('./package.json').version")")"
+if [ -n "$receipt" ]; then
+  echo "[candidate] local pack sha256 $(sha256sum "$tgz" | cut -d' ' -f1); qualifying the receipt archive sha256 $(sha256sum "$receipt" | cut -d' ' -f1)"
+  cp "$receipt" "$tgz"
+fi
 
 # src NAME VERSION: a verified sibling archive (`file:`) for exactly NAME@VERSION, else the registry version.
 src() {
