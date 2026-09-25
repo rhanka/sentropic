@@ -2,11 +2,13 @@
 // Runs inside the packaging container only (packaging.mk); never on the host.
 //   refresh <working-lock> <committed-lock> <package.json> <siblings-dir>
 //       write the committed lock from a provisional install: sibling-sourced entries get the registry
-//       `resolved` URL and the sha512 of the sibling bytes; the candidate keeps no integrity
+//       `resolved` URL and the sha512 of the sibling bytes (a sibling absent or at another version in the working
+//       lock is an error and nothing is written); the candidate keeps no integrity
 //   siblings <committed-lock> <siblings-dir>
 //       every sibling run: committed entry version/resolved/integrity must equal the sibling archive
 //   registry <committed-lock>
-//       after publication: registry dist.integrity of each published train package must equal the lock
+//       after publication: registry dist.tarball and dist.integrity of each published train package must equal the
+//       lock `resolved` and `integrity`
 import fs from 'node:fs';
 import { readIndex } from './siblings.mjs';
 
@@ -28,14 +30,18 @@ function refresh(workingLock, committedLock, packageJson, siblingsDir) {
   delete lock.packages[`node_modules/${CANDIDATE}`].integrity;
   lock.packages[''].dependencies = { ...manifest.dependencies };
   for (const sibling of readIndex(siblingsDir)) {
+    if (sibling.name === CANDIDATE) continue;
     const entry = lock.packages[`node_modules/${sibling.name}`];
-    if (!entry || entry.version !== sibling.version) continue;
+    if (!entry || entry.version !== sibling.version) {
+      error(`${sibling.name}@${sibling.version} is a sibling but the working lock pins ${entry?.version ?? 'nothing'}`);
+      continue;
+    }
     entry.resolved = tarballUrl(sibling.name, sibling.version);
     entry.integrity = sibling.integrity;
   }
   const text = `${JSON.stringify(lock, null, 2)}\n`;
   if (text.includes('"file:/')) error('refreshed lock still references an absolute file: path');
-  fs.writeFileSync(committedLock, text);
+  if (errors === 0) fs.writeFileSync(committedLock, text);
 }
 
 function siblings(committedLock, siblingsDir) {
@@ -63,6 +69,7 @@ async function registry(committedLock) {
       error(`${name} is absent from the committed lock`);
       continue;
     }
+    if (entry.resolved !== tarballUrl(name, entry.version)) error(`${name}: lock resolved ${entry.resolved} is not the registry URL`);
     const response = await fetch(`${REGISTRY}/${name.replace('/', '%2f')}`);
     if (!response.ok) {
       error(`${name}: registry lookup failed (${response.status})`);
@@ -72,6 +79,9 @@ async function registry(committedLock) {
     if (!published) {
       console.log(`::notice title=Train lock integrity::${name}@${entry.version} is not published; nothing to compare`);
       continue;
+    }
+    if (published.dist?.tarball !== entry.resolved) {
+      error(`${name}@${entry.version}: registry dist.tarball ${published.dist?.tarball} != committed lock resolved ${entry.resolved}`);
     }
     if (published.dist?.integrity !== entry.integrity) {
       error(`${name}@${entry.version}: registry dist.integrity ${published.dist?.integrity} != committed lock ${entry.integrity}`);
