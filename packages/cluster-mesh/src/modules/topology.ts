@@ -61,9 +61,27 @@ function instanceRegistry(): ClusterMeshInstanceEntry[] {
   return entries;
 }
 
+/** Module URL without `?query`/`#hash`: re-evaluations of one file share it; distinct copies do not. */
+export function normalizeModuleUrl(moduleUrl: string): string {
+  return moduleUrl.replace(/[?#].*$/su, '');
+}
+
+/**
+ * Register one evaluated copy. Re-evaluating the same file (HMR, Vite dev, `vi.resetModules`,
+ * cache-busting queries) replaces its entry; a different URL (nested copy, `npm link`,
+ * `--preserve-symlinks` link path, pnpm variant) adds one and is reported as a duplicate.
+ */
+export function registerClusterMeshInstance(registry: ClusterMeshInstanceEntry[], entry: ClusterMeshInstanceEntry): void {
+  const url = normalizeModuleUrl(entry.moduleUrl);
+  for (let index = registry.length - 1; index >= 0; index -= 1) {
+    if (normalizeModuleUrl(registry[index]!.moduleUrl) === url) registry.splice(index, 1);
+  }
+  registry.push(entry);
+}
+
 // Module evaluation registers this copy exactly once.
 const THIS_INSTANCE: ClusterMeshInstanceEntry = Object.freeze({ token: Symbol('cluster-mesh-instance'), moduleUrl: import.meta.url });
-instanceRegistry().push(THIS_INSTANCE);
+registerClusterMeshInstance(instanceRegistry(), THIS_INSTANCE);
 
 function versionAt(dir: string): string | undefined {
   try {
@@ -139,16 +157,23 @@ export function inspectTopology(input: InspectTopologyInput): ClusterMeshTopolog
 }
 
 const ANCHOR_DIR = physicalDirOf(import.meta.url);
-let memo: { count: number; outcome: { report: ClusterMeshTopologyReport } | { error: unknown } } | undefined;
+let memo: { tokens: readonly symbol[]; outcome: { report: ClusterMeshTopologyReport } | { error: unknown } } | undefined;
 
-/** Automatic per-process guard run by every leaf, loader and compose entry; memoized per copy count. */
+const sameTokens = (a: readonly symbol[], b: readonly ClusterMeshInstanceEntry[]): boolean =>
+  a.length === b.length && b.every((entry, index) => entry.token === a[index]);
+
+/**
+ * Automatic guard run by every leaf, loader and compose entry; memoized per registered copy set.
+ * State lives on `globalThis`, so it is per thread (each worker_thread has its own registry).
+ */
 export function assertClusterMeshTopology(): void {
   const instances = instanceRegistry();
-  if (memo?.count !== instances.length) {
+  if (!memo || !sameTokens(memo.tokens, instances)) {
+    const tokens = instances.map((entry) => entry.token);
     try {
-      memo = { count: instances.length, outcome: { report: inspectTopology({ anchorDir: ANCHOR_DIR, instances, strict: false }) } };
+      memo = { tokens, outcome: { report: inspectTopology({ anchorDir: ANCHOR_DIR, instances, strict: false }) } };
     } catch (error) {
-      memo = { count: instances.length, outcome: { error } };
+      memo = { tokens, outcome: { error } };
     }
   }
   if ('error' in memo.outcome) throw memo.outcome.error;
