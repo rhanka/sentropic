@@ -70,13 +70,14 @@
   - [x] Update `tests/{route-json-flow,route-stream-flow,errors,contract-snapshot}.test.ts`.
 - [x] **Lot 4 — Version and docs**
   - [x] `package.json` 0.19.0, mesh `^0.22.0`; `CHANGELOG.md`; README budget section.
-- [ ] **Lot 5 — Review fix round 1 (muse + complementary)**
+- [x] **Lot 5 — Review fix round 1 (muse + complementary)**
   - [x] Budget path sends the reserved default output ceiling as `maxOutputTokens` (both flows, both wires).
   - [x] Attachments counted as `imageUnits` with a per-attachment input allowance.
   - [x] Unmeasured usage (`{}`, partial, zero, non-finite) of a dispatched attempt charged at its allowance; release failure non-fatal.
   - [x] Port/README contract: input estimate + adapter margin, hold deadline and reconciliation, codex max-output pricing, idempotent release after ambiguous marker, no settlement on pre-admission refusals.
   - [x] New `tests/budget-hardening.test.ts` (default ceiling, multimodal, empty/partial usage, release failure, marker failure on attempt 2).
-  - [ ] Revalidation and new candidate digest.
+  - [x] Revalidation: gateway typecheck/lint/test/build/pack PASS (27 files, 273 tests; manifest guard PASS), `make test-llm-mesh` PASS (32 files, 270 tests), `make scope-check` PASS C2.
+  - [x] New candidate `sentropic-llm-gateway-0.19.0.tgz` sha256 `0b8d0f5ca790b45472df76c8280ca628c64ccaa9c8f33387899e2493ca48db89` (pack guard at `7a38e4c81`, not persisted, not published).
 - [x] **Lot N — Final validation**
   - [x] `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway build-llm-gateway pack-llm-gateway ENV=test-llm-gateway-budget` (26 files, 261 tests pass; manifest guard PASS)
   - [x] `make test-llm-mesh ENV=test-llm-gateway-budget` (32 files, 270 tests pass)
