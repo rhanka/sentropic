@@ -9,7 +9,13 @@
     "AgentsList.svelte": {
       "class": "primitive",
       "dogfoodedBy": [
-        "ui/src/lib/components/ChatWidget.svelte"
+        "packages/chat-ui/src/components/ChatWidgetPager.svelte"
+      ]
+    },
+    "ChatWidgetTabBar.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": [
+        "packages/chat-ui/src/components/ChatWidget.svelte"
       ]
     },
     "ChatPlacementMenuButton.svelte": {
@@ -31,9 +37,13 @@
       ]
     },
     "ChatWidget.svelte": {
-      "class": "primitive",
-      "dogfoodedBy": [
-        "ui/src/lib/components/ChatWidget.svelte"
+      "class": "assembly",
+      "assemblyValidatedBy": [
+        "tests/chat-widget-assembly.dom.spec.ts"
+      ],
+      "composes": [
+        "ChatWidgetTabBar.svelte",
+        "ChatWidgetPager.svelte"
       ]
     },
     "StreamMessage.svelte": {
@@ -164,6 +174,15 @@
       "class": "primitive",
       "dogfoodedBy": [
         "ui/src/lib/components/ChatWidget.svelte"
+      ]
+    },
+    "ChatWidgetPager.svelte": {
+      "class": "assembly",
+      "assemblyValidatedBy": [
+        "tests/chat-widget-pager.dom.spec.ts"
+      ],
+      "composes": [
+        "AgentsList.svelte"
       ]
     }
   }
