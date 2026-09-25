@@ -46,8 +46,8 @@
   - [x] Read spec §10 (B3d), §12.1, §12.3, §12.4, §12.6 and train design v3.
   - [x] Verify branch, registry latest cluster-mesh `0.12.0` (target `0.13.0` free), mesh `0.21.2`, gateway `0.18.0`.
 - [ ] **Lot 1 — Manifest, catalog and module ids**
-  - [ ] `package.json` 0.13.0, peers mesh `>=0.22.0 <0.23.0`, gateway `>=0.19.0 <0.20.0`; `catalog.ts` ranges equal.
-  - [ ] Remove `focus`, `cli`, `build-cli` gated module ids; CHANGELOG.
+  - [x] `package.json` 0.13.0, peers mesh `>=0.22.0 <0.23.0`, gateway `>=0.19.0 <0.20.0`; `catalog.ts` ranges equal.
+  - [x] Remove `focus`, `cli`, `build-cli` gated module ids; CHANGELOG.
   - [ ] Unit tests and fake package trees moved to the new tuple; `{ '/gw': '/' }` remap case.
 - [ ] **Lot 2 — Packed qualification (train design §2b-d)**
   - [ ] `packaging.mk` `SIBLING_ARCHIVES_FILE` (exact path) and `check-train-lock-integrity`.
