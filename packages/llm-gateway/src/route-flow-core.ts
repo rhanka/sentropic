@@ -10,7 +10,9 @@ import { GatewayError } from './router/errors.js';
 import { authenticateCaller } from './internal/caller-auth.js';
 import type { RouteAttemptDispatchPort } from './ports/dispatch.js';
 import type { GatewayBudgetOptions, RouteBudgetOverrun } from './ports/budget.js';
-import { admitRoute, assertBudgetRouteDeps, chargeAdmittedAttempts, type AdmittedRoute } from './admission.js';
+import {
+  admitRoute, assertBudgetRouteDeps, boundRouteOutputCeiling, chargeAdmittedAttempts, type AdmittedRoute,
+} from './admission.js';
 
 export interface RouteAttemptSettlement {
   readonly candidateRef: string;
@@ -87,7 +89,11 @@ export const prepareRouteFlow = async (
   }
   const canonical = normalizeGatewayIngress(request.wire, request.body);
   const subject = routingSubjectForCost(auth.cost);
-  if (deps.budget) return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, canonical);
+  if (deps.budget) {
+    // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
+    const bounded = boundRouteOutputCeiling(canonical, deps.budget);
+    return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, bounded);
+  }
   try {
     const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
     const plan = await deps.routePlanner.plan(subject, {
@@ -168,15 +174,16 @@ export const settleRouteRequest = async (
     return;
   }
   const charged = chargeAdmittedAttempts(admission, attempts);
-  try {
-    if (admission.dispatched.size === 0) await deps.budget.port.release(admission.holdRef);
-  } finally {
-    await deps.metering.settleRoute({
-      ...base, usage: aggregateUsage(charged.attempts), attempts: charged.attempts,
-      requestId: admission.requestId, holdRef: admission.holdRef, quoteRef: admission.quote.quoteRef,
-      ...(charged.overrun.length > 0 ? { overrun: charged.overrun } : {}),
-    });
+  if (admission.dispatched.size === 0) {
+    // A failed release never changes the response nor skips settlement: the
+    // hold expires at its deadline and the host reconciles it by requestId.
+    try { await deps.budget.port.release(admission.holdRef); } catch { /* settle below */ }
   }
+  await deps.metering.settleRoute({
+    ...base, usage: aggregateUsage(charged.attempts), attempts: charged.attempts,
+    requestId: admission.requestId, holdRef: admission.holdRef, quoteRef: admission.quote.quoteRef,
+    ...(charged.overrun.length > 0 ? { overrun: charged.overrun } : {}),
+  });
 };
 
 /**
