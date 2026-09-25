@@ -1865,6 +1865,18 @@ test-llm-gateway: build-llm-mesh build-oauth-verify build-mcp-auth build-auth-ho
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-gateway/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 semver@7.7.2 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic node_modules/@types; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/llm-mesh node_modules/@sentropic/llm-mesh; ln -sfn "$$tool_dir/node_modules/semver" node_modules/semver; for pkg in oauth-verify mcp-auth auth-hono; do ln -sfn /workspace/packages/$$pkg node_modules/@sentropic/$$pkg; mkdir -p /workspace/packages/$$pkg/node_modules/@sentropic; ln -sfn /workspace/packages/oauth-verify /workspace/packages/$$pkg/node_modules/@sentropic/oauth-verify; for peer in hono jose zod @hono @simplewebauthn; do ln -sfn "$$tool_dir/node_modules/$$peer" "/workspace/packages/$$pkg/node_modules/$$peer"; done; done; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; trap "rm -rf node_modules ../oauth-verify/node_modules ../mcp-auth/node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+# BRDP-EX1a — standalone LLM gateway host (apps/llm-gateway) checks on the existing api Compose
+# service and its prepared workspace graph; no new service, overlay or image.
+.PHONY: typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process
+typecheck-llm-gateway-process: prepare-node-workspace ## Typecheck the standalone LLM gateway host
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -w /workspace/apps/llm-gateway api npm run typecheck
+
+lint-llm-gateway-process: prepare-node-workspace ## Lint the standalone LLM gateway host
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -w /workspace/apps/llm-gateway api npm run lint
+
+test-llm-gateway-process: prepare-node-workspace ## Test the standalone LLM gateway host (SCOPE=tests/<file>.test.ts)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -w /workspace/apps/llm-gateway api sh -lc 'set -eu; scope="$${SCOPE#apps/llm-gateway/}"; if [ -n "$$scope" ]; then npx vitest run "$$scope" --environment node; else npm test; fi'
+
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
