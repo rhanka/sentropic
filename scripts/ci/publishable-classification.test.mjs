@@ -157,3 +157,21 @@ test('inventory: non-boolean private and invalid JSON are structural errors; con
   assert.match(r.out, /invalid package.json/);
   await assert.rejects(commandInventory({}, { env: {}, root: fakeRepo({}), out: sink() }), /refusing to guess/);
 });
+
+test('sibling plan: BLOCK packages in the dependency closure only; no context injects nothing', async () => {
+  const { commandSiblingPlan } = await import('./publishable-manifests.mjs');
+  const root = fakeRepo({
+    'mcp-auth': { name: '@sentropic/mcp-auth', version: '0.2.2', dependencies: { '@sentropic/oauth-verify': '^0.1.1' }, peerDependencies: { hono: '^4.0.0' } },
+    'oauth-verify': { name: '@sentropic/oauth-verify', version: '0.1.1' },
+    'cluster-mesh': MESH,
+  });
+  const outFile = path.join(root, 'plan.txt');
+  const registry = { lookup: async (name, version) => ({ status: 'present', evidence: { name, version } }) };
+  const run = (env) => commandSiblingPlan({ slug: 'mcp-auth', out: outFile }, { env, root, registry, out: sink(), snapshot: snapshotFrom() });
+  assert.equal(await run(inventoryEnv(['packages/mcp-auth/src/a.ts', 'packages/oauth-verify/src/b.ts'], [])), 0);
+  assert.equal(fs.readFileSync(outFile, 'utf8'), 'oauth-verify\n');
+  assert.equal(await run(inventoryEnv(['packages/mcp-auth/src/a.ts'], [])), 0);
+  assert.equal(fs.readFileSync(outFile, 'utf8'), '', 'unchanged published sibling resolves from the registry');
+  assert.equal(await run({}), 0);
+  assert.equal(fs.readFileSync(outFile, 'utf8'), '');
+});
