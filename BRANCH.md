@@ -97,6 +97,6 @@
   - [x] Candidates (not published): cluster-mesh 0.13.0 sha256 `6d091489ea2d5e62bd0f0e7d30de00d5b3b9fcb4296379f4a139e0b49f10cc54` (vs round 1: internal `dist/modules/semver.*` and README only), llm-mesh 0.22.0 `91fce7217da6abb60b93d6af04db7a873df4a7826795f6893970f15c77810751`, llm-gateway 0.19.0 `0b8d0f5ca790b45472df76c8280ca628c64ccaa9c8f33387899e2493ca48db89` (unchanged).
 - [ ] **Lot 6 — Train fix round 1 (muse + opus, conductor-verified defect)**
   - [x] Packed release matrix expects `sibling` per package only when `siblings/index.json` carries that exact `name@version`, else `registry`; unit rows: no index, empty receipts, only mesh, only gateway, both, other version.
-  - [ ] `check-lock-integrity registry` requires the packages published in this run (`REQUIRE_PUBLISHED`): cache-bypassing lookups retried 12 x 5 s, then an error; others stay notice-only; unit rows on a local fake registry.
+  - [x] `check-lock-integrity registry` requires the packages published in this run (`REQUIRE_PUBLISHED`): cache-bypassing lookups retried 12 x 5 s, then an error; others stay notice-only; unit rows on a local fake registry.
   - [ ] EX10 `ci.yml`: skipped-receipt heal only on a re-run (`github.run_attempt > 1`), dead `qualify-report.json` test removed; `!cancelled()` replaces the leading `always()` of the three train publishers and `verify-train-lock-integrity`; wiring assertions.
   - [ ] Gate and candidate digests.
