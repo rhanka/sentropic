@@ -100,9 +100,9 @@
 - [x] **Lot G-B3 — Pack and publish integration**
   - [x] All 23 `pack-<slug>` targets use the real-pack primitive; routing candidates guarded.
   - [x] All `publish-<slug>` / `-token` targets (46 recipes): packed identity, lookup, skip-before-candidate, strict check, publish exact tarball.
-- [ ] **Lot G-B4 — CI wiring and policy**
-  - [ ] ci.yml: separate list-files step, `manifest_guard` filter, new inventory job, pack context, qualification steps, N1 ordering, baseline-qualified lint.
-  - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` passes; `rules/workflow.md` Package Publication updated.
+- [x] **Lot G-B4 — CI wiring and policy**
+  - [x] ci.yml: separate list-files step, `manifest_guard` filter, new inventory job, pack context, qualification steps, N1 ordering, baseline-qualified lint.
+  - [x] `scripts/ci/publishable-ci-wiring.test.mjs` passes (9 tests); `rules/workflow.md` Package Publication updated; `make check-ci-version-filters` and `make check-e2e-inventory` pass.
 - [ ] **Lot G-B5 — Closure gates**
   - [ ] `qualify-published-install` PASS for mcp-auth 0.2.1, cluster-mesh 0.11.0, llm-gateway 0.18.0.
   - [ ] Spec section 11 gate commands pass; scope-check; `make down` with branch ports.
