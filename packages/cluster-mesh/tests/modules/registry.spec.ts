@@ -193,6 +193,10 @@ describe('release range check', () => {
     ['0.15.4', '^0.15.0', true],
     ['0.16.0', '^0.15.0', false],
     ['0.19.0-beta.1', '>=0.19.0 <0.20.0', false],
+    ['0.19.0+build.7', '>=0.19.0 <0.20.0', true],
+    ['0.20.0+build.7', '>=0.19.0 <0.20.0', false],
+    ['0.19.0-beta.1+build.7', '>=0.19.0 <0.20.0', false],
+    ['0.19.0+', '>=0.19.0 <0.20.0', false],
     [undefined, '^5.10.0', false],
   ])('should evaluate %s against %s as %s', (version, range, expected) => {
     expect(satisfiesRange(version, range)).toBe(expected);

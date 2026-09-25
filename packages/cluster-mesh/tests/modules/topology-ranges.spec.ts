@@ -87,13 +87,25 @@ describe('automatic leaf guard ranges', () => {
     expect(guard('gateway')).not.toThrow();
   });
 
-  it('should refuse prerelease and build-metadata versions (release-only range check)', () => {
+  it('should refuse prerelease versions and ignore build metadata like npm', () => {
     const guard = cluster('app');
-    for (const version of ['0.22.1-rc.0', '0.23.0-beta.1', '0.22.0+build.1']) {
+    for (const version of ['0.22.1-rc.0', '0.23.0-beta.1', '0.22.1-rc.0+build.1', '0.21.2+build.1']) {
       tree.install('app', fakeMesh('mesh', version));
       expect(refusal(guard('llm-mesh')).message, version).toContain(`installed @sentropic/llm-mesh@${version}`);
     }
-    tree.install('app', fakeMesh('mesh', '0.22.9'));
+    for (const version of ['0.22.0+build.1', '0.22.9']) {
+      tree.install('app', fakeMesh('mesh', version));
+      expect(guard('llm-mesh'), version).not.toThrow();
+    }
+  });
+
+  it('should check ranges on a symlinked workspace copy through its physical manifest', () => {
+    const guard = cluster('app');
+    const inRange = tree.install('workspace/in', fakeMesh('linked-in', '0.22.4'));
+    tree.link('app', '@sentropic/llm-mesh', inRange);
     expect(guard('llm-mesh')).not.toThrow();
+    const outOfRange = tree.install('workspace/out', fakeGateway('linked-out', '0.18.0'));
+    tree.link('app', '@sentropic/llm-gateway', outOfRange);
+    expect(refusal(guard('gateway'))).toMatchObject({ reason: 'incompatible_version', paths: [outOfRange] });
   });
 });

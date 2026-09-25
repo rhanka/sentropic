@@ -15,7 +15,9 @@
   (`cluster_mesh_topology_invalid`, reason `incompatible_version`, message naming the
   installed version and the required range) instead of later. Previously only
   `verifyClusterMeshTopology` and the loaders checked ranges; it remains an optional
-  earlier check. `sideEffects` lists the two new family guard modules.
+  earlier check. `sideEffects` lists the two new family guard modules. Range checks
+  accept release versions only: prereleases never satisfy, `+build` metadata is
+  ignored (npm parity).
 - **Public union change:** the gated module ids `focus`, `cli` and `build-cli` are
   removed from `CLUSTER_MESH_GATED_MODULE_IDS`, `ClusterMeshGatedModuleId` and
   `ClusterMeshModuleId` (and from the module catalog and `probe()`/`snapshot()` maps).

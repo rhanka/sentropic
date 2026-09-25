@@ -79,3 +79,7 @@
   - [x] Gate: `make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh build-cluster-mesh` PASS (50 files, 374 tests), `pack-cluster-mesh` PASS block, `pack-candidate-siblings` (2 receipts at HEAD), packed `test-lazy-package` with `SIBLING_ARCHIVES_FILE` PASS (7 files, 48 tests), `scope-check` PASS C2.
   - [x] Export diff re-verified: leaf/loader/compose `.d.ts` differ only by the guard import line, `dist/index.d.ts` identical, `sideEffects` +2 family guards, internal `topology` adds `ClusterMeshLeafFamily`/`assertClusterMeshTopology(family?)`.
   - [x] Candidates (not published): cluster-mesh 0.13.0 sha256 `8235173fafc28ac3a70d22f62555a3eea99edc02ea2bc75d18a16e7daf711a8e`, llm-mesh 0.22.0 `91fce7217da6abb60b93d6af04db7a873df4a7826795f6893970f15c77810751`, llm-gateway 0.19.0 `0b8d0f5ca790b45472df76c8280ca628c64ccaa9c8f33387899e2493ca48db89` (both unchanged).
+- [ ] **Lot 5 — Train integration (merge main, B3d minors, EX10, gates)**
+  - [x] Merge `origin/main` (B1 `apps/llm-gateway`, cli/build-cli/focus eradication); `make lock-root` diff empty.
+  - [x] B3d minor (a): `parseReleaseVersion` strips `+build` metadata (npm parity), prereleases still refused; unit rows, README, CHANGELOG.
+  - [x] B3d minor (b): range check through a `tree.link()` symlinked workspace copy (in-range passes, out-of-range refused on the physical path).
