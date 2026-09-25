@@ -90,16 +90,16 @@
   - [x] Merge `origin/main` (`28bfcf9f5`) without conflicts; record BRCI-EX1..EX4 before touching their paths.
   - [x] Add `lint-cluster-mesh` to the root static lint pattern (tooling delta only: `-w packages/llm-$*` became `-w packages/$*`).
   - [x] Baseline lint on base `28bfcf9f5` sources (node:24-bookworm-slim, npm 11.19.0, eslint 10.0.2, typescript-eslint 8.56.1): `make lint-cluster-mesh|lint-llm-mesh|lint-llm-gateway API_PORT=9440 UI_PORT=5640 MAILDEV_UI_PORT=1540 ENV=test-ci-manifest-guard` all exit 0; all three are wired, no lint debt recorded.
-- [ ] **Lot G-B1 — Shared guard and fixtures**
-  - [ ] `scripts/ci/publishable-manifests.mjs`: D1 rule, archive reader, classifier, registry lookups, bump gate, pack/publish/inventory CLI.
-  - [ ] `scripts/ci/check-publishable-manifests.sh` host orchestration; Make targets `check-publishable-manifest`, `pack-publishable-manifest`, `check-publishable-manifests`, `test-publishable-manifests`.
-  - [ ] Fixture tests: `publishable-manifests`, `publishable-classification`, `publishable-pack` test files pass.
-- [ ] **Lot G-B2 — Consumer qualification**
-  - [ ] `scripts/ci/qualify-published-install.mjs` plus `qualify-published-install` / `test-qualify-published-install` targets (no repo mount, fresh cache, no Python).
-  - [ ] `scripts/ci/qualify-published-install.test.mjs` passes.
-- [ ] **Lot G-B3 — Pack and publish integration**
-  - [ ] All 23 `pack-<slug>` targets use the real-pack primitive; routing candidates guarded.
-  - [ ] All `publish-<slug>` / `-token` targets: packed identity, lookup, skip-before-candidate, strict check, publish exact tarball.
+- [x] **Lot G-B1 — Shared guard and fixtures**
+  - [x] `scripts/ci/publishable-manifests.mjs`: D1 rule, archive reader, classifier, registry lookups, bump gate, pack/publish/inventory CLI.
+  - [x] `scripts/ci/check-publishable-manifests.sh` host orchestration; Make targets `check-publishable-manifest`, `pack-publishable-manifest`, `check-publishable-manifests`, `test-publishable-manifests`.
+  - [x] Fixture tests: `publishable-manifests`, `publishable-classification`, `publishable-pack` test files pass.
+- [x] **Lot G-B2 — Consumer qualification**
+  - [x] `scripts/ci/qualify-published-install.mjs` plus `qualify-published-install` / `test-qualify-published-install` targets (no repo mount, fresh cache, no Python).
+  - [x] `scripts/ci/qualify-published-install.test.mjs` passes (10 tests); same-PR sibling plan/pack/collect lane `pack-candidate-siblings` verified on a lockstep mcp-auth + oauth-verify context.
+- [x] **Lot G-B3 — Pack and publish integration**
+  - [x] All 23 `pack-<slug>` targets use the real-pack primitive; routing candidates guarded.
+  - [x] All `publish-<slug>` / `-token` targets (46 recipes): packed identity, lookup, skip-before-candidate, strict check, publish exact tarball.
 - [ ] **Lot G-B4 — CI wiring and policy**
   - [ ] ci.yml: separate list-files step, `manifest_guard` filter, new inventory job, pack context, qualification steps, N1 ordering, baseline-qualified lint.
   - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` passes; `rules/workflow.md` Package Publication updated.
