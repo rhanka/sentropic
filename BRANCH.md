@@ -38,6 +38,12 @@
 - `attention`: nothing dispatched → `release(holdRef)` then one zero-usage `settleRoute`; a dispatch-marker failure never calls the provider, releases the prepared attempt without health penalty and returns 503.
 - `attention`: `overrun` lists any dispatched attempt whose reported usage exceeds its allowance (flagged with `outputCeilingEnforced`); the `blocked_attempts` audit write stays the host adapter's (B3c).
 - `attention`: effort-insensitive candidate identity is handled by the port contract (adapter prices max over effort variants); the gateway passes no effort.
+- `attention`: fix round 1 — usage is measured only when both counts are finite and >= 1; empty/partial/zero usage of a dispatched attempt is charged at least its allowance (conservative overcharge for a genuine zero-output answer).
+- `attention`: fix round 1 — a `release` rejection is swallowed (settlement still runs once, original error kept); the hold expires at its deadline and the host reconciles by `requestId`.
+- `attention`: fix round 1 — attachment allowance: images/tool media `BUDGET_ATTACHMENT_INPUT_TOKENS` (4096) each, inline files `max(4096, decodedBytes/4)`; `imageUnits` only set when attachments exist (text-only quotes unchanged).
+- `attention`: muse 2 — sibling-tarball mesh fallback is train-only evidence; B3d/train must requalify the packed gateway against published mesh `0.22.0` (`mesh.source` flips to `registry`).
+- `attention`: muse 3 — the `blocked_attempts` audit write per overrun settlement is a B3c obligation (B3c test must prove it).
+- `attention`: muse 4 — `coveringCandidates` falls back to max-over-quote on provider/model mismatch (overcharge only); noted for B3c reconciliation.
 - `attention`: `tests/auth-subpaths.test.ts` installs the sibling workspace mesh candidate tarball while mesh `0.22.0` is absent from npm (registry used once published); required because the packed gateway now depends on `^0.22.0`.
 
 ## AI Flaky tests
@@ -64,6 +70,13 @@
   - [x] Update `tests/{route-json-flow,route-stream-flow,errors,contract-snapshot}.test.ts`.
 - [x] **Lot 4 — Version and docs**
   - [x] `package.json` 0.19.0, mesh `^0.22.0`; `CHANGELOG.md`; README budget section.
+- [ ] **Lot 5 — Review fix round 1 (muse + complementary)**
+  - [x] Budget path sends the reserved default output ceiling as `maxOutputTokens` (both flows, both wires).
+  - [x] Attachments counted as `imageUnits` with a per-attachment input allowance.
+  - [x] Unmeasured usage (`{}`, partial, zero, non-finite) of a dispatched attempt charged at its allowance; release failure non-fatal.
+  - [x] Port/README contract: input estimate + adapter margin, hold deadline and reconciliation, codex max-output pricing, idempotent release after ambiguous marker, no settlement on pre-admission refusals.
+  - [x] New `tests/budget-hardening.test.ts` (default ceiling, multimodal, empty/partial usage, release failure, marker failure on attempt 2).
+  - [ ] Revalidation and new candidate digest.
 - [x] **Lot N — Final validation**
   - [x] `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway build-llm-gateway pack-llm-gateway ENV=test-llm-gateway-budget` (26 files, 261 tests pass; manifest guard PASS)
   - [x] `make test-llm-mesh ENV=test-llm-gateway-budget` (32 files, 270 tests pass)
