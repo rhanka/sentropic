@@ -358,3 +358,28 @@ test('post-publication qualification fails on a missing or status-less receipt',
     assert.match(s.run, /if \[ -z "\$status" \]; then echo "::error title=Publication qualification::.*"; exit 1; fi/, s.name);
   }
 });
+
+// BRDP-EX11: run the host guard lines of qualify-published-install (before mkdir/docker) with sh, one shell per line as Make does.
+const runQualifyGuards = (vars) => {
+  const lines = recipe('qualify-published-install').split('\n');
+  const guards = lines.slice(0, lines.findIndex((l) => l.startsWith('\t@mkdir')));
+  for (const line of guards) {
+    const cmd = line.replace(/^\t@/, '').replace(/\$\(([A-Z_]+)\)/g, (_, k) => vars[k] ?? '').replaceAll('$$', '$');
+    const r = spawnSync('sh', ['-c', cmd], { encoding: 'utf8' });
+    if (r.status !== 0) return { status: r.status, out: r.stdout + r.stderr };
+  }
+  return { status: 0, out: '' };
+};
+
+test('qualify-published-install: TARBALL mode without PEERS/QUALIFY_MODE passes the character guard; invalid PEERS still refused', () => {
+  const tgz = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qguard-')), 'candidate.tgz');
+  fs.writeFileSync(tgz, '');
+  assert.deepEqual(runQualifyGuards({ TARBALL: tgz }), { status: 0, out: '' });
+  const missing = runQualifyGuards({ TARBALL: `${tgz}.absent` });
+  assert.equal(missing.status, 1);
+  assert.match(missing.out, /ERROR: TARBALL .* is not a file/);
+  const bad = runQualifyGuards({ TARBALL: tgz, PEERS: 'a@1;rm' });
+  assert.equal(bad.status, 1);
+  assert.match(bad.out, /ERROR: PKG\/PEERS\/QUALIFY_MODE contain unsupported characters/);
+  assert.equal(runQualifyGuards({ TARBALL: tgz, PEERS: '@x/a@1.0.0,b@2.0.0', QUALIFY_MODE: 'registry' }).status, 0);
+});
