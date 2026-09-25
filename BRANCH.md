@@ -44,6 +44,9 @@
 - [x] D-FL8 | Branch: Lot D | Owner: gateway/mesh/ledger maintainers | Severity: design | Status: attention | Repro: F6/F7/F10 admission review | Expected: enforced caps without duplicate rows | Actual: no recordLlmUsage in standalone; shared key upsert if composed observation remains; Retry-After capped at 60s; quote seam decided in B0, B3 split by owner | Evidence: spec D5/B0/B3a-c | Rationale: preserve frozen wire and one settlement row; any mapping change needs a separate wire-contract decision.
 - [x] D-FL9 | Branch: Lot D | Owner: backup maintainer | Severity: residual risk | Status: attention | Repro: F11 inspect deploy/k8s/base/70-pgbackup-cronjob.yaml | Expected: owner's no-Python rule | Actual: existing amazon/aws-cli:2.34.53 runtime uses Python | Evidence: spec D7 | Rationale: flag existing backup dependency only; remediation is outside the two-file scope.
 - [x] D-FL11 | Branch: Lot D | Owner: mesh lane conductor | Severity: build dependency | Status: resolved | Repro: registry check 2026-09-25 | Expected: separate auth leaves published | Actual: cluster-mesh 0.12.0 (PR #610) publishes `/gateway/auth` and `/gateway/auth-hono` with `loadGatewayAuth`/`loadGatewayAuthHono`; mcp-auth 0.2.1 and llm-gateway 0.18.0 published; registry latest llm-mesh 0.21.2, llm-gateway 0.18.0, cluster-mesh 0.12.0, so the 0.22.0/0.19.0/0.13.0 targets are free | Evidence: registry manifests | Rationale: closes D-FL10 and the Lot F prerequisite of B0.
+- [x] B0-A1 | Branch: Lot D | Owner: mesh owner | Severity: design | Status: attention | Quote is synchronous and pure, candidates are an account-independent superset capped at 16, and plan() rejects a mismatched quote. Rationale: conservative reservation without acquisition; the cap of 16 is reversible in B3a.
+- [x] B0-A2 | Branch: Lot D | Owner: mesh + ledger owners | Severity: design | Status: attention | Codex candidates carry `outputCeilingEnforced: false` (transport omits max_output_tokens); reserve the ceiling and charge any overrun at settlement. Rationale: D5 settlement debits actual cost unconditionally.
+- [x] B0-A3 | Branch: Lot D | Owner: cluster owner | Severity: design | Status: attention | `/gw` to `/` uses existing `mounts`; no mount-path collision guard because the product maps several namespaces to `/`. Rationale: a guard would break product boot; B3d adds a test only.
 - [x] D-FL10 | Branch: Lot D | Owner: cluster/gateway maintainers | Severity: build dependency | Status: resolved by D-FL11 | Repro: re-read both revised sibling specs on resume | Expected: matching service/session auth leaves | Actual: gateway separates /auth and /auth-hono; lazy-surface still describes a shared /gateway/auth-hono bridge | Evidence: spec sections 0/D4/B0 | Rationale: require cluster leaves/loaders matching Lot 2 and isolated packed tests before B1; preserve one loading path and edit neither sibling here.
 
 ## AI Flaky tests
@@ -58,6 +61,11 @@
 - [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot D — B0 freeze (spec section 12)**
+  - [x] 12.1-12.3: registry-verified matrix, target ranges, publication order, consumer gates; mesh quote contract and gateway budget port; `/gw` to `/` remap evidence.
+  - [ ] 12.4-12.5: auth leaf reconciliation against published cluster-mesh 0.12.0; G1a migration inventory.
+  - [ ] 12.6-12.7: per-lot exceptions for B1/B2/B3a/B3b/B3c/B3d; ordering, parallelism, stop point and blocked lots.
+  - [ ] Gates per commit: `git diff --check`, `make scope-check ENV=test-llm-deployable-process`; only the spec and this file change.
 - [x] **Lot D — Revision round 2 (N1-N7 and minors)**
   - [x] Routing group: extend B3c/product parity; separate partition configuration from dispatch generation; apply namespace, ingress and branch-wording minors.
   - [x] Qualification group: distinguish workspace image from h2a published tuple; freeze new minor compatibility targets and mcp-auth/jose prerequisites; cite the Lot F replacement.
