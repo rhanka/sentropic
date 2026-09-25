@@ -14,11 +14,13 @@
 - **Allowed Paths (implementation scope)**:
   - `packages/cluster-mesh/**` (incl. `packaging.mk`, `tests/packaging/**`, fixtures, README, CHANGELOG)
   - `BRANCH.md`
+  - `.github/workflows/ci.yml` (BRDP-EX10 only: train publish barrier, strict chain, concurrency, lock-sync, sibling-first lazy qualification, healed post-publication qualification, `verify-train-lock-integrity`)
+  - `scripts/ci/publishable-ci-wiring.test.mjs` (BRDP-EX10 wiring assertions only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**` (EX10 not authorized yet)
+  - `.github/workflows/**` other than the BRDP-EX10 `ci.yml` hunks
   - `.track/**`
   - `plan/**`
   - `deploy/**`
@@ -43,6 +45,11 @@
 - `attention`: registry mode (no `SIBLING_ARCHIVES_FILE`) fails at `selected` `npm ci` with 404 until mesh 0.22.0 / gateway 0.19.0 are published (fail-safe, expected by the train design); CI still needs EX10 (siblings before the lazy qualification) — ci.yml untouched here.
 - `attention`: every sibling in a receipts file is validated by `scripts/ci/qualify-published-install.mjs` `loadSiblings` itself (guard receipt, path, sha256, head sha = `git rev-parse HEAD`, packed identity and manifest guard, no unlisted archive) plus a basename-collision refusal, before any use; an invalid receipt fails the run rather than falling back to the registry. Receipts must be re-packed after every commit (`pack-candidate-siblings` with `MANIFEST_CONTEXT_FILE`).
 - `attention`: npm 11.19 partial bump (consumer keeps its own `^0.21.2`/`^0.18.0` pins) exits 1 with ERESOLVE; the skewed tree is built with `--legacy-peer-deps` and refused at every leaf, loader, compose entry and preflight.
+- `attention`: BRDP-EX10 (conductor-approved, design v3 points a-f) — reason: one green train PR, no registry write before the three train validations pass, no cluster-mesh 0.13.0 without its peers, no publish race, loud detection of pack drift; impact: `global` fires on the train PR (full CI), llm-mesh publication is coupled to cluster-mesh validation when the lock moves, cluster-mesh post-publication qualification also runs on a `skipped` receipt whose version is on the registry; rollback: revert the `ci.yml` EX10 commit and its wiring-test commit (no version or data impact).
+- `attention`: BRDP-EX6 closed in the train — after the `origin/main` merge, `make lock-root` writes an empty `package-lock.json` diff.
+- `attention`: train rule — llm-mesh 0.22.0, llm-gateway 0.19.0 and cluster-mesh 0.13.0 land on main in this single PR and publish in one main run (mesh → gateway → cluster); none of them merges or publishes separately.
+- `attention`: merge freeze (owner-enforced) — the conductor announces an all-lanes merge freeze on main 1 h before the train merge; it is lifted only after the lock-refresh follow-up PR lands.
+- `attention`: post-merge checklist — verify the 3 published manifests (provenance, gitHead = merge commit, peer ranges, dist.integrity); `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=<env>` green (and the `verify-train-lock-integrity` job); lock-refresh follow-up PR (`refresh-lazy-package-lock` without siblings) with an empty diff, else a traced pack-drift repair.
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic unit and packed-install tests, no provider call.
@@ -83,3 +90,4 @@
   - [x] Merge `origin/main` (B1 `apps/llm-gateway`, cli/build-cli/focus eradication); `make lock-root` diff empty.
   - [x] B3d minor (a): `parseReleaseVersion` strips `+build` metadata (npm parity), prereleases still refused; unit rows, README, CHANGELOG.
   - [x] B3d minor (b): range check through a `tree.link()` symlinked workspace copy (in-range passes, out-of-range refused on the physical path).
+  - [x] EX10 `ci.yml`: siblings packed before the lazy qualification (`SIBLING_ARCHIVES_FILE` when receipts exist), publish barrier and strict chain, `npm-publish-train` concurrency, `changes` lock-sync, healed post-publication qualification, `verify-train-lock-integrity`.
