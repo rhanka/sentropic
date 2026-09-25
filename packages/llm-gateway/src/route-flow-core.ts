@@ -1,5 +1,5 @@
 import type {
-  RouteAttemptUsage, RouteFailureClassification, RoutePlan, RoutePlanInput,
+  PreparedRouteAttempt, RouteAttemptUsage, RouteFailureClassification, RoutePlan, RoutePlanInput,
   RoutePlanner, VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
 import type { GatewayConfig } from './config.js';
@@ -9,6 +9,8 @@ import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
 import { authenticateCaller } from './internal/caller-auth.js';
 import type { RouteAttemptDispatchPort } from './ports/dispatch.js';
+import type { GatewayBudgetOptions, RouteBudgetOverrun } from './ports/budget.js';
+import { admitRoute, assertBudgetRouteDeps, chargeAdmittedAttempts, type AdmittedRoute } from './admission.js';
 
 export interface RouteAttemptSettlement {
   readonly candidateRef: string;
@@ -26,6 +28,14 @@ export interface RouteRequestSettlement {
   readonly outcome: 'success' | 'failed' | 'cancelled';
   readonly usage: SettleUsage;
   readonly attempts: readonly RouteAttemptSettlement[];
+  /** Budget admission only: server request id, the settlement idempotency key. */
+  readonly requestId?: string;
+  /** Budget admission only: hold settled (debited and released) by this aggregate. */
+  readonly holdRef?: string;
+  /** Budget admission only: the in-process quote the hold was priced from. */
+  readonly quoteRef?: string;
+  /** Budget admission only: dispatched attempts whose usage exceeded their allowance. */
+  readonly overrun?: readonly RouteBudgetOverrun[];
 }
 
 export interface RouteMeteringSink {
@@ -42,6 +52,8 @@ export interface RouteFlowDeps {
     readonly request: GatewayFlowRequest;
     readonly canonical: CanonicalIngressResult;
   }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities'>;
+  /** Opt-in budget admission; absent means no quote and no reservation. */
+  readonly budget?: GatewayBudgetOptions;
 }
 
 export interface PreparedRouteFlow {
@@ -49,6 +61,8 @@ export interface PreparedRouteFlow {
   readonly subject: VerifiedRoutingSubject;
   readonly canonical: CanonicalIngressResult;
   readonly plan: RoutePlan;
+  /** Present only when budget admission admitted the request. */
+  readonly admission?: AdmittedRoute;
 }
 
 export const routingSubjectForCost = (cost: CostContext): VerifiedRoutingSubject => ({
@@ -73,6 +87,7 @@ export const prepareRouteFlow = async (
   }
   const canonical = normalizeGatewayIngress(request.wire, request.body);
   const subject = routingSubjectForCost(auth.cost);
+  if (deps.budget) return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, canonical);
   try {
     const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
     const plan = await deps.routePlanner.plan(subject, {
@@ -94,6 +109,87 @@ export const prepareRouteFlow = async (
     });
     throw error;
   }
+};
+
+const prepareAdmittedRouteFlow = async (
+  deps: RouteFlowDeps,
+  request: GatewayFlowRequest,
+  cost: CostContext,
+  subject: VerifiedRoutingSubject,
+  canonical: CanonicalIngressResult,
+): Promise<PreparedRouteFlow> => {
+  assertBudgetRouteDeps(deps.routePlanner, true, deps.budget);
+  const routeInput = deps.routeInput?.({ cost, request, canonical });
+  const admission = await admitRoute({
+    budget: deps.budget!, routePlanner: deps.routePlanner,
+    requestId: request.authContext.requestId, cost, wire: request.wire,
+    requestedModel: request.model, canonical,
+    route: {
+      ...(routeInput?.targetCandidatesOverride ? { targetCandidatesOverride: routeInput.targetCandidatesOverride } : {}),
+      ...(routeInput?.intent ? { intent: routeInput.intent } : {}),
+      ...(routeInput?.policyProfile ? { policyProfile: routeInput.policyProfile } : {}),
+      ...(routeInput?.policyOverride ? { policyOverride: routeInput.policyOverride } : {}),
+      ...(routeInput?.explicit ? { explicit: routeInput.explicit } : {}),
+    },
+  });
+  try {
+    const plan = await deps.routePlanner.plan(subject, {
+      ...routeInput,
+      requestedModel: request.model,
+      requiredCapabilities: canonical.requiredCapabilities,
+      workspaceId: routeInput?.workspaceId ?? cost.workspaceId,
+      affinityKey: routeInput?.affinityKey ?? cost.correlationId,
+      quote: admission.quote,
+    });
+    return { cost, subject, canonical, plan, admission };
+  } catch (error) {
+    // The admitted request's one zero-usage settlement, with hold release.
+    await settleRouteRequest(deps, { cost, admission }, request, 'failed', []);
+    throw error;
+  }
+};
+
+/**
+ * The single aggregate settlement of a routed request. With budget admission
+ * it releases the hold first when nothing was dispatched, charges missing
+ * usage of dispatched attempts at their allowance and records overruns.
+ */
+export const settleRouteRequest = async (
+  deps: RouteFlowDeps,
+  prepared: Pick<PreparedRouteFlow, 'cost' | 'admission'>,
+  request: GatewayFlowRequest,
+  outcome: RouteRequestSettlement['outcome'],
+  attempts: readonly RouteAttemptSettlement[],
+): Promise<void> => {
+  const { admission } = prepared;
+  const base = { cost: prepared.cost, wire: request.wire, requestedModel: request.model, outcome };
+  if (!admission || !deps.budget) {
+    await deps.metering.settleRoute({ ...base, usage: aggregateUsage(attempts), attempts });
+    return;
+  }
+  const charged = chargeAdmittedAttempts(admission, attempts);
+  try {
+    if (admission.dispatched.size === 0) await deps.budget.port.release(admission.holdRef);
+  } finally {
+    await deps.metering.settleRoute({
+      ...base, usage: aggregateUsage(charged.attempts), attempts: charged.attempts,
+      requestId: admission.requestId, holdRef: admission.holdRef, quoteRef: admission.quote.quoteRef,
+      ...(charged.overrun.length > 0 ? { overrun: charged.overrun } : {}),
+    });
+  }
+};
+
+/**
+ * The dispatch marker failed: the provider was never called. Release the
+ * prepared attempt without health penalty, settle once, sanitized 503.
+ */
+export const refuseUnmarkedDispatch = async (
+  attempt: PreparedRouteAttempt | undefined,
+  settle: () => Promise<void>,
+): Promise<GatewayError> => {
+  try { await attempt?.releaseCancelled(); } catch { /* The budget refusal wins. */ }
+  await settle();
+  return new GatewayError('budget-unavailable', 'budget dispatch marker unavailable');
 };
 
 export const classifyRouteError = (

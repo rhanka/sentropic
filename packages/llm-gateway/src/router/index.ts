@@ -39,6 +39,8 @@ import {
 import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
 import { authenticateCaller, validateAuthContext } from '../internal/caller-auth.js';
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
+import type { GatewayBudgetOptions } from '../ports/budget.js';
+import { assertBudgetRouteDeps } from '../admission.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -69,6 +71,11 @@ export interface CreateGatewayRouterOptions {
   readonly routeInput?: RouteFlowDeps['routeInput'];
   /** `X-Sentropic-Request-Id` source (spec §3b). Defaults to a per-call id. */
   readonly requestId?: () => string;
+  /**
+   * Opt-in budget admission (BR-47). Requires `routePlanner` with `quote()`
+   * and `routeMetering`; construction fails otherwise. Absent: no quote call.
+   */
+  readonly budget?: GatewayBudgetOptions;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -171,6 +178,7 @@ export const createGatewayRouter = (
   if (options.routeDispatch && (!options.routePlanner || !options.routeMetering)) {
     throw new Error('routeDispatch requires routePlanner and routeMetering');
   }
+  assertBudgetRouteDeps(options.routePlanner, Boolean(options.routeMetering), options.budget);
   const requestId = options.requestId ?? defaultRequestId;
   const app = new Hono();
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
@@ -209,6 +217,7 @@ export const createGatewayRouter = (
         config, routePlanner: options.routePlanner, metering: options.routeMetering,
         ...(options.routeDispatch ? { dispatch: options.routeDispatch } : {}),
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
+        ...(options.budget ? { budget: options.budget } : {}),
       }
     : undefined;
 
