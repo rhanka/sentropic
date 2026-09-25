@@ -19,9 +19,13 @@
 - Gateway auth loaders are startup preflights resolving mcp-auth/jose or auth-hono
   from the installed gateway location, so a missing or incompatible peer fails
   before bind instead of on the first authenticated request.
-- Add a per-process topology guard evaluated by every leaf/loader/compose entry and
+- Add a per-thread topology guard evaluated by every leaf/loader/compose entry and
   the explicit `verifyClusterMeshTopology()` preflight (`ClusterMeshTopologyError`,
   `code: 'cluster_mesh_topology_invalid'`). `sideEffects` now lists those entries.
+  Re-evaluating the same file (HMR, test-runner module resets) is not a duplicate.
+- The registry imports the metadata-resolved provider file; the root graph has no
+  provider specifier, so bundling the root embeds no provider, auth or jose code.
+- Qualified with npm only; esbuild is the tested bundler.
 - Catalogue MCP, Track, memory and other capabilities as `source_unavailable`;
   their adapters ship in a later minor.
 - Migration (h2a and other consumers):

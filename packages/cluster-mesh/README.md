@@ -140,26 +140,38 @@ before binding any listener; they resolve and evaluate the selected peer graph
 { enabled, authMode: 'service' | 'session' | 'host', createRouter })` does this for
 you; `host` selects no gateway auth peer (host-injected `CallerAuthPort`).
 
-**Topology guard.** Every leaf, loader and compose entry first runs a per-process
-guard: more than one evaluated cluster-mesh copy (counted by evaluation, so
-`--preserve-symlinks`, `npm link` and pnpm peer variants are covered), or an
-llm-mesh resolved from cluster-mesh that differs from the gateway's, makes the
-import throw `ClusterMeshTopologyError` (`code: 'cluster_mesh_topology_invalid'`,
-message naming the conflicting paths). Call `verifyClusterMeshTopology({ require })`
-from the root at startup for an earlier, explicit check that also enforces the
-accepted ranges. The guard is per process; cross-process consistency stays with
-install/qualification gates. Under `--preserve-symlinks`, two llm-mesh instances
-sharing one realpath are not detectable without importing both.
+**Topology guard.** Every leaf, loader and compose entry first runs the guard: more
+than one evaluated cluster-mesh copy, or an llm-mesh resolved from cluster-mesh that
+differs from the gateway's, makes the import throw `ClusterMeshTopologyError`
+(`code: 'cluster_mesh_topology_invalid'`, message naming the conflicting paths).
+Copies are keyed by module URL without `?query`/`#hash`: a copy loaded from another
+path (nested install, `npm link`, a `--preserve-symlinks` link path) is a duplicate,
+while re-evaluating the same file (Vite dev/HMR, `vi.resetModules`, cache-busting
+query imports in test runners) replaces its entry and is not reported. Call
+`verifyClusterMeshTopology({ require })` from the root at startup for an earlier,
+explicit check that also enforces the accepted ranges. Guard state lives on
+`globalThis`, so it is per thread (each `worker_threads` worker checks its own
+copies); cross-process consistency stays with install/qualification gates. Limits:
+under `--preserve-symlinks`, two llm-mesh instances sharing one realpath are not
+detectable without importing both; and the automatic guard also refuses an
+llm-mesh-only consumer when a stray gateway with a private llm-mesh copy is installed
+next to it (remove that gateway copy or align its llm-mesh).
 
 **Consumer rules.** Every manifest that declares cluster-mesh and imports a leaf
 also declares that leaf's selected peers at the qualified versions; the installed
 tree must hold exactly one cluster-mesh and one llm-mesh shared with the gateway.
-Bundlers (tsup/esbuild) must externalize `@sentropic/cluster-mesh` **and**
-`@sentropic/cluster-mesh/*` (and the peer packages) so the resolution anchor stays
-at the installed package. Consumers with `skipLibCheck: false` need TypeScript
->= 5.7 for hono's declarations; with `skipLibCheck: true`, a missing peer surfaces
-as TS2305 on the named import. Tested tuple: cluster-mesh 0.12.0, llm-mesh 0.21.2,
-llm-gateway 0.18.0, mcp-auth 0.2.1, oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7.
+0.12.0 is qualified with **npm only** (flat project installs, `npm ci` from a lockfile,
+and a global consumer beside a separately installed runtime); other package managers
+are not qualified. The tested bundler is esbuild with `@sentropic/cluster-mesh` **and**
+`@sentropic/cluster-mesh/*` (and the peer packages) externalized, which keeps the
+resolution anchor at the installed package; bundling the root inline (as the API
+build does) embeds no provider code. TypeScript >= 5.7 is required with
+`skipLibCheck: false` (hono's declarations); with `skipLibCheck: true`, a missing
+peer surfaces as TS2305 on the named import. Frozen tuple (committed lockfile):
+cluster-mesh 0.12.0, llm-mesh 0.21.2, llm-gateway 0.18.0, mcp-auth 0.2.1,
+oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7; session mode with auth-hono 0.15.0
+(llm-gateway 0.18.0's published peer range `^0.15.0`); the latest versions inside
+every declared range are re-qualified on each release run.
 
 ## Available in v1
 
