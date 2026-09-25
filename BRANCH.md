@@ -66,7 +66,7 @@
 - [ ] **Lot 4 — Review fix round 1 (muse + opus + conductor)**
   - [x] Automatic leaf guard enforces the accepted peer ranges per family (llm-mesh leaves: llm-mesh; gateway leaves, loaders and compose: llm-gateway and llm-mesh), memoized per copy set and family; `sideEffects` lists the two family guards.
   - [x] Unit trees: correct tuple, out-of-range refusal message, nested in-range and out-of-range copies, gateway-located llm-mesh, prerelease/build metadata, HMR re-evaluation.
-  - [ ] Sibling receipts validated by `loadSiblings` itself (head sha, packed-manifest guard, unlisted archives) plus basename collision; a cluster-mesh receipt is the qualified candidate.
+  - [x] Sibling receipts validated by `loadSiblings` itself (head sha, packed-manifest guard, unlisted archives) plus basename collision; a cluster-mesh receipt is the qualified candidate.
   - [ ] `refresh` errors on a sibling version mismatch; `registry` compares `resolved`; refusal rows for absolute path and non-array/unreadable receipts.
   - [ ] Old-tuple and partial-bump fixtures record exit, warnings and installed versions; leaves, loaders and preflight refuse `incompatible_version`; every leaf imports in the correct single-tree and global topologies.
   - [ ] README/CHANGELOG: automatic range guard, optional preflight, upgrading to 0.13.
