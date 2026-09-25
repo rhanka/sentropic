@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { enabled, fixtureDir, nodeJson, read } from './helpers.js';
+import { enabled, expectedSource, fixtureDir, nodeJson, read, siblingIndex } from './helpers.js';
 
 const tupleOf = (name: string): Record<string, string> => Object.fromEntries(
   read(join(fixtureDir(name), 'tuple.txt')).trim().split('\n').map((line) => {
@@ -43,14 +43,14 @@ describe.skipIf(!enabled)('packed release matrix', () => {
     });
   });
 
-  it('should source the train packages from verified sibling archives only in a train run', () => {
-    const expected = process.env.CLUSTER_MESH_SIBLING_RECEIPTS ? 'sibling' : 'registry';
+  it('should source each train package from a verified sibling archive only when its receipt was verified', () => {
     const pinned: Record<string, string> = { '@sentropic/llm-mesh': '0.22.0', '@sentropic/llm-gateway': '0.19.0' };
+    const index = siblingIndex();
     for (const fixture of ['selected', 'selected-session', 'latest', 'src/separate-runtime']) {
       const lines = read(join(fixtureDir(fixture), 'sources.txt')).trim().split('\n').map((line) => line.split(' '));
       expect(lines.map(([name]) => name).sort(), fixture).toEqual(['@sentropic/llm-gateway', '@sentropic/llm-mesh']);
       for (const [name, kind, spec] of lines) {
-        expect(kind, `${fixture} ${name}`).toBe(expected);
+        expect(kind, `${fixture} ${name}`).toBe(expectedSource(index, name!, pinned[name!]!));
         if (kind === 'sibling') expect(spec, name).toMatch(new RegExp(`/sentropic-${name!.split('/')[1]}-${pinned[name!]}\\.tgz$`, 'u'));
         else if (fixture !== 'latest') expect(spec, name).toBe(pinned[name!]);
       }
