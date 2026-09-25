@@ -47,6 +47,8 @@
 - [x] B0-A1 | Branch: Lot D | Owner: mesh owner | Severity: design | Status: attention | Quote is synchronous and pure, candidates are an account-independent superset capped at 16, and plan() rejects a mismatched quote. Rationale: conservative reservation without acquisition; the cap of 16 is reversible in B3a.
 - [x] B0-A2 | Branch: Lot D | Owner: mesh + ledger owners | Severity: design | Status: attention | Codex candidates carry `outputCeilingEnforced: false` (transport omits max_output_tokens); reserve the ceiling and charge any overrun at settlement. Rationale: D5 settlement debits actual cost unconditionally.
 - [x] B0-A3 | Branch: Lot D | Owner: cluster owner | Severity: design | Status: attention | `/gw` to `/` uses existing `mounts`; no mount-path collision guard because the product maps several namespaces to `/`. Rationale: a guard would break product boot; B3d adds a test only.
+- [x] B0-A4 | Branch: Lot D | Owner: control-schema owner | Severity: design | Status: attention | G1a is `0008_llm_admission.sql`; pricing non-overlap uses GiST only if `btree_gist` is verified per tier, else a unique effective_from key plus checked insert path. Rationale: no control migration creates an extension today.
+- [x] B0-A5 | Branch: Lot D | Owner: cluster owner | Severity: test gap | Status: attention | Packed missing-jose refusal and packed old-tuple rejection are absent from 0.12.0 packaging tests; B3d adds them. Rationale: source-level coverage exists, packed coverage is required for the published tuple.
 - [x] D-FL10 | Branch: Lot D | Owner: cluster/gateway maintainers | Severity: build dependency | Status: resolved by D-FL11 | Repro: re-read both revised sibling specs on resume | Expected: matching service/session auth leaves | Actual: gateway separates /auth and /auth-hono; lazy-surface still describes a shared /gateway/auth-hono bridge | Evidence: spec sections 0/D4/B0 | Rationale: require cluster leaves/loaders matching Lot 2 and isolated packed tests before B1; preserve one loading path and edit neither sibling here.
 
 ## AI Flaky tests
@@ -63,7 +65,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot D — B0 freeze (spec section 12)**
   - [x] 12.1-12.3: registry-verified matrix, target ranges, publication order, consumer gates; mesh quote contract and gateway budget port; `/gw` to `/` remap evidence.
-  - [ ] 12.4-12.5: auth leaf reconciliation against published cluster-mesh 0.12.0; G1a migration inventory.
+  - [x] 12.4-12.5: auth leaf reconciliation against published cluster-mesh 0.12.0; G1a migration inventory.
   - [ ] 12.6-12.7: per-lot exceptions for B1/B2/B3a/B3b/B3c/B3d; ordering, parallelism, stop point and blocked lots.
   - [ ] Gates per commit: `git diff --check`, `make scope-check ENV=test-llm-deployable-process`; only the spec and this file change.
 - [x] **Lot D — Revision round 2 (N1-N7 and minors)**
