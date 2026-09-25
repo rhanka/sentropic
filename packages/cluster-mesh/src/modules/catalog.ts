@@ -20,6 +20,8 @@ export interface PeerRequirement {
   readonly subpath: string;
   readonly range: string;
   readonly requiredMembers: readonly string[];
+  /** Resolve from this already-resolved peer's package (its owner), not from the gateway. */
+  readonly resolveFrom?: string;
 }
 
 export interface ProviderDescriptor {
@@ -34,47 +36,39 @@ export interface ProviderDescriptor {
   readonly meshCoherence: boolean;
   /** Deferred auth peers resolved and preloaded from the gateway package. */
   readonly authPeers: readonly PeerRequirement[];
-  /** Literal dynamic import, anchored at the installed cluster-mesh package. */
-  readonly importEntry: () => Promise<unknown>;
 }
 
+// No provider specifier is ever imported from the root graph: the registry imports the
+// metadata-resolved physical file, so bundling the root never pulls a provider in.
 const SERVICE_AUTH_PEERS: readonly PeerRequirement[] = [
   { packageName: '@sentropic/mcp-auth', subpath: './hono', range: MCP_AUTH_RANGE, requiredMembers: ['createRequireServiceAuth'] },
-  { packageName: 'jose', subpath: '.', range: JOSE_RANGE, requiredMembers: ['jwtVerify'] },
+  // jose is mcp-auth's peer: resolve it from mcp-auth, which is what imports it.
+  { packageName: 'jose', subpath: '.', range: JOSE_RANGE, requiredMembers: ['jwtVerify'], resolveFrom: '@sentropic/mcp-auth' },
 ];
 const SESSION_AUTH_PEERS: readonly PeerRequirement[] = [
   { packageName: '@sentropic/auth-hono', subpath: './middleware', range: AUTH_HONO_RANGE, requiredMembers: ['createRequireAuth'] },
 ];
 
 const mesh = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembers: readonly string[],
-  importEntry: () => Promise<unknown>, namespace?: ClusterMeshNamespace): ProviderDescriptor => ({
+  namespace?: ClusterMeshNamespace): ProviderDescriptor => ({
   id, owner: 'llm-mesh', packageName: LLM_MESH_PACKAGE, subpath, range: LLM_MESH_RANGE, requiredMembers,
-  meshCoherence: false, authPeers: [], importEntry, ...(namespace ? { namespace } : {}),
+  meshCoherence: false, authPeers: [], ...(namespace ? { namespace } : {}),
 });
 const gateway = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembers: readonly string[],
-  authPeers: readonly PeerRequirement[], importEntry: () => Promise<unknown>,
-  namespace?: ClusterMeshNamespace): ProviderDescriptor => ({
+  authPeers: readonly PeerRequirement[], namespace?: ClusterMeshNamespace): ProviderDescriptor => ({
   id, owner: 'llm-gateway', packageName: LLM_GATEWAY_PACKAGE, subpath, range: LLM_GATEWAY_RANGE, requiredMembers,
-  meshCoherence: true, authPeers, importEntry, ...(namespace ? { namespace } : {}),
+  meshCoherence: true, authPeers, ...(namespace ? { namespace } : {}),
 });
 
 export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, ProviderDescriptor>> = {
-  'llm-mesh': mesh('llm-mesh', '.', ['createLlmMesh', 'createProviderRegistry'],
-    () => import('@sentropic/llm-mesh'), '/llm-mesh'),
-  'llm-mesh/facade': mesh('llm-mesh/facade', './facade', ['createLlmMeshFacade'],
-    () => import('@sentropic/llm-mesh/facade')),
-  'llm-mesh/enrollment': mesh('llm-mesh/enrollment', './enrollment', [],
-    () => import('@sentropic/llm-mesh/enrollment')),
-  'llm-mesh/node': mesh('llm-mesh/node', './node', ['InMemoryKeyring'],
-    () => import('@sentropic/llm-mesh/node')),
-  'llm-mesh/transport/cloud-code': mesh('llm-mesh/transport/cloud-code', './transport/cloud-code',
-    ['CloudCodeProviderAdapter'], () => import('@sentropic/llm-mesh/transport/cloud-code')),
-  gateway: gateway('gateway', '.', ['createGatewayRouter'], [],
-    () => import('@sentropic/llm-gateway'), '/gw'),
-  'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS,
-    () => import('@sentropic/llm-gateway/auth')),
-  'gateway/auth-hono': gateway('gateway/auth-hono', './auth-hono', ['AuthHonoVerifyToken'], SESSION_AUTH_PEERS,
-    () => import('@sentropic/llm-gateway/auth-hono')),
+  'llm-mesh': mesh('llm-mesh', '.', ['createLlmMesh', 'createProviderRegistry'], '/llm-mesh'),
+  'llm-mesh/facade': mesh('llm-mesh/facade', './facade', ['createLlmMeshFacade']),
+  'llm-mesh/enrollment': mesh('llm-mesh/enrollment', './enrollment', []),
+  'llm-mesh/node': mesh('llm-mesh/node', './node', ['InMemoryKeyring']),
+  'llm-mesh/transport/cloud-code': mesh('llm-mesh/transport/cloud-code', './transport/cloud-code', ['CloudCodeProviderAdapter']),
+  gateway: gateway('gateway', '.', ['createGatewayRouter'], [], '/gw'),
+  'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS),
+  'gateway/auth-hono': gateway('gateway/auth-hono', './auth-hono', ['AuthHonoVerifyToken'], SESSION_AUTH_PEERS),
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {

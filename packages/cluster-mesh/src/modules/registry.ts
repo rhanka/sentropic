@@ -24,7 +24,11 @@ import { satisfiesRange } from './semver.js';
 const ALL_IDS: readonly ClusterMeshModuleId[] = [...CLUSTER_MESH_PROVIDER_MODULE_IDS, ...CLUSTER_MESH_GATED_MODULE_IDS];
 const UNPROBED: ModuleCapabilityRecord = Object.freeze({ availability: 'gated', state: 'unprobed' });
 
-/** Test/qualification seam; public composition always anchors at the installed cluster-mesh. */
+/**
+ * Test/qualification seam; public composition always anchors at the installed cluster-mesh.
+ * Either way the registry imports the metadata-resolved physical file, never a bare provider
+ * specifier, so the root graph carries no provider edge for a bundler to follow.
+ */
 export interface ModuleRegistryInternals {
   readonly anchorDir?: string;
 }
@@ -74,7 +78,8 @@ function inspect(entry: ProviderDescriptor, anchorDir: string): Inspection | Ref
   }
   const peers: Inspection['peers'][number][] = [];
   for (const peer of entry.authPeers) {
-    const resolved = checkPackage(peer.packageName, peer.range, main.pkg.dir, peer.subpath);
+    const owner = peer.resolveFrom ? peers.find((resolved) => resolved.peer.packageName === peer.resolveFrom) : undefined;
+    const resolved = checkPackage(peer.packageName, peer.range, owner?.pkg.dir ?? main.pkg.dir, peer.subpath);
     if (isRefusal(resolved)) return resolved;
     peers.push({ peer, ...resolved });
   }
@@ -117,7 +122,7 @@ export function createModuleRegistry(
     const { entry, pkg } = found;
     let namespace: unknown;
     try {
-      namespace = internals.anchorDir === undefined ? await entry.importEntry() : await importFile(found.file);
+      namespace = await importFile(found.file);
     } catch (cause) {
       throw refuse(id, { reason: 'load_failed', packageName: entry.packageName, requiredRange: entry.range, cause });
     }
