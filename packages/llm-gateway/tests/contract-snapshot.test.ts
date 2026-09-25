@@ -76,6 +76,11 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
     openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
   },
+  // B3b internal kind: budget pricing/store failure reuses the sanitized 503 bodies.
+  'budget-unavailable': {
+    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+  },
   'upstream-auth-failed': {
     anthropic: { status: 401, type: 'authentication_error', message: 'authentication failed' },
     openai: { status: 401, type: 'authentication_error', message: 'authentication failed', code: 'invalid_api_key' },

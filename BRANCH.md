@@ -43,9 +43,9 @@
   - [x] Read spec §5, §10 (B3b), §12.2, §12.6, B0 review findings 6-7 and B3a review finding 8.
   - [x] Verify branch, registry latest `0.18.0`, target `0.19.0` free.
 - [ ] **Lot 1 — Budget port and admission**
-  - [ ] `src/ports/budget.ts`: `BudgetAdmissionPort`, decisions, settlement budget fields, error codes.
+  - [x] `src/ports/budget.ts`: `BudgetAdmissionPort`, decisions, settlement budget fields, error codes.
   - [ ] `src/admission.ts`: ceiling, in-process quote, admit/reserve, Retry-After bound, dispatch marker, release, overrun.
-  - [ ] `router/errors.ts`: internal `budget-unavailable` kind on the existing sanitized 503 bodies.
+  - [x] `router/errors.ts`: internal `budget-unavailable` kind on the existing sanitized 503 bodies.
 - [ ] **Lot 2 — Flow integration**
   - [ ] `route-flow-core.ts`: admission before plan, `plan({ quote })`, one settlement with `requestId`/`holdRef`/`quoteRef`.
   - [ ] `route-json-flow.ts`, `route-stream-flow.ts`: dispatch marker, allowance for missing usage, release when nothing dispatched.
