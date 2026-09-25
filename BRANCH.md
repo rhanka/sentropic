@@ -99,16 +99,16 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
     - [x] `make typecheck-llm-gateway test-llm-gateway ENV=test-llm-gateway-host` (pass; 25 files, 225 tests incl. router and contract-snapshot, no wire drift)
     - [x] `make scope-check REGISTRY=local ENV=test-llm-gateway-host` (PASS C2; advisory check sees only uncommitted files, branch diff `origin/main...HEAD` manually verified inside Allowed + declared Conditional paths)
     - [x] `make down API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (`make ps` empty)
-- [ ] **Lot 4 — B1 review fix round 1**
+- [x] **Lot 4 — B1 review fix round 1**
   - [x] `src/lifecycle.ts`: stop awaits settlement of cancelled streams (bounded) before resolving.
   - [x] `src/lifecycle.ts`: signal listeners via `on`; a repeated signal is absorbed during the drain.
   - [x] `src/lifecycle.ts`: per-request abort for JSON and pre-first-frame SSE requests, counted as `aborted`.
   - [x] `src/lifecycle.ts`: startup error listener removed once listening; post-listen errors logged by code only.
   - [x] `src/index.ts`: `dist/index.js` marked as the B5 target.
   - [x] `apps/llm-gateway/tests/lifecycle.test.ts` and `apps/llm-gateway/tests/fixtures.ts`: settlement asserted before stop resolves, repeated signal, JSON and pre-first-frame aborts, settlement bound, post-listen error log.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (pass; 44 host tests, lint 0 errors)
-    - [ ] `make typecheck-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host`
-    - [ ] `make build-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (production image: `npm ci`/`npm prune` with the host workspace)
-    - [ ] `make scope-check REGISTRY=local ENV=test-llm-gateway-host`
-    - [ ] `make down API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (`make ps` empty)
+    - [x] `make typecheck-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (pass)
+    - [x] `make build-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (production image: `npm ci`/`npm prune` with the host workspace) (pass: production image built, `npm prune --omit=dev --workspaces` step ok)
+    - [x] `make scope-check REGISTRY=local ENV=test-llm-gateway-host` (PASS C2; new commits touch only `apps/llm-gateway/**` and `BRANCH.md`)
+    - [x] `make down API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (`make ps` empty)
