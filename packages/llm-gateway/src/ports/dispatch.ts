@@ -7,11 +7,21 @@
  * concrete dispatch (selected `SecretAuthMaterial` + llm-mesh adapter), so it
  * keeps its own local port name rather than depending on chat-core.
  *
- * v0 stub: interface only. Lot 2 wires the concrete llm-mesh-backed adapter
- * (faithful provider-compat SSE passthrough — Anthropic SSE vs OpenAI [DONE]).
+ * Native passthrough retains these signatures. Routed execution uses the
+ * separate RouteAttemptDispatchPort below, without provider credentials.
  */
 
 import type { SecretAuthMaterial } from '@sentropic/llm-mesh';
+import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult } from '@sentropic/llm-mesh';
+
+export interface RouteAttemptDispatchRequest {
+  readonly attempt: Pick<PreparedRouteAttempt, 'generate' | 'stream'>;
+  readonly request: Omit<StreamRequest, 'auth'>;
+}
+export interface RouteAttemptDispatchPort {
+  generate(input: RouteAttemptDispatchRequest): Promise<GenerateResponse>;
+  stream(input: RouteAttemptDispatchRequest): Promise<StreamResult>;
+}
 
 export type GatewayWire = 'anthropic-messages' | 'openai-chat-completions';
 
