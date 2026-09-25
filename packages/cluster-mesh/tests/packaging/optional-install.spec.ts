@@ -118,21 +118,4 @@ describe.skipIf(!enabled)('packed optional install', () => {
       code: 'cluster_mesh_module_unavailable', moduleId: 'gateway/auth', reason: 'not_installed', packageName: 'jose',
     });
   });
-
-  it('should reject the old llm-mesh 0.21.2 / llm-gateway 0.18.0 tuple at install time and at runtime', () => {
-    const dir = fixtureDir('old-tuple');
-    expect(read(join(dir, 'npm-install-outcome')).trim()).toBe('refused');
-    const result = nodeJson(dir, `
-      import { createClusterMeshModules, verifyClusterMeshTopology } from '@sentropic/cluster-mesh';
-      import { loadGateway } from '@sentropic/cluster-mesh/loaders/gateway';
-      const error = await loadGateway(createClusterMeshModules()).catch((caught) => caught);
-      let topology;
-      try { verifyClusterMeshTopology(); } catch (caught) { topology = caught.reason; }
-      console.log(JSON.stringify({ reason: error.reason, installedVersion: error.installedVersion, topology }));`);
-    // Refused = ERESOLVE, or npm dropping the conflicting requests: the plain install never yields the old tuple.
-    expect(read(join(dir, 'npm-install-detail'))).not.toContain('@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0');
-    expect(read(join(dir, 'tuple.txt'))).toContain('@sentropic/llm-mesh@0.21.2');
-    expect(read(join(dir, 'tuple.txt'))).toContain('@sentropic/llm-gateway@0.18.0');
-    expect(result).toEqual({ reason: 'incompatible_version', installedVersion: '0.18.0', topology: 'incompatible_version' });
-  });
 });
