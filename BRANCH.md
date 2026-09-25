@@ -30,6 +30,15 @@
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
+- `attention`: port follows spec §12.2 names (`admit` = reserve, `release`, `markDispatched`); settlement stays the single `RouteMeteringSink.settleRoute` aggregate with optional `requestId`/`holdRef`/`quoteRef`/`overrun`, not a second port method.
+- `attention`: pricing/store failure uses a new internal kind `budget-unavailable` mapped to the existing sanitized 503 bodies; the frozen error golden gains one additive row, no existing row changed.
+- `attention`: missing request output ceiling is `bad-request` unless the host sets `defaultOutputTokens`; input ceiling reuses the gateway token estimate (bytes/4), and settlement charges actual usage unconditionally.
+- `attention`: empty-candidate quote reserves nothing and throws mesh `RoutePlanError('no-route')`, the existing generic 503 path.
+- `attention`: a non-finite `resetAtMs` yields `Retry-After: 60`; an admit rejection or malformed decision yields 503, never 429.
+- `attention`: nothing dispatched → `release(holdRef)` then one zero-usage `settleRoute`; a dispatch-marker failure never calls the provider, releases the prepared attempt without health penalty and returns 503.
+- `attention`: `overrun` lists any dispatched attempt whose reported usage exceeds its allowance (flagged with `outputCeilingEnforced`); the `blocked_attempts` audit write stays the host adapter's (B3c).
+- `attention`: effort-insensitive candidate identity is handled by the port contract (adapter prices max over effort variants); the gateway passes no effort.
+- `attention`: `tests/auth-subpaths.test.ts` installs the sibling workspace mesh candidate tarball while mesh `0.22.0` is absent from npm (registry used once published); required because the packed gateway now depends on `^0.22.0`.
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic unit and router tests, no provider call.
@@ -53,8 +62,8 @@
 - [x] **Lot 3 — Tests**
   - [x] New `tests/budget-admission.test.ts`.
   - [x] Update `tests/{route-json-flow,route-stream-flow,errors,contract-snapshot}.test.ts`.
-- [ ] **Lot 4 — Version and docs**
-  - [ ] `package.json` 0.19.0, mesh `^0.22.0`; `CHANGELOG.md`; README budget section.
+- [x] **Lot 4 — Version and docs**
+  - [x] `package.json` 0.19.0, mesh `^0.22.0`; `CHANGELOG.md`; README budget section.
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway build-llm-gateway pack-llm-gateway ENV=test-llm-gateway-budget`
   - [ ] `make test-llm-mesh ENV=test-llm-gateway-budget`

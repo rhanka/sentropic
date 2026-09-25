@@ -11,7 +11,8 @@ translation, retry classification, and response commitment. Mesh owns account
 eligibility, credentials, routing policy, health/cooldown, model equivalence,
 and affinity. Gateway sees only opaque plan/candidate references and redacted
 diagnostics.
-`budgetScope` is carried for attribution; quota admission remains a host/BR-47 responsibility.
+`budgetScope` is carried for attribution; quota pricing and storage remain a host/BR-47
+responsibility behind the opt-in budget admission port (see Budget admission).
 
 ## Caller authentication (0.18.0)
 
@@ -177,6 +178,44 @@ propagates to mesh and closes the iterator, including before first consumer iter
 `routeDispatch` only alongside routePlanner and routeMetering. The adapter preserves
 the request and AbortSignal and rejects an own `auth` field; it owns no planning,
 retry, credentials or settlement. Routed failures never fall back to native ports.
+
+## Budget admission (0.19.0)
+
+Budget admission is opt-in. Without `budget`, the routed flow is unchanged: no
+quote is computed and plans are not pinned. With it, the host injects a
+`BudgetAdmissionPort` (`admit`, `markDispatched`, `release`) and settles
+through the existing `routeMetering.settleRoute`:
+
+```ts
+const router = createGatewayRouter({
+  config, routePlanner, routeMetering,
+  budget: { port: budgetAdmission, defaultOutputTokens: 4096 },
+});
+```
+
+- The planner must implement `quote()` (mesh `^0.22.0`); otherwise router
+  construction throws `BudgetConfigurationError` (`budget-quote-required`).
+  A decorator that copies planner methods must keep `quote`.
+- Order: caller auth → ingress → finite ceiling → in-process quote → `admit` →
+  `plan({ quote })` → attempts → one settlement. The quote is never read from the
+  request body or headers.
+- A request without a finite output ceiling (and no `defaultOutputTokens`) or a
+  quote `invalid-ceiling` returns 400. An empty quote reserves nothing and fails
+  like an empty route (503).
+- `admit` prices every quoted candidate at its maximum liability over effort
+  variants (candidate identity carries no effort) and reserves
+  `maxAttempts × max(candidate liability)`. `over-budget` returns the frozen 429
+  body with `Retry-After = min(60, max(1, ceil((resetAtMs - nowMs) / 1000)))`.
+  `unavailable`, a rejection or a malformed decision returns the sanitized 503.
+  Refusals happen before any account acquisition or emitted byte and never settle.
+- Each provider call is preceded by `markDispatched(holdRef, attemptIndex)`;
+  if it fails the provider is never called and the request returns 503.
+- Settlement stays one aggregate per request and gains `requestId`, `holdRef`,
+  `quoteRef`. When nothing was dispatched, `release(holdRef)` runs first and the
+  settlement has zero usage. A dispatched attempt without reported usage is
+  charged at least its quoted allowance. Attempts whose reported usage exceeds
+  the allowance (for example codex, `outputCeilingEnforced: false`) are charged
+  in full and listed in `overrun`; the host records the audit entry.
 
 `personal-passthrough` remains the default mode. Cross-user pooling still
 requires both `mode: 'cross-user-pool'` and the explicit
