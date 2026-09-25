@@ -123,7 +123,7 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     const config = {
       ...stubGatewayConfig,
       callerAuth: { async verify() { return {
-        ok: true,
+        ok: true as const,
         cost: {
           tenantId: 'tenant-1', principalId: 'user-1', source: 'test', correlationId: 'request-1',
         },
@@ -167,7 +167,7 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     const config = {
       ...stubGatewayConfig,
       callerAuth: { async verify() { return {
-        ok: true,
+        ok: true as const,
         cost: {
           tenantId: 'tenant-1', principalId: 'user-1', source: 'test',
           correlationId: 'stream-request-1',
@@ -209,7 +209,7 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
       const config = {
         ...stubGatewayConfig,
         callerAuth: { async verify() { return {
-          ok: true,
+          ok: true as const,
           cost: {
             tenantId: 'tenant-1', principalId: 'user-1', source: 'test',
             correlationId: `transport-${transportProviderId}`,

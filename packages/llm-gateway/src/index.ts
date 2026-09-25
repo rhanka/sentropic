@@ -1,4 +1,5 @@
 export * from './config.js';
+export * from './cost-context.js';
 export * from './ports/index.js';
 export * from './router/index.js';
 export * from './router/errors.js';
@@ -12,5 +13,6 @@ export * from './canonical-ingress.js';
 export * from './canonical-egress.js';
 export * from './canonical-stream.js';
 export * from './route-flow-core.js';
+export * from './route-attempt-dispatch.js';
 export * from './route-json-flow.js';
 export * from './route-stream-flow.js';

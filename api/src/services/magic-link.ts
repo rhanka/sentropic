@@ -192,6 +192,7 @@ export async function verifyMagicLink(
         id: crypto.randomUUID(),
         email: normalizedLinkEmail,
         displayName,
+        emailVerified: true,
         role: 'editor',
         accountStatus: 'pending_admin_approval',
         approvalDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),

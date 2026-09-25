@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.10.1",
+  "version": "0.12.0",
   "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
@@ -15,6 +15,78 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./llm-mesh": {
+      "types": "./dist/integrations/llm-mesh/index.d.ts",
+      "import": "./dist/integrations/llm-mesh/index.js"
+    },
+    "./llm-mesh/facade": {
+      "types": "./dist/integrations/llm-mesh/facade.d.ts",
+      "import": "./dist/integrations/llm-mesh/facade.js"
+    },
+    "./llm-mesh/enrollment": {
+      "types": "./dist/integrations/llm-mesh/enrollment.d.ts",
+      "import": "./dist/integrations/llm-mesh/enrollment.js"
+    },
+    "./llm-mesh/node": {
+      "types": "./dist/integrations/llm-mesh/node.d.ts",
+      "import": "./dist/integrations/llm-mesh/node.js"
+    },
+    "./llm-mesh/transport/cloud-code": {
+      "types": "./dist/integrations/llm-mesh/transport/cloud-code.d.ts",
+      "import": "./dist/integrations/llm-mesh/transport/cloud-code.js"
+    },
+    "./gateway": {
+      "types": "./dist/integrations/gateway/index.d.ts",
+      "import": "./dist/integrations/gateway/index.js"
+    },
+    "./gateway/auth": {
+      "types": "./dist/integrations/gateway/auth.d.ts",
+      "import": "./dist/integrations/gateway/auth.js"
+    },
+    "./gateway/auth-hono": {
+      "types": "./dist/integrations/gateway/auth-hono.d.ts",
+      "import": "./dist/integrations/gateway/auth-hono.js"
+    },
+    "./loaders/llm-mesh": {
+      "types": "./dist/loaders/llm-mesh/index.d.ts",
+      "import": "./dist/loaders/llm-mesh/index.js"
+    },
+    "./loaders/llm-mesh/facade": {
+      "types": "./dist/loaders/llm-mesh/facade.d.ts",
+      "import": "./dist/loaders/llm-mesh/facade.js"
+    },
+    "./loaders/llm-mesh/enrollment": {
+      "types": "./dist/loaders/llm-mesh/enrollment.d.ts",
+      "import": "./dist/loaders/llm-mesh/enrollment.js"
+    },
+    "./loaders/llm-mesh/node": {
+      "types": "./dist/loaders/llm-mesh/node.d.ts",
+      "import": "./dist/loaders/llm-mesh/node.js"
+    },
+    "./loaders/llm-mesh/transport/cloud-code": {
+      "types": "./dist/loaders/llm-mesh/transport/cloud-code.d.ts",
+      "import": "./dist/loaders/llm-mesh/transport/cloud-code.js"
+    },
+    "./loaders/gateway": {
+      "types": "./dist/loaders/gateway/index.d.ts",
+      "import": "./dist/loaders/gateway/index.js"
+    },
+    "./loaders/gateway/auth": {
+      "types": "./dist/loaders/gateway/auth.d.ts",
+      "import": "./dist/loaders/gateway/auth.js"
+    },
+    "./loaders/gateway/auth-hono": {
+      "types": "./dist/loaders/gateway/auth-hono.d.ts",
+      "import": "./dist/loaders/gateway/auth-hono.js"
+    },
+    "./compose/llm-mesh": {
+      "types": "./dist/compose/llm-mesh.d.ts",
+      "import": "./dist/compose/llm-mesh.js"
+    },
+    "./compose/gateway": {
+      "types": "./dist/compose/gateway.d.ts",
+      "import": "./dist/compose/gateway.js"
     }
   },
   "files": [
@@ -26,7 +98,13 @@
     "provenance": true,
     "access": "public"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/modules/topology.js",
+    "./dist/modules/topology-guard.js",
+    "./dist/integrations/**",
+    "./dist/loaders/**",
+    "./dist/compose/**"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -36,6 +114,20 @@
     "@sentropic/contracts": "^0.3.0",
     "@sentropic/events": "^0.2.0",
     "hono": "^4.10.7"
+  },
+  "peerDependencies": {
+    "@sentropic/llm-mesh": ">=0.21.2 <0.22.0",
+    "@sentropic/llm-gateway": ">=0.18.0 <0.19.0",
+    "@sentropic/mcp-auth": ">=0.2.1 <0.3.0",
+    "@sentropic/auth-hono": "^0.15.0",
+    "jose": "^5.10.0"
+  },
+  "peerDependenciesMeta": {
+    "@sentropic/llm-mesh": { "optional": true },
+    "@sentropic/llm-gateway": { "optional": true },
+    "@sentropic/mcp-auth": { "optional": true },
+    "@sentropic/auth-hono": { "optional": true },
+    "jose": { "optional": true }
   },
   "devDependencies": {
     "@types/node": "^22.10.10",
