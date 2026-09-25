@@ -1,14 +1,20 @@
-import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
+import type { PreparedRouteAttempt, StreamEvent, RouteFailureClassification } from '@sentropic/llm-mesh';
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage, terminalGatewayError,
-  type RouteAttemptSettlement, type RouteFlowDeps,
+  type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { GatewayError } from './router/errors.js';
+import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
+import type { GatewayDispatchStreamEvent } from './ports/dispatch.js';
+const defaultDispatch = new RouteAttemptDispatch();
 
-const usageFromEvent = (event: StreamEvent): SettleUsage | undefined =>
-  event.type === 'done' ? routeUsage(event.data.usage) : undefined;
+const errorUsage = (error: unknown): SettleUsage | undefined => {
+  const usage = error && typeof error === 'object' ? (error as { usage?: SettleUsage }).usage : undefined;
+  return usage ? { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0,
+    estimated: usage.estimated ?? false } : undefined;
+};
 
 const servedTargetFor = (diagnostic: {
   readonly actualProviderId: string;
@@ -20,140 +26,222 @@ const servedTargetFor = (diagnostic: {
   model: diagnostic.actualModelId,
 });
 
+/** Claim the terminal outcome before awaiting any callback or iterator cleanup. */
+const trackedExecution = (input: {
+  attempt: PreparedRouteAttempt; iterator: AsyncIterator<StreamEvent>; first: StreamEvent;
+  prepared: PreparedRouteFlow; request: GatewayFlowRequest; target: ResolvedTarget;
+  candidateRef: string; attempts: RouteAttemptSettlement[]; responseId: string;
+  settle: (outcome: 'success' | 'failed' | 'cancelled') => Promise<void>;
+}) => {
+  const { attempt, iterator, prepared, request, target } = input;
+  const signal = request.signal ?? request.authContext.signal;
+  let terminal: RouteFailureClassification['reason'] | undefined;
+  let finishing: Promise<void> | undefined;
+  let closing: Promise<unknown> | undefined;
+  let outputCharacters = 0;
+  let firstObserved = false;
+  let priming = true;
+  let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
+  const isCancelled = () => terminal === 'cancelled';
+  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
+  const usage = (): SettleUsage => reported ?? ({
+    inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
+    outputTokens: Math.min(1_000_000, Math.ceil(outputCharacters / 4)), estimated: true,
+  });
+  const finish = (classification: RouteFailureClassification): Promise<void> => {
+    if (terminal) return finishing ?? Promise.resolve();
+    terminal = classification.reason;
+    signal?.removeEventListener('abort', onAbort);
+    const finalUsage = usage();
+    input.attempts.push({ candidateRef: input.candidateRef, providerId: target.providerId,
+      modelId: target.model, transportProviderId: target.transportProviderId,
+      outcome: terminal, usage: finalUsage });
+    finishing = (async () => {
+      try {
+        if (terminal === 'success') await attempt.complete(attemptUsage(finalUsage));
+        else if (terminal === 'cancelled') await attempt.releaseCancelled();
+        else await attempt.recordOutcome(classification, attemptUsage(finalUsage));
+      } finally {
+        await input.settle(terminal === 'success' ? 'success' : terminal === 'cancelled' ? 'cancelled' : 'failed');
+      }
+    })();
+    return finishing;
+  };
+  const cancel = async () => {
+    const result = finish({ reason: 'cancelled', retryable: false, healthScope: 'route' });
+    await Promise.all([result, close()]);
+  };
+  const onAbort = () => { void cancel().catch(() => undefined); };
+  const tracked = (async function* (): AsyncGenerator<StreamEvent> {
+    try {
+      let next: IteratorResult<StreamEvent> = { done: false, value: input.first };
+      while (!next.done) {
+        signal?.throwIfAborted();
+        if (isCancelled()) return;
+        const event = next.value;
+        if (event.type === 'error') throw event.data;
+        if (event.type === 'done') {
+          if (event.data.usage) reported = routeUsage(event.data.usage);
+          if (!priming) await finish({ reason: 'success', retryable: false, healthScope: 'route' });
+          firstObserved = true;
+          yield event;
+          return;
+        }
+        if (event.type === 'content_delta' || event.type === 'reasoning_delta' || event.type === 'tool_call_delta') {
+          outputCharacters = Math.min(4_000_000, outputCharacters + event.data.delta.length);
+        }
+        if (event.type === 'tool_call_start') outputCharacters = Math.min(4_000_000,
+          outputCharacters + (event.data.argumentsText?.length ?? 0));
+        firstObserved = true;
+        yield event;
+        next = await iterator.next();
+      }
+      throw new Error('stream ended without terminal event');
+    } catch (error) {
+      if (terminal) throw error; // callback failure: never record/settle again
+      reported = errorUsage(error) ?? reported;
+      const classification = classifyRouteError(error, signal?.aborted);
+      await finish(classification);
+      if (classification.reason !== 'cancelled') yield { type: 'error', data: {
+        providerId: target.providerId as never,
+        message: 'stream failed after commitment', retryable: false,
+      } };
+    } finally { await close(); }
+  })();
+  const encoded = encodeGatewayStream(request.wire, target.model, input.responseId, tracked,
+    request.wire === 'anthropic-messages'
+      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) } : undefined);
+  const expose = (buffered: readonly GatewayDispatchStreamEvent[]) => {
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    const stream = (async function* () {
+      try {
+        signal?.throwIfAborted();
+        if (isCancelled()) return;
+        for (const frame of buffered) {
+          signal?.throwIfAborted();
+          if (isCancelled()) return;
+          yield frame;
+        }
+        for await (const frame of encoded) {
+          signal?.throwIfAborted();
+          if (isCancelled()) return;
+          yield frame;
+        }
+      } finally {
+        await encoded.return(undefined);
+        if (!terminal) await cancel();
+        else await close();
+        signal?.removeEventListener('abort', onAbort);
+      }
+    })();
+    const originalReturn = stream.return.bind(stream);
+    stream.return = async value => { await cancel(); await encoded.return(undefined); return originalReturn(value); };
+    return stream;
+  };
+  const commit = async () => {
+    priming = false;
+    if (input.first.type === 'done') await finish({ reason: 'success', retryable: false, healthScope: 'route' });
+  };
+  return { encoded, expose, commit, get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
+};
+
 export const runRouteStreamFlow = async (
   deps: RouteFlowDeps,
   request: GatewayFlowRequest,
 ): Promise<GatewayStreamResult> => {
   const prepared = await prepareRouteFlow(deps, request);
   const attempts: RouteAttemptSettlement[] = [];
+  const signal = request.signal ?? request.authContext.signal;
+  let settled = false;
+  const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
+    if (settled) return;
+    settled = true;
+    await deps.metering.settleRoute({ cost: prepared.cost, wire: request.wire, requestedModel: request.model,
+      outcome, usage: aggregateUsage(attempts), attempts });
+  };
   for (let index = 0; index < prepared.plan.candidateRefs.length; index += 1) {
     const candidateRef = prepared.plan.candidateRefs[index]!;
     const diagnostic = prepared.plan.diagnostics[index]!;
     let attempt: PreparedRouteAttempt | undefined;
     let iterator: AsyncIterator<StreamEvent> | undefined;
+    let committed = false;
+    let invoked = false;
+    let execution: ReturnType<typeof trackedExecution> | undefined;
     try {
+      signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
         prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
       );
       const preparedAttempt = attempt;
-      const source = await preparedAttempt.stream({
+      signal?.throwIfAborted();
+      invoked = true;
+      const source = await (deps.dispatch ?? defaultDispatch).stream({ attempt: preparedAttempt, request: {
         ...prepared.canonical.request,
-        ...(request.signal ? { signal: request.signal } : {}),
-      });
+        ...(signal ? { signal } : {}),
+      } });
       iterator = source[Symbol.asyncIterator]();
       let first = await iterator.next();
+      let responseId = prepared.cost.correlationId;
+      const headers: Record<string, string> = {};
       while (!first.done && (first.value.type === 'status' || first.value.type === 'tool_call_result')) {
-        first = await iterator.next();
-      }
-      if (first.done) throw { code: 'empty_stream' };
-      if (first.value.type === 'error') throw first.value.data;
-      await preparedAttempt.markCommitted();
-      let usage = usageFromEvent(first.value) ?? routeUsage();
-      let terminal = false;
-      const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
-        if (terminal) return;
-        terminal = true;
-        await deps.metering.settleRoute({
-          cost: prepared.cost, wire: request.wire, requestedModel: request.model,
-          outcome, usage: aggregateUsage(attempts), attempts,
-        });
-      };
-      const cancel = async () => {
-        await iterator?.return?.();
-        if (terminal) return;
-        await preparedAttempt.releaseCancelled();
-        attempts.push({
-          candidateRef, providerId: diagnostic.actualProviderId,
-          modelId: diagnostic.actualModelId,
-          transportProviderId: diagnostic.actualTransportProviderId,
-          outcome: 'cancelled', usage,
-        });
-        await settle('cancelled');
-      };
-      const tracked = (async function* (): AsyncGenerator<StreamEvent> {
-        let completed = false;
-        let providerErrorEmitted = false;
-        try {
-          yield first.value;
-          for (let next = await iterator!.next(); !next.done; next = await iterator!.next()) {
-            usage = usageFromEvent(next.value) ?? usage;
-            yield next.value;
-            if (next.value.type === 'error') {
-              providerErrorEmitted = true;
-              throw next.value.data;
+        signal?.throwIfAborted();
+        if (first.value.type === 'status') {
+          responseId = first.value.data.sentropicResponseId ?? responseId;
+          const metadataHeaders = first.value.data.metadata?.responseHeaders;
+          if (metadataHeaders && typeof metadataHeaders === 'object') {
+            for (const [key, value] of Object.entries(metadataHeaders)) {
+              if (typeof value === 'string') headers[key.toLowerCase()] = value;
             }
           }
-          completed = true;
-          await preparedAttempt.complete(attemptUsage(usage));
-          attempts.push({
-            candidateRef, providerId: diagnostic.actualProviderId,
-            modelId: diagnostic.actualModelId,
-            transportProviderId: diagnostic.actualTransportProviderId,
-            outcome: 'success', usage,
-          });
-          await settle('success');
-        } catch (error) {
-          const classification = classifyRouteError(error, request.signal?.aborted);
-          if (classification.reason === 'cancelled') await preparedAttempt.releaseCancelled();
-          else await preparedAttempt.recordOutcome(classification, attemptUsage(usage));
-          attempts.push({
-            candidateRef, providerId: diagnostic.actualProviderId,
-            modelId: diagnostic.actualModelId,
-            transportProviderId: diagnostic.actualTransportProviderId,
-            outcome: classification.reason, usage,
-          });
-          await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
-          if (classification.reason !== 'cancelled' && !providerErrorEmitted) {
-            yield {
-              type: 'error',
-              data: {
-                providerId: diagnostic.actualProviderId as never,
-                message: 'stream failed after commitment', retryable: false,
-              },
-            };
-          }
-        } finally {
-          if (!completed) await cancel();
         }
-      })();
-      const responseId = first.value.type === 'done'
-        ? first.value.data.responseId ?? prepared.cost.correlationId
-        : first.value.type === 'status'
-          ? first.value.data.sentropicResponseId ?? prepared.cost.correlationId
-          : prepared.cost.correlationId;
-      const encoded = encodeGatewayStream(
-        request.wire, diagnostic.actualModelId, responseId, tracked,
-        request.wire === 'anthropic-messages'
-          ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) }
-          : undefined,
-      );
-      return { servedTarget: servedTargetFor(diagnostic), stream: (async function* () {
-        try { yield* encoded; }
-        finally {
-          await encoded.return(undefined);
-          await cancel();
-        }
-      })() };
-    } catch (error) {
-      await iterator?.return?.();
-      const classification = classifyRouteError(error, request.signal?.aborted);
-      const usage = routeUsage();
-      if (attempt) {
-        if (classification.reason === 'cancelled') await attempt.releaseCancelled();
-        else await attempt.recordOutcome(classification, attemptUsage(usage));
+        first = await iterator.next();
       }
+      signal?.throwIfAborted();
+      if (first.done) throw { code: 'empty_stream' };
+      if (first.value.type === 'error') throw first.value.data;
+      if (first.value.type === 'done') responseId = first.value.data.responseId ?? responseId;
+      execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
+        prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId, settle });
+      const buffered: GatewayDispatchStreamEvent[] = [];
+      do {
+        const frame = await execution.encoded.next();
+        if (execution.terminal) throw terminalGatewayError(
+          { reason: execution.terminal, retryable: false, healthScope: 'route' },
+          servedTargetFor(diagnostic), 'stream failed before commitment');
+        if (frame.done || typeof frame.value.raw !== 'string' || !frame.value.raw) throw Error('empty encoded stream');
+        buffered.push(frame.value);
+      } while (!execution.firstObserved);
+      committed = true;
+      await preparedAttempt.markCommitted();
+      signal?.throwIfAborted();
+      await execution.commit();
+      return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(buffered) };
+    } catch (error) {
+      if (execution?.terminal) {
+        try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
+        throw error;
+      }
+      try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
+      const classification = classifyRouteError(error, signal?.aborted);
+      const usage = errorUsage(error) ?? (invoked ? {
+        inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
+        outputTokens: 0, estimated: true,
+      } : routeUsage());
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
-      if (classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
-      await deps.metering.settleRoute({
-        cost: prepared.cost, wire: request.wire, requestedModel: request.model,
-        outcome: classification.reason === 'cancelled' ? 'cancelled' : 'failed',
-        usage: aggregateUsage(attempts), attempts,
-      });
+      try {
+        if (attempt) {
+          if (classification.reason === 'cancelled') await attempt.releaseCancelled();
+          else await attempt.recordOutcome(classification, attemptUsage(usage));
+        }
+      } catch (hookError) { await settle('failed'); throw hookError; }
+      if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
+      await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
       // Same terminal-class preservation as the JSON flow: a terminal
       // upstream refusal keeps its class, never a pooled 503.
       throw terminalGatewayError(
@@ -161,5 +249,6 @@ export const runRouteStreamFlow = async (
       );
     }
   }
+  await settle('failed');
   throw new GatewayError('no-eligible-account', 'route plan has no candidates');
 };

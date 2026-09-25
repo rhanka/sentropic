@@ -26,9 +26,11 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
 import { preprocessDependencySvelteTypeScript } from './vitest-dep-svelte-ts.js';
+import { productionWidgetSnippets } from './tests/fixtures/production-widget-snippets';
 
 export default defineConfig({
   plugins: [
+    productionWidgetSnippets(),
     // CHAT-AGENTS-BLK1: must run BEFORE the Svelte plugin — dependency .svelte
     // files ship as TypeScript source and the plugin does not preprocess them.
     preprocessDependencySvelteTypeScript(),
