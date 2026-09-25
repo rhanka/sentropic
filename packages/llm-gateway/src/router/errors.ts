@@ -10,6 +10,7 @@
  *   429  upstream-rate-limited (BR77)    -> provider rate-limit + Retry-After
  *   429  no-eligible-account             -> provider overloaded + Retry-After
  *   503  pooled-account-unavailable      -> provider overloaded (NOT pool detail)
+ *   503  budget-unavailable (BR-47)      -> same sanitized body (pricing/store failure)
  *   400  bad-request / unsupported-model -> provider invalid-request
  * The gateway maps internal failure CLASSES to these — callers see only the
  * provider-shaped surface, never `no_account` / lease / reservation internals.
@@ -35,6 +36,7 @@ export type GatewayFailureKind =
   | 'over-budget'
   | 'no-eligible-account'
   | 'pooled-account-unavailable'
+  | 'budget-unavailable'
   | 'upstream-auth-failed'
   | 'upstream-rate-limited'
   | 'bad-request'
@@ -116,6 +118,7 @@ export const mapGatewayError = (
 
     case 'caller-auth-unavailable':
     case 'pooled-account-unavailable':
+    case 'budget-unavailable':
       return anthropic
         ? anthropicError(503, 'overloaded_error', 'service temporarily unavailable', retry)
         : openAiError(503, 'rate_limit_error', 'service temporarily unavailable', 'overloaded', retry);
