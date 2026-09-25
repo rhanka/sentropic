@@ -4,7 +4,24 @@
 # aggregated so every package is reported before the final exit status.
 set -uo pipefail
 
-env_name="${1:?usage: check-publishable-manifests.sh <ENV>}"
+env_name="${1:?usage: check-publishable-manifests.sh <ENV> [siblings <slug> <dir>]}"
+
+# Same-PR sibling candidates for one BLOCK package: plan (Docker), full BLOCK packs, receipt collection.
+if [ "${2:-}" = siblings ]; then
+  slug="${3:?package slug required}"
+  dir="${4:?sibling directory required}"
+  case "$dir" in tmp/*) ;; *) echo "ERROR: sibling directory must live under tmp/"; exit 1 ;; esac
+  status=0
+  rm -rf "$dir" && mkdir -p "$dir/receipts"
+  make publishable-sibling-plan PACKAGE="$slug" SIBLING_DIR="$dir" ENV="$env_name" || exit 1
+  while IFS= read -r sib; do
+    [ -n "$sib" ] || continue
+    make "pack-${sib}" MANIFEST_SEVERITY=block PACK_DESTINATION="$dir/${sib}" MANIFEST_REPORT_DIR="$dir/receipts" ENV="$env_name" || status=1
+  done < "$dir/plan.txt"
+  [ "$status" -eq 0 ] || { echo "::error title=Publishable manifest::a same-PR sibling pack failed for ${slug}"; exit 1; }
+  make publishable-sibling-collect SIBLING_DIR="$dir" ENV="$env_name"
+  exit $?
+fi
 report_dir="${MANIFEST_REPORT_DIR:-tmp/ci-manifest-guard/manifests}"
 block_file="${report_dir}/block-packages.txt"
 status=0

@@ -721,11 +721,73 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
   }
 }
 
+// Same-PR sibling candidates (spec section 10): BLOCK packages in the dependency closure of `slug`.
+export async function commandSiblingPlan(opts, { env = process.env, root = process.cwd(), registry = createRegistry(), out, snapshot = snapshotPackage } = {}) {
+  if (typeof opts.slug !== 'string' || !SLUG.test(opts.slug)) throw new GuardError(`invalid --slug ${JSON.stringify(opts.slug)}`);
+  if (typeof opts.out !== 'string') throw new GuardError('--out is required');
+  const reporter = new Reporter({ out });
+  const packages = enumeratePackages(root, reporter);
+  if (!packages.has(opts.slug)) throw new GuardError(`${opts.slug} is not a public workspace package`);
+  const bySlugName = new Map([...packages].map(([slug, p]) => [p.manifest.name, slug]));
+  const closure = new Set();
+  const queue = [opts.slug];
+  while (queue.length) {
+    const { manifest } = packages.get(queue.shift());
+    for (const section of DEP_SECTIONS) {
+      for (const name of Object.keys(isPlainObject(manifest[section]) ? manifest[section] : {})) {
+        const slug = bySlugName.get(name);
+        if (slug && slug !== opts.slug && !closure.has(slug)) {
+          closure.add(slug);
+          queue.push(slug);
+        }
+      }
+    }
+  }
+  const context = readContext(env);
+  let plan = [];
+  if (!context) reporter.notice(opts.slug, 'no CI context: no same-PR sibling archives are injected');
+  else {
+    const absent = async (slug) => {
+      const snap = withManifestTransform(packages.get(slug).dir, () => snapshot(packages.get(slug).dir));
+      return (await registry.lookup(snap.name, snap.version)).status === 'absent';
+    };
+    const { classification } = await classifyPackages({ publicSlugs: [...closure], context, absent, completeInventory: false });
+    plan = [...closure].filter((slug) => classification.get(slug).severity === 'block').sort();
+    for (const slug of plan.filter((s) => !PACK_TARGETS.includes(s))) reporter.error(slug, `missing pack lane for same-PR sibling ${slug}`);
+  }
+  fs.writeFileSync(opts.out, plan.map((s) => `${s}\n`).join(''));
+  (out ?? process.stdout).write(`sibling plan for ${opts.slug}: closure=[${[...closure].sort().join(' ')}] block=[${plan.join(' ')}]\n`);
+  return reporter.errors ? 1 : 0;
+}
+
+// Collects guarded sibling receipts into <dir>/receipts.json with archive paths relative to <dir>.
+export async function commandSiblingCollect(opts, { out } = {}) {
+  const dir = opts.dir;
+  if (typeof dir !== 'string') throw new GuardError('--dir is required');
+  const plan = fs.readFileSync(path.join(dir, 'plan.txt'), 'utf8').split('\n').filter(Boolean);
+  const receipts = plan.map((slug) => {
+    const receipt = readJson(path.join(dir, 'receipts', `${slug}.receipt.json`), 'sibling receipt');
+    if (receipt.guard !== 'pass' || receipt.manifest_mode !== 'block' || typeof receipt.archive !== 'string') {
+      throw new GuardError(`sibling ${slug} has no passing BLOCK candidate archive`);
+    }
+    const file = path.join(slug, path.basename(receipt.archive));
+    if (sha256File(path.join(dir, file)) !== receipt.sha256) throw new GuardError(`sibling ${slug} archive hash differs from its receipt`);
+    const { name, version, sha256, head_sha, guard, manifest_mode, evidence } = receipt;
+    return { name, version, file, sha256, head_sha, guard, manifest_mode, evidence };
+  });
+  fs.writeFileSync(path.join(dir, 'receipts.json'), `${JSON.stringify(receipts, null, 2)}\n`);
+  (out ?? process.stdout).write(`collected ${receipts.length} sibling receipt(s): ${receipts.map((r) => `${r.name}@${r.version}`).join(' ')}\n`);
+  return 0;
+}
+
 export async function main(argv, deps = {}) {
   const [command, ...rest] = argv;
   const opts = parseArgs(rest);
-  const commands = { pack: commandPack, check: commandCheck, inventory: commandInventory, publish: commandPublish };
-  if (!commands[command]) throw new GuardError(`unknown command ${JSON.stringify(command)} (pack|check|inventory|publish)`);
+  const commands = {
+    pack: commandPack, check: commandCheck, inventory: commandInventory, publish: commandPublish,
+    'sibling-plan': commandSiblingPlan, 'sibling-collect': commandSiblingCollect,
+  };
+  if (!commands[command]) throw new GuardError(`unknown command ${JSON.stringify(command)} (pack|check|inventory|publish|sibling-plan|sibling-collect)`);
   return commands[command](opts, deps);
 }
 
