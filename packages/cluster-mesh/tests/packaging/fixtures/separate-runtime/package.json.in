@@ -5,8 +5,8 @@
   "exports": { ".": "./index.mjs" },
   "dependencies": {
     "@sentropic/cluster-mesh": "file:__CANDIDATE__",
-    "@sentropic/llm-gateway": "0.18.0",
-    "@sentropic/llm-mesh": "0.21.2",
+    "@sentropic/llm-gateway": "__LLM_GATEWAY__",
+    "@sentropic/llm-mesh": "__LLM_MESH__",
     "@sentropic/mcp-auth": "0.2.1",
     "hono": "4.10.7",
     "jose": "5.10.0"
