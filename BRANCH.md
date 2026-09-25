@@ -52,6 +52,9 @@
 - [x] BRCI-B1 | attention | Owner: conductor | Branch: current | 2026-09-24 | Add `validate-publishable-manifests` to required PR checks after its first successful CI run (YAML cannot change branch protection).
 - [x] BRCI-B2 | deferred | Owner: conductor | Branch: first real CI publication | 2026-09-24 | BRCI-R1-L9 checkpoint stays pending: tarball publication provenance/publishConfig evidence only from the first normal CI publication; `package-llm-routing-candidates` guard line NOT RUN locally (needs `tmp/llm-gateway-qualification`).
 - [x] BRCI-B3 | attention | Owner: unassigned | Branch: cowork remediation | 2026-09-24 | `@sentropic/cowork-desktop@0.2.0` `file:` dependencies remain WARN debt; standalone `make pack-cowork-desktop` now fails (BLOCK default) while CI validation passes context and WARNs.
+- [ ] BRCI-F1-N1 | deferred | Owner: conductor | Branch: follow-up | 2026-09-25 | A `skipped` upstream publisher can mask a failed validate in the N1 ordering (ci.yml publish-mcp-auth / publish-cluster-mesh conditions); possible fix: add the sibling `validate-*` jobs to `needs` and require their result is not failure. Documented only, no code.
+- [ ] BRCI-F1-N2 | deferred | Owner: conductor | Branch: follow-up | 2026-09-25 | More network before the existing-version skip (MANIFEST_GUARD_TOOLS semver install + lifecycle-free snapshot pack) than the former `npm view`; a registry outage now fails earlier. Documented only, no code.
+- [x] BRCI-F1-D1 | attention | Owner: conductor | Branch: current | 2026-09-25 | conductor decision (BRCI-EX2): root `package.json`/`package-lock.json` removed from all 23 `*_publish` filters; a lockfile-only main push attempted auth-hono 0.15.2 and build-cli 0.3.0 (ENEEDAUTH). Validation filters unchanged.
 - [x] BRCI-R1-L9 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | conductor decision (reversible): verify tarball publication preserves provenance and publishConfig on the first real CI publication; no manual/test publication and no evidence claimed from an existing-version skip.
 
 ## AI Flaky tests
@@ -112,9 +115,9 @@
   - [x] `make check-publishable-manifests MANIFEST_CONTEXT_FILE=tmp/ci-manifest-guard/changes-context.json` PASS (24 public packages, BLOCK none, 4 cowork WARN); lockstep mcp-auth+oauth-verify context PASS; cowork-touched context FAILS as required.
   - [x] Lint gates re-run on branch head: `make lint-cluster-mesh|lint-llm-mesh|lint-llm-gateway` exit 0; `make scope-check` PASS; branch diff limited to Allowed Paths.
   - [x] `make down API_PORT=9440 UI_PORT=5640 MAILDEV_UI_PORT=1540 ENV=test-ci-manifest-guard` and `make ps` show no services.
-- [ ] **Lot G-F1 — Build fix round 1 (review findings)**
+- [x] **Lot G-F1 — Build fix round 1 (review findings)**
   - [x] Registry freshness: never cache 404/absent packuments, `lookup(..., { fresh: true })` with `cache: 'no-store'` in the post-publication wait and pre-publish recheck; snapshot failures are transient only for network/registry errors (fixtures added).
   - [x] Publication triggers: `*_publish` filters keep only `packages/<slug>/**`; post-publication qualification runs only on `status=published` (wiring fixtures added).
   - [x] Shell hardening: sibling directory rejects `..`; `publishable-sibling-plan` validates `PACKAGE` with the slug regex.
-  - [ ] Spec and `rules/workflow.md` Package Publication state the package-path-only publication trigger and its reason; follow-ups recorded.
-  - [ ] `make test-publishable-manifests test-qualify-published-install`, `make check-ci-version-filters`, `make scope-check` pass.
+  - [x] Spec and `rules/workflow.md` Package Publication state the package-path-only publication trigger and its reason; follow-ups recorded.
+  - [x] `make test-publishable-manifests` (55 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make check-e2e-inventory`, `make scope-check` PASS.
