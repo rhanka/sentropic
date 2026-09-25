@@ -65,6 +65,10 @@
 - [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot D — B0 fix round 1 (reviewer verdict: approve with listed fixes)**
+  - [x] Findings 3-9 in 12.1-12.4: narrowed `/gw` loading wording and partial precedent; B3a quote tests (16-cap, superset, profile list, zero directory calls); B3b stream/JSON × wire pre-admit snapshots and codex overrun accounting; B1 autonomy test as requirement; `compose/gateway.ts:7-9,44-46` citation; old-tuple install+runtime refusal.
+  - [ ] Findings 11-12 in 12.6-12.7: per-row test obligations, narrowed B3c grant, B2-after-B1 hard gate, B1 extraction/target definition, coherent release proof artifact; B0-D1/B0-A4 reviewer recommendations recorded as proposed.
+  - [ ] Gates per commit: `git diff --check`, `make scope-check ENV=test-llm-deployable-process`; only the spec and this file change.
 - [x] **Lot D — B0 freeze (spec section 12)**
   - [x] 12.1-12.3: registry-verified matrix, target ranges, publication order, consumer gates; mesh quote contract and gateway budget port; `/gw` to `/` remap evidence.
   - [x] 12.4-12.5: auth leaf reconciliation against published cluster-mesh 0.12.0; G1a migration inventory.
