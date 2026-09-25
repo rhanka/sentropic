@@ -141,4 +141,29 @@ describe('cluster mesh streams cutover', () => {
     expect(wire).toContain('event: content_delta\nid: chat-1:2');
     expect(ports.chat.read).toHaveBeenCalledWith(expect.objectContaining({ sinceSequence: 1 }));
   });
+
+  it('should refresh presence after notifications are subscribed on each connection', async () => {
+    const ports = fakePorts();
+    const app = new Hono();
+    app.use('/streams/sse', async (context, next) => {
+      context.set('user', { userId: user.id, workspaceId: user.workspaceId, role: 'editor' });
+      await next();
+    });
+    app.route('/streams', createStreamsTransportRouter(ports));
+    for (let connection = 0; connection < 2; connection += 1) {
+      const abort = new AbortController();
+      const response = await app.request('/streams/sse', { signal: abort.signal });
+      const reader = response.body!.getReader();
+      try {
+        const decoder = new TextDecoder();
+        expect(decoder.decode((await reader.read()).value)).toContain(': connected');
+        const heartbeat = decoder.decode((await reader.read()).value);
+        expect(heartbeat).toContain('event: ping\n');
+        expect(ports.notifications.subscribe).toHaveBeenCalledTimes(connection + 1);
+      } finally {
+        abort.abort();
+        await reader.cancel();
+      }
+    }
+  }, 2_000);
 });

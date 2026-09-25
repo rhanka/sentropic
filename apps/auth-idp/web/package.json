@@ -19,7 +19,7 @@
     "@tsconfig/svelte": "^5.0.0",
     "@types/node": "^20.14.2",
     "autoprefixer": "^10.4.17",
-    "postcss": "^8.4.38",
+    "postcss": "^8.5.28",
     "svelte": "^5.0.0",
     "svelte-check": "^3.8.4",
     "tailwindcss": "^3.4.4",
@@ -31,5 +31,9 @@
     "@sentropic/design-system-svelte": "^0.34.0",
     "@sentropic/design-system-themes": "^0.11.0",
     "@simplewebauthn/browser": "^13.2.2"
+  },
+  "overrides": {
+    "brace-expansion@<2": "1.1.18",
+    "browserslist": "4.28.7"
   }
 }
