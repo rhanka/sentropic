@@ -17,7 +17,10 @@ describe('ChatWidget shell state extraction', () => {
     // packages/chat-ui/tests/chat-dock.dom.spec.ts.
     expect(source).toContain('resolveChatWidgetJobBadge');
     expect(source).toContain('shouldAutoCloseChatWidget');
-    expect(source).toContain('panelVisibility.showQueuePanel');
+    expect(source).not.toContain('panelVisibility.showQueuePanel');
+    const shell = readFileSync(resolve(process.cwd(), '../packages/chat-ui/src/components/ChatWidget.svelte'), 'utf8');
+    expect(shell).toContain('resolveChatWidgetPanelVisibility');
+    expect(shell).toContain('panelVisibility.showQueuePanel');
     expect(source).toContain('jobBadgeState.kind');
   });
 

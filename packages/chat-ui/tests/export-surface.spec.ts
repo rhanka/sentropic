@@ -87,6 +87,22 @@ describe('export-surface (c): store-shape — subscribe/set/update', () => {
 describe('export-surface (c2): placement component contracts stay synchronized', () => {
   const contracts = [
     {
+      subpath: './components/ChatWidget.svelte',
+      source: 'src/components/ChatWidget.svelte',
+      dts: 'src/components/ChatWidget.svelte.d.ts',
+      runtimeProps: ['renderContentGate', 'renderHeaderLeading', 'renderHeaderActions', 'headerGrip', 'tabBarVariant', 'showJobsBadge'],
+      dtsProps: ['renderContentGate?: Snippet<[Snippet<[]>]>', 'renderHeaderLeading?:', 'renderHeaderActions?:', 'headerGrip?:', 'tabBarVariant?:', 'showJobsBadge?:'],
+      snapshotTerms: ['renderContentGate?', 'renderHeaderLeading?', 'renderHeaderActions?', 'headerGrip?', 'tabBarVariant?', 'showJobsBadge?'],
+    },
+    {
+      subpath: './components/ChatWidgetPager.svelte',
+      source: 'src/components/ChatWidgetPager.svelte',
+      dts: 'src/components/ChatWidgetPager.svelte.d.ts',
+      runtimeProps: ['agentsView', 'canAgentsListBeDefaultView', 'agentsList', 'renderAgentsListHeader', 'renderConversationHeader', 'renderChatPanel', 'agentsViewAnnouncement'],
+      dtsProps: ['agentsView?:', 'canAgentsListBeDefaultView?:', 'agentsList?:', 'renderAgentsListHeader?:', 'renderConversationHeader?:', 'renderChatPanel?:', 'agentsViewAnnouncement?:'],
+      snapshotTerms: ['agentsView?', 'canAgentsListBeDefaultView?', 'agentsList?', 'renderAgentsListHeader?', 'renderConversationHeader?', 'renderChatPanel?', 'agentsViewAnnouncement?'],
+    },
+    {
       subpath: './components/ChatDock.svelte',
       source: 'src/components/ChatDock.svelte',
       dts: 'src/components/ChatDock.svelte.d.ts',
