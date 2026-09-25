@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       bootstrap_publish_target:
-        description: 'Bootstrap-publish target (uses NPM_TOKEN; first publish only before OIDC trusted publishers are attached)'
+        description: 'Bootstrap-publish target: exactly one explicit package is required, there is no "all" option (uses NPM_TOKEN; first publish only before OIDC trusted publishers are attached)'
         required: true
         default: 'none'
         type: choice
@@ -36,7 +36,6 @@ on:
           - cluster-mesh
           - focus
           - cited-source-viewer
-          - all
 
 env:
   REGISTRY: ${{ secrets.REGISTRY }}
@@ -1937,6 +1936,17 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
     steps:
+      # Defense in depth for API-dispatched runs: the choice list is not enforced
+      # server-side, so fail unless the target is exactly one declared package.
+      - name: Require one explicit bootstrap target
+        env:
+          BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target }}
+        run: |
+          set -eu
+          case "$BOOTSTRAP_TARGET" in
+            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-hono|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|build-cli|cli|harness|llm-gateway|cluster-mesh|focus|cited-source-viewer) ;;
+            *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
+          esac
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
@@ -1948,34 +1958,34 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Bootstrap publish contracts
-        if: inputs.bootstrap_publish_target == 'contracts' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'contracts'
         run: make publish-contracts-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish events
-        if: inputs.bootstrap_publish_target == 'events' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'events'
         run: make publish-events-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish chat-core
-        if: inputs.bootstrap_publish_target == 'chat-core' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'chat-core'
         run: make publish-chat-core-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish chat-server
-        if: inputs.bootstrap_publish_target == 'chat-server' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'chat-server'
         run: make publish-chat-server-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish comments
-        if: inputs.bootstrap_publish_target == 'comments' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'comments'
         run: make publish-comments-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish chat-ui
-        if: inputs.bootstrap_publish_target == 'chat-ui' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'chat-ui'
         run: make publish-chat-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish cited-source-viewer
-        if: inputs.bootstrap_publish_target == 'cited-source-viewer' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'cited-source-viewer'
         run: make publish-cited-source-viewer-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish oauth-verify
-        if: inputs.bootstrap_publish_target == 'oauth-verify' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'oauth-verify'
         run: make publish-oauth-verify-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish mcp-auth
-        if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'mcp-auth'
         run: make publish-mcp-auth-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Qualify bootstrap-published mcp-auth
-        if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'mcp-auth'
         run: |
           set -eu
           receipt=tmp/ci-manifest-guard/publish/mcp-auth.publish-output
@@ -1986,43 +1996,43 @@ jobs:
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
       - name: Bootstrap publish mcp-platform
-        if: inputs.bootstrap_publish_target == 'mcp-platform' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'mcp-platform'
         run: make publish-mcp-platform-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish auth-hono
-        if: inputs.bootstrap_publish_target == 'auth-hono' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'auth-hono'
         run: make publish-auth-hono-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish auth-client
-        if: inputs.bootstrap_publish_target == 'auth-client' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'auth-client'
         run: make publish-auth-client-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish auth-ui
-        if: inputs.bootstrap_publish_target == 'auth-ui' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'auth-ui'
         run: make publish-auth-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish flow
-        if: inputs.bootstrap_publish_target == 'flow' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'flow'
         run: make publish-flow-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish cowork-bridge
-        if: inputs.bootstrap_publish_target == 'cowork-bridge' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'cowork-bridge'
         run: make publish-cowork-bridge-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish cowork-desktop
-        if: inputs.bootstrap_publish_target == 'cowork-desktop' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'cowork-desktop'
         run: make publish-cowork-desktop-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish build-cli
-        if: inputs.bootstrap_publish_target == 'build-cli' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'build-cli'
         run: make publish-build-cli-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish cli
-        if: inputs.bootstrap_publish_target == 'cli' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'cli'
         run: make publish-cli-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish harness
-        if: inputs.bootstrap_publish_target == 'harness' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'harness'
         run: make publish-harness-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish llm-gateway
-        if: inputs.bootstrap_publish_target == 'llm-gateway' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'llm-gateway'
         run: make publish-llm-gateway-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish cluster-mesh
-        if: inputs.bootstrap_publish_target == 'cluster-mesh' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'cluster-mesh'
         run: make publish-cluster-mesh-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Qualify bootstrap-published cluster-mesh
-        if: inputs.bootstrap_publish_target == 'cluster-mesh' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'cluster-mesh'
         run: |
           set -eu
           receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
@@ -2033,7 +2043,7 @@ jobs:
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Bootstrap publish focus
-        if: inputs.bootstrap_publish_target == 'focus' || inputs.bootstrap_publish_target == 'all'
+        if: inputs.bootstrap_publish_target == 'focus'
         run: make publish-focus-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Upload bootstrap publication receipts and qualification reports
         if: always()
