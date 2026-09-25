@@ -63,8 +63,8 @@
     - [x] `make test-llm-mesh SCOPE=tests/budget-quote.test.ts ENV=test-llm-mesh-quote`
 - [x] **Lot 2 — Tests**
   - [x] New `packages/llm-mesh/tests/budget-quote.test.ts`: 16-cap, 1..8 attempts, superset vs plan across fallback, zero directory calls, purity/determinism, each error code, quote-mismatch, codex allowance list, maxOutputTokens profile list, no unquoted execution.
-- [ ] **Lot 3 — Version and docs**
-  - [ ] `packages/llm-mesh/package.json` 0.22.0; `CHANGELOG.md`; README quote section.
+- [x] **Lot 3 — Version and docs**
+  - [x] `packages/llm-mesh/package.json` 0.22.0; `CHANGELOG.md`; README quote section.
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh build-llm-mesh pack-llm-mesh ENV=test-llm-mesh-quote`
   - [ ] `make scope-check ENV=test-llm-mesh-quote`
