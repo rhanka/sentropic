@@ -70,10 +70,13 @@
 - [x] No services or port reservation required for this planning task.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot C — Strict CallerAuthResult consumer fix (PR #605 typecheck-lint-api)**
+- [x] **Lot C — Strict CallerAuthResult consumer fix (PR #605 typecheck-lint-api)**
   - [x] Under BRLG2-EX3, annotate the api/src/routes/namespaces/gw.ts callerAuth adapter `verify` with `Promise<CallerAuthResult>`; no gateway compatibility layer. Passed: make typecheck-api and make lint-api (0 errors) with API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
-  - [ ] Add a type-level regression rejecting the boolean-inferred legacy verifier shape and accepting the annotated shape; document the migration in README/spec.
-  - [ ] Full gateway gates, candidate SHA-256 and cleanup.
+  - [x] Add a type-level regression in tests/lot2-types.test.ts: un-annotated boolean-inferred verifier rejected under `@ts-expect-error`, annotated `Promise<CallerAuthResult>` verifier accepted; README before/after migration and spec D7 row updated.
+  - [x] Gates passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway pack-llm-gateway package-llm-routing-candidates LLM_ROUTING_PACK_DIR=/home/antoinefa/src/sentropic/tmp/llm-gateway-lot2/tmp/llm-gateway-lot2-candidates API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2. Full suite: 225 passed across 25 files, zero skipped; the I0 service-only install test now runs and passes against published mcp-auth 0.2.1.
+  - [x] Scoped consumer test passed: make up-api-test then make test-api-endpoints SCOPE=tests/api/cluster-mesh-gw.test.ts (3 tests) with the same ports and ENV. Prior root-owned packages/llm-mesh/node_modules/.vite cache cleared with make clean-node-modules.
+  - [x] New candidate tmp/llm-gateway-lot2-candidates/sentropic-llm-gateway-0.18.0.tgz matches qualification/candidate.tgz byte-for-byte; SHA-256 d4e28ff4c444a3bf2e8c3899e725412006150402df02b3a5873268bc9017da30. Consumer qualification must be rerun on this candidate.
+  - [x] Cleanup passed: make down API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2; make ps returned no services.
 - [x] **Lot C — Polish round**
   - [x] Confirm branch with harness, clean starting worktree, required rules and free ports 9380/5580/1480; current round writes remain limited to packages/llm-gateway/**, spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md and BRANCH.md.
   - [x] Close encoded/upstream iterators after a claimed-terminal ledger failure without repeating accounting; regress mesh finally in tests/route-stream-flow.test.ts.

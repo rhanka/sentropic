@@ -338,7 +338,7 @@ This table is exhaustive for existing public declarations changed by Lot 2. No e
 | Declaration | Exact delta from 0.17.1 | Compatibility |
 |---|---|---|
 | `CallerAuthPort.verify` and `PersonalPassthroughCallerAuth.verify` | Required second `CallerAuthRequestContext` argument | Breaking for call sites that pass only headers; implementations accepting fewer args can remain structurally assignable |
-| `CallerAuthResult` | Boolean/optional fields become the D1 discriminated union | Breaking for widened `ok: boolean`, success without cost, failure with cost, success with reason, or interfaces extending the old interface |
+| `CallerAuthResult` | Boolean/optional fields become the D1 discriminated union | Breaking for widened `ok: boolean`, success without cost, failure with cost, success with reason, or interfaces extending the old interface; migrate implementations by annotating `verify` with `Promise<CallerAuthResult>` (or `as const` literals), no compatibility layer (README migration) |
 | `VerifyToken.verify` | Required fourth context argument | Breaking for direct invocations; existing fixture methods ignoring extra arguments may compile unchanged |
 | `GatewayFlowRequest` | Add required `authContext` | Breaking for constructed requests to runJsonFlow/runStreamFlow/prepareRouteFlow/runRouteJsonFlow/runRouteStreamFlow |
 | `GatewayFailureKind` | Add `'caller-auth-unavailable'`; `router/errors.ts` maps verifier/store unavailability to provider-shaped 503 | Public union addition: breaking for exhaustive switches/records; existing variants unchanged |

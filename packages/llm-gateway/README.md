@@ -67,6 +67,25 @@ All `PersonalPassthroughCallerAuth` instances, including custom verifiers, now u
 malformed Authorization never falls back to x-api-key, and tokens containing
 spaces are rejected. This parsing change applies beyond the optional auth bridges.
 
+Migration: `CallerAuthPort` implementations must return literal or annotated
+discriminated results; a verifier declared outside a contextually typed position
+infers `ok: boolean` and no longer type-checks (no compatibility shape is accepted):
+
+```ts
+// Before (0.17.x): ok is inferred as boolean, rejected by 0.18.0
+callerAuth: {
+  async verify(headers: Readonly<Record<string, string>>) {
+    return cost ? { ok: true, cost } : { ok: false, reason: 'verified caller unavailable' };
+  },
+},
+// After: annotate the result (or use `ok: true as const` / `ok: false as const`)
+callerAuth: {
+  async verify(headers: Readonly<Record<string, string>>): Promise<CallerAuthResult> {
+    return cost ? { ok: true, cost } : { ok: false, reason: 'verified caller unavailable' };
+  },
+},
+```
+
 ## Provider-compatible surface
 
 | Route | Wire |
