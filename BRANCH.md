@@ -84,7 +84,7 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] `apps/llm-gateway/tests/fixtures.ts` (shared fixture ports) and `apps/llm-gateway/vitest.config.ts`
   - [x] `apps/llm-gateway/tests/config.test.ts`
   - [x] `apps/llm-gateway/tests/readiness.test.ts`
-  - [ ] `apps/llm-gateway/tests/autonomy.test.ts`
+  - [x] `apps/llm-gateway/tests/autonomy.test.ts`
   - [ ] `apps/llm-gateway/tests/lifecycle.test.ts`
   - [ ] Lot gate:
     - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 ENV=test-llm-gateway-host`
