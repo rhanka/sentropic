@@ -1,85 +1,134 @@
-# Feature: Cluster mesh single lazy integration surface
+# Feature: CI publishable manifest guard — Lot G SPEC + BUILD
 
 ## Objective
-- [x] Deliver Lot E design and the dated control-plane amendment (planning phase, complete).
-- [x] Implement cluster-mesh 0.12.0 LLM/gateway lazy surface (B1–B3 package side) in the same PR; MCP (B5) and later catalog lots stay deferred.
+- [x] Deliver the design for baseline-qualified package CI lint, packed-manifest enforcement, and clean consumer installation qualification.
+- [x] BUILD: implement `spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md` lots with exceptions BRCI-EX1..EX4 and review conditions N1/N2.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/cluster-mesh-lazy-surface`, branch `spec/cluster-mesh-lazy-surface`; branch check passed; `origin/main` merged (cluster-mesh 0.11.0, mcp-auth 0.2.1, llm-gateway 0.18.0).
-- [x] Make-only, Docker-first; `ENV=test-cluster-mesh-lazy-surface` last; reserved API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525.
-- [x] No migrations, push, PR, merge or publication; no `api/`, `ui/`, workflow or compose change; English except the verbatim owner quote.
+- [x] Planning only on `ci/publishable-manifest-guard`, worktree `tmp/ci-manifest-guard`; baseline `273bff382` equals local `origin/main` at entry.
+- [x] BUILD base: `origin/main` `28bfcf9f5` merged (merge commit `8a3c8567c`, no conflicts; includes PR #605 gateway 0.18.0 and mcp-auth 0.2.1).
+- [x] No dependency changes, publication, push, PR, merge, or edits outside this worktree.
+- [x] Make-only checks; Docker-first; no Python; English text; `ENV` last; no `ENV=dev` or `clean-all`.
+- [x] BUILD environment: `test-ci-manifest-guard`; ports API `9440`, UI `5640`, Maildev UI `1540`; no services required.
+- [x] Selective staging and separate `make commit`; update checkboxes in each atomic commit, approximately 150 lines maximum.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/**`
-  - `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md`
-  - `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` (append-only amendment and status)
-  - `BRANCH.md`
-- [x] **Forbidden Paths (must not change in this branch)**: `api/**` except `api/Dockerfile` (BRE-EX3), `ui/**`, `packages/llm-mesh/**`, `packages/llm-gateway/**`, other packages, `docker-compose*.yml`, `.github/workflows/**` except BRE-EX2, `.track/**`, other plans.
-- [x] **Conditional Paths**: `Makefile` (BRE-EX1 only), `.github/workflows/ci.yml` (BRE-EX2 one step only), `api/Dockerfile` and root `package-lock.json` (BRE-EX3 only).
-- [x] **Exception process**: declare `BRE-EXn` with reason, impact and rollback in `## Feedback Loop` before touching a conditional path.
+  - [x] `spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md`
+  - [x] `BRANCH.md`
+  - [x] `Makefile` (BRCI-EX1 only)
+  - [x] `.github/workflows/ci.yml` (BRCI-EX2 only)
+  - [x] `scripts/ci/publishable-manifests.mjs`, `scripts/ci/check-publishable-manifests.sh`, `scripts/ci/qualify-published-install.mjs`, `scripts/ci/*.test.mjs` (BRCI-EX3 only)
+  - [x] `rules/workflow.md` Package Publication section (BRCI-EX4 only)
+- [x] **Forbidden Paths (must not change in this branch)**:
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+  - [x] `packages/**`, `api/**`, `ui/**`, `e2e/**`, other `scripts/**`
+  - [x] `package.json`, `package-lock.json`, other `rules/**`, `plan/**`, `PLAN.md`, `.track/**`
+  - [x] Every path outside the Allowed Paths.
+- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**: none beyond BRCI-EX1..EX4.
+- [x] **Exception process**: BRCI-EX1..EX4 applied for BUILD exactly as declared in spec section 12.
 
 ## Feedback Loop
-- [x] E-A1 `attention`, owner: Lot E, revised 2026-09-24: select static provider leaves for import substitution and separate additive loaders; native ESM leaf failures cannot provide the loader's typed refusal.
-- [x] E-A2 `attention`, owner: Lot E, 2026-09-23: h2a MCP inventory includes external `@sentropic/track/mcp`; private broker/connectors remain gated until publishable contracts exist.
-- [x] E-A3 `attention`, owner: conductor, 2026-09-23: independent review remains conductor-owned per brief; no cross-host review or Track recorder artifacts outside the three allowed files, and no consensus claimed.
-- [x] E-A4 `attention`, owner: Lot E, 2026-09-23: keep synchronous plugin mounting after async preparation; inject the existing product LLM router because llm-mesh does not export it; preserve D1 and M05.
-- [x] E-A5 `attention`, owner: build conductor, revised 2026-09-24: B3 requires publication of mcp-auth 0.2.1 from `fix/mcp-auth-oauth-verify-dep` (`4a8251e1c`, under double review), with oauth-verify `^0.1.0`; exclude broken 0.2.0 and qualify public tarballs with jose `^5.10.0` and Hono.
-- [x] E-A6 `attention`, owner: Lot E, revised 2026-09-24: require gateway 0.18 and tested mesh 0.21 patches; loaders reject skew, while static consumers require packed/install coherence gates, one physical cluster-mesh and one mesh instance shared with gateway.
-- [x] E-A7 `attention`, owner: Lot E, revised 2026-09-24: expose Lot C service auth at `/gateway/auth` and session auth at `/gateway/auth-hono`, each with its own loader; gateway root JS/types select neither, keeping service-only consumers independent of auth-hono.
-- [x] E-A8 `attention`, owner: h-cond, 2026-09-24: the fifth gateway file at `75c1dc61` is a resolution-test comment, not an import; map all measured files without inventing a fifth import.
-- [x] E-A9 `attention`, owner: conductor, revised 2026-09-24: Opus 5.5 returned approve-with-fixes (architecture holds, four majors, no blocker); round 2 addresses those fixes, with final independent acceptance/build handoff still conductor-owned.
-- [x] E-A10 `attention`, owner: Lot E, 2026-09-24: release LLM/gateway first, then start MCP after h2a ships that flip; gateway's use of existing mcp-auth is not the later MCP server build.
-- [x] E-A11 `attention`, owner: h-cond, 2026-09-24: verify the full 0.9-to-0.10 wire/custody transition and 0.11 feedback before import substitution; the 0.9 changelog already names initial commandRef/custody requirements.
-- [x] E-A12 `attention`, owner: Lot E, 2026-09-24: selected auth loaders preload gateway-relative peers before bind; this catches Lot C's verification-time imports without changing static provider namespaces or auth ownership. Stable error `code` supports diagnosis across duplicate constructors.
-- [x] E-A13 `attention`, owner: h-cond, 2026-09-24: move h2a's 0.9 pin to 0.12.0 in the same artifact, declare selected peers per leaf consumer, and prove one physical cluster-mesh plus shared mesh under the actual global/separate-runtime install; workspace hoisting and first-party Vitest pins cannot prove deployment identity.
-- [x] E-A14 `attention`, owner: Lot E / h-cond, 2026-09-24: use only `export *` provider leaves and qualify skipLibCheck true/false; externalize cluster root/all subpaths from tsup so skipped declaration checks and bundling cannot mask missing peers or change their resolution anchor.
-- [x] E-A15 `attention`, owner: conductor, 2026-09-24: build handoff received; MCP lot B5 sequenced after the h2a LLM/gateway flip; `api/**` product follow-up excluded; B4/B8 are h-cond consumer lots.
-- [x] E-A16 `attention` conductor decision (reversible), 2026-09-24: automatic per-process topology guard; each leaf/loader/compose module evaluates a guard before its `export *`, counting evaluated cluster-mesh copies by unique token and comparing llm-mesh realpaths from cluster-mesh and gateway; root exports explicit `verifyClusterMeshTopology()`; leaf modules declared in `sideEffects`; cross-process consistency stays with install gates.
-- [x] BRE-EX1 `attention`, owner: Lot E, 2026-09-24: `Makefile` targets `typecheck-cluster-mesh`, `test-cluster-mesh`, `build-cluster-mesh` build llm-gateway/llm-mesh/mcp-auth/auth-hono dists and link them as dev-time peers inside the container (removed on exit), because provider leaves need provider declarations and runtime modules. Impact: those targets take longer and depend on `build-llm-gateway`. Rollback: revert the three target edits together with the leaves.
-- [x] E-A17 `attention` gates, owner: Lot E / conductor, revised 2026-09-25: now reproduced (npm) — global consumer + separately installed runtime, session mode with public auth-hono 0.15.0, latest-in-range, lockfile-frozen tuple, API-like root bundle. Recorded follow-ups (not in 0.12.0): pnpm layouts, Rollup/tsup, dedicated M05 test, llm-mesh evaluation token. `skipLibCheck: false` consumers need TypeScript >= 5.7 for hono declarations (packed checks use 5.9.3; 5.4.5 fails in hono, not in cluster-mesh).
-- [x] E-A18 `attention`, owner: Lot E, revised 2026-09-25: root `package-lock.json` refreshed under BRE-EX3 via `make lock-root` (cluster-mesh 0.12.0 + optional peers; llm-gateway entry normalized); no other package entry changed.
-- [x] BRE-EX1 widened `attention`, owner: product conductor, 2026-09-25: `prepare-node-workspace` and `up-api-test-ci` now build the whole llm-gateway chain through `build-cluster-mesh`, because leaves `export *` from the gateway and compiling cluster-mesh needs its declarations. Impact: longer API dev/CI builds. Hardening: peer-link cleanup on EXIT with INT/TERM exiting through it, and `docker run --init` on the three recipes. Rollback: revert the Makefile hunk with the leaves.
-- [x] BRE-EX2 `attention`, owner: product conductor, 2026-09-25: one step in `.github/workflows/ci.yml` job `validate-cluster-mesh` after Build runs `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test` (release gate P1). Impact: longer cluster-mesh CI job, registry access for public peer tarballs. Rollback: remove that step.
-- [x] BRE-EX3 `attention`, owner: product conductor, 2026-09-25: `api/Dockerfile` builds llm-mesh, oauth-verify, mcp-auth, auth-hono, llm-gateway before cluster-mesh and copies `packages/llm-gateway/package.json` before `npm ci`; root lockfile refresh. Impact: API image build order only; PASS `make build-api`. Rollback: revert both files.
-- [x] E-A19 `attention`, owner: Lot E, 2026-09-25: the automatic guard still throws `divergent_llm_mesh` for llm-mesh-only consumers when a stray gateway copy with a private llm-mesh is installed (spec behavior kept, documented as a README limit); scoping it to gateway acquisition needs a later amendment.
-- [x] E-A20 `attention`, owner: Lot E, 2026-09-25: P4 resolved by a latest-in-range fixture (ranges kept, not narrowed); at qualification time it resolves llm-mesh 0.21.2, llm-gateway 0.18.0, mcp-auth 0.2.1, auth-hono 0.15.0, jose 5.10.0, hono 4.13.9, and reruns on every CI qualification.
-- [x] E-A21 `attention`, owner: Lot E, 2026-09-25: the frozen `selected` lockfile omits only the candidate tarball's integrity (it changes with each build); the public tuple keeps registry integrity and installs with `npm ci`; regenerate with `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`.
+- [x] BRCI-A1 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): BLOCK changed packages, absent packed versions selected for publication, and explicit bootstrap targets; WARN unrelated existing versions to avoid root-lock debt fanout.
+- [x] BRCI-A2 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | Install replays are mandatory BUILD closure evidence; SPEC cannot add or execute the nonexistent target. Expected: two successful reports; actual: pending implementation.
+- [x] BRCI-A3 | attention | Owner: conductor | Branch: current | 2026-09-24 | This two-file scope excludes harness/track recorder writes; branch and scope checks remain mandatory. Independent review precedes conductor push/PR/merge.
+- [x] BRCI-A4 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | Reversible: full candidate packs for BLOCK, lifecycle-free inventory snapshots for WARN; avoids unrelated native builds while every actual publication remains strict.
+- [x] BRCI-EX1 / BRCI-EX2 / BRCI-EX3 / BRCI-EX4 | attention | Owner: BUILD conductor | Branch: future BUILD | 2026-09-24 | Proposed only: Makefile, ci.yml, named scripts/tests, Package Publication rule; reason/impact/rollback in spec section 12. None applied here.
+- [x] BRCI-A5 | attention | Owner: conductor | Branch: cowork remediation | 2026-09-24 | conductor decision (reversible): cowork-desktop owner remains unassigned; root-only changes and bootstrap all leave existing packed versions WARN; changed cowork, absent selected versions, and explicit cowork bootstrap stay BLOCK.
+- [x] BRCI-A6 | deferred | Owner: conductor | Branch: current | 2026-09-24 | Independent review remains the conductor handoff. No agents launched without the OK required by rules/subagents.md; no peer consensus claimed. Harness review dossiers/recorder files are outside this two-file scope.
+- [x] BRCI-R1-H1 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): derive P' and bootstrap-all selection from Docker registry lookups of packed versions; lookup failures are ERROR because unknown existence cannot safely select severity.
+- [x] BRCI-R1-H2 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): keep the inventory as a required PR check without publisher needs; skip existing versions with WARN before candidate packing/strict checks, while every actual publication checks its own archive.
+- [x] BRCI-R1-M3 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): BLOCK candidates at an existing registry version fail with "bump required" when packed runtime/peer/optional maps differ from that published artifact; dependency-only repairs must reach consumers.
+- [x] BRCI-R1-M4 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): qualify PR candidates with guarded BLOCK sibling archives; report remaining confirmed unpublished siblings as pending-sibling-publish (non-blocking in PR, blocking after publication), never as a successful registry install.
+- [x] BRCI-R1-L5 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): require dependency strings to be non-empty after trim before validRange; the positive allow-rule decides and npm aliases remain deliberately rejected.
+- [x] BRCI-R1-L6 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): emit JSON file lists from a separate dorny step with only publishable_package_files; avoids multiplying file outputs across roughly 45 filters near the 1 MB job-output limit.
+- [x] BRCI-R1-L7 | attention | Owner: conductor | Branch: current | 2026-09-24 | conductor decision (reversible): use a dedicated manifest_guard filter for scripts/ci, never global; the new job runs via always() without causing full API/UI/E2E builds on guard edits.
+- [x] BRCI-R1-L8 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | conductor decision (reversible): wire cluster-mesh, llm-mesh, and llm-gateway lint independently only after each passes on base; baseline failures become out-of-scope debt, unwired and unfixed here. Baseline lint is NOT RUN in SPEC.
+- [x] BRCI-EX1 | applied | Owner: BUILD | Branch: current | 2026-09-24 | `Makefile`: root lint pattern, real pack/shared guard, strict tarball publication, inventory/test/qualification targets. Impact: dry-run packs become real archives; every npm lane invokes the guard. Rollback: revert these hunks together with EX2; published versions stay immutable.
+- [x] BRCI-EX2 | applied | Owner: BUILD | Branch: current | 2026-09-24 | `.github/workflows/ci.yml`: classification outputs, always-scheduled guard, validation context, baseline-qualified lint, install smoke steps, N1 sibling ordering. Impact: new required PR check; unchanged publisher needs on the global guard. Rollback: revert with EX1; conductor removes the required status first.
+- [x] BRCI-EX3 | applied | Owner: BUILD | Branch: current | 2026-09-24 | `scripts/ci/publishable-manifests.mjs`, `scripts/ci/check-publishable-manifests.sh`, `scripts/ci/qualify-published-install.mjs`, five `scripts/ci/*.test.mjs`. Impact: new tooling only; no package graph or lockfile change. Rollback: remove after reverting Make/CI callers.
+- [x] BRCI-EX4 | applied | Owner: BUILD | Branch: current | 2026-09-24 | `rules/workflow.md` Package Publication section only: D1, npm workspace semantics, exact-artifact guard, consumer qualification. Rollback: revert the added paragraph with the tooling rollback.
+- [x] BRCI-B1 | attention | Owner: conductor | Branch: current | 2026-09-24 | Add `validate-publishable-manifests` to required PR checks after its first successful CI run (YAML cannot change branch protection).
+- [x] BRCI-B2 | deferred | Owner: conductor | Branch: first real CI publication | 2026-09-24 | BRCI-R1-L9 checkpoint stays pending: tarball publication provenance/publishConfig evidence only from the first normal CI publication; `package-llm-routing-candidates` guard line NOT RUN locally (needs `tmp/llm-gateway-qualification`).
+- [x] BRCI-B3 | attention | Owner: unassigned | Branch: cowork remediation | 2026-09-24 | `@sentropic/cowork-desktop@0.2.0` `file:` dependencies remain WARN debt; standalone `make pack-cowork-desktop` now fails (BLOCK default) while CI validation passes context and WARNs.
+- [ ] BRCI-F1-N1 | deferred | Owner: conductor | Branch: follow-up | 2026-09-25 | A `skipped` upstream publisher can mask a failed validate in the N1 ordering (ci.yml publish-mcp-auth / publish-cluster-mesh conditions); possible fix: add the sibling `validate-*` jobs to `needs` and require their result is not failure. Documented only, no code.
+- [ ] BRCI-F1-N2 | deferred | Owner: conductor | Branch: follow-up | 2026-09-25 | More network before the existing-version skip (MANIFEST_GUARD_TOOLS semver install + lifecycle-free snapshot pack) than the former `npm view`; a registry outage now fails earlier. Documented only, no code.
+- [x] BRCI-F1-D1 | attention | Owner: conductor | Branch: current | 2026-09-25 | conductor decision (BRCI-EX2): root `package.json`/`package-lock.json` removed from all 23 `*_publish` filters; a lockfile-only main push attempted auth-hono 0.15.2 and build-cli 0.3.0 (ENEEDAUTH). Validation filters unchanged.
+- [x] BRCI-F2-A1 | attention | Owner: conductor | Branch: current | 2026-09-25 | conductor decision (reversible): HTTP 408 (Request Timeout) is retried as transient alongside 429/5xx, matching the `HTTP 408` classifier entry; every other non-404 4xx is permanent.
+- [x] BRCI-R1-L9 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | conductor decision (reversible): verify tarball publication preserves provenance and publishConfig on the first real CI publication; no manual/test publication and no evidence claimed from an existing-version skip.
 
 ## AI Flaky tests
-- [x] Not applicable: deterministic package tests only; no AI/provider calls.
+- [x] Not applicable: documentation-only; no AI or runtime tests are executed or waived.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, single author; no delegated implementation, cherry-picks or cross-repository edits.
+- [x] Mono-branch; one author; no integration, cherry-pick, or delegated writes.
+- [x] Multi-branch implementation planning is owned by the conductor after SPEC review.
 
 ## UAT Management (in orchestration context)
-- [x] Web, Chrome and VSCode UAT not applicable; acceptance is source-backed design coverage, scope checks and atomic documentation commits.
+- [x] Web, Chrome, VSCode UAT: not applicable to this design-only lot.
+- [x] Consumer acceptance: specify published mcp-auth `0.2.1` and cluster-mesh `0.11.0` replays and evidence fields for BUILD; actual replays remain NOT RUN in SPEC.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline**: read required rules/template, README/TODO/PLAN context, control-plane decisions, package exports, registration gates, F1–F7 branch and h2a imports at `75c1dc61`; create this branch plan first.
-- [x] **Lot 1 — New specification**: decide loader/type/version/error contracts; map every h2a symbol and MCP import; reconcile namespace mounting and F1; specify migration and implementation lots with file-level tests; commit spec with this checklist.
-- [x] **Lot 2 — Amendment**: append dated verbatim decision, translation, preserved D1 and strengthened D14 with spec link; original 495 lines compare byte-for-byte equal; commit amendment with this checklist.
-- [x] **Initial validation**: PASS `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` before each initial commit; exact diff/whitespace review; only allowed paths in the initial two-commit delivery.
-- [x] **Initial cleanup**: PASS `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; PASS `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` (no services).
-- [x] **Revision R1a — Consumer contract**: answer all three orientations with arguments; choose static leaves/separate loaders; enumerate all measured h2a sites including node; align Lot C auth isolation and E2–E7.
-- [x] **Revision R1b — Upgrade and shipment**: pin gateway 0.18 compatibility; document cluster-mesh 0.9 → 0.10 → 0.11 → lazy minor; ship LLM/gateway before building MCP; revise file-level acceptance.
-- [x] **Revision R1c — Authority and validation**: append consumer clarification inside the amendment only; preserve resumed work; PASS branch/scope and whitespace checks, original 495 control-plane lines byte-identical, reviewed diff/history; PASS reserved-environment `make down` and `make ps` with the ports/ENV above (no services). Commit each remaining revision atomically with this checklist; independent review/delivery stays pending below.
-- [x] **Revision R2a — Auth entries and release prerequisite**: separate service/session leaves and loaders, require mcp-auth 0.2.1 publication for B3, update the tested tuple, amendment and E-A5/E-A7.
-- [x] **Revision R2b — Startup refusal**: require gateway-relative auth resolution/preload before bind, document static-consumer preflight and the existing runtime-import diagnostic boundary, recognize errors by code, specify absent-peer startup tests.
-- [x] **Revision R2c — Consumer topology and declarations**: require manifest-local selected peers and one physical cluster-mesh, update the 0.9 pin in the same artifact, specify global/separate-runtime and tsup/skipLibCheck fixtures, align leaf paths, and validate the three-file scope.
-- [x] **R2 consumer notice**: topology rule/test delivered via signed h2a message to live h-cond (`claude:h2a:c3d1621ed118`), envelope `env:send:f6b2cab0-b8e4-4fd2-a103-93ab62487599`; informational only, consumer edits/build approval remain conductor-owned.
-- [x] **R2 validation**: PASS `harness check branch`; PASS `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` for each revision group; PASS whitespace/diff review and byte comparison of the original 495 control-plane lines against `75032fc85`; only the three allowed files changed, no scope exception.
-- [x] **R2 cleanup**: PASS `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; PASS `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` (no services). Runtime/declaration/install tests are specified, not executed in this planning-only revision.
-- [x] **Lot B1 — Registry and errors**: `src/modules/{contracts,catalog,registry,errors,resolution,semver}.ts`, root exports, optional `modules` on `createDegenerateClusterMesh`; tests `tests/modules/{registry,capabilities}.spec.ts`, updated `tests/{mesh,bindings}.spec.ts`.
-- [x] **Lot B1t — Topology guard (E-A16)**: `src/modules/topology.ts`, root `verifyClusterMeshTopology()`; tests `tests/modules/topology.spec.ts`; spec E8 paragraph.
-- [x] **Lot B2 — LLM/gateway leaves and composition**: `src/integrations/**`, `src/loaders/**`, `src/compose/{llm-mesh,gateway}.ts`, manifest exports/optional peers/`sideEffects`; BRE-EX1 Makefile; tests `tests/integrations/{llm-surface,gateway-surface,gateway-auth-isolation}.spec.ts`, `tests/modules/namespace-loading.spec.ts`, `tests/fixtures/types/llm-consumer.ts`.
-- [x] **Lot B3 — Packed release gate (package side)**: `packaging.mk`, `tests/packaging/{prepare.sh,helpers.ts,optional-install,types-and-bundlers,consumer-topology}.spec.ts`; PASS `make -f packages/cluster-mesh/packaging.mk test-lazy-package` (24 tests, public tuple); remaining matrix pending (E-A17); publication stays conductor-owned.
-- [x] **Release notes**: version 0.12.0, CHANGELOG and README consumer migration notes.
-- [ ] **Lot B5 — MCP leaves**: deferred until the h2a LLM/gateway flip ships (E-A15); not built in this branch.
-- [x] **Final gates**: PASS `make typecheck-cluster-mesh test-cluster-mesh pack-cluster-mesh` (47 files, 344 passed, 24 packaging skipped outside packaging.mk; pack 339 files); PASS `make -f packages/cluster-mesh/packaging.mk test-lazy-package` (24 passed); PASS `make scope-check`; PASS `make down` (ports/ENV above).
-- [x] **Fix round 1 — F1 root graph**: registry imports the metadata-resolved file only (no literal provider `import()` in `catalog.ts`); jose resolved from mcp-auth; test `gateway-auth-isolation.spec.ts`.
-- [x] **Fix round 1 — F2 topology**: registry dedupe by normalized module URL; non-file URL fallback; guard import in `compose/disabled.ts`; tests `tests/modules/topology.spec.ts`.
-- [x] **Fix round 1 — F3 packed matrix**: API-like root bundle, frozen `selected` lockfile (`npm ci`), session-mode positive, latest-in-range, global consumer + separately installed runtime (P2/P3/P4).
-- [x] **Fix round 1 — F4 build/CI exceptions**: BRE-EX1 hardening (`trap` EXIT INT TERM, `docker run --init`), BRE-EX2 CI step, BRE-EX3 Dockerfile order + lockfile refresh; PASS `make build-api`.
-- [x] **Fix round 1 — F5 docs**: README (HMR/test runners, per-thread guard, llm-mesh-only limit, npm only, tested bundlers, TS >= 5.7), spec E8/E10 amendments, E-A17 update.
-- [ ] **Review/delivery gate (conductor-owned)**: independent acceptance of round 2 fixes; only then deliver the approved build contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor. The requested topology rule/test notice is informational, not build authorization.
+- [x] **Lot G0 — Baseline and rule**
+  - [x] Read mandatory rules, template, root workspace declaration, Makefile recipes, and CI publication structure; mechanical branch check passes.
+  - [x] Create this scoped branch plan first.
+  - [x] Document npm root cause, strict dependency rule, packed-artifact boundary, and placement recommendation in the new spec.
+- [x] **Lot G1 — Exact BUILD contract**
+  - [x] Specify root lint target, guard targets, CI jobs/steps, classification algorithm, and forbidden-spec regex.
+  - [x] Specify clean install isolation, entry point imports, published/tarball inputs, and failure reporting.
+- [x] **Lot G2 — Acceptance and handoff**
+  - [x] List file-level BUILD tests, exception requests, rollout sequence, known offenders, and unresolved owner decisions.
+  - [x] Consolidate the standalone EVOL spec and author-review all requirements against repository evidence, including dorny v4 rename handling; independent review remains A6.
+  - [x] Run `make scope-check ENV=test-ci-manifest-guard` before each commit; inspect staged diff; commit only the two allowed files.
+  - [x] `make check-ci-version-filters ENV=test-ci-manifest-guard` passes; branch check and Git whitespace checks pass.
+  - [x] `make down API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` passes.
+  - [x] `make ps API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` passes with no services; Compose reports only an unset DISABLE_RATE_LIMIT warning.
+  - [x] Handoff includes exact checks, explicit NOT RUN install replays, final scope verification, and `git log --oneline origin/main..HEAD`.
+- [x] **Lot G-R1 — Design review revisions**
+  - [x] HIGH: correct root-lock/bootstrap classification, registry failure semantics, publisher independence, and skip ordering in the spec; update A5 and acceptance cases.
+  - [x] MEDIUM: specify dependency-map bump enforcement and same-PR sibling archive qualification, including fixtures and report evidence.
+  - [x] LOW: tighten trimmed ranges, isolate file-list/filter outputs, gate all three lint jobs on baseline evidence, and require first-CI publication compatibility evidence.
+  - [x] Review all nine findings and updated acceptance cases; only the two allowed files changed, with no BUILD exceptions activated.
+  - [x] `make scope-check ENV=test-ci-manifest-guard` passes before each group commit; `make check-ci-version-filters ENV=test-ci-manifest-guard` passes; mechanical branch and Git whitespace checks pass.
+  - [x] `make down API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` and `make ps API_PORT=9435 UI_PORT=5635 MAILDEV_UI_PORT=1535 ENV=test-ci-manifest-guard` pass; no services remain, with only the unset DISABLE_RATE_LIMIT warning.
+  - [x] Baseline lint, new guard fixtures, install replays, and real CI provenance/publishConfig verification remain NOT RUN in SPEC; conductor owns BUILD evidence and independent review.
+- [x] **Lot G-B0 — BUILD baseline and lint gate**
+  - [x] Merge `origin/main` (`28bfcf9f5`) without conflicts; record BRCI-EX1..EX4 before touching their paths.
+  - [x] Add `lint-cluster-mesh` to the root static lint pattern (tooling delta only: `-w packages/llm-$*` became `-w packages/$*`).
+  - [x] Baseline lint on base `28bfcf9f5` sources (node:24-bookworm-slim, npm 11.19.0, eslint 10.0.2, typescript-eslint 8.56.1): `make lint-cluster-mesh|lint-llm-mesh|lint-llm-gateway API_PORT=9440 UI_PORT=5640 MAILDEV_UI_PORT=1540 ENV=test-ci-manifest-guard` all exit 0; all three are wired, no lint debt recorded.
+- [x] **Lot G-B1 — Shared guard and fixtures**
+  - [x] `scripts/ci/publishable-manifests.mjs`: D1 rule, archive reader, classifier, registry lookups, bump gate, pack/publish/inventory CLI.
+  - [x] `scripts/ci/check-publishable-manifests.sh` host orchestration; Make targets `check-publishable-manifest`, `pack-publishable-manifest`, `check-publishable-manifests`, `test-publishable-manifests`.
+  - [x] Fixture tests: `publishable-manifests`, `publishable-classification`, `publishable-pack` test files pass.
+- [x] **Lot G-B2 — Consumer qualification**
+  - [x] `scripts/ci/qualify-published-install.mjs` plus `qualify-published-install` / `test-qualify-published-install` targets (no repo mount, fresh cache, no Python).
+  - [x] `scripts/ci/qualify-published-install.test.mjs` passes (10 tests); same-PR sibling plan/pack/collect lane `pack-candidate-siblings` verified on a lockstep mcp-auth + oauth-verify context.
+- [x] **Lot G-B3 — Pack and publish integration**
+  - [x] All 23 `pack-<slug>` targets use the real-pack primitive; routing candidates guarded.
+  - [x] All `publish-<slug>` / `-token` targets (46 recipes): packed identity, lookup, skip-before-candidate, strict check, publish exact tarball.
+- [x] **Lot G-B4 — CI wiring and policy**
+  - [x] ci.yml: separate list-files step, `manifest_guard` filter, new inventory job, pack context, qualification steps, N1 ordering, baseline-qualified lint.
+  - [x] `scripts/ci/publishable-ci-wiring.test.mjs` passes (9 tests); `rules/workflow.md` Package Publication updated; `make check-ci-version-filters` and `make check-e2e-inventory` pass.
+- [x] **Lot G-B5 — Closure gates**
+  - [x] `make qualify-published-install PKG=@sentropic/mcp-auth@0.2.1 PEERS=hono@4.10.7` PASS (root + `/hono`, integrity sha512-SZSTMWjc…, sha256 054a0e7e…); `PKG=@sentropic/cluster-mesh@0.11.0` PASS (root, sha256 59c73d85…); `PKG=@sentropic/llm-gateway@0.18.0` PASS (root, `/auth`, `/auth-hono`, sha256 5cb35819…); node:24-bookworm-slim, Node v24.21.0, npm 11.19.0.
+  - [x] `make test-publishable-manifests test-qualify-published-install` (51 + 10 tests) PASS; `make typecheck-cluster-mesh test-cluster-mesh pack-cluster-mesh` PASS (279 tests; candidate sha256 equals published 0.11.0); `make check-ci-version-filters` PASS.
+  - [x] `make check-publishable-manifests MANIFEST_CONTEXT_FILE=tmp/ci-manifest-guard/changes-context.json` PASS (24 public packages, BLOCK none, 4 cowork WARN); lockstep mcp-auth+oauth-verify context PASS; cowork-touched context FAILS as required.
+  - [x] Lint gates re-run on branch head: `make lint-cluster-mesh|lint-llm-mesh|lint-llm-gateway` exit 0; `make scope-check` PASS; branch diff limited to Allowed Paths.
+  - [x] `make down API_PORT=9440 UI_PORT=5640 MAILDEV_UI_PORT=1540 ENV=test-ci-manifest-guard` and `make ps` show no services.
+- [x] **Lot G-F1 — Build fix round 1 (review findings)**
+  - [x] Registry freshness: never cache 404/absent packuments, `lookup(..., { fresh: true })` with `cache: 'no-store'` in the post-publication wait and pre-publish recheck; snapshot failures are transient only for network/registry errors (fixtures added).
+  - [x] Publication triggers: `*_publish` filters keep only `packages/<slug>/**`; post-publication qualification runs only on `status=published` (wiring fixtures added).
+  - [x] Shell hardening: sibling directory rejects `..`; `publishable-sibling-plan` validates `PACKAGE` with the slug regex.
+  - [x] Spec and `rules/workflow.md` Package Publication state the package-path-only publication trigger and its reason; follow-ups recorded.
+  - [x] `make test-publishable-manifests` (55 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make check-e2e-inventory`, `make scope-check` PASS.
+- [x] **Lot G-F2 — Build fix round 2 (verified defect + review findings)**
+  - [x] Sibling directory: strict `^tmp/<segment>(/<segment>)*$` check (no empty or dot-leading segment, `..` still rejected) before `rm -rf`; fixture runs the script in a throwaway cwd with a stub `make` and proves `tmp/`, `tmp/.`, `tmp//`, `tmp/./x`, `tmp/../x`, `/tmp/x`, `x` are rejected before any deletion.
+  - [x] `publishable-sibling-plan` passes `PACKAGE`/`SIBLING_DIR` as container env and validates both inside a single-quoted script; post-publication qualification hard-fails on a missing or status-less receipt (no `:-missing` fallback).
+  - [x] Registry request: 400/401/403 permanent, 408/429/5xx and exceptions transient; classifier adds `fetch failed`, `ERR_SOCKET_TIMEOUT`, `UND_ERR_*`, `HTTP 408`, `E429`, `E5xx`, drops `EPIPE`; re-run hint never duplicated; inventory failure message points to `classification.json`.
+  - [x] `make test-publishable-manifests` (61 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make scope-check` PASS.
+- [x] **Lot G-F3 — Build fix round 3 (sibling directory guard)**
+  - [x] `check-publishable-manifests.sh siblings` derives `tmp/ci-manifest-guard/siblings/<slug>` from the slug; the kept argument must equal it exactly; a directory containing `.git` is refused; slug and directory checks are whole-string (no line-based grep, newline rejected).
+  - [x] `pack-candidate-siblings` / `publishable-sibling-plan`: Make-level `SIBLING_ARGS_GATE` plus single-quoted slug check before `docker run`; the in-container check requires the derived directory; ci.yml unchanged.
+  - [x] Fixture rejects worktree-like `tmp/ci-manifest-guard`, `tmp/cluster-mesh-lazy-surface`, newline, glob, newline-slug and `.git` cases with sentinel intact and no `make` call; throwaway dirs removed.
+  - [x] `make test-publishable-manifests` (61 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make scope-check` PASS.

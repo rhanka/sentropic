@@ -93,6 +93,9 @@ jobs:
 
   changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       global: ${{ steps.filter.outputs.global }}
       api: ${{ steps.filter.outputs.api }}
@@ -146,6 +149,10 @@ jobs:
       focus_publish: ${{ steps.filter.outputs.focus_publish }}
       cli: ${{ steps.filter.outputs.cli }}
       cli_publish: ${{ steps.filter.outputs.cli_publish }}
+      manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
+      # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
+      package_files: ${{ steps.publishable_files.outputs.publishable_package_files_files }}
+      matched_filters: ${{ steps.filter.outputs.changes }}
     steps:
       - uses: actions/checkout@v6
       # Enforces the "Keep `api` and `ui` in sync with API_VERSION / UI_VERSION"
@@ -203,8 +210,6 @@ jobs:
               - 'packages/cluster-mesh/**'
               - '.github/workflows/ci.yml'
             cluster_mesh_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cluster-mesh/**'
             llm_gateway:
               - 'Makefile'
@@ -214,12 +219,8 @@ jobs:
               - 'packages/llm-mesh/**'
               - '.github/workflows/ci.yml'
             llm_mesh_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/llm-mesh/**'
             llm_gateway_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/llm-gateway/**'
             chat_ui:
               - 'Makefile'
@@ -228,8 +229,6 @@ jobs:
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             chat_ui_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/chat-ui/**'
             cited_source_viewer:
               - 'Makefile'
@@ -238,8 +237,6 @@ jobs:
               - 'packages/cited-source-viewer/**'
               - '.github/workflows/ci.yml'
             cited_source_viewer_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cited-source-viewer/**'
             cowork_bridge:
               - 'Makefile'
@@ -248,8 +245,6 @@ jobs:
               - 'packages/cowork-bridge/**'
               - '.github/workflows/ci.yml'
             cowork_bridge_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cowork-bridge/**'
             cowork_desktop:
               - 'Makefile'
@@ -260,8 +255,6 @@ jobs:
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             cowork_desktop_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cowork-desktop/**'
             oauth_verify:
               - 'Makefile'
@@ -270,8 +263,6 @@ jobs:
               - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             oauth_verify_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/oauth-verify/**'
             mcp_auth:
               - 'Makefile'
@@ -281,8 +272,6 @@ jobs:
               - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             mcp_auth_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/mcp-auth/**'
             mcp_platform:
               - 'Makefile'
@@ -291,8 +280,6 @@ jobs:
               - 'packages/mcp-platform/**'
               - '.github/workflows/ci.yml'
             mcp_platform_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/mcp-platform/**'
             auth_hono:
               - 'Makefile'
@@ -302,8 +289,6 @@ jobs:
               - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             auth_hono_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/auth-hono/**'
             auth_client:
               - 'Makefile'
@@ -312,8 +297,6 @@ jobs:
               - 'packages/auth-client/**'
               - '.github/workflows/ci.yml'
             auth_client_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/auth-client/**'
             auth_ui:
               - 'Makefile'
@@ -322,8 +305,6 @@ jobs:
               - 'packages/auth-ui/**'
               - '.github/workflows/ci.yml'
             auth_ui_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/auth-ui/**'
             chat_core:
               - 'Makefile'
@@ -334,8 +315,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             chat_core_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/chat-core/**'
             chat_server:
               - 'Makefile'
@@ -344,8 +323,6 @@ jobs:
               - 'packages/chat-server/**'
               - '.github/workflows/ci.yml'
             chat_server_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/chat-server/**'
             comments:
               - 'Makefile'
@@ -355,8 +332,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             comments_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/comments/**'
             events:
               - 'Makefile'
@@ -366,8 +341,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             events_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/events/**'
             contracts:
               - 'Makefile'
@@ -376,8 +349,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             contracts_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/contracts/**'
             flow:
               - 'Makefile'
@@ -386,8 +357,6 @@ jobs:
               - 'packages/flow/**'
               - '.github/workflows/ci.yml'
             flow_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/flow/**'
             build_cli:
               - 'Makefile'
@@ -402,8 +371,6 @@ jobs:
               - 'packages/harness/**'
               - '.github/workflows/ci.yml'
             harness_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/harness/**'
             focus:
               - 'Makefile'
@@ -412,12 +379,8 @@ jobs:
               - 'packages/focus/**'
               - '.github/workflows/ci.yml'
             focus_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/focus/**'
             build_cli_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/build-cli/**'
             cli:
               - 'Makefile'
@@ -427,9 +390,50 @@ jobs:
               - 'packages/build-cli/**'
               - '.github/workflows/ci.yml'
             cli_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cli/**'
+            # Dedicated guard filter: never part of global, api/ui/e2e or _publish fanout.
+            manifest_guard:
+              - 'scripts/ci/**'
+      # Separate step so only this single filter emits a file list (job-output size limit).
+      - uses: dorny/paths-filter@v4
+        id: publishable_files
+        with:
+          list-files: json
+          filters: |
+            publishable_package_files:
+              - 'packages/*/**'
+
+  # Publishable manifest inventory (spec sections 6 and 9). Always scheduled so a failed or
+  # skipped `changes` cannot silently skip this required check; never a publisher dependency.
+  validate-publishable-manifests:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: always() && !cancelled()
+    permissions:
+      contents: read
+    env:
+      CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+      CI_MANIFEST_CHANGES_RESULT: ${{ needs.changes.result }}
+      CI_MANIFEST_EVENT: ${{ github.event_name }}
+      CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+      CI_MANIFEST_BEFORE_SHA: ${{ github.event.before }}
+      CI_MANIFEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test publishable manifest guard and consumer qualification
+        run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
+      - name: Check publishable manifests
+        run: make check-publishable-manifests ENV=test-ci-manifests
+      - name: Upload publishable manifest reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publishable-manifests
+          path: tmp/ci-manifest-guard/manifests/**
+          retention-days: 7
+          if-no-files-found: ignore
 
   # Build E2E Docker image
   build-e2e:
@@ -505,6 +509,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Lint LLM Mesh
+        run: make lint-llm-mesh ENV=test-ci-llm-mesh
       - name: Check model-equivalence council freshness
         run: make check-llm-model-equivalences
       - name: Typecheck LLM Mesh
@@ -514,7 +520,11 @@ jobs:
       - name: Build LLM Mesh
         run: make build-llm-mesh
       - name: Pack LLM Mesh
-        run: make pack-llm-mesh
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-llm-mesh ENV=test-ci-llm-mesh
 
   # The first package release uses bootstrap-publish. Enable steady-state OIDC
   # publication only after the npm trusted publisher has been attached.
@@ -526,6 +536,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Lint Cluster Mesh
+        run: make lint-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Typecheck Cluster Mesh
         run: make typecheck-cluster-mesh
       - name: Test Cluster Mesh
@@ -535,7 +547,32 @@ jobs:
       - name: Qualify packed Cluster Mesh (lazy surface release gate)
         run: make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test
       - name: Pack Cluster Mesh
-        run: make pack-cluster-mesh
+        id: pack
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-cluster-mesh PACK_DESTINATION=tmp/ci-manifest-guard/candidate/cluster-mesh PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-cluster-mesh
+      - name: Pack Cluster Mesh same-PR BLOCK siblings
+        if: steps.pack.outputs.manifest_mode == 'block'
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-cluster-mesh
+      - name: Qualify Cluster Mesh candidate install
+        if: steps.pack.outputs.manifest_mode == 'block'
+        env:
+          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+      - name: Upload Cluster Mesh candidate qualification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualify-cluster-mesh-candidate
+          path: tmp/ci-manifest-guard/qualify-cluster-mesh/**
+          retention-days: 7
+          if-no-files-found: ignore
 
   # BR-LB-EX1 — @sentropic/llm-gateway (WP16 Layer-B) CI validation (owner-approved
   # 2026-06-22). Mirrors validate-llm-mesh; the make targets build the sibling
@@ -549,6 +586,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Lint LLM Gateway
+        run: make lint-llm-gateway ENV=test-ci-llm-gateway
       - name: Typecheck LLM Gateway
         run: make typecheck-llm-gateway
       - name: Test LLM Gateway
@@ -556,7 +595,11 @@ jobs:
       - name: Build LLM Gateway
         run: make build-llm-gateway
       - name: Pack LLM Gateway
-        run: make pack-llm-gateway
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-llm-gateway ENV=test-ci-llm-gateway
 
   validate-chat-ui:
     runs-on: ubuntu-latest
@@ -575,7 +618,11 @@ jobs:
       - name: Build Chat UI
         run: make build-chat-ui
       - name: Pack Chat UI
-        run: make pack-chat-ui
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-chat-ui ENV=test-ci-chat-ui
 
   validate-cited-source-viewer:
     runs-on: ubuntu-latest
@@ -594,7 +641,11 @@ jobs:
       - name: Build Cited Source Viewer
         run: make build-cited-source-viewer
       - name: Pack Cited Source Viewer
-        run: make pack-cited-source-viewer
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-cited-source-viewer ENV=test-ci-cited-source-viewer
 
   validate-cowork-bridge:
     runs-on: ubuntu-latest
@@ -611,7 +662,11 @@ jobs:
       - name: Build Cowork Bridge
         run: make build-cowork-bridge
       - name: Pack Cowork Bridge
-        run: make pack-cowork-bridge
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-cowork-bridge ENV=test-ci-cowork-bridge
 
   validate-oauth-verify:
     runs-on: ubuntu-latest
@@ -628,7 +683,11 @@ jobs:
       - name: Build OAuth Verify
         run: make build-oauth-verify
       - name: Pack OAuth Verify
-        run: make pack-oauth-verify
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-oauth-verify ENV=test-ci-oauth-verify
 
   validate-mcp-auth:
     runs-on: ubuntu-latest
@@ -645,7 +704,32 @@ jobs:
       - name: Build MCP Auth
         run: make build-mcp-auth
       - name: Pack MCP Auth
-        run: make pack-mcp-auth
+        id: pack
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-auth PACK_DESTINATION=tmp/ci-manifest-guard/candidate/mcp-auth PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-mcp-auth
+      - name: Pack MCP Auth same-PR BLOCK siblings
+        if: steps.pack.outputs.manifest_mode == 'block'
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-candidate-siblings PACKAGE=mcp-auth SIBLING_DIR=tmp/ci-manifest-guard/siblings/mcp-auth ENV=test-ci-mcp-auth
+      - name: Qualify MCP Auth candidate install
+        if: steps.pack.outputs.manifest_mode == 'block'
+        env:
+          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/mcp-auth/receipts.json PEERS=hono@4.10.7 REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
+      - name: Upload MCP Auth candidate qualification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualify-mcp-auth-candidate
+          path: tmp/ci-manifest-guard/qualify-mcp-auth/**
+          retention-days: 7
+          if-no-files-found: ignore
 
   validate-mcp-platform:
     runs-on: ubuntu-latest
@@ -662,7 +746,11 @@ jobs:
       - name: Build MCP Platform
         run: make build-mcp-platform
       - name: Pack MCP Platform
-        run: make pack-mcp-platform
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-platform ENV=test-ci-mcp-platform
       - name: API Extract MCP Platform
         run: make api-extract-mcp-platform
 
@@ -681,7 +769,11 @@ jobs:
       - name: Build Auth Hono
         run: make build-auth-hono
       - name: Pack Auth Hono
-        run: make pack-auth-hono
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-auth-hono ENV=test-ci-auth-hono
 
   validate-auth-client:
     runs-on: ubuntu-latest
@@ -698,7 +790,11 @@ jobs:
       - name: Build Auth Client
         run: make build-auth-client
       - name: Pack Auth Client
-        run: make pack-auth-client
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-auth-client ENV=test-ci-auth-client
 
   validate-auth-ui:
     runs-on: ubuntu-latest
@@ -715,7 +811,11 @@ jobs:
       - name: Build Auth UI
         run: make build-auth-ui
       - name: Pack Auth UI
-        run: make pack-auth-ui
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-auth-ui ENV=test-ci-auth-ui
 
   validate-cowork-desktop:
     runs-on: ubuntu-latest
@@ -732,7 +832,11 @@ jobs:
       - name: Build Cowork Desktop
         run: make build-cowork-desktop
       - name: Pack Cowork Desktop
-        run: make pack-cowork-desktop
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-cowork-desktop ENV=test-ci-cowork-desktop
 
   validate-contracts:
     runs-on: ubuntu-latest
@@ -747,7 +851,11 @@ jobs:
       - name: Build Contracts
         run: make build-contracts
       - name: Pack Contracts
-        run: make pack-contracts
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-contracts ENV=test-ci-contracts
 
   validate-events:
     runs-on: ubuntu-latest
@@ -762,7 +870,11 @@ jobs:
       - name: Build Events
         run: make build-events
       - name: Pack Events
-        run: make pack-events
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-events ENV=test-ci-events
 
   validate-chat-core:
     runs-on: ubuntu-latest
@@ -777,7 +889,11 @@ jobs:
       - name: Build Chat Core
         run: make build-chat-core
       - name: Pack Chat Core
-        run: make pack-chat-core
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-chat-core ENV=test-ci-chat-core
 
   validate-chat-server:
     runs-on: ubuntu-latest
@@ -794,7 +910,11 @@ jobs:
       - name: Build Chat Server
         run: make build-chat-server
       - name: Pack Chat Server
-        run: make pack-chat-server
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-chat-server ENV=test-ci-chat-server
 
   validate-comments:
     runs-on: ubuntu-latest
@@ -811,7 +931,11 @@ jobs:
       - name: Build Comments
         run: make build-comments
       - name: Pack Comments
-        run: make pack-comments
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-comments ENV=test-ci-comments
 
   validate-flow:
     runs-on: ubuntu-latest
@@ -826,7 +950,11 @@ jobs:
       - name: Build Flow
         run: make build-flow
       - name: Pack Flow
-        run: make pack-flow
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-flow ENV=test-ci-flow
 
   validate-build-cli:
     runs-on: ubuntu-latest
@@ -843,7 +971,11 @@ jobs:
       - name: Build Build CLI
         run: make build-build-cli
       - name: Pack Build CLI
-        run: make pack-build-cli
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-build-cli ENV=test-ci-build-cli
 
   validate-harness:
     runs-on: ubuntu-latest
@@ -860,7 +992,11 @@ jobs:
       - name: Build Harness
         run: make build-harness
       - name: Pack Harness
-        run: make pack-harness
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-harness ENV=test-ci-harness
 
   validate-focus:
     runs-on: ubuntu-latest
@@ -871,7 +1007,11 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Validate Focus (typecheck, test, build, pack)
-        run: make typecheck-focus test-focus build-focus pack-focus
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make typecheck-focus test-focus build-focus pack-focus ENV=test-ci-focus
 
   validate-cli:
     runs-on: ubuntu-latest
@@ -888,7 +1028,11 @@ jobs:
       - name: Build CLI
         run: make build-cli
       - name: Pack CLI
-        run: make pack-cli
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-cli ENV=test-ci-cli
 
   # Build API Docker image (independent from API tests)
   build-api-image:
@@ -1515,10 +1659,17 @@ jobs:
       - name: Publish OAuth Verify
         run: make publish-oauth-verify
 
+  # N1: mcp-auth depends on @sentropic/oauth-verify; publish (and qualify from the registry)
+  # only after the sibling publisher succeeded or was skipped, as gateway waits for mesh.
   publish-mcp-auth:
     runs-on: ubuntu-latest
-    needs: [changes, validate-mcp-auth]
-    if: needs.changes.outputs.mcp_auth_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-mcp-auth, publish-oauth-verify]
+    if: >-
+      always() &&
+      needs.changes.outputs.mcp_auth_publish == 'true' &&
+      needs.validate-mcp-auth.result == 'success' &&
+      (needs.publish-oauth-verify.result == 'success' || needs.publish-oauth-verify.result == 'skipped') &&
+      github.ref == 'refs/heads/main'
     permissions:
       contents: read
       id-token: write
@@ -1528,6 +1679,24 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Publish MCP Auth
         run: make publish-mcp-auth
+      - name: Qualify published MCP Auth from the registry
+        run: |
+          set -eu
+          receipt=tmp/ci-manifest-guard/publish/mcp-auth.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
+          make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
+      - name: Upload MCP Auth publication qualification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualify-mcp-auth-published
+          path: tmp/ci-manifest-guard/qualify-mcp-auth/**
+          retention-days: 7
+          if-no-files-found: ignore
 
   publish-mcp-platform:
     runs-on: ubuntu-latest
@@ -1725,10 +1894,17 @@ jobs:
       - name: Publish CLI
         run: make publish-cli
 
+  # N1: cluster-mesh depends on @sentropic/events and @sentropic/contracts; wait for both.
   publish-cluster-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cluster-mesh]
-    if: needs.changes.outputs.cluster_mesh_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-cluster-mesh, publish-events, publish-contracts]
+    if: >-
+      always() &&
+      needs.changes.outputs.cluster_mesh_publish == 'true' &&
+      needs.validate-cluster-mesh.result == 'success' &&
+      (needs.publish-events.result == 'success' || needs.publish-events.result == 'skipped') &&
+      (needs.publish-contracts.result == 'success' || needs.publish-contracts.result == 'skipped') &&
+      github.ref == 'refs/heads/main'
     permissions:
       contents: read
       id-token: write
@@ -1738,6 +1914,24 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Publish Cluster Mesh
         run: make publish-cluster-mesh
+      - name: Qualify published Cluster Mesh from the registry
+        run: |
+          set -eu
+          receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
+          make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+      - name: Upload Cluster Mesh publication qualification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualify-cluster-mesh-published
+          path: tmp/ci-manifest-guard/qualify-cluster-mesh/**
+          retention-days: 7
+          if-no-files-found: ignore
 
   bootstrap-publish:
     runs-on: ubuntu-latest
@@ -1780,6 +1974,17 @@ jobs:
       - name: Bootstrap publish mcp-auth
         if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
         run: make publish-mcp-auth-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Qualify bootstrap-published mcp-auth
+        if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
+        run: |
+          set -eu
+          receipt=tmp/ci-manifest-guard/publish/mcp-auth.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
+          make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
       - name: Bootstrap publish mcp-platform
         if: inputs.bootstrap_publish_target == 'mcp-platform' || inputs.bootstrap_publish_target == 'all'
         run: make publish-mcp-platform-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
@@ -1816,9 +2021,30 @@ jobs:
       - name: Bootstrap publish cluster-mesh
         if: inputs.bootstrap_publish_target == 'cluster-mesh' || inputs.bootstrap_publish_target == 'all'
         run: make publish-cluster-mesh-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Qualify bootstrap-published cluster-mesh
+        if: inputs.bootstrap_publish_target == 'cluster-mesh' || inputs.bootstrap_publish_target == 'all'
+        run: |
+          set -eu
+          receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
+          make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Bootstrap publish focus
         if: inputs.bootstrap_publish_target == 'focus' || inputs.bootstrap_publish_target == 'all'
         run: make publish-focus-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Upload bootstrap publication receipts and qualification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-publication-qualification
+          path: |
+            tmp/ci-manifest-guard/publish/**
+            tmp/ci-manifest-guard/qualify-*/**
+          retention-days: 7
+          if-no-files-found: ignore
 
   # BR-55c (ARCH-17): main -> PREPROD continuous deploy. REPLACES the legacy
   # prod-targeting deploy-k8s job — NO main merge can touch the `sentropic` (prod)
