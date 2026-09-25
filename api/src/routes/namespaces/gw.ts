@@ -2,6 +2,7 @@ import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
 import {
   createGatewayRouter,
   stubGatewayConfig,
+  type CallerAuthResult,
   type CostContext,
 } from '../../../../packages/llm-gateway/src/index';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
@@ -106,7 +107,7 @@ export const createGwNamespaceModule = (
   const config = {
     ...stubGatewayConfig,
     callerAuth: {
-      async verify(headers: Readonly<Record<string, string>>) {
+      async verify(headers: Readonly<Record<string, string>>): Promise<CallerAuthResult> {
         const token = headers[CALLER_TOKEN_HEADER];
         const cost = token ? callers.get(token) : undefined;
         if (token) callers.delete(token);
