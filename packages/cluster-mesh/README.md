@@ -103,7 +103,7 @@ topology introduced in 0.1: one Sentropic server, its attached local workstation
 local signed projections, and the existing device-code lifecycle. It does not
 implement server-to-server federation.
 
-## Lazy integration surface in 0.12
+## Lazy integration surface (0.12+, tuple of 0.13)
 
 Cluster Mesh is the single integration surface for llm-mesh and llm-gateway. Those
 providers stay independent packages and never depend on cluster-mesh. They are
@@ -112,8 +112,8 @@ providers stay independent packages and never depend on cluster-mesh. They are
 
 | Entry | Provider | Selected optional peers |
 |---|---|---|
-| `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`, `/llm-mesh/transport/cloud-code` | matching `@sentropic/llm-mesh` entry | `@sentropic/llm-mesh >=0.21.2 <0.22.0` |
-| `/gateway` | `@sentropic/llm-gateway` root (neither auth mode) | llm-mesh + `@sentropic/llm-gateway >=0.18.0 <0.19.0` |
+| `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`, `/llm-mesh/transport/cloud-code` | matching `@sentropic/llm-mesh` entry | `@sentropic/llm-mesh >=0.22.0 <0.23.0` |
+| `/gateway` | `@sentropic/llm-gateway` root (neither auth mode) | llm-mesh + `@sentropic/llm-gateway >=0.19.0 <0.20.0` |
 | `/gateway/auth` (service mode) | `@sentropic/llm-gateway/auth` | gateway + `@sentropic/mcp-auth >=0.2.1 <0.3.0`, `jose ^5.10.0` |
 | `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0` |
 | `/loaders/<leaf>` | async typed loader (`loadLlmMesh`, `loadGateway`, `loadGatewayAuth`, ...) | as its leaf, resolved on call |
@@ -160,7 +160,7 @@ next to it (remove that gateway copy or align its llm-mesh).
 **Consumer rules.** Every manifest that declares cluster-mesh and imports a leaf
 also declares that leaf's selected peers at the qualified versions; the installed
 tree must hold exactly one cluster-mesh and one llm-mesh shared with the gateway.
-0.12.0 is qualified with **npm only** (flat project installs, `npm ci` from a lockfile,
+0.13.0 is qualified with **npm only** (flat project installs, `npm ci` from a lockfile,
 and a global consumer beside a separately installed runtime); other package managers
 are not qualified. The tested bundler is esbuild with `@sentropic/cluster-mesh` **and**
 `@sentropic/cluster-mesh/*` (and the peer packages) externalized, which keeps the
@@ -168,10 +168,23 @@ resolution anchor at the installed package; bundling the root inline (as the API
 build does) embeds no provider code. TypeScript >= 5.7 is required with
 `skipLibCheck: false` (hono's declarations); with `skipLibCheck: true`, a missing
 peer surfaces as TS2305 on the named import. Frozen tuple (committed lockfile):
-cluster-mesh 0.12.0, llm-mesh 0.21.2, llm-gateway 0.18.0, mcp-auth 0.2.1,
+cluster-mesh 0.13.0, llm-mesh 0.22.0, llm-gateway 0.19.0, mcp-auth 0.2.1,
 oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7; session mode with auth-hono 0.15.0
-(llm-gateway 0.18.0's published peer range `^0.15.0`); the latest versions inside
-every declared range are re-qualified on each release run.
+(llm-gateway 0.19.0's declared peer range `^0.15.0`); the latest versions inside
+every declared range are re-qualified on each release run. The previous tuple
+(llm-mesh 0.21.x, llm-gateway 0.18.x) is refused: npm does not install it next to
+0.13.0, and a forced tree fails `loadGateway` and `verifyClusterMeshTopology` with
+`incompatible_version`. Release-train runs qualify the unpublished llm-mesh and
+llm-gateway candidates from verified same-PR sibling archives
+(`make -f packages/cluster-mesh/packaging.mk test-lazy-package
+SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json`); the
+committed `selected` lockfile carries their registry URL and the sha512 of those bytes.
+
+**Namespace remap.** `createClusterMeshPlugin({ mounts })` mounts each enabled module
+once at `mounts[namespace] ?? namespace`. A standalone gateway host passes
+`mounts: { '/gw': '/' }` and serves exactly `/healthz`, `/readyz`, `/v1/messages`,
+`/v1/chat/completions` and `/v1/models` (nothing under `/gw`); the product keeps
+`/gw` under its own prefix.
 
 ## Available in v1
 
