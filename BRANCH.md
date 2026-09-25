@@ -46,6 +46,7 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
 - [x] BR900-A3 | attention | Owner: conductor | Branch: current | 2026-09-25 | Reversible: legacy `GatewayConfig` pool/authResolver/dispatch are host-owned refusing ports (native passthrough disabled); `stubGatewayConfig` and gateway stub ports are rejected at composition. A typed routed-host config remains a gateway-owned option.
 - [x] BR900-A4 | attention | Owner: conductor | Branch: current | 2026-09-25 | Reversible: the host is a private workspace member `@sentropic/llm-gateway-host`; runtime values of the gateway come only from the cluster-mesh loader (type-only static imports). Compiling `dist/index.js` (bundling the api `standalone-ports.ts` import) is B5 scope.
 - [x] BR900-A5 | attention | Owner: conductor | Branch: current | 2026-09-25 | Muse 12(a): the root lockfile change triggers every lockfile-filtered validate job; sequencing belongs to the conductor merge train.
+- [x] BR900-A6 | attention | Owner: conductor | Branch: current | 2026-09-25 | The worktree has no `.env`; service-starting make commands pass `REGISTRY=local` as a make variable (documented `exec-playwright-dev` pattern) so the api image tag resolves. No secret file was copied.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -65,31 +66,31 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
 - [x] No UI surface; no UAT in this lot.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read MASTER/workflow/subagents/testing rules, template, spec sections and muse B0 findings 8, 11, 12(a).
   - [x] Verify branch `feat/llm-gateway-host` in `tmp/llm-gateway-host`.
   - [x] Declare BRDP-EX1a, BRDP-EX6, BRDP-EX7 with exact content before editing those paths.
-- [ ] **Lot 1 — Extraction and workspace wiring**
+- [x] **Lot 1 — Extraction and workspace wiring**
   - [x] BRDP-EX7: extract `standalone-ports.ts`; rewire `gateway-route-plane.ts` imports only.
   - [x] Host manifest `apps/llm-gateway/{package.json,tsconfig.json,eslint.config.cjs,.gitignore}`.
   - [x] BRDP-EX6: root workspace entry and `make lock-root` refresh.
-- [ ] **Lot 2 — Host sources**
+- [x] **Lot 2 — Host sources**
   - [x] `src/config.ts`: validated listener configuration (mode, port, host).
   - [x] `src/readiness.ts`: dependency slots, 2 s bound, 5 s cache, not-ready latch.
   - [x] `src/app.ts`: one registry, one gateway namespace module mounted at `/`, injected ports, no listen on import.
   - [x] `src/lifecycle.ts`: listen, SIGTERM stop, admission close and bounded SSE drain.
   - [x] `src/index.ts`: entry with pending dependencies.
-- [ ] **Lot 3 — Host tests and make checks**
+- [x] **Lot 3 — Host tests and make checks**
   - [x] BRDP-EX1a: host make targets.
   - [x] `apps/llm-gateway/tests/fixtures.ts` (shared fixture ports) and `apps/llm-gateway/vitest.config.ts`
   - [x] `apps/llm-gateway/tests/config.test.ts`
   - [x] `apps/llm-gateway/tests/readiness.test.ts`
   - [x] `apps/llm-gateway/tests/autonomy.test.ts`
   - [x] `apps/llm-gateway/tests/lifecycle.test.ts`
-  - [ ] Lot gate:
-    - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 ENV=test-llm-gateway-host`
-    - [ ] `make typecheck-api lint-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 ENV=test-llm-gateway-host`
-    - [ ] Api tests touching the extraction: `tests/unit/provider-mesh-contract-proof.test.ts`, `tests/unit/llm-runtime-stream.test.ts`, `tests/api/cluster-mesh-gw.test.ts`
-    - [ ] `make typecheck-llm-gateway test-llm-gateway ENV=test-llm-gateway-host` (router and contract-snapshot unchanged)
-    - [ ] `make scope-check ENV=test-llm-gateway-host`
-    - [ ] `make down API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 ENV=test-llm-gateway-host`
+  - [x] Lot gate:
+    - [x] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (pass; lint 0 errors)
+    - [x] `make typecheck-api lint-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (pass; 40 host tests; api lint 0 errors)
+    - [x] Api tests touching the extraction: `tests/unit/provider-mesh-contract-proof.test.ts`, `tests/unit/llm-runtime-stream.test.ts`, `tests/api/cluster-mesh-gw.test.ts` via `make up-api-test`, `make test-api-unit SCOPE=...` (119 passed, 1 skipped) and `make test-api-endpoints SCOPE=...` (3 passed)
+    - [x] `make typecheck-llm-gateway test-llm-gateway ENV=test-llm-gateway-host` (pass; 25 files, 225 tests incl. router and contract-snapshot, no wire drift)
+    - [x] `make scope-check REGISTRY=local ENV=test-llm-gateway-host` (PASS C2; advisory check sees only uncommitted files, branch diff `origin/main...HEAD` manually verified inside Allowed + declared Conditional paths)
+    - [x] `make down API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (`make ps` empty)
