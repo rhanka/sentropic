@@ -50,7 +50,7 @@
   - [x] Remove `focus`, `cli`, `build-cli` gated module ids; CHANGELOG.
   - [x] Unit tests and fake package trees moved to the new tuple; `{ '/gw': '/' }` remap case.
 - [ ] **Lot 2 — Packed qualification (train design §2b-d)**
-  - [ ] `packaging.mk` `SIBLING_ARCHIVES_FILE` (exact path) and `check-train-lock-integrity`.
+  - [x] `packaging.mk` `SIBLING_ARCHIVES_FILE` (exact path) and `check-train-lock-integrity`.
   - [ ] `prepare.sh` sibling resolver with sha256/identity check and registry fallback, `sources.txt`, provisional `selected` mode, lock with registry `resolved` and sibling integrity.
   - [ ] Fixtures on 0.22.0/0.19.0/0.13.0; old-tuple (0.21.2/0.18.0) refusal at install and runtime; packed missing-jose refusal.
   - [ ] Global consumer + separately installed runtime with `file:` + `overrides` proven.
