@@ -108,3 +108,29 @@ export function fakeGateway(label: string, version = '0.18.0', authSource?: { se
     },
   };
 }
+
+export function fakeMcpAuth(label: string, version = '0.2.1', honoSource?: string): FakePackage {
+  return {
+    name: '@sentropic/mcp-auth',
+    version,
+    exports: {
+      '.': { source: moduleSource(label, ['createMcpAuth']) },
+      './hono': { source: honoSource ?? moduleSource(`${label}/hono`, ['createRequireServiceAuth']) },
+    },
+  };
+}
+
+export function fakeJose(label: string, version = '5.10.0'): FakePackage {
+  return { name: 'jose', version, exports: { '.': { source: moduleSource(label, ['jwtVerify']) } } };
+}
+
+export function fakeAuthHono(label: string, version = '0.15.2'): FakePackage {
+  return {
+    name: '@sentropic/auth-hono',
+    version,
+    exports: {
+      '.': { source: moduleSource(label, ['createAuthRouter']) },
+      './middleware': { source: moduleSource(`${label}/middleware`, ['createRequireAuth']) },
+    },
+  };
+}
