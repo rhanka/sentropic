@@ -17,6 +17,12 @@
 - Lazy surface otherwise identical to 0.12.0: same leaves, loaders, compose entries,
   topology guard and `cluster_mesh_topology_invalid` code. A standalone gateway host
   can project `/gw` at the root with `mounts: { '/gw': '/' }` (no source change).
+- Packed qualification (`packaging.mk`): optional `SIBLING_ARCHIVES_FILE` (exactly
+  `tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json`) resolves the train
+  fixtures from sha256/identity-verified sibling archives with registry fallback; the
+  `selected` lockfile pins the registry URL and the sibling bytes' sha512;
+  `check-train-lock-integrity` compares it with the published `dist.integrity`. New
+  packed cases: missing-jose refusal and old-tuple refusal at install and runtime.
 
 ## 0.12.0
 
