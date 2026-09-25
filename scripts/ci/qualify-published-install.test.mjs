@@ -1,0 +1,154 @@
+// Clean-consumer qualification fixtures (make test-qualify-published-install). Local tarballs only;
+// the "registry" is a local 404 server or an in-process stub. Nothing is published.
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { GuardError, readPackedManifest, runNpmPack, sha256File } from './publishable-manifests.mjs';
+import { checkSiblingRanges, entryPoints, loadSiblings, missingSibling, parseExactSpec, qualify } from './qualify-published-install.mjs';
+
+const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
+function build(manifest, files) {
+  const dir = path.join(tmp('qfx-'), 'pkg');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ version: '1.0.0', type: 'module', ...manifest }));
+  for (const [name, body] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+    fs.writeFileSync(path.join(dir, name), body);
+  }
+  return runNpmPack(dir, tmp('qout-')).archive;
+}
+let registry;
+test.before(async () => {
+  const child = spawn(process.execPath, ['-e', "const s=require('http').createServer((q,r)=>{r.writeHead(404,{'content-type':'application/json'});r.end('{\"error\":\"Not found\"}')});s.listen(0,'127.0.0.1',()=>console.log(s.address().port))"], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const port = await new Promise((resolve) => child.stdout.once('data', (d) => resolve(String(d).trim())));
+  registry = { url: `http://127.0.0.1:${port}`, child };
+});
+test.after(() => registry.child.kill());
+const probe = (opts) => qualify({ registry: registry.url, reportDir: tmp('qrep-'), ...opts });
+const readReport = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'qualify-report.json'), 'utf8'));
+
+test('good fixture installs and imports every runtime entry point, including a CommonJS branch', async () => {
+  const tgz = build({ name: '@fx/good', exports: { '.': { types: './i.d.ts', import: './index.js' }, './sub': './sub.js', './cjs': { import: './index.js', require: './c.cjs' }, './types': { types: './t.d.ts' } } },
+    { 'index.js': 'export default 1;', 'sub.js': 'export const s = 1;', 'c.cjs': 'module.exports = 1;' });
+  const reportDir = tmp('qrep-');
+  assert.equal(await qualify({ tarball: tgz, registry: registry.url, reportDir }), 0);
+  const report = readReport(reportDir);
+  assert.equal(report.status, 'pass');
+  assert.deepEqual(report.entrypoints.map((e) => `${e.phase}:${e.mode}:${e.specifier}`), ['core:import:@fx/good', 'all:import:@fx/good', 'all:import:@fx/good/sub', 'all:import:@fx/good/cjs', 'all:require:@fx/good/cjs']);
+  assert.deepEqual(report.entrypointTypesOnly, ['@fx/good/types']);
+  assert.equal(report.resolved.sha256, sha256File(tgz));
+  assert.equal(fs.existsSync(report.consumer), false, 'disposable consumer removed');
+  assert.ok(fs.existsSync(path.join(reportDir, 'qualify.log')) && fs.existsSync(path.join(reportDir, 'qualify-summary.txt')));
+});
+
+test('absent dist, misdeclared export and undeclared dependency fail even though install succeeds', async () => {
+  assert.equal(await probe({ tarball: build({ name: '@fx/nodist', exports: { '.': './dist/index.js' } }, {}) }), 1);
+  assert.equal(await probe({ tarball: build({ name: '@fx/undeclared' , exports: './index.js' }, { 'index.js': "import 'not-declared-anywhere';" }) }), 1);
+});
+
+test('packed-manifest guard rejects file: dependencies before installing', async () => {
+  const reportDir = tmp('qrep-');
+  assert.equal(await qualify({ tarball: build({ name: '@fx/bad', dependencies: { '@fx/x': 'file:../x' } }, { 'index.js': '' }), registry: registry.url, reportDir }), 1);
+  assert.match(readReport(reportDir).problems.join('\n'), /packed manifest guard: dependencies/);
+});
+
+test('optional peer: core smoke independent of the peer, adapter covered only with explicit PEERS', async () => {
+  const peer = build({ name: '@fx/peer', version: '2.0.0' }, { 'index.js': 'export const p = 2;' });
+  const pkg = { name: '@fx/opt', peerDependencies: { '@fx/peer': '^2.0.0' }, peerDependenciesMeta: { '@fx/peer': { optional: true } }, exports: { '.': './index.js', './adapter': './adapter.js' } };
+  const tgz = build(pkg, { 'index.js': 'export default 1;', 'adapter.js': "export * from '@fx/peer';" });
+  const sibs = siblingDir([peer]);
+  const without = tmp('qrep-');
+  assert.equal(await qualify({ tarball: tgz, siblingsDir: sibs, registry: registry.url, reportDir: without }), 1);
+  assert.match(readReport(without).problems.join('\n'), /supply PEERS/);
+  assert.equal(readReport(without).entrypoints[0].ok, true, 'core import passed without the optional peer');
+  assert.deepEqual(readReport(without).overrides, {}, 'optional sibling peers stay out of the core smoke');
+  const withPeer = tmp('qrep-');
+  assert.equal(await qualify({ tarball: tgz, siblingsDir: sibs, peers: ['@fx/peer@2.0.0'], registry: registry.url, reportDir: withPeer }), 0);
+  assert.deepEqual(readReport(withPeer).peersAdded.map((p) => `${p.name}@${p.version}:${p.source}`), ['@fx/peer@2.0.0:sibling-receipt']);
+  const eager = build({ ...pkg, name: '@fx/eager' }, { 'index.js': "export * from '@fx/peer';", 'adapter.js': '' });
+  assert.equal(await probe({ tarball: eager }), 1, 'eager optional-peer import fails the core smoke');
+});
+
+test('entry point classification: wildcard, asset and browser-only exports are unsupported', () => {
+  const statuses = entryPoints({ name: 'x', exports: { '.': './a.js', './*': './*.js', './theme.css': './t.css', './b': { browser: './b.js' }, './t': { types: './t.d.ts' } } }).map((e) => e.status);
+  assert.deepEqual(statuses.map((s) => s.split(':')[0]), ['runtime', 'unsupported', 'unsupported', 'unsupported', 'types-only']);
+  assert.equal(entryPoints({ name: 'x', main: './i.js' })[0].specifier, 'x');
+});
+
+test('invalid inputs are rejected', async () => {
+  await assert.rejects(qualify({ reportDir: tmp('q-') }), /exactly one/);
+  await assert.rejects(qualify({ pkg: 'a@1.0.0', tarball: '/x.tgz', reportDir: tmp('q-') }), /exactly one/);
+  for (const spec of ['a@^1.0.0', 'a@latest', 'a', 'a@file:../a', 'a@1.0']) assert.throws(() => parseExactSpec(spec), /exact-version/);
+  assert.deepEqual(parseExactSpec('@sentropic/mcp-auth@0.2.1-rc.1'), { name: '@sentropic/mcp-auth', version: '0.2.1-rc.1' });
+  assert.equal(await probe({ tarball: '/does/not/exist.tgz' }), 1);
+});
+
+test('published replays: registry failure and absent versions fail; sibling injection is rejected', async () => {
+  const failing = { lookup: async () => { throw new GuardError('registry HTTP 503', { transient: true }); } };
+  const reportDir = tmp('qrep-');
+  assert.equal(await qualify({ pkg: '@fx/a@1.0.0', registryClient: failing, registry: registry.url, reportDir }), 1);
+  assert.match(readReport(reportDir).problems[0], /re-run, not debt/);
+  assert.equal(await probe({ pkg: '@fx/a@1.0.0', registryClient: { lookup: async () => ({ status: 'absent', evidence: {} }) } }), 1);
+  await assert.rejects(probe({ pkg: '@fx/a@1.0.0', siblingsDir: tmp('s-') }), /restricted/);
+  await assert.rejects(probe({ tarball: '/x.tgz', siblingsDir: tmp('s-'), mode: 'post-publication' }), /restricted/);
+});
+
+// ---- same-PR lockstep siblings
+function siblingDir(archives, mutate = (r) => r) {
+  const dir = tmp('sibs-');
+  const receipts = archives.map((archive, i) => {
+    fs.mkdirSync(path.join(dir, `s${i}`));
+    const file = path.join(`s${i}`, path.basename(archive));
+    fs.copyFileSync(archive, path.join(dir, file));
+    const m = readPackedManifest(fs.readFileSync(archive));
+    return mutate({ name: m.name, version: m.version, file, sha256: sha256File(archive), head_sha: 'head', guard: 'pass', manifest_mode: 'block', evidence: 'release-candidate' });
+  });
+  fs.writeFileSync(path.join(dir, 'receipts.json'), JSON.stringify(receipts));
+  return dir;
+}
+function lockstep() {
+  const c = build({ name: '@sentropic/fx-c', version: '1.1.0' }, { 'index.js': 'export const c = 1;' });
+  const b = build({ name: '@sentropic/fx-b', version: '1.1.0', dependencies: { '@sentropic/fx-c': '^1.1.0' } }, { 'index.js': "export * from '@sentropic/fx-c';" });
+  const a = build({ name: '@sentropic/fx-a', version: '1.1.0', dependencies: { '@sentropic/fx-b': '^1.1.0' }, exports: './index.js' }, { 'index.js': "export * from '@sentropic/fx-b';" });
+  return { a, b, c };
+}
+
+test('lockstep bump installs direct and transitive sibling archives from guarded receipts', async () => {
+  const { a, b, c } = lockstep();
+  const reportDir = tmp('qrep-');
+  assert.equal(await qualify({ tarball: a, siblingsDir: siblingDir([b, c]), headSha: 'head', registry: registry.url, reportDir }), 0);
+  const report = readReport(reportDir);
+  assert.deepEqual(Object.keys(report.overrides).sort(), ['@sentropic/fx-b', '@sentropic/fx-c']);
+  assert.equal(report.siblingEdges.every((e) => e.ok), true);
+});
+
+test('sibling hash, head, identity, unlisted archive and range mismatches block', async () => {
+  const { a, b, c } = lockstep();
+  assert.throws(() => loadSiblings(siblingDir([b, c], (r) => ({ ...r, sha256: '0'.repeat(64) })), {}), /hash mismatch/);
+  assert.throws(() => loadSiblings(siblingDir([b, c]), { headSha: 'other' }), /not head other/);
+  assert.throws(() => loadSiblings(siblingDir([b], (r) => ({ ...r, version: '9.9.9' })), {}), /identity mismatch/);
+  assert.throws(() => loadSiblings(siblingDir([b], (r) => ({ ...r, guard: 'fail' })), {}), /not a passing BLOCK/);
+  const extra = siblingDir([b]);
+  fs.copyFileSync(c, path.join(extra, 'stray.tgz'));
+  assert.throws(() => loadSiblings(extra, {}), /unlisted archive/);
+  assert.throws(() => checkSiblingRanges([{ name: 'x', version: '1', dependencies: { '@sentropic/fx-b': '^2.0.0' } }], [{ name: '@sentropic/fx-b', version: '1.1.0' }]), /does not accept/);
+  assert.equal(await probe({ tarball: a, siblingsDir: siblingDir([b, c], (r) => ({ ...r, sha256: '0'.repeat(64) })) }), 1);
+});
+
+test('confirmed missing sibling: pending (non-blocking) in PR candidates, blocking after publication', async () => {
+  const { a } = lockstep();
+  const pr = tmp('qrep-');
+  assert.equal(await qualify({ tarball: a, registry: registry.url, reportDir: pr }), 0);
+  assert.equal(readReport(pr).status, 'pending-sibling-publish');
+  assert.equal(readReport(pr).pendingSibling.name, '@sentropic/fx-b');
+  assert.match(fs.readFileSync(path.join(pr, 'qualify-summary.txt'), 'utf8'), /PENDING-SIBLING-PUBLISH/);
+  const post = tmp('qrep-');
+  assert.equal(await qualify({ tarball: a, mode: 'post-publication', registry: registry.url, reportDir: post, attempts: 2, delaySeconds: 0 }), 1);
+  assert.equal(readReport(post).status, 'pending-sibling-publish');
+  assert.equal(missingSibling("npm error 404 Not Found - GET http://r/@sentropic%2ffx-b - Not found\nnpm error 404  '@sentropic/fx-b@^1.1.0' is not in this registry.").name, '@sentropic/fx-b');
+  assert.equal(missingSibling('npm error notarget No matching version found for @sentropic/fx-b@^9.0.0.\n').range, '^9.0.0');
+  assert.equal(missingSibling('npm error ECONNREFUSED'), null);
+});

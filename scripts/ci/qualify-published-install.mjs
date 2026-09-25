@@ -87,7 +87,7 @@ function run(cmd, args, { cwd, env, log, timeout = 600_000 }) {
 // Detects a confirmed-missing @sentropic sibling version in npm install output.
 export function missingSibling(output) {
   const m = output.match(/No matching version found for (@sentropic\/[a-z0-9._-]+)@(\S+?)\.?\s/) ??
-    output.match(/404[^\n]*?(@sentropic\/[a-z0-9._-]+)@(\S+?)'? is not in this registry/) ??
+    output.match(/'(@sentropic\/[a-z0-9._-]+)@([^'\s]+)' is not in this registry/) ??
     output.match(/404 Not Found - GET \S+\/(@sentropic(?:%2f|\/)[a-z0-9._-]+)\b/i);
   if (!m) return null;
   return { name: decodeURIComponent(m[1]).replace('%2f', '/'), range: m[2] ?? '*' };
