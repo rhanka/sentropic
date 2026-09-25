@@ -24,11 +24,12 @@ export const STEADY_STATE_PUBLISHERS = [
   'cowork-desktop', 'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-hono', 'auth-client', 'auth-ui',
   'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'build-cli', 'harness', 'cli',
 ];
-// bootstrap-publish step order in ci.yml (`all` expands to this list).
+// bootstrap-publish step order in ci.yml (must equal the Bootstrap publish steps, in order).
+// Owner freeze: auth-hono, build-cli and focus are not bootstrap targets until the owner decides.
 export const BOOTSTRAP_TARGETS = [
   'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'chat-ui', 'cited-source-viewer',
-  'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-hono', 'auth-client', 'auth-ui', 'flow',
-  'cowork-bridge', 'cowork-desktop', 'build-cli', 'cli', 'harness', 'llm-gateway', 'cluster-mesh', 'focus',
+  'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-client', 'auth-ui', 'flow',
+  'cowork-bridge', 'cowork-desktop', 'cli', 'harness', 'llm-gateway', 'cluster-mesh',
 ];
 // Explicit full candidate pack lanes (`make pack-<slug>`).
 export const PACK_TARGETS = [
