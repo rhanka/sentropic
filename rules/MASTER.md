@@ -33,6 +33,7 @@ tags: [master]
 - Scope exceptions require `BRxx-EXn` with rationale + impact + rollback
 - Use `plan/BRANCH_TEMPLATE.md` for `BRANCH.md` creation
 - For complex branches, use `spec/BRANCH_SPEC_EVOL.md` (consolidate before tests, then delete)
+- CLI = h2a: no sentropic CLI package (`@sentropic/cli`, `@sentropic/build-cli`); focus is owned by h2a and the sentropic API does not consume focus (guard: `make check-eradicated-packages`)
 
 ## Orchestration Modes (choose one)
 - **Mono-branch + cherry-pick**: sub-agents in isolated branches; cherry-pick into main; one test cycle
