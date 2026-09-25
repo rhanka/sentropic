@@ -100,4 +100,28 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
     expect(run.stderr).toBe('');
     expect(run.stdout.trim()).toBe('function');
   });
+
+  it('should bundle the root like the API build without embedding provider, auth or jose code', () => {
+    // Same bundling flags as api/package.json `build`; every peer is installed, so any
+    // literal provider edge in the root graph would be followed and inlined.
+    const dir = fixtureDir('latest');
+    const entry = join(dir, 'api-like-entry.mjs');
+    writeFileSync(entry, [
+      "import { createClusterMeshModules, createClusterMeshPlugin } from '@sentropic/cluster-mesh';",
+      'const modules = createClusterMeshModules();',
+      "const mesh = await modules.load('llm-mesh');",
+      'console.log(typeof createClusterMeshPlugin, typeof mesh.createLlmMesh);',
+    ].join('\n'));
+    const build = esbuild(dir, entry, join(dir, 'api-like.mjs'), [], ['--target=node20', '--sourcemap']);
+    expect(build.status, build.stderr).toBe(0);
+    const output = read(join(dir, 'api-like.mjs'));
+    expect(output).toContain('node_modules/@sentropic/cluster-mesh/dist/modules/registry.js');
+    for (const peer of ['@sentropic/llm-mesh', '@sentropic/llm-gateway', '@sentropic/mcp-auth', '@sentropic/oauth-verify',
+      '@sentropic/auth-hono', 'jose']) {
+      expect(output, peer).not.toContain(`node_modules/${peer}/`);
+    }
+    const run = runNode(dir, output, 'api-like-run.mjs');
+    expect(run.stderr).toBe('');
+    expect(run.stdout.trim()).toBe('function function');
+  });
 });
