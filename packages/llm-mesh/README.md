@@ -109,7 +109,10 @@ budgets.
 Pass the quote to `plan({ ..., quote })`: the plan keeps only quoted targets,
 caps attempts at `quote.maxAttempts`, and throws `RoutePlanError` code
 `quote-mismatch` when the quote reference, council or policy revision differs,
-or when no planned route is covered by the quote.
+or when no planned route is covered by the quote. A pinned plan evaluates
+council freshness at `quote.quotedAt` (the quote's `now`), shares its target
+resolution with `quoteRoute`, and ignores a sticky affinity whose target the
+quote does not cover. `requiredCapabilities` order does not affect `quoteRef`.
 
 ## Cloud Code OAuth client rotation
 
