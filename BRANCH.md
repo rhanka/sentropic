@@ -80,7 +80,7 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] `src/lifecycle.ts`: listen, SIGTERM stop, admission close and bounded SSE drain.
   - [x] `src/index.ts`: entry with pending dependencies.
 - [ ] **Lot 3 — Host tests and make checks**
-  - [ ] BRDP-EX1a: host make targets.
+  - [x] BRDP-EX1a: host make targets.
   - [ ] `apps/llm-gateway/tests/config.test.ts`
   - [ ] `apps/llm-gateway/tests/readiness.test.ts`
   - [ ] `apps/llm-gateway/tests/autonomy.test.ts`
