@@ -4,6 +4,7 @@
   "type": "module",
   "exports": { ".": "./index.mjs" },
   "dependencies": {
+    "@sentropic/auth-hono": "0.15.0",
     "@sentropic/cluster-mesh": "file:__CANDIDATE__",
     "@sentropic/llm-gateway": "__LLM_GATEWAY__",
     "@sentropic/llm-mesh": "__LLM_MESH__",
