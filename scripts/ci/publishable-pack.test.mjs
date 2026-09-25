@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
-import { commandPack, commandPublish, diffDependencyMaps, runNpmPack, sha256File, withManifestTransform } from './publishable-manifests.mjs';
+import { commandPack, commandPublish, createRegistry, diffDependencyMaps, runNpmPack, sha256File, withManifestTransform } from './publishable-manifests.mjs';
 
 const sink = () => {
   const chunks = [];
@@ -183,4 +183,40 @@ test('publication of a violating absent version is rejected strictly', async () 
   const code = await commandPublish({ slug: 'mcp-auth', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r') }, { env: {}, cwd: dir, registry: absentRegistry, out: sink(), npm: npm.stub });
   assert.equal(code, 1);
   assert.equal(npm.called(), false);
+});
+
+// ---- registry freshness: absent/404 answers are never cached; rechecks always hit the registry
+const sequenceFetch = (answers) => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    const doc = answers[Math.min(calls.length, answers.length) - 1];
+    return doc === null ? { status: 404, ok: false } : { status: 200, ok: true, json: async () => doc };
+  };
+  return { fetchImpl, calls };
+};
+
+test('pre-publish recheck performs a fresh registry request and skips a concurrent publication', async () => {
+  const dir = fixture('events', {});
+  const npm = npmStub();
+  const { fetchImpl, calls } = sequenceFetch([null, { versions: { '1.0.0': {} } }]);
+  const registry = createRegistry({ registry: 'http://registry.test', fetchImpl, delayMs: 0 });
+  const out = sink();
+  const code = await commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r') }, { env: {}, cwd: dir, registry, out, npm: npm.stub });
+  assert.equal(code, 0);
+  assert.match(out.text(), /already exists \(recheck before publish\)/);
+  assert.equal(npm.called(), false);
+  assert.equal(calls.length, 2, 'initial lookup and recheck each reach the registry');
+  assert.ok(calls.every((c) => c.init.cache === 'no-store'));
+});
+
+test('registry cache: present packuments are reused for listed versions only; fresh lookups bypass it', async () => {
+  const { fetchImpl, calls } = sequenceFetch([{ versions: { '1.0.0': {} } }, { versions: { '1.0.0': {}, '1.1.0': {} } }]);
+  const registry = createRegistry({ registry: 'http://registry.test', fetchImpl, delayMs: 0 });
+  assert.equal((await registry.lookup('@fx/a', '1.0.0')).status, 'present');
+  assert.equal((await registry.lookup('@fx/a', '1.0.0')).status, 'present');
+  assert.equal(calls.length, 1, 'listed version answered from cache');
+  assert.equal((await registry.lookup('@fx/a', '1.1.0')).status, 'present', 'unlisted version refetched');
+  await registry.lookup('@fx/a', '1.0.0', { fresh: true });
+  assert.equal(calls.length, 3);
 });

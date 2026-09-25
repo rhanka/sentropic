@@ -94,7 +94,7 @@ export function missingSibling(output) {
 }
 
 async function confirmMissing(registry, { name, range }, semver) {
-  const doc = await registry.packument(name);
+  const doc = await registry.packument(name, { fresh: true });
   if (doc === null) return true;
   return !Object.keys(doc.versions).some((v) => range === '*' || semver.satisfies(v, range, { includePrerelease: true }));
 }
@@ -234,7 +234,7 @@ export async function qualify(opts) {
       const { name, version } = parseExactSpec(opts.pkg, semver);
       let found;
       for (let i = 1; i <= attempts; i += 1) {
-        found = await registry.lookup(name, version);
+        found = await registry.lookup(name, version, { fresh: true });
         if (found.status === 'present' || i === attempts) break;
         fs.appendFileSync(log, `waiting for ${name}@${version} (${i}/${attempts})\n`);
         await sleep(delayMs);
