@@ -385,6 +385,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Check eradicated packages (CLI and focus are owned by h2a)
+        run: make check-eradicated-packages ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
       - name: Check publishable manifests
