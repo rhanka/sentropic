@@ -15,7 +15,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AccountTransportAccount } from '@sentropic/llm-mesh';
-import { CoordinatorPoolState } from '../src/index.js';
+import { CoordinatorPoolState, PersonalPassthroughCallerAuth,
+  VerifiedCostContextResolver, routingSubjectForCost } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
 import { authHeaders, buildHarness } from './fixtures/harness.js';
 import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
@@ -40,6 +41,21 @@ const accountIdOf = (material: unknown): string | undefined =>
     : undefined;
 
 describe('B1 caller==provider — caller-owned account selection', () => {
+  it('preserves the exact enrolled owner from trusted mapping despite forged identity headers', async () => {
+    const auth = new PersonalPassthroughCallerAuth({
+      verifyToken: { verify: () => ({ tenantId: 'tenant', principalId: 'user-a',
+        source: 'test', ownerScopeRef: 'cli:enrollment-owner-a' }) },
+      costContextResolver: new VerifiedCostContextResolver(),
+    });
+    const result = await auth.verify({ authorization: 'Bearer valid',
+      'x-owner-scope-ref': 'cli:enrollment-owner-b', 'x-principal-id': 'user-b',
+      'x-correlation-id': 'shared-session' },
+    { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'unique-charge' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw Error('expected authenticated owner');
+    expect(routingSubjectForCost(result.cost)).toEqual({ principalRef: 'user-a', ownerScopeRef: 'cli:enrollment-owner-a' });
+    expect(result.cost.correlationId).toBe('unique-charge');
+  });
   it('caller-b NEVER selects caller-a\'s account (deny-as-missing)', async () => {
     // Pool holds ONLY user-a's account. user-b owns nothing here.
     const transport = new FixtureTransport({

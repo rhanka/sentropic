@@ -31,6 +31,7 @@ export interface ProviderShapedError {
  */
 export type GatewayFailureKind =
   | 'caller-auth-failed'
+  | 'caller-auth-unavailable'
   | 'over-budget'
   | 'no-eligible-account'
   | 'pooled-account-unavailable'
@@ -113,6 +114,7 @@ export const mapGatewayError = (
         ? anthropicError(429, 'overloaded_error', 'service temporarily unavailable', retry)
         : openAiError(429, 'rate_limit_error', 'service temporarily unavailable', 'overloaded', retry);
 
+    case 'caller-auth-unavailable':
     case 'pooled-account-unavailable':
       return anthropic
         ? anthropicError(503, 'overloaded_error', 'service temporarily unavailable', retry)

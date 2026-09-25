@@ -67,14 +67,16 @@ services:
         condition: service_healthy
 
   minio:
-    image: quay.io/minio/minio:latest
+    # quay.io/minio/minio withdrawn from public distribution (401 since 2026-09); Chainguard replacement pinned by digest (2026-09-24).
+    image: cgr.dev/chainguard/minio:latest@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
 
   minio-init:
-    image: quay.io/minio/mc:latest
+    # quay.io/minio/mc withdrawn (401 since 2026-09); Chainguard -dev variant provides /bin/sh + mc, pinned by digest (2026-09-24).
+    image: cgr.dev/chainguard/minio-client:latest-dev@sha256:614e083a12c6dc779f13f97e01b13afda4021a8ce3f4021a2fcf23ec86f46837
     profiles: ["init"]
     depends_on:
       minio:

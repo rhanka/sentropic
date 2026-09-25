@@ -1,8 +1,7 @@
 /**
  * Minimal v0 stubs so the router can be constructed/tested. These are NOT the
  * production implementations — they throw `not-implemented` on the dispatch
- * path. The concrete personal-passthrough wiring (caller-auth via auth-hono,
- * DB-backed pool, KMS resolver, llm-mesh dispatch) lands in Lot 2.
+ * path. Hosts select concrete caller auth, storage and dispatch at composition.
  */
 
 import type { CallerAuthPort, CallerAuthResult } from './ports/caller-auth.js';

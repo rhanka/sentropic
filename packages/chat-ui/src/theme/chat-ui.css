@@ -837,6 +837,12 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .cursor-default {
   cursor: default;
 }
+[data-st-chat-theme] .cursor-grab {
+  cursor: grab;
+}
+[data-st-chat-theme] .cursor-grabbing {
+  cursor: grabbing;
+}
 [data-st-chat-theme] .cursor-not-allowed {
   cursor: not-allowed;
 }
