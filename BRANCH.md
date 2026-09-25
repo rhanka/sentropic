@@ -83,7 +83,7 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] BRDP-EX1a: host make targets.
   - [x] `apps/llm-gateway/tests/fixtures.ts` (shared fixture ports) and `apps/llm-gateway/vitest.config.ts`
   - [x] `apps/llm-gateway/tests/config.test.ts`
-  - [ ] `apps/llm-gateway/tests/readiness.test.ts`
+  - [x] `apps/llm-gateway/tests/readiness.test.ts`
   - [ ] `apps/llm-gateway/tests/autonomy.test.ts`
   - [ ] `apps/llm-gateway/tests/lifecycle.test.ts`
   - [ ] Lot gate:
