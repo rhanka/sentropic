@@ -3,9 +3,10 @@ import { estimateAnthropicInputTokens } from './canonical-stream.js';
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage, terminalGatewayError,
-  type RouteAttemptSettlement, type RouteFlowDeps,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, routeUsage,
+  settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
+import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 const defaultDispatch = new RouteAttemptDispatch();
@@ -41,10 +42,12 @@ export const runRouteJsonFlow = async (
     inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
     outputTokens: Math.min(1_000_000, Math.ceil(output.length / 4)), estimated: true,
   });
-  const settle = (outcome: 'success' | 'failed' | 'cancelled') => deps.metering.settleRoute({
-    cost: prepared.cost, wire: request.wire, requestedModel: request.model,
-    outcome, usage: aggregateUsage(attempts), attempts,
-  });
+  let settled = false;
+  const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
+    if (settled) return;
+    settled = true;
+    await settleRouteRequest(deps, prepared, request, outcome, attempts);
+  };
   for (let index = 0; index < prepared.plan.candidateRefs.length; index += 1) {
     const candidateRef = prepared.plan.candidateRefs[index]!;
     const diagnostic = prepared.plan.diagnostics[index]!;
@@ -59,6 +62,7 @@ export const runRouteJsonFlow = async (
         prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
       );
       signal?.throwIfAborted();
+      await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       response = await (deps.dispatch ?? defaultDispatch).generate({ attempt, request: {
         ...prepared.canonical.request,
@@ -68,6 +72,9 @@ export const runRouteJsonFlow = async (
       signal?.throwIfAborted();
       encoded = encodeGatewayResponse(request.wire, response);
     } catch (error) {
+      if (error instanceof BudgetDispatchMarkError) {
+        throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
+      }
       const classification = classifyRouteError(error, signal?.aborted);
       const usage = errorUsage(error, observedUsage ?? (invoked ? estimate() : routeUsage()));
       attempts.push({
