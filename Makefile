@@ -588,6 +588,19 @@ test-qualify-published-install: ## Run clean-consumer qualification fixture test
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test scripts/ci/qualify-published-install.test.mjs'
 
+.PHONY: pack-candidate-siblings publishable-sibling-plan publishable-sibling-collect
+pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> into SIBLING_DIR=tmp/<dir> (writes receipts.json)
+	@./scripts/ci/check-publishable-manifests.sh "$(ENV)" siblings "$(PACKAGE)" "$(SIBLING_DIR)"
+
+publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency closure of PACKAGE into SIBLING_DIR/plan.txt
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs sibling-plan --slug "$(PACKAGE)" --out /siblings/plan.txt'
+
+publishable-sibling-collect: ## Internal: verify sibling pack receipts and write SIBLING_DIR/receipts.json
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
+		-v "$(abspath $(SIBLING_DIR)):/siblings" $(MANIFEST_GUARD_IMAGE) node /probe/publishable-manifests.mjs sibling-collect --dir /siblings
+
 .PHONY: publishable-manifests-inventory
 publishable-manifests-inventory: ## Internal step of check-publishable-manifests: classify packages, audit WARN snapshots
 	@mkdir -p "$(MANIFEST_REPORT_DIR)"
