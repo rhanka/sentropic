@@ -1,8 +1,4 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
-import {
-  FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
-  type TrackOwnerSignatureWrite,
-} from '@sentropic/focus';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
@@ -16,6 +12,9 @@ import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 
 const passAuth: MiddlewareHandler = async (_context, next) => next();
 const runtime = clusterMeshAdapter.sessionControl!.runtime;
+
+// Opaque write intent: the /track namespace exposes reads only and must refuse any write.
+type TrackWriteIntent = Record<string, unknown>;
 
 describe('cluster mesh Track adapter', () => {
   it('mounts a truthful 503 shell on the product root while the provider is absent', async () => {
@@ -35,7 +34,7 @@ describe('cluster mesh Track adapter', () => {
   });
 
   it('shadows pinned deterministic reads and refuses a valid write intent with zero effects', async () => {
-    const effectBoundary = vi.fn(async (_intent: TrackOwnerSignatureWrite) => ({ effectRef: 'track:1' }));
+    const effectBoundary = vi.fn(async (_intent: TrackWriteIntent) => ({ effectRef: 'track:1' }));
     const provider = {
       descriptor: PINNED_TRACK_PROVIDER,
       readEvidence: vi.fn(async () => ({ reference: 'evidence:decision-1', digest: 'sha256:evidence' })),
@@ -54,8 +53,8 @@ describe('cluster mesh Track adapter', () => {
     expect(provider.readEvidence).toHaveBeenCalledOnce();
     expect(provider.readCursor).toHaveBeenCalledOnce();
 
-    const validIntent: TrackOwnerSignatureWrite = {
-      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+    const validIntent: TrackWriteIntent = {
+      contractVersion: 'track-owner-signature/1.0.0',
       target: { workspace: 'workspace-1', decisionId: 'decision-1' },
       attestation: {
         attester: {
