@@ -74,8 +74,8 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] Host manifest `apps/llm-gateway/{package.json,tsconfig.json,eslint.config.cjs,.gitignore}`.
   - [x] BRDP-EX6: root workspace entry and `make lock-root` refresh.
 - [ ] **Lot 2 — Host sources**
-  - [ ] `src/config.ts`: validated listener configuration (mode, port, host).
-  - [ ] `src/readiness.ts`: dependency slots, 2 s bound, 5 s cache, not-ready latch.
+  - [x] `src/config.ts`: validated listener configuration (mode, port, host).
+  - [x] `src/readiness.ts`: dependency slots, 2 s bound, 5 s cache, not-ready latch.
   - [ ] `src/app.ts`: one registry, one gateway namespace module mounted at `/`, injected ports, no listen on import.
   - [ ] `src/lifecycle.ts`: listen, SIGTERM stop, admission close and bounded SSE drain.
   - [ ] `src/index.ts`: entry with pending dependencies.
