@@ -81,7 +81,8 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] `src/index.ts`: entry with pending dependencies.
 - [ ] **Lot 3 — Host tests and make checks**
   - [x] BRDP-EX1a: host make targets.
-  - [ ] `apps/llm-gateway/tests/config.test.ts`
+  - [x] `apps/llm-gateway/tests/fixtures.ts` (shared fixture ports) and `apps/llm-gateway/vitest.config.ts`
+  - [x] `apps/llm-gateway/tests/config.test.ts`
   - [ ] `apps/llm-gateway/tests/readiness.test.ts`
   - [ ] `apps/llm-gateway/tests/autonomy.test.ts`
   - [ ] `apps/llm-gateway/tests/lifecycle.test.ts`
