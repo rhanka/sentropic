@@ -72,19 +72,45 @@ discriminated results; a verifier declared outside a contextually typed position
 infers `ok: boolean` and no longer type-checks (no compatibility shape is accepted):
 
 ```ts
-// Before (0.17.x): ok is inferred as boolean, rejected by 0.18.0
-callerAuth: {
-  async verify(headers: Readonly<Record<string, string>>) {
-    return cost ? { ok: true, cost } : { ok: false, reason: 'verified caller unavailable' };
+import { stubGatewayConfig } from '@sentropic/llm-gateway';
+import type { CostContext } from '@sentropic/llm-gateway';
+
+// Host-owned mapping from verified headers to a cost context.
+declare function resolveCost(headers: Readonly<Record<string, string>>): CostContext | undefined;
+
+// Before (0.17.x): a standalone object is not contextually typed, so `ok` is
+// inferred as boolean; passing `config` to createGatewayRouter fails in 0.18.0.
+const config = {
+  ...stubGatewayConfig,
+  callerAuth: {
+    async verify(headers: Readonly<Record<string, string>>) {
+      const cost = resolveCost(headers);
+      return cost ? { ok: true, cost } : { ok: false, reason: 'verified caller unavailable' };
+    },
   },
-},
-// After: annotate the result (or use `ok: true as const` / `ok: false as const`)
-callerAuth: {
-  async verify(headers: Readonly<Record<string, string>>): Promise<CallerAuthResult> {
-    return cost ? { ok: true, cost } : { ok: false, reason: 'verified caller unavailable' };
-  },
-},
+};
 ```
+
+```ts
+import { stubGatewayConfig } from '@sentropic/llm-gateway';
+import type { CallerAuthResult, CostContext } from '@sentropic/llm-gateway';
+
+declare function resolveCost(headers: Readonly<Record<string, string>>): CostContext | undefined;
+
+// After: annotate the result (or use `ok: true as const` / `ok: false as const`).
+const config = {
+  ...stubGatewayConfig,
+  callerAuth: {
+    async verify(headers: Readonly<Record<string, string>>): Promise<CallerAuthResult> {
+      const cost = resolveCost(headers);
+      return cost ? { ok: true, cost } : { ok: false, reason: 'verified caller unavailable' };
+    },
+  },
+};
+```
+
+The same verifier written inline inside `createGatewayRouter({ config: { ... } })`
+is contextually typed and compiles without the annotation.
 
 ## Provider-compatible surface
 

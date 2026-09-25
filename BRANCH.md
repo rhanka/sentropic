@@ -40,7 +40,7 @@
 - [x] BRLG2-EX1 | acknowledge | Owner: conductor | Approved before edits: Makefile `typecheck-llm-gateway`, `build-llm-gateway`, `test-llm-gateway` gain oauth-verify/mcp-auth/auth-hono build prerequisites and peer links; `package-llm-routing-candidates` adds auth tarballs; new `wait-llm-gateway-auth-dependencies` and `publish-llm-gateway` enforce recursive registry visibility. Reason: compile/qualify isolated optional auth subpaths. Impact: isolated toolset dependencies and publication ordering only. Rollback: git revert. No other Makefile, compose or workflow changes.
 - [x] BRLG2-EX2 | acknowledge | Owner: conductor | I0 requires root `package-lock.json` gateway metadata alignment with 0.18.0, mesh floor and optional auth peers. Root package.json unchanged unless required. Impact: gateway dependency metadata only. Rollback: git revert.
 - [x] BRLG2-EX3 | acknowledge | Owner: product conductor | Scope exception to the api/** forbidden path: `api/src/routes/namespaces/gw.ts` ONLY (plus an existing api/tests file covering gw.ts only if it must change). Reason: in-repo consumer of the strict 0.18.0 `CallerAuthResult` discriminated union (PR #605 typecheck-lint-api TS2322 at gw.ts:140); the gateway type stays strict, no compatibility layer. Impact: none at runtime, the callerAuth adapter now returns literal discriminated results. Rollback: git revert of the commit.
-- [ ] BRLG2-I0 | blocked | Owner: auth lane / conductor | BLOCKS merge AND release. Merging to main triggers publish-llm-gateway (.github/workflows/ci.yml), which fails while @sentropic/mcp-auth@0.2.1 is E404. Registry latest is mcp-auth 0.2.0 on 2026-09-24; published 0.2.1 service-only clean-install evidence remains required. Develop against workspace without pinning 0.2.0.
+- [x] BRLG2-I0 | closed 2026-09-24 | Owner: auth lane / conductor | Registry 2026-09-24: @sentropic/mcp-auth latest 0.2.1, dependencies {"@sentropic/oauth-verify":"^0.1.0"}, published by GitHub Actions trusted publisher with SLSA provenance. Service-only clean-install qualification RUNS and PASSES against published 0.2.1: make test-llm-gateway (in the combined gate command below) with API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2, test "qualifies service-only 0.2.1, transitive oauth-verify and required jose"; 225 passed, 0 skipped.
 - [x] BRLG2-SCOPE | acknowledge | Implementation brief supersedes historical planning-only guardrails below. Single writer; no Track writes, push, PR, merge or publish. ENV=test-llm-gateway-lot2; API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480; ports verified free. Independent review/consumer qualification remain conductor gates.
 - [x] BRLG2-C6 | attention | Reversible | Adapter validation reports exact zero usage on cancellation before provider invocation; preserve attempt identity and the dispatch port contract without adding a callback. JSON/stream error usage already overrides estimates.
 - [x] C-FL1 | attention | Owner: conductor | Reversible | Use the EVOL rung directly: the brief fixes the three adapters and authorizes the Lot 2 type migration.
@@ -70,6 +70,11 @@
 - [x] No services or port reservation required for this planning task.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot C — Review doc round (README migration + I0 closure)**
+  - [x] README CallerAuthResult migration: standalone `const config = { ...stubGatewayConfig, callerAuth }` before/after, `import type { CallerAuthResult }`, self-contained `resolveCost`; no src/test/api change.
+  - [x] Gates passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway pack-llm-gateway package-llm-routing-candidates LLM_ROUTING_PACK_DIR=/home/antoinefa/src/sentropic/tmp/llm-gateway-lot2/tmp/llm-gateway-lot2-candidates API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2. 225 passed across 25 files, 0 skipped.
+  - [x] New candidate SHA-256 5cb35819eefad7cd01c947f1bc0d9be0fb4fa5568ca08b52be1829fc8e03fbc7 matches qualification/candidate.tgz byte-for-byte.
+  - [x] Equivalence vs d4e28ff4 (tmp/equivalence-d4e28ff4-vs-new.txt): same 139-file list; 68 .js/.d.ts checksums identical; package.json identical; only package/README.md differs.
 - [x] **Lot C — Strict CallerAuthResult consumer fix (PR #605 typecheck-lint-api)**
   - [x] Under BRLG2-EX3, annotate the api/src/routes/namespaces/gw.ts callerAuth adapter `verify` with `Promise<CallerAuthResult>`; no gateway compatibility layer. Passed: make typecheck-api and make lint-api (0 errors) with API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
   - [x] Add a type-level regression in tests/lot2-types.test.ts: un-annotated boolean-inferred verifier rejected under `@ts-expect-error`, annotated `Promise<CallerAuthResult>` verifier accepted; README before/after migration and spec D7 row updated.
@@ -98,7 +103,7 @@
   - [x] Harness branch/scope and whitespace checks passed; four-file atomic commit and final log accompany handoff. Independent review remains the conductor's gate; no push/PR/merge/publish.
 - [ ] **Lot C — Build fix round 1**
   - [x] C1 — Explicitly record I0 as blocking merge AND release in branch and spec.
-  - [x] C2 — End-of-round 2026-09-24 registry check: curl -s https://registry.npmjs.org/@sentropic%2fmcp-auth | grep -o '"0.2.1"' produced no match (exit 1); latest remains 0.2.0. Leave auth-subpaths.test.ts service skip intact and BRLG2-I0 open: BLOCKS merge AND release. No service lockfile or clean-install success is claimed.
+  - [x] C2 — Superseded: BRLG2-I0 closed on 2026-09-24 once mcp-auth 0.2.1 was published; the service-only fixture now runs and passes.
   - [x] C3 — Record consumer conductor h-cond ownership and candidate typecheck merge gate; execution remains open in BRLG2-CONSUMER.
   - [x] C4 — Buffer through the first upstream-derived frame before commitment; complete a primed done event after markCommitted, and later done events before encoding their success terminators. Regression also prevents success frames on ledger rejection. Final stream suite passed (20 tests). Candidate 0.18.0 remains greater than registry latest 0.17.1 (2026-09-24).
   - [x] C5 — Expose tracked terminal state and rethrow before outer accounting when already claimed; pre-commit regression accompanies C4's priming change.
@@ -123,7 +128,7 @@
   - [x] Update package.json and lockfile; wire only approved Makefile targets; recursive registry validation in scripts/auth-registry.mjs and tests/auth-registry.test.ts (bounded helper added within package scope).
   - [x] I0 workspace gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (132 tests). Initial missing-semver-link failure corrected and rerun green.
   - [x] Registry wait exercised: make wait-llm-gateway-auth-dependencies LLM_MESH_REGISTRY_WAIT_ATTEMPTS=1 API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 fails closed on mcp-auth 0.2.1 E404, as required. Clean fixtures remain I2/I5 gates.
-  - [ ] Qualify published mcp-auth 0.2.1 service-only install and auth-hono 0.15.0 session-only install (pending BRLG2-I0).
+  - [x] Qualify published mcp-auth 0.2.1 service-only install and auth-hono 0.15.0 session-only install: both auth-subpaths.test.ts fixtures passed on 2026-09-24 (BRLG2-I0 closed).
 - [x] **I1 — Request-bound auth contracts**
   - [x] Implement request context, discriminated auth result, generic unavailable mapping and trusted router URL projection; internal/caller-auth.ts shares validation across boundaries (private helper within package scope).
   - [x] Add caller-auth/lot2-types tests; update contract-snapshot exhaustive error map in I1 because its Record correctly rejects the new union member until mapped. Test undefined publicUrl callback results fail closed.
@@ -160,7 +165,7 @@
   - [x] Update routed flows/router only as required; canonical ingress/egress/stream unchanged. Existing conversion/compaction regressions pass.
   - [x] Add lot2-router-integration tests; update routed flow tests and exhaustive contract snapshot. Final I4 gate passed: make typecheck-llm-gateway lint-llm-gateway test-llm-gateway API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (212 passed, one pending service clean install).
 - [ ] **I5 — Release and consumer qualification**
-  - [x] Auth regression suites passed: make test-mcp-auth test-oauth-verify test-auth-hono API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (46 / 21 / 173 tests). Service registry recheck still reports 0.2.0; gateway latest remains 0.17.1 < candidate 0.18.0.
+  - [x] Auth regression suites passed: make test-mcp-auth test-oauth-verify test-auth-hono API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2 (46 / 21 / 173 tests). Service registry recheck reported 0.2.0 at that round (superseded by BRLG2-I0 closure); gateway latest remains 0.17.1 < candidate 0.18.0.
   - [x] Document 0.18.0 migration, optional subpath peers, trusted publicUrl/ownership, RFC 6750 deviation, stable affinity, dispatch and settlement boundaries in README.
   - [x] Retain exact fixture tarball/hash and root/session/service consumer lockfiles in ignored tmp/llm-gateway-qualification; approved candidate-pack target copies evidence and compares tarball bytes. Build fixture uses the normal dist output path for identical sourcemaps.
   - [x] Update README, spec build evidence and candidate package metadata; pack exact candidates; run auth and six specified mesh regression scopes.
