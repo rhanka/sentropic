@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.0
+
+- Move the optional peers to the Lot D release tuple: llm-mesh `>=0.22.0 <0.23.0`
+  (route quote API) and llm-gateway `>=0.19.0 <0.20.0` (opt-in budget admission).
+  mcp-auth `>=0.2.1 <0.3.0`, auth-hono `^0.15.0` and jose `^5.10.0` are unchanged.
+  The previous tuple (llm-mesh 0.21.x, llm-gateway 0.18.x) is refused at install
+  (npm peer resolution) and at runtime (`incompatible_version` from the loaders and
+  from `verifyClusterMeshTopology`).
+- **Public union change:** the gated module ids `focus`, `cli` and `build-cli` are
+  removed from `CLUSTER_MESH_GATED_MODULE_IDS`, `ClusterMeshGatedModuleId` and
+  `ClusterMeshModuleId` (and from the module catalog and `probe()`/`snapshot()` maps).
+  Reason: the owner removes cli, build-cli and focus from sentropic; focus is
+  reintroduced only after an owner decision on who carries it. The `/cli` transport
+  namespace of the Hono plugin is a separate contract and is unchanged.
+- Lazy surface otherwise identical to 0.12.0: same leaves, loaders, compose entries,
+  topology guard and `cluster_mesh_topology_invalid` code. A standalone gateway host
+  can project `/gw` at the root with `mounts: { '/gw': '/' }` (no source change).
+
 ## 0.12.0
 
 - Add the lazy LLM/gateway integration surface: static `export *` leaves
