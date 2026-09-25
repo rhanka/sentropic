@@ -2,6 +2,8 @@
 
 ## Authority, baseline and outcome
 
+**Status, 2026-09-24:** B1, B2 and the package side of B3 are implemented on `spec/cluster-mesh-lazy-surface` as cluster-mesh 0.12.0 (unpublished; release, independent review and B4 remain conductor/h-cond-owned). B5 (MCP) is not built: it follows the shipped h2a LLM/gateway flip. B6–B8 remain later lots; product `api/` follow-up is separate work.
+
 EVOL, 2026-09-23, revised 2026-09-24, Lot E; design only. The owner decision and translation are in the [dated control-plane amendment](SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md#amendment-2026-09-23--single-lazy-integration-surface). Target **cluster-mesh 0.12.0** delivers the LLM/gateway surface after additive 0.11.0 and Lot C gateway 0.18.0. MCP remains contracted here but is built only after that consumer flip, for a subsequent minor. Implementation, publication and h2a migration require later branches; this document delivers no runtime behavior.
 
 Evidence: Sentropic `origin/main` at `75032fc85`, cluster-mesh 0.10.1 (`package.json`, `src/index.ts`, `src/runtime/registration.ts`, `src/hono/plugin.ts`, `src/runtime/namespace-registry.ts`); feedback branch `feat/cluster-mesh-upstream-feedback` at `6409d6f28` (0.11.0); llm-mesh 0.21.2 and llm-gateway 0.17.1 export maps; `packages/mcp-*/package.json` and MCP public entries. h2a evidence is pinned to `75c1dc61e034aceeca5deb6541af2905e445d941`, not its moving worktree. The control-plane D1/D3/D6/D13–D16, namespace inventory and r13 implementation evidence remain authoritative.

@@ -103,6 +103,64 @@ topology introduced in 0.1: one Sentropic server, its attached local workstation
 local signed projections, and the existing device-code lifecycle. It does not
 implement server-to-server federation.
 
+## Lazy integration surface in 0.12
+
+Cluster Mesh is the single integration surface for llm-mesh and llm-gateway. Those
+providers stay independent packages and never depend on cluster-mesh. They are
+**optional peers**: a bare install pulls none of them, and the root entry
+(`@sentropic/cluster-mesh`) has no static JS or declaration edge to any of them.
+
+| Entry | Provider | Selected optional peers |
+|---|---|---|
+| `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`, `/llm-mesh/transport/cloud-code` | matching `@sentropic/llm-mesh` entry | `@sentropic/llm-mesh >=0.21.2 <0.22.0` |
+| `/gateway` | `@sentropic/llm-gateway` root (neither auth mode) | llm-mesh + `@sentropic/llm-gateway >=0.18.0 <0.19.0` |
+| `/gateway/auth` (service mode) | `@sentropic/llm-gateway/auth` | gateway + `@sentropic/mcp-auth >=0.2.1 <0.3.0`, `jose ^5.10.0` |
+| `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0` |
+| `/loaders/<leaf>` | async typed loader (`loadLlmMesh`, `loadGateway`, `loadGatewayAuth`, ...) | as its leaf, resolved on call |
+| `/compose/llm-mesh`, `/compose/gateway` | `createLlmMeshNamespaceModule`, `createGatewayNamespaceModule` | as the loaders they call |
+
+Static leaves are `export *` re-exports of the provider namespace: same values,
+types, overloads and class identity. Importing a leaf selects that provider; a
+missing provider fails native ESM linking of the importing module. Loaders take a
+registry from `createClusterMeshModules({ disabled? })` (one per composition root) and
+reject with `ClusterMeshModuleUnavailableError` (`code: 'cluster_mesh_module_unavailable'`,
+reasons `disabled | not_installed | incompatible_version | export_unavailable |
+load_failed | source_unavailable`). Recognize it with `isClusterMeshModuleUnavailableError`
+or by `code`, never by `instanceof` (duplicate copies have distinct constructors).
+`modules.probe()` reports metadata-only availability without evaluating providers;
+pass `modules` to `createDegenerateClusterMesh` to expose `capabilities.modules`.
+MCP and other catalogued capabilities are listed as `source_unavailable` until a
+later minor delivers them.
+
+**Startup preflight (fail closed before bind).** llm-gateway imports its auth peers
+only at verification time, so importing an auth leaf proves nothing. Await
+`loadGatewayAuth(modules)` (service) or `loadGatewayAuthHono(modules)` (session)
+before binding any listener; they resolve and evaluate the selected peer graph
+**from the installed gateway's location**. `createGatewayNamespaceModule(modules,
+{ enabled, authMode: 'service' | 'session' | 'host', createRouter })` does this for
+you; `host` selects no gateway auth peer (host-injected `CallerAuthPort`).
+
+**Topology guard.** Every leaf, loader and compose entry first runs a per-process
+guard: more than one evaluated cluster-mesh copy (counted by evaluation, so
+`--preserve-symlinks`, `npm link` and pnpm peer variants are covered), or an
+llm-mesh resolved from cluster-mesh that differs from the gateway's, makes the
+import throw `ClusterMeshTopologyError` (`code: 'cluster_mesh_topology_invalid'`,
+message naming the conflicting paths). Call `verifyClusterMeshTopology({ require })`
+from the root at startup for an earlier, explicit check that also enforces the
+accepted ranges. The guard is per process; cross-process consistency stays with
+install/qualification gates. Under `--preserve-symlinks`, two llm-mesh instances
+sharing one realpath are not detectable without importing both.
+
+**Consumer rules.** Every manifest that declares cluster-mesh and imports a leaf
+also declares that leaf's selected peers at the qualified versions; the installed
+tree must hold exactly one cluster-mesh and one llm-mesh shared with the gateway.
+Bundlers (tsup/esbuild) must externalize `@sentropic/cluster-mesh` **and**
+`@sentropic/cluster-mesh/*` (and the peer packages) so the resolution anchor stays
+at the installed package. Consumers with `skipLibCheck: false` need TypeScript
+>= 5.7 for hono's declarations; with `skipLibCheck: true`, a missing peer surfaces
+as TS2305 on the named import. Tested tuple: cluster-mesh 0.12.0, llm-mesh 0.21.2,
+llm-gateway 0.18.0, mcp-auth 0.2.1, oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7.
+
 ## Available in v1
 
 - A directory containing the local server and its attached workstations.
