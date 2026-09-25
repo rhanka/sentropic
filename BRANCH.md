@@ -76,7 +76,7 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
 - [ ] **Lot 2 — Host sources**
   - [x] `src/config.ts`: validated listener configuration (mode, port, host).
   - [x] `src/readiness.ts`: dependency slots, 2 s bound, 5 s cache, not-ready latch.
-  - [ ] `src/app.ts`: one registry, one gateway namespace module mounted at `/`, injected ports, no listen on import.
+  - [x] `src/app.ts`: one registry, one gateway namespace module mounted at `/`, injected ports, no listen on import.
   - [ ] `src/lifecycle.ts`: listen, SIGTERM stop, admission close and bounded SSE drain.
   - [ ] `src/index.ts`: entry with pending dependencies.
 - [ ] **Lot 3 — Host tests and make checks**
