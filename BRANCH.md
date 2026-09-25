@@ -1,7 +1,7 @@
 # Feature: llm-mesh 0.22.0 pure quote API — Lot D B3a
 
 ## Objective
-- [ ] Deliver the pure, synchronous `quoteRoute` seam frozen in `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §12.2 (mesh 0.22.0), with `plan({ quote })` pinning and `quote-mismatch` refusal.
+- [x] Deliver the pure, synchronous `quoteRoute` seam frozen in `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §12.2 (mesh 0.22.0), with `plan({ quote })` pinning and `quote-mismatch` refusal.
 
 ## Scope / Guardrails
 - [x] Branch `feat/llm-mesh-quote`, worktree `tmp/llm-mesh-quote`, base `origin/main` `a334fab47`.
@@ -65,7 +65,7 @@
   - [x] New `packages/llm-mesh/tests/budget-quote.test.ts`: 16-cap, 1..8 attempts, superset vs plan across fallback, zero directory calls, purity/determinism, each error code, quote-mismatch, codex allowance list, maxOutputTokens profile list, no unquoted execution.
 - [x] **Lot 3 — Version and docs**
   - [x] `packages/llm-mesh/package.json` 0.22.0; `CHANGELOG.md`; README quote section.
-- [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh build-llm-mesh pack-llm-mesh ENV=test-llm-mesh-quote`
-  - [ ] `make scope-check ENV=test-llm-mesh-quote`
-  - [ ] Record packed tarball name and sha256 (local candidate only).
+- [x] **Lot N — Final validation**
+  - [x] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh build-llm-mesh pack-llm-mesh ENV=test-llm-mesh-quote` (32 files, 265 tests pass)
+  - [x] `make scope-check ENV=test-llm-mesh-quote`
+  - [x] Candidate `sentropic-llm-mesh-0.22.0.tgz` sha256 `eb3d6a8af8f490a2aba9f624889a4bc210e8b4777ba44ad7d97807d079928b6b` (guard pass at `2503476eb`, not persisted, not published).
