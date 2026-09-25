@@ -71,8 +71,8 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] Declare BRDP-EX1a, BRDP-EX6, BRDP-EX7 with exact content before editing those paths.
 - [ ] **Lot 1 — Extraction and workspace wiring**
   - [x] BRDP-EX7: extract `standalone-ports.ts`; rewire `gateway-route-plane.ts` imports only.
-  - [ ] Host manifest `apps/llm-gateway/{package.json,tsconfig.json,eslint.config.cjs}`.
-  - [ ] BRDP-EX6: root workspace entry and `make lock-root` refresh.
+  - [x] Host manifest `apps/llm-gateway/{package.json,tsconfig.json,eslint.config.cjs,.gitignore}`.
+  - [x] BRDP-EX6: root workspace entry and `make lock-root` refresh.
 - [ ] **Lot 2 — Host sources**
   - [ ] `src/config.ts`: validated listener configuration (mode, port, host).
   - [ ] `src/readiness.ts`: dependency slots, 2 s bound, 5 s cache, not-ready latch.
