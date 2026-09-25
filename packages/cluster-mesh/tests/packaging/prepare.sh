@@ -165,32 +165,57 @@ npm install -g --prefix "$work/global" $quiet "$work/src/fixture-global-consumer
 npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
 npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-global-consumer-pinned-1.0.0.tgz" >/dev/null
 
+# installed DIR: installed versions of the candidate and both train packages in DIR.
+installed() {
+  for name in @sentropic/cluster-mesh @sentropic/llm-mesh @sentropic/llm-gateway; do
+    printf '%s@%s ' "$name" "$(node -p "require('$1/node_modules/$name/package.json').version" 2>/dev/null || echo absent)"
+  done | sed 's/ *$//'
+}
+# attempt DIR LABEL NPM-ARGS...: one npm install with warnings kept; appends LABEL-exit, LABEL-eresolve (an
+# ERESOLVE line on stderr, full stderr in npm-LABEL.stderr) and LABEL-installed to DIR/npm-install-detail.
+attempt() {
+  dir="$1"
+  label="$2"
+  shift 2
+  if (cd "$dir" && npm install --no-audit --no-fund --loglevel=warn "$@" >/dev/null 2>"$dir/npm-$label.stderr"); then code=0; else code=$?; fi
+  if grep -q ERESOLVE "$dir/npm-$label.stderr"; then eresolve=yes; else eresolve=no; fi
+  printf '%s-exit=%s\n%s-eresolve=%s\n%s-installed=%s\n' "$label" "$code" "$label" "$eresolve" "$label" "$(installed "$dir")" \
+    >> "$dir/npm-install-detail"
+}
+old_installed="@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0"
+
 # Old tuple (llm-mesh 0.21.2, llm-gateway 0.18.0), registry only: npm must refuse the out-of-range optional
 # peers. npm 11 either fails with ERESOLVE or exits 0 after dropping the conflicting root requests
 # ("ERESOLVE overriding peer dependency"); both leave the old tuple uninstalled and count as refused.
-# --force then builds the skewed tree only to prove the runtime refusal.
+# npm 11 --force applies the same override; --legacy-peer-deps then builds the skewed tree for the runtime refusal.
 fixture old-tuple
-old_tuple="@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0"
-old_installed() {
-  for name in @sentropic/llm-mesh @sentropic/llm-gateway; do
-    printf '%s@%s ' "$name" "$(node -p "require('$work/old-tuple/node_modules/$name/package.json').version" 2>/dev/null || echo absent)"
-  done
-}
-if (cd "$work/old-tuple" && npm install $quiet "$tgz" $old_tuple >/dev/null 2>&1); then plain=0; else plain=$?; fi
-after="$(old_installed)"
-if [ "$plain" = 0 ] && [ "$after" = "@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0 " ]; then
-  echo accepted > "$work/old-tuple/npm-install-outcome"
-else
-  echo refused > "$work/old-tuple/npm-install-outcome"
-  # npm 11 --force applies the same peer override (drops the old tuple); --legacy-peer-deps then skips peer
-  # resolution entirely, which is the only way left to build the skewed tree.
-  skew=force
-  (cd "$work/old-tuple" && npm install $quiet --force "$tgz" $old_tuple >/dev/null 2>&1) || true
-  if [ "$(old_installed)" != "@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0 " ]; then
-    skew=legacy-peer-deps
-    (cd "$work/old-tuple" && npm install $quiet --legacy-peer-deps "$tgz" $old_tuple >/dev/null 2>&1)
-  fi
-fi
-printf 'plain-exit=%s\nplain-installed=%s\nskew-build=%s\n' "$plain" "$after" "${skew:-none}" > "$work/old-tuple/npm-install-detail"
-echo "[old-tuple] outcome $(cat "$work/old-tuple/npm-install-outcome"): plain exit $plain, installed $after, skew build ${skew:-none}"
+: > "$work/old-tuple/npm-install-detail"
+attempt "$work/old-tuple" plain "$tgz" $old_installed
+case "$code $(installed "$work/old-tuple")" in
+  "0 @sentropic/cluster-mesh@"*" $old_installed") echo accepted > "$work/old-tuple/npm-install-outcome"; skew=none ;;
+  *) echo refused > "$work/old-tuple/npm-install-outcome"
+    skew=force
+    attempt "$work/old-tuple" force --force "$tgz" $old_installed
+    case "$(installed "$work/old-tuple")" in
+      *" $old_installed") ;;
+      *) skew=legacy-peer-deps; attempt "$work/old-tuple" legacy-peer-deps --legacy-peer-deps "$tgz" $old_installed ;;
+    esac ;;
+esac
+echo "skew-build=$skew" >> "$work/old-tuple/npm-install-detail"
+echo "[old-tuple] outcome $(cat "$work/old-tuple/npm-install-outcome")"; cat "$work/old-tuple/npm-install-detail"
 tuple old-tuple
+
+# Partial bump: the consumer moves cluster-mesh to the candidate but keeps its own direct llm-mesh ^0.21.2 and
+# llm-gateway ^0.18.0 (registry). What npm does is recorded as is; when it drops the old pins the tree is
+# rebuilt with --legacy-peer-deps so the runtime refusal is asserted on the skewed tree.
+consumer "$work/partial-bump" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/llm-mesh=^0.21.2" "@sentropic/llm-gateway=^0.18.0"
+: > "$work/partial-bump/npm-install-detail"
+attempt "$work/partial-bump" plain
+skew=none
+case "$(installed "$work/partial-bump")" in
+  "@sentropic/cluster-mesh@0.13.0 @sentropic/llm-mesh@0.21."*" @sentropic/llm-gateway@0.18."*) ;;
+  *) skew=legacy-peer-deps; attempt "$work/partial-bump" legacy-peer-deps --legacy-peer-deps ;;
+esac
+echo "skew-build=$skew" >> "$work/partial-bump/npm-install-detail"
+echo "[partial-bump]"; cat "$work/partial-bump/npm-install-detail"
+tuple partial-bump
