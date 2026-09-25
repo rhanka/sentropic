@@ -6,15 +6,20 @@
 //       lock is an error and nothing is written); the candidate keeps no integrity
 //   siblings <committed-lock> <siblings-dir>
 //       every sibling run: committed entry version/resolved/integrity must equal the sibling archive
-//   registry <committed-lock>
+//   registry <committed-lock> [required...]
 //       after publication: registry dist.tarball and dist.integrity of each published train package must equal the
-//       lock `resolved` and `integrity`
+//       lock `resolved` and `integrity`; a required package (its publish job succeeded in this run) must be on the
+//       registry: cache-bypassing lookups retried 12 x 5 s, then an error; any other absent package is a notice
 import fs from 'node:fs';
 import { readIndex } from './siblings.mjs';
 
 const REGISTRY = 'https://registry.npmjs.org';
 const TRAIN = ['@sentropic/llm-mesh', '@sentropic/llm-gateway'];
 const CANDIDATE = '@sentropic/cluster-mesh';
+// Lookup base and retry budget; overridable for the unit tests only (lock `resolved` always names REGISTRY).
+const LOOKUP_REGISTRY = process.env.CLUSTER_MESH_REGISTRY_LOOKUP_URL ?? REGISTRY;
+const RETRIES = Number(process.env.CLUSTER_MESH_REGISTRY_RETRIES ?? 12);
+const DELAY_MS = Number(process.env.CLUSTER_MESH_REGISTRY_DELAY_MS ?? 5000);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const tarballUrl = (name, version) => `${REGISTRY}/${name}/-/${name.split('/').pop()}-${version}.tgz`;
@@ -61,7 +66,20 @@ function siblings(committedLock, siblingsDir) {
   }
 }
 
-async function registry(committedLock) {
+// Registry packument lookup bypassing HTTP caches (a publish of this run may not be visible yet on a cached read).
+async function lookup(name, attempt) {
+  const url = `${LOOKUP_REGISTRY}/${name.replace('/', '%2f')}?cache-bust=${Date.now()}-${attempt}`;
+  try {
+    const response = await fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', Accept: 'application/json' } });
+    return response.ok ? { status: response.status, packument: await response.json() } : { status: response.status };
+  } catch (cause) {
+    return { status: `network error ${cause.message}` };
+  }
+}
+
+// A required package was published by a successful publish job of this run: its version must appear, so an
+// absent version is retried (RETRIES x DELAY_MS) then fails; any other package keeps one notice-only lookup.
+async function registry(committedLock, required) {
   const lock = readJson(committedLock);
   for (const name of TRAIN) {
     const entry = lock.packages[`node_modules/${name}`];
@@ -70,12 +88,22 @@ async function registry(committedLock) {
       continue;
     }
     if (entry.resolved !== tarballUrl(name, entry.version)) error(`${name}: lock resolved ${entry.resolved} is not the registry URL`);
-    const response = await fetch(`${REGISTRY}/${name.replace('/', '%2f')}`);
-    if (!response.ok) {
-      error(`${name}: registry lookup failed (${response.status})`);
+    const attempts = required.includes(name) ? RETRIES : 1;
+    let result;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+      result = await lookup(name, attempt);
+      if (result.packument?.versions?.[entry.version]) break;
+    }
+    const published = result.packument?.versions?.[entry.version];
+    if (!published && required.includes(name)) {
+      error(`${name}@${entry.version} was published in this run but is absent from the registry after ${attempts} attempts (last status ${result.status})`);
       continue;
     }
-    const published = (await response.json()).versions?.[entry.version];
+    if (!result.packument) {
+      error(`${name}: registry lookup failed (${result.status})`);
+      continue;
+    }
     if (!published) {
       console.log(`::notice title=Train lock integrity::${name}@${entry.version} is not published; nothing to compare`);
       continue;
@@ -92,10 +120,11 @@ async function registry(committedLock) {
 const [command, ...args] = process.argv.slice(2);
 if (command === 'refresh' && args.length === 4) refresh(...args);
 else if (command === 'siblings' && args.length === 2) siblings(...args);
-else if (command === 'registry' && args.length === 1) await registry(args[0]);
-else {
+else if (command === 'registry' && args.length >= 1 && args.slice(1).every((name) => TRAIN.includes(name))) {
+  await registry(args[0], args.slice(1));
+} else {
   console.error('usage: check-lock-integrity.mjs refresh <working-lock> <committed-lock> <package.json> <siblings-dir>'
-    + ' | siblings <committed-lock> <siblings-dir> | registry <committed-lock>');
+    + ` | siblings <committed-lock> <siblings-dir> | registry <committed-lock> [required: ${TRAIN.join(' ')}]`);
   process.exit(2);
 }
 process.exit(errors === 0 ? 0 : 1);
