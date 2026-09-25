@@ -56,8 +56,8 @@
 - [ ] **Lot 1 — Quote seam**
   - [x] Contract types in `routing-contracts.ts`; `RoutePlanError` gains `quote-mismatch`.
   - [x] `route-quote.ts`: `quoteRoute`, `RouteQuoteError`, `MAX_ROUTE_QUOTE_CANDIDATES`, shared quote digest.
-  - [ ] `InMemoryRoutePlanner.quote` and `plan({ quote })` pinning.
-  - [ ] Export from the package entry.
+  - [x] `InMemoryRoutePlanner.quote` and `plan({ quote })` pinning.
+  - [x] Export from the package entry.
   - [ ] Lot gate:
     - [ ] `make typecheck-llm-mesh lint-llm-mesh ENV=test-llm-mesh-quote`
     - [ ] `make test-llm-mesh SCOPE=tests/budget-quote.test.ts ENV=test-llm-mesh-quote`
