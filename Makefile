@@ -517,6 +517,53 @@ publish-e2e-image: docker-login
 check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every API_VERSION/UI_VERSION hash input
 	@./scripts/check-ci-version-filters.sh
 
+# BRCI-EX1 — publishable manifest guard (spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md).
+# Every npm pack/publish lane inspects the real archive; tools are pinned in ephemeral dirs.
+MANIFEST_GUARD_IMAGE ?= $(LLM_MESH_NODE_IMAGE)
+MANIFEST_REPORT_DIR ?= tmp/ci-manifest-guard/manifests
+MANIFEST_CONTEXT_FILE ?=
+MANIFEST_SEVERITY ?=
+PACK_DESTINATION ?=
+PACK_OUTPUT_FILE ?=
+MANIFEST_GUARD_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"
+MANIFEST_GUARD_ENV = -e CI_MANIFEST_CONTEXT -e CI_MANIFEST_EVENT -e CI_MANIFEST_BOOTSTRAP_TARGET -e CI_MANIFEST_CHANGES_RESULT \
+	-e CI_MANIFEST_BEFORE_SHA -e CI_MANIFEST_BASE_SHA -e GITHUB_SHA -e MANIFEST_SEVERITY="$(MANIFEST_SEVERITY)" \
+	-e MANIFEST_HEAD_SHA="$$(git rev-parse HEAD 2>/dev/null || true)" \
+	$(if $(MANIFEST_CONTEXT_FILE),-v "$(abspath $(MANIFEST_CONTEXT_FILE)):/run/manifest-context.json:ro" -e MANIFEST_CONTEXT_FILE=/run/manifest-context.json)
+# Transform lanes (chat-ui, cited-source-viewer): pack/publish the dist-form manifest, restore on any exit.
+MANIFEST_DIST_FORM = cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json;
+# Guarded publication tail for existing publish recipes: $(call manifest_guard_publish,<slug>,<npm publish flags>)
+manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/publishable-manifests.mjs publish --slug $(1) -- $(2)
+
+# $(1)=package slug; $(2)=optional in-container pre-pack commands.
+define manifest_guard_pack
+	@mkdir -p "$(MANIFEST_REPORT_DIR)" $(if $(PACK_DESTINATION),"$(PACK_DESTINATION)")
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		$(if $(PACK_DESTINATION),-v "$(abspath $(PACK_DESTINATION)):/pack-out" -e PACK_DESTINATION_HOST="$(abspath $(PACK_DESTINATION))") \
+		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
+	@if [ -n "$(PACK_OUTPUT_FILE)" ]; then cat "$(MANIFEST_REPORT_DIR)/$(1).github-output" >> "$(PACK_OUTPUT_FILE)"; fi
+endef
+
+.PHONY: pack-publishable-manifest check-publishable-manifest check-publishable-manifests test-publishable-manifests
+pack-publishable-manifest: ## Real npm pack + packed-manifest guard for an already built PACKAGE=<slug> [PACK_DESTINATION=<dir>]
+	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
+	$(call manifest_guard_pack,$(PACKAGE))
+
+check-publishable-manifest: ## Strictly inspect one real archive TARBALL=<path> [SOURCE_MANIFEST=<path>]
+	@test -f "$(TARBALL)" || { echo "ERROR: TARBALL=<path> must be an existing file"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
+		-v "$(abspath $(TARBALL)):/input/package.tgz:ro" $(if $(SOURCE_MANIFEST),-v "$(abspath $(SOURCE_MANIFEST)):/input/source.json:ro") \
+		$(MANIFEST_GUARD_IMAGE) sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node /probe/publishable-manifests.mjs check --tarball /input/package.tgz $(if $(SOURCE_MANIFEST),--source /input/source.json)'
+
+check-publishable-manifests: ## Inventory all public manifests; full-pack BLOCK packages (needs MANIFEST_CONTEXT_FILE or CI context)
+	@./scripts/ci/check-publishable-manifests.sh "$(ENV)"
+
+test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs)'
+
 
 .PHONY: typecheck
 .NOTPARALLEL: typecheck
