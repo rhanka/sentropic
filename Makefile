@@ -560,6 +560,34 @@ check-publishable-manifest: ## Strictly inspect one real archive TARBALL=<path> 
 check-publishable-manifests: ## Inventory all public manifests; full-pack BLOCK packages (needs MANIFEST_CONTEXT_FILE or CI context)
 	@./scripts/ci/check-publishable-manifests.sh "$(ENV)"
 
+# Clean consumer qualification (spec section 10): fresh container, no repository mount, fresh npm
+# cache/config, public registry, scripts enabled, no Python. Exactly one of PKG or TARBALL.
+REPORT_DIR ?= tmp/ci-manifest-guard/qualification
+QUALIFY_MODE ?=
+QUALIFY_HEAD_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
+QUALIFY_REGISTRY := https://registry.npmjs.org
+.PHONY: qualify-published-install test-qualify-published-install
+qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBALL=<path> [SIBLING_ARCHIVES_FILE=<receipts.json>] [PEERS=a@1,b@2] in a clean consumer
+	@if [ -n "$(PKG)" ] && [ -n "$(TARBALL)" ] || [ -z "$(PKG)$(TARBALL)" ]; then echo "ERROR: exactly one of PKG=<name>@<exact-version> or TARBALL=<path> is required"; exit 1; fi
+	@printf '%s' "$(PKG)$(PEERS)$(QUALIFY_MODE)" | grep -Eq '^[@a-z0-9._/,+-]*$$' || { echo "ERROR: PKG/PEERS/QUALIFY_MODE contain unsupported characters"; exit 1; }
+	@if [ -n "$(TARBALL)" ]; then test -f "$(TARBALL)" || { echo "ERROR: TARBALL $(TARBALL) is not a file"; exit 1; }; fi
+	@if [ -n "$(SIBLING_ARCHIVES_FILE)" ]; then test -f "$(SIBLING_ARCHIVES_FILE)" && [ "$$(basename "$(SIBLING_ARCHIVES_FILE)")" = receipts.json ] || { echo "ERROR: SIBLING_ARCHIVES_FILE must be an existing receipts.json"; exit 1; }; fi
+	@mkdir -p "$(REPORT_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e QUALIFY_IMAGE="$(MANIFEST_GUARD_IMAGE)" -e GITHUB_JOB \
+		-v "$(CURDIR)/scripts/ci/qualify-published-install.mjs:/probe/qualify.mjs:ro" \
+		-v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
+		$(if $(TARBALL),-v "$(abspath $(TARBALL)):/input/package.tgz:ro") \
+		$(if $(SIBLING_ARCHIVES_FILE),-v "$(abspath $(dir $(SIBLING_ARCHIVES_FILE))):/input/siblings:ro") \
+		-v "$(abspath $(REPORT_DIR)):/reports" -w /tmp $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; unset NODE_PATH NODE_OPTIONS; tool_dir="$$(mktemp -d)"; npm_config_cache="$$(mktemp -d)" npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; \
+			node /probe/qualify.mjs --report-dir /reports --registry $(QUALIFY_REGISTRY) --head-sha "$(QUALIFY_HEAD_SHA)" \
+			$(if $(PKG),--pkg "$(PKG)",--tarball /input/package.tgz) $(if $(SIBLING_ARCHIVES_FILE),--siblings-dir /input/siblings) \
+			$(if $(PEERS),--peers "$(PEERS)") $(if $(QUALIFY_MODE),--mode "$(QUALIFY_MODE)")'
+
+test-qualify-published-install: ## Run clean-consumer qualification fixture tests (local fixture tarballs, no publish)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test scripts/ci/qualify-published-install.test.mjs'
+
 .PHONY: publishable-manifests-inventory
 publishable-manifests-inventory: ## Internal step of check-publishable-manifests: classify packages, audit WARN snapshots
 	@mkdir -p "$(MANIFEST_REPORT_DIR)"
