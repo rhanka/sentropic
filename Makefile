@@ -588,18 +588,23 @@ test-qualify-published-install: ## Run clean-consumer qualification fixture test
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test scripts/ci/qualify-published-install.test.mjs'
 
+# Make-level gate (no shell expansion of the values): PACKAGE is one word without a quote and SIBLING_DIR
+# is exactly tmp/ci-manifest-guard/siblings/$(PACKAGE); the slug charset is then checked in single quotes.
+SIBLING_ARGS_GATE = $(if $(and $(filter 1,$(words $(PACKAGE))),$(if $(findstring ',$(PACKAGE)),,ok),$(findstring tmp/ci-manifest-guard/siblings/$(PACKAGE),$(SIBLING_DIR)),$(findstring $(SIBLING_DIR),tmp/ci-manifest-guard/siblings/$(PACKAGE))),,$(error PACKAGE=<slug> and SIBLING_DIR=tmp/ci-manifest-guard/siblings/<slug> are required))
+
 .PHONY: pack-candidate-siblings publishable-sibling-plan publishable-sibling-collect
-pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> into SIBLING_DIR=tmp/<dir> (writes receipts.json)
-	@./scripts/ci/check-publishable-manifests.sh "$(ENV)" siblings "$(PACKAGE)" "$(SIBLING_DIR)"
+pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> into SIBLING_DIR=tmp/ci-manifest-guard/siblings/<slug> (writes receipts.json)
+	$(SIBLING_ARGS_GATE)
+	@./scripts/ci/check-publishable-manifests.sh "$(ENV)" siblings '$(PACKAGE)' '$(SIBLING_DIR)'
 
 publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency closure of PACKAGE into SIBLING_DIR/plan.txt
-	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
+	$(SIBLING_ARGS_GATE)
+	@case '$(PACKAGE)' in ''|-*|*[!a-z0-9-]*) echo "ERROR: invalid PACKAGE"; exit 1 ;; esac
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
 		-e PACKAGE="$(PACKAGE)" -e SIBLING_DIR="$(SIBLING_DIR)" \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		sh -lc 'set -eu; printf "%s" "$$PACKAGE" | grep -Eq "^[a-z0-9][a-z0-9-]*$$" || { echo "ERROR: invalid PACKAGE"; exit 1; }; \
-			case "$$SIBLING_DIR" in *..*) echo "ERROR: invalid SIBLING_DIR"; exit 1 ;; esac; \
-			printf "%s" "$$SIBLING_DIR" | grep -Eq "^tmp/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$$" || { echo "ERROR: invalid SIBLING_DIR"; exit 1; }; \
+		sh -lc 'set -eu; case "$$PACKAGE" in ""|-*|*[!a-z0-9-]*) echo "ERROR: invalid PACKAGE"; exit 1 ;; esac; \
+			[ "$$SIBLING_DIR" = "tmp/ci-manifest-guard/siblings/$$PACKAGE" ] || { echo "ERROR: invalid SIBLING_DIR"; exit 1; }; \
 			$(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs sibling-plan --slug "$$PACKAGE" --out /siblings/plan.txt'
 
 publishable-sibling-collect: ## Internal: verify sibling pack receipts and write SIBLING_DIR/receipts.json

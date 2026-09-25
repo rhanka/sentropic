@@ -4,18 +4,19 @@
 # aggregated so every package is reported before the final exit status.
 set -uo pipefail
 
-env_name="${1:?usage: check-publishable-manifests.sh <ENV> [siblings <slug> <dir>]}"
+env_name="${1:?usage: check-publishable-manifests.sh <ENV> [siblings <slug> tmp/ci-manifest-guard/siblings/<slug>]}"
 
 # Same-PR sibling candidates for one BLOCK package: plan (Docker), full BLOCK packs, receipt collection.
 if [ "${2:-}" = siblings ]; then
   slug="${3:?package slug required}"
   dir="${4:?sibling directory required}"
-  printf '%s' "$slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || { echo "ERROR: invalid package slug: ${slug}"; exit 1; }
-  # `rm -rf "$dir"` below: only a strict, non-empty path strictly below tmp/ is accepted (no empty
-  # segment, no segment starting with '.', no '..'), so `tmp/`, `tmp/.` or `tmp//` never reach it.
-  case "$dir" in *..*) echo "ERROR: sibling directory must not contain '..'"; exit 1 ;; esac
-  printf '%s' "$dir" | grep -Eq '^tmp/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$' \
-    || { echo "ERROR: sibling directory must be a strict path below tmp/ (got '${dir}')"; exit 1; }
+  # Whole-string checks (a glob class, not line-based grep): newlines and any non-slug byte are refused.
+  case "$slug" in ''|-*|*[!a-z0-9-]*) echo "ERROR: invalid package slug: ${slug}"; exit 1 ;; esac
+  # `rm -rf "$dir"` below: the directory is derived from the validated slug, never chosen by the caller;
+  # the argument is kept for compatibility and must equal the derived value exactly.
+  expected="tmp/ci-manifest-guard/siblings/${slug}"
+  [ "$dir" = "$expected" ] || { echo "ERROR: sibling directory must be exactly ${expected} (got '${dir}')"; exit 1; }
+  [ ! -e "$dir/.git" ] || { echo "ERROR: sibling directory ${dir} contains .git (refusing to delete a checkout)"; exit 1; }
   status=0
   rm -rf "$dir" && mkdir -p "$dir/receipts"
   make publishable-sibling-plan PACKAGE="$slug" SIBLING_DIR="$dir" ENV="$env_name" || exit 1
@@ -43,7 +44,7 @@ fi
 
 while IFS= read -r slug; do
   [ -n "$slug" ] || continue
-  if ! printf '%s' "$slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$'; then
+  if case "$slug" in ''|-*|*[!a-z0-9-]*) true ;; *) false ;; esac; then
     echo "::error title=Publishable manifest::invalid package slug in BLOCK list: ${slug}"
     status=1
     continue
