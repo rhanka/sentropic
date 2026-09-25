@@ -10,10 +10,12 @@
 # `make pack-candidate-siblings`, exactly this path) replaces the registry with the verified same-PR sibling
 # archive for exactly the name@version it carries (provisional `selected` install, lock integrity asserted).
 # `refresh-lazy-package-lock` regenerates tests/packaging/fixtures/selected/package-lock.json.
-# `check-train-lock-integrity` compares the registry dist.tarball/dist.integrity of published train packages with that lock.
+# `check-train-lock-integrity` compares the registry dist.tarball/dist.integrity of published train packages with that lock;
+# REQUIRE_PUBLISHED="<name>..." (packages whose publish job succeeded in this run) must appear on the registry (retried).
 LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
 ENV ?= test
 SIBLING_ARCHIVES_FILE ?=
+REQUIRE_PUBLISHED ?=
 CLUSTER_MESH_SIBLING_RECEIPTS := tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json
 # Receipts must be packed from this commit (same default as the root QUALIFY_HEAD_SHA of qualify-published-install).
 CLUSTER_MESH_HEAD_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
@@ -36,4 +38,4 @@ refresh-lazy-package-lock:
 	@$(LAZY_PACKAGE_RUN) sh -lc 'set -eu; REFRESH_LOCK=1 sh tests/packaging/prepare.sh /tmp/lazy-package'
 
 check-train-lock-integrity:
-	@$(LAZY_PACKAGE_RUN) node tests/packaging/check-lock-integrity.mjs registry tests/packaging/fixtures/selected/package-lock.json
+	@$(LAZY_PACKAGE_RUN) node tests/packaging/check-lock-integrity.mjs registry tests/packaging/fixtures/selected/package-lock.json $(REQUIRE_PUBLISHED)
