@@ -4,7 +4,8 @@
   "workspaces": [
     "api",
     "ui",
-    "packages/*"
+    "packages/*",
+    "apps/llm-gateway"
   ],
   "devDependencies": {
     "typescript": "5.4.5"

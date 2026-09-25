@@ -22,19 +22,20 @@ export const TRANSIENT_HINT = 're-run, not debt: transient registry or tooling f
 export const STEADY_STATE_PUBLISHERS = [
   'llm-mesh', 'llm-gateway', 'cluster-mesh', 'chat-ui', 'cited-source-viewer', 'cowork-bridge',
   'cowork-desktop', 'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-hono', 'auth-client', 'auth-ui',
-  'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'build-cli', 'harness', 'cli',
+  'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'harness',
 ];
-// bootstrap-publish step order in ci.yml (`all` expands to this list).
+// bootstrap-publish step order in ci.yml (must equal the Bootstrap publish steps, in order).
+// Owner freeze: auth-hono is not a bootstrap target until the owner decides.
 export const BOOTSTRAP_TARGETS = [
   'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'chat-ui', 'cited-source-viewer',
-  'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-hono', 'auth-client', 'auth-ui', 'flow',
-  'cowork-bridge', 'cowork-desktop', 'build-cli', 'cli', 'harness', 'llm-gateway', 'cluster-mesh', 'focus',
+  'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-client', 'auth-ui', 'flow',
+  'cowork-bridge', 'cowork-desktop', 'harness', 'llm-gateway', 'cluster-mesh',
 ];
 // Explicit full candidate pack lanes (`make pack-<slug>`).
 export const PACK_TARGETS = [
   'cluster-mesh', 'llm-mesh', 'llm-gateway', 'chat-ui', 'cited-source-viewer', 'auth-hono', 'auth-client',
-  'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-ui', 'cowork-bridge', 'cowork-desktop', 'build-cli',
-  'harness', 'focus', 'cli', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow',
+  'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-ui', 'cowork-bridge', 'cowork-desktop',
+  'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow',
 ];
 export const publishFilter = (slug) => `${slug.replace(/-/g, '_')}_publish`;
 

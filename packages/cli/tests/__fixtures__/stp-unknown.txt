@@ -1,1 +1,0 @@
-Unknown subcommand: bogus. Available subcommands: app, surface. Run `stp --help`.
