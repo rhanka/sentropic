@@ -26,6 +26,11 @@ import { FixtureTransport, anthropicFrames, openAiFrames } from './fixtures/tran
 import { buildHarness, authHeaders } from './fixtures/harness.js';
 import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
 import { openAiChatResponse, openAiRequest } from './fixtures/openai.js';
+import { RouteQuoteError } from '@sentropic/llm-mesh';
+import type { BudgetAdmissionDecision } from '../src/index.js';
+import {
+  NOW_MS, WIRES, budgetRouter, jsonAttempt, quotingPlanner, recordingBudget, send, textResponse,
+} from './fixtures/budget.js';
 
 const REQUEST_ID_HEADER = 'x-sentropic-request-id';
 
@@ -345,4 +350,71 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
       'type',
     ]);
   });
+});
+
+/**
+ * B3b: budget refusals happen before any account acquisition. JSON and stream
+ * flows return the SAME frozen provider envelope (status, body, headers) and
+ * emit nothing before `admit` resolves.
+ */
+describe('B3b v1 wire contract snapshot — pre-acquisition budget refusals', () => {
+  const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+  const cases = [
+    { name: 'over-budget', kind: 'over-budget' as const, retryAfter: 60,
+      decision: { kind: 'over-budget', resetAtMs: NOW_MS + MONTH_MS } as BudgetAdmissionDecision },
+    { name: 'unavailable', kind: 'budget-unavailable' as const,
+      decision: { kind: 'unavailable' } as BudgetAdmissionDecision },
+    { name: 'invalid-ceiling', kind: 'bad-request' as const, invalidCeiling: true },
+  ];
+  const snapshot = async (response: Response) => {
+    const headers: [string, string][] = [];
+    response.headers.forEach((value, key) => { headers.push([key, value]); });
+    return {
+      status: response.status,
+      body: await response.text(),
+      headers: headers.sort(([a], [b]) => a.localeCompare(b)),
+    };
+  };
+
+  for (const testCase of cases) {
+    for (const { wire, path } of WIRES) {
+      it(`${testCase.name} on ${wire}: identical JSON/stream envelope, zero bytes before admit`, async () => {
+        const results = [];
+        for (const stream of [false, true]) {
+          let open!: () => void;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          const provider = { generate: textResponse({ inputTokens: 1, outputTokens: 1 }) };
+          const { planner, calls } = quotingPlanner([jsonAttempt(provider.generate)], testCase.invalidCeiling
+            ? { quote: () => { throw new RouteQuoteError('ceiling', 'invalid-ceiling'); } } : {});
+          const recorder = recordingBudget(async () => { await gate; return testCase.decision!; });
+          const pending = send(budgetRouter({ planner, recorder }), path, stream);
+          let answered = false;
+          void pending.then(() => { answered = true; });
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          if (!testCase.invalidCeiling) {
+            expect(answered).toBe(false);
+            expect(recorder.admitted).toHaveLength(1);
+          }
+          expect(calls.prepare).toEqual([]);
+          open();
+          const response = await pending;
+          expect(calls.prepare).toEqual([]);
+          expect(calls.plan).toEqual([]);
+          expect(recorder.settlements).toEqual([]);
+          expect(recorder.events.filter((event) => event !== 'admit')).toEqual([]);
+          results.push(await snapshot(response));
+        }
+        expect(results[1]).toEqual(results[0]);
+        const golden = mapGatewayError(wire, testCase.kind, testCase.retryAfter);
+        const [json] = results;
+        expect(json!.status).toBe(golden.status);
+        expect(JSON.parse(json!.body)).toEqual(golden.body);
+        const headers = Object.fromEntries(json!.headers);
+        expect(headers['content-type']).toMatch(/^application\/json/);
+        expect(headers[REQUEST_ID_HEADER]).toBe('req_budget');
+        expect(headers['retry-after']).toBe(testCase.retryAfter ? String(testCase.retryAfter) : undefined);
+        expect(headers['x-sentropic-served']).toBeUndefined();
+      });
+    }
+  }
 });
