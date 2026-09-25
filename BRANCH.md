@@ -46,10 +46,10 @@
   - [x] `src/ports/budget.ts`: `BudgetAdmissionPort`, decisions, settlement budget fields, error codes.
   - [x] `src/admission.ts`: ceiling, in-process quote, admit/reserve, Retry-After bound, dispatch marker, release, overrun.
   - [x] `router/errors.ts`: internal `budget-unavailable` kind on the existing sanitized 503 bodies.
-- [ ] **Lot 2 — Flow integration**
-  - [ ] `route-flow-core.ts`: admission before plan, `plan({ quote })`, one settlement with `requestId`/`holdRef`/`quoteRef`.
-  - [ ] `route-json-flow.ts`, `route-stream-flow.ts`: dispatch marker, allowance for missing usage, release when nothing dispatched.
-  - [ ] `router/index.ts`: opt-in `budget` option; construction error when the planner has no `quote()`.
+- [x] **Lot 2 — Flow integration**
+  - [x] `route-flow-core.ts`: admission before plan, `plan({ quote })`, one settlement with `requestId`/`holdRef`/`quoteRef`.
+  - [x] `route-json-flow.ts`, `route-stream-flow.ts`: dispatch marker, allowance for missing usage, release when nothing dispatched.
+  - [x] `router/index.ts`: opt-in `budget` option; construction error when the planner has no `quote()`.
 - [ ] **Lot 3 — Tests**
   - [ ] New `tests/budget-admission.test.ts`.
   - [ ] Update `tests/{route-json-flow,route-stream-flow,errors,contract-snapshot}.test.ts`.
