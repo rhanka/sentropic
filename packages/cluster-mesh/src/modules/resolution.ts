@@ -1,5 +1,5 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
-import { basename, dirname, join, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -34,9 +34,18 @@ function readManifest(dir: string): Readonly<Record<string, unknown>> | undefine
   }
 }
 
-/** Directory of the calling module file, resolved to its physical location. */
+/**
+ * Directory of the calling module file, resolved to its physical location. A non-file URL
+ * (bundler-inlined or non-Node host) falls back to the URL string: lookups then find nothing
+ * instead of throwing at module evaluation.
+ */
 export function physicalDirOf(moduleUrl: string): string {
-  const dir = dirname(fileURLToPath(moduleUrl));
+  let dir: string;
+  try {
+    dir = dirname(fileURLToPath(moduleUrl));
+  } catch {
+    return moduleUrl;
+  }
   try {
     return realpathSync(dir);
   } catch {
@@ -45,6 +54,7 @@ export function physicalDirOf(moduleUrl: string): string {
 }
 
 export function findInstalledPackage(name: string, fromDir: string): InstalledPackage | undefined {
+  if (!isAbsolute(fromDir)) return undefined;
   let dir = fromDir;
   for (;;) {
     if (basename(dir) !== 'node_modules') {
@@ -68,6 +78,7 @@ export function findInstalledPackage(name: string, fromDir: string): InstalledPa
 
 /** Nearest enclosing package directory whose manifest has the given name. */
 export function findOwningPackageDir(fromDir: string, name: string): string | undefined {
+  if (!isAbsolute(fromDir)) return undefined;
   let dir = fromDir;
   for (;;) {
     if (readManifest(dir)?.name === name) return dir;

@@ -1,8 +1,12 @@
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as root from '../../src/index.js';
-import { inspectTopology, isClusterMeshTopologyError, type ClusterMeshInstanceEntry } from '../../src/modules/topology.js';
+import {
+  inspectTopology, isClusterMeshTopologyError, normalizeModuleUrl, registerClusterMeshInstance, type ClusterMeshInstanceEntry,
+} from '../../src/modules/topology.js';
 import { evaluations, fakeGateway, fakeMesh, PackageTree } from '../fixtures/package-tree.js';
 
 const INSTANCES = Symbol.for('@sentropic/cluster-mesh/instances');
@@ -44,12 +48,30 @@ describe('cluster-mesh topology guard', () => {
     expect(evaluations()).toEqual([]);
   });
 
-  it('should refuse two evaluated copies even when they share one realpath', () => {
-    const error = thrown(() => inspect([self, { ...self, token: Symbol('preserve-symlinks copy') }]));
+  it('should refuse two copies evaluated through distinct link paths sharing one realpath', () => {
+    // --preserve-symlinks / npm link: each link path is its own module URL and evaluation.
+    const clusterDir = join(tree.root, 'app/node_modules/@sentropic/cluster-mesh');
+    tree.link('runtime', '@sentropic/cluster-mesh', clusterDir);
+    const linkUrl = pathToFileURL(join(tree.root, 'runtime/node_modules/@sentropic/cluster-mesh/dist/modules/topology.js')).href;
+    const registered: ClusterMeshInstanceEntry[] = [];
+    registerClusterMeshInstance(registered, self);
+    registerClusterMeshInstance(registered, { token: Symbol('preserve-symlinks copy'), moduleUrl: linkUrl });
+    expect(registered).toHaveLength(2);
+    const error = thrown(() => inspect(registered));
     expect(isClusterMeshTopologyError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'cluster_mesh_topology_invalid', reason: 'duplicate_instance' });
     expect(error.paths).toHaveLength(2);
     expect(error.paths![0]).toBe(error.paths![1]);
+  });
+
+  it('should replace, not add, a re-evaluation of the same file URL (query and hash ignored)', () => {
+    const registered: ClusterMeshInstanceEntry[] = [];
+    registerClusterMeshInstance(registered, self);
+    registerClusterMeshInstance(registered, { token: Symbol('hmr'), moduleUrl: `${self.moduleUrl}?t=1695000000000` });
+    registerClusterMeshInstance(registered, { token: Symbol('hash'), moduleUrl: `${self.moduleUrl}#reload` });
+    expect(registered).toHaveLength(1);
+    expect(normalizeModuleUrl(registered[0]!.moduleUrl)).toBe(self.moduleUrl);
+    expect(() => inspect(registered)).not.toThrow();
   });
 
   it('should refuse physically distinct copies and name both paths', () => {
@@ -82,19 +104,33 @@ describe('cluster-mesh topology guard', () => {
     expect(thrown(() => inspect([self], true, ['gateway']))).toMatchObject({ reason: 'not_installed' });
   });
 
-  it('should make a second evaluated copy fail its guarded import with the code', async () => {
-    const before = registry().length;
-    expect(before).toBe(1);
-    expect(() => root.verifyClusterMeshTopology()).not.toThrow();
+  it('should not self-report a re-evaluated copy (vi.resetModules, query variant)', async () => {
+    expect(registry()).toHaveLength(1);
     await import('../../src/modules/topology-guard.js');
-    await import('../../src/modules/topology.js?second-copy');
+    vi.resetModules();
+    const fresh = await import('../../src/modules/topology.js');
+    await import('../../src/modules/topology.js?hmr=1');
+    await expect(import('../../src/modules/topology-guard.js?hmr=2')).resolves.toBeDefined();
+    expect(registry()).toHaveLength(1);
+    expect(() => fresh.verifyClusterMeshTopology()).not.toThrow();
+    expect(() => root.verifyClusterMeshTopology()).not.toThrow();
+  });
+
+  it('should make a physically distinct copy fail its guarded import with the code', async () => {
+    const copy = mkdtempSync(join(tmpdir(), 'cluster-mesh-copy-'));
+    cpSync(fileURLToPath(new URL('../../src/modules', import.meta.url)), copy, { recursive: true });
+    const copyUrl = pathToFileURL(copy).href;
     try {
+      const error = await import(pathToFileURL(join(copy, 'topology-guard.ts')).href).catch((caught: unknown) => caught);
       expect(registry()).toHaveLength(2);
-      const error = await import('../../src/modules/topology-guard.js?second-guard').catch((caught: unknown) => caught);
       expect(error).toMatchObject({ code: 'cluster_mesh_topology_invalid', reason: 'duplicate_instance' });
       expect(() => root.verifyClusterMeshTopology()).toThrow(/duplicate_instance/u);
     } finally {
-      registry().splice(1);
+      const entries = registry();
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        if (entries[index]!.moduleUrl.startsWith(copyUrl)) entries.splice(index, 1);
+      }
+      rmSync(copy, { recursive: true, force: true });
     }
     expect(() => root.verifyClusterMeshTopology()).not.toThrow();
   });
