@@ -107,6 +107,14 @@ describe('gateway auth startup matrix', () => {
     expect(await refusedStartup('service')).toMatchObject({ reason: 'not_installed', packageName: 'jose' });
   });
 
+  it('should resolve jose from mcp-auth, its owning package, not from the gateway', async () => {
+    tree.install('app', fakeMcpAuth('mcp-auth'));
+    tree.install('app/node_modules/@sentropic/mcp-auth', fakeJose('mcp-auth-jose'));
+    tree.install('app/node_modules/@sentropic/llm-gateway', fakeJose('gateway-jose', '4.0.0'));
+    expect(await startup('service')).toHaveBeenCalledOnce();
+    expect(evaluations()).toEqual(['gw', 'gw/auth', 'mcp-auth/hono', 'mcp-auth-jose']);
+  });
+
   it('should fail session startup without auth-hono and keep service mode independent of it', async () => {
     expect(await refusedStartup('session')).toMatchObject({
       moduleId: 'gateway/auth-hono', reason: 'not_installed', packageName: '@sentropic/auth-hono',
