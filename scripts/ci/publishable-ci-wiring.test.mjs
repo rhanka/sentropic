@@ -92,9 +92,36 @@ test('steady-state publisher mapping and bootstrap expansion match ci.yml', () =
   }
   const bootstrapSteps = jobs['bootstrap-publish'].steps.map((s) => s.run?.match(/^make publish-([a-z-]+)-token /)?.[1]).filter(Boolean);
   assert.deepEqual(bootstrapSteps, BOOTSTRAP_TARGETS);
-  const options = ci.on.workflow_dispatch.inputs.bootstrap_publish_target.options.filter((o) => o !== 'none' && o !== 'all');
+  const options = ci.on.workflow_dispatch.inputs.bootstrap_publish_target.options.filter((o) => o !== 'none');
   assert.deepEqual([...options].sort(), [...BOOTSTRAP_TARGETS].sort());
   assert.ok(!needsOf('bootstrap-publish').length, 'bootstrap keeps its existing (absent) needs');
+});
+
+test('bootstrap publish requires exactly one explicit target: no all option, one declared option per step', () => {
+  const input = ci.on.workflow_dispatch.inputs.bootstrap_publish_target;
+  assert.ok(!input.options.includes('all'), 'no all option');
+  assert.match(input.description, /exactly one explicit package/);
+  const declared = input.options.filter((o) => o !== 'none');
+  const job = jobs['bootstrap-publish'];
+  for (const cond of [job.if, ...job.steps.map((s) => s.if)]) assert.ok(!String(cond ?? '').includes("'all'"), `no condition references all: ${cond}`);
+  const guard = job.steps[0];
+  assert.equal(guard.name, 'Require one explicit bootstrap target');
+  assert.equal(guard.env.BOOTSTRAP_TARGET, '${{ inputs.bootstrap_publish_target }}');
+  assert.ok(!guard.run.includes('${{'), 'guard reads the target from env only');
+  const allowed = guard.run.match(/^\s*([a-z|-]+)\) ;;$/m)?.[1].split('|');
+  assert.deepEqual([...allowed].sort(), [...declared].sort(), 'guard allow-list equals declared options');
+  assert.match(guard.run, /\*\) echo "::error[^\n]*exit 1 ;;/);
+  const conditioned = job.steps.filter((s) => String(s.if ?? '').includes('bootstrap_publish_target'));
+  assert.ok(conditioned.length >= declared.length);
+  for (const step of conditioned) {
+    const m = String(step.if).match(/^inputs\.bootstrap_publish_target == '([a-z-]+)'$/);
+    assert.ok(m, `${step.name}: condition is a single equality`);
+    assert.ok(declared.includes(m[1]), `${step.name}: ${m[1]} is a declared option`);
+    if (step.run?.startsWith('make publish-')) assert.equal(step.run.match(/^make publish-([a-z-]+)-token /)[1], m[1], `${step.name}: condition matches its target`);
+  }
+  for (const slug of declared) {
+    assert.equal(job.steps.filter((s) => s.if === `inputs.bootstrap_publish_target == '${slug}'` && s.run?.startsWith(`make publish-${slug}-token `)).length, 1, `${slug}: one publish step`);
+  }
 });
 
 test('publisher ordering: gateway waits for mesh; N1 lockstep siblings gate mcp-auth and cluster-mesh', () => {
