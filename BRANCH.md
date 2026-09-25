@@ -113,13 +113,13 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
     - [x] `make test-publishable-manifests ENV=test-chore-eradicate-cli-focus`
     - [ ] `make build-api API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
 
-- [ ] **Lot 3 — Durable guard**
-  - [ ] Add `scripts/ci/eradicated-packages.mjs` (Node) + `scripts/ci/eradicated-packages.test.mjs`.
-  - [ ] Add `make check-eradicated-packages`, wire into `validate-publishable-manifests`.
-  - [ ] Add one line in `rules/MASTER.md`.
-  - [ ] Lot gate:
-    - [ ] Mutation proof: a workspace package named `@sentropic/focus` makes `make check-eradicated-packages ENV=test-chore-eradicate-cli-focus` fail, removal makes it pass.
-    - [ ] `make test-publishable-manifests ENV=test-chore-eradicate-cli-focus`
+- [x] **Lot 3 — Durable guard**
+  - [x] Add `scripts/ci/eradicated-packages.mjs` (Node) + `scripts/ci/eradicated-packages.test.mjs`.
+  - [x] Add `make check-eradicated-packages`, wire into `validate-publishable-manifests`.
+  - [x] Add one line in `rules/MASTER.md`.
+  - [x] Lot gate:
+    - [x] Mutation proof: a workspace package named `@sentropic/focus` makes `make check-eradicated-packages ENV=test-chore-eradicate-cli-focus` fail, removal makes it pass.
+    - [x] `make test-publishable-manifests ENV=test-chore-eradicate-cli-focus`
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Superseded note at top of `spec/SPEC_VOL_FOCUS.md`, `spec/SPEC_EVOL_STP_FEDERATION.md`, `spec/SPEC_EVOL_BUILD_APP_CLI.md`.

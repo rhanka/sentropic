@@ -620,7 +620,11 @@ publishable-manifests-inventory: ## Internal step of check-publishable-manifests
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs)'
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/eradicated-packages.test.mjs)'
+
+.PHONY: check-eradicated-packages
+check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/eradicated-packages.mjs
 
 
 .PHONY: typecheck
