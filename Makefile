@@ -31,7 +31,7 @@ export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
-export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/cluster-mesh/src packages/cluster-mesh/package.json packages/cluster-mesh/tsconfig.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json packages/chat-server/src packages/chat-server/package.json packages/chat-server/tsconfig.json packages/comments/src packages/comments/package.json packages/comments/tsconfig.json packages/focus/src packages/focus/package.json packages/focus/tsconfig.json api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/cluster-mesh/src packages/cluster-mesh/package.json packages/cluster-mesh/tsconfig.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json packages/chat-server/src packages/chat-server/package.json packages/chat-server/tsconfig.json packages/comments/src packages/comments/package.json packages/comments/tsconfig.json api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
@@ -620,7 +620,11 @@ publishable-manifests-inventory: ## Internal step of check-publishable-manifests
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs)'
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/eradicated-packages.test.mjs)'
+
+.PHONY: check-eradicated-packages
+check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/eradicated-packages.mjs
 
 
 .PHONY: typecheck
@@ -1372,26 +1376,6 @@ publish-cowork-bridge-token: build-cowork-bridge ## Publish @sentropic/cowork-br
 		-w /workspace/packages/cowork-bridge \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cowork-bridge,--access public)'
 
-# --- @sentropic/build-cli (BR42a1-EX1: additive lane; pure-Node, node test env) ---
-.PHONY: typecheck-build-cli
-typecheck-build-cli: ## Run @sentropic/build-cli type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
-
-.PHONY: test-build-cli
-test-build-cli: ## Run @sentropic/build-cli tests
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
-
-.PHONY: build-build-cli
-build-build-cli: ## Build @sentropic/build-cli dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
-
-.PHONY: pack-build-cli
-pack-build-cli: build-build-cli ## Validate @sentropic/build-cli npm package contents without publishing
-	$(call manifest_guard_pack,build-cli)
-
 # --- @sentropic/harness (BR42h-EX1: additive lane; tooling-only, pure-TS, node test env) ---
 .PHONY: typecheck-harness test-harness build-harness pack-harness
 typecheck-harness: ## Run @sentropic/harness type checks
@@ -1408,60 +1392,6 @@ build-harness: ## Build @sentropic/harness dist package
 
 pack-harness: build-harness ## Validate @sentropic/harness npm package contents without publishing
 	$(call manifest_guard_pack,harness)
-
-# --- @sentropic/focus (BR-FOCUS-EX (Makefile): focus gained its first real runtime dep
-#     @sentropic/track, so it builds via the WORKSPACE node_modules — the install-internal-packages
-#     + `npx --offline tsc/vitest` pattern used by chat-core/comments — NOT the isolated zero-dep
-#     temp-toolset (which cannot resolve @sentropic/track + its transitive deps). Public, pure-TS
-#     render-core + the /track read binding; node test env. install-internal-packages installs the
-#     packages/focus workspace (incl. @sentropic/track@0.17.0) into node_modules from the lockfile.) ---
-.PHONY: typecheck-focus test-focus build-focus pack-focus publish-focus publish-focus-token
-typecheck-focus: install-internal-packages ## Run @sentropic/focus type checks (requires @sentropic/track in workspace node_modules)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
-
-test-focus: install-internal-packages ## Run @sentropic/focus tests (requires @sentropic/track in workspace node_modules)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline vitest run tests --environment node'
-
-build-focus: install-internal-packages ## Build @sentropic/focus dist package (requires @sentropic/track in workspace node_modules)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
-
-pack-focus: build-focus ## Validate @sentropic/focus npm package contents without publishing
-	$(call manifest_guard_pack,focus)
-
-publish-focus: build-focus ## Publish @sentropic/focus from CI OIDC trusted publishing
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-e GITHUB_ACTIONS \
-		-e GITHUB_REPOSITORY \
-		-e GITHUB_REF \
-		-e GITHUB_SHA \
-		-e GITHUB_EVENT_NAME \
-		-e GITHUB_RUN_ID \
-		-e GITHUB_RUN_ATTEMPT \
-		-e GITHUB_SERVER_URL \
-		-e GITHUB_REPOSITORY_ID \
-		-e GITHUB_REPOSITORY_OWNER_ID \
-		-e GITHUB_WORKFLOW \
-		-e GITHUB_WORKFLOW_REF \
-		-e GITHUB_WORKFLOW_SHA \
-		-e ACTIONS_ID_TOKEN_REQUEST_URL \
-		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
-		-v "$(CURDIR):/workspace" \
-		-w /workspace/packages/focus \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,focus,--access public)'
-
-publish-focus-token: build-focus ## Publish @sentropic/focus using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-focus in CI)
-	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-v "$(CURDIR):/workspace" \
-		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
-		-w /workspace/packages/focus \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,focus,--access public)'
 
 .PHONY: publish-harness
 publish-harness: build-harness ## Publish @sentropic/harness from CI OIDC trusted publishing
@@ -1504,100 +1434,6 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) node dist/bin/harness.js check scope --branch-md /workspace/BRANCH.md --staged-files "$$files"
-
-# --- @sentropic/cli (BR42a1-EX1: additive lane; pure-Node, node test env) ---
-.PHONY: typecheck-cli
-typecheck-cli: ## Run @sentropic/cli type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
-
-.PHONY: test-cli
-test-cli: ## Run @sentropic/cli tests
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
-
-.PHONY: build-cli
-build-cli: ## Build @sentropic/cli dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
-
-.PHONY: pack-cli
-pack-cli: build-cli ## Validate @sentropic/cli npm package contents without publishing
-	$(call manifest_guard_pack,cli)
-
-.PHONY: publish-build-cli
-publish-build-cli: build-build-cli ## Publish @sentropic/build-cli from CI OIDC trusted publishing
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-e GITHUB_ACTIONS \
-		-e GITHUB_REPOSITORY \
-		-e GITHUB_REF \
-		-e GITHUB_SHA \
-		-e GITHUB_EVENT_NAME \
-		-e GITHUB_RUN_ID \
-		-e GITHUB_RUN_ATTEMPT \
-		-e GITHUB_SERVER_URL \
-		-e GITHUB_REPOSITORY_ID \
-		-e GITHUB_REPOSITORY_OWNER_ID \
-		-e GITHUB_WORKFLOW \
-		-e GITHUB_WORKFLOW_REF \
-		-e GITHUB_WORKFLOW_SHA \
-		-e ACTIONS_ID_TOKEN_REQUEST_URL \
-		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
-		-v "$(CURDIR):/workspace" \
-		-w /workspace/packages/build-cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,build-cli,--access public)'
-
-.PHONY: publish-build-cli-token
-publish-build-cli-token: build-build-cli ## Publish @sentropic/build-cli using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-build-cli in CI)
-	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-v "$(CURDIR):/workspace" \
-		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
-		-w /workspace/packages/build-cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,build-cli,--access public)'
-
-.PHONY: publish-cli
-publish-cli: build-cli ## Publish @sentropic/cli from CI OIDC trusted publishing
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-e GITHUB_ACTIONS \
-		-e GITHUB_REPOSITORY \
-		-e GITHUB_REF \
-		-e GITHUB_SHA \
-		-e GITHUB_EVENT_NAME \
-		-e GITHUB_RUN_ID \
-		-e GITHUB_RUN_ATTEMPT \
-		-e GITHUB_SERVER_URL \
-		-e GITHUB_REPOSITORY_ID \
-		-e GITHUB_REPOSITORY_OWNER_ID \
-		-e GITHUB_WORKFLOW \
-		-e GITHUB_WORKFLOW_REF \
-		-e GITHUB_WORKFLOW_SHA \
-		-e ACTIONS_ID_TOKEN_REQUEST_URL \
-		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
-		-v "$(CURDIR):/workspace" \
-		-w /workspace/packages/cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,cli,--access public)'
-
-.PHONY: publish-cli-token
-publish-cli-token: build-cli ## Publish @sentropic/cli using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-cli in CI)
-	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-v "$(CURDIR):/workspace" \
-		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
-		-w /workspace/packages/cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cli,--access public)'
 
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
@@ -1689,7 +1525,7 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 
 .PHONY: install-internal-packages
 install-internal-packages: ## Install workspace deps and link internal packages into node_modules (no api/ui)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/focus --workspace=packages/mcp-platform --include-workspace-root --ignore-scripts --no-audit --no-fund'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/mcp-platform --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
 .PHONY: build-contracts
 build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
@@ -2029,6 +1865,18 @@ test-llm-gateway: build-llm-mesh build-oauth-verify build-mcp-auth build-auth-ho
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-gateway/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 semver@7.7.2 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic node_modules/@types; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/llm-mesh node_modules/@sentropic/llm-mesh; ln -sfn "$$tool_dir/node_modules/semver" node_modules/semver; for pkg in oauth-verify mcp-auth auth-hono; do ln -sfn /workspace/packages/$$pkg node_modules/@sentropic/$$pkg; mkdir -p /workspace/packages/$$pkg/node_modules/@sentropic; ln -sfn /workspace/packages/oauth-verify /workspace/packages/$$pkg/node_modules/@sentropic/oauth-verify; for peer in hono jose zod @hono @simplewebauthn; do ln -sfn "$$tool_dir/node_modules/$$peer" "/workspace/packages/$$pkg/node_modules/$$peer"; done; done; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; trap "rm -rf node_modules ../oauth-verify/node_modules ../mcp-auth/node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+# BRDP-EX1a — standalone LLM gateway host (apps/llm-gateway) checks on the existing api Compose
+# service and its prepared workspace graph; no new service, overlay or image.
+.PHONY: typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process
+typecheck-llm-gateway-process: prepare-node-workspace ## Typecheck the standalone LLM gateway host
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -w /workspace/apps/llm-gateway api npm run typecheck
+
+lint-llm-gateway-process: prepare-node-workspace ## Lint the standalone LLM gateway host
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -w /workspace/apps/llm-gateway api npm run lint
+
+test-llm-gateway-process: prepare-node-workspace ## Test the standalone LLM gateway host (SCOPE=tests/<file>.test.ts)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -w /workspace/apps/llm-gateway api sh -lc 'set -eu; scope="$${SCOPE#apps/llm-gateway/}"; if [ -n "$$scope" ]; then npx vitest run "$$scope" --environment node; else npm test; fi'
+
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
@@ -2116,26 +1964,6 @@ test-ui: up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.
 
 .PHONY: test-api
 test-api: up-api-test test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security test-api-ai up-api test-api-limit
-
-.PHONY: owner-sign
-owner-sign: ## Sign a decision as owner (DECISION=<id>) (BR-FUSION-EX1)
-	@if [ -z "$(DECISION)" ]; then \
-		echo "❌ DECISION is required (e.g., make owner-sign DECISION=01KX4ZNTAZYSHCY108NJXYNWJ6)"; \
-		exit 1; \
-	fi
-	@echo "▶ Signing decision $(DECISION) as owner..."
-	@idempotency_key="owner-sign-$$(date +%s)"; \
-	res=$$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "$(API_BASE_URL)/api/v1/focus/owner-signatures" \
-		-H "Content-Type: application/json" \
-		-d "{\"decision_id\": \"$(DECISION)\", \"idempotency_key\": \"$$idempotency_key\"}" 2>/dev/null); \
-	status=$$(echo "$$res" | grep "HTTP_STATUS" | cut -d: -f2); \
-	body=$$(echo "$$res" | grep -v "HTTP_STATUS"); \
-	if [ "$$status" = "200" ] || [ "$$status" = "201" ]; then \
-		echo "✅ posé ($$status)"; \
-	else \
-		echo "⛔ refusé ($$status): $$body"; \
-		exit 1; \
-	fi
 
 .PHONY: test-contract
 test-contract:
@@ -2299,7 +2127,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
-prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google build-focus ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
@@ -2350,7 +2178,7 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
-up-api-test-ci: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google build-focus ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+up-api-test-ci: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api

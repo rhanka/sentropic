@@ -1,5 +1,7 @@
 # SPEC EVOL — Build-App CLI (`sentropic-build-app`)
 
+> **Superseded — eradicated (BRERAD, 2026-09-25).** `packages/cli`, `packages/build-cli` and `packages/focus` were removed from sentropic and the API no longer consumes focus. CLI = h2a; focus = h2a. This document is kept as history only.
+
 Status: Scoping / brainstorm (planning-only) for **BR-42a `feat/build-app-cli`**. No code, no branch, no worktree produced by this document. Output of read-only analysis on `main` HEAD, 2026-05-31.
 
 ## Review log
