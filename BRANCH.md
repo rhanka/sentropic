@@ -49,6 +49,8 @@
 - [x] B0-A3 | Branch: Lot D | Owner: cluster owner | Severity: design | Status: attention | `/gw` to `/` uses existing `mounts`; no mount-path collision guard because the product maps several namespaces to `/`. Rationale: a guard would break product boot; B3d adds a test only.
 - [x] B0-A4 | Branch: Lot D | Owner: control-schema owner | Severity: design | Status: attention | G1a is `0008_llm_admission.sql`; pricing non-overlap uses GiST only if `btree_gist` is verified per tier, else a unique effective_from key plus checked insert path. Rationale: no control migration creates an extension today.
 - [x] B0-A5 | Branch: Lot D | Owner: cluster owner | Severity: test gap | Status: attention | Packed missing-jose refusal and packed old-tuple rejection are absent from 0.12.0 packaging tests; B3d adds them. Rationale: source-level coverage exists, packed coverage is required for the published tuple.
+- [x] B0-A6 | Branch: Lot D | Owner: conductor | Severity: scope | Status: attention | Proposed EX1a (B1 host check targets), EX6 (root manifests/lockfile), EX7/EX8/EX9 (api product lane for B1/B2/B3c) and EX10 (cluster publish ordering, option A only); EX2 stays dropped. Rationale: explicit per-lot paths before any build edit.
+- [ ] B0-D1 | Branch: Lot D | Owner: conductor | Severity: release sequencing | Status: blocked | Workspace coupling: mesh 0.22.0 or gateway 0.19.0 on main before cluster 0.13.0 ranges is expected to fail validate-cluster-mesh, and cluster 0.13.0 cannot pass its registry-pinned packed test before publication. Recommended option A: one conductor train branch with same-PR sibling tarballs and EX10; option B reopens D-N6. Rationale: keeps main green; blocks merge sequencing of Waves 1-3, not development.
 - [x] D-FL10 | Branch: Lot D | Owner: cluster/gateway maintainers | Severity: build dependency | Status: resolved by D-FL11 | Repro: re-read both revised sibling specs on resume | Expected: matching service/session auth leaves | Actual: gateway separates /auth and /auth-hono; lazy-surface still describes a shared /gateway/auth-hono bridge | Evidence: spec sections 0/D4/B0 | Rationale: require cluster leaves/loaders matching Lot 2 and isolated packed tests before B1; preserve one loading path and edit neither sibling here.
 
 ## AI Flaky tests
@@ -63,11 +65,11 @@
 - [x] Specify operational UAT for standalone/composed gateway, tenant isolation, budgets, seat rotation, and rollout in the spec.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot D — B0 freeze (spec section 12)**
+- [x] **Lot D — B0 freeze (spec section 12)**
   - [x] 12.1-12.3: registry-verified matrix, target ranges, publication order, consumer gates; mesh quote contract and gateway budget port; `/gw` to `/` remap evidence.
   - [x] 12.4-12.5: auth leaf reconciliation against published cluster-mesh 0.12.0; G1a migration inventory.
-  - [ ] 12.6-12.7: per-lot exceptions for B1/B2/B3a/B3b/B3c/B3d; ordering, parallelism, stop point and blocked lots.
-  - [ ] Gates per commit: `git diff --check`, `make scope-check ENV=test-llm-deployable-process`; only the spec and this file change.
+  - [x] 12.6-12.7: per-lot exceptions for B1/B2/B3a/B3b/B3c/B3d; ordering, parallelism, stop point and blocked lots.
+  - [x] Gates per commit: `git diff --check`, `make scope-check ENV=test-llm-deployable-process`; only the spec and this file change.
 - [x] **Lot D — Revision round 2 (N1-N7 and minors)**
   - [x] Routing group: extend B3c/product parity; separate partition configuration from dispatch generation; apply namespace, ingress and branch-wording minors.
   - [x] Qualification group: distinguish workspace image from h2a published tuple; freeze new minor compatibility targets and mcp-auth/jose prerequisites; cite the Lot F replacement.
