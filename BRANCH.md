@@ -52,8 +52,8 @@
 - [ ] **Lot 2 — Packed qualification (train design §2b-d)**
   - [x] `packaging.mk` `SIBLING_ARCHIVES_FILE` (exact path) and `check-train-lock-integrity`.
   - [x] `prepare.sh` sibling resolver with sha256/identity check and registry fallback, `sources.txt`, provisional `selected` mode, lock with registry `resolved` and sibling integrity.
-  - [ ] Fixtures on 0.22.0/0.19.0/0.13.0; old-tuple (0.21.2/0.18.0) refusal at install and runtime; packed missing-jose refusal.
-  - [ ] Global consumer + separately installed runtime with `file:` + `overrides` proven.
+  - [x] Fixtures on 0.22.0/0.19.0/0.13.0; old-tuple (0.21.2/0.18.0) refusal at install and runtime; packed missing-jose refusal.
+  - [x] Global consumer + separately installed runtime with `file:` + `overrides` proven.
 - [ ] **Lot 3 — Docs, lockfile and proof**
   - [ ] README compatibility matrix and remap line; root lockfile (EX6).
   - [ ] Export diff artifact 0.12.0 (published) vs 0.13.0 (packed).

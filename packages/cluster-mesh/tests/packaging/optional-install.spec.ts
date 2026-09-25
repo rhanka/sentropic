@@ -31,10 +31,10 @@ describe.skipIf(!enabled)('packed optional install', () => {
     expect(result.loaders).toHaveLength(LOADERS.length);
     expect(result.refusal).toEqual({
       recognized: true, code: 'cluster_mesh_module_unavailable', reason: 'not_installed',
-      message: 'Cluster Mesh module "llm-mesh" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.21.2 <0.22.0" and restart.',
+      message: 'Cluster Mesh module "llm-mesh" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.23.0" and restart.',
     });
     expect(result.probe).toEqual({
-      gateway: { availability: 'gated', state: 'unavailable', reason: 'not_installed', packageName: '@sentropic/llm-gateway', requiredRange: '>=0.18.0 <0.19.0' },
+      gateway: { availability: 'gated', state: 'unavailable', reason: 'not_installed', packageName: '@sentropic/llm-gateway', requiredRange: '>=0.19.0 <0.20.0' },
       mcpTrack: { availability: 'gated', state: 'unavailable', reason: 'source_unavailable' },
     });
   });
@@ -48,7 +48,7 @@ describe.skipIf(!enabled)('packed optional install', () => {
 
   it('should probe metadata without evaluating an untouched installed peer', () => {
     const dir = cloneFixture('bare', 'bare-poisoned');
-    for (const [name, version] of [['llm-gateway', '0.18.0'], ['llm-mesh', '0.21.2']] as const) {
+    for (const [name, version] of [['llm-gateway', '0.19.0'], ['llm-mesh', '0.22.0']] as const) {
       const packageDir = join(dir, 'node_modules/@sentropic', name);
       mkdirSync(join(packageDir, 'dist'), { recursive: true });
       writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
@@ -62,8 +62,8 @@ describe.skipIf(!enabled)('packed optional install', () => {
       const probe = await createClusterMeshModules().probe();
       console.log(JSON.stringify({ gateway: probe.gateway, mesh: probe['llm-mesh'] }));`);
     expect(result).toMatchObject({
-      gateway: { availability: 'available', state: 'installed', installedVersion: '0.18.0' },
-      mesh: { availability: 'available', state: 'installed', installedVersion: '0.21.2' },
+      gateway: { availability: 'available', state: 'installed', installedVersion: '0.19.0' },
+      mesh: { availability: 'available', state: 'installed', installedVersion: '0.22.0' },
     });
   });
 
@@ -92,7 +92,7 @@ describe.skipIf(!enabled)('packed optional install', () => {
       session: { code: 'cluster_mesh_module_unavailable', reason: 'not_installed', packageName: '@sentropic/auth-hono' },
       health: 200, sharedMesh: true,
     });
-    expect(read(join(fixtureDir('selected'), 'tuple.txt'))).toContain('@sentropic/llm-gateway@0.18.0');
+    expect(read(join(fixtureDir('selected'), 'tuple.txt'))).toContain('@sentropic/llm-gateway@0.19.0');
   });
 
   it('should refuse a broken transitive service-auth graph as load_failed', () => {
@@ -106,8 +106,21 @@ describe.skipIf(!enabled)('packed optional install', () => {
     expect(result).toEqual({ reason: 'load_failed', packageName: '@sentropic/mcp-auth' });
   });
 
-  it('should reject gateway 0.17 at install time and at runtime', () => {
-    const dir = fixtureDir('gateway-017');
+  it('should refuse a service-mode startup whose jose peer is missing from the packed tree', () => {
+    const dir = cloneFixture('selected', 'selected-no-jose');
+    rmSync(join(dir, 'node_modules/jose'), { recursive: true, force: true });
+    const result = nodeJson(dir, `
+      import { createClusterMeshModules } from '@sentropic/cluster-mesh';
+      import { loadGatewayAuth } from '@sentropic/cluster-mesh/loaders/gateway/auth';
+      const error = await loadGatewayAuth(createClusterMeshModules()).catch((caught) => caught);
+      console.log(JSON.stringify({ code: error.code, moduleId: error.moduleId, reason: error.reason, packageName: error.packageName }));`);
+    expect(result).toEqual({
+      code: 'cluster_mesh_module_unavailable', moduleId: 'gateway/auth', reason: 'not_installed', packageName: 'jose',
+    });
+  });
+
+  it('should reject the old llm-mesh 0.21.2 / llm-gateway 0.18.0 tuple at install time and at runtime', () => {
+    const dir = fixtureDir('old-tuple');
     expect(read(join(dir, 'npm-install-outcome')).trim()).toBe('refused');
     const result = nodeJson(dir, `
       import { createClusterMeshModules, verifyClusterMeshTopology } from '@sentropic/cluster-mesh';
@@ -116,6 +129,10 @@ describe.skipIf(!enabled)('packed optional install', () => {
       let topology;
       try { verifyClusterMeshTopology(); } catch (caught) { topology = caught.reason; }
       console.log(JSON.stringify({ reason: error.reason, installedVersion: error.installedVersion, topology }));`);
-    expect(result).toEqual({ reason: 'incompatible_version', installedVersion: '0.17.1', topology: 'incompatible_version' });
+    // Refused = ERESOLVE, or npm dropping the conflicting requests: the plain install never yields the old tuple.
+    expect(read(join(dir, 'npm-install-detail'))).not.toContain('@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0');
+    expect(read(join(dir, 'tuple.txt'))).toContain('@sentropic/llm-mesh@0.21.2');
+    expect(read(join(dir, 'tuple.txt'))).toContain('@sentropic/llm-gateway@0.18.0');
+    expect(result).toEqual({ reason: 'incompatible_version', installedVersion: '0.18.0', topology: 'incompatible_version' });
   });
 });

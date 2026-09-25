@@ -29,7 +29,7 @@ const PREFLIGHT = (mode: 'service' | 'session' | 'both') => `
 
 describe.skipIf(!enabled)('packed release matrix', () => {
   it('should install the selected tuple from the committed lockfile', () => {
-    const lock = JSON.parse(readFileSync(join(fixtureDir('selected'), 'package-lock.json'), 'utf8')) as {
+    const lock = JSON.parse(readFileSync(join(fixtureDir('selected'), 'committed-lock.json'), 'utf8')) as {
       packages: Record<string, { version?: string }>;
     };
     const tuple = tupleOf('selected');
@@ -38,9 +38,23 @@ describe.skipIf(!enabled)('packed release matrix', () => {
       expect(lock.packages[`node_modules/${name}`]?.version, name).toBe(version);
     }
     expect(tuple).toMatchObject({
-      '@sentropic/llm-mesh': '0.21.2', '@sentropic/llm-gateway': '0.18.0', '@sentropic/mcp-auth': '0.2.1',
+      '@sentropic/llm-mesh': '0.22.0', '@sentropic/llm-gateway': '0.19.0', '@sentropic/mcp-auth': '0.2.1',
       '@sentropic/oauth-verify': '0.1.0', jose: '5.10.0', hono: '4.10.7', '@sentropic/auth-hono': 'absent',
     });
+  });
+
+  it('should source the train packages from verified sibling archives only in a train run', () => {
+    const expected = process.env.CLUSTER_MESH_SIBLING_RECEIPTS ? 'sibling' : 'registry';
+    const pinned: Record<string, string> = { '@sentropic/llm-mesh': '0.22.0', '@sentropic/llm-gateway': '0.19.0' };
+    for (const fixture of ['selected', 'selected-session', 'latest', 'src/separate-runtime']) {
+      const lines = read(join(fixtureDir(fixture), 'sources.txt')).trim().split('\n').map((line) => line.split(' '));
+      expect(lines.map(([name]) => name).sort(), fixture).toEqual(['@sentropic/llm-gateway', '@sentropic/llm-mesh']);
+      for (const [name, kind, spec] of lines) {
+        expect(kind, `${fixture} ${name}`).toBe(expected);
+        if (kind === 'sibling') expect(spec, name).toMatch(new RegExp(`/sentropic-${name!.split('/')[1]}-${pinned[name!]}\\.tgz$`, 'u'));
+        else if (fixture !== 'latest') expect(spec, name).toBe(pinned[name!]);
+      }
+    }
   });
 
   it('should pass session-mode preflight with the public auth-hono tarball', () => {
