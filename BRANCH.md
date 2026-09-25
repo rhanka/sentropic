@@ -35,6 +35,12 @@
 
 ## Feedback Loop
 - `attention`: root `package-lock.json` and `api/package-lock.json` keep the `0.21.2` workspace version field; prior mesh bumps (`a4359f18c`) did not refresh it, so BRDP-EX6 is not used.
+- `attention`: `quoteRef` is an FNV-1a 64 digest of canonical route input fields, resolved profile name and the quoted body (candidates with allowances, `maxAttempts`, revisions); raw `ceiling`/`now` enter through allowances and council-filtered candidates so `plan()` can recompute it. Consistency reference only, not an authentication tag.
+- `attention`: an unpinned candidate whose provider lists `codex` among its account transports (OpenAI) is flagged `outputCeilingEnforced: false` (conservative).
+- `attention`: unknown `policyProfile` in a quote throws `RoutePlanError('no-route')` exactly as `plan()`; invalid policy throws `RoutePolicyError`; an invalid `now` Date is `invalid-ceiling`.
+- `attention`: `explicit` narrows the quote by provider/model/alias/transport only (an unpinned candidate is pinned to the explicit transport); `diagnosticAccountRef` is account-bound and ignored, so the quote stays a superset and may be empty.
+- `attention`: candidate identity is provider/model/optional transport (the frozen shape has no effort); duplicates keep the first occurrence.
+- `attention`: `plan({ quote })` filters planned candidates to quoted ones; if every planned candidate is unquoted (for example a sticky affinity to another model) it throws `quote-mismatch` instead of `no-route`.
 
 ## AI Flaky tests
 - [x] Not applicable: pure unit tests, no provider call.
@@ -49,7 +55,7 @@
   - [x] Verify branch, registry latest `0.21.2`, target `0.22.0` free.
 - [ ] **Lot 1 — Quote seam**
   - [x] Contract types in `routing-contracts.ts`; `RoutePlanError` gains `quote-mismatch`.
-  - [ ] `route-quote.ts`: `quoteRoute`, `RouteQuoteError`, `MAX_ROUTE_QUOTE_CANDIDATES`, shared quote digest.
+  - [x] `route-quote.ts`: `quoteRoute`, `RouteQuoteError`, `MAX_ROUTE_QUOTE_CANDIDATES`, shared quote digest.
   - [ ] `InMemoryRoutePlanner.quote` and `plan({ quote })` pinning.
   - [ ] Export from the package entry.
   - [ ] Lot gate:
