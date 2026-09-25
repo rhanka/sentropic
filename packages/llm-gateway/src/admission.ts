@@ -5,8 +5,8 @@
  * no account is prepared and no byte is emitted before `admit` resolves.
  */
 import {
-  RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
-  type RouteQuoteInput, type RouteUsageCeiling,
+  RoutePlanError, RouteQuoteError, type GenerateRequest, type QuotedRouteCandidate, type RoutePlanner,
+  type RouteQuote, type RouteQuoteInput, type RouteUsageCeiling,
 } from '@sentropic/llm-mesh';
 import type { CanonicalIngressResult } from './canonical-ingress.js';
 import { estimateAnthropicInputTokens } from './canonical-stream.js';
@@ -60,7 +60,44 @@ export const budgetRetryAfterSeconds = (resetAtMs: number, nowMs: number): numbe
     ? Math.min(MAX_BUDGET_RETRY_AFTER_SECONDS, Math.max(1, Math.ceil((resetAtMs - nowMs) / 1000)))
     : MAX_BUDGET_RETRY_AFTER_SECONDS;
 
-/** Finite per-attempt ceiling: measured input and the request (or default) output limit. */
+/**
+ * Budget path only: a request without max tokens is sent with the host default
+ * output ceiling, so the provider enforces exactly what the hold reserved.
+ */
+export const boundRouteOutputCeiling = (
+  canonical: CanonicalIngressResult,
+  budget: GatewayBudgetOptions,
+): CanonicalIngressResult => canonical.request.maxOutputTokens !== undefined
+  || budget.defaultOutputTokens === undefined
+  ? canonical
+  : { ...canonical, request: { ...canonical.request, maxOutputTokens: budget.defaultOutputTokens } };
+
+/** Minimum input-token allowance per image, file or tool-result media attachment. */
+export const BUDGET_ATTACHMENT_INPUT_TOKENS = 4_096;
+
+interface AttachmentLike { readonly type: string; readonly data?: string; readonly url?: string }
+
+const attachmentTokens = (part: AttachmentLike): number => {
+  const inline = part.data ?? (part.url?.startsWith('data:') ? part.url : undefined);
+  const bytes = inline && part.type !== 'image' ? Math.ceil((inline.length * 3) / 4) : 0;
+  return Math.max(BUDGET_ATTACHMENT_INPUT_TOKENS, Math.ceil(bytes / 4));
+};
+
+/** Attachments the byte estimate projects out (binary data replaced by a marker). */
+const routeAttachments = (request: GenerateRequest): AttachmentLike[] => request.messages.flatMap((message) => [
+  ...(typeof message.content === 'string' ? [] : message.content
+    .filter((part) => part.type === 'image' || part.type === 'file') as AttachmentLike[]),
+  ...('toolResult' in message ? (message.toolResult.content ?? []).flatMap((part): AttachmentLike[] =>
+    part.type === 'media' ? [part]
+      : part.type === 'embedded-resource' && part.resource.data !== undefined
+        ? [{ type: 'file', data: part.resource.data }] : []) : []),
+]);
+
+/**
+ * Finite per-attempt ceiling: estimated input and the request (or default)
+ * output limit. Attachments count as `imageUnits` and add a conservative
+ * per-attachment input allowance; the input side stays an estimate.
+ */
 export const routeUsageCeiling = (
   canonical: CanonicalIngressResult,
   budget: GatewayBudgetOptions,
@@ -69,7 +106,10 @@ export const routeUsageCeiling = (
   if (!isCount(outputTokens, 1)) {
     throw new GatewayError('bad-request', 'a finite output token ceiling is required');
   }
-  return { inputTokens: estimateAnthropicInputTokens(canonical.request), outputTokens };
+  const attachments = routeAttachments(canonical.request);
+  const inputTokens = estimateAnthropicInputTokens(canonical.request)
+    + attachments.reduce((total, part) => total + attachmentTokens(part), 0);
+  return { inputTokens, outputTokens, ...(attachments.length > 0 ? { imageUnits: attachments.length } : {}) };
 };
 
 type QuoteRouteFields = Omit<RouteQuoteInput, 'requestedModel' | 'requiredCapabilities' | 'ceiling' | 'now'>;
@@ -167,9 +207,18 @@ const allowanceFor = (candidates: readonly QuotedRouteCandidate[]): RouteUsageCe
 });
 
 /**
- * Charged usage per attempt: a dispatched attempt without reported usage is
+ * Measured means both counts are finite and non-zero. Empty (`{}`), partial
+ * (`{ totalTokens }`) or zero-filled provider usage is no billing evidence.
+ */
+const isMeasured = (usage: SettleUsage): boolean => !usage.estimated
+  && isCount(usage.inputTokens, 1) && isCount(usage.outputTokens, 1);
+
+const countOrZero = (value: number): number => (isCount(value, 0) ? value : 0);
+
+/**
+ * Charged usage per attempt: a dispatched attempt without measured usage is
  * charged at least its quoted allowance, never an estimated zero. Overruns
- * record dispatched attempts whose reported usage exceeded the allowance.
+ * record dispatched attempts whose measured usage exceeded the allowance.
  */
 export const chargeAdmittedAttempts = <T extends AttemptView>(
   admission: AdmittedRoute,
@@ -180,10 +229,10 @@ export const chargeAdmittedAttempts = <T extends AttemptView>(
     if (!admission.dispatched.has(attempt.candidateRef)) return attempt;
     const candidates = coveringCandidates(admission.quote, attempt);
     const allowance = allowanceFor(candidates);
-    if (attempt.usage.estimated) {
+    if (!isMeasured(attempt.usage)) {
       return { ...attempt, usage: {
-        inputTokens: Math.max(attempt.usage.inputTokens, allowance.inputTokens),
-        outputTokens: Math.max(attempt.usage.outputTokens, allowance.outputTokens),
+        inputTokens: Math.max(countOrZero(attempt.usage.inputTokens), allowance.inputTokens),
+        outputTokens: Math.max(countOrZero(attempt.usage.outputTokens), allowance.outputTokens),
         estimated: true,
       } };
     }
