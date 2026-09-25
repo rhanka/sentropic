@@ -87,6 +87,11 @@ export interface RouteQuote {
   readonly candidates: readonly QuotedRouteCandidate[];
   /** Resolved policy attempt cap, 1..8. */
   readonly maxAttempts: number;
+  /**
+   * ISO instant of the quote's `now`; `plan({ quote })` evaluates council
+   * freshness at this instant so the plan never diverges from the quote.
+   */
+  readonly quotedAt: string;
   /** Policy profile revision, or 'default' when no profile applies. */
   readonly policyRevision: string;
   readonly councilRevision: string;
