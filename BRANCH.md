@@ -65,7 +65,7 @@
   - [x] Candidates (not published): cluster-mesh 0.13.0 sha256 `5e4b5bf3882a4c33bbb44efdeafffd3b82e3499b52bd758e9e9edaf12733ffa2`, llm-mesh 0.22.0 `91fce7217da6abb60b93d6af04db7a873df4a7826795f6893970f15c77810751`, llm-gateway 0.19.0 `0b8d0f5ca790b45472df76c8280ca628c64ccaa9c8f33387899e2493ca48db89` (equal to the B3b digest).
 - [ ] **Lot 4 — Review fix round 1 (muse + opus + conductor)**
   - [x] Automatic leaf guard enforces the accepted peer ranges per family (llm-mesh leaves: llm-mesh; gateway leaves, loaders and compose: llm-gateway and llm-mesh), memoized per copy set and family; `sideEffects` lists the two family guards.
-  - [ ] Unit trees: correct tuple, out-of-range refusal message, nested in-range and out-of-range copies, gateway-located llm-mesh, prerelease/build metadata, HMR re-evaluation.
+  - [x] Unit trees: correct tuple, out-of-range refusal message, nested in-range and out-of-range copies, gateway-located llm-mesh, prerelease/build metadata, HMR re-evaluation.
   - [ ] Sibling receipts validated by `loadSiblings` itself (head sha, packed-manifest guard, unlisted archives) plus basename collision; a cluster-mesh receipt is the qualified candidate.
   - [ ] `refresh` errors on a sibling version mismatch; `registry` compares `resolved`; refusal rows for absolute path and non-array/unreadable receipts.
   - [ ] Old-tuple and partial-bump fixtures record exit, warnings and installed versions; leaves, loaders and preflight refuse `incompatible_version`; every leaf imports in the correct single-tree and global topologies.
