@@ -60,8 +60,11 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
 - [x] `acknowledge` BRERAD-EX3 `api/Dockerfile`: drop focus manifest copy and build. Impact: API image no longer builds focus. Rollback: `git revert`.
 - [x] `acknowledge` BRERAD-EX4 `package-lock.json`: regenerated via `make lock-root` after workspace removal; `@sentropic/track` becomes an explicit API dependency (previously hoisted through focus). Impact: dependency graph. Rollback: `git revert`.
 - [x] `acknowledge` BRERAD-EX5: pure-deletion commits exceed the 150-line rule (one commit per package, API focus removal). Rollback: `git revert`.
-- [x] `attention` owner follow-up: npm deprecation of already-published `@sentropic/cli@0.5.0` and `@sentropic/build-cli@0.2.0` (npm blocked on host). No action on `@sentropic/focus` (published 0.3.0 is consumed by h2a).
+- [x] `attention` owner follow-up: npm deprecation of already-published `@sentropic/cli@0.5.0`, `@sentropic/build-cli@0.2.0` and `@sentropic/focus` (latest published 0.3.0); no registry action taken in this branch (no publish, unpublish, deprecate or dist-tag change).
 - [x] `attention` owner follow-up: DB table `track_owner_signatures` is focus-only; no drop migration written.
+- [x] `acknowledge` focus source for 0.4.0-0.6.0 (never published) is preserved in git history at `c50c0aabad54680b7f97907d3c062758b63482b1` (last `main` before deletion) for h2a to adopt if needed.
+- [x] `acknowledge` `packages/cluster-mesh` has no dependency on `@sentropic/focus`; its catalog keeps inert gated ids `focus`, `cli`, `build-cli` (`source_unavailable`), handled by cluster-mesh 0.13.0 outside this branch.
+- [x] `acknowledge` API `/cli` namespace (`productCliModule`, device/CLI auth) is not part of the removed packages and is kept.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -92,26 +95,27 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
   - [x] Delete tests `api/tests/unit/focus-owner-signature-route.test.ts`, `api/tests/unit/focus-decision-validator.test.ts`, `api/tests/unit/track-event-owner-signature-port.test.ts`, `api/tests/unit/track-owner-signature-adapter.test.ts`, `api/tests/api/cluster-mesh-focus-cutover.test.ts`, `api/tests/helpers/owner-sign-child.ts`.
   - [x] Update `api/tests/api/cluster-mesh-track.test.ts` (local intent type) and `api/tests/api/cluster-mesh-namespace-inventory.test.ts` (no `/focus`) and `e2e/tests/10-cluster-mesh-control-plane.spec.ts` (28 modules).
   - [x] Drop focus from `api/package.json`, `api/package-lock.json`, `api/vitest.config.ts`, `api/Dockerfile`; declare `@sentropic/track` explicitly.
-  - [ ] Lot gate:
-    - [ ] `make typecheck API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
-    - [ ] `make lint API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
-    - [ ] **API tests**
-      - [ ] Updated: `api/tests/api/cluster-mesh-track.test.ts`, `api/tests/api/cluster-mesh-namespace-inventory.test.ts`
-      - [ ] Sub-lot gate: `make test-api-unit API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] No UI caller of `/api/v1/focus` exists; no UI test change.
-    - [ ] **E2E tests**
-      - [ ] No E2E change; CI e2e groups cover non-regression.
+  - [x] Lot gate:
+    - [x] `make typecheck API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
+    - [x] `make lint API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
+    - [x] **API tests**
+      - [x] Updated: `api/tests/api/cluster-mesh-track.test.ts`, `api/tests/api/cluster-mesh-namespace-inventory.test.ts`
+      - [x] Sub-lot gate: `make test-api-unit API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus` (980 passed, 2 skipped)
+- [x] Scoped: `make test-api-endpoints SCOPE="tests/api/cluster-mesh-track.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-apps.test.ts" API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus` (13 passed)
+    - [x] **UI tests (TypeScript only)**
+      - [x] No UI caller of `/api/v1/focus` exists; no UI test change.
+    - [x] **E2E tests**
+      - [x] No E2E change; CI e2e groups cover non-regression.
 
-- [ ] **Lot 2 — Package deletion and wiring**
+- [x] **Lot 2 — Package deletion and wiring**
   - [x] `git rm -r packages/focus`, `packages/cli`, `packages/build-cli` (one commit each).
   - [x] Remove Makefile lanes (typecheck/test/build/pack/publish/publish-token), `owner-sign`, focus in `API_VERSION`, `install-internal-packages`, `prepare-node-workspace`, `up-api-test-ci`.
   - [x] Remove ci.yml filters, outputs, validate/publish jobs, bootstrap option/step for the three packages.
   - [x] Update `scripts/ci/publishable-manifests.mjs` lists and `scripts/ci/publishable-*.test.mjs` expectations.
   - [x] Regenerate `package-lock.json` with `make lock-root ENV=test-chore-eradicate-cli-focus`.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make test-publishable-manifests ENV=test-chore-eradicate-cli-focus`
-    - [ ] `make build-api API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
+    - [x] `make build-api API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
 
 - [x] **Lot 3 — Durable guard**
   - [x] Add `scripts/ci/eradicated-packages.mjs` (Node) + `scripts/ci/eradicated-packages.test.mjs`.
@@ -121,14 +125,14 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
     - [x] Mutation proof: a workspace package named `@sentropic/focus` makes `make check-eradicated-packages ENV=test-chore-eradicate-cli-focus` fail, removal makes it pass.
     - [x] `make test-publishable-manifests ENV=test-chore-eradicate-cli-focus`
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Superseded note at top of `spec/SPEC_VOL_FOCUS.md`, `spec/SPEC_EVOL_STP_FEDERATION.md`, `spec/SPEC_EVOL_BUILD_APP_CLI.md`.
-  - [ ] Pointers in `track/TRACK.md` and `PLAN.md`.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Superseded note at top of `spec/SPEC_VOL_FOCUS.md`, `spec/SPEC_EVOL_STP_FEDERATION.md`, `spec/SPEC_EVOL_BUILD_APP_CLI.md`.
+  - [x] Pointers in `track/TRACK.md` and `PLAN.md`.
 
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest API (cf Lot 1)
-  - [ ] No package `src/**` changed outside deleted packages (no bump required).
+- [x] **Lot N — Final validation**
+  - [x] Typecheck & Lint
+  - [x] Retest API (cf Lot 1)
+  - [x] No package `src/**` changed outside deleted packages (no bump required).
   - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: verify branch CI on that PR and resolve blockers.
   - [ ] Final gate step 3: once CI is `OK`, commit removal of `BRANCH.md`, push, and merge.

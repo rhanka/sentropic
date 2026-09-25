@@ -1,5 +1,7 @@
 # SPEC_VOL_FOCUS — `@sentropic/focus`: a focused-session document runtime (orient/steer a subject; decide = one modality)
 
+> **Superseded — eradicated (BRERAD, 2026-09-25).** `packages/cli`, `packages/build-cli` and `packages/focus` were removed from sentropic and the API no longer consumes focus. CLI = h2a; focus = h2a. This document is kept as history only.
+
 Status: intent + proposal, 2026-06-20. Owner-named **`focus`** (rhanka): a Focus is *un temps de focus sur un
 sujet particulier, pour orienter/piloter — décider étant UNE modalité* (parmi orienter / amender / commenter).
 Generalizes the earlier "decision-dossier" framing: the decision-dossier is the FIRST focus TYPE, not the whole
