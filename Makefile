@@ -593,6 +593,7 @@ pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> i
 	@./scripts/ci/check-publishable-manifests.sh "$(ENV)" siblings "$(PACKAGE)" "$(SIBLING_DIR)"
 
 publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency closure of PACKAGE into SIBLING_DIR/plan.txt
+	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs sibling-plan --slug "$(PACKAGE)" --out /siblings/plan.txt'

@@ -10,6 +10,8 @@ env_name="${1:?usage: check-publishable-manifests.sh <ENV> [siblings <slug> <dir
 if [ "${2:-}" = siblings ]; then
   slug="${3:?package slug required}"
   dir="${4:?sibling directory required}"
+  printf '%s' "$slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || { echo "ERROR: invalid package slug: ${slug}"; exit 1; }
+  case "$dir" in *..*) echo "ERROR: sibling directory must not contain '..'"; exit 1 ;; esac
   case "$dir" in tmp/*) ;; *) echo "ERROR: sibling directory must live under tmp/"; exit 1 ;; esac
   status=0
   rm -rf "$dir" && mkdir -p "$dir/receipts"
