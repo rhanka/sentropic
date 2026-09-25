@@ -91,10 +91,13 @@ describe('cluster-mesh topology guard', () => {
     expect(evaluations()).toEqual([]);
   });
 
-  it('should check versions and requirements only in the explicit preflight', () => {
+  it('should check requirements only in the explicit preflight and ranges only there or for a leaf family', () => {
     tree.install('app', fakeMesh('mesh'));
     tree.install('app', fakeGateway('gw', '0.18.0'));
     expect(() => inspect([self])).not.toThrow();
+    expect(() => inspectTopology({ anchorDir, instances: [self], strict: false, family: 'llm-mesh' })).not.toThrow();
+    expect(thrown(() => inspectTopology({ anchorDir, instances: [self], strict: false, family: 'gateway' })))
+      .toMatchObject({ reason: 'incompatible_version' });
     expect(thrown(() => inspect([self], true))).toMatchObject({ reason: 'incompatible_version' });
     tree.cleanup();
     tree = new PackageTree();
@@ -111,6 +114,8 @@ describe('cluster-mesh topology guard', () => {
     const fresh = await import('../../src/modules/topology.js');
     await import('../../src/modules/topology.js?hmr=1');
     await expect(import('../../src/modules/topology-guard.js?hmr=2')).resolves.toBeDefined();
+    await expect(import('../../src/modules/topology-guard-llm-mesh.js?hmr=3')).resolves.toBeDefined();
+    await expect(import('../../src/modules/topology-guard-gateway.js?hmr=4')).resolves.toBeDefined();
     expect(registry()).toHaveLength(1);
     expect(() => fresh.verifyClusterMeshTopology()).not.toThrow();
     expect(() => root.verifyClusterMeshTopology()).not.toThrow();
