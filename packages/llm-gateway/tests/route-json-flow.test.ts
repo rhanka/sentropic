@@ -1,6 +1,7 @@
 import type { PreparedRouteAttempt, RoutePlanner } from '@sentropic/llm-mesh';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
+import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 
@@ -11,7 +12,7 @@ const policy = {
 };
 
 const request = {
-  wire: 'openai-chat-completions' as const, headers: {}, model: 'gpt-5.6-terra', stream: false,
+  wire: 'openai-chat-completions' as const, headers: {}, authContext: { method: "POST", url: "https://gateway.test/v1/chat/completions", requestId: "req-test" }, model: 'gpt-5.6-terra', stream: false,
   body: { model: 'gpt-5.6-terra', messages: [{ role: 'user', content: 'hello' }] },
 };
 
@@ -19,7 +20,7 @@ const config = {
   ...stubGatewayConfig,
   callerAuth: { async verify() {
     return {
-      ok: true,
+      ok: true as const,
       cost: {
         tenantId: 'tenant-1', principalId: 'user-1', source: 'test', correlationId: 'request-1',
       },
@@ -51,6 +52,71 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
 });
 
 describe('route JSON flow', () => {
+  it('settles zero usage when dispatch validation cancels before the provider call', async () => {
+    const controller = new AbortController(); const settleRoute = vi.fn();
+    const source = { generate: vi.fn(), releaseCancelled: vi.fn(), recordOutcome: vi.fn() } as unknown as PreparedRouteAttempt;
+    const adapter = new RouteAttemptDispatch();
+    const dispatch = { stream: vi.fn(), generate: (input: import('../src/ports/dispatch.js').RouteAttemptDispatchRequest) => {
+      controller.abort(); return adapter.generate(input);
+    } };
+    await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([source]), dispatch,
+      metering: { settleRoute } }, { ...request, signal: controller.signal })).rejects.toThrow();
+    expect(source.generate).not.toHaveBeenCalled();
+    expect(source.releaseCancelled).toHaveBeenCalledTimes(1);
+    expect(source.recordOutcome).not.toHaveBeenCalled();
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'cancelled',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: false },
+      attempts: [expect.objectContaining({ usage: { inputTokens: 0, outputTokens: 0, estimated: false } })],
+    }));
+  });
+  it('settles an empty plan exactly once with zero usage', async () => {
+    const settleRoute = vi.fn();
+    await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([]), metering: { settleRoute } }, request))
+      .rejects.toMatchObject({ kind: 'no-eligible-account' });
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      outcome: 'failed', attempts: [], usage: { inputTokens: 0, outputTokens: 0, estimated: false },
+    }));
+  });
+  it.each([undefined, { inputTokens: 0, outputTokens: 0 }])('preserves reported zero and estimates only missing usage: %j', async usage => {
+    const source = { generate: vi.fn(async () => ({
+      id: 'r', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'response' }, text: 'response', toolCalls: [],
+      finishReason: 'stop' as const, usage,
+    })), complete: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn();
+    await runRouteJsonFlow({ config, routePlanner: routePlanner([source]), metering: { settleRoute } }, request);
+    const settled = settleRoute.mock.calls[0]![0];
+    expect(settled.usage.estimated).toBe(!usage);
+    expect(settled.usage.inputTokens).toEqual(usage ? 0 : expect.any(Number));
+    if (!usage) expect(settled.usage.inputTokens).toBeGreaterThan(0);
+  });
+  it('never redispatches or completes twice after a settlement rejection', async () => {
+    const generate = vi.fn(async () => ({ id: 'r', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop' as const }));
+    const source = { generate, complete: vi.fn(), recordOutcome: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn(async () => { throw Object.assign(Error('ledger'), { status: 502 }); });
+    await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([source, source]), metering: { settleRoute } }, request))
+      .rejects.toThrow('ledger');
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(source.complete).toHaveBeenCalledTimes(1);
+    expect(source.recordOutcome).not.toHaveBeenCalled();
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+  });
+  it('uses the injected opaque adapter without calling native ports', async () => {
+    const source = { attemptRef: 'exact', generate: vi.fn(async () => ({
+      id: 'r', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop' as const,
+    })), stream: vi.fn(), complete: vi.fn(), recordOutcome: vi.fn(), markCommitted: vi.fn(), releaseCancelled: vi.fn() };
+    const dispatch = { generate: vi.fn(async (input: import("../src/ports/dispatch.js").RouteAttemptDispatchRequest) => input.attempt.generate(input.request)), stream: vi.fn() };
+    const forbidden = vi.fn(() => { throw Error('native port called'); });
+    await runRouteJsonFlow({ config: { ...config, pool: { ...config.pool, select: forbidden },
+      authResolver: { resolve: forbidden }, dispatch: { dispatch: forbidden, dispatchStream: forbidden } },
+    routePlanner: routePlanner([source]), dispatch, metering: { settleRoute() {} } }, request);
+    expect(dispatch.generate).toHaveBeenCalledTimes(1);
+    expect(dispatch.generate.mock.calls[0]![0].attempt).toBe(source);
+    expect(source.complete).toHaveBeenCalledTimes(1);
+    expect(forbidden).not.toHaveBeenCalled();
+  });
   it('settles once when planning fails after trusted route input starts the request', async () => {
     const settlements: RouteRequestSettlement[] = [];
     let routeInputCalls = 0;

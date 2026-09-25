@@ -1,0 +1,30 @@
+{
+  "fixtureVersion": 1,
+  "baselineLines": ["0.10.x", "0.11.x"],
+  "self": { "kind": "server", "nodeId": "node:local", "issuer": "issuer", "endpoint": "https://local.test", "state": "active" },
+  "lookup": { "workspaceId": "abc", "userId": "user:1" },
+  "membership": { "tenantId": "tenant:1", "userId": "user:1", "status": "approved" },
+  "residence": { "tid": "tenant:1", "userId": "user:1", "homeNodeId": "node:local", "workspace": "ws:sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" },
+  "capabilities": { "mode": "single-node", "localDevices": "available", "localProjection": "available", "interServerDirectory": "gated", "tokenExchange": "gated", "memoryReplication": "gated" },
+  "reference": { "kind": "agent_identity", "reference": "agent:1", "homeNodeId": "node:local", "issuer": "issuer", "keyId": "key:1", "signature": "opaque-host-signature" },
+  "projectionCases": [
+    { "name": "legacy local", "patch": {}, "verified": true, "expected": { "identity": "agent:1" } },
+    { "name": "invalid signature", "patch": {}, "verified": false, "error": { "code": "invalid_projection_reference" } },
+    { "name": "remote home", "patch": { "homeNodeId": "node:remote" }, "verified": true, "error": { "code": "capability_gated", "capability": "remote_projection" } }
+  ],
+  "device": { "deviceCode": "d", "userCode": "u", "intervalSec": 5, "expiresAt": "2030-01-01T00:00:00.000Z" },
+  "poll": { "status": "approved", "userId": "user:1", "role": "OWNER", "deviceName": "Laptop" },
+  "approval": { "ok": false, "reason": "already_resolved" },
+  "commandResult": { "exitCode": 1, "stdout": "", "stderr": "denied" },
+  "nhi": [
+    { "method": "attest", "input": { "instance": "agent:1", "privateKey": "/key" }, "args": ["nhi", "attest", "--instance", "agent:1", "--private-key", "/key"] },
+    { "method": "offboard", "input": { "instance": "agent:1" }, "args": ["nhi", "offboard", "--instance", "agent:1"] },
+    { "method": "exportBundle", "input": { "instance": "agent:1", "trustDomain": "local.test" }, "args": ["nhi", "export", "--instance", "agent:1", "--trust-domain", "local.test"] }
+  ],
+  "since011": {
+    "supportedKinds": ["human_identity", "agent_identity"],
+    "timestamps": { "issuedAt": 900, "expiresAt": 1100 },
+    "canonical": "{\"kind\":\"agent_identity\",\"reference\":\"agent:1\",\"homeNodeId\":\"node:local\",\"issuer\":\"issuer\",\"keyId\":\"key:1\",\"expiresAt\":1100,\"issuedAt\":900}",
+    "denialError": { "code": "capability_gated", "capability": "device_denial" }
+  }
+}

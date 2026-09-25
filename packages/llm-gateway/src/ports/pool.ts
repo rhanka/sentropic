@@ -90,8 +90,8 @@ export interface PoolStatePort {
 /**
  * AuthResolver — gateway-owned (spec §4). Resolves a selected pooled
  * account's executable `SecretAuthMaterial` from the secret store, refreshing
- * under lock if expired. Refresh is GATEWAY-owned + coordinated, NEVER
- * delegated to llm-mesh. Hooks/logs receive the redacted `AuthDescriptor`, the
+ * under lock if expired on the native path only. BR-73 routed refresh is
+ * mesh-owned. Hooks/logs receive the redacted `AuthDescriptor`, the
  * resolver returns the executable material to the dispatch path only.
  */
 export interface AuthResolver {
