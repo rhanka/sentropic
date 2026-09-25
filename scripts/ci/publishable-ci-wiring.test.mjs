@@ -213,11 +213,11 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
     if (slug === 'cluster-mesh') {
-      // Release train (BRDP-EX10): a skipped receipt is qualified when the version is on the registry and unqualified.
+      // Release train (BRDP-EX10): a skipped receipt is healed only on a re-run, when the version is on the registry.
       const run = publish[at + 1].run;
-      assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)/, 'qualify a new publication and a healed skip');
+      assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, 'first attempt: a skip is a prior publication');
       assert.match(run, /if ! curl -fsS -o \/dev\/null "https:\/\/registry\.npmjs\.org\/[^\n]*then echo "::error [^\n]*absent from the registry"; exit 1; fi/);
-      assert.match(run, /if \[ -f "\$\{report_dir\}\/qualify-report\.json" \]; then [^\n]*exit 0; fi/);
+      assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
       assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" QUALIFY_MODE=post-publication REPORT_DIR="\$report_dir"/);
     } else {
       assert.match(publish[at + 1].run, /if \[ "\$status" != published \]; then .*exit 0; fi\n.*make qualify-published-install/s, 'qualify only a new publication, never a skip');
@@ -233,7 +233,8 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
     const cond = jobs[job].if;
     const slug = job.slice('publish-'.length);
-    assert.ok(cond.startsWith(`always() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && needs.changes.outputs.${publishFilter(slug)} == 'true' && `), `${job}: barrier prefix`);
+    // `!cancelled()` instead of design section 5's `always()`: a manual cancel stops the train.
+    assert.ok(cond.startsWith(`!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && needs.changes.outputs.${publishFilter(slug)} == 'true' && `), `${job}: barrier prefix`);
     assert.equal(cond, [cond.slice(0, cond.indexOf(' && (')), ...validated, ...upstreams.map(([s, f]) => strictWait(s, f))].join(' && '), `${job}: exact condition`);
     assert.deepEqual(needsOf(job), ['changes', ...TRAIN_VALIDATES.map(([v]) => v), ...upstreams.map(([s]) => s)], `${job}: needs`);
     assert.deepEqual(jobs[job].concurrency, { group: 'npm-publish-train', 'cancel-in-progress': false }, `${job}: concurrency`);
@@ -248,9 +249,13 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   assert.match(sync.run, /if \[ "\$manifest" != "\$locked" \]; then\n\s*echo "::error [^\n]*"\n\s*exit 1/);
   const verify = jobs['verify-train-lock-integrity'];
   assert.deepEqual(needsOf('verify-train-lock-integrity'), ['changes', 'publish-llm-mesh', 'publish-llm-gateway']);
-  assert.equal(verify.if, "always() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')");
+  assert.equal(verify.if, "!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')");
   assert.deepEqual(verify.permissions, { contents: 'read' });
-  assert.ok(verify.steps.some((s) => s.run === 'make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-ci-cluster-mesh'));
+  const check = verify.steps.find((s) => /check-train-lock-integrity/.test(s.run ?? ''));
+  assert.deepEqual(check.env, { LLM_MESH_PUBLISH_RESULT: '${{ needs.publish-llm-mesh.result }}', LLM_GATEWAY_PUBLISH_RESULT: '${{ needs.publish-llm-gateway.result }}' });
+  assert.match(check.run, /if \[ "\$LLM_MESH_PUBLISH_RESULT" = success \]; then required="@sentropic\/llm-mesh"; fi/);
+  assert.match(check.run, /if \[ "\$LLM_GATEWAY_PUBLISH_RESULT" = success \]; then required="[^\n]*@sentropic\/llm-gateway"; fi/);
+  assert.match(check.run, /make -f packages\/cluster-mesh\/packaging\.mk check-train-lock-integrity REQUIRE_PUBLISHED="\$required" ENV=test-ci-cluster-mesh$/m);
   for (const name of Object.keys(jobs)) assert.ok(!needsOf(name).includes('verify-train-lock-integrity'), `${name}: integrity check never stops the chain`);
   const steps = jobs['validate-cluster-mesh'].steps;
   const index = (pattern) => steps.findIndex((s) => pattern.test(s.run ?? ''));

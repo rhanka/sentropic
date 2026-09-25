@@ -1498,7 +1498,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
     if: >-
-      always() &&
+      !cancelled() &&
       needs.changes.result == 'success' &&
       github.ref == 'refs/heads/main' &&
       needs.changes.outputs.llm_mesh_publish == 'true' &&
@@ -1532,7 +1532,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
     if: >-
-      always() &&
+      !cancelled() &&
       needs.changes.result == 'success' &&
       github.ref == 'refs/heads/main' &&
       needs.changes.outputs.llm_gateway_publish == 'true' &&
@@ -1823,7 +1823,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts]
     if: >-
-      always() &&
+      !cancelled() &&
       needs.changes.result == 'success' &&
       github.ref == 'refs/heads/main' &&
       needs.changes.outputs.cluster_mesh_publish == 'true' &&
@@ -1855,15 +1855,16 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           report_dir=tmp/ci-manifest-guard/qualify-cluster-mesh
-          # Release train (BRDP-EX10): a re-run after a publish that landed writes status=skipped; the
-          # post-publication qualification is healed when the version is on the registry and no report exists.
+          # Release train (BRDP-EX10): a re-run after a publish that landed writes status=skipped; only then
+          # (run attempt > 1) is the post-publication qualification healed, when the version is on the registry.
+          # On a first attempt a skipped receipt is a version published before this run (e.g. a README-only change).
           case "$status" in
             published) ;;
             skipped)
+              if [ "$GITHUB_RUN_ATTEMPT" -le 1 ]; then echo "::notice title=Publication qualification::cluster-mesh status=skipped on the first attempt: ${pkg} was published before this run, nothing to qualify"; exit 0; fi
               name="${pkg%@*}"; version="${pkg##*@}"
               if ! curl -fsS -o /dev/null "https://registry.npmjs.org/$(printf '%s' "$name" | sed 's#/#%2f#')/${version}"; then echo "::error title=Publication qualification::cluster-mesh status=skipped but ${pkg} is absent from the registry"; exit 1; fi
-              if [ -f "${report_dir}/qualify-report.json" ]; then echo "::notice title=Publication qualification::${pkg} already qualified in this attempt"; exit 0; fi
-              echo "::notice title=Publication qualification::cluster-mesh status=skipped, ${pkg} present on the registry and not qualified: running post-publication qualification" ;;
+              echo "::notice title=Publication qualification::cluster-mesh status=skipped on run attempt ${GITHUB_RUN_ATTEMPT}, ${pkg} present on the registry: running post-publication qualification" ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
           make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" ENV=test-ci-cluster-mesh
@@ -1882,15 +1883,26 @@ jobs:
   verify-train-lock-integrity:
     runs-on: ubuntu-latest
     needs: [changes, publish-llm-mesh, publish-llm-gateway]
-    if: always() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')
+    # `!cancelled()` (not `always()`): a manual cancel stops the chain (deviation from design section 5).
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      # A package whose publish job succeeded in this run must be on the registry (retried); the other is notice-only.
       - name: Check train lock integrity against the registry
-        run: make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-ci-cluster-mesh
+        env:
+          LLM_MESH_PUBLISH_RESULT: ${{ needs.publish-llm-mesh.result }}
+          LLM_GATEWAY_PUBLISH_RESULT: ${{ needs.publish-llm-gateway.result }}
+        run: |
+          set -eu
+          required=""
+          if [ "$LLM_MESH_PUBLISH_RESULT" = success ]; then required="@sentropic/llm-mesh"; fi
+          if [ "$LLM_GATEWAY_PUBLISH_RESULT" = success ]; then required="${required:+$required }@sentropic/llm-gateway"; fi
+          make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity REQUIRE_PUBLISHED="$required" ENV=test-ci-cluster-mesh
 
   bootstrap-publish:
     runs-on: ubuntu-latest
