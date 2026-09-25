@@ -595,8 +595,12 @@ pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> i
 publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency closure of PACKAGE into SIBLING_DIR/plan.txt
 	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		-e PACKAGE="$(PACKAGE)" -e SIBLING_DIR="$(SIBLING_DIR)" \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(SIBLING_DIR)):/siblings" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs sibling-plan --slug "$(PACKAGE)" --out /siblings/plan.txt'
+		sh -lc 'set -eu; printf "%s" "$$PACKAGE" | grep -Eq "^[a-z0-9][a-z0-9-]*$$" || { echo "ERROR: invalid PACKAGE"; exit 1; }; \
+			case "$$SIBLING_DIR" in *..*) echo "ERROR: invalid SIBLING_DIR"; exit 1 ;; esac; \
+			printf "%s" "$$SIBLING_DIR" | grep -Eq "^tmp/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$$" || { echo "ERROR: invalid SIBLING_DIR"; exit 1; }; \
+			$(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs sibling-plan --slug "$$PACKAGE" --out /siblings/plan.txt'
 
 publishable-sibling-collect: ## Internal: verify sibling pack receipts and write SIBLING_DIR/receipts.json
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \

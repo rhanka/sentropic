@@ -1,6 +1,8 @@
 // Workflow and Makefile wiring assertions for the publishable manifest guard (make test-publishable-manifests).
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
@@ -176,4 +178,52 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
   assert.match(recipe('publish-cluster-mesh-token'), /--access public --no-provenance\)/);
   assert.match(recipe('publish-auth-hono-token'), /--access public --provenance=false\)/);
   assert.match(recipe('publish-chat-ui'), /make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/);
+});
+
+test('sibling directory guard rejects unsafe paths before any deletion; accepts a strict tmp/ path', () => {
+  const script = path.join(root, 'scripts', 'ci', 'check-publishable-manifests.sh');
+  const run = (dir) => {
+    // Throwaway cwd with a sentinel under tmp/ and a `make` stub that logs and fails (no real make/Docker).
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'sibling-guard-'));
+    fs.mkdirSync(path.join(work, 'tmp', 'keep'), { recursive: true });
+    fs.writeFileSync(path.join(work, 'tmp', 'keep', 'sentinel'), 'x');
+    fs.mkdirSync(path.join(work, 'bin'));
+    fs.writeFileSync(path.join(work, 'bin', 'make'), '#!/bin/sh\necho "$*" >> "$MAKE_LOG"\nexit 1\n', { mode: 0o755 });
+    const makeLog = path.join(work, 'make.log');
+    const r = spawnSync('bash', [script, 'test-env', 'siblings', 'foo', dir], { cwd: work, encoding: 'utf8', env: { ...process.env, PATH: `${path.join(work, 'bin')}:${process.env.PATH}`, MAKE_LOG: makeLog } });
+    return { ...r, work, made: fs.existsSync(makeLog) ? fs.readFileSync(makeLog, 'utf8') : '' };
+  };
+  for (const dir of ['tmp/', 'tmp/.', 'tmp//', 'tmp/./x', 'tmp/../x', '/tmp/x', 'x', 'tmp', 'tmp/x/', 'tmp/.hidden', 'tmp/a b']) {
+    const r = run(dir);
+    assert.equal(r.status, 1, `${dir} must be rejected`);
+    assert.match(r.stdout, /ERROR: sibling directory/, dir);
+    assert.ok(fs.existsSync(path.join(r.work, 'tmp', 'keep', 'sentinel')), `${dir}: tmp/ must be untouched`);
+    assert.equal(r.made, '', `${dir}: rejected before any make call`);
+  }
+  const ok = run('tmp/ci-manifest-guard/siblings/foo');
+  assert.equal(ok.status, 1, 'stubbed make fails after the guard');
+  assert.doesNotMatch(ok.stdout, /ERROR: sibling directory/);
+  assert.ok(fs.existsSync(path.join(ok.work, 'tmp', 'ci-manifest-guard', 'siblings', 'foo', 'receipts')));
+  assert.ok(fs.existsSync(path.join(ok.work, 'tmp', 'keep', 'sentinel')));
+  assert.match(ok.made, /^publishable-sibling-plan PACKAGE=foo SIBLING_DIR=tmp\/ci-manifest-guard\/siblings\/foo ENV=test-env$/m);
+});
+
+test('publishable-sibling-plan passes PACKAGE/SIBLING_DIR as container env and validates them inside', () => {
+  const r = recipe('publishable-sibling-plan');
+  assert.match(r, /-e PACKAGE="\$\(PACKAGE\)" -e SIBLING_DIR="\$\(SIBLING_DIR\)"/);
+  const inner = r.slice(r.indexOf("sh -lc '"));
+  assert.ok(!/\$\((?:PACKAGE|SIBLING_DIR)\)/.test(inner), 'no Make interpolation inside the container script');
+  assert.match(inner, /--slug "\$\$PACKAGE"/);
+  assert.match(inner, /grep -Eq "\^tmp\/\[A-Za-z0-9_-\]\[A-Za-z0-9._-\]\*\(/);
+});
+
+test('post-publication qualification fails on a missing or status-less receipt', () => {
+  const steps = Object.values(jobs).flatMap((j) => j.steps ?? [])
+    .filter((s) => /Qualify (published|bootstrap-published)/.test(s.name ?? ''));
+  assert.equal(steps.length, 4);
+  for (const s of steps) {
+    assert.ok(!/:-missing/.test(s.run), s.name);
+    assert.match(s.run, /if \[ ! -f "\$receipt" \]; then echo "::error title=Publication qualification::.*"; exit 1; fi/, s.name);
+    assert.match(s.run, /if \[ -z "\$status" \]; then echo "::error title=Publication qualification::.*"; exit 1; fi/, s.name);
+  }
 });

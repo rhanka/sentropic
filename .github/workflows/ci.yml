@@ -1680,9 +1680,12 @@ jobs:
       - name: Qualify published MCP Auth from the registry
         run: |
           set -eu
-          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
-          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
-          pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
+          receipt=tmp/ci-manifest-guard/publish/mcp-auth.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
       - name: Upload MCP Auth publication qualification report
         if: always()
@@ -1912,9 +1915,12 @@ jobs:
       - name: Qualify published Cluster Mesh from the registry
         run: |
           set -eu
-          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
-          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
-          pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
+          receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
@@ -1970,9 +1976,12 @@ jobs:
         if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
         run: |
           set -eu
-          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
-          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
-          pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
+          receipt=tmp/ci-manifest-guard/publish/mcp-auth.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
       - name: Bootstrap publish mcp-platform
         if: inputs.bootstrap_publish_target == 'mcp-platform' || inputs.bootstrap_publish_target == 'all'
@@ -2014,9 +2023,12 @@ jobs:
         if: inputs.bootstrap_publish_target == 'cluster-mesh' || inputs.bootstrap_publish_target == 'all'
         run: |
           set -eu
-          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
-          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
-          pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
+          receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
+          if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
+          status="$(sed -n 's/^status=//p' "$receipt")"
+          if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
+          pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Bootstrap publish focus
         if: inputs.bootstrap_publish_target == 'focus' || inputs.bootstrap_publish_target == 'all'

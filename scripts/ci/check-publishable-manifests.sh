@@ -11,8 +11,11 @@ if [ "${2:-}" = siblings ]; then
   slug="${3:?package slug required}"
   dir="${4:?sibling directory required}"
   printf '%s' "$slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || { echo "ERROR: invalid package slug: ${slug}"; exit 1; }
+  # `rm -rf "$dir"` below: only a strict, non-empty path strictly below tmp/ is accepted (no empty
+  # segment, no segment starting with '.', no '..'), so `tmp/`, `tmp/.` or `tmp//` never reach it.
   case "$dir" in *..*) echo "ERROR: sibling directory must not contain '..'"; exit 1 ;; esac
-  case "$dir" in tmp/*) ;; *) echo "ERROR: sibling directory must live under tmp/"; exit 1 ;; esac
+  printf '%s' "$dir" | grep -Eq '^tmp/[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$' \
+    || { echo "ERROR: sibling directory must be a strict path below tmp/ (got '${dir}')"; exit 1; }
   status=0
   rm -rf "$dir" && mkdir -p "$dir/receipts"
   make publishable-sibling-plan PACKAGE="$slug" SIBLING_DIR="$dir" ENV="$env_name" || exit 1
@@ -34,7 +37,7 @@ rm -f "$block_file" "${report_dir}/classification.json" "${report_dir}"/*.receip
 make publishable-manifests-inventory MANIFEST_REPORT_DIR="$report_dir" ENV="$env_name" || status=1
 
 if [ ! -f "$block_file" ]; then
-  echo "::error title=Publishable manifest::inventory produced no classification (context or registry ERROR: re-run, not debt, unless the context itself is invalid)"
+  echo "::error title=Publishable manifest::inventory produced no classification: see the classification ERROR above and ${report_dir}/classification.json (only an error the classifier marks transient is 're-run, not debt')"
   exit 1
 fi
 
