@@ -30,6 +30,7 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
   - `e2e/tests/10-cluster-mesh-control-plane.spec.ts` (namespace inventory drops `/focus`)
   - `scripts/ci/**`
   - `rules/MASTER.md`
+  - `rules/workflow.md` (frozen-package line)
   - `track/TRACK.md`
   - `PLAN.md`
   - `spec/SPEC_VOL_FOCUS.md`
@@ -103,13 +104,13 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
       - [ ] No E2E change; CI e2e groups cover non-regression.
 
 - [ ] **Lot 2 — Package deletion and wiring**
-  - [ ] `git rm -r packages/focus`, `packages/cli`, `packages/build-cli` (one commit each).
-  - [ ] Remove Makefile lanes (typecheck/test/build/pack/publish/publish-token), `owner-sign`, focus in `API_VERSION`, `install-internal-packages`, `prepare-node-workspace`, `up-api-test-ci`.
-  - [ ] Remove ci.yml filters, outputs, validate/publish jobs, bootstrap option/step for the three packages.
-  - [ ] Update `scripts/ci/publishable-manifests.mjs` lists and `scripts/ci/publishable-*.test.mjs` expectations.
-  - [ ] Regenerate `package-lock.json` with `make lock-root ENV=test-chore-eradicate-cli-focus`.
+  - [x] `git rm -r packages/focus`, `packages/cli`, `packages/build-cli` (one commit each).
+  - [x] Remove Makefile lanes (typecheck/test/build/pack/publish/publish-token), `owner-sign`, focus in `API_VERSION`, `install-internal-packages`, `prepare-node-workspace`, `up-api-test-ci`.
+  - [x] Remove ci.yml filters, outputs, validate/publish jobs, bootstrap option/step for the three packages.
+  - [x] Update `scripts/ci/publishable-manifests.mjs` lists and `scripts/ci/publishable-*.test.mjs` expectations.
+  - [x] Regenerate `package-lock.json` with `make lock-root ENV=test-chore-eradicate-cli-focus`.
   - [ ] Lot gate:
-    - [ ] `make test-publishable-manifests ENV=test-chore-eradicate-cli-focus`
+    - [x] `make test-publishable-manifests ENV=test-chore-eradicate-cli-focus`
     - [ ] `make build-api API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
 
 - [ ] **Lot 3 — Durable guard**
