@@ -29,3 +29,16 @@ export * from './runtime/receipts.js';
 export * from './runtime/registration.js';
 export * from './runtime/session-cutover.js';
 export * from './messaging/index.js';
+export * from './modules/errors.js';
+export * from './modules/contracts.js';
+export { createClusterMeshModules } from './modules/registry.js';
+export {
+  CLUSTER_MESH_TOPOLOGY_INVALID,
+  ClusterMeshTopologyError,
+  isClusterMeshTopologyError,
+  verifyClusterMeshTopology,
+  type ClusterMeshTopologyReason,
+  type ClusterMeshTopologyReport,
+  type TopologyPackage,
+  type VerifyClusterMeshTopologyOptions,
+} from './modules/topology.js';

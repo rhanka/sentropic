@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDegenerateClusterMesh, type NhiLifecyclePort } from '../src/index.js';
+import { createClusterMeshModules, createDegenerateClusterMesh, type NhiLifecyclePort } from '../src/index.js';
 
 function bindings() {
   return {
@@ -82,6 +82,18 @@ describe('runtime bindings', () => {
     await expect(mesh.wrap.nhi.offboard({ instance: 'agent' })).rejects.toThrow('offline');
     expect(input.nhiRunner.run).not.toHaveBeenCalled();
     expect(createDegenerateClusterMesh({ ...input, nhiRunner: undefined, nhi }).wrap.nhi).toBe(nhi);
+  });
+
+  it('should keep binding availability independent of an injected module registry', () => {
+    const input = bindings();
+    const modules = createClusterMeshModules({ disabled: ['gateway'] });
+    const mesh = createDegenerateClusterMesh({ ...input, modules });
+    expect(mesh.capabilities.localDevices).toBe('available');
+    expect(mesh.capabilities.localProjection).toBe('available');
+    input.projections.availability = 'gated';
+    expect(mesh.capabilities.localProjection).toBe('gated');
+    expect(mesh.capabilities.localProjectionKinds).toEqual([]);
+    expect(mesh.capabilities.modules?.gateway).toEqual({ availability: 'gated', state: 'unprobed' });
   });
 
   it('should reject construction without a lifecycle or runner', () => {

@@ -1,0 +1,8 @@
+{
+  "name": "fixture-global-consumer",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": { "fixture-global-consumer": "cli.mjs" },
+  "peerDependencies": { "fixture-separate-runtime": "1.0.0" },
+  "peerDependenciesMeta": { "fixture-separate-runtime": { "optional": true } }
+}
