@@ -27,6 +27,7 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
   - `api/src/routes/namespaces/focus-cutover.ts`
   - `api/src/services/focus/**`
   - `api/tests/**`
+  - `e2e/tests/10-cluster-mesh-control-plane.spec.ts` (namespace inventory drops `/focus`)
   - `scripts/ci/**`
   - `rules/MASTER.md`
   - `track/TRACK.md`
@@ -85,11 +86,11 @@ Remove `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` (`@sentrop
   - [x] Declare BRERAD-EX1..EX5.
 
 - [ ] **Lot 1 — API focus removal**
-  - [ ] Remove `/focus` namespace registration from `api/src/app.ts`.
-  - [ ] Delete `api/src/routes/namespaces/focus.ts`, `api/src/routes/namespaces/focus-cutover.ts`, `api/src/services/focus/**`.
-  - [ ] Delete tests `api/tests/unit/focus-owner-signature-route.test.ts`, `api/tests/unit/focus-decision-validator.test.ts`, `api/tests/unit/track-event-owner-signature-port.test.ts`, `api/tests/unit/track-owner-signature-adapter.test.ts`, `api/tests/api/cluster-mesh-focus-cutover.test.ts`, `api/tests/helpers/owner-sign-child.ts`.
-  - [ ] Update `api/tests/api/cluster-mesh-track.test.ts` (local intent type) and `api/tests/api/cluster-mesh-namespace-inventory.test.ts` (no `/focus`).
-  - [ ] Drop focus from `api/package.json`, `api/package-lock.json`, `api/vitest.config.ts`, `api/Dockerfile`; declare `@sentropic/track` explicitly.
+  - [x] Remove `/focus` namespace registration from `api/src/app.ts`.
+  - [x] Delete `api/src/routes/namespaces/focus.ts`, `api/src/routes/namespaces/focus-cutover.ts`, `api/src/services/focus/**`.
+  - [x] Delete tests `api/tests/unit/focus-owner-signature-route.test.ts`, `api/tests/unit/focus-decision-validator.test.ts`, `api/tests/unit/track-event-owner-signature-port.test.ts`, `api/tests/unit/track-owner-signature-adapter.test.ts`, `api/tests/api/cluster-mesh-focus-cutover.test.ts`, `api/tests/helpers/owner-sign-child.ts`.
+  - [x] Update `api/tests/api/cluster-mesh-track.test.ts` (local intent type) and `api/tests/api/cluster-mesh-namespace-inventory.test.ts` (no `/focus`) and `e2e/tests/10-cluster-mesh-control-plane.spec.ts` (28 modules).
+  - [x] Drop focus from `api/package.json`, `api/package-lock.json`, `api/vitest.config.ts`, `api/Dockerfile`; declare `@sentropic/track` explicitly.
   - [ ] Lot gate:
     - [ ] `make typecheck API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
     - [ ] `make lint API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=test-chore-eradicate-cli-focus`
