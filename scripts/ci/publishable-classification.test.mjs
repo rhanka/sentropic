@@ -144,6 +144,24 @@ test('inventory: registry outage is an ERROR that says re-run, not debt', async 
   assert.match(r.out, /classification ERROR.*re-run, not debt/);
 });
 
+test('inventory: snapshot failure is transient only for network/registry errors', async () => {
+  const run = async (message) => {
+    const root = fakeRepo({ 'cluster-mesh': MESH });
+    const out = sink();
+    const registry = { lookup: async () => { throw new Error('lookup must not run'); } };
+    const snapshot = () => { throw new Error(message); };
+    const code = await commandInventory({ 'report-dir': path.join(root, 'reports') }, { env: inventoryEnv([], ['cluster_mesh_publish']), root, registry, out, snapshot });
+    return { code, out: out.text() };
+  };
+  const broken = await run('npm pack failed in /workspace/packages/cluster-mesh (exit 1): npm error code EJSONPARSE');
+  assert.equal(broken.code, 1);
+  assert.match(broken.out, /classification ERROR: cannot resolve packed identity of cluster-mesh/);
+  assert.doesNotMatch(broken.out, /re-run, not debt/);
+  const network = await run('npm pack failed (exit 1): npm error code ECONNRESET');
+  assert.equal(network.code, 1);
+  assert.match(network.out, /re-run, not debt/);
+});
+
 test('inventory: selected public package without a pack lane fails (skills)', async () => {
   const r = await inventory({ packages: { skills: { name: '@sentropic/skills', version: '0.1.2' } }, env: inventoryEnv(['packages/skills/src/a.ts'], []) });
   assert.equal(r.code, 1);
