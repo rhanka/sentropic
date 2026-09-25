@@ -91,3 +91,4 @@
   - [x] B3d minor (a): `parseReleaseVersion` strips `+build` metadata (npm parity), prereleases still refused; unit rows, README, CHANGELOG.
   - [x] B3d minor (b): range check through a `tree.link()` symlinked workspace copy (in-range passes, out-of-range refused on the physical path).
   - [x] EX10 `ci.yml`: siblings packed before the lazy qualification (`SIBLING_ARCHIVES_FILE` when receipts exist), publish barrier and strict chain, `npm-publish-train` concurrency, `changes` lock-sync, healed post-publication qualification, `verify-train-lock-integrity`.
+  - [x] EX10 wiring tests (`publishable-ci-wiring.test.mjs`): exact train publish conditions and needs, strict upstream waits, concurrency group, lock-sync step, integrity job never a dependency, sibling-first lazy qualification, healed skip qualification.
