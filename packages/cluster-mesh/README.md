@@ -150,7 +150,8 @@ the paths, or the installed version and the required range). llm-mesh entries ch
 the llm-mesh range; gateway entries check the llm-gateway and llm-mesh ranges. Ranges
 are checked on the copies cluster-mesh actually resolves (llm-mesh and llm-gateway from
 its own physical location, the gateway's llm-mesh from the gateway's location), release
-versions only: a prerelease or build-metadata version never satisfies. An absent
+versions only: a prerelease version never satisfies, and `+build` metadata is ignored
+as npm does (`0.22.0+build.1` satisfies `>=0.22.0 <0.23.0`). An absent
 provider is left to the leaf import itself.
 Copies are keyed by module URL without `?query`/`#hash`: a copy loaded from another
 path (nested install, `npm link`, a `--preserve-symlinks` link path) is a duplicate,
