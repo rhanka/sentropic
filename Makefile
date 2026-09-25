@@ -2033,13 +2033,13 @@ test-llm-gateway: build-llm-mesh build-oauth-verify build-mcp-auth build-auth-ho
 # service and its prepared workspace graph; no new service, overlay or image.
 .PHONY: typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process
 typecheck-llm-gateway-process: prepare-node-workspace ## Typecheck the standalone LLM gateway host
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -w /workspace/apps/llm-gateway api npm run typecheck
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -w /workspace/apps/llm-gateway api npm run typecheck
 
 lint-llm-gateway-process: prepare-node-workspace ## Lint the standalone LLM gateway host
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -w /workspace/apps/llm-gateway api npm run lint
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -w /workspace/apps/llm-gateway api npm run lint
 
 test-llm-gateway-process: prepare-node-workspace ## Test the standalone LLM gateway host (SCOPE=tests/<file>.test.ts)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e SCOPE="$(SCOPE)" -w /workspace/apps/llm-gateway api sh -lc 'set -eu; scope="$${SCOPE#apps/llm-gateway/}"; if [ -n "$$scope" ]; then npx vitest run "$$scope" --environment node; else npm test; fi'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -w /workspace/apps/llm-gateway api sh -lc 'set -eu; scope="$${SCOPE#apps/llm-gateway/}"; if [ -n "$$scope" ]; then npx vitest run "$$scope" --environment node; else npm test; fi'
 
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
