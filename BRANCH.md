@@ -48,7 +48,7 @@
 - [ ] **Lot 1 — Manifest, catalog and module ids**
   - [x] `package.json` 0.13.0, peers mesh `>=0.22.0 <0.23.0`, gateway `>=0.19.0 <0.20.0`; `catalog.ts` ranges equal.
   - [x] Remove `focus`, `cli`, `build-cli` gated module ids; CHANGELOG.
-  - [ ] Unit tests and fake package trees moved to the new tuple; `{ '/gw': '/' }` remap case.
+  - [x] Unit tests and fake package trees moved to the new tuple; `{ '/gw': '/' }` remap case.
 - [ ] **Lot 2 — Packed qualification (train design §2b-d)**
   - [ ] `packaging.mk` `SIBLING_ARCHIVES_FILE` (exact path) and `check-train-lock-integrity`.
   - [ ] `prepare.sh` sibling resolver with sha256/identity check and registry fallback, `sources.txt`, provisional `selected` mode, lock with registry `resolved` and sibling integrity.
