@@ -1,7 +1,7 @@
 # Feature: llm-gateway 0.19.0 budget admission — Lot D B3b
 
 ## Objective
-- [ ] Deliver the opt-in gateway budget admission (`BudgetAdmissionPort`, `admission.ts`) frozen in `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §5, §10 (B3b) and §12.2/§12.6, consuming the mesh 0.22.0 quote API.
+- [x] Deliver the opt-in gateway budget admission (`BudgetAdmissionPort`, `admission.ts`) frozen in `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §5, §10 (B3b) and §12.2/§12.6, consuming the mesh 0.22.0 quote API.
 
 ## Scope / Guardrails
 - [x] Branch `feat/llm-gateway-budget`, worktree `tmp/llm-gateway-budget`, based on `feat/llm-mesh-quote` (mesh 0.22.0 candidate).
@@ -64,8 +64,8 @@
   - [x] Update `tests/{route-json-flow,route-stream-flow,errors,contract-snapshot}.test.ts`.
 - [x] **Lot 4 — Version and docs**
   - [x] `package.json` 0.19.0, mesh `^0.22.0`; `CHANGELOG.md`; README budget section.
-- [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway build-llm-gateway pack-llm-gateway ENV=test-llm-gateway-budget`
-  - [ ] `make test-llm-mesh ENV=test-llm-gateway-budget`
-  - [ ] `make scope-check ENV=test-llm-gateway-budget`
-  - [ ] Candidate tarball sha256 recorded (not published).
+- [x] **Lot N — Final validation**
+  - [x] `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway build-llm-gateway pack-llm-gateway ENV=test-llm-gateway-budget` (26 files, 261 tests pass; manifest guard PASS)
+  - [x] `make test-llm-mesh ENV=test-llm-gateway-budget` (32 files, 270 tests pass)
+  - [x] `make scope-check ENV=test-llm-gateway-budget` (PASS C2; branch diff limited to `packages/llm-gateway/**` and `BRANCH.md`)
+  - [x] Candidate `sentropic-llm-gateway-0.19.0.tgz` sha256 `f444a581ffa7823587f8d83215117444e59f0e4b8ecd60fae82563f176640505` (pack guard at `71c296f9b`, not persisted, not published).
