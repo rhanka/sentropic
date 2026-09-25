@@ -31,8 +31,12 @@
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- `attention`: BRDP-EX6 — root `package-lock.json` workspace entries move to mesh 0.22.0 / gateway 0.19.0 / cluster 0.13.0 (lock-sync assertion of the train); rollback = revert the lockfile hunk with this lot.
+- `attention`: BRDP-EX6 — root `package-lock.json` workspace entries move to mesh 0.22.0 / gateway 0.19.0 / cluster 0.13.0 (lock-sync assertion of the train); applied with the editing tool on the three `packages/<slug>` entries only (version and manifest ranges mirrored), because `make lock-root` runs a full workspace install writing node_modules into the worktree; rollback = revert the lockfile hunk with this lot.
 - `attention`: owner decision — gated module ids `focus`, `cli`, `build-cli` removed from `CLUSTER_MESH_GATED_MODULE_IDS`/`ClusterMeshModuleId` (public union change, CHANGELOG); the `/cli` transport namespace of `src/hono/cli-router.ts` is a separate `ClusterMeshNamespace` from `@sentropic/contracts` and stays untouched (`src/hono/**` forbidden).
+- `attention`: npm 11.19 does not fail the plain old-tuple install with ERESOLVE: it exits 0 after "ERESOLVE overriding peer dependency" and drops both conflicting root requests (0.12's gateway-017 case failed with ERESOLVE); `--force` does the same. Outcome `refused` = old tuple not installed (exit code and installed versions recorded in `npm-install-detail`); the skewed tree for the runtime refusal is built with `--legacy-peer-deps`.
+- `attention`: global consumer + separately installed runtime with `file:` siblings + `overrides` is green; a one-off experiment without `overrides` was also green (the runtime's direct `file:` sibling satisfies gateway's `^0.22.0` edge, registry never queried), so no placeholder fallback beyond `__LLM_MESH__`/`__LLM_GATEWAY__` substitution was needed.
+- `attention`: registry mode (no `SIBLING_ARCHIVES_FILE`) fails at `selected` `npm ci` with 404 until mesh 0.22.0 / gateway 0.19.0 are published (fail-safe, expected by the train design); CI still needs EX10 (siblings before the lazy qualification) — ci.yml untouched here.
+- `attention`: every sibling in a receipts file is validated (guard, path, sha256, packed identity) before any use; an invalid receipt fails the run rather than falling back to the registry.
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic unit and packed-install tests, no provider call.
