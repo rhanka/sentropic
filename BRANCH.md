@@ -70,6 +70,10 @@
 - [x] No services or port reservation required for this planning task.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot C — Strict CallerAuthResult consumer fix (PR #605 typecheck-lint-api)**
+  - [x] Under BRLG2-EX3, annotate the api/src/routes/namespaces/gw.ts callerAuth adapter `verify` with `Promise<CallerAuthResult>`; no gateway compatibility layer. Passed: make typecheck-api and make lint-api (0 errors) with API_PORT=9380 UI_PORT=5580 MAILDEV_UI_PORT=1480 ENV=test-llm-gateway-lot2.
+  - [ ] Add a type-level regression rejecting the boolean-inferred legacy verifier shape and accepting the annotated shape; document the migration in README/spec.
+  - [ ] Full gateway gates, candidate SHA-256 and cleanup.
 - [x] **Lot C — Polish round**
   - [x] Confirm branch with harness, clean starting worktree, required rules and free ports 9380/5580/1480; current round writes remain limited to packages/llm-gateway/**, spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md and BRANCH.md.
   - [x] Close encoded/upstream iterators after a claimed-terminal ledger failure without repeating accounting; regress mesh finally in tests/route-stream-flow.test.ts.
