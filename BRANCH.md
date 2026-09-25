@@ -51,6 +51,8 @@
 - `attention`: train rule — llm-mesh 0.22.0, llm-gateway 0.19.0 and cluster-mesh 0.13.0 land on main in this single PR and publish in one main run (mesh → gateway → cluster); none of them merges or publishes separately.
 - `attention`: merge freeze (owner-enforced) — the conductor announces an all-lanes merge freeze on main 1 h before the train merge; it is lifted only after the lock-refresh follow-up PR lands.
 - `attention`: post-merge checklist — verify the 3 published manifests (provenance, gitHead = merge commit, peer ranges, dist.integrity); `make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=<env>` green (and the `verify-train-lock-integrity` job); lock-refresh follow-up PR (`refresh-lazy-package-lock` without siblings) with an empty diff, else a traced pack-drift repair.
+- `attention`: deviation from train design §5 (conductor-requested, fix round 1) — the three train publishers and `verify-train-lock-integrity` start with `!cancelled()` instead of `always()`, so a manual cancel stops the chain; the rest of each condition stays literal; rollback = restore `always()` and the wiring assertions.
+- `attention`: `verify-train-lock-integrity` passes `REQUIRE_PUBLISHED` = packages whose publish job result is `success` in this run (retried 12 x 5 s, then red); cluster-mesh post-publication heal of a `skipped` receipt runs only when `GITHUB_RUN_ATTEMPT` > 1 (first attempt: notice, exit 0).
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic unit and packed-install tests, no provider call.
@@ -98,5 +100,5 @@
 - [ ] **Lot 6 — Train fix round 1 (muse + opus, conductor-verified defect)**
   - [x] Packed release matrix expects `sibling` per package only when `siblings/index.json` carries that exact `name@version`, else `registry`; unit rows: no index, empty receipts, only mesh, only gateway, both, other version.
   - [x] `check-lock-integrity registry` requires the packages published in this run (`REQUIRE_PUBLISHED`): cache-bypassing lookups retried 12 x 5 s, then an error; others stay notice-only; unit rows on a local fake registry.
-  - [ ] EX10 `ci.yml`: skipped-receipt heal only on a re-run (`github.run_attempt > 1`), dead `qualify-report.json` test removed; `!cancelled()` replaces the leading `always()` of the three train publishers and `verify-train-lock-integrity`; wiring assertions.
+  - [x] EX10 `ci.yml`: skipped-receipt heal only on a re-run (`github.run_attempt > 1`), dead `qualify-report.json` test removed; `!cancelled()` replaces the leading `always()` of the three train publishers and `verify-train-lock-integrity`; wiring assertions.
   - [ ] Gate and candidate digests.
