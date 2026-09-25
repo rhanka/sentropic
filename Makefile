@@ -635,7 +635,7 @@ publish-cluster-mesh: build-cluster-mesh ## Publish @sentropic/cluster-mesh from
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/cluster-mesh \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cluster-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cluster-mesh@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,cluster-mesh,--access public)'
 
 publish-cluster-mesh-token: build-cluster-mesh ## Bootstrap-publish @sentropic/cluster-mesh using NPM_TOKEN_FILE
 	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
@@ -646,7 +646,7 @@ publish-cluster-mesh-token: build-cluster-mesh ## Bootstrap-publish @sentropic/c
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cluster-mesh \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cluster-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cluster-mesh@$$version already exists; skipping publish"; else npm publish --access public --no-provenance; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cluster-mesh,--access public --no-provenance)'
 
 .PHONY: refresh-llm-model-equivalences
 refresh-llm-model-equivalences: ## Regenerate the pinned model-equivalence council
@@ -718,6 +718,7 @@ package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for pkg in oauth-verify mcp-auth auth-hono; do (cd packages/$$pkg && npm pack --pack-destination /artifacts >/dev/null); done; for pkg in llm-mesh llm-gateway oauth-verify mcp-auth auth-hono; do version="$$(node -p "require(\"./packages/$$pkg/package.json\").version")"; sha256sum "/artifacts/sentropic-$$pkg-$$version.tgz"; done; cp package-lock.json /artifacts/workspace-package-lock.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -v "$(LLM_ROUTING_PACK_DIR):/artifacts:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); for pkg in llm-mesh llm-gateway; do version="$$(node -p "require(\"./packages/$$pkg/package.json\").version")"; node scripts/ci/publishable-manifests.mjs check --tarball "/artifacts/sentropic-$$pkg-$$version.tgz" --source "packages/$$pkg/package.json"; done'
 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; mkdir -p /artifacts/qualification; cp -R tmp/llm-gateway-qualification/. /artifacts/qualification/; gateway="$$(node -p "require(\"./packages/llm-gateway/package.json\").version")"; cmp "/artifacts/sentropic-llm-gateway-$$gateway.tgz" /artifacts/qualification/candidate.tgz'
 
@@ -755,7 +756,7 @@ publish-llm-gateway: check-llm-model-equivalences wait-llm-gateway-mesh-dependen
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/llm-gateway \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-gateway@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-gateway@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,llm-gateway,--access public)'
 
 .PHONY: publish-llm-gateway-token
 publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-llm-gateway in CI)
@@ -767,7 +768,7 @@ publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway u
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/llm-gateway \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-gateway@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-gateway@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-gateway,--access public)'
 
 .PHONY: typecheck-flow
 typecheck-flow: install-internal-packages ## Run @sentropic/flow type checks
@@ -843,7 +844,7 @@ publish-llm-mesh: check-llm-model-equivalences verify-llm-mesh-cloud-code-oauth 
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/llm-mesh \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-mesh@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,llm-mesh,--access public)'
 
 NPM_TOKEN_FILE ?= /tmp/sentropic-npm-token
 
@@ -857,7 +858,7 @@ publish-llm-mesh-token: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/l
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/llm-mesh \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-mesh@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-mesh,--access public)'
 
 .PHONY: typecheck-chat-ui
 typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
@@ -919,7 +920,7 @@ publish-auth-hono: build-auth-hono ## Publish @sentropic/auth-hono from CI OIDC 
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/auth-hono \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-hono@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-hono@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,auth-hono,--access public)'
 
 .PHONY: publish-auth-hono-token
 publish-auth-hono-token: build-auth-hono ## Publish @sentropic/auth-hono using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-auth-hono in CI)
@@ -931,7 +932,7 @@ publish-auth-hono-token: build-auth-hono ## Publish @sentropic/auth-hono using N
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/auth-hono \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-hono@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-hono@$$version already exists; skipping publish"; else npm publish --access public --provenance=false; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,auth-hono,--access public --provenance=false)'
 
 .PHONY: typecheck-auth-client
 typecheck-auth-client: ## Run @sentropic/auth-client type checks
@@ -972,7 +973,7 @@ publish-auth-client: build-auth-client ## Publish @sentropic/auth-client from CI
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/auth-client \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-client@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-client@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,auth-client,--access public)'
 
 .PHONY: publish-auth-client-token
 publish-auth-client-token: build-auth-client ## Publish @sentropic/auth-client using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-auth-client in CI)
@@ -984,7 +985,7 @@ publish-auth-client-token: build-auth-client ## Publish @sentropic/auth-client u
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/auth-client \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-client@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-client@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,auth-client,--access public)'
 
 .PHONY: typecheck-oauth-verify
 typecheck-oauth-verify: ## Run @sentropic/oauth-verify type checks
@@ -1031,7 +1032,7 @@ publish-oauth-verify: build-oauth-verify ## Publish @sentropic/oauth-verify from
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/oauth-verify \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/oauth-verify@"$$version" version >/dev/null 2>&1; then echo "@sentropic/oauth-verify@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,oauth-verify,--access public)'
 
 .PHONY: publish-oauth-verify-token
 publish-oauth-verify-token: build-oauth-verify ## Publish @sentropic/oauth-verify using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-oauth-verify in CI)
@@ -1043,7 +1044,7 @@ publish-oauth-verify-token: build-oauth-verify ## Publish @sentropic/oauth-verif
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/oauth-verify \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/oauth-verify@"$$version" version >/dev/null 2>&1; then echo "@sentropic/oauth-verify@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,oauth-verify,--access public)'
 
 .PHONY: typecheck-mcp-auth
 typecheck-mcp-auth: build-oauth-verify ## Run @sentropic/mcp-auth type checks
@@ -1090,7 +1091,7 @@ publish-mcp-auth: build-mcp-auth ## Publish @sentropic/mcp-auth from CI OIDC tru
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/mcp-auth \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/mcp-auth@"$$version" version >/dev/null 2>&1; then echo "@sentropic/mcp-auth@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,mcp-auth,--access public)'
 
 .PHONY: publish-mcp-auth-token
 publish-mcp-auth-token: build-mcp-auth ## Publish @sentropic/mcp-auth using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-mcp-auth in CI)
@@ -1102,7 +1103,7 @@ publish-mcp-auth-token: build-mcp-auth ## Publish @sentropic/mcp-auth using NPM_
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/mcp-auth \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/mcp-auth@"$$version" version >/dev/null 2>&1; then echo "@sentropic/mcp-auth@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,mcp-auth,--access public)'
 
 .PHONY: typecheck-mcp-platform
 typecheck-mcp-platform: install-internal-packages ## Run @sentropic/mcp-platform type checks
@@ -1155,7 +1156,7 @@ publish-mcp-platform: build-mcp-platform ## Publish @sentropic/mcp-platform from
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/mcp-platform \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/mcp-platform@"$$version" version >/dev/null 2>&1; then echo "@sentropic/mcp-platform@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,mcp-platform,--access public)'
 
 .PHONY: publish-mcp-platform-token
 publish-mcp-platform-token: build-mcp-platform ## Publish @sentropic/mcp-platform using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-mcp-platform in CI)
@@ -1167,7 +1168,7 @@ publish-mcp-platform-token: build-mcp-platform ## Publish @sentropic/mcp-platfor
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/mcp-platform \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/mcp-platform@"$$version" version >/dev/null 2>&1; then echo "@sentropic/mcp-platform@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,mcp-platform,--access public)'
 
 .PHONY: typecheck-auth-ui
 typecheck-auth-ui: ## Run @sentropic/auth-ui type checks
@@ -1205,7 +1206,7 @@ publish-auth-ui: build-auth-ui ## Publish @sentropic/auth-ui from CI OIDC truste
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/auth-ui \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-ui@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-ui@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,auth-ui,--access public)'
 
 .PHONY: publish-auth-ui-token
 publish-auth-ui-token: build-auth-ui ## Publish @sentropic/auth-ui using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-auth-ui in CI)
@@ -1217,10 +1218,10 @@ publish-auth-ui-token: build-auth-ui ## Publish @sentropic/auth-ui using NPM_TOK
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/auth-ui \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-ui@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-ui@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,auth-ui,--access public)'
 
 # BR-PKG-EX1 (Makefile exception): publish-chat-ui transiently rewrites package.json to dist-form,
-# runs npm publish, then restores the src-form package.json.
+# runs the guarded tarball publication (BRCI-EX1), then restores the src-form package.json.
 # The committed repo package.json always stays src-form (exports -> ./src/...).
 .PHONY: publish-chat-ui
 publish-chat-ui: build-chat-ui ## Publish @sentropic/chat-ui from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
@@ -1245,7 +1246,7 @@ publish-chat-ui: build-chat-ui ## Publish @sentropic/chat-ui from CI OIDC truste
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/chat-ui \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-ui@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-ui@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-ui,--access public)'
 
 .PHONY: publish-chat-ui-token
 publish-chat-ui-token: build-chat-ui ## Publish @sentropic/chat-ui using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-chat-ui in CI)
@@ -1257,7 +1258,7 @@ publish-chat-ui-token: build-chat-ui ## Publish @sentropic/chat-ui using a token
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/chat-ui \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-ui@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-ui@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-ui,--access public)'
 
 .PHONY: typecheck-cowork-bridge
 typecheck-cowork-bridge: ## Run @sentropic/cowork-bridge type checks
@@ -1301,7 +1302,7 @@ publish-cowork-bridge: build-cowork-bridge ## Publish @sentropic/cowork-bridge f
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/cowork-bridge \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cowork-bridge@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cowork-bridge@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,cowork-bridge,--access public)'
 
 .PHONY: publish-cowork-bridge-token
 publish-cowork-bridge-token: build-cowork-bridge ## Publish @sentropic/cowork-bridge using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-cowork-bridge in CI)
@@ -1313,7 +1314,7 @@ publish-cowork-bridge-token: build-cowork-bridge ## Publish @sentropic/cowork-br
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cowork-bridge \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cowork-bridge@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cowork-bridge@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cowork-bridge,--access public)'
 
 # --- @sentropic/build-cli (BR42a1-EX1: additive lane; pure-Node, node test env) ---
 .PHONY: typecheck-build-cli
@@ -1393,7 +1394,7 @@ publish-focus: build-focus ## Publish @sentropic/focus from CI OIDC trusted publ
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/focus \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/focus@"$$version" version >/dev/null 2>&1; then echo "@sentropic/focus@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,focus,--access public)'
 
 publish-focus-token: build-focus ## Publish @sentropic/focus using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-focus in CI)
 	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
@@ -1404,7 +1405,7 @@ publish-focus-token: build-focus ## Publish @sentropic/focus using NPM_TOKEN_FIL
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/focus \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/focus@"$$version" version >/dev/null 2>&1; then echo "@sentropic/focus@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,focus,--access public)'
 
 .PHONY: publish-harness
 publish-harness: build-harness ## Publish @sentropic/harness from CI OIDC trusted publishing
@@ -1429,7 +1430,7 @@ publish-harness: build-harness ## Publish @sentropic/harness from CI OIDC truste
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/harness \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/harness@"$$version" version >/dev/null 2>&1; then echo "@sentropic/harness@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,harness,--access public)'
 
 .PHONY: publish-harness-token
 publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-harness in CI)
@@ -1441,7 +1442,7 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/harness \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/harness@"$$version" version >/dev/null 2>&1; then echo "@sentropic/harness@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,harness,--access public)'
 
 .PHONY: scope-check
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
@@ -1491,7 +1492,7 @@ publish-build-cli: build-build-cli ## Publish @sentropic/build-cli from CI OIDC 
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/build-cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/build-cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/build-cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,build-cli,--access public)'
 
 .PHONY: publish-build-cli-token
 publish-build-cli-token: build-build-cli ## Publish @sentropic/build-cli using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-build-cli in CI)
@@ -1503,7 +1504,7 @@ publish-build-cli-token: build-build-cli ## Publish @sentropic/build-cli using N
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/build-cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/build-cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/build-cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,build-cli,--access public)'
 
 .PHONY: publish-cli
 publish-cli: build-cli ## Publish @sentropic/cli from CI OIDC trusted publishing
@@ -1528,7 +1529,7 @@ publish-cli: build-cli ## Publish @sentropic/cli from CI OIDC trusted publishing
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,cli,--access public)'
 
 .PHONY: publish-cli-token
 publish-cli-token: build-cli ## Publish @sentropic/cli using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-cli in CI)
@@ -1540,7 +1541,7 @@ publish-cli-token: build-cli ## Publish @sentropic/cli using NPM_TOKEN_FILE (boo
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cli \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cli,--access public)'
 
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
@@ -1584,7 +1585,7 @@ publish-cowork-desktop: build-cowork-desktop ## Publish @sentropic/cowork-deskto
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/cowork-desktop \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cowork-desktop@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cowork-desktop@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,cowork-desktop,--access public)'
 
 .PHONY: publish-cowork-desktop-token
 publish-cowork-desktop-token: build-cowork-desktop ## Publish @sentropic/cowork-desktop using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-cowork-desktop in CI)
@@ -1596,7 +1597,7 @@ publish-cowork-desktop-token: build-cowork-desktop ## Publish @sentropic/cowork-
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cowork-desktop \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cowork-desktop@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cowork-desktop@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,cowork-desktop,--access public)'
 
 .PHONY: package-desktop-windows
 package-desktop-windows: ## Build the signable single Windows .exe for @sentropic/cowork-desktop (BR41a Lot 5). Signing is gated on COWORK_SIGN_PFX (+ COWORK_SIGN_PASS); skipped with a warning if absent.
@@ -1727,7 +1728,7 @@ publish-contracts: build-contracts ## Publish @sentropic/contracts from CI OIDC 
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/contracts \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/contracts@"$$version" version >/dev/null 2>&1; then echo "@sentropic/contracts@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,contracts,--access public)'
 
 .PHONY: publish-contracts-token
 publish-contracts-token: build-contracts ## Publish @sentropic/contracts using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-contracts in CI)
@@ -1739,7 +1740,7 @@ publish-contracts-token: build-contracts ## Publish @sentropic/contracts using N
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/contracts \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/contracts@"$$version" version >/dev/null 2>&1; then echo "@sentropic/contracts@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,contracts,--access public)'
 
 .PHONY: publish-events
 publish-events: build-events ## Publish @sentropic/events from CI OIDC trusted publishing
@@ -1764,7 +1765,7 @@ publish-events: build-events ## Publish @sentropic/events from CI OIDC trusted p
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/events \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/events@"$$version" version >/dev/null 2>&1; then echo "@sentropic/events@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,events,--access public)'
 
 .PHONY: publish-events-token
 publish-events-token: build-events ## Publish @sentropic/events using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-events in CI)
@@ -1776,7 +1777,7 @@ publish-events-token: build-events ## Publish @sentropic/events using NPM_TOKEN_
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/events \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/events@"$$version" version >/dev/null 2>&1; then echo "@sentropic/events@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,events,--access public)'
 
 .PHONY: publish-chat-core
 publish-chat-core: build-chat-core ## Publish @sentropic/chat-core from CI OIDC trusted publishing
@@ -1801,7 +1802,7 @@ publish-chat-core: build-chat-core ## Publish @sentropic/chat-core from CI OIDC 
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/chat-core \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-core@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-core@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,chat-core,--access public)'
 
 .PHONY: publish-chat-core-token
 publish-chat-core-token: build-chat-core ## Publish @sentropic/chat-core using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-chat-core in CI)
@@ -1813,7 +1814,7 @@ publish-chat-core-token: build-chat-core ## Publish @sentropic/chat-core using N
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/chat-core \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-core@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-core@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,chat-core,--access public)'
 
 .PHONY: publish-chat-server
 publish-chat-server: build-chat-server ## Publish @sentropic/chat-server from CI OIDC trusted publishing
@@ -1838,7 +1839,7 @@ publish-chat-server: build-chat-server ## Publish @sentropic/chat-server from CI
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/chat-server \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-server@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-server@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,chat-server,--access public)'
 
 .PHONY: publish-chat-server-token
 publish-chat-server-token: build-chat-server ## Publish @sentropic/chat-server using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-chat-server in CI)
@@ -1850,7 +1851,7 @@ publish-chat-server-token: build-chat-server ## Publish @sentropic/chat-server u
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/chat-server \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-server@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-server@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,chat-server,--access public)'
 
 .PHONY: publish-comments
 publish-comments: build-comments ## Publish @sentropic/comments from CI OIDC trusted publishing
@@ -1875,7 +1876,7 @@ publish-comments: build-comments ## Publish @sentropic/comments from CI OIDC tru
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/comments \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/comments@"$$version" version >/dev/null 2>&1; then echo "@sentropic/comments@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,comments,--access public)'
 
 .PHONY: publish-comments-token
 publish-comments-token: build-comments ## Publish @sentropic/comments using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-comments in CI)
@@ -1887,7 +1888,7 @@ publish-comments-token: build-comments ## Publish @sentropic/comments using NPM_
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/comments \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/comments@"$$version" version >/dev/null 2>&1; then echo "@sentropic/comments@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,comments,--access public)'
 
 .PHONY: publish-flow
 publish-flow: build-flow ## Publish @sentropic/flow from CI OIDC trusted publishing
@@ -1912,7 +1913,7 @@ publish-flow: build-flow ## Publish @sentropic/flow from CI OIDC trusted publish
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/flow \
-		$(FLOW_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/flow@"$$version" version >/dev/null 2>&1; then echo "@sentropic/flow@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(FLOW_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,flow,--access public)'
 
 .PHONY: publish-flow-token
 publish-flow-token: build-flow ## Publish @sentropic/flow using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-flow in CI)
@@ -1924,7 +1925,7 @@ publish-flow-token: build-flow ## Publish @sentropic/flow using NPM_TOKEN_FILE (
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/flow \
-		$(FLOW_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/flow@"$$version" version >/dev/null 2>&1; then echo "@sentropic/flow@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(FLOW_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,flow,--access public)'
 
 .PHONY: lint
 .NOTPARALLEL: lint
@@ -3417,7 +3418,7 @@ pack-cited-source-viewer: build-cited-source-viewer ## Validate @sentropic/cited
 	$(call manifest_guard_pack,cited-source-viewer,$(MANIFEST_DIST_FORM))
 
 # BR-CSVP-EX1: publish-cited-source-viewer transiently rewrites package.json to dist-form,
-# runs npm publish (OIDC trusted publishing), then restores the src-form package.json.
+# runs the guarded tarball publication (OIDC trusted publishing, BRCI-EX1), then restores the src-form package.json.
 # The committed repo package.json always stays src-form (exports -> ./src/...).
 .PHONY: publish-cited-source-viewer
 publish-cited-source-viewer: build-cited-source-viewer ## Publish @sentropic/cited-source-viewer from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-CSVP-EX1)
@@ -3442,7 +3443,7 @@ publish-cited-source-viewer: build-cited-source-viewer ## Publish @sentropic/cit
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace/packages/cited-source-viewer \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cited-source-viewer@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cited-source-viewer@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,cited-source-viewer,--access public)'
 
 .PHONY: publish-cited-source-viewer-token
 publish-cited-source-viewer-token: build-cited-source-viewer ## Publish @sentropic/cited-source-viewer using a token read from NPM_TOKEN_FILE (first-publish bootstrap only; prefer OIDC publish-cited-source-viewer in CI)
@@ -3454,7 +3455,7 @@ publish-cited-source-viewer-token: build-cited-source-viewer ## Publish @sentrop
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cited-source-viewer \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cited-source-viewer@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cited-source-viewer@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,cited-source-viewer,--access public)'
 # ---- BR-72 Wave-1 connector recoding proofs (read-only, private, not published) ----
 .PHONY: typecheck-mcp-connector-github
 typecheck-mcp-connector-github: ## Run @sentropic/mcp-connector-github type checks (BR-72 read-only benchmark proof)
