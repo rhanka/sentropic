@@ -264,3 +264,82 @@ The build conductor must check port ownership and allocate distinct mappings for
 | Future changes | Multi-replica HA, public ingress, npm `bin`, a product dispatch cutover or cross-principal pooling require separately scoped decisions/tests. No open irreversible choice is executed by completing this design. |
 
 Residual risks are explicit: one replica has rollout downtime; host extraction must prove independence from product boot/remote control plane; B0/B3d must reconcile auth leaves, Lot F publication and the new-minor compatibility matrix; the owner must provision/rotate the new GitHub API credential and custody must prove durable commit/recovery plus independent freshness monitoring despite best-effort cron; real first-delivery/apply behavior, CNI/provider reachability and quota await manual preprod evidence; the original conductor artifact is unavailable; and existing pgbackup's Python-based `amazon/aws-cli` violates the owner's rule outside this scope (F11). G1b and production seat delivery remain deferred. Spec completion does not deploy a gateway, execute G1a or enforce caps today; those outcomes require the build lots and execution gates.
+
+## 12. B0 freeze (2026-09-25)
+
+Inspected HEAD `fc704e259` (origin/main merged). Registry facts were read on 2026-09-25 from `https://registry.npmjs.org/@sentropic%2f<pkg>`; the published cluster-mesh 0.12.0 tarball was unpacked and compared with source. Every statement is code- or registry-derived; no runtime test was executed on this planning branch. Build lots start only after conductor approval of 12.6 and decision B0-D1 (12.7).
+
+### 12.1 Frozen version and compatibility matrix
+
+| Package | Registry latest | Workspace manifest | Target | Target free |
+|---|---|---|---|---|
+| `@sentropic/llm-mesh` | 0.21.2; no dependencies or peers | 0.21.2 (`packages/llm-mesh/package.json:3`) | **0.22.0** | yes |
+| `@sentropic/llm-gateway` | 0.18.0; deps mesh `^0.21.2`, hono `^4.10.7`; optional peers mcp-auth `^0.2.1`, auth-hono `^0.15.0`, jose `^5.10.0` | 0.18.0 (`packages/llm-gateway/package.json:3,44-55`) | **0.19.0** | yes |
+| `@sentropic/cluster-mesh` | 0.12.0; optional peers mesh `>=0.21.2 <0.22.0`, gateway `>=0.18.0 <0.19.0`, mcp-auth `>=0.2.1 <0.3.0`, auth-hono `^0.15.0`, jose `^5.10.0` | 0.12.0 (`packages/cluster-mesh/package.json:3,119-130`; `src/modules/catalog.ts:11-16`) | **0.13.0** | yes |
+| `@sentropic/mcp-auth` | 0.2.1; dep oauth-verify `^0.1.0`; peers jose `^5.10.0`, hono `^4.10.7` (optional) | 0.2.1 | unchanged | n/a |
+| `@sentropic/oauth-verify` | 0.1.0; peer jose `^5.10.0` | 0.1.0 | unchanged | n/a |
+| `@sentropic/auth-hono` | 0.15.0 | **0.15.2, unpublished** (`packages/auth-hono/package.json:3`) | unchanged | n/a |
+| `jose` | 5.10.0 exists; latest 6.2.12 lies outside `^5.10.0` | n/a | pinned 5.10.0 | n/a |
+
+Exact target declarations. Mesh 0.22.0 keeps empty dependencies/peers. Gateway 0.19.0 declares `@sentropic/llm-mesh: ^0.22.0` and `hono: ^4.10.7`, and keeps the optional peers `@sentropic/mcp-auth: ^0.2.1`, `@sentropic/auth-hono: ^0.15.0`, `jose: ^5.10.0`. Cluster 0.13.0 keeps `hono ^4.10.7`, `@sentropic/events ^0.2.0`, `@sentropic/contracts ^0.3.0` and declares optional peers `@sentropic/llm-mesh: >=0.22.0 <0.23.0`, `@sentropic/llm-gateway: >=0.19.0 <0.20.0`, `@sentropic/mcp-auth: >=0.2.1 <0.3.0`, `@sentropic/auth-hono: ^0.15.0`, `jose: ^5.10.0`. `catalog.ts` `LLM_MESH_RANGE`/`LLM_GATEWAY_RANGE` must equal the manifest; README matrix (`README.md:115-116,171`), `tests/packaging/fixtures/selected/package.json` pins and `tests/packaging/prepare.sh` old-range fixture (currently mesh 0.21.2/gateway 0.17.1) move to the new tuple and to an old-tuple (0.21.2/0.18.0) rejection.
+
+Publication order through existing CI OIDC: mesh 0.22.0 → gateway 0.19.0 → cluster 0.13.0. `publish-llm-gateway` already needs `publish-llm-mesh` (`.github/workflows/ci.yml:1587-1589`) and waits for its mesh floor and transitive auth floors on npm (`Makefile:785-793`). `publish-cluster-mesh` needs only events/contracts (`ci.yml:1898-1900`), but its packed qualification installs the committed registry-pinned `selected` lockfile (`ci.yml:548`), so cluster 0.13.0 cannot pass before mesh 0.22.0 and gateway 0.19.0 are visible on npm.
+
+Consumer qualification. The **api workspace graph** links cluster-mesh, llm-mesh, mcp-auth, auth-hono and oauth-verify with `file:` (`api/package.json:71-83`) and has **no llm-gateway dependency**: product code imports gateway source by relative path (`api/src/routes/namespaces/gw.ts:7`, `api/src/services/llm-runtime/gateway-route-plane.ts:12`), outside the cluster loader. B5 records that workspace graph, including unpublished auth-hono 0.15.2, so it can never stand in for the h2a proof. The **h2a published tuple** is cluster 0.13.0, mesh 0.22.0, gateway 0.19.0, mcp-auth 0.2.1, oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7, plus auth-hono 0.15.0 only in session mode; service mode installs without auth-hono.
+
+Workspace coupling hazard (code-derived, not executed). A local mesh 0.22.0 does not satisfy gateway's `^0.21.2`, and cluster 0.12 rejects out-of-range installed providers (`packages/cluster-mesh/src/modules/registry.ts:55,74`). `tests/modules/namespace-loading.spec.ts:33-84` loads the real workspace mesh/gateway through `createClusterMeshModules()`, and `validate-cluster-mesh` runs on every `package-lock.json` change (`ci.yml:206-210,531-548`). A mesh-only or mesh+gateway bump on main before cluster ranges move is therefore expected to turn cluster-mesh CI red, while cluster 0.13.0 cannot pass its registry-pinned packaging test before publication. Lockstep manifest precedent: `4853aa5e4` (mesh 0.21.0 + gateway 0.17.0). Sequencing is decision B0-D1.
+
+### 12.2 Quote API contract (B3a, mesh 0.22.0)
+
+New `packages/llm-mesh/src/route-quote.ts`, exported from `src/index.ts`; types join `src/routing-contracts.ts`.
+
+```ts
+export interface RouteUsageCeiling {
+  readonly inputTokens: number;        // finite integer >= 0, gateway-measured upper bound
+  readonly outputTokens: number;       // finite integer >= 1, request ceiling after gateway default
+  readonly reasoningTokens?: number;   // finite integer >= 0
+  readonly imageUnits?: number;
+  readonly toolCalls?: number;
+}
+export type RouteQuoteInput = Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'intent'
+  | 'requiredCapabilities' | 'policyProfile' | 'policyOverride' | 'explicit'>
+  & { readonly ceiling: RouteUsageCeiling; readonly now: Date };
+export interface QuotedRouteCandidate {
+  readonly providerId: string; readonly modelId: string; readonly transportProviderId?: string;
+  readonly reason: PlannedRouteTarget['reason'];
+  readonly allowance: RouteUsageCeiling;       // per attempt
+  readonly outputCeilingEnforced: boolean;     // false when the transport drops the ceiling
+}
+export interface RouteQuote {
+  readonly quoteRef: string;                   // deterministic digest of input and revisions
+  readonly requestedModel: string;
+  readonly candidates: readonly QuotedRouteCandidate[];
+  readonly maxAttempts: number;                // resolved policy, 1..8
+  readonly policyRevision: string;             // profile revision or 'default'
+  readonly councilRevision: string;
+}
+export const MAX_ROUTE_QUOTE_CANDIDATES = 16;
+export type RouteQuoteErrorCode = 'unknown-model' | 'capabilities-unmet' | 'invalid-ceiling' | 'too-many-candidates';
+export class RouteQuoteError extends Error { readonly code: RouteQuoteErrorCode }
+export function quoteRoute(input: RouteQuoteInput, options?: {
+  readonly council?: ModelEquivalenceCouncil; readonly profiles?: InMemoryRoutePolicyProfiles;
+}): RouteQuote;
+// RoutePlanner gains optional quote(input: RouteQuoteInput): RouteQuote (InMemoryRoutePlanner delegates
+// with its council/profiles). RoutePlanInput gains optional quote?: RouteQuote; RoutePlanError adds 'quote-mismatch'.
+```
+
+- **Bounds.** Candidates are `resolveRequestedTargets` (`src/route-selection.ts:68`) plus council equivalents when `allowEquivalentModels` (`route-selection.ts:121-134`), filtered by capabilities but **not** by accounts or health, so they are a superset of any plan (plan only narrows: `src/route-planner.ts:99-135`). Deterministic order; more than 16 raises `too-many-candidates`. `maxAttempts` comes from the validated policy (1..8, `src/routing-policy.ts:86`), the same cap plan applies (`route-planner.ts:129,134`).
+- **Allowances.** Output is `min(ceiling.outputTokens, maxOutputTokens)` when the profile defines one (`src/capabilities.ts:77`; only 2 of 28 profiles do, `src/catalog.ts:348,360`); otherwise the caller ceiling. Input above a defined `contextWindowTokens` raises `invalid-ceiling`. Codex candidates set `outputCeilingEnforced: false` because the transport omits the ceiling (`src/transport/codex-runtime-wire.ts:84-86`).
+- **Purity.** Synchronous; no `AccountDirectoryPort` call (`route-planner.ts:91`), no attempt preparation, no plan/affinity/round-robin mutation (`route-planner.ts:182-200`), no clock read (`now` is an input), no I/O, no pricing or budget access.
+- **Pinning.** `plan()` with `quote` keeps only quoted targets, caps attempts at `quote.maxAttempts`, and throws `RoutePlanError('quote-mismatch')` if council/policy revision or `quoteRef` differ, so execution cannot add an unreserved candidate or larger ceiling.
+- **Gateway consumption (B3b).** New `packages/llm-gateway/src/ports/budget.ts`: `BudgetAdmissionPort { admit(req: { requestId; cost: CostContext; wire: GatewayWire; quote: RouteQuote }): Promise<{ kind: 'admitted'; holdRef } | { kind: 'over-budget'; resetAtMs } | { kind: 'unavailable' }>; markDispatched(holdRef, attemptIndex): Promise<void>; release(holdRef): Promise<void> }`. `src/admission.ts` orders caller auth (`src/route-flow-core.ts:69`) → ingress normalization → finite ceiling (missing ceiling is `bad-request`) → `quote` → `admit` → `plan({ quote })` → attempts. The adapter prices every quoted candidate and reserves `maxAttempts × max(candidate liability)`; mesh never prices, gateway never reads pricing.
+- **Errors, frozen wire.** Over-budget raises `GatewayError('over-budget', …, min(60, max(1, ceil((resetAtMs - nowMs) / 1000))))`, rendered by the unchanged 429 bodies (`src/router/errors.ts:107-110`) outside `classifyRouteError` (`route-flow-core.ts:99-136`). `unavailable` uses a new internal kind mapped to the existing sanitized 503 body; `invalid-ceiling` maps to existing `bad-request`; `unknown-model`, `capabilities-unmet` and `too-many-candidates` keep today's generic 503 fallback (`errors.ts:147-172`). No status, body or header changes.
+- **Settlement.** `RouteRequestSettlement` (`route-flow-core.ts:22-29`) gains `requestId`, `holdRef`, `quoteRef`; `settleRoute` stays the single aggregate. Auth, quote and over-budget refusals never call it. Today a plan failure settles a zero-usage record (`route-flow-core.ts:86-94`); B3b moves it after admission so it becomes the admitted request's one zero-usage row with hold release. Missing usage for a dispatched attempt settles the quoted allowance instead of `routeUsage()` zeros (`route-flow-core.ts:171-177`).
+
+### 12.3 Namespace remap check
+
+**Supported without source change.** `createClusterMeshPlugin` takes `mounts` (`packages/cluster-mesh/src/hono/plugin.ts:20`) and mounts each enabled module once at `mounts[namespace] ?? namespace` (`plugin.ts:26-32`). A root `'/'` projection is proven for `/session` (`tests/hono-plugin.spec.ts:46-61`) and a `/gw` remap to `/api/v1/gw` (`tests/modules/namespace-loading.spec.ts:70-84`). The gateway router serves `/healthz`, `/readyz`, `/v1/messages`, `/v1/chat/completions`, `/v1/models` (`packages/llm-gateway/src/router/index.ts:191,193,316,317,319`), so the standalone host passes `mounts: { '/gw': '/' }` and exposes exactly the D2 paths; the product keeps `/gw` under `/api/v1` (`api/src/app.ts:122,434-437`).
+
+Duplicate-mount protection: the registry rejects a second module for one namespace (`src/runtime/namespace-registry.ts:28`, `duplicate_cluster_mesh_namespace`). No mount-path collision guard is proposed: the product deliberately maps several namespaces to `'/'` (`api/src/app.ts:325-326,431`). A second direct mount stays a host rule, tested in B1 (`autonomy.test.ts`: one `createGatewayRouter` call) and B3c. Product `gw.ts` currently bypasses `createGatewayNamespaceModule` and builds the router itself with the stub config (`gw.ts:101-147`); B3c migrates it.
+
+Minimal cluster-owned B3d change: add a `namespace-loading.spec.ts` case for `{ '/gw': '/' }` asserting the five exact paths and 404 on `/gw/healthz`, plus a README line; no `src` change is needed for remapping.
