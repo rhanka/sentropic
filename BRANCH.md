@@ -1,21 +1,23 @@
 # Feature: Cluster mesh single lazy integration surface
 
 ## Objective
-- [x] Deliver Lot E design and the dated control-plane amendment; implementation and h2a migration belong to later branches.
+- [x] Deliver Lot E design and the dated control-plane amendment (planning phase, complete).
+- [ ] Implement cluster-mesh 0.12.0 LLM/gateway lazy surface (B1–B3 package side) in the same PR; MCP (B5) and later catalog lots stay deferred.
 
 ## Scope / Guardrails
-- [x] Planning-only in `tmp/cluster-mesh-lazy-surface`, branch `spec/cluster-mesh-lazy-surface`, base `75032fc85`; mechanical branch check passed.
-- [x] Make-only, Docker-first; `ENV=test-cluster-mesh-lazy-surface` last; reserved API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525; no services needed.
-- [x] No code, migrations, package bumps, push, PR, merge, or publication; English except the explicitly required verbatim owner quote.
+- [x] Worktree `tmp/cluster-mesh-lazy-surface`, branch `spec/cluster-mesh-lazy-surface`; branch check passed; `origin/main` merged (cluster-mesh 0.11.0, mcp-auth 0.2.1, llm-gateway 0.18.0).
+- [x] Make-only, Docker-first; `ENV=test-cluster-mesh-lazy-surface` last; reserved API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525.
+- [x] No migrations, push, PR, merge or publication; no `api/`, `ui/`, workflow or compose change; English except the verbatim owner quote.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
+  - `packages/cluster-mesh/**`
   - `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md`
-  - `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` (append-only amendment)
+  - `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` (append-only amendment and status)
   - `BRANCH.md`
-- [x] **Forbidden Paths (must not change in this branch)**: all other files, including `packages/**`, `Makefile`, `docker-compose*.yml`, `.github/workflows/**`, `.track/**` and other plans.
-- [x] **Conditional Paths**: none.
-- [x] **Exception process**: record `blocked` and stop for an irreversible contract change, migration or infrastructure change; no exceptions authorized.
+- [x] **Forbidden Paths (must not change in this branch)**: `api/**`, `ui/**`, `packages/llm-mesh/**`, `packages/llm-gateway/**`, other packages, `docker-compose*.yml`, `.github/workflows/**`, `.track/**`, other plans.
+- [x] **Conditional Paths**: `Makefile` (BRE-EX1 only), `package-lock.json` (only under a declared exception).
+- [x] **Exception process**: declare `BRE-EXn` with reason, impact and rollback in `## Feedback Loop` before touching a conditional path.
 
 ## Feedback Loop
 - [x] E-A1 `attention`, owner: Lot E, revised 2026-09-24: select static provider leaves for import substitution and separate additive loaders; native ESM leaf failures cannot provide the loader's typed refusal.
@@ -32,9 +34,12 @@
 - [x] E-A12 `attention`, owner: Lot E, 2026-09-24: selected auth loaders preload gateway-relative peers before bind; this catches Lot C's verification-time imports without changing static provider namespaces or auth ownership. Stable error `code` supports diagnosis across duplicate constructors.
 - [x] E-A13 `attention`, owner: h-cond, 2026-09-24: move h2a's 0.9 pin to 0.12.0 in the same artifact, declare selected peers per leaf consumer, and prove one physical cluster-mesh plus shared mesh under the actual global/separate-runtime install; workspace hoisting and first-party Vitest pins cannot prove deployment identity.
 - [x] E-A14 `attention`, owner: Lot E / h-cond, 2026-09-24: use only `export *` provider leaves and qualify skipLibCheck true/false; externalize cluster root/all subpaths from tsup so skipped declaration checks and bundling cannot mask missing peers or change their resolution anchor.
+- [x] E-A15 `attention`, owner: conductor, 2026-09-24: build handoff received; MCP lot B5 sequenced after the h2a LLM/gateway flip; `api/**` product follow-up excluded; B4/B8 are h-cond consumer lots.
+- [x] E-A16 `attention` conductor decision (reversible), 2026-09-24: automatic per-process topology guard; each leaf/loader/compose module evaluates a guard before its `export *`, counting evaluated cluster-mesh copies by unique token and comparing llm-mesh realpaths from cluster-mesh and gateway; root exports explicit `verifyClusterMeshTopology()`; leaf modules declared in `sideEffects`; cross-process consistency stays with install gates.
+- [x] BRE-EX1 `attention`, owner: Lot E, 2026-09-24: `Makefile` targets `typecheck-cluster-mesh`, `test-cluster-mesh`, `build-cluster-mesh` build llm-gateway/llm-mesh/mcp-auth/auth-hono dists and link them as dev-time peers inside the container (removed on exit), because provider leaves need provider declarations and runtime modules. Impact: those targets take longer and depend on `build-llm-gateway`. Rollback: revert the three target edits together with the leaves.
 
 ## AI Flaky tests
-- [x] Not applicable: documentation-only; runtime tests are specified for later implementation, not claimed as run.
+- [x] Not applicable: deterministic package tests only; no AI/provider calls.
 
 ## Orchestration Mode (AI-selected)
 - [x] Mono-branch, single author; no delegated implementation, cherry-picks or cross-repository edits.
@@ -57,4 +62,11 @@
 - [x] **R2 consumer notice**: topology rule/test delivered via signed h2a message to live h-cond (`claude:h2a:c3d1621ed118`), envelope `env:send:f6b2cab0-b8e4-4fd2-a103-93ab62487599`; informational only, consumer edits/build approval remain conductor-owned.
 - [x] **R2 validation**: PASS `harness check branch`; PASS `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` for each revision group; PASS whitespace/diff review and byte comparison of the original 495 control-plane lines against `75032fc85`; only the three allowed files changed, no scope exception.
 - [x] **R2 cleanup**: PASS `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; PASS `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` (no services). Runtime/declaration/install tests are specified, not executed in this planning-only revision.
+- [ ] **Lot B1 — Registry and errors**: `src/modules/{contracts,catalog,registry,errors,resolution,semver}.ts`, root exports, optional `modules` on `createDegenerateClusterMesh`; tests `tests/modules/{registry,capabilities}.spec.ts`, updated `tests/{mesh,bindings}.spec.ts`.
+- [ ] **Lot B1t — Topology guard (E-A16)**: `src/modules/topology.ts`, root `verifyClusterMeshTopology()`; tests `tests/modules/topology.spec.ts`; spec E8 paragraph.
+- [ ] **Lot B2 — LLM/gateway leaves and composition**: `src/integrations/**`, `src/loaders/**`, `src/compose/{llm-mesh,gateway}.ts`, manifest exports/optional peers/`sideEffects`; BRE-EX1 Makefile; tests `tests/integrations/{llm-surface,gateway-surface,gateway-auth-isolation}.spec.ts`, `tests/modules/namespace-loading.spec.ts`, `tests/fixtures/types/llm-consumer.ts`.
+- [ ] **Lot B3 — Packed release gate (package side)**: `packaging.mk`, `tests/packaging/**`, fixtures; publication stays conductor-owned.
+- [ ] **Release notes**: version 0.12.0, CHANGELOG and README consumer migration notes.
+- [ ] **Lot B5 — MCP leaves**: deferred until the h2a LLM/gateway flip ships (E-A15); not built in this branch.
+- [ ] **Final gates**: typecheck/test/pack cluster-mesh, scope-check, `make down`.
 - [ ] **Review/delivery gate (conductor-owned)**: independent acceptance of round 2 fixes; only then deliver the approved build contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor. The requested topology rule/test notice is informational, not build authorization.
