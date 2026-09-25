@@ -46,7 +46,57 @@ export interface RoutePlanInput {
   readonly policyProfile?: string;
   readonly policyOverride?: Partial<RoutePolicy>;
   readonly explicit?: RouteSelector;
+  /** Pins the plan to a previously issued quote: no unquoted target, no larger attempt count. */
+  readonly quote?: RouteQuote;
 }
+
+/** Per-request usage upper bound supplied by the caller (gateway-measured). */
+export interface RouteUsageCeiling {
+  /** Finite integer >= 0. */
+  readonly inputTokens: number;
+  /** Finite integer >= 1, the request ceiling after the gateway default. */
+  readonly outputTokens: number;
+  /** Finite integer >= 0 when present. */
+  readonly reasoningTokens?: number;
+  /** Finite integer >= 0 when present. */
+  readonly imageUnits?: number;
+  /** Finite integer >= 0 when present. */
+  readonly toolCalls?: number;
+}
+
+export type RouteQuoteInput = Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'intent'
+  | 'requiredCapabilities' | 'policyProfile' | 'policyOverride' | 'explicit'>
+  & { readonly ceiling: RouteUsageCeiling; readonly now: Date };
+
+export interface QuotedRouteCandidate {
+  readonly providerId: string;
+  readonly modelId: string;
+  /** Present only when the route pins a transport; otherwise any enrolled transport may serve it. */
+  readonly transportProviderId?: string;
+  readonly reason: PlannedRouteTarget['reason'];
+  /** Usage allowance for one attempt. */
+  readonly allowance: RouteUsageCeiling;
+  /** False when the serving transport may drop the output ceiling (codex). */
+  readonly outputCeilingEnforced: boolean;
+}
+
+export interface RouteQuote {
+  /** Deterministic digest of the route input, revisions and quoted body. */
+  readonly quoteRef: string;
+  readonly requestedModel: string;
+  readonly candidates: readonly QuotedRouteCandidate[];
+  /** Resolved policy attempt cap, 1..8. */
+  readonly maxAttempts: number;
+  /** Policy profile revision, or 'default' when no profile applies. */
+  readonly policyRevision: string;
+  readonly councilRevision: string;
+}
+
+export type RouteQuoteErrorCode =
+  | 'unknown-model'
+  | 'capabilities-unmet'
+  | 'invalid-ceiling'
+  | 'too-many-candidates';
 
 export interface RouteDiagnostic {
   readonly candidateRef: string;
@@ -155,6 +205,8 @@ export interface RoutePlanner {
     subject: VerifiedRoutingSubject,
   ): Promise<readonly RouteModelInventoryEntry[]>;
   plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan>;
+  /** Pure, synchronous candidate and usage bounds; never touches accounts. */
+  quote?(input: RouteQuoteInput): RouteQuote;
   prepareAttempt(
     subject: VerifiedRoutingSubject,
     planRef: string,
