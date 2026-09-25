@@ -35,7 +35,7 @@ test.describe('Cluster Mesh central control plane A1 qualification', () => {
         const refused = await api.post('/api/v1/auth/session/control/drive', {
           headers: { 'content-type': 'application/json' },
           data: {
-            commandId: 'a1-source-gap',
+            commandRef: 'a1-source-gap',
             targetRegistrationId: 'unavailable-real-target',
             idempotencyKey: 'a1-source-gap',
           },
@@ -56,7 +56,7 @@ test.describe('Cluster Mesh central control plane A1 qualification', () => {
           'x-correlation-id': `a1-${commandId}`,
         },
         data: {
-          commandId,
+          commandRef: commandId,
           targetRegistrationId: A1_REGISTRATION,
           idempotencyKey: `a1-${commandId}`,
         },
@@ -246,7 +246,7 @@ test.describe('Cluster Mesh final LOST qualification', () => {
           'x-correlation-id': 'a4-lost',
         },
         data: {
-          commandId: 'a4-wake-dead-target',
+          commandRef: 'a4-wake-dead-target',
           targetRegistrationId: A1_REGISTRATION,
           idempotencyKey: 'a4-wake-dead-target',
         },

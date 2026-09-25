@@ -23,6 +23,18 @@ const WORDPROCESSINGML_MIME =
 const TEMPLATES = ['executive-synthesis.docx', 'usecase-onepage.docx'];
 
 describe('document text extraction — office extension routing (BUG-3)', () => {
+  it('extracts the real PDF fixture with the installed Node runtime dependencies', async () => {
+    const filename = 'AM1020.05.03.01-sample.pdf';
+    const extracted = await extractDocumentInfoFromDocument({
+      bytes: new Uint8Array(readFileSync(join(process.cwd(), '..', 'e2e', 'tests', 'fixtures', filename))),
+      filename,
+      mimeType: 'application/pdf',
+    });
+    expect(extracted.text).toContain('Engineering Requirements Document');
+    expect(extracted.text).toContain('criteria and acceptance thresholds for the production line.');
+    expect(extracted.text.trim().length).toBeGreaterThan(80);
+  });
+
   it('file-type byte-sniffing mis-detects the bundled docx templates as zip (proves the root cause)', async () => {
     const { fileTypeFromBuffer } = await import('file-type');
     for (const name of TEMPLATES) {

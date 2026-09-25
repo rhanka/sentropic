@@ -88,6 +88,7 @@ describe('Magic Link Service', () => {
       
       expect(user).toBeDefined();
       expect(user.email).toBe('newuser@example.com');
+      expect(user.emailVerified).toBe(true);
       // New users get immediate access (editor) but are pending admin approval
       expect(user.role).toBe('editor');
       expect(user.accountStatus).toBe('pending_admin_approval');
