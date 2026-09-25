@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 import { waitForLockedByOtherWithOptions, waitForNoLocker } from '../helpers/lock-ui';
 import { withWorkspaceAndFolderStorageState, withWorkspaceStorageState } from '../helpers/workspace-scope';
+import { createIsolatedMember } from '../helpers/isolated-user';
 
 test.describe('Configuration de la matrice', () => {
   const FILE_TAG = 'e2e:matrix.spec.ts';
@@ -415,12 +416,15 @@ test.describe('Configuration de la matrice', () => {
 
   test.describe('Matrix lock/presence', () => {
     test('User A locks → User B sees → unlock accept', async ({ browser }) => {
-      const userAContext = await browser.newContext({
-        storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, workspaceAId, folderId),
-      });
-      const userBContext = await browser.newContext({
-        storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
-      });
+      // Fresh accounts: the server clears a user's locks when that user's last SSE connection closes,
+      // which parallel specs sharing the seeded accounts trigger.
+      const [memberA, memberB] = await Promise.all(
+        ['matrix-lock-a', 'matrix-lock-b'].map((label) => createIsolatedMember({
+          apiBaseUrl: API_BASE_URL, ownerStatePath: USER_A_STATE, workspaceId: workspaceAId, label, folderId,
+        })),
+      );
+      const userAContext = await browser.newContext({ storageState: memberA.storageState });
+      const userBContext = await browser.newContext({ storageState: memberB.storageState });
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
