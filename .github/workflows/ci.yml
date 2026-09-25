@@ -210,8 +210,6 @@ jobs:
               - 'packages/cluster-mesh/**'
               - '.github/workflows/ci.yml'
             cluster_mesh_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cluster-mesh/**'
             llm_gateway:
               - 'Makefile'
@@ -221,12 +219,8 @@ jobs:
               - 'packages/llm-mesh/**'
               - '.github/workflows/ci.yml'
             llm_mesh_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/llm-mesh/**'
             llm_gateway_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/llm-gateway/**'
             chat_ui:
               - 'Makefile'
@@ -235,8 +229,6 @@ jobs:
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             chat_ui_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/chat-ui/**'
             cited_source_viewer:
               - 'Makefile'
@@ -245,8 +237,6 @@ jobs:
               - 'packages/cited-source-viewer/**'
               - '.github/workflows/ci.yml'
             cited_source_viewer_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cited-source-viewer/**'
             cowork_bridge:
               - 'Makefile'
@@ -255,8 +245,6 @@ jobs:
               - 'packages/cowork-bridge/**'
               - '.github/workflows/ci.yml'
             cowork_bridge_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cowork-bridge/**'
             cowork_desktop:
               - 'Makefile'
@@ -267,8 +255,6 @@ jobs:
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             cowork_desktop_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cowork-desktop/**'
             oauth_verify:
               - 'Makefile'
@@ -277,8 +263,6 @@ jobs:
               - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             oauth_verify_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/oauth-verify/**'
             mcp_auth:
               - 'Makefile'
@@ -288,8 +272,6 @@ jobs:
               - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             mcp_auth_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/mcp-auth/**'
             mcp_platform:
               - 'Makefile'
@@ -298,8 +280,6 @@ jobs:
               - 'packages/mcp-platform/**'
               - '.github/workflows/ci.yml'
             mcp_platform_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/mcp-platform/**'
             auth_hono:
               - 'Makefile'
@@ -309,8 +289,6 @@ jobs:
               - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             auth_hono_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/auth-hono/**'
             auth_client:
               - 'Makefile'
@@ -319,8 +297,6 @@ jobs:
               - 'packages/auth-client/**'
               - '.github/workflows/ci.yml'
             auth_client_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/auth-client/**'
             auth_ui:
               - 'Makefile'
@@ -329,8 +305,6 @@ jobs:
               - 'packages/auth-ui/**'
               - '.github/workflows/ci.yml'
             auth_ui_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/auth-ui/**'
             chat_core:
               - 'Makefile'
@@ -341,8 +315,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             chat_core_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/chat-core/**'
             chat_server:
               - 'Makefile'
@@ -351,8 +323,6 @@ jobs:
               - 'packages/chat-server/**'
               - '.github/workflows/ci.yml'
             chat_server_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/chat-server/**'
             comments:
               - 'Makefile'
@@ -362,8 +332,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             comments_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/comments/**'
             events:
               - 'Makefile'
@@ -373,8 +341,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             events_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/events/**'
             contracts:
               - 'Makefile'
@@ -383,8 +349,6 @@ jobs:
               - 'packages/contracts/**'
               - '.github/workflows/ci.yml'
             contracts_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/contracts/**'
             flow:
               - 'Makefile'
@@ -393,8 +357,6 @@ jobs:
               - 'packages/flow/**'
               - '.github/workflows/ci.yml'
             flow_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/flow/**'
             build_cli:
               - 'Makefile'
@@ -409,8 +371,6 @@ jobs:
               - 'packages/harness/**'
               - '.github/workflows/ci.yml'
             harness_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/harness/**'
             focus:
               - 'Makefile'
@@ -419,12 +379,8 @@ jobs:
               - 'packages/focus/**'
               - '.github/workflows/ci.yml'
             focus_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/focus/**'
             build_cli_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/build-cli/**'
             cli:
               - 'Makefile'
@@ -434,8 +390,6 @@ jobs:
               - 'packages/build-cli/**'
               - '.github/workflows/ci.yml'
             cli_publish:
-              - 'package.json'
-              - 'package-lock.json'
               - 'packages/cli/**'
             # Dedicated guard filter: never part of global, api/ui/e2e or _publish fanout.
             manifest_guard:
@@ -1726,6 +1680,8 @@ jobs:
       - name: Qualify published MCP Auth from the registry
         run: |
           set -eu
+          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
           make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
       - name: Upload MCP Auth publication qualification report
@@ -1956,6 +1912,8 @@ jobs:
       - name: Qualify published Cluster Mesh from the registry
         run: |
           set -eu
+          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
           make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
@@ -2012,6 +1970,8 @@ jobs:
         if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
         run: |
           set -eu
+          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/mcp-auth.publish-output)"
           make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
       - name: Bootstrap publish mcp-platform
@@ -2054,6 +2014,8 @@ jobs:
         if: inputs.bootstrap_publish_target == 'cluster-mesh' || inputs.bootstrap_publish_target == 'all'
         run: |
           set -eu
+          status="$(sed -n 's/^status=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
+          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status:-missing}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' tmp/ci-manifest-guard/publish/cluster-mesh.publish-output)"
           make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Bootstrap publish focus

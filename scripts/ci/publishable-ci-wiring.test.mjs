@@ -71,6 +71,17 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   }
 });
 
+test('publication filters: only packages/<slug>/** triggers a publisher, never root package.json or lockfile', () => {
+  const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
+  const publish = Object.keys(filters).filter((n) => n.endsWith('_publish'));
+  assert.ok(publish.length >= STEADY_STATE_PUBLISHERS.length);
+  for (const name of publish) {
+    const slug = name.slice(0, -'_publish'.length).replace(/_/g, '-');
+    assert.deepEqual(filters[name], [`packages/${slug}/**`], name);
+  }
+  for (const slug of STEADY_STATE_PUBLISHERS) assert.ok(filters[publishFilter(slug)], `${publishFilter(slug)} exists`);
+});
+
 test('steady-state publisher mapping and bootstrap expansion match ci.yml', () => {
   const npmPublishers = Object.keys(jobs).filter((n) => /^publish-/.test(n) && !/-image$/.test(n)).map((n) => n.slice('publish-'.length)).sort();
   assert.deepEqual(npmPublishers, [...STEADY_STATE_PUBLISHERS].sort());
@@ -141,6 +152,7 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
+    assert.match(publish[at + 1].run, /if \[ "\$status" != published \]; then .*exit 0; fi\n.*make qualify-published-install/s, 'qualify only a new publication, never a skip');
     assert.match(publish[at + 1].run, new RegExp(`make qualify-published-install PKG="\\$pkg"${peers} QUALIFY_MODE=post-publication`));
     assert.ok(!/SIBLING_ARCHIVES_FILE|TARBALL=/.test(publish[at + 1].run), 'registry-only after publication');
     assert.equal(publish[at + 2].if, 'always()');
