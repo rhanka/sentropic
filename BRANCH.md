@@ -53,16 +53,16 @@
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read spec §5, §10 (B3a), §12.1/§12.2 and B0 review findings 4, 5, 7.
   - [x] Verify branch, registry latest `0.21.2`, target `0.22.0` free.
-- [ ] **Lot 1 — Quote seam**
+- [x] **Lot 1 — Quote seam**
   - [x] Contract types in `routing-contracts.ts`; `RoutePlanError` gains `quote-mismatch`.
   - [x] `route-quote.ts`: `quoteRoute`, `RouteQuoteError`, `MAX_ROUTE_QUOTE_CANDIDATES`, shared quote digest.
   - [x] `InMemoryRoutePlanner.quote` and `plan({ quote })` pinning.
   - [x] Export from the package entry.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh lint-llm-mesh ENV=test-llm-mesh-quote`
-    - [ ] `make test-llm-mesh SCOPE=tests/budget-quote.test.ts ENV=test-llm-mesh-quote`
-- [ ] **Lot 2 — Tests**
-  - [ ] New `packages/llm-mesh/tests/budget-quote.test.ts`: 16-cap, 1..8 attempts, superset vs plan across fallback, zero directory calls, purity/determinism, each error code, quote-mismatch, codex allowance list, maxOutputTokens profile list, no unquoted execution.
+  - [x] Lot gate:
+    - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-llm-mesh-quote`
+    - [x] `make test-llm-mesh SCOPE=tests/budget-quote.test.ts ENV=test-llm-mesh-quote`
+- [x] **Lot 2 — Tests**
+  - [x] New `packages/llm-mesh/tests/budget-quote.test.ts`: 16-cap, 1..8 attempts, superset vs plan across fallback, zero directory calls, purity/determinism, each error code, quote-mismatch, codex allowance list, maxOutputTokens profile list, no unquoted execution.
 - [ ] **Lot 3 — Version and docs**
   - [ ] `packages/llm-mesh/package.json` 0.22.0; `CHANGELOG.md`; README quote section.
 - [ ] **Lot N — Final validation**
