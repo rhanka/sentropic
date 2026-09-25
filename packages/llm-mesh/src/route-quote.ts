@@ -1,9 +1,9 @@
 import { modelProfiles, providerProfiles } from './catalog.js';
 import {
-  DEFAULT_MODEL_EQUIVALENCE_COUNCIL, modelSupportsCapability, type ModelEquivalenceCouncil,
+  DEFAULT_MODEL_EQUIVALENCE_COUNCIL, type ModelEquivalenceCouncil,
 } from './equivalence-council.js';
 import { mergeRoutePolicy, RoutePlanError } from './route-planner-state.js';
-import { resolveRequestedTargets } from './route-selection.js';
+import { resolveRouteTargets } from './route-selection.js';
 import type {
   PlannedRouteTarget, QuotedRouteCandidate, RoutePlanInput, RouteQuote, RouteQuoteErrorCode,
   RouteQuoteInput, RouteUsageCeiling,
@@ -106,7 +106,9 @@ export const computeRouteQuoteRef = (
   route: {
     targetCandidatesOverride: input.targetCandidatesOverride,
     intent: input.intent,
-    requiredCapabilities: input.requiredCapabilities,
+    // Order-insensitive: the capability filter is a conjunction.
+    requiredCapabilities: input.requiredCapabilities
+      ?.map((entry) => JSON.stringify(canonical(entry))).sort(),
     policyProfile: input.policyProfile,
     policyOverride: input.policyOverride,
     explicit: input.explicit,
@@ -115,6 +117,7 @@ export const computeRouteQuoteRef = (
   requestedModel: body.requestedModel,
   candidates: body.candidates,
   maxAttempts: body.maxAttempts,
+  quotedAt: body.quotedAt,
   policyRevision: body.policyRevision,
   councilRevision: body.councilRevision,
 })))}`;
@@ -156,48 +159,17 @@ const resolveQuoteTargets = (
   policy: RoutePolicy,
   council: ModelEquivalenceCouncil,
 ): QuoteTarget[] => {
-  const resolution = resolveRequestedTargets(input);
+  const resolution = resolveRouteTargets(input, policy, council, input.now);
   if (resolution.kind === 'unknown-model') {
     throw new RouteQuoteError('Unknown requested model', 'unknown-model');
   }
-  const targets: QuoteTarget[] = resolution.targets.map((target) => ({
-    providerId: target.providerId,
-    modelId: target.model,
-    ...(target.transportProviderId ? { transportProviderId: target.transportProviderId } : {}),
-    reason: target.reason,
-  }));
-  if (policy.allowEquivalentModels) {
-    const now = input.now.getTime();
-    for (const resolved of resolution.targets) {
-      const group = council.groups.find((candidate) =>
-        Date.parse(candidate.expiresAt) > now
-        && candidate.evidence.length > 0
-        && candidate.members.some((member) =>
-          member.providerId === resolved.providerId && member.modelId === resolved.model));
-      group?.members.filter((member) => !targets.some((target) =>
-        target.providerId === member.providerId && target.modelId === member.modelId))
-        .sort((left, right) => left.rank - right.rank)
-        .forEach((member) => targets.push({
-          providerId: member.providerId, modelId: member.modelId, reason: 'equivalent',
-        }));
-    }
-  }
-  const capable = (target: QuoteTarget): boolean => !input.requiredCapabilities?.length
-    || input.requiredCapabilities.every((capability) =>
-      modelSupportsCapability(profileFor(target), capability));
-  const faithfulClaude = input.requestedModel.startsWith('claude-')
-    && resolution.useFaithfulAnthropicTarget;
-  if (faithfulClaude && targets[0] && !capable(targets[0])) {
-    throw new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet');
-  }
-  const capableTargets = targets.filter(capable);
-  if (!faithfulClaude && targets.length > 0 && capableTargets.length === 0) {
+  if (resolution.kind === 'capabilities-unmet') {
     throw new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet');
   }
   // Account-independent part of an explicit selector; the account selector only narrows plan().
   const explicit = input.explicit;
-  const selected = explicit
-    ? capableTargets
+  const selected: QuoteTarget[] = explicit
+    ? resolution.capableTargets
       .filter((target) => (!explicit.providerId || explicit.providerId === target.providerId)
         && (!explicit.modelId || explicit.modelId === target.modelId)
         && (!explicit.alias || explicit.alias === input.requestedModel)
@@ -206,7 +178,7 @@ const resolveQuoteTargets = (
       .map((target) => (explicit.transportProviderId
         ? { ...target, transportProviderId: explicit.transportProviderId }
         : target))
-    : capableTargets;
+    : [...resolution.capableTargets];
   const seen = new Set<string>();
   return selected.filter((target) => {
     const key = `${target.providerId}\u001f${target.modelId}\u001f${target.transportProviderId ?? ''}`;
@@ -274,6 +246,7 @@ export const quoteRoute = (input: RouteQuoteInput, options: RouteQuoteOptions = 
     requestedModel: input.requestedModel,
     candidates,
     maxAttempts: policy.maxAttempts,
+    quotedAt: input.now.toISOString(),
     policyRevision: profile?.revision ?? 'default',
     councilRevision: council.revision,
   };

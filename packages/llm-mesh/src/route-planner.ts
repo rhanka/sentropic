@@ -80,8 +80,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const policy = quote && quote.maxAttempts < resolvedPolicy.maxAttempts
       ? { ...resolvedPolicy, maxAttempts: quote.maxAttempts }
       : resolvedPolicy;
-    const inQuote = (candidate: RankedRouteCandidate): boolean =>
-      !quote || isQuotedRouteTarget(quote, candidate.target);
+    const inQuoteTarget = (target: RankedRouteCandidate['target']): boolean =>
+      !quote || isQuotedRouteTarget(quote, target);
+    const inQuote = (candidate: RankedRouteCandidate): boolean => inQuoteTarget(candidate.target);
     const strategy = resolveRouteStrategy(policy, input);
     const affinity = input.affinityKey
       ? this.affinities.get(affinityRef(subject, input.affinityKey, input.workspaceId))
@@ -97,7 +98,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const selection = selectRouteCandidates({
       request: input, policy, council: this.council, accounts,
       roundRobinOffset,
-      now: this.clock.now(),
+      // A pinned plan resolves council freshness at the quote instant, like the quote.
+      now: quote ? new Date(quote.quotedAt) : this.clock.now(),
       applyAttemptLimit: false,
     });
     if (selection.kind === 'unknown-model') {
@@ -107,7 +109,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       throw new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet');
     }
     let candidates = selection.kind === 'candidates' ? [...selection.candidates] : [];
-    if (affinity && policy.stickyAccount) {
+    // With a quote, an affinity to an unquoted target is ignored for selection
+    // (for example a sticky model the request no longer asks for).
+    if (affinity && policy.stickyAccount && inQuoteTarget(affinity.target)) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
       if (!account || account.readiness !== 'ready') {
         candidates = [];
@@ -209,6 +213,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     profileName: string | undefined, profileRevision: string | undefined): void {
     const { quoteRef, ...body } = quote;
     if (quote.requestedModel !== input.requestedModel
+      || !Number.isFinite(Date.parse(quote.quotedAt))
       || quote.councilRevision !== this.council.revision
       || quote.policyRevision !== (profileRevision ?? 'default')
       || quoteRef !== computeRouteQuoteRef(input, profileName, body)) {
