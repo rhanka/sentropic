@@ -153,6 +153,20 @@ jobs:
         run: make check-ci-version-filters
       - name: Assert every numbered E2E spec has a CI lane
         run: make check-e2e-inventory
+      # Release train lock-sync (BRDP-EX10): a train package whose manifest version differs from its
+      # root lockfile workspace entry fails `changes`, which blocks every publisher (barrier below).
+      - name: Assert train package versions match the root lockfile
+        run: |
+          set -eu
+          for slug in llm-mesh llm-gateway cluster-mesh; do
+            manifest="$(jq -r '.version' "packages/${slug}/package.json")"
+            locked="$(jq -r --arg key "packages/${slug}" '.packages[$key].version // "missing"' package-lock.json)"
+            if [ "$manifest" != "$locked" ]; then
+              echo "::error title=Train lock-sync::packages/${slug}/package.json version ${manifest} differs from package-lock.json packages/${slug} version ${locked}; refresh the root lockfile through Make"
+              exit 1
+            fi
+            echo "lock-sync ok: ${slug}@${manifest}"
+          done
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -509,8 +523,8 @@ jobs:
         run: make test-cluster-mesh
       - name: Build Cluster Mesh
         run: make build-cluster-mesh
-      - name: Qualify packed Cluster Mesh (lazy surface release gate)
-        run: make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test
+      # Release train (BRDP-EX10): pack the candidate and its same-PR siblings first so the packed lazy
+      # qualification resolves unpublished train siblings from their verified archives.
       - name: Pack Cluster Mesh
         id: pack
         env:
@@ -525,6 +539,15 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-cluster-mesh
+      - name: Qualify packed Cluster Mesh (lazy surface release gate)
+        run: |
+          set -eu
+          receipts=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json
+          if [ -f "$receipts" ]; then
+            make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE="$receipts" ENV=test
+          else
+            make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test
+          fi
       - name: Qualify Cluster Mesh candidate install
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
@@ -1468,10 +1491,23 @@ jobs:
           docker tag  "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}" "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
           docker push "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
 
+  # Release train (BRDP-EX10): llm-mesh -> llm-gateway -> cluster-mesh publish in a strict chain,
+  # never before the three train validations pass (a validation counts as skipped only when its
+  # own trigger filter and `global` are false), serialized across runs by one concurrency group.
   publish-llm-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh]
-    if: needs.changes.outputs.llm_mesh_publish == 'true' && github.ref == 'refs/heads/main'
+    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh]
+    if: >-
+      always() &&
+      needs.changes.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.llm_mesh_publish == 'true' &&
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true'))
+    concurrency:
+      group: npm-publish-train
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -1494,13 +1530,19 @@ jobs:
 
   publish-llm-gateway:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-gateway, publish-llm-mesh]
+    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh]
     if: >-
       always() &&
+      needs.changes.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
       needs.changes.outputs.llm_gateway_publish == 'true' &&
-      needs.validate-llm-gateway.result == 'success' &&
-      (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-mesh.result == 'skipped') &&
-      github.ref == 'refs/heads/main'
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.publish-llm-mesh.result == 'success' || (needs.publish-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh_publish != 'true'))
+    concurrency:
+      group: npm-publish-train
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -1775,16 +1817,26 @@ jobs:
         run: make publish-harness
 
   # N1: cluster-mesh depends on @sentropic/events and @sentropic/contracts; wait for both.
+  # Release train (BRDP-EX10): also the last link after llm-mesh and llm-gateway; an upstream
+  # publisher counts as skipped only when its own `*_publish` filter is false.
   publish-cluster-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cluster-mesh, publish-events, publish-contracts]
+    needs: [changes, validate-llm-mesh, validate-llm-gateway, validate-cluster-mesh, publish-llm-mesh, publish-llm-gateway, publish-events, publish-contracts]
     if: >-
       always() &&
+      needs.changes.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
       needs.changes.outputs.cluster_mesh_publish == 'true' &&
-      needs.validate-cluster-mesh.result == 'success' &&
-      (needs.publish-events.result == 'success' || needs.publish-events.result == 'skipped') &&
-      (needs.publish-contracts.result == 'success' || needs.publish-contracts.result == 'skipped') &&
-      github.ref == 'refs/heads/main'
+      (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.validate-cluster-mesh.result == 'success' || (needs.validate-cluster-mesh.result == 'skipped' && needs.changes.outputs.cluster_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.publish-llm-mesh.result == 'success' || (needs.publish-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh_publish != 'true')) &&
+      (needs.publish-llm-gateway.result == 'success' || (needs.publish-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway_publish != 'true')) &&
+      (needs.publish-events.result == 'success' || (needs.publish-events.result == 'skipped' && needs.changes.outputs.events_publish != 'true')) &&
+      (needs.publish-contracts.result == 'success' || (needs.publish-contracts.result == 'skipped' && needs.changes.outputs.contracts_publish != 'true'))
+    concurrency:
+      group: npm-publish-train
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -1801,9 +1853,20 @@ jobs:
           if [ ! -f "$receipt" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt is missing: publication outcome unknown, qualification cannot be skipped"; exit 1; fi
           status="$(sed -n 's/^status=//p' "$receipt")"
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
-          if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+          report_dir=tmp/ci-manifest-guard/qualify-cluster-mesh
+          # Release train (BRDP-EX10): a re-run after a publish that landed writes status=skipped; the
+          # post-publication qualification is healed when the version is on the registry and no report exists.
+          case "$status" in
+            published) ;;
+            skipped)
+              name="${pkg%@*}"; version="${pkg##*@}"
+              if ! curl -fsS -o /dev/null "https://registry.npmjs.org/$(printf '%s' "$name" | sed 's#/#%2f#')/${version}"; then echo "::error title=Publication qualification::cluster-mesh status=skipped but ${pkg} is absent from the registry"; exit 1; fi
+              if [ -f "${report_dir}/qualify-report.json" ]; then echo "::notice title=Publication qualification::${pkg} already qualified in this attempt"; exit 0; fi
+              echo "::notice title=Publication qualification::cluster-mesh status=skipped, ${pkg} present on the registry and not qualified: running post-publication qualification" ;;
+            *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
+          esac
+          make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -1812,6 +1875,22 @@ jobs:
           path: tmp/ci-manifest-guard/qualify-cluster-mesh/**
           retention-days: 7
           if-no-files-found: ignore
+
+  # Release train (BRDP-EX10): after llm-mesh/llm-gateway publication, the registry dist.integrity of the
+  # bytes actually published must equal the committed cluster-mesh `selected` fixture lock. A separate job,
+  # not a publish step: a mismatch turns main red (fixture lock stale) without stopping the publish chain.
+  verify-train-lock-integrity:
+    runs-on: ubuntu-latest
+    needs: [changes, publish-llm-mesh, publish-llm-gateway]
+    if: always() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Check train lock integrity against the registry
+        run: make -f packages/cluster-mesh/packaging.mk check-train-lock-integrity ENV=test-ci-cluster-mesh
 
   bootstrap-publish:
     runs-on: ubuntu-latest
