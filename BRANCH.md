@@ -105,9 +105,9 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] `src/lifecycle.ts`: per-request abort for JSON and pre-first-frame SSE requests, counted as `aborted`.
   - [x] `src/lifecycle.ts`: startup error listener removed once listening; post-listen errors logged by code only.
   - [x] `src/index.ts`: `dist/index.js` marked as the B5 target.
-  - [ ] `apps/llm-gateway/tests/lifecycle.test.ts` and `apps/llm-gateway/tests/fixtures.ts`: settlement asserted before stop resolves, repeated signal, JSON and pre-first-frame aborts, settlement bound, post-listen error log.
+  - [x] `apps/llm-gateway/tests/lifecycle.test.ts` and `apps/llm-gateway/tests/fixtures.ts`: settlement asserted before stop resolves, repeated signal, JSON and pre-first-frame aborts, settlement bound, post-listen error log.
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host`
+    - [x] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (pass; 44 host tests, lint 0 errors)
     - [ ] `make typecheck-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host`
     - [ ] `make build-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (production image: `npm ci`/`npm prune` with the host workspace)
     - [ ] `make scope-check REGISTRY=local ENV=test-llm-gateway-host`
