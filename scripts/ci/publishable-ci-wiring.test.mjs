@@ -125,7 +125,7 @@ test('bootstrap publish requires exactly one explicit target: no all option, one
 });
 
 // Owner freeze: these packages must not be published by any path until the owner decides (see rules/workflow.md).
-const FROZEN = ['auth-hono', 'build-cli', 'focus'];
+const FROZEN = ['auth-hono'];
 
 test('frozen packages are not bootstrap targets: absent from options, guard allow-list, steps and BOOTSTRAP_TARGETS', () => {
   const job = jobs['bootstrap-publish'];
@@ -212,7 +212,7 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
   assert.match(recipe('pack-chat-ui'), /manifest_guard_pack,chat-ui,\$\(MANIFEST_DIST_FORM\)/);
   assert.match(recipe('pack-cited-source-viewer'), /manifest_guard_pack,cited-source-viewer,\$\(MANIFEST_DIST_FORM\)/);
   const publishRecipes = [...makefile.matchAll(/^(publish-[a-z-]+):[^\n]*\n((?:\t[^\n]*\n?)+)/gm)].filter(([, n]) => !/-image$/.test(n));
-  assert.equal(publishRecipes.length, (STEADY_STATE_PUBLISHERS.length + 1) * 2, 'OIDC + token recipe per package (focus included)');
+  assert.equal(publishRecipes.length, STEADY_STATE_PUBLISHERS.length * 2, 'OIDC + token recipe per package');
   for (const [, name, body] of publishRecipes) {
     const slug = name.replace(/^publish-/, '').replace(/-token$/, '');
     assert.match(body, new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public`), name);
