@@ -50,9 +50,9 @@
   - [x] `route-flow-core.ts`: admission before plan, `plan({ quote })`, one settlement with `requestId`/`holdRef`/`quoteRef`.
   - [x] `route-json-flow.ts`, `route-stream-flow.ts`: dispatch marker, allowance for missing usage, release when nothing dispatched.
   - [x] `router/index.ts`: opt-in `budget` option; construction error when the planner has no `quote()`.
-- [ ] **Lot 3 — Tests**
+- [x] **Lot 3 — Tests**
   - [x] New `tests/budget-admission.test.ts`.
-  - [ ] Update `tests/{route-json-flow,route-stream-flow,errors,contract-snapshot}.test.ts`.
+  - [x] Update `tests/{route-json-flow,route-stream-flow,errors,contract-snapshot}.test.ts`.
 - [ ] **Lot 4 — Version and docs**
   - [ ] `package.json` 0.19.0, mesh `^0.22.0`; `CHANGELOG.md`; README budget section.
 - [ ] **Lot N — Final validation**
