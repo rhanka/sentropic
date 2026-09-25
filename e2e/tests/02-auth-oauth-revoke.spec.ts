@@ -61,6 +61,8 @@ const buildAuthorizeUrl = (state: string): string => {
   url.searchParams.set('client_id', CLIENT_ID);
   url.searchParams.set('redirect_uri', `${UI_BASE_URL}/auth/oauth/callback`);
   url.searchParams.set('scope', 'openid profile email');
+  // Other specs and retries can leave a covering consent grant for this client.
+  url.searchParams.set('prompt', 'consent');
   url.searchParams.set('code_challenge', createCodeChallenge(CODE_VERIFIER));
   url.searchParams.set('code_challenge_method', 'S256');
   url.searchParams.set('state', state);

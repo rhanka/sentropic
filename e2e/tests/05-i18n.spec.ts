@@ -88,8 +88,8 @@ test.describe('Internationalization reliability', () => {
 
     const warningText =
       lang === 'fr'
-        ? "Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants."
-        : 'Warning: changing weights will automatically recalculate all scores for your existing use cases.';
+        ? 'Attention : Modifier les poids recalculera automatiquement tous les scores de vos initiatives existantes.'
+        : 'Warning: changing weights will automatically recalculate all scores for your existing initiatives.';
     const emptyText = lang === 'fr' ? 'Aucune matrice configurée pour ce dossier' : 'No matrix configured for this folder';
     const createLabel = lang === 'fr' ? 'Créer une nouvelle matrice' : 'Create a new matrix';
     const createDialogBody = lang === 'fr' ? 'Choisissez le type de matrice à créer :' : 'Choose the type of matrix to create:';
