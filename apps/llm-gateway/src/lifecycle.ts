@@ -26,35 +26,27 @@ const isEventStream = (response: Response): boolean =>
   (response.headers.get('content-type') ?? '').toLowerCase().startsWith('text/event-stream');
 
 export const startHost = async (host: HostApp, config: HostConfig): Promise<RunningHost> => {
+  // Drain accounting is at the HTTP layer: a response counts until its socket write
+  // completes (`close`), so the listener never closes under unflushed SSE bytes.
   let inflight = 0;
   const idleWaiters = new Set<() => void>();
-  const streams = new Set<(reason: unknown) => Promise<void>>();
-  const release = (): void => {
-    inflight -= 1;
-    if (inflight === 0) for (const wake of idleWaiters) wake();
-  };
+  const streams = new Set<(reason: unknown) => void>();
 
+  // SSE bodies stay cancellable from here, which aborts the gateway request signal.
   const track = (response: Response): Response => {
     const reader = response.body!.getReader();
-    let finished = false;
-    const finish = (): void => {
-      if (finished) return;
-      finished = true;
+    const cancel = (reason: unknown): void => {
       streams.delete(cancel);
-      release();
-    };
-    const cancel = async (reason: unknown): Promise<void> => {
-      finish();
-      await reader.cancel(reason).catch(() => undefined);
+      void reader.cancel(reason).catch(() => undefined);
     };
     streams.add(cancel);
     const body = new ReadableStream<Uint8Array>({
       async pull(controller) {
         try {
           const next = await reader.read();
-          if (next.done) { finish(); controller.close(); } else controller.enqueue(next.value);
+          if (next.done) { streams.delete(cancel); controller.close(); } else controller.enqueue(next.value);
         } catch (error) {
-          finish();
+          streams.delete(cancel);
           controller.error(error);
         }
       },
@@ -64,23 +56,21 @@ export const startHost = async (host: HostApp, config: HostConfig): Promise<Runn
   };
 
   const fetch = async (request: Request): Promise<Response> => {
-    inflight += 1;
-    let response: Response;
-    try {
-      response = await host.app.fetch(request);
-    } catch (error) {
-      release();
-      throw error;
-    }
-    if (response.body && isEventStream(response)) return track(response);
-    release();
-    return response;
+    const response = await host.app.fetch(request);
+    return response.body && isEventStream(response) ? track(response) : response;
   };
 
   let server!: Server;
   const port = await new Promise<number>((resolve, reject) => {
     server = serve({ fetch, port: config.port, hostname: config.host }, (info) => resolve(info.port)) as Server;
     server.once('error', reject);
+    server.on('request', (_request, response) => {
+      inflight += 1;
+      response.once('close', () => {
+        inflight -= 1;
+        if (inflight === 0) for (const wake of idleWaiters) wake();
+      });
+    });
   });
 
   const waitForIdle = (timeoutMs: number): Promise<boolean> => new Promise((resolve) => {
@@ -96,10 +86,13 @@ export const startHost = async (host: HostApp, config: HostConfig): Promise<Runn
     host.closeAdmission();
     const drained = await waitForIdle(config.drainTimeoutMs);
     const remaining = [...streams];
-    await Promise.all(remaining.map((cancel) => cancel(new Error('llm gateway host shutdown'))));
+    // Cancelling aborts provider work and settles the request as cancelled; it is not
+    // awaited, so a provider ignoring the abort cannot extend the drain bound.
+    for (const cancel of remaining) cancel(new Error('llm gateway host shutdown'));
     await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-      server.closeAllConnections();
+      const force = setTimeout(() => server.closeAllConnections(), drained ? 1_000 : 0);
+      server.close(() => { clearTimeout(force); resolve(); });
+      server.closeIdleConnections();
     });
     return { drained, cancelled: remaining.length };
   };
