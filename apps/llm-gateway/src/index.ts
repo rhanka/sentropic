@@ -1,5 +1,6 @@
 /**
- * Process entry of the standalone gateway host (`node apps/llm-gateway/dist/index.js`).
+ * Process entry of the standalone gateway host. `node apps/llm-gateway/dist/index.js`
+ * is the B5 target: no build emits `dist/` yet (BR900-A4).
  * B1 wires no identity (B2), settlement (B3c) or routing (B4) adapter yet: the
  * process listens, `/healthz` is live, `/readyz` stays 503 and admission refuses.
  * It runs no migration and holds no fallback (no stub, file or in-memory store).
@@ -24,7 +25,7 @@ export const main = async (options: MainOptions = {}): Promise<RunningHost> => {
     dependencies: options.dependencies ?? {},
     onProbeFailure: (name, failure) => log(`llm-gateway-host readiness probe=${name} failure=${failure}`),
   });
-  const running = await startHost(host, config);
+  const running = await startHost(host, config, { log });
   log(`llm-gateway-host listening port=${running.port} pending=${host.pending.join(',') || 'none'}`);
   return running;
 };

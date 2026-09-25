@@ -47,6 +47,11 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
 - [x] BR900-A4 | attention | Owner: conductor | Branch: current | 2026-09-25 | Reversible: the host is a private workspace member `@sentropic/llm-gateway-host`; runtime values of the gateway come only from the cluster-mesh loader (type-only static imports). Compiling `dist/index.js` (bundling the api `standalone-ports.ts` import) is B5 scope.
 - [x] BR900-A5 | attention | Owner: conductor | Branch: current | 2026-09-25 | Muse 12(a): the root lockfile change triggers every lockfile-filtered validate job; sequencing belongs to the conductor merge train.
 - [x] BR900-A6 | attention | Owner: conductor | Branch: current | 2026-09-25 | The worktree has no `.env`; service-starting make commands pass `REGISTRY=local` as a make variable (documented `exec-playwright-dev` pattern) so the api image tag resolves. No secret file was copied.
+- [ ] BR900-A7 | attention | Owner: conductor | Branch: current | 2026-09-25 | Review B1 (record only): no CI job runs the host checks yet; wire them in B5/B6 with a `ci.yml` exception (merge-train note).
+- [ ] BR900-A8 | attention | Owner: conductor | Branch: current | 2026-09-25 | Review B1 (record only): the host imports `../../../api/src/...` across the package boundary, unresolvable from `dist`; resolved in B5 (see BR900-A4).
+- [ ] BR900-A9 | attention | Owner: conductor | Branch: current | 2026-09-25 | Review B1 (record only): `apps/llm-gateway/**` is in neither `API_VERSION` nor the api CI filter; B6.
+- [ ] BR900-A10 | attention | Owner: conductor | Branch: current | 2026-09-25 | Review B1 (record only): on merge, this `BRANCH.md` must not clobber main's lot record (conductor handles).
+- [x] BR900-A11 | attention | Owner: conductor | Branch: current | 2026-09-25 | Reversible: shutdown awaits settlement of cancelled/aborted work under a fixed 5 s bound (`SETTLE_TIMEOUT_MS`, 25 s + 5 s + 1 s close inside the 40 s pod grace) and reports `aborted` and `settled` in `StopReport`; not an env knob.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -94,3 +99,16 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
     - [x] `make typecheck-llm-gateway test-llm-gateway ENV=test-llm-gateway-host` (pass; 25 files, 225 tests incl. router and contract-snapshot, no wire drift)
     - [x] `make scope-check REGISTRY=local ENV=test-llm-gateway-host` (PASS C2; advisory check sees only uncommitted files, branch diff `origin/main...HEAD` manually verified inside Allowed + declared Conditional paths)
     - [x] `make down API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (`make ps` empty)
+- [ ] **Lot 4 — B1 review fix round 1**
+  - [x] `src/lifecycle.ts`: stop awaits settlement of cancelled streams (bounded) before resolving.
+  - [x] `src/lifecycle.ts`: signal listeners via `on`; a repeated signal is absorbed during the drain.
+  - [x] `src/lifecycle.ts`: per-request abort for JSON and pre-first-frame SSE requests, counted as `aborted`.
+  - [x] `src/lifecycle.ts`: startup error listener removed once listening; post-listen errors logged by code only.
+  - [x] `src/index.ts`: `dist/index.js` marked as the B5 target.
+  - [ ] `apps/llm-gateway/tests/lifecycle.test.ts` and `apps/llm-gateway/tests/fixtures.ts`: settlement asserted before stop resolves, repeated signal, JSON and pre-first-frame aborts, settlement bound, post-listen error log.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host`
+    - [ ] `make typecheck-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host`
+    - [ ] `make build-api API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (production image: `npm ci`/`npm prune` with the host workspace)
+    - [ ] `make scope-check REGISTRY=local ENV=test-llm-gateway-host`
+    - [ ] `make down API_PORT=9461 UI_PORT=5661 MAILDEV_UI_PORT=1561 REGISTRY=local ENV=test-llm-gateway-host` (`make ps` empty)
