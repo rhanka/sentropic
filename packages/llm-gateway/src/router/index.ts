@@ -28,7 +28,7 @@ import {
   type RouteFlowDeps,
   type RouteMeteringSink,
 } from '../route-flow-core.js';
-import type { GatewayWire, ProviderResponseHeaders } from '../ports/dispatch.js';
+import type { GatewayWire, ProviderResponseHeaders, RouteAttemptDispatchPort } from '../ports/dispatch.js';
 import {
   mapGatewayError,
   notImplemented,
@@ -37,6 +37,8 @@ import {
   type ProviderShapedError,
 } from './errors.js';
 import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
+import { authenticateCaller, validateAuthContext } from '../internal/caller-auth.js';
+import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -44,6 +46,9 @@ export interface ReadinessProbe {
 }
 
 export interface CreateGatewayRouterOptions {
+  readonly routeDispatch?: RouteAttemptDispatchPort;
+  /** Trusted ingress reconstruction, including external scheme and rewritten path. */
+  readonly publicUrl?: (req: Request) => string;
   readonly config: GatewayConfig;
   /** Optional readiness probe; defaults to always-ready in the v0 scaffold. */
   readonly readiness?: ReadinessProbe;
@@ -163,8 +168,24 @@ export const createGatewayRouter = (
   options: CreateGatewayRouterOptions,
 ): Hono => {
   const { config, readiness, resolveTarget, metering } = options;
+  if (options.routeDispatch && (!options.routePlanner || !options.routeMetering)) {
+    throw new Error('routeDispatch requires routePlanner and routeMetering');
+  }
   const requestId = options.requestId ?? defaultRequestId;
   const app = new Hono();
+  const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
+    try {
+      const context = {
+        method: req.method, url: options.publicUrl ? options.publicUrl(req) : req.url,
+        requestId: id, signal: req.signal,
+      };
+      validateAuthContext(context);
+      return context;
+    } catch {
+      req.signal.throwIfAborted();
+      throw new GatewayError('caller-auth-unavailable', 'public URL unavailable');
+    }
+  };
 
   // --- Health (real) ---
   app.get('/healthz', (c) => c.json({ status: 'ok', mode: config.mode }));
@@ -186,6 +207,7 @@ export const createGatewayRouter = (
   const routeFlowDeps: RouteFlowDeps | undefined = options.routePlanner && options.routeMetering
     ? {
         config, routePlanner: options.routePlanner, metering: options.routeMetering,
+        ...(options.routeDispatch ? { dispatch: options.routeDispatch } : {}),
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
       }
     : undefined;
@@ -214,8 +236,14 @@ export const createGatewayRouter = (
 
     const headers = readHeaders(c.req.raw.headers);
     const stream = readStream(body);
+    let authContext: CallerAuthRequestContext;
+    try {
+      authContext = authContextFor(c.req.raw, id);
+    } catch (error) {
+      return sendError(c, toProviderShapedError(wire, error), id);
+    }
     const flowRequest = {
-      wire, headers, body, model, stream,
+      wire, headers, body, model, stream, authContext,
       signal: c.req.raw.signal,
     };
 
@@ -237,12 +265,18 @@ export const createGatewayRouter = (
     // (first frame buffered). A failure BEFORE any byte (auth/select/dispatch/
     // first-frame) REJECTS here -> provider-shaped HTTP error, never an empty 200
     // (#6). A mid-stream failure is settled inside the stream (no retry, §2).
+    const cancellation = new AbortController();
+    const abort = () => cancellation.abort(c.req.raw.signal.reason);
+    c.req.raw.signal.addEventListener('abort', abort, { once: true });
+    if (c.req.raw.signal.aborted) abort();
+    flowRequest.signal = cancellation.signal;
     let streamResult;
     try {
       streamResult = routeFlowDeps
         ? await runRouteStreamFlow(routeFlowDeps, flowRequest)
         : await runStreamFlow(flowDeps!, flowRequest);
     } catch (error) {
+      c.req.raw.signal.removeEventListener('abort', abort);
       return sendError(c, toProviderShapedError(wire, error), id, servedTargetForError(error));
     }
 
@@ -254,17 +288,25 @@ export const createGatewayRouter = (
     // B3: relay provider frames VERBATIM. The gateway synthesizes NO terminator —
     // a real OpenAI transport emits its own `[DONE]`; Anthropic uses message_stop.
     // On a mid-stream error the stream simply ends (no synthetic [DONE]).
+    let closed = false;
+    const detach = () => c.req.raw.signal.removeEventListener('abort', abort);
     return c.body(
       new ReadableStream<Uint8Array>({
-        async start(controller) {
-          const encoder = new TextEncoder();
+        async pull(controller) {
           try {
-            for await (const event of streamResult.stream) {
-              controller.enqueue(encoder.encode(event.raw));
-            }
-          } finally {
-            controller.close();
+            const next = await streamResult.stream.next();
+            if (closed) return;
+            if (next.done) { closed = true; detach(); controller.close(); }
+            else controller.enqueue(new TextEncoder().encode(next.value.raw));
+          } catch (error) {
+            if (!closed) { closed = true; detach(); controller.error(error); }
           }
+        },
+        async cancel(reason) {
+          closed = true;
+          cancellation.abort(reason);
+          try { await streamResult.stream.return(undefined); }
+          finally { detach(); }
         },
       }),
     );
@@ -278,7 +320,14 @@ export const createGatewayRouter = (
     const id = requestId();
     // Filtered by caller/pool policy (spec §3). Caller-auth gates the catalog:
     // an unauthenticated caller gets a provider-shaped 401, never the pool.
-    const auth = await config.callerAuth.verify(readHeaders(c.req.raw.headers));
+    let auth: CallerAuthResult;
+    try {
+      auth = await authenticateCaller(
+        config.callerAuth, readHeaders(c.req.raw.headers), authContextFor(c.req.raw, id),
+      );
+    } catch (error) {
+      return sendError(c, toProviderShapedError('openai-chat-completions', error), id);
+    }
     if (!auth.ok || !auth.cost) {
       return sendError(
         c,

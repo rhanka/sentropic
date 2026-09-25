@@ -177,7 +177,7 @@ const CLOUD_CODE_TRANSPORT_PROVIDER_ID = 'cloud-code';
 const MUSE_TARGET_PROVIDER_ID = 'muse';
 const MUSE_TRANSPORT_PROVIDER_ID = 'muse';
 const RESERVATION_TTL_MS = 5 * 60 * 1000;
-const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
+export const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 
 const codexRefreshes = new Map<string, Promise<CodexTokenSecretPayload | null>>();
 const claudeCodeRefreshes = new Map<string, Promise<ClaudeCodeTokenSecretPayload | null>>();

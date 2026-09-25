@@ -1,9 +1,16 @@
 /**
  * CostContext — resolved from the VERIFIED caller identity (spec §2), NEVER
  * from the request body. It is the financial attribution key ("who consumed /
- * who pays") that BR-47 rolls cost_events by (spec §5). v0 stub: shape only;
- * the real resolver (caller-auth via auth-hono) lands in Lot 2.
+ * who pays") that BR-47 rolls cost_events by (spec §5).
  */
+import type { VerifiedPrincipal } from '../personal-passthrough/caller-auth.js';
+import type { CallerAuthRequestContext } from './caller-auth.js';
+
+export interface CostContextResolver {
+  resolve(principal: VerifiedPrincipal, context: CallerAuthRequestContext):
+    Promise<CostContext | undefined> | CostContext | undefined;
+}
+
 export interface CostContext {
   readonly tenantId: string;
   readonly workspaceId?: string;
