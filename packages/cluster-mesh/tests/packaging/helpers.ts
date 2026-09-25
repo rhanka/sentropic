@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Set by packaging.mk; packaging specs are skipped in the ordinary package test run. */
@@ -82,3 +82,18 @@ export function cloneFixture(from: string, to: string): string {
 }
 
 export const read = (path: string): string => readFileSync(path, 'utf8');
+
+export interface SiblingIndexEntry {
+  readonly name: string;
+  readonly version: string;
+}
+
+/** Siblings verified by prepare.sh (`<dir>/index.json`); none in a registry run. An empty receipts file yields []. */
+export function siblingIndex(dir: string = fixtureDir('siblings')): SiblingIndexEntry[] {
+  const file = join(dir, 'index.json');
+  return existsSync(file) ? JSON.parse(read(file)) as SiblingIndexEntry[] : [];
+}
+
+/** Source prepare.sh must record for name@version: a sibling only when that exact name@version was verified. */
+export const expectedSource = (index: readonly SiblingIndexEntry[], name: string, version: string): 'sibling' | 'registry' =>
+  index.some((entry) => entry.name === name && entry.version === version) ? 'sibling' : 'registry';
