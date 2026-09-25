@@ -15,8 +15,8 @@
   - `spec/SPEC_EVOL_CLUSTER_MESH_LAZY_SURFACE.md`
   - `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` (append-only amendment and status)
   - `BRANCH.md`
-- [x] **Forbidden Paths (must not change in this branch)**: `api/**`, `ui/**`, `packages/llm-mesh/**`, `packages/llm-gateway/**`, other packages, `docker-compose*.yml`, `.github/workflows/**`, `.track/**`, other plans.
-- [x] **Conditional Paths**: `Makefile` (BRE-EX1 only), `package-lock.json` (only under a declared exception).
+- [x] **Forbidden Paths (must not change in this branch)**: `api/**` except `api/Dockerfile` (BRE-EX3), `ui/**`, `packages/llm-mesh/**`, `packages/llm-gateway/**`, other packages, `docker-compose*.yml`, `.github/workflows/**` except BRE-EX2, `.track/**`, other plans.
+- [x] **Conditional Paths**: `Makefile` (BRE-EX1 only), `.github/workflows/ci.yml` (BRE-EX2 one step only), `api/Dockerfile` and root `package-lock.json` (BRE-EX3 only).
 - [x] **Exception process**: declare `BRE-EXn` with reason, impact and rollback in `## Feedback Loop` before touching a conditional path.
 
 ## Feedback Loop
@@ -71,4 +71,9 @@
 - [x] **Release notes**: version 0.12.0, CHANGELOG and README consumer migration notes.
 - [ ] **Lot B5 — MCP leaves**: deferred until the h2a LLM/gateway flip ships (E-A15); not built in this branch.
 - [x] **Final gates**: PASS `make typecheck-cluster-mesh test-cluster-mesh pack-cluster-mesh` (47 files, 344 passed, 24 packaging skipped outside packaging.mk; pack 339 files); PASS `make -f packages/cluster-mesh/packaging.mk test-lazy-package` (24 passed); PASS `make scope-check`; PASS `make down` (ports/ENV above).
+- [x] **Fix round 1 — F1 root graph**: registry imports the metadata-resolved file only (no literal provider `import()` in `catalog.ts`); jose resolved from mcp-auth; test `gateway-auth-isolation.spec.ts`.
+- [ ] **Fix round 1 — F2 topology**: registry dedupe by normalized module URL; non-file URL fallback; guard import in `compose/disabled.ts`; tests `tests/modules/topology.spec.ts`.
+- [ ] **Fix round 1 — F3 packed matrix**: API-like root bundle, frozen `selected` lockfile (`npm ci`), session-mode positive, latest-in-range, global consumer + separately installed runtime (P2/P3/P4).
+- [ ] **Fix round 1 — F4 build/CI exceptions**: BRE-EX1 hardening (`trap` EXIT INT TERM, `docker run --init`), BRE-EX2 CI step, BRE-EX3 Dockerfile order + lockfile refresh; PASS `make build-api`.
+- [ ] **Fix round 1 — F5 docs**: README (HMR/test runners, per-thread guard, llm-mesh-only limit, npm only, tested bundlers, TS >= 5.7), spec E8/E10 amendments, E-A17 update.
 - [ ] **Review/delivery gate (conductor-owned)**: independent acceptance of round 2 fixes; only then deliver the approved build contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor. The requested topology rule/test notice is informational, not build authorization.
