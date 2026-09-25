@@ -70,7 +70,7 @@ Deliver the private `apps/llm-gateway` Node host that composes the gateway throu
   - [x] Verify branch `feat/llm-gateway-host` in `tmp/llm-gateway-host`.
   - [x] Declare BRDP-EX1a, BRDP-EX6, BRDP-EX7 with exact content before editing those paths.
 - [ ] **Lot 1 — Extraction and workspace wiring**
-  - [ ] BRDP-EX7: extract `standalone-ports.ts`; rewire `gateway-route-plane.ts` imports only.
+  - [x] BRDP-EX7: extract `standalone-ports.ts`; rewire `gateway-route-plane.ts` imports only.
   - [ ] Host manifest `apps/llm-gateway/{package.json,tsconfig.json,eslint.config.cjs}`.
   - [ ] BRDP-EX6: root workspace entry and `make lock-root` refresh.
 - [ ] **Lot 2 — Host sources**
