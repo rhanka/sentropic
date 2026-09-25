@@ -101,6 +101,8 @@
   "sideEffects": [
     "./dist/modules/topology.js",
     "./dist/modules/topology-guard.js",
+    "./dist/modules/topology-guard-gateway.js",
+    "./dist/modules/topology-guard-llm-mesh.js",
     "./dist/integrations/**",
     "./dist/loaders/**",
     "./dist/compose/**"
