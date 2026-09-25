@@ -122,7 +122,8 @@
   - [x] Shell hardening: sibling directory rejects `..`; `publishable-sibling-plan` validates `PACKAGE` with the slug regex.
   - [x] Spec and `rules/workflow.md` Package Publication state the package-path-only publication trigger and its reason; follow-ups recorded.
   - [x] `make test-publishable-manifests` (55 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make check-e2e-inventory`, `make scope-check` PASS.
-- [ ] **Lot G-F2 — Build fix round 2 (verified defect + review findings)**
+- [x] **Lot G-F2 — Build fix round 2 (verified defect + review findings)**
   - [x] Sibling directory: strict `^tmp/<segment>(/<segment>)*$` check (no empty or dot-leading segment, `..` still rejected) before `rm -rf`; fixture runs the script in a throwaway cwd with a stub `make` and proves `tmp/`, `tmp/.`, `tmp//`, `tmp/./x`, `tmp/../x`, `/tmp/x`, `x` are rejected before any deletion.
   - [x] `publishable-sibling-plan` passes `PACKAGE`/`SIBLING_DIR` as container env and validates both inside a single-quoted script; post-publication qualification hard-fails on a missing or status-less receipt (no `:-missing` fallback).
-  - [ ] Registry request: 400/401/403 permanent, 408/429/5xx and exceptions transient; classifier adds `fetch failed`, `ERR_SOCKET_TIMEOUT`, `UND_ERR_*`, `HTTP 408`, `E429`, `E5xx`, drops `EPIPE`; re-run hint never duplicated; inventory failure message points to `classification.json`.
+  - [x] Registry request: 400/401/403 permanent, 408/429/5xx and exceptions transient; classifier adds `fetch failed`, `ERR_SOCKET_TIMEOUT`, `UND_ERR_*`, `HTTP 408`, `E429`, `E5xx`, drops `EPIPE`; re-run hint never duplicated; inventory failure message points to `classification.json`.
+  - [x] `make test-publishable-manifests` (61 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make scope-check` PASS.
