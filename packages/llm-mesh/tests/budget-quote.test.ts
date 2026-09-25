@@ -6,7 +6,7 @@ import { InMemoryRoutePlanner } from '../src/route-planner.js';
 import { RoutePlanError } from '../src/route-planner-state.js';
 import { MAX_ROUTE_QUOTE_CANDIDATES, quoteRoute, RouteQuoteError } from '../src/route-quote.js';
 import type {
-  AccountDirectoryPort, EligibleAccountDescriptor, RouteQuote, RouteQuoteInput,
+  AccountDirectoryPort, EligibleAccountDescriptor, RoutePlan, RouteQuote, RouteQuoteInput,
 } from '../src/routing-contracts.js';
 import { InMemoryRoutePolicyProfiles, RoutePolicyError, DEFAULT_ROUTE_POLICY } from '../src/routing-policy.js';
 import { CANONICAL_TARGET_ROUTE_MAPPINGS } from '../src/routing-targets.js';
@@ -18,6 +18,46 @@ const quoteInput = (requestedModel: string, extra: Partial<RouteQuoteInput> = {}
   requestedModel, ceiling, now: NOW, ...extra,
 });
 const fixedClock = { now: () => new Date(NOW.getTime()) };
+const SKEWED = new Date('2026-09-27T00:00:00Z');
+const skewedClock = { now: () => new Date(SKEWED.getTime()) };
+const evidence = [{
+  suite: 'fixture', artifact: 'fixture.json', measuredAt: '2026-08-01T00:00:00Z',
+  dimensions: { quality: 'equivalent' as const },
+}];
+/** Two long-lived groups (one with transport preferences) and one expiring between NOW and SKEWED. */
+const SUPERSET_COUNCIL = {
+  ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+  groups: [
+    {
+      id: 'gemini-flash', intent: 'fast' as const, expiresAt: '2027-01-01T00:00:00Z', evidence,
+      members: [
+        { providerId: 'gemini', modelId: 'gemini-3.5-flash', rank: 1, requiredCapabilities: [] },
+        {
+          providerId: 'gemini', modelId: 'gemini-3.1-flash-lite', rank: 2, requiredCapabilities: [],
+          transportPreferences: ['antigravity', 'cloud-code'],
+        },
+      ],
+    },
+    {
+      id: 'openai-nano', intent: 'fast' as const, expiresAt: '2027-01-01T00:00:00Z', evidence,
+      members: [
+        { providerId: 'openai', modelId: 'gpt-5.4-nano', rank: 1, requiredCapabilities: [] },
+        { providerId: 'openai', modelId: 'gpt-4.1-nano', rank: 2, requiredCapabilities: [] },
+      ],
+    },
+    {
+      id: 'mistral-expiring', intent: 'general' as const, expiresAt: '2026-09-26T00:00:00Z', evidence,
+      members: [
+        { providerId: 'mistral', modelId: 'mistral-small-2603', rank: 1, requiredCapabilities: [] },
+        {
+          providerId: 'mistral', modelId: 'magistral-medium-2509', rank: 2, requiredCapabilities: [],
+          transportPreferences: ['muse'],
+        },
+      ],
+    },
+  ],
+};
+
 
 class SpyDirectory implements AccountDirectoryPort {
   readonly calls: string[] = [];
@@ -247,7 +287,7 @@ describe('pure route quote', () => {
     expect(refused).toEqual([]);
   });
 
-  it('quotes a superset of every plan across fallback, policies and capabilities', async () => {
+  it('quotes a superset of every plan across fallback, policies, capabilities and council', async () => {
     const variants = [
       { policyOverride: { maxAttempts: 8 } },
       { policyOverride: { maxAttempts: 8, fallbackMode: 'one-way' as const } },
@@ -255,34 +295,56 @@ describe('pure route quote', () => {
       { policyOverride: { maxAttempts: 8, allowEquivalentModels: false } },
       { policyOverride: { maxAttempts: 8 }, requiredCapabilities: ['tools' as const] },
     ];
-    let plansChecked = 0;
+    const routes = (plan: RoutePlan) => plan.diagnostics.map((entry) => `${entry.actualProviderId}/`
+      + `${entry.actualModelId}@${entry.actualTransportProviderId}#${entry.diagnosticAccountRef}`);
+    let plansChecked = 0; let equivalentsPlanned = 0;
     for (const requestedModel of requestedModels) {
       for (const variant of variants) {
-        const directory = new FakeRouteDirectory(broadAccounts());
-        const planner = new InMemoryRoutePlanner({ directory, clock: fixedClock });
+        const planner = new InMemoryRoutePlanner({
+          directory: new FakeRouteDirectory(broadAccounts()), clock: fixedClock, council: SUPERSET_COUNCIL,
+        });
+        // Planner clock after the expiring group: the pinned plan must still follow the quote.
+        const skewed = new InMemoryRoutePlanner({
+          directory: new FakeRouteDirectory(broadAccounts()), clock: skewedClock, council: SUPERSET_COUNCIL,
+        });
         let quote: RouteQuote;
         try { quote = planner.quote(quoteInput(requestedModel, variant)); } catch { continue; }
+        expect(skewed.quote(quoteInput(requestedModel, variant))).toEqual(quote);
         expect(quote.candidates.length).toBeLessThanOrEqual(MAX_ROUTE_QUOTE_CANDIDATES);
+        const ordered = variant.policyOverride.strategy === undefined;
         // Suppress each first route in turn to walk the fallback chain.
         for (let round = 0; round < 4; round += 1) {
           let plan;
           try { plan = await planner.plan(routingSubject(), { requestedModel, ...variant }); } catch { break; }
           plansChecked += 1;
+          equivalentsPlanned += plan.diagnostics.filter((entry) => entry.reason === 'equivalent').length;
           expect(plan.candidateRefs.length).toBeLessThanOrEqual(quote.maxAttempts);
           for (const diagnostic of plan.diagnostics) {
             expect(quoted(quote, diagnostic), `${requestedModel} -> ${diagnostic.actualProviderId}/`
               + `${diagnostic.actualModelId}@${diagnostic.actualTransportProviderId}`).toBe(true);
           }
           const pinned = await planner.plan(routingSubject(), { requestedModel, ...variant, quote });
-          expect(pinned.diagnostics.map((entry) => entry.actualModelId))
-            .toEqual(plan.diagnostics.map((entry) => entry.actualModelId));
-          await (await planner.prepareAttempt(
-            routingSubject(), plan.planRef, plan.candidateRefs[0]!, `req-${round}`, 0,
-          )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+          expect(pinned.diagnostics.every((entry) => quoted(quote, entry))).toBe(true);
+          // Round-robin rotates by the reservations of the previous plan, so only ordered strategies compare.
+          if (ordered) expect(routes(pinned)).toEqual(routes(plan));
+          const skewedPlan = await skewed.plan(routingSubject(), { requestedModel, ...variant, quote });
+          expect(skewedPlan.diagnostics.every((entry) => quoted(quote, entry))).toBe(true);
+          expect(skewedPlan.candidateRefs.length).toBeLessThanOrEqual(quote.maxAttempts);
+          if (ordered) expect(routes(skewedPlan), requestedModel).toEqual(routes(plan));
+          const failed = routes(plan)[0];
+          const skewedIndex = Math.max(0, routes(skewedPlan).indexOf(failed!));
+          for (const [owner, entry, index] of [
+            [planner, plan, 0], [skewed, skewedPlan, skewedIndex],
+          ] as const) {
+            await (await owner.prepareAttempt(
+              routingSubject(), entry.planRef, entry.candidateRefs[index]!, `req-${round}`, index,
+            )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+          }
         }
       }
     }
     expect(plansChecked).toBeGreaterThan(100);
+    expect(equivalentsPlanned).toBeGreaterThan(0);
   });
 
   it('refuses a quote that does not match the plan before touching accounts', async () => {
@@ -323,7 +385,7 @@ describe('pure route quote', () => {
     expect(directory.calls).toEqual([]);
   });
 
-  it('never executes an unquoted sticky target', async () => {
+  it('ignores an affinity to an unquoted target and plans among quoted candidates', async () => {
     const accounts: EligibleAccountDescriptor[] = [
       {
         accountRef: 'internal-a', diagnosticAccountRef: 'acct_a', targetProviderId: 'gemini',
@@ -346,6 +408,7 @@ describe('pure route quote', () => {
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-a', 0,
     )).complete();
 
+    // Without a quote the sticky behavior is unchanged (attention item for the mesh owner).
     const unpinned = await planner.plan(routingSubject(), {
       requestedModel: 'gemini-3.5-flash', affinityKey: 'session', policyOverride,
     });
@@ -353,11 +416,101 @@ describe('pure route quote', () => {
 
     const quote = planner.quote(quoteInput('gemini-3.5-flash', { policyOverride }));
     expect(quote.candidates.map((candidate) => candidate.modelId)).toEqual(['gemini-3.5-flash']);
-    const before = directory.prepared.length;
-    await expect(planner.plan(routingSubject(), {
+    const pinned = await planner.plan(routingSubject(), {
       requestedModel: 'gemini-3.5-flash', affinityKey: 'session', policyOverride, quote,
-    })).rejects.toMatchObject({ code: 'quote-mismatch' });
-    expect(directory.prepared).toHaveLength(before);
+    });
+    expect(pinned.diagnostics.map((entry) => [entry.diagnosticAccountRef, entry.actualModelId]))
+      .toEqual([['acct_b', 'gemini-3.5-flash']]);
+    const before = directory.prepared.length;
+    await (await planner.prepareAttempt(
+      routingSubject(), pinned.planRef, pinned.candidateRefs[0]!, 'req-b', 0,
+    )).complete();
+    expect(directory.prepared.slice(before).map((entry) => [entry.accountRef, entry.target.modelId]))
+      .toEqual([['internal-b', 'gemini-3.5-flash']]);
+  });
+
+  it('keeps a quoted sticky affinity when the quote covers it', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory(), clock: fixedClock });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'gemini-3.5-flash', affinityKey: 'session',
+    });
+    const boundRef = first.diagnostics[0]!.diagnosticAccountRef;
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-a', 0,
+    )).complete();
+    const quote = planner.quote(quoteInput('gemini-3.5-flash'));
+    const pinned = await planner.plan(routingSubject(), {
+      requestedModel: 'gemini-3.5-flash', affinityKey: 'session', quote,
+    });
+    expect(pinned.diagnostics[0]).toMatchObject({ reason: 'sticky', diagnosticAccountRef: boundRef });
+  });
+
+  it('evaluates council freshness at the quote instant, not the planner clock', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(broadAccounts()), clock: skewedClock, council: SUPERSET_COUNCIL,
+    });
+    const input = quoteInput('mistral-small-2603', { policyOverride: { maxAttempts: 8 } });
+    const quote = planner.quote(input);
+    expect(quote.quotedAt).toBe(NOW.toISOString());
+    expect(quote.candidates.map((candidate) => candidate.modelId))
+      .toEqual(['mistral-small-2603', 'magistral-medium-2509']);
+    const unpinned = await planner.plan(routingSubject(), { requestedModel: 'mistral-small-2603',
+      policyOverride: { maxAttempts: 8 } });
+    expect(new Set(unpinned.diagnostics.map((entry) => entry.actualModelId)))
+      .toEqual(new Set(['mistral-small-2603']));
+    const pinned = await planner.plan(routingSubject(), { requestedModel: 'mistral-small-2603',
+      policyOverride: { maxAttempts: 8 }, quote });
+    expect(new Set(pinned.diagnostics.map((entry) => entry.actualModelId)))
+      .toEqual(new Set(['mistral-small-2603', 'magistral-medium-2509']));
+    await expect(planner.plan(routingSubject(), { requestedModel: 'mistral-small-2603',
+      policyOverride: { maxAttempts: 8 }, quote: { ...quote, quotedAt: SKEWED.toISOString() } }))
+      .rejects.toMatchObject({ code: 'quote-mismatch' });
+  });
+
+  it('caps pinned attempts at the quoted maximum when the policy grows', async () => {
+    const profiles = new InMemoryRoutePolicyProfiles([
+      { name: 'p', revision: 'rev-1', policy: { ...DEFAULT_ROUTE_POLICY, maxAttempts: 3 } },
+    ]);
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(broadAccounts()), profiles, clock: fixedClock,
+    });
+    const quote = planner.quote(quoteInput('gemini-3.5-flash', { policyProfile: 'p' }));
+    expect(quote.maxAttempts).toBe(3);
+    profiles.set({ name: 'p', revision: 'rev-1', policy: { ...DEFAULT_ROUTE_POLICY, maxAttempts: 8 } });
+    const unpinned = await planner.plan(routingSubject(), {
+      requestedModel: 'gemini-3.5-flash', policyProfile: 'p',
+    });
+    expect(unpinned.candidateRefs.length).toBeGreaterThan(3);
+    const pinned = await planner.plan(routingSubject(), {
+      requestedModel: 'gemini-3.5-flash', policyProfile: 'p', quote,
+    });
+    expect(pinned.candidateRefs.length).toBeLessThanOrEqual(3);
+    expect(pinned.policy.maxAttempts).toBe(3);
+  });
+
+  it('ignores explicit.diagnosticAccountRef in the quote but narrows the plan', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(broadAccounts()), clock: fixedClock,
+    });
+    const explicit = { diagnosticAccountRef: 'acct_gemini_antigravity' };
+    const quote = planner.quote(quoteInput('gemini-3.5-flash', { explicit }));
+    expect(quote.candidates).toEqual(planner.quote(quoteInput('gemini-3.5-flash')).candidates);
+    const plan = await planner.plan(routingSubject(), {
+      requestedModel: 'gemini-3.5-flash', explicit, quote,
+    });
+    expect(plan.diagnostics.map((entry) => entry.diagnosticAccountRef))
+      .toEqual(['acct_gemini_antigravity']);
+  });
+
+  it('treats requiredCapabilities order as irrelevant for the quote reference', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory(), clock: fixedClock });
+    const quote = planner.quote(quoteInput('gemini-3.5-flash', { requiredCapabilities: ['tools', 'input:image'] }));
+    expect(planner.quote(quoteInput('gemini-3.5-flash', { requiredCapabilities: ['input:image', 'tools'] })).quoteRef)
+      .toBe(quote.quoteRef);
+    const plan = await planner.plan(routingSubject(), {
+      requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:image', 'tools'], quote,
+    });
+    expect(plan.candidateRefs.length).toBeGreaterThan(0);
   });
 });
 
