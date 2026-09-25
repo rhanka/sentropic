@@ -1,4 +1,4 @@
-import '../../../modules/topology-guard.js';
+import '../../../modules/topology-guard-llm-mesh.js';
 import type { ClusterMeshModules } from '../../../modules/contracts.js';
 
 /**

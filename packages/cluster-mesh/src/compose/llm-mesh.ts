@@ -1,4 +1,4 @@
-import '../modules/topology-guard.js';
+import '../modules/topology-guard-llm-mesh.js';
 import type { VerifiedInvocationContextPort } from '@sentropic/contracts';
 import type { InvocationReceiptPort } from '@sentropic/events';
 import type { Hono } from 'hono';
