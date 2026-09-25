@@ -14,6 +14,11 @@ ingestion) has no entries yet, so PLAN.md + this registry are the de-facto
 source of truth. Ingesting per-branch BRANCH.md into the harness track is a
 follow-up (see Open items).
 
+Eradication note (BRERAD, 2026-09-25): `packages/cli`, `packages/build-cli` and
+`packages/focus` were removed from sentropic; the API no longer consumes focus.
+CLI = h2a; focus = h2a. Rows below that name `cli`, `build-cli` or `focus` are
+history; the CI guard `make check-eradicated-packages` forbids their return.
+
 Scope vocabulary (verified `git ls-tree origin/main packages/`): `auth-client`,
 `auth-hono`, `auth-ui`, `build-cli`, `chat-core`, `chat-server`, `chat-ui`,
 `cli`, `comments`, `contracts`, `cowork-bridge`, `cowork-desktop`, `events`,
