@@ -1,0 +1,14 @@
+{
+  "name": "fixture-separate-runtime",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": { ".": "./index.mjs" },
+  "dependencies": {
+    "@sentropic/cluster-mesh": "file:__CANDIDATE__",
+    "@sentropic/llm-gateway": "0.18.0",
+    "@sentropic/llm-mesh": "0.21.2",
+    "@sentropic/mcp-auth": "0.2.1",
+    "hono": "4.10.7",
+    "jose": "5.10.0"
+  }
+}

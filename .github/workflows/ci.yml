@@ -532,6 +532,8 @@ jobs:
         run: make test-cluster-mesh
       - name: Build Cluster Mesh
         run: make build-cluster-mesh
+      - name: Qualify packed Cluster Mesh (lazy surface release gate)
+        run: make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test
       - name: Pack Cluster Mesh
         run: make pack-cluster-mesh
 
