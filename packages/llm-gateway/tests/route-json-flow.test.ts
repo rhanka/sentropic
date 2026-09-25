@@ -4,6 +4,9 @@ import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
+import {
+  budgetConfig, fixtureQuote, jsonAttempt, quotingPlanner, recordingBudget, textResponse, type BudgetRecorder,
+} from './fixtures/budget.js';
 
 const policy = {
   strategy: { kind: 'last-enrolled' as const }, rules: [], fallbackMode: 'retest-preferred' as const,
@@ -273,5 +276,92 @@ describe('route JSON flow', () => {
     );
     expect((error as { kind?: string }).kind).toBe('upstream-rate-limited');
     expect((error as { retryAfterSeconds?: number }).retryAfterSeconds).toBe(9);
+  });
+});
+
+describe('route JSON flow with budget admission', () => {
+  const deps = (planner: RoutePlanner, recorder: BudgetRecorder) => ({
+    config: budgetConfig, routePlanner: planner, metering: recorder.metering, budget: recorder.options,
+  });
+  const budgetRequest = { ...request, body: { ...request.body, max_tokens: 64 } };
+  const allowanceUsage = { inputTokens: 100, outputTokens: 64, estimated: true };
+
+  it('settles one aggregate with hold refs across fallback attempts', async () => {
+    const failing = jsonAttempt(async () => { throw Object.assign(Error('upstream'), { status: 500 }); });
+    const serving = jsonAttempt(textResponse({ inputTokens: 5, outputTokens: 2 }));
+    const { planner } = quotingPlanner([failing, serving]);
+    const recorder = recordingBudget();
+    await runRouteJsonFlow(deps(planner, recorder), budgetRequest);
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'mark:hold-1:1', 'settle']);
+    expect(recorder.settlements).toHaveLength(1);
+    expect(recorder.settlements[0]).toMatchObject({
+      outcome: 'success', requestId: 'req-test', holdRef: 'hold-1', quoteRef: 'quote_fixture',
+      attempts: [{ outcome: 'provider-5xx', usage: allowanceUsage },
+        { outcome: 'success', usage: { inputTokens: 5, outputTokens: 2, estimated: false } }],
+    });
+  });
+  it.each([
+    ['planning fails', { plan: () => { throw new Error('no route'); } }, [] as PreparedRouteAttempt[]],
+    ['the plan is empty', {}, [] as PreparedRouteAttempt[]],
+  ] as const)('releases the hold before one zero-usage settlement when %s', async (_name, options, attempts) => {
+    const { planner } = quotingPlanner([...attempts], options);
+    const recorder = recordingBudget();
+    await expect(runRouteJsonFlow(deps(planner, recorder), budgetRequest)).rejects.toThrow();
+    expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    expect(recorder.settlements[0]).toMatchObject({ outcome: 'failed', attempts: [], holdRef: 'hold-1',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: false } });
+  });
+  it('releases a request cancelled after admission and before any dispatch', async () => {
+    const controller = new AbortController();
+    const generate = vi.fn();
+    const { planner, calls } = quotingPlanner([jsonAttempt(generate)]);
+    const recorder = recordingBudget(() => { controller.abort(); return { kind: 'admitted', holdRef: 'hold-1' }; });
+    await expect(runRouteJsonFlow(deps(planner, recorder), { ...budgetRequest, signal: controller.signal }))
+      .rejects.toThrow();
+    expect(calls.prepare).toEqual([]);
+    expect(generate).not.toHaveBeenCalled();
+    expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    expect(recorder.settlements[0]).toMatchObject({ outcome: 'cancelled' });
+  });
+  it('charges the quoted allowance when a dispatched attempt reports no usage', async () => {
+    const { planner } = quotingPlanner([jsonAttempt(textResponse())]);
+    const recorder = recordingBudget();
+    await runRouteJsonFlow(deps(planner, recorder), budgetRequest);
+    expect(recorder.settlements[0]!.usage).toEqual(allowanceUsage);
+    expect(recorder.settlements[0]!.overrun).toBeUndefined();
+  });
+  it('settles actual usage and records the overrun of an unenforced (codex) ceiling', async () => {
+    const quote = fixtureQuote({ candidates: [{ ...fixtureQuote().candidates[0]!, outputCeilingEnforced: false }] });
+    const { planner } = quotingPlanner([jsonAttempt(textResponse({ inputTokens: 10, outputTokens: 500 }))],
+      { quote: () => quote });
+    const recorder = recordingBudget();
+    await runRouteJsonFlow(deps(planner, recorder), budgetRequest);
+    expect(recorder.settlements[0]).toMatchObject({
+      holdRef: 'hold-1', quoteRef: 'quote_fixture',
+      usage: { inputTokens: 10, outputTokens: 500, estimated: false },
+      overrun: [{ candidateRef: 'candidate-0', outputCeilingEnforced: false,
+        allowance: { inputTokens: 100, outputTokens: 64 },
+        usage: { inputTokens: 10, outputTokens: 500, estimated: false } }],
+    });
+  });
+  it('never calls the provider when the dispatch marker fails', async () => {
+    const generate = vi.fn(); const hooks: string[] = [];
+    const { planner } = quotingPlanner([jsonAttempt(generate, hooks), jsonAttempt(generate, hooks)]);
+    const recorder = recordingBudget(undefined, { markDispatched: async () => { throw Error('store down'); } });
+    await expect(runRouteJsonFlow(deps(planner, recorder), budgetRequest))
+      .rejects.toMatchObject({ kind: 'budget-unavailable' });
+    expect(generate).not.toHaveBeenCalled();
+    expect(hooks).toEqual(['cancelled']);
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'release:hold-1', 'settle']);
+  });
+  it('never redispatches after a settlement sink failure', async () => {
+    const generate = vi.fn(textResponse({ inputTokens: 1, outputTokens: 1 }));
+    const { planner } = quotingPlanner([jsonAttempt(generate), jsonAttempt(generate)]);
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    await expect(runRouteJsonFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest))
+      .rejects.toThrow('ledger down');
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
   });
 });

@@ -5,6 +5,9 @@ import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import { parseSse } from '../src/wire.js';
+import {
+  NOW_MS, answerStream, budgetConfig, quotingPlanner, recordingBudget, streamAttempt, type BudgetRecorder,
+} from './fixtures/budget.js';
 
 const policy = {
   strategy: { kind: 'last-enrolled' as const }, rules: [], fallbackMode: 'retest-preferred' as const,
@@ -412,5 +415,65 @@ describe('route stream flow', () => {
     expect(settlements[0]).toMatchObject({
       outcome: 'cancelled', attempts: [{ outcome: 'cancelled' }],
     });
+  });
+});
+
+describe('route stream flow with budget admission', () => {
+  const deps = (planner: RoutePlanner, recorder: BudgetRecorder) => ({
+    config: budgetConfig, routePlanner: planner, metering: recorder.metering, budget: recorder.options,
+  });
+  const budgetRequest = { ...request, body: { ...request.body, max_tokens: 64 } };
+
+  it('settles one aggregate with hold refs across a pre-commit fallback', async () => {
+    const failing = streamAttempt(async function* (): AsyncGenerator<StreamEvent> {
+      throw Object.assign(Error('upstream'), { status: 500 });
+    });
+    const serving = streamAttempt(answerStream({ inputTokens: 5, outputTokens: 2 }));
+    const { planner } = quotingPlanner([failing, serving]);
+    const recorder = recordingBudget();
+    const result = await runRouteStreamFlow(deps(planner, recorder), budgetRequest);
+    expect(recorder.settlements).toEqual([]);
+    await collect(result.stream);
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'mark:hold-1:1', 'settle']);
+    expect(recorder.settlements[0]).toMatchObject({
+      outcome: 'success', holdRef: 'hold-1', quoteRef: 'quote_fixture', requestId: 'req-test',
+      attempts: [{ outcome: 'provider-5xx', usage: { inputTokens: 100, outputTokens: 64, estimated: true } },
+        { outcome: 'success', usage: { inputTokens: 5, outputTokens: 2, estimated: false } }],
+    });
+  });
+  it('charges the allowance once when a committed stream is cancelled without usage', async () => {
+    const hooks: string[] = [];
+    const { planner } = quotingPlanner([streamAttempt(async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'content_delta', data: { delta: 'partial' } };
+      await new Promise(() => undefined);
+    }, hooks)]);
+    const recorder = recordingBudget();
+    const result = await runRouteStreamFlow(deps(planner, recorder), budgetRequest);
+    await result.stream.next();
+    await result.stream.return(undefined);
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+    expect(recorder.settlements[0]).toMatchObject({ outcome: 'cancelled', holdRef: 'hold-1',
+      usage: { inputTokens: 100, outputTokens: 64, estimated: true } });
+  });
+  it('never opens the provider stream when the dispatch marker fails', async () => {
+    const hooks: string[] = [];
+    const source = streamAttempt(answerStream(), hooks);
+    const opened = vi.spyOn(source, 'stream');
+    const { planner } = quotingPlanner([source]);
+    const recorder = recordingBudget(undefined, { markDispatched: async () => { throw Error('store down'); } });
+    await expect(runRouteStreamFlow(deps(planner, recorder), budgetRequest))
+      .rejects.toMatchObject({ kind: 'budget-unavailable' });
+    expect(opened).not.toHaveBeenCalled();
+    expect(hooks).toEqual(['cancelled']);
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'release:hold-1', 'settle']);
+  });
+  it('refuses over-budget before planning or opening any stream', async () => {
+    const { planner, calls } = quotingPlanner([streamAttempt(answerStream())]);
+    const recorder = recordingBudget(() => ({ kind: 'over-budget', resetAtMs: NOW_MS + 5_000 }));
+    await expect(runRouteStreamFlow(deps(planner, recorder), budgetRequest))
+      .rejects.toMatchObject({ kind: 'over-budget', retryAfterSeconds: 5 });
+    expect(calls.plan).toEqual([]);
+    expect(calls.prepare).toEqual([]);
+    expect(recorder.settlements).toEqual([]);
   });
 });
