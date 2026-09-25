@@ -2,7 +2,7 @@
 
 ## Objective
 - [x] Deliver the design for baseline-qualified package CI lint, packed-manifest enforcement, and clean consumer installation qualification.
-- [ ] BUILD: implement `spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md` lots with exceptions BRCI-EX1..EX4 and review conditions N1/N2.
+- [x] BUILD: implement `spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md` lots with exceptions BRCI-EX1..EX4 and review conditions N1/N2.
 
 ## Scope / Guardrails
 - [x] Planning only on `ci/publishable-manifest-guard`, worktree `tmp/ci-manifest-guard`; baseline `273bff382` equals local `origin/main` at entry.
@@ -49,6 +49,9 @@
 - [x] BRCI-EX2 | applied | Owner: BUILD | Branch: current | 2026-09-24 | `.github/workflows/ci.yml`: classification outputs, always-scheduled guard, validation context, baseline-qualified lint, install smoke steps, N1 sibling ordering. Impact: new required PR check; unchanged publisher needs on the global guard. Rollback: revert with EX1; conductor removes the required status first.
 - [x] BRCI-EX3 | applied | Owner: BUILD | Branch: current | 2026-09-24 | `scripts/ci/publishable-manifests.mjs`, `scripts/ci/check-publishable-manifests.sh`, `scripts/ci/qualify-published-install.mjs`, five `scripts/ci/*.test.mjs`. Impact: new tooling only; no package graph or lockfile change. Rollback: remove after reverting Make/CI callers.
 - [x] BRCI-EX4 | applied | Owner: BUILD | Branch: current | 2026-09-24 | `rules/workflow.md` Package Publication section only: D1, npm workspace semantics, exact-artifact guard, consumer qualification. Rollback: revert the added paragraph with the tooling rollback.
+- [x] BRCI-B1 | attention | Owner: conductor | Branch: current | 2026-09-24 | Add `validate-publishable-manifests` to required PR checks after its first successful CI run (YAML cannot change branch protection).
+- [x] BRCI-B2 | deferred | Owner: conductor | Branch: first real CI publication | 2026-09-24 | BRCI-R1-L9 checkpoint stays pending: tarball publication provenance/publishConfig evidence only from the first normal CI publication; `package-llm-routing-candidates` guard line NOT RUN locally (needs `tmp/llm-gateway-qualification`).
+- [x] BRCI-B3 | attention | Owner: unassigned | Branch: cowork remediation | 2026-09-24 | `@sentropic/cowork-desktop@0.2.0` `file:` dependencies remain WARN debt; standalone `make pack-cowork-desktop` now fails (BLOCK default) while CI validation passes context and WARNs.
 - [x] BRCI-R1-L9 | attention | Owner: BUILD conductor | Branch: current | 2026-09-24 | conductor decision (reversible): verify tarball publication preserves provenance and publishConfig on the first real CI publication; no manual/test publication and no evidence claimed from an existing-version skip.
 
 ## AI Flaky tests
@@ -103,6 +106,9 @@
 - [x] **Lot G-B4 — CI wiring and policy**
   - [x] ci.yml: separate list-files step, `manifest_guard` filter, new inventory job, pack context, qualification steps, N1 ordering, baseline-qualified lint.
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs` passes (9 tests); `rules/workflow.md` Package Publication updated; `make check-ci-version-filters` and `make check-e2e-inventory` pass.
-- [ ] **Lot G-B5 — Closure gates**
-  - [ ] `qualify-published-install` PASS for mcp-auth 0.2.1, cluster-mesh 0.11.0, llm-gateway 0.18.0.
-  - [ ] Spec section 11 gate commands pass; scope-check; `make down` with branch ports.
+- [x] **Lot G-B5 — Closure gates**
+  - [x] `make qualify-published-install PKG=@sentropic/mcp-auth@0.2.1 PEERS=hono@4.10.7` PASS (root + `/hono`, integrity sha512-SZSTMWjc…, sha256 054a0e7e…); `PKG=@sentropic/cluster-mesh@0.11.0` PASS (root, sha256 59c73d85…); `PKG=@sentropic/llm-gateway@0.18.0` PASS (root, `/auth`, `/auth-hono`, sha256 5cb35819…); node:24-bookworm-slim, Node v24.21.0, npm 11.19.0.
+  - [x] `make test-publishable-manifests test-qualify-published-install` (51 + 10 tests) PASS; `make typecheck-cluster-mesh test-cluster-mesh pack-cluster-mesh` PASS (279 tests; candidate sha256 equals published 0.11.0); `make check-ci-version-filters` PASS.
+  - [x] `make check-publishable-manifests MANIFEST_CONTEXT_FILE=tmp/ci-manifest-guard/changes-context.json` PASS (24 public packages, BLOCK none, 4 cowork WARN); lockstep mcp-auth+oauth-verify context PASS; cowork-touched context FAILS as required.
+  - [x] Lint gates re-run on branch head: `make lint-cluster-mesh|lint-llm-mesh|lint-llm-gateway` exit 0; `make scope-check` PASS; branch diff limited to Allowed Paths.
+  - [x] `make down API_PORT=9440 UI_PORT=5640 MAILDEV_UI_PORT=1540 ENV=test-ci-manifest-guard` and `make ps` show no services.
