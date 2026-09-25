@@ -36,6 +36,7 @@ describe('degenerate cluster mesh', () => {
       localProjectionKinds: ['human_identity', 'agent_identity', 'memory_snapshot'],
       interServerDirectory: 'gated', tokenExchange: 'gated', memoryReplication: 'gated',
     });
+    expect(Object.keys(mesh.capabilities)).not.toContain('modules');
     await expect(mesh.wrap.memoryReplication.replicate(ref)).rejects.toMatchObject({
       capability: 'memory_replication',
     });
