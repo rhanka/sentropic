@@ -8,11 +8,11 @@ import {
 
 export const LLM_MESH_PACKAGE = '@sentropic/llm-mesh';
 export const LLM_GATEWAY_PACKAGE = '@sentropic/llm-gateway';
-export const LLM_MESH_RANGE = '>=0.21.2 <0.22.0';
-export const LLM_GATEWAY_RANGE = '>=0.18.0 <0.19.0';
+export const LLM_MESH_RANGE = '>=0.22.0 <0.23.0';
+export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.20.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
-/** Follows llm-gateway 0.18.0's published optional peer range. */
+/** Follows llm-gateway 0.19.0's declared optional peer range. */
 export const AUTH_HONO_RANGE = '^0.15.0';
 
 export interface PeerRequirement {
@@ -81,12 +81,9 @@ const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; n
   'mcp/track': { owner: 'track', namespace: '/mcp' },
   'auth-hono': { owner: 'auth-hono', namespace: '/auth' },
   'chat-server': { owner: 'chat-server', namespace: '/chat' },
-  focus: { owner: 'focus', namespace: '/focus' },
   flow: { owner: 'flow', namespace: '/workflows' },
   comments: { owner: 'comments', namespace: '/comments' },
   'connector-host': { owner: 'connector-host', namespace: '/connectors' },
-  cli: { owner: 'cli', namespace: '/cli' },
-  'build-cli': { owner: 'build-cli' },
   harness: { owner: 'harness' },
   memory: { owner: 'memory', namespace: '/memory' },
   'track-http': { owner: 'track', namespace: '/track' },
