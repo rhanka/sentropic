@@ -4,7 +4,7 @@
 - [x] Deliver the pure, synchronous `quoteRoute` seam frozen in `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` §12.2 (mesh 0.22.0), with `plan({ quote })` pinning and `quote-mismatch` refusal.
 
 ## Scope / Guardrails
-- [x] Branch `feat/llm-mesh-quote`, worktree `tmp/llm-mesh-quote`, base `origin/main` `a334fab47`.
+- [x] Branch `feat/llm-mesh-quote`, worktree `tmp/llm-mesh-quote`, base `origin/main` `a334fab47`, merged with `origin/main` `481f56147` (#613) in fix round 1.
 - [x] Make-only checks; Docker-first; no Python; English text; `ENV=test-llm-mesh-quote` last; never `ENV=dev` or `clean-all`.
 - [x] Ports reserved if a service starts: API `9462`, UI `5662`, Maildev UI `1562` (mesh targets start no service).
 - [x] Selective staging and separate `make commit`; update checkboxes in each atomic commit, approximately 150 lines maximum.
@@ -12,11 +12,7 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/{route-quote,routing-contracts,route-planner,route-planner-state,index}.ts`
-  - `packages/llm-mesh/tests/budget-quote.test.ts`
-  - `packages/llm-mesh/package.json` (0.22.0)
-  - `packages/llm-mesh/README.md`
-  - `packages/llm-mesh/CHANGELOG.md`
+  - `packages/llm-mesh/**` (conductor ruling, fix round 1; incl. `route-selection.ts`, `CHANGELOG.md`, `package.json` 0.22.0)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -40,7 +36,14 @@
 - `attention`: unknown `policyProfile` in a quote throws `RoutePlanError('no-route')` exactly as `plan()`; invalid policy throws `RoutePolicyError`; an invalid `now` Date is `invalid-ceiling`.
 - `attention`: `explicit` narrows the quote by provider/model/alias/transport only (an unpinned candidate is pinned to the explicit transport); `diagnosticAccountRef` is account-bound and ignored, so the quote stays a superset and may be empty.
 - `attention`: candidate identity is provider/model/optional transport (the frozen shape has no effort); duplicates keep the first occurrence.
-- `attention`: `plan({ quote })` filters planned candidates to quoted ones; if every planned candidate is unquoted (for example a sticky affinity to another model) it throws `quote-mismatch` instead of `no-route`.
+- `attention`: `plan({ quote })` filters planned candidates to quoted ones and ignores a sticky affinity whose target the quote does not cover (normal selection among quoted candidates); `quote-mismatch` remains only as a defensive refusal when every planned candidate is unquoted.
+- `attention` (mesh owner): without a quote, a sticky affinity still dispatches its bound model; asking `gemini-3.5-flash` after a `gemini-3.7-flash` affinity plans `gemini-3.7-flash`. Unchanged here (out of scope), pinned by test.
+- `attention`: `RouteQuote.quotedAt` (ISO of the quote `now`, inside `quoteRef`) is additive to the §12.2 shape; `plan({ quote })` evaluates council freshness at it so quote and plan never diverge; planner clock still drives health, plan TTL and eviction.
+- `attention`: planning and quoting share `resolveRouteTargets` (`route-selection.ts`); the quote adds only the account-independent explicit narrowing and provider/model/transport dedup.
+- `attention`: `requiredCapabilities` is order-normalized (sorted canonical entries) inside `quoteRef`.
+- `attention` (mesh owner follow-up): the planner constructor does not validate the council (overlapping groups are accepted).
+- `attention` (spec owner question): one equivalent below the input ceiling context window refuses the whole quote with `invalid-ceiling` (§12.2 as written); dropping only that candidate is an alternative.
+- `attention` (B3b watch): quote must be mandatory on the budgeted path; define handling of an empty-candidate quote; identity has no effort so price the max over effort variants; never accept an external quote.
 
 ## AI Flaky tests
 - [x] Not applicable: pure unit tests, no provider call.
@@ -65,6 +68,14 @@
   - [x] New `packages/llm-mesh/tests/budget-quote.test.ts`: 16-cap, 1..8 attempts, superset vs plan across fallback, zero directory calls, purity/determinism, each error code, quote-mismatch, codex allowance list, maxOutputTokens profile list, no unquoted execution.
 - [x] **Lot 3 — Version and docs**
   - [x] `packages/llm-mesh/package.json` 0.22.0; `CHANGELOG.md`; README quote section.
+- [x] **Lot 4 — Fix round 1 (muse needs changes)**
+  - [x] Merge `origin/main` `481f56147`; diff vs `origin/main` limited to `packages/llm-mesh/**` and `BRANCH.md`.
+  - [x] Shared `resolveRouteTargets` used by `selectRouteCandidates` and `quoteRoute`; duplicate removed.
+  - [x] Pinned plan ignores an unquoted sticky affinity; council freshness at `quote.quotedAt`; capability order normalized in `quoteRef`.
+  - [x] Tests: multi-group council with transport preferences and an expiring group, skewed planner clock, attempt capping, `diagnosticAccountRef`, capability order.
+  - [x] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh build-llm-mesh pack-llm-mesh ENV=test-llm-mesh-quote` (32 files, 270 tests pass)
+  - [x] `make scope-check ENV=test-llm-mesh-quote`
+  - [x] Candidate `sentropic-llm-mesh-0.22.0.tgz` sha256 `91fce7217da6abb60b93d6af04db7a873df4a7826795f6893970f15c77810751` (guard pass after fix round 1, not persisted, not published; supersedes `eb3d6a8a…`).
 - [x] **Lot N — Final validation**
   - [x] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh build-llm-mesh pack-llm-mesh ENV=test-llm-mesh-quote` (32 files, 265 tests pass)
   - [x] `make scope-check ENV=test-llm-mesh-quote`
