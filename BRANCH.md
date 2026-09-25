@@ -127,3 +127,8 @@
   - [x] `publishable-sibling-plan` passes `PACKAGE`/`SIBLING_DIR` as container env and validates both inside a single-quoted script; post-publication qualification hard-fails on a missing or status-less receipt (no `:-missing` fallback).
   - [x] Registry request: 400/401/403 permanent, 408/429/5xx and exceptions transient; classifier adds `fetch failed`, `ERR_SOCKET_TIMEOUT`, `UND_ERR_*`, `HTTP 408`, `E429`, `E5xx`, drops `EPIPE`; re-run hint never duplicated; inventory failure message points to `classification.json`.
   - [x] `make test-publishable-manifests` (61 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make scope-check` PASS.
+- [x] **Lot G-F3 — Build fix round 3 (sibling directory guard)**
+  - [x] `check-publishable-manifests.sh siblings` derives `tmp/ci-manifest-guard/siblings/<slug>` from the slug; the kept argument must equal it exactly; a directory containing `.git` is refused; slug and directory checks are whole-string (no line-based grep, newline rejected).
+  - [x] `pack-candidate-siblings` / `publishable-sibling-plan`: Make-level `SIBLING_ARGS_GATE` plus single-quoted slug check before `docker run`; the in-container check requires the derived directory; ci.yml unchanged.
+  - [x] Fixture rejects worktree-like `tmp/ci-manifest-guard`, `tmp/cluster-mesh-lazy-surface`, newline, glob, newline-slug and `.git` cases with sentinel intact and no `make` call; throwaway dirs removed.
+  - [x] `make test-publishable-manifests` (61 tests) and `make test-qualify-published-install` (11 tests) PASS with `ENV=test-ci-manifest-guard`; `make check-ci-version-filters`, `make scope-check` PASS.

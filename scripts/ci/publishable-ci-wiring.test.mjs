@@ -180,41 +180,67 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
   assert.match(recipe('publish-chat-ui'), /make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/);
 });
 
-test('sibling directory guard rejects unsafe paths before any deletion; accepts a strict tmp/ path', () => {
+test('sibling directory guard derives the directory from the slug and rejects anything else before any deletion', () => {
   const script = path.join(root, 'scripts', 'ci', 'check-publishable-manifests.sh');
-  const run = (dir) => {
+  const run = (dir, { slug = 'foo', gitIn } = {}) => {
     // Throwaway cwd with a sentinel under tmp/ and a `make` stub that logs and fails (no real make/Docker).
     const work = fs.mkdtempSync(path.join(os.tmpdir(), 'sibling-guard-'));
-    fs.mkdirSync(path.join(work, 'tmp', 'keep'), { recursive: true });
-    fs.writeFileSync(path.join(work, 'tmp', 'keep', 'sentinel'), 'x');
-    fs.mkdirSync(path.join(work, 'bin'));
-    fs.writeFileSync(path.join(work, 'bin', 'make'), '#!/bin/sh\necho "$*" >> "$MAKE_LOG"\nexit 1\n', { mode: 0o755 });
-    const makeLog = path.join(work, 'make.log');
-    const r = spawnSync('bash', [script, 'test-env', 'siblings', 'foo', dir], { cwd: work, encoding: 'utf8', env: { ...process.env, PATH: `${path.join(work, 'bin')}:${process.env.PATH}`, MAKE_LOG: makeLog } });
-    return { ...r, work, made: fs.existsSync(makeLog) ? fs.readFileSync(makeLog, 'utf8') : '' };
+    try {
+      fs.mkdirSync(path.join(work, 'tmp', 'keep'), { recursive: true });
+      fs.writeFileSync(path.join(work, 'tmp', 'keep', 'sentinel'), 'x');
+      if (gitIn) fs.mkdirSync(path.join(work, gitIn, '.git'), { recursive: true });
+      fs.mkdirSync(path.join(work, 'bin'));
+      fs.writeFileSync(path.join(work, 'bin', 'make'), '#!/bin/sh\necho "$*" >> "$MAKE_LOG"\nexit 1\n', { mode: 0o755 });
+      const makeLog = path.join(work, 'make.log');
+      const r = spawnSync('bash', [script, 'test-env', 'siblings', slug, dir], { cwd: work, encoding: 'utf8', env: { ...process.env, PATH: `${path.join(work, 'bin')}:${process.env.PATH}`, MAKE_LOG: makeLog } });
+      return {
+        ...r,
+        made: fs.existsSync(makeLog) ? fs.readFileSync(makeLog, 'utf8') : '',
+        sentinel: fs.existsSync(path.join(work, 'tmp', 'keep', 'sentinel')),
+        gitKept: gitIn ? fs.existsSync(path.join(work, gitIn, '.git')) : true,
+        receipts: fs.existsSync(path.join(work, 'tmp', 'ci-manifest-guard', 'siblings', 'foo', 'receipts')),
+      };
+    } finally {
+      fs.rmSync(work, { recursive: true, force: true });
+    }
   };
-  for (const dir of ['tmp/', 'tmp/.', 'tmp//', 'tmp/./x', 'tmp/../x', '/tmp/x', 'x', 'tmp', 'tmp/x/', 'tmp/.hidden', 'tmp/a b']) {
-    const r = run(dir);
-    assert.equal(r.status, 1, `${dir} must be rejected`);
-    assert.match(r.stdout, /ERROR: sibling directory/, dir);
-    assert.ok(fs.existsSync(path.join(r.work, 'tmp', 'keep', 'sentinel')), `${dir}: tmp/ must be untouched`);
-    assert.equal(r.made, '', `${dir}: rejected before any make call`);
+  const rejected = [
+    ['tmp/'], ['tmp/.'], ['tmp//'], ['tmp/./x'], ['tmp/../x'], ['/tmp/x'], ['x'], ['tmp'], ['tmp/x/'], ['tmp/.hidden'], ['tmp/a b'],
+    ['tmp/keep'], ['tmp/ci-manifest-guard'], ['tmp/cluster-mesh-lazy-surface'], ['tmp/ci-manifest-guard/siblings/bar'],
+    ['tmp/\ntmp/x'], ['tmp/x\n/'], ['/\ntmp/x'], ['tmp/a*b'], ['tmp/a?x'], ['tmp/a[x]'],
+    ['tmp/ci-manifest-guard/siblings/foo\n', { slug: 'foo\n' }], ['tmp/ci-manifest-guard/siblings/foo\ntmp', { slug: 'foo\ntmp' }],
+    ['tmp/ci-manifest-guard/siblings/foo', { gitIn: 'tmp/ci-manifest-guard/siblings/foo' }],
+  ];
+  for (const [dir, opts] of rejected) {
+    const label = JSON.stringify([dir, opts]);
+    const r = run(dir, opts);
+    assert.equal(r.status, 1, `${label} must be rejected`);
+    assert.match(r.stdout, /ERROR: (sibling directory|invalid package slug)/, label);
+    assert.ok(r.sentinel, `${label}: tmp/ must be untouched`);
+    assert.ok(r.gitKept, `${label}: a checkout with .git must be untouched`);
+    assert.equal(r.made, '', `${label}: rejected before any make call`);
   }
   const ok = run('tmp/ci-manifest-guard/siblings/foo');
   assert.equal(ok.status, 1, 'stubbed make fails after the guard');
   assert.doesNotMatch(ok.stdout, /ERROR: sibling directory/);
-  assert.ok(fs.existsSync(path.join(ok.work, 'tmp', 'ci-manifest-guard', 'siblings', 'foo', 'receipts')));
-  assert.ok(fs.existsSync(path.join(ok.work, 'tmp', 'keep', 'sentinel')));
+  assert.ok(ok.receipts);
+  assert.ok(ok.sentinel);
   assert.match(ok.made, /^publishable-sibling-plan PACKAGE=foo SIBLING_DIR=tmp\/ci-manifest-guard\/siblings\/foo ENV=test-env$/m);
 });
 
-test('publishable-sibling-plan passes PACKAGE/SIBLING_DIR as container env and validates them inside', () => {
+test('sibling Make targets gate PACKAGE/SIBLING_DIR on the host before docker and pass them as container env', () => {
+  assert.match(makefile, /^SIBLING_ARGS_GATE = \$\(if \$\(and \$\(filter 1,\$\(words \$\(PACKAGE\)\)\),.*\$\(error /m);
+  for (const target of ['pack-candidate-siblings', 'publishable-sibling-plan']) {
+    assert.match(recipe(target).split('\n')[0], /^\t\$\(SIBLING_ARGS_GATE\)$/, `${target}: host gate is the first recipe line`);
+  }
+  assert.match(recipe('pack-candidate-siblings'), /siblings '\$\(PACKAGE\)' '\$\(SIBLING_DIR\)'/);
   const r = recipe('publishable-sibling-plan');
+  assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('docker run'), 'host slug check before docker run');
   assert.match(r, /-e PACKAGE="\$\(PACKAGE\)" -e SIBLING_DIR="\$\(SIBLING_DIR\)"/);
   const inner = r.slice(r.indexOf("sh -lc '"));
   assert.ok(!/\$\((?:PACKAGE|SIBLING_DIR)\)/.test(inner), 'no Make interpolation inside the container script');
   assert.match(inner, /--slug "\$\$PACKAGE"/);
-  assert.match(inner, /grep -Eq "\^tmp\/\[A-Za-z0-9_-\]\[A-Za-z0-9._-\]\*\(/);
+  assert.match(inner, /\[ "\$\$SIBLING_DIR" = "tmp\/ci-manifest-guard\/siblings\/\$\$PACKAGE" \]/);
 });
 
 test('post-publication qualification fails on a missing or status-less receipt', () => {
