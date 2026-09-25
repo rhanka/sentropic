@@ -2,7 +2,7 @@
 
 ## Objective
 - [x] Deliver Lot E design and the dated control-plane amendment (planning phase, complete).
-- [ ] Implement cluster-mesh 0.12.0 LLM/gateway lazy surface (B1–B3 package side) in the same PR; MCP (B5) and later catalog lots stay deferred.
+- [x] Implement cluster-mesh 0.12.0 LLM/gateway lazy surface (B1–B3 package side) in the same PR; MCP (B5) and later catalog lots stay deferred.
 
 ## Scope / Guardrails
 - [x] Worktree `tmp/cluster-mesh-lazy-surface`, branch `spec/cluster-mesh-lazy-surface`; branch check passed; `origin/main` merged (cluster-mesh 0.11.0, mcp-auth 0.2.1, llm-gateway 0.18.0).
@@ -70,5 +70,5 @@
 - [x] **Lot B3 — Packed release gate (package side)**: `packaging.mk`, `tests/packaging/{prepare.sh,helpers.ts,optional-install,types-and-bundlers,consumer-topology}.spec.ts`; PASS `make -f packages/cluster-mesh/packaging.mk test-lazy-package` (24 tests, public tuple); remaining matrix pending (E-A17); publication stays conductor-owned.
 - [x] **Release notes**: version 0.12.0, CHANGELOG and README consumer migration notes.
 - [ ] **Lot B5 — MCP leaves**: deferred until the h2a LLM/gateway flip ships (E-A15); not built in this branch.
-- [ ] **Final gates**: typecheck/test/pack cluster-mesh, scope-check, `make down`.
+- [x] **Final gates**: PASS `make typecheck-cluster-mesh test-cluster-mesh pack-cluster-mesh` (47 files, 344 passed, 24 packaging skipped outside packaging.mk; pack 339 files); PASS `make -f packages/cluster-mesh/packaging.mk test-lazy-package` (24 passed); PASS `make scope-check`; PASS `make down` (ports/ENV above).
 - [ ] **Review/delivery gate (conductor-owned)**: independent acceptance of round 2 fixes; only then deliver the approved build contract to h-cond (`01M38QMNYJTA3EYZTSV75KB7XM`) and product conductor. The requested topology rule/test notice is informational, not build authorization.
