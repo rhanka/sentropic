@@ -201,19 +201,32 @@ const router = createGatewayRouter({
   request body or headers.
 - A request without a finite output ceiling (and no `defaultOutputTokens`) or a
   quote `invalid-ceiling` returns 400. An empty quote reserves nothing and fails
-  like an empty route (503).
+  like an empty route (503). When `defaultOutputTokens` applies, it is also sent
+  to the provider as the request `maxOutputTokens`.
+- The ceiling input side is an estimate (bytes / 4 plus
+  `BUDGET_ATTACHMENT_INPUT_TOKENS` per image/file/tool media, counted as
+  `imageUnits`), not an upper bound: the adapter applies its own input margin.
+  For `outputCeilingEnforced: false` (codex) candidates the adapter prices the
+  reservation at the model's maximum output.
 - `admit` prices every quoted candidate at its maximum liability over effort
   variants (candidate identity carries no effort) and reserves
   `maxAttempts × max(candidate liability)`. `over-budget` returns the frozen 429
   body with `Retry-After = min(60, max(1, ceil((resetAtMs - nowMs) / 1000)))`.
   `unavailable`, a rejection or a malformed decision returns the sanitized 503.
-  Refusals happen before any account acquisition or emitted byte and never settle.
+  Refusals happen before any account acquisition or emitted byte and never settle
+  (the OFF path settles a zero-usage failure when planning fails).
 - Each provider call is preceded by `markDispatched(holdRef, attemptIndex)`;
-  if it fails the provider is never called and the request returns 503.
+  if it fails the provider is never called and the request returns 503. A
+  rejected marker may still be written: `release` must be idempotent and must
+  not free a hold whose durable marker exists.
+- Every hold carries a deadline and expires. A failed `release` is ignored (the
+  hold expires); after a settlement sink failure the adapter reconciles the
+  hold by `requestId` through the durable dispatch marker.
 - Settlement stays one aggregate per request and gains `requestId`, `holdRef`,
   `quoteRef`. When nothing was dispatched, `release(holdRef)` runs first and the
-  settlement has zero usage. A dispatched attempt without reported usage is
-  charged at least its quoted allowance. Attempts whose reported usage exceeds
+  settlement has zero usage. A dispatched attempt without measured usage
+  (missing, empty `{}`, partial, non-finite or zero counts) is charged at least
+  its quoted allowance. Attempts whose reported usage exceeds
   the allowance (for example codex, `outputCeilingEnforced: false`) are charged
   in full and listed in `overrun`; the host records the audit entry.
 
