@@ -2,19 +2,17 @@ import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL, type ModelEquivalenceCouncil } from 
 import { prepareStoredRouteAttempt } from './route-attempt.js';
 import { InMemoryRouteHealth } from './route-health.js';
 import {
-  affinityRef, mergeRoutePolicy, RoutePlanError, SequentialIdFactory,
+  affinityRef, RoutePlanError, SequentialIdFactory,
   routingOwnerRef, subjectRef, type StoredAffinity, type StoredPlan,
 } from './route-planner-state.js';
 import { resolveRequestedTargets, selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
 import type {
   AccountDirectoryPort, AffinityDescription, Clock, IdFactory, PreparedRouteAttempt,
   AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
-  RouteModelInventoryEntry,
+  RouteModelInventoryEntry, RouteQuote, RouteQuoteInput,
 } from './routing-contracts.js';
-import {
-  DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles, resolveRoutePolicy,
-  resolveRouteStrategy, validateRoutePolicy,
-} from './routing-policy.js';
+import { computeRouteQuoteRef, isQuotedRouteTarget, quoteRoute, resolveQuotePolicy } from './route-quote.js';
+import { InMemoryRoutePolicyProfiles, resolveRouteStrategy } from './routing-policy.js';
 export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
   readonly council?: ModelEquivalenceCouncil;
@@ -76,14 +74,14 @@ export class InMemoryRoutePlanner implements RoutePlanner {
   }
   async plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan> {
     this.evictPlans();
-    const profile = input.policyProfile
-      ? this.profiles.list().find((entry) => entry.name === input.policyProfile)
-      : this.profiles.active();
-    if (input.policyProfile && !profile) throw new RoutePlanError('Unknown policy profile', 'no-route');
-    const policy = resolveRoutePolicy(
-      mergeRoutePolicy(profile?.policy ?? DEFAULT_ROUTE_POLICY, input.policyOverride), input,
-    );
-    validateRoutePolicy(policy);
+    const { profile, policy: resolvedPolicy } = resolveQuotePolicy(input, this.profiles);
+    const { quote } = input;
+    if (quote) this.assertQuoteMatches(input, quote, profile?.name, profile?.revision);
+    const policy = quote && quote.maxAttempts < resolvedPolicy.maxAttempts
+      ? { ...resolvedPolicy, maxAttempts: quote.maxAttempts }
+      : resolvedPolicy;
+    const inQuote = (candidate: RankedRouteCandidate): boolean =>
+      !quote || isQuotedRouteTarget(quote, candidate.target);
     const strategy = resolveRouteStrategy(policy, input);
     const affinity = input.affinityKey
       ? this.affinities.get(affinityRef(subject, input.affinityKey, input.workspaceId))
@@ -124,12 +122,12 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           account,
           target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
         };
-        candidates = [sticky, ...sameAccount, ...rotated]
+        candidates = this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
           .filter((candidate) => !this.health.isSuppressed(candidate))
           .slice(0, policy.maxAttempts);
       }
     } else {
-      candidates = candidates
+      candidates = this.keepQuoted(candidates, inQuote)
         .filter((candidate) => !this.health.isSuppressed(candidate))
         .slice(0, policy.maxAttempts);
     }
@@ -203,6 +201,27 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     }
     this.trimPlans();
     return plan;
+  }
+  quote(input: RouteQuoteInput): RouteQuote {
+    return quoteRoute(input, { council: this.council, profiles: this.profiles });
+  }
+  private assertQuoteMatches(input: RoutePlanInput, quote: RouteQuote,
+    profileName: string | undefined, profileRevision: string | undefined): void {
+    const { quoteRef, ...body } = quote;
+    if (quote.requestedModel !== input.requestedModel
+      || quote.councilRevision !== this.council.revision
+      || quote.policyRevision !== (profileRevision ?? 'default')
+      || quoteRef !== computeRouteQuoteRef(input, profileName, body)) {
+      throw new RoutePlanError('Route quote does not match this plan', 'quote-mismatch');
+    }
+  }
+  private keepQuoted(candidates: RankedRouteCandidate[],
+    inQuote: (candidate: RankedRouteCandidate) => boolean): RankedRouteCandidate[] {
+    const quoted = candidates.filter(inQuote);
+    if (candidates.length > 0 && quoted.length === 0) {
+      throw new RoutePlanError('No planned route is covered by the quote', 'quote-mismatch');
+    }
+    return quoted;
   }
   async prepareAttempt(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
     requestId: string, attemptIndex: number): Promise<PreparedRouteAttempt> {
