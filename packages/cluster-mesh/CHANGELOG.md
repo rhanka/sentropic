@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.12.0
+
+- Add the lazy LLM/gateway integration surface: static `export *` leaves
+  `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`,
+  `/llm-mesh/transport/cloud-code`, `/gateway`, `/gateway/auth` (service mode) and
+  `/gateway/auth-hono` (session mode); typed loaders under `/loaders/*`; namespace
+  wrappers `/compose/llm-mesh` and `/compose/gateway` on the existing synchronous plugin.
+- Declare llm-mesh `>=0.21.2 <0.22.0`, llm-gateway `>=0.18.0 <0.19.0`, mcp-auth
+  `>=0.2.1 <0.3.0`, auth-hono `^0.15.0` and jose `^5.10.0` as optional peers. The root
+  keeps no JS or declaration edge to any of them; llm-mesh and llm-gateway gain no
+  dependency on cluster-mesh. gateway 0.17.x is rejected.
+- Add `createClusterMeshModules`, `ClusterMeshModuleUnavailableError`
+  (`code: 'cluster_mesh_module_unavailable'`, recognize by code),
+  `isClusterMeshModuleUnavailableError`, metadata-only `probe()` and optional
+  `capabilities.modules` via `createDegenerateClusterMesh({ modules })`. F1 binding
+  getters and all 0.11 exports are unchanged.
+- Gateway auth loaders are startup preflights resolving mcp-auth/jose or auth-hono
+  from the installed gateway location, so a missing or incompatible peer fails
+  before bind instead of on the first authenticated request.
+- Add a per-thread topology guard evaluated by every leaf/loader/compose entry and
+  the explicit `verifyClusterMeshTopology()` preflight (`ClusterMeshTopologyError`,
+  `code: 'cluster_mesh_topology_invalid'`). `sideEffects` now lists those entries.
+  Re-evaluating the same file (HMR, test-runner module resets) is not a duplicate.
+- The registry imports the metadata-resolved provider file; the root graph has no
+  provider specifier, so bundling the root embeds no provider, auth or jose code.
+- Qualified with npm only; esbuild is the tested bundler.
+- Catalogue MCP, Track, memory and other capabilities as `source_unavailable`;
+  their adapters ship in a later minor.
+- Migration (h2a and other consumers):
+  - Complete 0.9 → 0.10 (`commandRef`, strict keys, verified custody), 0.10.1 and
+    0.11 adaptations first; move a 0.9 pin to 0.12.0 in the same artifact.
+  - Adapt to gateway 0.18 `CallerAuthPort`/auth types, then replace specifiers only:
+    `@sentropic/llm-mesh[/x]` → `@sentropic/cluster-mesh/llm-mesh[/x]`,
+    `@sentropic/llm-gateway` → `@sentropic/cluster-mesh/gateway`; calls and
+    `import type` stay unchanged.
+  - Declare the selected peers in every manifest that imports a leaf; keep exactly
+    one cluster-mesh and one llm-mesh shared with the gateway in the installed tree.
+  - Await `loadGatewayAuth(modules)` or `loadGatewayAuthHono(modules)` and
+    `verifyClusterMeshTopology()` before binding; catch native link failures at the
+    existing dynamic runtime import.
+  - Externalize `@sentropic/cluster-mesh` and `@sentropic/cluster-mesh/*` in tsup/esbuild.
+
 ## 0.11.0
 
 - Add runtime binding availability reporting and gating for local devices and projections,
