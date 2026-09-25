@@ -1,0 +1,9 @@
+{
+  "name": "fixture-global-consumer-pinned",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": { "fixture-global-consumer-pinned": "cli.mjs" },
+  "dependencies": { "@sentropic/cluster-mesh": "file:__CANDIDATE__" },
+  "peerDependencies": { "fixture-separate-runtime": "1.0.0" },
+  "peerDependenciesMeta": { "fixture-separate-runtime": { "optional": true } }
+}
