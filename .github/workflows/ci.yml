@@ -23,18 +23,15 @@ on:
           - oauth-verify
           - mcp-auth
           - mcp-platform
-          - auth-hono
           - auth-client
           - auth-ui
           - flow
           - cowork-bridge
           - cowork-desktop
-          - build-cli
           - cli
           - harness
           - llm-gateway
           - cluster-mesh
-          - focus
           - cited-source-viewer
 
 env:
@@ -1944,7 +1941,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-hono|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|build-cli|cli|harness|llm-gateway|cluster-mesh|focus|cited-source-viewer) ;;
+            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|cli|harness|llm-gateway|cluster-mesh|cited-source-viewer) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -1998,9 +1995,6 @@ jobs:
       - name: Bootstrap publish mcp-platform
         if: inputs.bootstrap_publish_target == 'mcp-platform'
         run: make publish-mcp-platform-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
-      - name: Bootstrap publish auth-hono
-        if: inputs.bootstrap_publish_target == 'auth-hono'
-        run: make publish-auth-hono-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish auth-client
         if: inputs.bootstrap_publish_target == 'auth-client'
         run: make publish-auth-client-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
@@ -2016,9 +2010,6 @@ jobs:
       - name: Bootstrap publish cowork-desktop
         if: inputs.bootstrap_publish_target == 'cowork-desktop'
         run: make publish-cowork-desktop-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
-      - name: Bootstrap publish build-cli
-        if: inputs.bootstrap_publish_target == 'build-cli'
-        run: make publish-build-cli-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish cli
         if: inputs.bootstrap_publish_target == 'cli'
         run: make publish-cli-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
@@ -2042,9 +2033,6 @@ jobs:
           if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Bootstrap publish focus
-        if: inputs.bootstrap_publish_target == 'focus'
-        run: make publish-focus-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Upload bootstrap publication receipts and qualification reports
         if: always()
         uses: actions/upload-artifact@v4

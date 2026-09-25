@@ -45,18 +45,18 @@ Technically lock the owner-frozen packages `@sentropic/auth-hono`, `@sentropic/b
   - [x] Confirm worktree `tmp/bootstrap-freeze` on branch `ci/bootstrap-freeze`.
   - [x] Declare BR99-EX1 and BR99-EX2.
 
-- [ ] **Lot 1 — Bootstrap freeze**
-  - [ ] Remove auth-hono, build-cli, focus from `bootstrap_publish_target` options.
-  - [ ] Remove them from the guard step allow-list.
-  - [ ] Remove their `Bootstrap publish <slug>` steps.
-  - [ ] Remove them from `BOOTSTRAP_TARGETS`.
-  - [ ] Wiring test: FROZEN list absent from options, allow-list, steps and `BOOTSTRAP_TARGETS`; one step per declared option still asserted.
-  - [ ] `rules/workflow.md`: one frozen-packages line.
-  - [ ] Lot gate:
-    - [ ] `make test-publishable-manifests ENV=test-bootstrap-freeze`
-    - [ ] `make check-ci-version-filters ENV=test-bootstrap-freeze`
-    - [ ] `make scope-check ENV=test-bootstrap-freeze`
-    - [ ] Mutation probe: re-add one frozen option, test fails; restore.
+- [x] **Lot 1 — Bootstrap freeze**
+  - [x] Remove auth-hono, build-cli, focus from `bootstrap_publish_target` options.
+  - [x] Remove them from the guard step allow-list.
+  - [x] Remove their `Bootstrap publish <slug>` steps.
+  - [x] Remove them from `BOOTSTRAP_TARGETS`.
+  - [x] Wiring test: FROZEN list absent from options, allow-list, steps and `BOOTSTRAP_TARGETS`; one step per declared option still asserted.
+  - [x] `rules/workflow.md`: one frozen-packages line.
+  - [x] Lot gate:
+    - [x] `make test-publishable-manifests ENV=test-bootstrap-freeze` (63 pass, 0 fail)
+    - [x] `make check-ci-version-filters ENV=test-bootstrap-freeze` (pass)
+    - [x] `make scope-check ENV=test-bootstrap-freeze` (PASS C2)
+    - [x] Mutation probe: re-added `focus` option, 3 tests fail (including the frozen test); restored, 63 pass.
 
 - [ ] **Lot N — Final validation**
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (conductor).
