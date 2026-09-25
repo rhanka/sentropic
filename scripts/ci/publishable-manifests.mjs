@@ -45,6 +45,11 @@ export class GuardError extends Error {
   }
 }
 
+// Only network/registry failures are transient; broken manifests and pack errors are real errors.
+export const TRANSIENT_ERROR = /\b(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|ESOCKETTIMEDOUT|EAI_AGAIN|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|EPIPE|socket hang up|HTTP (?:429|5\d\d))\b/;
+export const isTransientError = (error) =>
+  (error instanceof GuardError && error.transient === true) || TRANSIENT_ERROR.test(String(error?.message ?? error));
+
 let cachedSemver;
 export function loadSemver() {
   if (cachedSemver) return cachedSemver;
@@ -177,13 +182,16 @@ export function readPackedManifest(tgz) {
 // ---------------------------------------------------------------- registry
 const registryPath = (name) => (name.startsWith('@') ? `@${encodeURIComponent(name.slice(1))}` : encodeURIComponent(name));
 
+// Only packuments that exist are cached, and a cached packument answers only versions it already
+// lists (published versions are immutable). 404s and not-yet-listed versions are always refetched;
+// `{ fresh: true }` bypasses the cache entirely (propagation waits, pre-publish recheck).
 export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fetch, attempts = 3, delayMs = 1000 } = {}) {
   const packuments = new Map();
   async function request(url, accept) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const response = await fetchImpl(url, { headers: { accept } });
+        const response = await fetchImpl(url, { headers: { accept }, cache: 'no-store' });
         if (response.status === 404) return { status: 404 };
         if (response.ok) return { status: response.status, response };
         lastError = `HTTP ${response.status}`;
@@ -195,8 +203,8 @@ export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fet
     }
     throw new GuardError(`registry request failed for ${url}: ${lastError}`, { transient: true });
   }
-  async function packument(name) {
-    if (packuments.has(name)) return packuments.get(name);
+  async function packument(name, { fresh = false } = {}) {
+    if (!fresh && packuments.has(name)) return packuments.get(name);
     const url = `${registry}/${registryPath(name)}`;
     const res = await request(url, 'application/vnd.npm.install-v1+json');
     let doc = null;
@@ -210,12 +218,14 @@ export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fet
         throw new GuardError(`malformed registry response for ${name}: missing versions`, { transient: true });
       }
     }
-    packuments.set(name, doc);
+    if (doc === null) packuments.delete(name);
+    else packuments.set(name, doc);
     return doc;
   }
   // present | absent (confirmed 404 or version missing); lookup failures throw GuardError.
-  async function lookup(name, version) {
-    const doc = await packument(name);
+  async function lookup(name, version, { fresh = false } = {}) {
+    const cached = packuments.get(name);
+    const doc = !fresh && cached?.versions?.[version] ? cached : await packument(name, { fresh: true });
     const meta = doc?.versions?.[version];
     const evidence = { registry, name, version, packageFound: doc !== null };
     if (!meta) return { status: 'absent', evidence };
@@ -626,7 +636,7 @@ export async function commandInventory(opts, { env = process.env, root = process
       try {
         snapshots.set(slug, { ok: true, ...withManifestTransform(packages.get(slug).dir, () => snapshot(packages.get(slug).dir)) });
       } catch (error) {
-        snapshots.set(slug, { ok: false, error: error.message });
+        snapshots.set(slug, { ok: false, error: error.message, transient: isTransientError(error) });
       }
     }
     return snapshots.get(slug);
@@ -634,7 +644,7 @@ export async function commandInventory(opts, { env = process.env, root = process
   const registryStatus = new Map();
   const absent = async (slug) => {
     const snap = takeSnapshot(slug);
-    if (!snap.ok) throw new GuardError(`cannot resolve packed identity of ${slug} for publication classification: ${snap.error}`, { transient: true });
+    if (!snap.ok) throw new GuardError(`cannot resolve packed identity of ${slug} for publication classification: ${snap.error}`, { transient: snap.transient });
     const found = await registry.lookup(snap.name, snap.version);
     registryStatus.set(slug, { status: found.status, ...found.evidence });
     return found.status === 'absent';
@@ -711,7 +721,7 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
       writeReceipt('rejected', { sha256: result.sha256 });
       return 1;
     }
-    if ((await registry.lookup(snap.name, snap.version)).status === 'present') return skip('recheck before publish');
+    if ((await registry.lookup(snap.name, snap.version, { fresh: true })).status === 'present') return skip('recheck before publish');
     (out ?? process.stdout).write(`publishing verified archive ${path.basename(archive)} sha256=${result.sha256}\n`);
     const run = spawnSync(npm, ['publish', archive, ...opts.passthrough], { cwd, stdio: 'inherit' });
     writeReceipt(run.status === 0 ? 'published' : 'failed', { sha256: result.sha256, npm_exit: run.status });

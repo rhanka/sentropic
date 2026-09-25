@@ -112,3 +112,9 @@
   - [x] `make check-publishable-manifests MANIFEST_CONTEXT_FILE=tmp/ci-manifest-guard/changes-context.json` PASS (24 public packages, BLOCK none, 4 cowork WARN); lockstep mcp-auth+oauth-verify context PASS; cowork-touched context FAILS as required.
   - [x] Lint gates re-run on branch head: `make lint-cluster-mesh|lint-llm-mesh|lint-llm-gateway` exit 0; `make scope-check` PASS; branch diff limited to Allowed Paths.
   - [x] `make down API_PORT=9440 UI_PORT=5640 MAILDEV_UI_PORT=1540 ENV=test-ci-manifest-guard` and `make ps` show no services.
+- [ ] **Lot G-F1 — Build fix round 1 (review findings)**
+  - [x] Registry freshness: never cache 404/absent packuments, `lookup(..., { fresh: true })` with `cache: 'no-store'` in the post-publication wait and pre-publish recheck; snapshot failures are transient only for network/registry errors (fixtures added).
+  - [ ] Publication triggers: `*_publish` filters keep only `packages/<slug>/**`; post-publication qualification runs only on `status=published` (wiring fixtures added).
+  - [ ] Shell hardening: sibling directory rejects `..`; `publishable-sibling-plan` validates `PACKAGE` with the slug regex.
+  - [ ] Spec and `rules/workflow.md` Package Publication state the package-path-only publication trigger and its reason; follow-ups recorded.
+  - [ ] `make test-publishable-manifests test-qualify-published-install`, `make check-ci-version-filters`, `make scope-check` pass.

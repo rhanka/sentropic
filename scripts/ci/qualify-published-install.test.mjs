@@ -2,11 +2,12 @@
 // the "registry" is a local 404 server or an in-process stub. Nothing is published.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { GuardError, readPackedManifest, runNpmPack, sha256File } from './publishable-manifests.mjs';
+import { GuardError, createRegistry, readPackedManifest, runNpmPack, sha256File } from './publishable-manifests.mjs';
 import { checkSiblingRanges, entryPoints, loadSiblings, missingSibling, parseExactSpec, qualify } from './qualify-published-install.mjs';
 
 const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
@@ -151,4 +152,39 @@ test('confirmed missing sibling: pending (non-blocking) in PR candidates, blocki
   assert.equal(missingSibling("npm error 404 Not Found - GET http://r/@sentropic%2ffx-b - Not found\nnpm error 404  '@sentropic/fx-b@^1.1.0' is not in this registry.").name, '@sentropic/fx-b');
   assert.equal(missingSibling('npm error notarget No matching version found for @sentropic/fx-b@^9.0.0.\n').range, '^9.0.0');
   assert.equal(missingSibling('npm error ECONNREFUSED'), null);
+});
+
+// ---- post-publication propagation: a lagging first lookup must not be cached
+async function serveRegistry(tgz) {
+  const manifest = readPackedManifest(fs.readFileSync(tgz));
+  const integrity = `sha512-${createHash('sha512').update(fs.readFileSync(tgz)).digest('base64')}`;
+  const script = path.join(tmp('qreg-'), 'server.cjs');
+  fs.writeFileSync(script, `const fs=require('fs');const http=require('http');const m=${JSON.stringify(manifest)};const tgz=${JSON.stringify(tgz)};
+const s=http.createServer((q,r)=>{const base='http://127.0.0.1:'+s.address().port;const url=decodeURIComponent(q.url);
+if(url==='/'+m.name){r.writeHead(200,{'content-type':'application/json'});return r.end(JSON.stringify({name:m.name,'dist-tags':{latest:m.version},versions:{[m.version]:{...m,dist:{tarball:base+'/pkg.tgz',integrity:${JSON.stringify(integrity)}}}}}));}
+if(url==='/pkg.tgz'){r.writeHead(200,{'content-type':'application/octet-stream'});return r.end(fs.readFileSync(tgz));}
+r.writeHead(404,{'content-type':'application/json'});r.end('{}');});s.listen(0,'127.0.0.1',()=>console.log(s.address().port));`);
+  const child = spawn(process.execPath, [script], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const port = await new Promise((resolve) => child.stdout.once('data', (d) => resolve(String(d).trim())));
+  return { url: `http://127.0.0.1:${port}`, child, manifest };
+}
+
+test('post-publication: an absent-then-present registry answer passes after a fresh re-lookup', async () => {
+  const tgz = build({ name: '@fx/late', exports: './index.js' }, { 'index.js': 'export default 1;' });
+  const server = await serveRegistry(tgz);
+  try {
+    let packumentCalls = 0;
+    const fetchImpl = async (url, init) => {
+      if (url === `${server.url}/@fx%2Flate` && (packumentCalls += 1) === 1) return { status: 404, ok: false };
+      return fetch(url, init);
+    };
+    const registryClient = createRegistry({ registry: server.url, fetchImpl, delayMs: 0 });
+    const reportDir = tmp('qrep-');
+    const code = await qualify({ pkg: '@fx/late@1.0.0', mode: 'post-publication', registryClient, registry: server.url, reportDir, attempts: 3, delaySeconds: 0 });
+    assert.equal(code, 0, JSON.stringify(readReport(reportDir).problems));
+    assert.equal(packumentCalls, 2, 'second attempt re-fetched the packument instead of reusing the cached 404');
+    assert.match(fs.readFileSync(path.join(reportDir, 'qualify.log'), 'utf8'), /waiting for @fx\/late@1.0.0 \(1\/3\)/);
+  } finally {
+    server.child.kill();
+  }
 });
