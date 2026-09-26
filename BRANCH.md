@@ -32,9 +32,9 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 ## Feedback Loop
 - [x] `acknowledge` BRCIW-EX1 (Makefile): reason = registry waits (`wait-llm-gateway-mesh-dependency`, `wait-llm-gateway-auth-dependencies`, `qualify-published-install` wait budget and provenance variable) used a cached 60 s budget; impact = CI publish/qualification recipes only; rollback = revert the Makefile hunks.
 - [x] `acknowledge` BRCIW-EX2 (`scripts/ci/**`): reason = registry client, publish conflict, qualification retries and provenance check live there; impact = CI guard scripts and their fixture tests; rollback = revert the commits.
-- [x] `acknowledge` BRCIW-EX3 (ci.yml): reason = pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"` to the steady-state OIDC post-publication qualification of mcp-auth and cluster-mesh; impact = two run lines; rollback = drop the variable.
+- [x] `acknowledge` BRCIW-EX3 (ci.yml): reason = pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"` to the steady-state OIDC post-publication qualification of mcp-auth and cluster-mesh, align the mcp-auth `skipped` handling with cluster-mesh (heal on re-run only) and cache-bust both registry presence checks (review fix 1); impact = the two steady-state post-publication qualification steps; rollback = revert those hunks.
 - [ ] `attention` `packages/llm-gateway/scripts/auth-registry.mjs` is not modified (a change would need a llm-gateway bump): cache bypass is applied through `npm_config_prefer_online=true` and the 18 x 10 s budget from the Makefile recipe.
-- [ ] `attention` an equal-bytes publish conflict writes `status=skipped` (receipt JSON `conflict: equal-integrity`) so the existing ci.yml status handling applies unchanged; post-publication qualification then follows the existing `skipped` rules.
+- [ ] `attention` an equal-bytes publish conflict writes `status=skipped` (receipt JSON `conflict: equal-integrity`) ; mcp-auth and cluster-mesh both qualify a `skipped` receipt only on a re-run (first attempt = notice).
 - [ ] `attention` bootstrap token publications (`--no-provenance`) do not get the provenance check: the variable is only wired in the steady-state OIDC jobs.
 
 ## Orchestration Mode (AI-selected)
@@ -60,6 +60,13 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - [x] **Lot 3 — Provenance source commit**
   - [x] Post-publication qualification compares the SLSA v1 `resolvedDependencies[].digest.gitCommit` with `QUALIFY_PROVENANCE_SHA`.
   - [x] ci.yml steady-state mcp-auth and cluster-mesh qualification pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"`.
+
+- [ ] **Lot 4 — Review fix 1**
+  - [x] mcp-auth post-publication qualification heals `skipped` only on a re-run after a cache-busted presence check (aligned with cluster-mesh).
+  - [x] Cluster-mesh presence check `curl` sends `cache-control: no-cache` with a cache-busting query.
+  - [ ] Test: generic E403 without "cannot publish over" is not a conflict.
+  - [ ] Conflict re-read budget wired to the Make wait variables.
+  - [ ] Provenance: only the repository source entry must equal the workflow commit.
 
 - [x] **Lot N — Final validation**
   - [x] `make test-publishable-manifests ENV=test-registry-waits`
