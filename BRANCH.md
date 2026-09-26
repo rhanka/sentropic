@@ -55,6 +55,8 @@
 - `attention`: deviation from train design §5 (conductor-requested, fix round 1) — the three train publishers and `verify-train-lock-integrity` start with `!cancelled()` instead of `always()`, so a manual cancel stops the chain; the rest of each condition stays literal; rollback = restore `always()` and the wiring assertions.
 - `attention`: `verify-train-lock-integrity` passes `REQUIRE_PUBLISHED` = packages whose publish job result is `success` in this run (retried 12 x 5 s, then red); cluster-mesh post-publication heal of a `skipped` receipt runs only when `GITHUB_RUN_ATTEMPT` > 1 (first attempt: notice, exit 0).
 - `attention`: BRDP-EX11 (conductor-approved) — reason: `qualify-published-install` refused TARBALL mode without PEERS/QUALIFY_MODE because `printf` of an empty string gives `grep` no line (exit 1, CI run 36201194206 job validate-cluster-mesh); the character check now runs only on a non-empty value; impact: one Makefile recipe line, non-empty invalid values still refused; rollback: revert the Makefile line and its wiring test.
+- `attention`: BRDP-EX10 train fix 2 — CI run 36202484189 (validate-cluster-mesh re-run) failed the candidate install: without PEERS every `llm-mesh*`/`gateway*` leaf fails `ERR_MODULE_NOT_FOUND` (optional peers are not installed); the three cluster-mesh qualify steps (candidate, post-publication, bootstrap) now pass `PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0` (release-matrix `selected` + `selected-session` pins; `latest`/`separate-runtime` already install mcp-auth and auth-hono together); mesh/gateway resolve from sibling receipts (candidate) or the registry (post-publication), others from the registry.
+- `attention`: `hono` is not in PEERS (deviation from the brief): it is a cluster-mesh runtime `dependency` (`^4.10.7`), and the qualifier refuses it ("PEERS entry hono is not a declared peerDependency", reproduced locally); it resolves through the dependency range (4.13.9 locally).
 
 ## AI Flaky tests
 - [x] Not applicable: deterministic unit and packed-install tests, no provider call.
@@ -109,3 +111,8 @@
   - [x] `qualify-published-install`: the PKG/PEERS/QUALIFY_MODE character check is skipped on an empty value (TARBALL mode without PEERS/QUALIFY_MODE); non-empty invalid values still refused.
   - [x] Wiring test runs the host guard lines with `sh`: empty value passes, missing tarball fails on "is not a file", invalid PEERS refused, valid PEERS/QUALIFY_MODE pass; mutation (old line) makes it fail.
   - [x] Gate PASS: `test-publishable-manifests` (74), `test-qualify-published-install` (11), `check-ci-version-filters`, `scope-check`.
+- [x] **Lot 8 — Train fix 2: cluster-mesh qualification with optional peers (EX10)**
+  - [x] EX10 `ci.yml`: candidate, post-publication and bootstrap cluster-mesh `qualify-published-install` pass the five optional peers.
+  - [x] Wiring assertions: exact candidate command, post-publication and bootstrap commands carry the same PEERS.
+  - [x] Local reproduction at `d06d704ad` (siblings re-packed, 2 receipts; candidate sha256 `6d091489…0cc54`): exact CI command without PEERS FAIL (8 leaves `ERR_MODULE_NOT_FOUND`), with PEERS PASS (21 entry points; mesh/gateway `sibling-receipt`, mcp-auth/auth-hono/jose `registry`).
+  - [x] Gate PASS: `test-publishable-manifests` (74), `check-ci-version-filters`, `scope-check` PASS C2.
