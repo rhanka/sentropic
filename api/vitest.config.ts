@@ -23,6 +23,7 @@ export default defineConfig({
       '@sentropic/auth-hono': pkgSrc('auth-hono'),
       '@sentropic/chat-core': pkgSrc('chat-core'),
       '@sentropic/chat-server': pkgSrc('chat-server'),
+      '@sentropic/cluster-mesh/compose/gateway': pkgSrc('cluster-mesh', 'compose/gateway.ts'),
       '@sentropic/cluster-mesh': pkgSrc('cluster-mesh'),
       '@sentropic/comments': pkgSrc('comments'),
       '@sentropic/connector-host': pkgSrc('connector-host'),
