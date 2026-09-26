@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
 import {
-  modelProfiles, RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
+  modelProfiles, providerProfiles, RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
   type RouteQuoteInput, type RouteUsageCeiling,
 } from '@sentropic/llm-mesh';
 import type {
@@ -71,11 +71,37 @@ export const attemptLiability = (price: PricingRow, allowance: RouteUsageCeiling
   return total > price.minCharge ? total : price.minCharge;
 };
 
-/** Actual cost of one dispatched attempt; zero usage (never dispatched) costs nothing. */
-export const usageCost = (price: PricingRow, usage: { inputTokens: number; outputTokens: number }): bigint => {
+/**
+ * Actual cost of one dispatched attempt; zero usage (never dispatched) costs nothing. The gateway
+ * `SettleUsage` carries input and output counts only: reasoning tokens are folded into the output
+ * count, so output is charged at max(output, reasoning) rate, exactly like the reservation. Image
+ * units and tool calls are charged when a usage carries them.
+ */
+export const usageCost = (price: PricingRow, usage: {
+  inputTokens: number; outputTokens: number; imageUnits?: number; toolCalls?: number;
+}): bigint => {
   if (usage.inputTokens <= 0 && usage.outputTokens <= 0) return 0n;
-  const total = perMtok(usage.inputTokens, price.input) + perMtok(usage.outputTokens, price.output);
+  const outputRate = price.reasoning > price.output ? price.reasoning : price.output;
+  const units = (value: number | undefined) => BigInt(Number.isSafeInteger(value) && value! > 0 ? value! : 0);
+  const total = perMtok(usage.inputTokens, price.input) + perMtok(usage.outputTokens, outputRate)
+    + units(usage.imageUnits) * price.image + units(usage.toolCalls) * price.toolCall;
   return total > price.minCharge ? total : price.minCharge;
+};
+
+/** Upper-bound liability of one million-token attempt at a price, to rank prices conservatively. */
+export const priceWeight = (price: PricingRow): bigint =>
+  price.input + (price.reasoning > price.output ? price.reasoning : price.output) + price.image + price.toolCall
+  + price.minCharge;
+
+/**
+ * THE lock order on `control.budgets`, shared by admission, settlement, release and the reaper:
+ * every transaction locks the rows it will update with `ORDER BY id FOR UPDATE` before any UPDATE,
+ * so two transactions touching overlapping buckets can never wait on each other in a cycle.
+ */
+export const lockBudgets = async (tx: LedgerTx, ids: readonly string[]): Promise<void> => {
+  if (ids.length > 0) {
+    await tx.execute(sql`SELECT id FROM control.budgets WHERE id = ANY(${pgTextArray(ids)}) ORDER BY id FOR UPDATE`);
+  }
 };
 
 export type PrincipalKind = 'user' | 'service';
@@ -83,19 +109,18 @@ export class PrincipalKeyError extends Error {
   constructor() { super('principal is not an opaque identifier'); this.name = 'PrincipalKeyError'; }
 }
 
-const OPAQUE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
-const IPV4 = /(^|:)\d{1,3}(\.\d{1,3}){3}$/;
+// Opaque id shapes produced by B2 identity: a user id (UUID / generated token) or
+// `service:<client id>`. No dot, `@`, colon or space in the id itself, so no e-mail, hostname,
+// IPv4 or IPv6 literal can match.
+const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
-/**
- * `principal_key` is the verified opaque principal id (user id or `service:<client id>`), never an
- * e-mail or IP: anything that is not an opaque token (`@`, spaces, dotted quad, IPv6 groups) refuses.
- */
+/** `principal_key` is the verified opaque principal id; any other shape refuses admission. */
 export const principalOf = (cost: Pick<CostContext, 'principalId'>): { kind: PrincipalKind; key: string } => {
   const id = cost.principalId;
-  if (typeof id !== 'string' || !OPAQUE.test(id) || IPV4.test(id) || /:[0-9a-f]{0,4}:/i.test(id.replace(/^service:/, ''))) {
-    throw new PrincipalKeyError();
-  }
-  return { kind: id.startsWith('service:') ? 'service' : 'user', key: id };
+  const service = typeof id === 'string' && id.startsWith('service:');
+  const bare = typeof id === 'string' ? (service ? id.slice('service:'.length) : id) : '';
+  if (!OPAQUE_ID.test(bare)) throw new PrincipalKeyError();
+  return { kind: service ? 'service' : 'user', key: id };
 };
 
 export const modelBucketKey = (providerId: string, modelId: string): string => `${providerId}/${modelId}`;
@@ -139,6 +164,12 @@ export const createBudgetAdmission = (options: BudgetAdmissionOptions): BudgetAd
 
   const admitIn = async (tx: LedgerTx, request: BudgetAdmissionRequest, now: Date): Promise<BudgetAdmissionDecision> => {
     const { cost, quote } = request;
+    // Documented exception to the audit rule: the gateway never calls `admit` with an empty quote
+    // (it refuses `no-route` first) and mesh bounds maxAttempts to 1..8, and the 0008 reason CHECK has
+    // no code for a malformed quote (a new code needs a migration), so this guard writes no row.
+    if (quote.candidates.length === 0 || !Number.isSafeInteger(quote.maxAttempts) || quote.maxAttempts < 1) {
+      return { kind: 'unavailable' };
+    }
     const principal = principalOf(cost);
     const block = async (reason: BlockReason, extra: { strategyId?: string; budgetId?: string;
       liability?: bigint; resetAt?: Date } = {}): Promise<void> => {
@@ -163,9 +194,6 @@ export const createBudgetAdmission = (options: BudgetAdmissionOptions): BudgetAd
       const liability = attemptLiability(price, allowance, reservedOutput(candidate));
       if (liability > maxCandidate) maxCandidate = liability;
     }
-    if (quote.candidates.length === 0 || !Number.isSafeInteger(quote.maxAttempts) || quote.maxAttempts < 1) {
-      return { kind: 'unavailable' };
-    }
     const liability = BigInt(quote.maxAttempts) * maxCandidate;
 
     const modelKeys = quote.candidates.map((candidate) => modelBucketKey(candidate.providerId, candidate.modelId));
@@ -184,6 +212,12 @@ export const createBudgetAdmission = (options: BudgetAdmissionOptions): BudgetAd
     if (!buckets.some((bucket) => bucket.scopeKind === 'tenant')) {
       await block('missing_bucket', { strategyId, liability });
       return { kind: 'unavailable' };
+    }
+    // A workspace-less caller cannot be matched to a workspace cap: never skip one silently.
+    if (!cost.workspaceId) {
+      const [scoped] = (await tx.execute(sql`SELECT 1 AS present FROM control.budgets
+        WHERE tenant_id = ${cost.tenantId} AND scope_kind = 'workspace' LIMIT 1`)).rows;
+      if (scoped) { await block('missing_bucket', { strategyId, liability }); return { kind: 'unavailable' }; }
     }
     for (const bucket of buckets.filter((entry) => entry.resetAt.getTime() <= now.getTime())) {
       bucket.spent = 0n;
@@ -236,6 +270,7 @@ export const createBudgetAdmission = (options: BudgetAdmissionOptions): BudgetAd
           FROM control.budget_holds WHERE id = ${holdRef} FOR UPDATE`)).rows as Array<Record<string, unknown>>;
         // Idempotent; a durable dispatch marker (even from an ambiguous failure) keeps the hold.
         if (!hold || hold.status !== 'held' || hold.dispatch_started_at !== null) return;
+        await lockBudgets(tx, hold.budget_ids as string[]);
         await tx.execute(sql`UPDATE control.budget_holds SET status = 'released', settled_at = ${now}, updated_at = ${now}
           WHERE id = ${holdRef}`);
         await tx.execute(sql`UPDATE control.budgets SET updated_at = ${now},
@@ -334,6 +369,23 @@ export const withRoutePartition = (inner: CallerAuthPort, partition: RoutePartit
   },
 });
 
+/** Transports that cannot apply a caller output ceiling (the Codex wire omits it). */
+export const OUTPUT_CEILING_UNENFORCED_TRANSPORTS: readonly string[] = ['codex'];
+
+/**
+ * Mirror of llm-mesh 0.22.0 `mayUseUnenforcedTransport` (`packages/llm-mesh/src/route-quote.ts`,
+ * not exported): a pinned transport decides; unpinned, the candidate is unenforced when any account
+ * transport of the provider profile is `codex` (e.g. provider `openai`, transport `codex`).
+ */
+export const mayUseUnenforcedTransport = (providerId: string, transportProviderId?: string): boolean => {
+  if (transportProviderId !== undefined) return OUTPUT_CEILING_UNENFORCED_TRANSPORTS.includes(transportProviderId);
+  const provider = (providerProfiles as Record<string, {
+    capabilities: { auth: { accountTransports: readonly string[] } };
+  } | undefined>)[providerId];
+  return provider?.capabilities.auth.accountTransports
+    .some((transport) => OUTPUT_CEILING_UNENFORCED_TRANSPORTS.includes(transport)) ?? false;
+};
+
 /**
  * Pure, synchronous quote seam for catalog-backed planners (product and host route planes): the
  * candidates are the catalog entries of the requested model, one attempt, no account touched.
@@ -342,10 +394,9 @@ export const withRoutePartition = (inner: CallerAuthPort, partition: RoutePartit
 export const withCatalogQuote = (planner: RoutePlanner, options: {
   readonly catalog: { listModels(): readonly { readonly modelId: string; readonly providerId: string }[] };
   readonly councilRevision: string;
-  /** Providers whose transport may drop the output ceiling (codex). */
-  readonly unenforcedProviders?: readonly string[];
+  /** Transport pinned by the catalog entry, when known (undefined: any enrolled transport). */
+  readonly transportFor?: (model: { readonly modelId: string; readonly providerId: string }) => string | undefined;
 }): RoutePlanner => {
-  const unenforced = new Set(options.unenforcedProviders ?? ['codex']);
   const quote = (input: RouteQuoteInput): RouteQuote => {
     const { ceiling } = input;
     const count = (value: unknown, min: number) => typeof value === 'number' && Number.isSafeInteger(value) && value >= min;
@@ -355,7 +406,7 @@ export const withCatalogQuote = (planner: RoutePlanner, options: {
     if (models.length === 0) throw new RouteQuoteError('Unknown requested model', 'unknown-model');
     const candidates: QuotedRouteCandidate[] = models.map((model) => ({
       providerId: model.providerId, modelId: model.modelId, reason: 'exact',
-      allowance: { ...ceiling }, outputCeilingEnforced: !unenforced.has(model.providerId),
+      allowance: { ...ceiling }, outputCeilingEnforced: !mayUseUnenforcedTransport(model.providerId, options.transportFor?.(model)),
     }));
     const body = {
       requestedModel: input.requestedModel, candidates, maxAttempts: 1, quotedAt: input.now.toISOString(),
