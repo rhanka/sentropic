@@ -38,20 +38,55 @@ describe('0008_llm_admission — expand-first shape', () => {
     expect(applied!.hash).toBe(createHash('sha256').update(migrationSql).digest('hex'));
   });
 
-  it('only creates tables, adds nullable columns, new-column CHECKs and indexes', () => {
-    const statements = migrationSql.split('--> statement-breakpoint').map((part) => part.trim()).filter(Boolean);
+  it('only creates tables, adds nullable columns, NOT VALID + VALIDATE CHECKs, one new-table FK, comments and indexes', () => {
+    const statements = migrationSql.split('--> statement-breakpoint')
+      .map((part) => part.replace(/^--.*$/gm, '').trim()).filter(Boolean);
     for (const statement of statements) {
-      expect(statement).toMatch(/^(CREATE TABLE IF NOT EXISTS|CREATE (UNIQUE )?INDEX IF NOT EXISTS|ALTER TABLE "control"\."cost_ledger" ADD (COLUMN|CONSTRAINT))/);
+      expect(statement).toMatch(new RegExp([
+        '^CREATE TABLE IF NOT EXISTS', '^CREATE (UNIQUE )?INDEX IF NOT EXISTS',
+        '^ALTER TABLE "control"\\."cost_ledger" (ADD COLUMN|ADD CONSTRAINT|VALIDATE CONSTRAINT)',
+        '^DO \\$\\$ BEGIN\\s+ALTER TABLE "control"\\."budget_holds" ADD CONSTRAINT "\\w+" FOREIGN KEY',
+        '^COMMENT ON COLUMN "control"\\."(cost_ledger|budget_holds|blocked_attempts)"\\."principal_key"',
+      ].join('|')));
     }
-    expect(migrationSql).not.toMatch(/\b(DROP|RENAME|TRUNCATE|DELETE|UPDATE|EXTENSION|EXCLUDE|gist)\b/i);
+    expect(migrationSql.replace('ON DELETE restrict ON UPDATE no action', ''))
+      .not.toMatch(/\b(DROP|RENAME|TRUNCATE|DELETE|UPDATE|EXTENSION|EXCLUDE|gist|CASCADE)\b/i);
     expect(migrationSql).not.toMatch(/ALTER COLUMN|SET DATA TYPE|USING\s+"/i);
     for (const statement of statements.filter((s) => s.includes('ADD COLUMN'))) {
       expect(statement).not.toMatch(/NOT NULL|DEFAULT/);
     }
-    for (const statement of statements.filter((s) => s.includes('ADD CONSTRAINT'))) {
-      expect(statement).toMatch(/CHECK \("control"\."cost_ledger"\."\w+" IS NULL OR /);
+    const ledgerChecks = statements.filter((s) => /cost_ledger" ADD CONSTRAINT/.test(s));
+    expect(ledgerChecks).toHaveLength(3);
+    for (const statement of ledgerChecks) {
+      expect(statement).toMatch(/CHECK \("control"\."cost_ledger"\."\w+" IS NULL OR .*\) NOT VALID;$/s);
+      const name = /ADD CONSTRAINT "(\w+)"/.exec(statement)![1];
+      expect(statements).toContain(`ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "${name}";`);
     }
+    expect(migrationSql).toContain('ON DELETE restrict');
     expect(migrationSql).not.toContain('llm_identity');
+  });
+
+  it('validates the ledger CHECKs, documents principal_key and restricts strategy deletion', async () => {
+    const checks = await rows<{ conname: string; convalidated: boolean }>(sql`
+      SELECT conname, convalidated FROM pg_constraint
+      WHERE conname IN ('cost_ledger_principal_kind_check', 'cost_ledger_result_check', 'cost_ledger_reconciliation_state_check')
+      ORDER BY conname`);
+    expect(checks).toEqual([
+      { conname: 'cost_ledger_principal_kind_check', convalidated: true },
+      { conname: 'cost_ledger_reconciliation_state_check', convalidated: true },
+      { conname: 'cost_ledger_result_check', convalidated: true },
+    ]);
+    const comments = await rows<{ table_name: string; comment: string | null }>(sql`
+      SELECT c.relname AS table_name, col_description(c.oid, a.attnum) AS comment
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'principal_key'
+      WHERE n.nspname = 'control' AND c.relname IN ('cost_ledger', 'budget_holds', 'blocked_attempts')
+      ORDER BY c.relname`);
+    expect(comments.map((c) => c.table_name)).toEqual(['blocked_attempts', 'budget_holds', 'cost_ledger']);
+    for (const { comment } of comments) expect(comment).toMatch(/never an e-mail, raw IP/);
+    const [fk] = await rows<{ def: string }>(sql`SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+      WHERE conname = 'budget_holds_budget_strategy_id_tenant_budget_strategy_id_fk'`);
+    expect(fk!.def).toBe('FOREIGN KEY (budget_strategy_id) REFERENCES control.tenant_budget_strategy(id) ON DELETE RESTRICT');
   });
 
   it('keeps cost_ledger history-compatible: nullable new columns, unchanged CHECK and idempotency key', async () => {
@@ -86,6 +121,7 @@ describe('0008_llm_admission — expand-first shape', () => {
 describe('0008_llm_admission — constraints', () => {
   const tenant = `llmadm-${run}`;
   afterEach(async () => {
+    await db.execute(sql`DELETE FROM control.budget_holds WHERE tenant_id LIKE ${`${tenant}%`}`);
     await db.execute(sql`DELETE FROM control.budgets WHERE tenant_id LIKE ${`${tenant}%`}`);
     await db.execute(sql`DELETE FROM control.tenant_budget_strategy WHERE tenant_id LIKE ${`${tenant}%`}`);
   });
@@ -106,6 +142,19 @@ describe('0008_llm_admission — constraints', () => {
     expect(await failure(budget(`${tenant}-b3`, tenant))).toMatchObject({ cause: { constraint: 'budgets_tenant_scope_period_unique' } });
   });
 
+  it('keeps every hold attributable: unknown strategy refused, referenced strategy cannot be deleted', async () => {
+    const hold = (id: string, strategyId: string) => sql`INSERT INTO control.budget_holds (id, request_id, tenant_id,
+      principal_kind, principal_key, budget_strategy_id, budget_ids, quote_ref, pricing_versions, liability_micro_usd,
+      owner_ref, deadline_at) VALUES (${id}, ${id}, ${tenant}, 'service', 'svc', ${strategyId}, '{}', 'q', '{}', 0, 'o', now())`;
+    const fk = 'budget_holds_budget_strategy_id_tenant_budget_strategy_id_fk';
+    expect(await failure(hold(`${tenant}-h0`, `${tenant}-missing`))).toMatchObject({ cause: { constraint: fk } });
+    await db.execute(sql`INSERT INTO control.tenant_budget_strategy (id, tenant_id, funding_mode, key_sourcing_mode)
+      VALUES (${`${tenant}-sh`}, ${tenant}, 'tenant_pool', 'platform')`);
+    await db.execute(hold(`${tenant}-h1`, `${tenant}-sh`));
+    expect(await failure(sql`DELETE FROM control.tenant_budget_strategy WHERE id = ${`${tenant}-sh`}`))
+      .toMatchObject({ cause: { constraint: fk } });
+  });
+
   it.each([
     ['budgets_amounts_check', sql`INSERT INTO control.budgets (id, tenant_id, scope_kind, scope_key, reserved_micro_usd, reset_at) VALUES ('c1', 'llmadm-x', 'tenant', 't', -1, now())`],
     ['budgets_workspace_scope_check', sql`INSERT INTO control.budgets (id, tenant_id, scope_kind, scope_key, reset_at) VALUES ('c2', 'llmadm-x', 'workspace', 'w', now())`],
@@ -119,7 +168,8 @@ describe('0008_llm_admission — constraints', () => {
   });
 });
 
-// B0-A4 single-writer checked insert, kept test-local until its home is named (BRANCH.md `blocked`).
+// B0-A4 single-writer checked insert, test-local until B3c moves it verbatim to
+// `api/src/services/llm-metering/model-pricing-writer.ts` (EX9).
 // FOR UPDATE cannot lock an absent predecessor, so a transaction-scoped advisory lock keyed on
 // (provider, model) serializes writers first; the unique key stays the last-resort guard.
 interface PricingWrite { id: string; providerId: string; modelId: string; from: Date; to: Date | null }
@@ -259,6 +309,23 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
     await migrate(drizzle(pool), control(CONTROL_DIR));
     const upgraded = await upgradedState(pool);
     expect(upgraded).toEqual({ migrations: 9, tables: NEW_TABLES, newRows: 0, attributed: 0, ledger: history });
+    expect((await query(pool, `SELECT bool_and(convalidated) AS ok FROM pg_constraint WHERE conname LIKE 'cost_ledger_%_check'
+      AND conname <> 'cost_ledger_operation_check'`))[0].ok).toBe(true);
+
+    // Replay: the runner re-run is a journal no-op; a raw re-execution of 0008 (constraints have no
+    // IF NOT EXISTS) fails on the first duplicate object and its transaction leaves nothing behind.
+    await migrate(drizzle(pool), control(CONTROL_DIR));
+    expect(await upgradedState(pool)).toEqual(upgraded);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const replay = await client.query(migrationSql).then(() => null, (error: { code?: string }) => error);
+      await client.query('ROLLBACK');
+      expect(replay).toMatchObject({ code: '42701' }); // duplicate_column: CREATE ... IF NOT EXISTS are no-ops, ADD COLUMN is not
+    } finally {
+      client.release();
+    }
+    expect(await upgradedState(pool)).toEqual(upgraded);
     await close(pool);
 
     // Rollback-by-restore: the pre-migration backup still holds 0007 state and the same rows.
