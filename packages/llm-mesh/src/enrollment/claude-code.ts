@@ -229,7 +229,7 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
 
   async refresh(input: RefreshInput & { grantedScopes?: unknown }): Promise<PreparedCredential> {
     const profile = await this.profile(input.credentialVersion, true);
-    if (!token(input.refreshToken)) throw new ClaudeRefreshPreparationError();
+    if (!token(input.refreshToken)) throw failure('missing or invalid refresh token');
     const value = await this.exchange(profile, { grant_type: 'refresh_token',
       refresh_token: input.refreshToken, client_id: profile.clientId, scope: profile.refreshScopes.join(' ') });
     return this.grant(value, profile, input.accountId, 'refresh', input.refreshToken, input.grantedScopes);

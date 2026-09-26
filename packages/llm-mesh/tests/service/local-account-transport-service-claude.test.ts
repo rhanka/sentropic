@@ -89,7 +89,7 @@ describe('Claude service enrollment', () => {
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
-  it.each(['read', 'write', 'write-then-throw', 'profile', 'missing-token'])(
+  it.each(['read', 'write', 'write-then-throw', 'profile'])(
     'keeps a pre-request %s failure retryable without requiring reauthentication', async (kind) => {
       const { service, keyring, fetchFn, configResolver, create } = setup();
       const custom = { id: 'custom-retry-v1', authorizationUrl: 'https://auth.example.test/authorize',
@@ -114,7 +114,6 @@ describe('Claude service enrollment', () => {
         await save(key, value);
       };
       if (kind === 'profile') configResolver.resolveConfig.mockRejectedValueOnce(new Error(REFRESH));
-      if (kind === 'missing-token') (service as any).accountsMap.get(accountId).refreshToken = undefined;
       const error = await assertSafe(service.acquire(acquire));
       expect(error).toBeInstanceOf(AccountTransportAcquireError);
       expect(String(error)).toContain('retry');
@@ -270,7 +269,7 @@ describe('Claude service enrollment', () => {
     }
   });
 
-  it.each(['network', 'invalid_grant', 'unknown-profile', 'empty-refresh'])(
+  it.each(['network', 'invalid_grant', 'unknown-profile', 'empty-refresh', 'missing-token'])(
     'keeps %s refresh failure and AcquireError secret-free across restart', async (kind) => {
       const { service, fetchFn, keyring, create } = setup();
       const { accountId } = await service.completeClaudeCredentialImport(paste(true), owner);
@@ -279,17 +278,18 @@ describe('Claude service enrollment', () => {
         error: 'invalid_grant', error_description: `${ACCESS} ${REFRESH}` }), { status: 400 }));
       if (kind === 'empty-refresh') fetchFn.mockResolvedValue(new Response(JSON.stringify({
         access_token: ACCESS, refresh_token: '', expires_in: 3600, scope: 'user:inference' })));
-      if (kind === 'unknown-profile') {
+      if (kind === 'unknown-profile' || kind === 'missing-token') {
         const key = `sentropic-llm-mesh:${accountId}:envelope`;
         const envelope = JSON.parse((await keyring.getSecret(key))!);
-        await keyring.setSecret(key, JSON.stringify({ ...envelope, authClientConfigVersion: 'v1.0.0' }));
+        await keyring.setSecret(key, JSON.stringify({ ...envelope, ...(kind === 'missing-token'
+          ? { refreshToken: undefined } : { authClientConfigVersion: 'v1.0.0' }) }));
       }
       const error = await assertSafe(create().acquire(acquire));
       expect(error).toBeInstanceOf(AccountTransportAcquireError);
       expect(String(error)).toContain('reauthentication required');
       expect((await service.listAccounts(owner))[0].status).toBe('reauth_required');
       await assertSafe(create().acquire(acquire));
-      expect(fetchFn).toHaveBeenCalledTimes(kind === 'unknown-profile' ? 0 : 1);
+      expect(fetchFn).toHaveBeenCalledTimes(['unknown-profile', 'missing-token'].includes(kind) ? 0 : 1);
     });
 
   it.each(['cancel', 'expire', 'remove'])('cannot resurrect an account after %s during HTTP', async (mode) => {
