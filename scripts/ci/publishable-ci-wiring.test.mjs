@@ -402,6 +402,23 @@ test('qualify-published-install: registry wait budget defaults to 18 x 10 s and 
   }
 });
 
+test('steady-state OIDC post-publication qualification checks the SLSA provenance commit; bootstrap token publishes do not', () => {
+  for (const slug of ['mcp-auth', 'cluster-mesh']) {
+    const publish = jobs[`publish-${slug}`].steps;
+    const step = publish[publish.findIndex((s) => s.run === `make publish-${slug}`) + 1];
+    assert.match(step.run, /make qualify-published-install PKG="\$pkg" [^\n]* QUALIFY_PROVENANCE_SHA="\$GITHUB_SHA" ENV=test-ci-/, slug);
+    const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === `Qualify bootstrap-published ${slug}`);
+    assert.ok(!bootstrap.run.includes('QUALIFY_PROVENANCE_SHA'), `${slug}: bootstrap publishes carry no provenance`);
+  }
+  assert.match(recipe('qualify-published-install'), /\$\(if \$\(QUALIFY_PROVENANCE_SHA\),--provenance-commit "\$\(QUALIFY_PROVENANCE_SHA\)"\)/);
+  const tgz = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qguard-')), 'candidate.tgz');
+  fs.writeFileSync(tgz, '');
+  assert.equal(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_SHA: 'a'.repeat(40) }).status, 0);
+  for (const bad of ['HEAD', 'A'.repeat(40), `${'a'.repeat(40)};x`]) {
+    assert.match(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_SHA: bad }).out, /QUALIFY_PROVENANCE_SHA must be a 40-hex commit SHA/, bad);
+  }
+});
+
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_ATTEMPTS \?= 18$/m);
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_SECONDS \?= 10$/m);
