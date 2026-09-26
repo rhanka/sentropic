@@ -61,12 +61,12 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
   - [x] Post-publication qualification compares the SLSA v1 `resolvedDependencies[].digest.gitCommit` with `QUALIFY_PROVENANCE_SHA`.
   - [x] ci.yml steady-state mcp-auth and cluster-mesh qualification pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"`.
 
-- [ ] **Lot 4 — Review fix 1**
+- [x] **Lot 4 — Review fix 1**
   - [x] mcp-auth post-publication qualification heals `skipped` only on a re-run after a cache-busted presence check (aligned with cluster-mesh).
   - [x] Cluster-mesh presence check `curl` sends `cache-control: no-cache` with a cache-busting query.
   - [x] Test: generic E403 without "cannot publish over" is not a conflict.
   - [x] Conflict re-read budget wired to the Make wait variables.
-  - [ ] Provenance: only the repository source entry must equal the workflow commit.
+  - [x] Provenance: only the repository source entry must equal the workflow commit.
 
 - [x] **Lot N — Final validation**
   - [x] `make test-publishable-manifests ENV=test-registry-waits`
