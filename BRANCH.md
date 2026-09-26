@@ -92,7 +92,7 @@
 
 - [ ] **Lot 2 — Product `/gw` and host wiring**
   - [x] `api/package.json` `@sentropic/llm-gateway` `^0.19.0` + `make lock-root`; product code imports no gateway source by relative path.
-  - [ ] `gw.ts` on `createGatewayNamespaceModule` (one mount) with budget, B2 identity, partition, settlement, readiness; remove `stubGatewayConfig`, noop `settleRoute()`, boot/request-time cutover activation; keep the author fence.
+  - [x] `gw.ts` on `createGatewayNamespaceModule` (one mount) with budget, B2 identity, partition, settlement, readiness; remove `stubGatewayConfig`, noop `settleRoute()`, boot/request-time cutover activation; keep the author fence.
   - [ ] `apps/llm-gateway/src/app.ts` budget slot + identity, `readiness.ts` store probes, `lifecycle.ts` B1 minors.
 
 - [ ] **Lot 3 — Tests and gates**
