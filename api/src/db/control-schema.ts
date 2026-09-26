@@ -10,7 +10,7 @@
  * - NO published-contract mutation (@sentropic/contracts / @sentropic/comments untouched).
  */
 
-import { bigint, check, index, integer, jsonb, pgSchema, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, boolean, check, index, integer, jsonb, pgSchema, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Declare the `control` schema namespace.
@@ -402,6 +402,20 @@ export const costLedger = controlSchema.table(
     // Cost (exact micro-USD; nullable until model_pricing exists — later lot).
     costMicroUsd: bigint('cost_micro_usd', { mode: 'number' }),
 
+    // G1a settlement attribution (0008, expand-first): all NULLABLE so historical observe-only rows
+    // keep NULL (never rewritten as zero cost). Values are ids/refs/codes, never model output.
+    principalKind: text('principal_kind'),
+    principalKey: text('principal_key'),                  // opaque id or keyed hash only (COMMENT ON COLUMN in 0008)
+    budgetStrategyId: text('budget_strategy_id'),         // soft ref → tenant_budget_strategy.id
+    pricingVersion: text('pricing_version'),              // soft ref → model_pricing.id
+    result: text('result'),
+    holdId: text('hold_id'),                              // soft ref → budget_holds.id
+    quoteRef: text('quote_ref'),                          // mesh RouteQuote.quoteRef digest
+    reconciliationState: text('reconciliation_state'),
+    // Redacted per-attempt breakdown: provider/model ids, pricing ids, token counts, micro-USD.
+    // No prompt/completion text, no account or plan refs.
+    attempts: jsonb('attempts'),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (table) => ({
@@ -412,11 +426,245 @@ export const costLedger = controlSchema.table(
       'cost_ledger_operation_check',
       sql`${table.operation} IN ('generate', 'stream')`,
     ),
+    principalKindCheck: check(
+      'cost_ledger_principal_kind_check',
+      sql`${table.principalKind} IS NULL OR ${table.principalKind} IN ('user', 'service', 'guest', 'anonymous', 'system')`,
+    ),
+    resultCheck: check(
+      'cost_ledger_result_check',
+      sql`${table.result} IS NULL OR ${table.result} IN ('ok', 'capped', 'error', 'aborted')`,
+    ),
+    reconciliationStateCheck: check(
+      'cost_ledger_reconciliation_state_check',
+      sql`${table.reconciliationState} IS NULL OR ${table.reconciliationState} IN ('none', 'estimated', 'pending', 'reconciled')`,
+    ),
   }),
 );
 
 export type CostLedgerRow = typeof costLedger.$inferSelect;
 export type CostLedgerInsert = typeof costLedger.$inferInsert;
+
+/**
+ * G1a budget admission (BRDP-EX5, migration 0008; SPEC_EVOL_LLM_DEPLOYABLE_PROCESS §5/§12.5,
+ * SPEC_EVOL_QUOTA_LEDGER §2/§6). Expand-first: new tables only. Soft refs, no cross-namespace FK.
+ * Money is exact integer micro-USD. No column stores prompt/completion text or provider JSON.
+ * `principal_key` holds an opaque principal id or keyed hash only, never an e-mail or raw IP
+ * (COMMENT ON COLUMN, hand-added to 0008 because drizzle-kit does not emit column comments).
+ */
+const PRINCIPAL_KINDS = sql`('user', 'service', 'guest', 'anonymous', 'system')`;
+
+/** Per-tenant budget/key strategy (QUOTA_LEDGER §6); at most one `active` row per tenant. */
+export const tenantBudgetStrategy = controlSchema.table(
+  'tenant_budget_strategy',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    fundingMode: text('funding_mode').notNull(),
+    keySourcingMode: text('key_sourcing_mode').notNull(),
+    mutualizationScope: text('mutualization_scope').notNull().default('none'),
+    anonymousEnabled: boolean('anonymous_enabled').notNull().default(false),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+    retiredAt: timestamp('retired_at', { withTimezone: true }),
+  },
+  (table) => ({
+    activeTenantUnique: uniqueIndex('tenant_budget_strategy_active_tenant_unique')
+      .on(table.tenantId)
+      .where(sql`${table.status} = 'active'`),
+    fundingModeCheck: check(
+      'tenant_budget_strategy_funding_mode_check',
+      sql`${table.fundingMode} IN ('tenant_pool', 'seat_pooled', 'sponsored', 'byok_user', 'mutualized')`,
+    ),
+    keySourcingModeCheck: check(
+      'tenant_budget_strategy_key_sourcing_mode_check',
+      sql`${table.keySourcingMode} IN ('platform', 'user', 'workspace', 'mutualized')`,
+    ),
+    mutualizationScopeCheck: check(
+      'tenant_budget_strategy_mutualization_scope_check',
+      sql`${table.mutualizationScope} IN ('none', 'intra_tenant', 'cross_tenant')`,
+    ),
+    statusCheck: check('tenant_budget_strategy_status_check', sql`${table.status} IN ('active', 'retired')`),
+  }),
+);
+
+/** Funding buckets: tenant-qualified uniqueness, never an unqualified cross-tenant scope key. */
+export const budgets = controlSchema.table(
+  'budgets',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    workspaceId: text('workspace_id'),
+    scopeKind: text('scope_kind').notNull(),
+    scopeKey: text('scope_key').notNull(),
+    period: text('period').notNull().default('monthly'),
+    capMicroUsd: bigint('cap_micro_usd', { mode: 'number' }),   // NULL = attribution only, no cap
+    reservedMicroUsd: bigint('reserved_micro_usd', { mode: 'number' }).notNull().default(0),
+    spentMicroUsd: bigint('spent_micro_usd', { mode: 'number' }).notNull().default(0),
+    resetAt: timestamp('reset_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    scopeUnique: uniqueIndex('budgets_tenant_scope_period_unique').on(
+      table.tenantId,
+      table.scopeKind,
+      table.scopeKey,
+      table.period,
+    ),
+    tenantWorkspaceIdx: index('budgets_tenant_workspace_idx').on(table.tenantId, table.workspaceId),
+    scopeKindCheck: check(
+      'budgets_scope_kind_check',
+      sql`${table.scopeKind} IN ('tenant', 'workspace', 'principal', 'model', 'anonymous_pool')`,
+    ),
+    workspaceScopeCheck: check(
+      'budgets_workspace_scope_check',
+      sql`${table.scopeKind} <> 'workspace' OR ${table.workspaceId} IS NOT NULL`,
+    ),
+    periodCheck: check('budgets_period_check', sql`${table.period} IN ('monthly')`),
+    amountsCheck: check(
+      'budgets_amounts_check',
+      sql`${table.reservedMicroUsd} >= 0 AND ${table.spentMicroUsd} >= 0 AND (${table.capMicroUsd} IS NULL OR ${table.capMicroUsd} >= 0)`,
+    ),
+  }),
+);
+
+/**
+ * Immutable effective-dated component rates (micro-USD). Non-overlap per (provider, model) is
+ * enforced by the unique key plus the single-writer checked insert (B0-A4); only `effective_to`
+ * of the open predecessor may be closed by that writer. No btree_gist / extension.
+ */
+export const modelPricing = controlSchema.table(
+  'model_pricing',
+  {
+    id: text('id').primaryKey(),
+    providerId: text('provider_id').notNull(),
+    modelId: text('model_id').notNull(),
+    inputMicroUsdPerMtok: bigint('input_micro_usd_per_mtok', { mode: 'number' }).notNull(),
+    outputMicroUsdPerMtok: bigint('output_micro_usd_per_mtok', { mode: 'number' }).notNull(),
+    cachedInputMicroUsdPerMtok: bigint('cached_input_micro_usd_per_mtok', { mode: 'number' }),
+    reasoningMicroUsdPerMtok: bigint('reasoning_micro_usd_per_mtok', { mode: 'number' }),
+    imageMicroUsdPerUnit: bigint('image_micro_usd_per_unit', { mode: 'number' }),
+    audioMicroUsdPerUnit: bigint('audio_micro_usd_per_unit', { mode: 'number' }),
+    toolCallMicroUsdPerUnit: bigint('tool_call_micro_usd_per_unit', { mode: 'number' }),
+    embeddingMicroUsdPerMtok: bigint('embedding_micro_usd_per_mtok', { mode: 'number' }),
+    minChargeMicroUsd: bigint('min_charge_micro_usd', { mode: 'number' }),
+    effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull(),
+    effectiveTo: timestamp('effective_to', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    effectiveUnique: uniqueIndex('model_pricing_provider_model_effective_from_unique').on(
+      table.providerId,
+      table.modelId,
+      table.effectiveFrom,
+    ),
+    windowCheck: check(
+      'model_pricing_window_check',
+      sql`${table.effectiveTo} IS NULL OR ${table.effectiveTo} > ${table.effectiveFrom}`,
+    ),
+    ratesCheck: check(
+      'model_pricing_rates_check',
+      sql`${table.inputMicroUsdPerMtok} >= 0 AND ${table.outputMicroUsdPerMtok} >= 0
+        AND COALESCE(${table.cachedInputMicroUsdPerMtok}, 0) >= 0 AND COALESCE(${table.reasoningMicroUsdPerMtok}, 0) >= 0
+        AND COALESCE(${table.imageMicroUsdPerUnit}, 0) >= 0 AND COALESCE(${table.audioMicroUsdPerUnit}, 0) >= 0
+        AND COALESCE(${table.toolCallMicroUsdPerUnit}, 0) >= 0 AND COALESCE(${table.embeddingMicroUsdPerMtok}, 0) >= 0
+        AND COALESCE(${table.minChargeMicroUsd}, 0) >= 0`,
+    ),
+  }),
+);
+
+/** Durable reservation hold: deadline, dispatch-start marker and fenced owner (D5 crash handling). */
+export const budgetHolds = controlSchema.table(
+  'budget_holds',
+  {
+    id: text('id').primaryKey(),                               // gateway holdRef
+    requestId: text('request_id').notNull(),                   // server request id (settlement key)
+    tenantId: text('tenant_id').notNull(),
+    workspaceId: text('workspace_id'),
+    principalKind: text('principal_kind').notNull(),
+    principalKey: text('principal_key').notNull(),
+    // Strategies are retired, never deleted: RESTRICT keeps every hold attributable.
+    budgetStrategyId: text('budget_strategy_id')
+      .notNull()
+      .references(() => tenantBudgetStrategy.id, { onDelete: 'restrict' }),
+    budgetIds: text('budget_ids').array().notNull(),
+    quoteRef: text('quote_ref').notNull(),
+    pricingVersions: text('pricing_versions').array().notNull(),
+    liabilityMicroUsd: bigint('liability_micro_usd', { mode: 'number' }).notNull(),
+    status: text('status').notNull().default('held'),
+    ownerRef: text('owner_ref').notNull(),
+    fence: bigint('fence', { mode: 'number' }).notNull().default(0),
+    deadlineAt: timestamp('deadline_at', { withTimezone: true }).notNull(),
+    dispatchStartedAt: timestamp('dispatch_started_at', { withTimezone: true }),
+    dispatchedAttempts: integer('dispatched_attempts').notNull().default(0),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    requestUnique: uniqueIndex('budget_holds_request_id_unique').on(table.requestId),
+    reaperIdx: index('budget_holds_status_deadline_idx').on(table.status, table.deadlineAt),
+    tenantWorkspaceIdx: index('budget_holds_tenant_workspace_idx').on(table.tenantId, table.workspaceId),
+    principalKindCheck: check('budget_holds_principal_kind_check', sql`${table.principalKind} IN ${PRINCIPAL_KINDS}`),
+    statusCheck: check(
+      'budget_holds_status_check',
+      sql`${table.status} IN ('held', 'dispatched', 'settled', 'released', 'reconciled')`,
+    ),
+    amountsCheck: check(
+      'budget_holds_amounts_check',
+      sql`${table.liabilityMicroUsd} >= 0 AND ${table.fence} >= 0 AND ${table.dispatchedAttempts} >= 0`,
+    ),
+  }),
+);
+
+/** Audit of refused or overrun admissions: never a cost row (QUOTA_LEDGER Q1). */
+export const blockedAttempts = controlSchema.table(
+  'blocked_attempts',
+  {
+    id: text('id').primaryKey(),
+    requestId: text('request_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    workspaceId: text('workspace_id'),
+    principalKind: text('principal_kind').notNull(),
+    principalKey: text('principal_key').notNull(),
+    budgetStrategyId: text('budget_strategy_id'),
+    reason: text('reason').notNull(),
+    budgetId: text('budget_id'),                               // blocking bucket, when known
+    requestedModel: text('requested_model'),                   // catalog-validated model id
+    holdId: text('hold_id'),
+    quoteRef: text('quote_ref'),
+    liabilityMicroUsd: bigint('liability_micro_usd', { mode: 'number' }),
+    resetAt: timestamp('reset_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    tenantCreatedIdx: index('blocked_attempts_tenant_workspace_created_idx').on(
+      table.tenantId,
+      table.workspaceId,
+      table.createdAt,
+    ),
+    requestIdx: index('blocked_attempts_request_id_idx').on(table.requestId),
+    principalKindCheck: check(
+      'blocked_attempts_principal_kind_check',
+      sql`${table.principalKind} IN ${PRINCIPAL_KINDS}`,
+    ),
+    reasonCheck: check(
+      'blocked_attempts_reason_check',
+      sql`${table.reason} IN ('cap', 'no_pricing', 'no_strategy', 'missing_bucket', 'overrun', 'killswitch', 'rate')`,
+    ),
+    liabilityCheck: check(
+      'blocked_attempts_liability_check',
+      sql`${table.liabilityMicroUsd} IS NULL OR ${table.liabilityMicroUsd} >= 0`,
+    ),
+  }),
+);
+
+export type TenantBudgetStrategyRow = typeof tenantBudgetStrategy.$inferSelect;
+export type BudgetRow = typeof budgets.$inferSelect;
+export type ModelPricingRow = typeof modelPricing.$inferSelect;
+export type BudgetHoldRow = typeof budgetHolds.$inferSelect;
+export type BlockedAttemptRow = typeof blockedAttempts.$inferSelect;
 
 export const clusterMeshGenerations = controlSchema.table(
   'cluster_mesh_generations',

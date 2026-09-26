@@ -18,7 +18,7 @@ const store = new PostgresClusterMeshCutoverStore();
 const defaultMigrationDirectory = fileURLToPath(new URL('../../drizzle/control', import.meta.url));
 
 function readClusterMeshMigration(directory = defaultMigrationDirectory) {
-  const files = readdirSync(directory).filter((file) => /^000[78]_/.test(file));
+  const files = readdirSync(directory).filter((file) => /^\d+_cluster_mesh/.test(file));
   if (files.length !== 1) throw new Error(`expected one cluster mesh migration, found ${files.length}`);
   return { files, source: readFileSync(`${directory}/${files[0]}`, 'utf8') };
 }
