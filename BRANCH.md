@@ -39,6 +39,9 @@
 - [x] `CS-07` — attention — owner: custody lane — Custody-only rotation is a controlling design requirement, not implemented protection in the current local account service; qualify the separate resolver/job before enabling custody seats.
 - [x] `CS-08` — attention — owner: conductor — Before the live mission, nominate isolated grants and one operator/refresh owner, then verify current wire profile and per-device revocation. See spec O2; no real credentials handled here.
 - [x] `CS-09` — attention — owner: design author — Round 1 uses sessionless paste, internal provider capabilities, offline labels, and strict versioned config; these preserve the existing contracts and avoid an unverified profile request.
+- [x] `CS-10` — attention — owner: conductor — O3 recommends pinned CLI 2.1.80 values with M2 profile evidence; O4 recommends accepting rejected serving without impersonation; both avoid speculative wire changes.
+- [x] `CS-11` — attention — owner: conductor — O5 recommends accepting expired renewable JSON and refreshing on first acquire; import stays offline and the operator avoids a competing CLI rotation.
+- [x] `CS-12` — attention — owner: implementer — Widen refresh single-flight as a shared bug fix with Cloud Code/Codex regression tests; native Muse dispatch is separately reported and remains outside scope.
 
 ## AI Flaky tests
 - [x] Not applicable: no tests or live provider calls in this design lot.
@@ -67,13 +70,19 @@
   - [x] List future unit/integration test files and h2a mission steps/evidence; no test execution in this lot.
   - [x] Record only real owner decisions with recommendations; reconcile every deliverable section and evidence reference.
   - [x] Run final scope check, inspect complete diff, commit, clean up the dedicated environment, and report final commit log.
-- [ ] **Lot 4 — Review revision round 1 (planning only)**
+- [x] **Lot 4 — Review revision round 1 (planning only)**
   - [x] Verify claims in contracts, Muse facades, service refresh/persistence, provider config, app constants, runtime clients, exports, and consumer tests.
   - [x] Reduce Claude API, keep provider internal, define refresh config resolution/offline labels, correct citations, and document the shared refresh race.
-  - [ ] Split future implementation lots, preserve auth validation, add O3–O5, and strengthen regression/mission evidence.
-  - [ ] Run scope/diff checks, commit the two-file revision, clean up, and report O1–O5 and review disposition.
+  - [x] Split future implementation lots, preserve auth validation, add O3–O5, and strengthen regression/mission evidence.
+  - [x] Complete the two-file revision and diff review; clean up the dedicated environment; prepare the checked scope/commit handoff with O1–O5 and review disposition.
+
+## Future implementation handoff (not authorized in this branch)
+- [ ] **Implementation lot 1 — enrollment, refresh, persistence**: provider, facade/service and completion type export; enrollment/contracts/service/auth tests listed in spec §5, including Cloud Code/Codex race regression and AcquireError canaries.
+- [ ] **Implementation lot 2 — runtime client parity**: new Claude Messages client/private headers and root export; transport/auth tests plus cluster-mesh `tests/integrations/llm-surface.spec.ts` and `tests/packaging/types-and-bundlers.spec.ts`; keep generic auth validation unchanged.
+- [ ] **Implementation lot 3 — consumer qualification**: conductor scopes h2a files, runs M0–M7 with M2 profile provenance and M5 counting fetch, then completes docs and one bump per package; custody remains separate.
 
 ## Validation Evidence
+- [x] Round 1: all nine reviewer requests verified against code and accepted; spec is 250 lines, external evidence qualifications preserved; no disagreement or new consensus claim.
 - [x] `harness check branch` — PASS C1; branch is `spec/llm-mesh-claude-seat`.
 - [x] `make scope-check ENV=test-llm-mesh-claude-seat` — PASS C2 before each commit; its harness dependency builds in Docker.
 - [x] `git diff --check` — PASS; final tracked diff contains only the two Allowed Paths.
