@@ -12,6 +12,7 @@ export * from './codex.js';
 export * from './canonical-ingress.js';
 export * from './canonical-egress.js';
 export * from './canonical-stream.js';
+export * from './admission.js';
 export * from './route-flow-core.js';
 export * from './route-attempt-dispatch.js';
 export * from './route-json-flow.js';

@@ -1,7 +1,8 @@
 /** Minimal release-only SemVer range check used for peer version evidence. */
 type Version = readonly [number, number, number];
 
-const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+/** Release core with optional `+build` metadata (ignored for precedence, as npm does). */
+const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 
 export function parseReleaseVersion(value: unknown): Version | undefined {
   if (typeof value !== 'string') return undefined;
@@ -46,7 +47,7 @@ function comparators(range: string): ((version: Version) => boolean)[] | undefin
   return tests.length > 0 ? tests : undefined;
 }
 
-/** Prerelease, build metadata and malformed versions or ranges never satisfy. */
+/** Prerelease and malformed versions or ranges never satisfy; build metadata is stripped. */
 export function satisfiesRange(version: unknown, range: string): boolean {
   const parsed = parseReleaseVersion(version);
   const tests = comparators(range);

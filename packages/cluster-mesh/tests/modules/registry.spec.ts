@@ -39,7 +39,7 @@ describe('module registry', () => {
     await expect(modules.load('llm-mesh')).resolves.toBe(namespace);
     expect(evaluations()).toEqual(['mesh']);
     expect(modules.snapshot()['llm-mesh']).toEqual({
-      availability: 'available', state: 'loaded', packageName: '@sentropic/llm-mesh', installedVersion: '0.21.2',
+      availability: 'available', state: 'loaded', packageName: '@sentropic/llm-mesh', installedVersion: '0.22.0',
     });
   });
 
@@ -47,7 +47,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.21.2 <0.22.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.23.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
@@ -67,9 +67,9 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.22.0', '0.22.0'],
-    ['0.21.1', '0.21.1'],
-    ['0.21.3-rc.1', '0.21.3-rc.1'],
+    ['0.23.0', '0.23.0'],
+    ['0.21.2', '0.21.2'],
+    ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
     tree.install('app', fakeMesh('mesh', version));
     await expect(registry().load('llm-mesh')).rejects.toMatchObject({
@@ -85,7 +85,7 @@ describe('module registry', () => {
 
   it('should distinguish a missing export map entry from a missing runtime member', async () => {
     tree.install('app', {
-      name: '@sentropic/llm-mesh', version: '0.21.2',
+      name: '@sentropic/llm-mesh', version: '0.22.0',
       exports: { '.': { source: moduleSource('bare', ['createLlmMesh']) } },
     });
     const modules = registry();
@@ -97,7 +97,7 @@ describe('module registry', () => {
 
   it('should report evaluation failures as load_failed without leaking paths', async () => {
     tree.install('app', {
-      name: '@sentropic/llm-mesh', version: '0.21.2',
+      name: '@sentropic/llm-mesh', version: '0.22.0',
       exports: { '.': { source: `throw new Error('boom at ${tree.root}');` } },
     });
     const error = await registry().load('llm-mesh').catch((caught: unknown) => caught) as ClusterMeshModuleUnavailableError;
@@ -119,11 +119,11 @@ describe('module registry', () => {
     expect(evaluations()).toEqual([]);
   });
 
-  it('should refuse gateway 0.17 and a gateway-private llm-mesh copy', async () => {
+  it('should refuse the old gateway 0.18 and a gateway-private llm-mesh copy', async () => {
     tree.install('app', fakeMesh('mesh'));
-    tree.install('app', fakeGateway('gw', '0.17.1'));
+    tree.install('app', fakeGateway('gw', '0.18.0'));
     await expect(registry().load('gateway')).rejects.toMatchObject({
-      reason: 'incompatible_version', packageName: '@sentropic/llm-gateway', installedVersion: '0.17.1',
+      reason: 'incompatible_version', packageName: '@sentropic/llm-gateway', installedVersion: '0.18.0',
     });
     tree.cleanup();
     tree = new PackageTree();
@@ -132,7 +132,7 @@ describe('module registry', () => {
     tree.install('app/node_modules/@sentropic/llm-gateway', fakeMesh('nested'));
     tree.install('app', fakeGateway('gw'));
     await expect(registry().load('gateway')).rejects.toMatchObject({
-      reason: 'incompatible_version', packageName: '@sentropic/llm-mesh', installedVersion: '0.21.2',
+      reason: 'incompatible_version', packageName: '@sentropic/llm-mesh', installedVersion: '0.22.0',
     });
     expect(evaluations()).toEqual([]);
   });
@@ -149,14 +149,14 @@ describe('module registry', () => {
   it('should probe metadata without evaluating and demote after a later failure', async () => {
     tree.install('app', fakeMesh('mesh'));
     tree.install('app', {
-      name: '@sentropic/llm-gateway', version: '0.18.0',
+      name: '@sentropic/llm-gateway', version: '0.19.0',
       exports: { '.': { source: 'throw new Error("gateway broke");' } },
     });
     const modules = registry(['llm-mesh/node']);
     const map = await modules.probe();
     expect(evaluations()).toEqual([]);
     expect(map['llm-mesh']).toEqual({
-      availability: 'available', state: 'installed', packageName: '@sentropic/llm-mesh', installedVersion: '0.21.2',
+      availability: 'available', state: 'installed', packageName: '@sentropic/llm-mesh', installedVersion: '0.22.0',
     });
     expect(map.gateway).toMatchObject({ availability: 'available', state: 'installed' });
     expect(map['gateway/auth']).toMatchObject({ availability: 'gated', state: 'unavailable', reason: 'export_unavailable' });
@@ -172,7 +172,7 @@ describe('module registry', () => {
   it('should list the catalog with delivered and source-unavailable entries', () => {
     const catalog = registry().catalog();
     expect(catalog.find((entry) => entry.id === 'gateway/auth')).toMatchObject({
-      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.18.0 <0.19.0',
+      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.20.0',
       peers: [
         { packageName: '@sentropic/mcp-auth', entry: '@sentropic/mcp-auth/hono', requiredRange: '>=0.2.1 <0.3.0' },
         { packageName: 'jose', entry: 'jose', requiredRange: '^5.10.0' },
@@ -184,14 +184,19 @@ describe('module registry', () => {
 
 describe('release range check', () => {
   it.each([
-    ['0.21.2', '>=0.21.2 <0.22.0', true],
-    ['0.21.9', '>=0.21.2 <0.22.0', true],
-    ['0.22.0', '>=0.21.2 <0.22.0', false],
+    ['0.22.0', '>=0.22.0 <0.23.0', true],
+    ['0.22.9', '>=0.22.0 <0.23.0', true],
+    ['0.23.0', '>=0.22.0 <0.23.0', false],
+    ['0.21.2', '>=0.22.0 <0.23.0', false],
     ['5.10.3', '^5.10.0', true],
     ['6.0.0', '^5.10.0', false],
     ['0.15.4', '^0.15.0', true],
     ['0.16.0', '^0.15.0', false],
-    ['0.18.0-beta.1', '>=0.18.0 <0.19.0', false],
+    ['0.19.0-beta.1', '>=0.19.0 <0.20.0', false],
+    ['0.19.0+build.7', '>=0.19.0 <0.20.0', true],
+    ['0.20.0+build.7', '>=0.19.0 <0.20.0', false],
+    ['0.19.0-beta.1+build.7', '>=0.19.0 <0.20.0', false],
+    ['0.19.0+', '>=0.19.0 <0.20.0', false],
     [undefined, '^5.10.0', false],
   ])('should evaluate %s against %s as %s', (version, range, expected) => {
     expect(satisfiesRange(version, range)).toBe(expected);

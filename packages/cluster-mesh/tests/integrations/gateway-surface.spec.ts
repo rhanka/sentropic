@@ -5,7 +5,9 @@ import * as sessionProvider from '@sentropic/llm-gateway/auth-hono';
 import * as gatewayLeaf from '../../src/integrations/gateway/index.js';
 import * as serviceLeaf from '../../src/integrations/gateway/auth.js';
 import * as sessionLeaf from '../../src/integrations/gateway/auth-hono.js';
-import { createClusterMeshModules } from '../../src/index.js';
+import * as meshProvider from '@sentropic/llm-mesh';
+import * as meshLeaf from '../../src/integrations/llm-mesh/index.js';
+import { createClusterMeshModules, verifyClusterMeshTopology } from '../../src/index.js';
 import { loadGateway } from '../../src/loaders/gateway/index.js';
 import { loadGatewayAuth } from '../../src/loaders/gateway/auth.js';
 import { loadGatewayAuthHono } from '../../src/loaders/gateway/auth-hono.js';
@@ -47,7 +49,19 @@ describe('gateway static leaves', () => {
     expect(session.AuthHonoVerifyToken).toBe(sessionProvider.AuthHonoVerifyToken);
     const snapshot = await modules.probe();
     for (const id of ['gateway', 'gateway/auth', 'gateway/auth-hono'] as const) {
-      expect(snapshot[id]).toMatchObject({ availability: 'available', state: 'loaded', installedVersion: '0.18.0' });
+      expect(snapshot[id]).toMatchObject({ availability: 'available', state: 'loaded', installedVersion: '0.19.0' });
     }
+  });
+
+  it('should carry the 0.19 budget admission and 0.22 quote surfaces of the new-minor tuple', async () => {
+    expect(gatewayLeaf.BudgetConfigurationError).toBe(gatewayProvider.BudgetConfigurationError);
+    expect(gatewayLeaf.MAX_BUDGET_RETRY_AFTER_SECONDS).toBe(60);
+    expect(meshLeaf.quoteRoute).toBe(meshProvider.quoteRoute);
+    const report = verifyClusterMeshTopology({ require: ['llm-mesh', 'gateway'] });
+    expect(report.gateway).toMatchObject({ version: '0.19.0' });
+    expect(report.gateway?.llmMesh?.path).toBe(report.llmMesh?.path);
+    const snapshot = await createClusterMeshModules().probe();
+    expect(snapshot['llm-mesh']).toMatchObject({ state: 'installed', installedVersion: '0.22.0' });
+    expect(snapshot.gateway).toMatchObject({ state: 'installed', installedVersion: '0.19.0' });
   });
 });
