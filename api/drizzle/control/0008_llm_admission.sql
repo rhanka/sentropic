@@ -132,10 +132,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "tenant_budget_strategy_active_tenant_unique" 
 ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_principal_kind_check" CHECK ("control"."cost_ledger"."principal_kind" IS NULL OR "control"."cost_ledger"."principal_kind" IN ('user', 'service', 'guest', 'anonymous', 'system')) NOT VALID;--> statement-breakpoint
 ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_result_check" CHECK ("control"."cost_ledger"."result" IS NULL OR "control"."cost_ledger"."result" IN ('ok', 'capped', 'error', 'aborted')) NOT VALID;--> statement-breakpoint
 ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_reconciliation_state_check" CHECK ("control"."cost_ledger"."reconciliation_state" IS NULL OR "control"."cost_ledger"."reconciliation_state" IN ('none', 'estimated', 'pending', 'reconciled')) NOT VALID;--> statement-breakpoint
--- Hand-edited (drizzle-kit cannot emit NOT VALID / VALIDATE / COMMENT): see BRANCH.md.
-ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "cost_ledger_principal_kind_check";--> statement-breakpoint
-ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "cost_ledger_result_check";--> statement-breakpoint
-ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "cost_ledger_reconciliation_state_check";--> statement-breakpoint
+-- Hand-edited (drizzle-kit cannot emit NOT VALID / COMMENT): see BRANCH.md. The 3 cost_ledger CHECKs stay
+-- NOT VALID (enforced on new writes); formal VALIDATE is deferred to a later maintenance migration.
 COMMENT ON COLUMN "control"."cost_ledger"."principal_key" IS 'Opaque principal id or keyed hash only; never an e-mail, raw IP or other personal data in clear.';--> statement-breakpoint
 COMMENT ON COLUMN "control"."budget_holds"."principal_key" IS 'Opaque principal id or keyed hash only; never an e-mail, raw IP or other personal data in clear.';--> statement-breakpoint
 COMMENT ON COLUMN "control"."blocked_attempts"."principal_key" IS 'Opaque principal id or keyed hash only; never an e-mail, raw IP or other personal data in clear.';

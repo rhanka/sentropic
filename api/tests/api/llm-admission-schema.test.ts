@@ -38,13 +38,13 @@ describe('0008_llm_admission — expand-first shape', () => {
     expect(applied!.hash).toBe(createHash('sha256').update(migrationSql).digest('hex'));
   });
 
-  it('only creates tables, adds nullable columns, NOT VALID + VALIDATE CHECKs, one new-table FK, comments and indexes', () => {
+  it('only creates tables, adds nullable columns, NOT VALID CHECKs (no VALIDATE), one new-table FK, comments and indexes', () => {
     const statements = migrationSql.split('--> statement-breakpoint')
       .map((part) => part.replace(/^--.*$/gm, '').trim()).filter(Boolean);
     for (const statement of statements) {
       expect(statement).toMatch(new RegExp([
         '^CREATE TABLE IF NOT EXISTS', '^CREATE (UNIQUE )?INDEX IF NOT EXISTS',
-        '^ALTER TABLE "control"\\."cost_ledger" (ADD COLUMN|ADD CONSTRAINT|VALIDATE CONSTRAINT)',
+        '^ALTER TABLE "control"\\."cost_ledger" (ADD COLUMN|ADD CONSTRAINT)',
         '^DO \\$\\$ BEGIN\\s+ALTER TABLE "control"\\."budget_holds" ADD CONSTRAINT "\\w+" FOREIGN KEY',
         '^COMMENT ON COLUMN "control"\\."(cost_ledger|budget_holds|blocked_attempts)"\\."principal_key"',
       ].join('|')));
@@ -59,22 +59,22 @@ describe('0008_llm_admission — expand-first shape', () => {
     expect(ledgerChecks).toHaveLength(3);
     for (const statement of ledgerChecks) {
       expect(statement).toMatch(/CHECK \("control"\."cost_ledger"\."\w+" IS NULL OR .*\) NOT VALID;$/s);
-      const name = /ADD CONSTRAINT "(\w+)"/.exec(statement)![1];
-      expect(statements).toContain(`ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "${name}";`);
     }
+    // Formal validation is deferred to a later maintenance migration (conductor option b).
+    expect(migrationSql).not.toMatch(/VALIDATE CONSTRAINT/);
     expect(migrationSql).toContain('ON DELETE restrict');
     expect(migrationSql).not.toContain('llm_identity');
   });
 
-  it('validates the ledger CHECKs, documents principal_key and restricts strategy deletion', async () => {
+  it('leaves the ledger CHECKs NOT VALID, documents principal_key and restricts strategy deletion', async () => {
     const checks = await rows<{ conname: string; convalidated: boolean }>(sql`
       SELECT conname, convalidated FROM pg_constraint
       WHERE conname IN ('cost_ledger_principal_kind_check', 'cost_ledger_result_check', 'cost_ledger_reconciliation_state_check')
       ORDER BY conname`);
     expect(checks).toEqual([
-      { conname: 'cost_ledger_principal_kind_check', convalidated: true },
-      { conname: 'cost_ledger_reconciliation_state_check', convalidated: true },
-      { conname: 'cost_ledger_result_check', convalidated: true },
+      { conname: 'cost_ledger_principal_kind_check', convalidated: false },
+      { conname: 'cost_ledger_reconciliation_state_check', convalidated: false },
+      { conname: 'cost_ledger_result_check', convalidated: false },
     ]);
     const comments = await rows<{ table_name: string; comment: string | null }>(sql`
       SELECT c.relname AS table_name, col_description(c.oid, a.attnum) AS comment
@@ -309,8 +309,22 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
     await migrate(drizzle(pool), control(CONTROL_DIR));
     const upgraded = await upgradedState(pool);
     expect(upgraded).toEqual({ migrations: 9, tables: NEW_TABLES, newRows: 0, attributed: 0, ledger: history });
-    expect((await query(pool, `SELECT bool_and(convalidated) AS ok FROM pg_constraint WHERE conname LIKE 'cost_ledger_%_check'
-      AND conname <> 'cost_ledger_operation_check'`))[0].ok).toBe(true);
+    expect((await query(pool, `SELECT bool_or(convalidated) AS any FROM pg_constraint WHERE conname LIKE 'cost_ledger_%_check'
+      AND conname <> 'cost_ledger_operation_check'`))[0].any).toBe(false);
+
+    // NOT VALID still enforces every NEW write; existing rows stay untouched.
+    for (const [column, value] of [['result', 'bogus'], ['principal_kind', 'x'], ['reconciliation_state', 'x']]) {
+      const refused = await pool.query(`INSERT INTO control.cost_ledger (id, idempotency_key, operation, provider_id, model_id, ${column})
+        VALUES ('n-${column}', 'n-${column}', 'generate', 'p', 'm', '${value}')`).then(() => null, (error: { code?: string; constraint?: string }) => error);
+      expect(refused).toMatchObject({ code: '23514', constraint: `cost_ledger_${column}_check` });
+      const updated = await pool.query(`UPDATE control.cost_ledger SET ${column} = '${value}' WHERE id = 'h1'`)
+        .then(() => null, (error: { code?: string }) => error);
+      expect(updated).toMatchObject({ code: '23514' });
+    }
+    await pool.query(`INSERT INTO control.cost_ledger (id, idempotency_key, operation, provider_id, model_id, result, principal_kind,
+      reconciliation_state) VALUES ('n-ok', 'n-ok', 'generate', 'p', 'm', 'ok', 'service', 'none')`);
+    expect(await query(pool, `${LEDGER.replace('ORDER BY id', "WHERE id <> 'n-ok' ORDER BY id")}`)).toEqual(history);
+    await pool.query(`DELETE FROM control.cost_ledger WHERE id = 'n-ok'`);
 
     // Replay: the runner re-run is a journal no-op; a raw re-execution of 0008 (constraints have no
     // IF NOT EXISTS) fails on the first duplicate object and its transaction leaves nothing behind.
