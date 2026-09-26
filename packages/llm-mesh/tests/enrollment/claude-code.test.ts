@@ -29,6 +29,91 @@ async function safeFailure(promise: Promise<unknown>) {
 afterEach(() => vi.useRealTimers());
 
 describe('Claude renewable enrollment', () => {
+  it.each(['missing', 'mismatch', 'extra', 'blank', 'expired', 'cancelled'])(
+    'refuses %s manual return before exchange', async (mode) => {
+      let now = NOW;
+      const fetchFn = vi.fn(async () => response());
+      const provider = new ClaudeCodeEnrollmentProvider({ fetchFn, nowFn: () => now });
+      const session = await provider.start(start);
+      let code = returnedCode(session);
+      if (mode === 'missing') code = CODE;
+      if (mode === 'mismatch') code = `${CODE}#wrong`;
+      if (mode === 'extra') code += '#extra';
+      if (mode === 'blank') code = code.replace(CODE, '');
+      if (mode === 'expired') now += 15 * 60_000;
+      if (mode === 'cancelled') await provider.cancel(session.enrollmentId);
+      await safeFailure(provider.complete({ enrollmentId: session.enrollmentId, code }));
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+  it.each(['success', 'cancel', 'expiry', 'timeout'])('locks concurrent completion through %s', async (mode) => {
+    vi.useFakeTimers();
+    let now = NOW;
+    let finish!: (result: Response) => void;
+    const fetchFn = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    const provider = new ClaudeCodeEnrollmentProvider({ fetchFn, nowFn: () => now });
+    const session = await provider.start(start);
+    const input = { enrollmentId: session.enrollmentId, code: returnedCode(session) };
+    const pending = provider.complete(input);
+    const settled = pending.then((value) => value, (error) => error);
+    await safeFailure(provider.complete(input));
+    if (mode === 'cancel') await provider.cancel(session.enrollmentId);
+    if (mode === 'expiry') now += 15 * 60_000;
+    if (mode === 'timeout') await vi.advanceTimersByTimeAsync(30_000);
+    finish(response());
+    const result = await settled;
+    if (mode === 'success') expect(result.accountId).toMatch(/^acct_claude_/);
+    else expect(result).toBeInstanceOf(Error);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    await safeFailure(provider.complete(input));
+  });
+
+  it('sweeps idle sessions at TTL and refuses redirects/blank owners', async () => {
+    vi.useFakeTimers();
+    const { provider, fetchFn } = setup();
+    await safeFailure(provider.start({ ...start, ownerScope: ' ' }));
+    await safeFailure(provider.start({ ...start, redirectUri: 'https://evil.invalid' }));
+    const session = await provider.start(start);
+    await vi.advanceTimersByTimeAsync(15 * 60_000);
+    await safeFailure(provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) }));
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([{ access_token: '' }, { access_token: `${ACCESS}\n` }, { refresh_token: '' },
+    { refresh_token: null }, { expires_in: 0 }, { expires_in: -1 }, { expires_in: '3600' },
+    { expires_in: 1e99 }, { scope: 'user:profile' }, { scope: null }])('refuses malformed token grants (%j)', async (extra) => {
+      const { provider } = setup(vi.fn(async () => response(grant(extra))));
+      await safeFailure(provider.refresh({ accountId: 'opaque', refreshToken: REFRESH, credentialVersion: VERSION }));
+    });
+
+  it.each([true, false])('refreshes JSON with rotated token present=%s', async (rotates) => {
+    const body = grant();
+    if (!rotates) delete (body as Partial<typeof body>).refresh_token;
+    else body.refresh_token = 'FAKE_ROTATED_CANARY';
+    const { provider, fetchFn } = setup(vi.fn(async () => response(body)));
+    const credential = await provider.refresh({ accountId: 'opaque', refreshToken: REFRESH, credentialVersion: VERSION });
+    expect(credential.refreshToken).toBe(rotates ? 'FAKE_ROTATED_CANARY' : REFRESH);
+    expect(credential.accountId).toBe('opaque');
+    const init = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(init.body as string)).toEqual({ grant_type: 'refresh_token', refresh_token: REFRESH,
+      client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
+      scope: 'user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload' });
+  });
+
+  it.each(['body', 'network', 'json'])('sanitizes %s failure without retry', async (kind) => {
+    const fetchFn = vi.fn(async () => {
+      if (kind === 'network') throw new Error(`${ACCESS} ${REFRESH} ${CODE}`);
+      if (kind === 'json') return new Response(`${ACCESS} ${CODE}`, { status: 500 });
+      return response({ error: 'invalid_grant', error_description: `${ACCESS} ${REFRESH} ${CODE}` } as any, 400);
+    });
+    const { provider } = setup(fetchFn);
+    const session = await provider.start(start);
+    const error = await safeFailure(provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) }));
+    if (kind === 'body') expect(String(error)).toContain('HTTP 400 invalid_grant');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the A2 browser profile, PKCE and one JSON exchange with offline resolution', async () => {
     const { provider, fetchFn } = setup();
     const session = await provider.start(start);
