@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  GuardError, REGISTRY, checkManifest, createRegistry, loadSemver, readPackedManifest, sha256File,
+  GuardError, REGISTRY, checkManifest, createRegistry, loadSemver, readPackedManifest, sha256File, waitBudget, waitForVersion,
 } from './publishable-manifests.mjs';
 
 const EXACT_PKG = /^((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)@([^@\s]+)$/;
@@ -74,8 +74,14 @@ function cleanEnv(consumer, registry) {
     npm_config_globalconfig: emptyGlobal,
     npm_config_registry: registry,
     npm_config_update_notifier: 'false',
+    // Revalidate registry metadata instead of trusting a cached packument (post-publication lag).
+    npm_config_prefer_online: 'true',
   };
 }
+
+// npm install output of a version the registry (or its CDN) does not serve yet; retried within the wait budget.
+export const registryNotVisible = (output) =>
+  /\b(?:ETARGET|E404)\b|\bnotarget\b|No matching version found|is not in this registry|404 Not Found/i.test(output);
 
 function run(cmd, args, { cwd, env, log, timeout = 600_000 }) {
   const result = spawnSync(cmd, args, { cwd, env, encoding: 'utf8', timeout, maxBuffer: 64 * 1024 * 1024 });
@@ -198,8 +204,10 @@ export async function qualify(opts) {
   if (!['candidate', 'published', 'post-publication'].includes(mode)) throw new GuardError(`unknown mode ${mode}`);
   if (Boolean(opts.pkg) === Boolean(opts.tarball)) throw new GuardError('exactly one of PKG=<name>@<exact-version> or TARBALL=<path> is required');
   if (opts.siblingsDir && (opts.pkg || mode !== 'candidate')) throw new GuardError('sibling injection is restricted to TARBALL candidate qualification');
-  const attempts = mode === 'post-publication' ? Number(opts.attempts ?? 12) : 1;
-  const delayMs = Number(opts.delaySeconds ?? 5) * 1000;
+  // Post-publication waits share the registry visibility budget (default 18 x 10 s); other modes never wait.
+  const budget = waitBudget({ attempts: opts.attempts, delaySeconds: opts.delaySeconds });
+  const attempts = mode === 'post-publication' ? budget.attempts : 1;
+  const delayMs = budget.delaySeconds * 1000;
   const reportDir = opts.reportDir;
   fs.mkdirSync(reportDir, { recursive: true });
   const log = path.join(reportDir, 'qualify.log');
@@ -232,13 +240,9 @@ export async function qualify(opts) {
     let primary;
     if (opts.pkg) {
       const { name, version } = parseExactSpec(opts.pkg, semver);
-      let found;
-      for (let i = 1; i <= attempts; i += 1) {
-        found = await registry.lookup(name, version, { fresh: true });
-        if (found.status === 'present' || i === attempts) break;
-        fs.appendFileSync(log, `waiting for ${name}@${version} (${i}/${attempts})\n`);
-        await sleep(delayMs);
-      }
+      const found = await waitForVersion(registry, name, version, {
+        attempts, delaySeconds: budget.delaySeconds, onWait: (i, n) => fs.appendFileSync(log, `waiting for ${name}@${version} (${i}/${n})\n`),
+      });
       if (found.status !== 'present') {
         report.problems.push(`${name}@${version} is not published on ${registryUrl}`);
         return finish('fail');
@@ -279,8 +283,9 @@ export async function qualify(opts) {
       install = run('npm', installArgs, { cwd: consumer.dir, env, log });
       if (install.status === 0) break;
       const missing = missingSibling(install.output);
-      if (!missing || !(await confirmMissing(registry, missing, semver))) break;
-      report.pendingSibling = { ...missing, intended: 'awaiting publication', attempt: i };
+      if (missing && (await confirmMissing(registry, missing, semver))) report.pendingSibling = { ...missing, intended: 'awaiting publication', attempt: i };
+      else if (!registryNotVisible(install.output)) break;
+      else fs.appendFileSync(log, `registry not yet serving the install graph (${i}/${attempts})\n`);
       if (i < attempts) await sleep(delayMs);
     }
     report.install = { command: `npm ${installArgs.join(' ')}`, exit: install.status };
@@ -323,8 +328,17 @@ export async function qualify(opts) {
       if (range === undefined) throw new GuardError(`PEERS entry ${name} is not a declared peerDependency of ${primary.name}`);
       if (!semver.satisfies(version, range, { includePrerelease: true })) throw new GuardError(`PEERS entry ${name}@${version} does not satisfy ${range}`);
       const sib = siblings.find((s) => s.name === name && s.version === version);
-      const r = run('npm', ['install', sib ? sib.file : `${name}@${version}`, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
-      report.peersAdded.push({ name, version, source: sib ? 'sibling-receipt' : 'registry', exit: r.status });
+      // Registry peers published by the same train may lag: retry only "not yet visible" errors.
+      let r;
+      let tries = 0;
+      while (tries < attempts) {
+        tries += 1;
+        r = run('npm', ['install', sib ? sib.file : `${name}@${version}`, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
+        if (r.status === 0 || sib || !registryNotVisible(r.output) || tries === attempts) break;
+        fs.appendFileSync(log, `waiting for optional peer ${name}@${version} (${tries}/${attempts})\n`);
+        await sleep(delayMs);
+      }
+      report.peersAdded.push({ name, version, source: sib ? 'sibling-receipt' : 'registry', exit: r.status, attempts: tries });
       if (r.status !== 0) report.problems.push(`optional peer install failed: ${name}@${version}`);
     }
     if (report.peersAdded.length) report.treeAfter = tree(consumer, env, log);

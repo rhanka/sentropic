@@ -51,7 +51,7 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - [ ] **Lot 1 — Registry visibility waits**
   - [x] Fresh registry requests send `cache-control: no-cache` with a cache-busting query; shared 18 x 10 s budget; `wait` subcommand.
   - [x] Makefile mesh/auth waits use the bypassing wait and the configurable 18 x 10 s budget.
-  - [ ] qualify-published-install: 18 x 10 s primary wait (configurable), core/PEERS installs retried on ETARGET/E404/notarget within the budget, other errors fail immediately.
+  - [x] qualify-published-install: 18 x 10 s primary wait (configurable), core/PEERS installs retried on ETARGET/E404/notarget within the budget, other errors fail immediately.
 
 - [ ] **Lot 2 — Publish conflict**
   - [ ] commandPublish: version conflict re-reads registry integrity without cache; equal = skipped, different = failure, unreadable after budget = failure.

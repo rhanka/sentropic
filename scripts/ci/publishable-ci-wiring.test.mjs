@@ -366,7 +366,8 @@ test('post-publication qualification fails on a missing or status-less receipt',
 });
 
 // BRDP-EX11: run the host guard lines of qualify-published-install (before mkdir/docker) with sh, one shell per line as Make does.
-const runQualifyGuards = (vars) => {
+const runQualifyGuards = (overrides) => {
+  const vars = { QUALIFY_WAIT_ATTEMPTS: '18', QUALIFY_WAIT_SECONDS: '10', ...overrides };
   const lines = recipe('qualify-published-install').split('\n');
   const guards = lines.slice(0, lines.findIndex((l) => l.startsWith('\t@mkdir')));
   for (const line of guards) {
@@ -388,4 +389,24 @@ test('qualify-published-install: TARBALL mode without PEERS/QUALIFY_MODE passes 
   assert.equal(bad.status, 1);
   assert.match(bad.out, /ERROR: PKG\/PEERS\/QUALIFY_MODE contain unsupported characters/);
   assert.equal(runQualifyGuards({ TARBALL: tgz, PEERS: '@x/a@1.0.0,b@2.0.0', QUALIFY_MODE: 'registry' }).status, 0);
+});
+
+test('qualify-published-install: registry wait budget defaults to 18 x 10 s and only accepts integers', () => {
+  assert.match(makefile, /^QUALIFY_WAIT_ATTEMPTS \?= 18$/m);
+  assert.match(makefile, /^QUALIFY_WAIT_SECONDS \?= 10$/m);
+  assert.match(recipe('qualify-published-install'), /--attempts "\$\(QUALIFY_WAIT_ATTEMPTS\)" --delay "\$\(QUALIFY_WAIT_SECONDS\)"/);
+  const tgz = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qguard-')), 'candidate.tgz');
+  fs.writeFileSync(tgz, '');
+  for (const bad of [{ QUALIFY_WAIT_ATTEMPTS: '0' }, { QUALIFY_WAIT_ATTEMPTS: '1;x' }, { QUALIFY_WAIT_SECONDS: 'ten' }, { QUALIFY_WAIT_SECONDS: '' }]) {
+    assert.match(runQualifyGuards({ TARBALL: tgz, ...bad }).out, /QUALIFY_WAIT_ATTEMPTS\/QUALIFY_WAIT_SECONDS must be integers/, JSON.stringify(bad));
+  }
+});
+
+test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
+  assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_ATTEMPTS \?= 18$/m);
+  assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_SECONDS \?= 10$/m);
+  const mesh = recipe('wait-llm-gateway-mesh-dependency');
+  assert.match(mesh, /publishable-manifests\.mjs wait --spec "@sentropic\/llm-mesh@\$\$version"/);
+  assert.ok(!mesh.includes('npm view'), 'no cached npm view poll');
+  assert.match(recipe('wait-llm-gateway-auth-dependencies'), /npm_config_prefer_online=true node scripts\/auth-registry\.mjs/);
 });

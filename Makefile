@@ -566,10 +566,14 @@ REPORT_DIR ?= tmp/ci-manifest-guard/qualification
 QUALIFY_MODE ?=
 QUALIFY_HEAD_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 QUALIFY_REGISTRY := https://registry.npmjs.org
+# Post-publication registry visibility budget (cache-bypassing lookups, install retries): 18 x 10 s (BRCIW-EX1).
+QUALIFY_WAIT_ATTEMPTS ?= 18
+QUALIFY_WAIT_SECONDS ?= 10
 .PHONY: qualify-published-install test-qualify-published-install
 qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBALL=<path> [SIBLING_ARCHIVES_FILE=<receipts.json>] [PEERS=a@1,b@2] in a clean consumer
 	@if [ -n "$(PKG)" ] && [ -n "$(TARBALL)" ] || [ -z "$(PKG)$(TARBALL)" ]; then echo "ERROR: exactly one of PKG=<name>@<exact-version> or TARBALL=<path> is required"; exit 1; fi
 	@v="$(PKG)$(PEERS)$(QUALIFY_MODE)"; [ -z "$$v" ] || printf '%s' "$$v" | grep -Eq '^[@a-z0-9._/,+-]*$$' || { echo "ERROR: PKG/PEERS/QUALIFY_MODE contain unsupported characters"; exit 1; }
+	@printf '%s' "$(QUALIFY_WAIT_ATTEMPTS)" | grep -Eq '^[1-9][0-9]*$$' && printf '%s' "$(QUALIFY_WAIT_SECONDS)" | grep -Eq '^[0-9]+$$' || { echo "ERROR: QUALIFY_WAIT_ATTEMPTS/QUALIFY_WAIT_SECONDS must be integers"; exit 1; }
 	@if [ -n "$(TARBALL)" ]; then test -f "$(TARBALL)" || { echo "ERROR: TARBALL $(TARBALL) is not a file"; exit 1; }; fi
 	@if [ -n "$(SIBLING_ARCHIVES_FILE)" ]; then test -f "$(SIBLING_ARCHIVES_FILE)" && [ "$$(basename "$(SIBLING_ARCHIVES_FILE)")" = receipts.json ] || { echo "ERROR: SIBLING_ARCHIVES_FILE must be an existing receipts.json"; exit 1; }; fi
 	@mkdir -p "$(REPORT_DIR)"
@@ -580,7 +584,7 @@ qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBA
 		$(if $(SIBLING_ARCHIVES_FILE),-v "$(abspath $(dir $(SIBLING_ARCHIVES_FILE))):/input/siblings:ro") \
 		-v "$(abspath $(REPORT_DIR)):/reports" -w /tmp $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; unset NODE_PATH NODE_OPTIONS; tool_dir="$$(mktemp -d)"; npm_config_cache="$$(mktemp -d)" npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; \
-			node /probe/qualify.mjs --report-dir /reports --registry $(QUALIFY_REGISTRY) --head-sha "$(QUALIFY_HEAD_SHA)" \
+			node /probe/qualify.mjs --report-dir /reports --registry $(QUALIFY_REGISTRY) --head-sha "$(QUALIFY_HEAD_SHA)" --attempts "$(QUALIFY_WAIT_ATTEMPTS)" --delay "$(QUALIFY_WAIT_SECONDS)" \
 			$(if $(PKG),--pkg "$(PKG)",--tarball /input/package.tgz) $(if $(SIBLING_ARCHIVES_FILE),--siblings-dir /input/siblings) \
 			$(if $(PEERS),--peers "$(PEERS)") $(if $(QUALIFY_MODE),--mode "$(QUALIFY_MODE)")'
 
