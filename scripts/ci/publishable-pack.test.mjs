@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
-import { GuardError, TRANSIENT_HINT, commandPack, commandPublish, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, withManifestTransform } from './publishable-manifests.mjs';
+import { GuardError, TRANSIENT_HINT, commandPack, commandPublish, commandWait, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, waitBudget, withManifestTransform } from './publishable-manifests.mjs';
 
 const sink = () => {
   const chunks = [];
@@ -185,6 +185,93 @@ test('publication of a violating absent version is rejected strictly', async () 
   assert.equal(npm.called(), false);
 });
 
+// ---- publish conflict: equal registry sha512 = already published; anything else never goes green
+function failingNpm(stderr, code = 1) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'npm-fail-'));
+  const stub = path.join(dir, 'npm');
+  fs.writeFileSync(stub, `#!/usr/bin/env node\nconst fs=require('fs');const c=require('crypto');const a=process.argv.slice(2);fs.writeFileSync(${JSON.stringify(path.join(dir, 'integrity'))},'sha512-'+c.createHash('sha512').update(fs.readFileSync(a[1])).digest('base64'));process.stderr.write(${JSON.stringify(stderr)});process.exit(${code});\n`);
+  fs.chmodSync(stub, 0o755);
+  return { stub, integrity: () => fs.readFileSync(path.join(dir, 'integrity'), 'utf8'), called: () => fs.existsSync(path.join(dir, 'integrity')) };
+}
+const CONFLICT = 'npm error code E403\nnpm error 403 403 Forbidden - PUT https://registry.npmjs.org/@fx%2fevents - You cannot publish over the previously published versions: 1.0.0.\n';
+// Absent for the two pre-publish lookups, then `after(call)` for the fresh conflict re-reads.
+const conflictRegistry = (after) => {
+  const calls = [];
+  return {
+    calls,
+    lookup: async (name, version, opts) => {
+      calls.push(opts?.fresh === true);
+      if (calls.length <= 2) return { status: 'absent', evidence: {} };
+      return after(calls.length - 2);
+    },
+  };
+};
+async function publishWith(npm, registry) {
+  const dir = fixture('events', {});
+  const receiptDir = path.join(dir, '..', 'r');
+  const out = sink();
+  const code = await commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': receiptDir, 'wait-attempts': '3', 'wait-delay': '0' }, { env: {}, cwd: dir, registry, out, npm: npm.stub });
+  const receipt = JSON.parse(fs.readFileSync(path.join(receiptDir, 'events.json'), 'utf8'));
+  return { code, out: out.text(), receipt, output: fs.readFileSync(path.join(receiptDir, 'events.publish-output'), 'utf8') };
+}
+
+test('publish conflict with the same bytes on the registry is treated as already published', async () => {
+  const npm = failingNpm(CONFLICT);
+  const registry = conflictRegistry((i) => (i === 1 ? { status: 'absent', evidence: {} } : { status: 'present', meta: { dist: { integrity: npm.integrity() } }, evidence: {} }));
+  const r = await publishWith(npm, registry);
+  assert.equal(r.code, 0, r.out);
+  assert.equal(r.receipt.status, 'skipped');
+  assert.equal(r.receipt.conflict, 'equal-integrity');
+  assert.equal(r.receipt.registry_integrity, npm.integrity());
+  assert.equal(r.output, 'pkg=@fx/events@1.0.0\nstatus=skipped\nconflict=equal-integrity\n');
+  assert.match(r.out, /::notice .*publish conflict: the registry already holds the verified archive/);
+  assert.deepEqual(registry.calls.slice(2), [true, true], 'conflict re-reads are fresh and retried until visible');
+});
+
+test('publish conflict with different registry bytes fails loudly', async () => {
+  const npm = failingNpm('npm error code EPUBLISHCONFLICT\n');
+  const r = await publishWith(npm, conflictRegistry(() => ({ status: 'present', meta: { dist: { integrity: `sha512-${'A'.repeat(86)}==` } }, evidence: {} })));
+  assert.equal(r.code, 1);
+  assert.equal(r.receipt.status, 'failed');
+  assert.equal(r.receipt.conflict, 'different-integrity');
+  assert.match(r.out, /::error .*DIFFERENT bytes/);
+});
+
+test('publish conflict whose registry integrity stays unreadable fails after the budget', async () => {
+  const npm = failingNpm(CONFLICT);
+  const registry = conflictRegistry((i) => {
+    if (i === 2) throw new GuardError('registry request failed: HTTP 503', { transient: true });
+    return { status: 'absent', evidence: {} };
+  });
+  const r = await publishWith(npm, registry);
+  assert.equal(r.code, 1);
+  assert.equal(r.receipt.status, 'failed');
+  assert.equal(r.receipt.conflict, 'unverified');
+  assert.match(r.out, /version exists, integrity could not be verified after 3 x 0s/);
+  assert.equal(registry.calls.length, 5, 'two pre-publish lookups + three conflict re-reads');
+});
+
+test('non-conflict publish failures (auth, generic 403, network) fail without any registry re-read', async () => {
+  for (const stderr of ['npm error code E401\nnpm error 401 Unauthorized\n', 'npm error code ENEEDAUTH\nnpm error need auth\n', 'npm error code ECONNRESET\nnpm error network aborted\n',
+    'npm error code E403\nnpm error 403 403 Forbidden - PUT https://registry.npmjs.org/@fx%2fevents - Forbidden\n']) {
+    const registry = conflictRegistry(() => { throw new Error('must not be called'); });
+    const npm = failingNpm(stderr);
+    const r = await publishWith(npm, registry);
+    assert.ok(npm.called(), `${stderr}: npm publish was called`);
+    assert.equal(r.code, 1, stderr);
+    assert.equal(r.receipt.status, 'failed', stderr);
+    assert.equal(r.receipt.conflict, undefined, stderr);
+    assert.equal(registry.calls.length, 2, stderr);
+  }
+});
+
+test('an invalid conflict re-read budget is refused before any publication', async () => {
+  const npm = failingNpm(CONFLICT);
+  const dir = fixture('events', {});
+  await assert.rejects(commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r'), 'wait-attempts': '0', 'wait-delay': '0' }, { env: {}, cwd: dir, registry: absentRegistry, out: sink(), npm: npm.stub }), /invalid registry wait budget/);
+  assert.equal(npm.called(), false);
+});
+
 // ---- registry freshness: absent/404 answers are never cached; rechecks always hit the registry
 const sequenceFetch = (answers) => {
   const calls = [];
@@ -219,6 +306,36 @@ test('registry cache: present packuments are reused for listed versions only; fr
   assert.equal((await registry.lookup('@fx/a', '1.1.0')).status, 'present', 'unlisted version refetched');
   await registry.lookup('@fx/a', '1.0.0', { fresh: true });
   assert.equal(calls.length, 3);
+});
+
+test('fresh registry reads bypass the CDN: no-cache headers and a unique cache-busting query', async () => {
+  const { fetchImpl, calls } = sequenceFetch([{ versions: {} }]);
+  const registry = createRegistry({ registry: 'http://registry.test', fetchImpl, delayMs: 0 });
+  await registry.lookup('@fx/a', '1.0.0', { fresh: true });
+  await registry.lookup('@fx/a', '1.0.0', { fresh: true });
+  for (const { url, init } of calls) {
+    assert.match(url, /^http:\/\/registry\.test\/@fx%2Fa\?cachebust=\d+-[a-z0-9]+$/);
+    assert.equal(init.headers['cache-control'], 'no-cache');
+    assert.equal(init.headers.pragma, 'no-cache');
+  }
+  assert.notEqual(calls[0].url, calls[1].url, 'each fresh read has its own cache key');
+});
+
+test('wait: default budget is 18 x 10 s; polls fresh lookups until visible, fails after the budget', async () => {
+  assert.deepEqual(waitBudget(), { attempts: 18, delaySeconds: 10 });
+  assert.throws(() => waitBudget({ attempts: 0 }), /invalid registry wait budget/);
+  const { fetchImpl, calls } = sequenceFetch([null, { versions: {} }, { versions: { '0.22.0': {} } }]);
+  const out = sink();
+  const registry = createRegistry({ registry: 'http://registry.test', fetchImpl, delayMs: 0 });
+  assert.equal(await commandWait({ spec: '@fx/mesh@0.22.0', attempts: '5', delay: '0' }, { registry, out }), 0);
+  assert.equal(calls.length, 3);
+  assert.match(out.text(), /Waiting for @fx\/mesh@0\.22\.0 \(2\/5\)/);
+  const never = sequenceFetch([null]);
+  const late = sink();
+  assert.equal(await commandWait({ spec: '@fx/mesh@0.22.0', attempts: '3', delay: '0' }, { registry: createRegistry({ registry: 'http://registry.test', fetchImpl: never.fetchImpl, delayMs: 0 }), out: late }), 1);
+  assert.equal(never.calls.length, 3);
+  assert.match(late.text(), /is not visible .* after 3 x 0s/);
+  await assert.rejects(commandWait({ spec: 'nover', attempts: '1', delay: '0' }, { registry, out }), /expected --spec/);
 });
 
 test('registry request: 400/401/403 are permanent (no retry); 408/429/5xx and network exceptions are transient', async () => {

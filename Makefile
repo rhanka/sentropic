@@ -533,7 +533,8 @@ MANIFEST_GUARD_ENV = -e CI_MANIFEST_CONTEXT -e CI_MANIFEST_EVENT -e CI_MANIFEST_
 # Transform lanes (chat-ui, cited-source-viewer): pack/publish the dist-form manifest, restore on any exit.
 MANIFEST_DIST_FORM = cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json;
 # Guarded publication tail for existing publish recipes: $(call manifest_guard_publish,<slug>,<npm publish flags>)
-manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/publishable-manifests.mjs publish --slug $(1) -- $(2)
+# A version conflict re-reads the registry integrity within the registry wait budget (BRCIW-EX1).
+manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/publishable-manifests.mjs publish --slug $(1) --wait-attempts "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" --wait-delay "$(LLM_MESH_REGISTRY_WAIT_SECONDS)" -- $(2)
 
 # $(1)=package slug; $(2)=optional in-container pre-pack commands.
 define manifest_guard_pack
@@ -566,10 +567,20 @@ REPORT_DIR ?= tmp/ci-manifest-guard/qualification
 QUALIFY_MODE ?=
 QUALIFY_HEAD_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 QUALIFY_REGISTRY := https://registry.npmjs.org
+# Post-publication registry visibility budget (cache-bypassing lookups, install retries): 18 x 10 s (BRCIW-EX1).
+QUALIFY_WAIT_ATTEMPTS ?= 18
+QUALIFY_WAIT_SECONDS ?= 10
+# Optional (PKG post-publication only): the SLSA provenance source commit must equal this SHA (CI: $GITHUB_SHA).
+QUALIFY_PROVENANCE_SHA ?=
+# Optional re-run heal (CI: $GITHUB_RUN_ID): a version whose provenance names another run is a stale skip (exit 0).
+QUALIFY_PROVENANCE_RUN ?=
 .PHONY: qualify-published-install test-qualify-published-install
 qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBALL=<path> [SIBLING_ARCHIVES_FILE=<receipts.json>] [PEERS=a@1,b@2] in a clean consumer
 	@if [ -n "$(PKG)" ] && [ -n "$(TARBALL)" ] || [ -z "$(PKG)$(TARBALL)" ]; then echo "ERROR: exactly one of PKG=<name>@<exact-version> or TARBALL=<path> is required"; exit 1; fi
 	@v="$(PKG)$(PEERS)$(QUALIFY_MODE)"; [ -z "$$v" ] || printf '%s' "$$v" | grep -Eq '^[@a-z0-9._/,+-]*$$' || { echo "ERROR: PKG/PEERS/QUALIFY_MODE contain unsupported characters"; exit 1; }
+	@printf '%s' "$(QUALIFY_WAIT_ATTEMPTS)" | grep -Eq '^[1-9][0-9]*$$' && printf '%s' "$(QUALIFY_WAIT_SECONDS)" | grep -Eq '^[0-9]+$$' || { echo "ERROR: QUALIFY_WAIT_ATTEMPTS/QUALIFY_WAIT_SECONDS must be integers"; exit 1; }
+	@[ -z "$(QUALIFY_PROVENANCE_SHA)" ] || printf '%s' "$(QUALIFY_PROVENANCE_SHA)" | grep -Eq '^[0-9a-f]{40}$$' || { echo "ERROR: QUALIFY_PROVENANCE_SHA must be a 40-hex commit SHA"; exit 1; }
+	@[ -z "$(QUALIFY_PROVENANCE_RUN)" ] || printf '%s' "$(QUALIFY_PROVENANCE_RUN)" | grep -Eq '^[1-9][0-9]*$$' || { echo "ERROR: QUALIFY_PROVENANCE_RUN must be a numeric run id"; exit 1; }
 	@if [ -n "$(TARBALL)" ]; then test -f "$(TARBALL)" || { echo "ERROR: TARBALL $(TARBALL) is not a file"; exit 1; }; fi
 	@if [ -n "$(SIBLING_ARCHIVES_FILE)" ]; then test -f "$(SIBLING_ARCHIVES_FILE)" && [ "$$(basename "$(SIBLING_ARCHIVES_FILE)")" = receipts.json ] || { echo "ERROR: SIBLING_ARCHIVES_FILE must be an existing receipts.json"; exit 1; }; fi
 	@mkdir -p "$(REPORT_DIR)"
@@ -580,9 +591,9 @@ qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBA
 		$(if $(SIBLING_ARCHIVES_FILE),-v "$(abspath $(dir $(SIBLING_ARCHIVES_FILE))):/input/siblings:ro") \
 		-v "$(abspath $(REPORT_DIR)):/reports" -w /tmp $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; unset NODE_PATH NODE_OPTIONS; tool_dir="$$(mktemp -d)"; npm_config_cache="$$(mktemp -d)" npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; \
-			node /probe/qualify.mjs --report-dir /reports --registry $(QUALIFY_REGISTRY) --head-sha "$(QUALIFY_HEAD_SHA)" \
+			node /probe/qualify.mjs --report-dir /reports --registry $(QUALIFY_REGISTRY) --head-sha "$(QUALIFY_HEAD_SHA)" --attempts "$(QUALIFY_WAIT_ATTEMPTS)" --delay "$(QUALIFY_WAIT_SECONDS)" \
 			$(if $(PKG),--pkg "$(PKG)",--tarball /input/package.tgz) $(if $(SIBLING_ARCHIVES_FILE),--siblings-dir /input/siblings) \
-			$(if $(PEERS),--peers "$(PEERS)") $(if $(QUALIFY_MODE),--mode "$(QUALIFY_MODE)")'
+			$(if $(PEERS),--peers "$(PEERS)") $(if $(QUALIFY_MODE),--mode "$(QUALIFY_MODE)") $(if $(QUALIFY_PROVENANCE_SHA),--provenance-commit "$(QUALIFY_PROVENANCE_SHA)") $(if $(QUALIFY_PROVENANCE_RUN),--provenance-run "$(QUALIFY_PROVENANCE_RUN)")'
 
 test-qualify-published-install: ## Run clean-consumer qualification fixture tests (local fixture tarballs, no publish)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
@@ -782,17 +793,18 @@ package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact 
 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; mkdir -p /artifacts/qualification; cp -R tmp/llm-gateway-qualification/. /artifacts/qualification/; gateway="$$(node -p "require(\"./packages/llm-gateway/package.json\").version")"; cmp "/artifacts/sentropic-llm-gateway-$$gateway.tgz" /artifacts/qualification/candidate.tgz'
 
-LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 12
-LLM_MESH_REGISTRY_WAIT_SECONDS ?= 5
+# Registry visibility budget (CDN propagation measured at 110-170 s): cache-bypassing reads, 18 x 10 s (BRCIW-EX1).
+LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 18
+LLM_MESH_REGISTRY_WAIT_SECONDS ?= 10
 
 .PHONY: wait-llm-gateway-mesh-dependency
-wait-llm-gateway-mesh-dependency: ## Wait until the gateway's mesh dependency floor is visible on npm
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; attempt=1; while ! npm view "@sentropic/llm-mesh@$$version" version >/dev/null 2>&1; do if [ "$$attempt" -ge "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" ]; then echo "@sentropic/llm-mesh@$$version is not visible" >&2; exit 1; fi; echo "Waiting for @sentropic/llm-mesh@$$version ($$attempt/$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS))"; sleep "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"; attempt=$$((attempt + 1)); done'
+wait-llm-gateway-mesh-dependency: ## Wait until the gateway's mesh dependency floor is visible on npm (no-cache, cache-busted reads)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; node scripts/ci/publishable-manifests.mjs wait --spec "@sentropic/llm-mesh@$$version" --attempts "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" --delay "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"'
 
 .PHONY: publish-llm-gateway
 .PHONY: wait-llm-gateway-auth-dependencies
 wait-llm-gateway-auth-dependencies: ## Fail closed until every transitive auth dependency floor is registry-resolvable
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /tmp $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; npm_config_cache=/tmp/npm-cache npm install --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; mkdir -p scripts; cp /workspace/packages/llm-gateway/scripts/auth-registry.mjs scripts/; cp /workspace/packages/llm-gateway/package.json .; node scripts/auth-registry.mjs $(LLM_MESH_REGISTRY_WAIT_ATTEMPTS) $(LLM_MESH_REGISTRY_WAIT_SECONDS)'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /tmp $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; npm_config_cache=/tmp/npm-cache npm install --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; mkdir -p scripts; cp /workspace/packages/llm-gateway/scripts/auth-registry.mjs scripts/; cp /workspace/packages/llm-gateway/package.json .; npm_config_prefer_online=true node scripts/auth-registry.mjs $(LLM_MESH_REGISTRY_WAIT_ATTEMPTS) $(LLM_MESH_REGISTRY_WAIT_SECONDS)'
 
 publish-llm-gateway: check-llm-model-equivalences wait-llm-gateway-mesh-dependency wait-llm-gateway-auth-dependencies build-llm-gateway ## Publish @sentropic/llm-gateway from CI OIDC trusted publishing
 	@docker run --rm \
