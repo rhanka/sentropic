@@ -117,16 +117,16 @@ export type MusePosition = 'off' | 'after-claude' | 'first' | 'claude-last';
 export const DEFAULT_MUSE_POSITION: MusePosition = 'after-claude';
 
 export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
-  { requestedId: 'claude-opus-5', codexModel: 'gpt-5.6-sol', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5', codexModel: 'gpt-6-sol', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
   { requestedId: 'claude-opus-5-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'medium', cloudEffort: 'high' },
   { requestedId: 'claude-opus-5-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'medium', cloudEffort: 'high' },
   { requestedId: 'claude-opus-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-opus-4-8', codexModel: 'gpt-5.6-terra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
   { requestedId: 'claude-opus-4-8-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'medium', cloudEffort: 'high' },
   { requestedId: 'claude-opus-4-8-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5', codexModel: 'gpt-5.6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-xhigh', codexModel: 'gpt-5.6-luna', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-4-6', codexModel: 'gpt-5.6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5', codexModel: 'gpt-6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-xhigh', codexModel: 'gpt-6-luna', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-4-6', codexModel: 'gpt-6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
   // GA switch applied: Fable 5 and 5.1 now use GPT-6 Astra.
   { requestedId: 'claude-fable-5', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', cloudEffort: 'high' },
