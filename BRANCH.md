@@ -70,7 +70,7 @@
 - Rationale: B2 is an api identity/control-schema lane parallel to B3b; B3c consumes it.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read spec §4, §5, §10 (B2), §12.5-§12.7 and `SPEC_EVOL_QUOTA_LEDGER.md` §2/§6.
   - [x] Verify branch, control journal ends at idx 7, no `0008*` control file, B1 host present.
   - [x] Confirm scope and exceptions BRDP-EX5 / BRDP-EX8.
@@ -85,8 +85,10 @@
   - [x] `api/tests/api/llm-admission-schema.test.ts` (expand-first shape, pricing concurrency, disposable upgrade + restore; 18 tests PASS twice)
   - [x] `api/tests/api/auth/service-auth-middleware.test.ts` (extend: real IdP token → gateway service bridge → caller identity; 8 tests PASS)
   - [x] `apps/llm-gateway/tests/auth.test.ts` (host: service DPoP/replay/URL, issuer/audience/expiry/scope, revoked/null/wrong tenant, forged headers/body, session memberships, DB outage 503; 12 tests PASS)
-- [ ] **Lot 4 — Gates**
-  - [ ] `make typecheck-api lint-api API_PORT=9466 UI_PORT=5666 MAILDEV_UI_PORT=1566 ENV=test-llm-identity`
-  - [ ] `make test-api-<suite> SCOPE=<file> ... ENV=test-llm-identity` for each new/changed file, then the affected api suites
-  - [ ] `make typecheck-llm-gateway-process test-llm-gateway-process ... ENV=test-llm-identity`
-  - [ ] `make scope-check`, `make down ...`, `make ps ...`
+- [x] **Lot 4 — Gates**
+  - [x] `make typecheck-api lint-api API_PORT=9466 UI_PORT=5666 MAILDEV_UI_PORT=1566 ENV=test-llm-identity` PASS (lint 0 errors, pre-existing warnings only)
+  - [x] Scoped runs PASS: unit `llm-identity-directory` 13, endpoints `llm-admission-schema` 18 (twice), endpoints `auth/service-auth-middleware` 8
+  - [x] Affected suites: `make test-api-unit` PASS (113 files, 993 tests, 2 skipped); `make test-api-endpoints` 118/119 files, 930/932 tests — the 2 failures are `cluster-mesh-migration.test.ts` (see `blocked` item above)
+  - [x] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process ... ENV=test-llm-identity` PASS (5 files, 56 tests)
+  - [x] `make scope-check` PASS C2 (clean tree); committed range `merge-base..HEAD` limited to Allowed Paths
+  - [x] `make down API_PORT=9466 UI_PORT=5666 MAILDEV_UI_PORT=1566 ENV=test-llm-identity` done; `make ps` with the same ports/ENV lists no container
