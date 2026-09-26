@@ -56,7 +56,7 @@ Make the packed `tuple-skew.spec.ts` assert registry-state independent invariant
 
 - [ ] **Lot 1 — Registry-independent skew invariants**
   - [x] Add `packages/cluster-mesh/tests/packaging/skew-invariants.ts` (pure invariant checks over the recorded npm detail and the runtime probe).
-  - [ ] Add `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (negative fakes: old tuple accepted by plain install -> violation; skewed tree not refused -> violation; valid outcomes -> no violation).
+  - [x] Add `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (negative fakes: old tuple accepted by plain install -> violation; skewed tree not refused -> violation; valid outcomes -> no violation).
   - [ ] Rewrite `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts` (old-tuple and partial-bump) on the invariants; print the recorded npm outcomes.
   - [ ] Update `packages/cluster-mesh/tests/packaging/prepare.sh` comments (recorded behavior no longer frozen).
   - [ ] Review other packed assertions for frozen pre-publication registry behavior.
