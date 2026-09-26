@@ -419,7 +419,7 @@ No open decision remains; auth-hono workspace 0.15.2 versus published 0.15.0 is 
 
 Order (operator, per tier; each step is a precondition of the next):
 
-1. **Schedule the reservation reaper** (`reapExpiredHolds`, `api/src/services/llm-metering/reservation-reaper.ts`). It is implemented and tested but scheduled nowhere in B3c; a follow-up lot wires it into the product scheduler and the host `apps/llm-gateway/src/index.ts`. **Activating `/gw` before the reaper runs is FORBIDDEN**: a crashed or unreleased hold would keep its reserve and caps would stick.
+1. **Schedule the reservation reaper** (`reapExpiredHolds`, `api/src/services/llm-metering/reservation-reaper.ts`). It is implemented and tested but scheduled nowhere in B3c; a follow-up lot wires it into the product scheduler and the host `apps/llm-gateway/src/index.ts`. **Activating `/gw` before the reaper runs is FORBIDDEN**: a crashed or unreleased hold would keep its reserve and caps would stick. Require per-hold failure isolation (rollback, count/log without secrets or row dumps, continue to later candidates); the scheduler must monitor the returned `failed` count and remediate persistent failures.
 2. **Provision the partition** as trusted configuration: `LLM_GATEWAY_PARTITION` (JSON `{ revision, hash, tenants }`, `hash = routePartitionHash(revision, tenants)`), then pin its revision id and hash in the `/gw` cutover evidence `shadowComparison.partition` (previous pair in `rollbackCheckpoint.partition`). Assignments never live in the cutover row.
 3. **Activate the `/gw` cutover** (`compositionRoot: 'product'`, `namespace: '/gw'`, `activeAuthor: 'llm-gateway-module'`, the running `selectedGenerationId`). Neither host writes cutovers; a partition update or rollback rewrites only the evidence and never the dispatch generation or author.
 
@@ -428,3 +428,17 @@ Existing tiers where `main` already auto-activated `/gw` hold an active row with
 Behavior change: `main`'s `/gw` dispatched real provider calls without billing (`settleRoute() {}`); B3c stops that. Any external client pointing `ANTHROPIC_BASE_URL` at `/api/v1/gw` is cut until activation (none known; the consumer CLI `--gw` mode uses its local gateway on `127.0.0.1:3002`, verified by its conductor).
 
 Recorded decisions: the product `/gw` accepts session identities only (service-to-service identities are refused on `/gw`, a v0 narrowing; S2S uses the standalone host). The gateway's `instanceof RouteQuoteError` across two llm-mesh copies is a gateway-package fix (code-based check) owned by the mesh/gateway lane; it is neutralized today because the workspace links a single llm-mesh copy.
+
+Activation caveats (operator prerequisites before step 3):
+
+- **Default: EXCLUDE Gemini thinking models from the product `/gw` catalog** until the mesh/gateway lane carries thought tokens through settlement. Cloud-code sets output to `candidatesTokenCount` and keeps `thoughtsTokenCount` separate; gateway attempt/aggregate usage retains only input/output. Charging output at max(output, reasoning) does not charge the dropped thoughts. Accepting documented undercharge would require an explicit future product decision; it is not the default.
+- **Require null image and tool-call rates on `/gw` model pricing** until gateway usage carries those units through settlement. `SettleUsage` has no image/tool counts; `usageCost` also returns zero when both token counts are zero, even if image/tool units exist. Reservation alone is not accepted as coverage: normal settlement replaces the reserved liability with the reported charge.
+
+Follow-ups (recorded only; no implementation in fix round 2):
+
+- Mesh/gateway lane: preserve thought-token counts from transport through attempt and aggregate settlement; prove Gemini thinking charges in JSON and SSE before lifting catalog exclusion.
+- Mesh/gateway lane and product metering: carry image/tool units through usage and charge unit-only attempts before enabling non-null unit rates; verify reservation and actual settlement agree on supported dimensions.
+- Product metering lane: reconcile reaper versus observer-row ledger/budget mismatches and the `reconciliation_state` marker, including request-id collisions; prove one correction and matching ledger/budget totals.
+- Product metering lane: emit `llm.request.settled` outbox events for late corrections with an idempotent delivery contract; test redelivery.
+- Product metering tests: extend the multi-bucket concurrency test to include reaper and late correction; assert no deadlocks or accounting drift.
+- Product metering lane: harden WeakMap mode binding across cost-context identity changes; retain trusted JSON/SSE operation attribution.

@@ -72,10 +72,12 @@ export const attemptLiability = (price: PricingRow, allowance: RouteUsageCeiling
 };
 
 /**
- * Actual cost of one dispatched attempt; zero usage (never dispatched) costs nothing. The gateway
- * `SettleUsage` carries input and output counts only: reasoning tokens are folded into the output
- * count, so output is charged at max(output, reasoning) rate, exactly like the reservation. Image
- * units and tool calls are charged when a usage carries them.
+ * Prices reported input/output; no token usage returns zero, even for image/tool-only usage.
+ * Gateway `SettleUsage` carries input/output only; output uses max(output, reasoning) rate.
+ * Reasoning is not universally included: cloud-code keeps Gemini thoughtsTokenCount separate,
+ * and the gateway drops it, so those thoughts are uncharged. Image/tool counts also never arrive
+ * via the gateway; this helper adds them only when supplied alongside positive token usage.
+ * Product /gw activation restrictions and mesh/gateway follow-ups are in spec §12.8.
  */
 export const usageCost = (price: PricingRow, usage: {
   inputTokens: number; outputTokens: number; imageUnits?: number; toolCalls?: number;
