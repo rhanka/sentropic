@@ -34,6 +34,24 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it('allows only one service completion for concurrent calls on the same enrollment ID', async () => {
+    const { service, fetchFn, create } = setup();
+    let finish!: (value: Response) => void;
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    fetchFn.mockImplementationOnce(() => { enter(); return new Promise((resolve) => { finish = resolve; }); });
+    const session = await service.enroll('claude-code', start);
+    const first = service.completeClaudeEnrollment(session.enrollmentId, codeFor(session), owner);
+    await entered;
+    const error = await assertSafe(service.completeClaudeEnrollment(session.enrollmentId, codeFor(session), owner));
+    expect(String(error)).toContain('session unavailable');
+    finish(response());
+    const completion = await first;
+    expect((await create().listAccounts(owner)).map((account) => account.accountId)).toEqual([completion.accountId]);
+    await assertSafe(service.completeClaudeEnrollment(session.enrollmentId, codeFor(session), owner));
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses an already stored Claude grant for the same owner after restart', async () => {
     const { service, create } = setup();
     const first = await service.completeClaudeCredentialImport(paste(), owner);

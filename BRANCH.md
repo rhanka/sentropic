@@ -149,6 +149,7 @@
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [x] Finding 6 coverage added: service-level same-ID completion concurrency, retained session verifier/state cleared after completion/cancel, verifier absent from authorization URL, custom-profile offline import, and 65,535/65,536/65,537-byte UTF-8 boundaries. Existing implementation satisfies these cases.
 - [x] Finding 5 verified: sequential/restored and concurrent duplicate imports succeeded before the fix; same-owner duplicates now receive the exact non-echoing refusal. Distinct grants, owner isolation and removal remain covered; README documents one grant/account/refresh holder.
 - [x] Finding 4 verified: omitted refresh scope reproduced reauth; provider tests distinguish omission from invalid values, and service tests preserve the previous scopes through two refreshes across restarts.
 - [x] Finding 3 verified: five local-failure cases and refresh-time removal reproduced incorrect reauth errors; distinguish retryable preparation, terminal/ambiguous failures, and removed accounts without reflecting secret-bearing causes.

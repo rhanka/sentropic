@@ -29,6 +29,33 @@ async function safeFailure(promise: Promise<unknown>) {
 afterEach(() => vi.useRealTimers());
 
 describe('Claude renewable enrollment', () => {
+  it.each(['complete', 'cancel'])('wipes the verifier after %s and never puts it in the authorization URL', async (action) => {
+    const { provider } = setup();
+    const session = await provider.start(start);
+    if (session.kind !== 'authorization-url') throw new Error('Wrong session');
+    const sessions = (provider as unknown as { sessions: Map<string, { verifier: string; state: string }> }).sessions;
+    const retained = sessions.get(session.enrollmentId)!;
+    expect(retained.verifier.length).toBeGreaterThan(30);
+    expect(session.url).not.toContain(retained.verifier);
+    expect(new URL(session.url!).searchParams.has('code_verifier')).toBe(false);
+    if (action === 'complete') {
+      await provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) });
+    } else await provider.cancel(session.enrollmentId);
+    expect(sessions.has(session.enrollmentId)).toBe(false);
+    expect(retained.verifier).toBe('');
+    expect(retained.state).toBe('');
+  });
+
+  it.each([65_535, 65_536, 65_537])('enforces the exact UTF-8 import boundary at %i bytes', async (bytes) => {
+    const { provider, fetchFn } = setup();
+    const base = JSON.stringify(document({ padding: 'é' }));
+    const input = base + ' '.repeat(bytes - new TextEncoder().encode(base).length);
+    expect(new TextEncoder().encode(input).length).toBe(bytes);
+    if (bytes <= 65_536) await expect(provider.importCredential(input)).resolves.toMatchObject({ accessToken: ACCESS });
+    else await safeFailure(provider.importCredential(input));
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it.each([undefined, null, '', ['user:inference']])('uses prior scopes only for omitted refresh scope (%j)', async (scope) => {
     const { provider } = setup(vi.fn(async () => response(grant({ scope }))));
     const pending = provider.refresh({ accountId: 'opaque', refreshToken: REFRESH,
@@ -67,7 +94,7 @@ describe('Claude renewable enrollment', () => {
       expect(fetchFn).not.toHaveBeenCalled();
     });
 
-  it('snapshots a custom profile and restores its exact version through a new provider', async () => {
+  it('imports with a custom profile, snapshots it and restores its exact version through a new provider', async () => {
     const profile = { id: 'qualified-profile-v2', authorizationUrl: 'https://auth.example.test/authorize',
       tokenUrl: 'https://auth.example.test/token', redirectUri: 'https://auth.example.test/callback',
       clientId: 'public-client-id', source: 'https://source.example.test/v2',
@@ -77,6 +104,11 @@ describe('Claude renewable enrollment', () => {
     const fetchFn = vi.fn(async () => response());
     const options = { configResolver: { resolveConfig }, fetchFn, nowFn: () => NOW };
     const provider = new ClaudeCodeEnrollmentProvider(options);
+    const imported = await provider.importCredential(JSON.stringify(document()));
+    expect(imported.authClientConfigVersion).toBe(original.id);
+    expect((await provider.resolve(imported)).scopes).toEqual(original.requiredScopes);
+    expect(resolveConfig).toHaveBeenLastCalledWith('claude-code');
+    expect(fetchFn).not.toHaveBeenCalled();
     const session = await provider.start({ ...start, configRef: 'host-profile' });
     profile.tokenUrl = 'https://changed.example.test/token';
     profile.requiredScopes.push('user:profile');
