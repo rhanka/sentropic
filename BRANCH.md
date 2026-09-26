@@ -114,7 +114,7 @@
 ## Implementation plan (LOT 1 authorized)
 - [x] Step A — docs-only approval corrections and implementation scope conversion.
 - [ ] **Implementation lot 1 — enrollment, refresh, persistence**
-  - [ ] Isolated shared refresh fix with Cloud Code/Codex save-window, failure and removal regressions in `tests/service/local-account-transport-service.test.ts`.
+  - [x] Isolated shared refresh fix with Cloud Code/Codex save-window/failure regressions and existing removal coverage; reproduced premature publication before fix.
   - [ ] Versioned Claude profile validation/resolution and renewable paste parsing in `src/enrollment/claude-code.ts`.
   - [ ] PKCE/manual completion, one-use cancellation/TTL/timeout and JSON refresh in the Claude provider.
   - [ ] Claude provider validation/configuration/grant/error tests in `tests/enrollment/claude-code.test.ts`.
