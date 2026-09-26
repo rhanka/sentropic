@@ -119,7 +119,7 @@
     - [x] A2 bundle and fail-closed enrollment/exact-version refresh profile resolver.
   - [x] PKCE/manual completion, one-use cancellation/TTL/timeout and JSON refresh in the Claude provider.
     - [x] Bounded JSON grant wire, strict rotation validation and offline allowlisted metadata.
-  - [ ] Claude provider validation/configuration/grant/error tests in `tests/enrollment/claude-code.test.ts`.
+  - [x] Claude provider validation/configuration/grant/error tests in `tests/enrollment/claude-code.test.ts`.
     - [x] Browser wire/PKCE/replay and offline import/O5/allowlist/UTF-8 validation tests added.
     - [x] State/TTL/cancel/concurrent completion/timeout, malformed grants, rotation and secret-error tests added.
   - [ ] Owner-bound sessions and common durable completion helper in `src/service/local-account-transport-service.ts`.
