@@ -36,8 +36,10 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - [x] `acknowledge` BRCIW-EX3 (ci.yml): reason = pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"` to the steady-state OIDC post-publication qualification of mcp-auth and cluster-mesh, align the mcp-auth `skipped` handling with cluster-mesh (heal on re-run only) and cache-bust both registry presence checks (review fix 1); impact = the two steady-state post-publication qualification steps; rollback = revert those hunks.
 - [x] `acknowledge` BRCIW-EX4 (`rules/workflow.md`, Package Publication section only; conductor decision): reason = the Consumer qualification rule described the old behavior (qualify only on `published`); impact = one updated sentence plus one new line on registry waits, conflict integrity and provenance commit; rollback = revert that hunk.
 - [ ] `attention` `packages/llm-gateway/scripts/auth-registry.mjs` is not modified (a change would need a llm-gateway bump): cache bypass is applied through `npm_config_prefer_online=true` and the 18 x 10 s budget from the Makefile recipe.
-- [ ] `attention` an equal-bytes publish conflict writes `status=skipped` (receipt JSON `conflict: equal-integrity`) ; mcp-auth and cluster-mesh both qualify a `skipped` receipt only on a re-run (first attempt = notice).
+- [ ] `attention` an equal-bytes publish conflict writes `status=skipped` with `conflict=equal-integrity` in the publish output; mcp-auth and cluster-mesh qualify it at once, and qualify a plain `skipped` receipt only on a re-run (first attempt = notice).
 - [ ] `attention` bootstrap token publications (`--no-provenance`) do not get the provenance check: the variable is only wired in the steady-state OIDC jobs.
+- [ ] `attention` behavior change (intended): the publish conflict re-read budget is validated before the first registry lookup, so an invalid `LLM_MESH_REGISTRY_WAIT_*` value now fails even when the version is already present (previously a skip).
+- [ ] `attention` re-run heal of a plain `skipped` receipt passes `QUALIFY_PROVENANCE_RUN=$GITHUB_RUN_ID`: a version whose provenance names another workflow run is a stale skip (notice, exit 0, not qualified); an attestation without a run id is never treated as stale.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -70,10 +72,10 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
   - [x] Conflict re-read budget wired to the Make wait variables.
   - [x] Provenance: only the repository source entry must equal the workflow commit.
 
-- [ ] **Lot 5 — Review fix 2**
+- [x] **Lot 5 — Review fix 2**
   - [x] Publish receipt `publish-output` carries `conflict=<kind>`; qualify `--provenance-run`: another run's publication is `stale-skip` (exit 0), this run's is fully checked; repository frozen for the CLI path (parameter test-only).
-  - [ ] ci.yml re-run heal: `conflict=equal-integrity` qualifies at once; a plain `skipped` re-run passes `QUALIFY_PROVENANCE_RUN` (stale = notice); presence curls retry; wiring tests assert the exact REPORT_DIR forms.
-  - [ ] `rules/workflow.md`: bootstrap token publishes are exempt from the provenance check.
+  - [x] ci.yml re-run heal: `conflict=equal-integrity` qualifies at once; a plain `skipped` re-run passes `QUALIFY_PROVENANCE_RUN` (stale = notice); presence curls retry; wiring tests assert the exact REPORT_DIR forms.
+  - [x] `rules/workflow.md`: bootstrap token publishes are exempt from the provenance check.
 
 - [x] **Lot N — Final validation**
   - [x] `make test-publishable-manifests ENV=test-registry-waits`

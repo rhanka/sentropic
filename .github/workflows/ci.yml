@@ -1639,18 +1639,25 @@ jobs:
           status="$(sed -n 's/^status=//p' "$receipt")"
           if [ -z "$status" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          # Aligned with cluster-mesh (BRCIW-EX3): a skipped receipt (prior publication or equal-bytes publish
-          # conflict) is healed only on a re-run (run attempt > 1), when the version is on the registry.
+          conflict="$(sed -n 's/^conflict=//p' "$receipt")"
+          provenance_run=
+          # Aligned with cluster-mesh (BRCIW-EX3): an equal-integrity conflict (verified bytes on the registry) is
+          # qualified at once; a plain skip is healed only on a re-run, and QUALIFY_PROVENANCE_RUN turns a version
+          # published by an earlier run (stale skip, e.g. a no-bump change) into a notice instead of a red check.
           case "$status" in
             published) ;;
             skipped)
-              if [ "$GITHUB_RUN_ATTEMPT" -le 1 ]; then echo "::notice title=Publication qualification::mcp-auth status=skipped on the first attempt: ${pkg} was published before this run, nothing to qualify"; exit 0; fi
-              name="${pkg%@*}"; version="${pkg##*@}"
-              if ! curl -fsS -o /dev/null -H 'cache-control: no-cache' "https://registry.npmjs.org/$(printf '%s' "$name" | sed 's#/#%2f#')/${version}?cachebust=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"; then echo "::error title=Publication qualification::mcp-auth status=skipped but ${pkg} is absent from the registry"; exit 1; fi
-              echo "::notice title=Publication qualification::mcp-auth status=skipped on run attempt ${GITHUB_RUN_ATTEMPT}, ${pkg} present on the registry: running post-publication qualification" ;;
+              if [ "$conflict" = equal-integrity ]; then echo "::notice title=Publication qualification::mcp-auth equal-integrity publish conflict: running post-publication qualification"
+              else
+                if [ "$GITHUB_RUN_ATTEMPT" -le 1 ]; then echo "::notice title=Publication qualification::mcp-auth status=skipped on the first attempt: ${pkg} was published before this run, nothing to qualify"; exit 0; fi
+                name="${pkg%@*}"; version="${pkg##*@}"
+                if ! curl -fsS --retry 3 --retry-all-errors -o /dev/null -H 'cache-control: no-cache' "https://registry.npmjs.org/$(printf '%s' "$name" | sed 's#/#%2f#')/${version}?cachebust=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"; then echo "::error title=Publication qualification::mcp-auth status=skipped but ${pkg} is absent from the registry"; exit 1; fi
+                provenance_run="$GITHUB_RUN_ID"
+                echo "::notice title=Publication qualification::mcp-auth status=skipped on run attempt ${GITHUB_RUN_ATTEMPT}, ${pkg} present on the registry: running post-publication qualification (stale skip if published by another run)"
+              fi ;;
             *) echo "::error title=Publication qualification::mcp-auth status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" ENV=test-ci-mcp-auth
+          make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-mcp-auth
       - name: Upload MCP Auth publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -1867,19 +1874,26 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
           report_dir=tmp/ci-manifest-guard/qualify-cluster-mesh
-          # Release train (BRDP-EX10): a re-run after a publish that landed writes status=skipped; only then
-          # (run attempt > 1) is the post-publication qualification healed, when the version is on the registry.
-          # On a first attempt a skipped receipt is a version published before this run (e.g. a README-only change).
+          conflict="$(sed -n 's/^conflict=//p' "$receipt")"
+          provenance_run=
+          # Release train (BRDP-EX10, BRCIW-EX3): an equal-integrity conflict (verified bytes on the registry) is
+          # qualified at once. A plain skip on a first attempt is a version published before this run (e.g. a
+          # README-only change); on a re-run it is healed, and QUALIFY_PROVENANCE_RUN turns a version published by
+          # an earlier run (stale skip) into a notice instead of a red provenance check.
           case "$status" in
             published) ;;
             skipped)
-              if [ "$GITHUB_RUN_ATTEMPT" -le 1 ]; then echo "::notice title=Publication qualification::cluster-mesh status=skipped on the first attempt: ${pkg} was published before this run, nothing to qualify"; exit 0; fi
-              name="${pkg%@*}"; version="${pkg##*@}"
-              if ! curl -fsS -o /dev/null -H 'cache-control: no-cache' "https://registry.npmjs.org/$(printf '%s' "$name" | sed 's#/#%2f#')/${version}?cachebust=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"; then echo "::error title=Publication qualification::cluster-mesh status=skipped but ${pkg} is absent from the registry"; exit 1; fi
-              echo "::notice title=Publication qualification::cluster-mesh status=skipped on run attempt ${GITHUB_RUN_ATTEMPT}, ${pkg} present on the registry: running post-publication qualification" ;;
+              if [ "$conflict" = equal-integrity ]; then echo "::notice title=Publication qualification::cluster-mesh equal-integrity publish conflict: running post-publication qualification"
+              else
+                if [ "$GITHUB_RUN_ATTEMPT" -le 1 ]; then echo "::notice title=Publication qualification::cluster-mesh status=skipped on the first attempt: ${pkg} was published before this run, nothing to qualify"; exit 0; fi
+                name="${pkg%@*}"; version="${pkg##*@}"
+                if ! curl -fsS --retry 3 --retry-all-errors -o /dev/null -H 'cache-control: no-cache' "https://registry.npmjs.org/$(printf '%s' "$name" | sed 's#/#%2f#')/${version}?cachebust=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"; then echo "::error title=Publication qualification::cluster-mesh status=skipped but ${pkg} is absent from the registry"; exit 1; fi
+                provenance_run="$GITHUB_RUN_ID"
+                echo "::notice title=Publication qualification::cluster-mesh status=skipped on run attempt ${GITHUB_RUN_ATTEMPT}, ${pkg} present on the registry: running post-publication qualification (stale skip if published by another run)"
+              fi ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
