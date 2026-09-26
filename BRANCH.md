@@ -10,6 +10,7 @@
 - [x] Disposable Postgres of `ENV=test-llm-product-admission` only; NO migration in this lot (stop and report if one is needed).
 - [x] Selective staging and separate `make commit`; checkboxes updated in each atomic commit, approximately 150 lines maximum.
 - [x] HARD STOP: no push, no PR, no merge, no publication.
+- [x] Fix round 2 scope: only `api/src/services/llm-metering/**`, `api/tests/**`, this file and spec §12.8; ports API `9477`, UI `5677`, Maildev UI `1577` override prior lot ports for every command in this round.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -47,6 +48,7 @@
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
+- [x] `attention`: B3c-R2 activation defaults — exclude Gemini thinking models from the product `/gw` catalog until thought tokens reach settlement; require null image/tool rates until those units reach settlement. Reservation alone does not cover their actual charge; these conservative restrictions prevent documented undercharge from becoming an implicit product policy.
 - `acknowledge`: BRDP-EX9 (conductor-approved) — reason: product lane migrates `gw.ts` onto the cluster gateway namespace module with real admission, D2 partition rejection, settlement and readiness, and adds the application ledger adapters; `api/package.json` gains `@sentropic/llm-gateway` `^0.19.0` (workspace link, not `file:`) so product code stops importing gateway source by relative path; impact: product `/gw` requires an active cutover record, a verified partition revision, a tenant strategy, pricing and a tenant bucket before any dispatch; no dispatch-generation change; rollback: restore prior `gw.ts` and dependency, ledger rows preserved, product author fence unchanged.
 - `acknowledge`: BRDP-EX6 (conductor-approved) — reason: root `package-lock.json` refreshed through `make lock-root` for the new api dependency only; impact: lockfile-gated CI jobs run; rollback: revert the manifest and lockfile hunks.
 - `acknowledge`: BRDP-EX13 (conductor-approved in fix round 1) — `api/vitest.config.ts` one alias line `@sentropic/cluster-mesh/compose/gateway` → package source; reason: the existing `@sentropic/cluster-mesh` alias prefix-matches the subpath and breaks every API test importing `gw.ts` (the product must use the SAME `createGatewayNamespaceModule` as the host); impact: test resolution only, no runtime/build change; rollback: remove the line.
@@ -63,7 +65,7 @@
 - `acknowledge`: fix round 1 (muse approve-with-fixes + complementary review), one line per finding:
   - F1 HIGH deadlock — fixed: `lockBudgets` (`SELECT … ORDER BY id FOR UPDATE`) before every bucket UPDATE in admission, settlement, release and reaper; reaper runs one transaction per hold; concurrency test over tenant + workspace + model buckets (ids inserted in reverse order); mutation check: with `lockBudgets` disabled (old ordering) the test failed 3 of 3 runs with Postgres `deadlock detected` (40P01), with the fix it passed 3 of 3 runs plus the full file.
   - F2 HIGH codex detection — fixed: `mayUseUnenforcedTransport` mirrors llm-mesh `route-quote.ts` (pinned transport, else provider account transports; `openai` has `codex`); tested at model max output.
-  - F3 HIGH reasoning at settlement — fixed: `SettleUsage` carries input/output only (reasoning folded into output), so settled output is billed at max(output, reasoning) rate like the reservation; image/tool units billed when present; unit + Postgres tests.
+  - F3 HIGH reasoning at settlement — partial coverage: reported output is billed at max(output, reasoning); cloud-code Gemini thoughts stay separate and are dropped by gateway usage, so thinking is uncharged. Gateway usage also has no image/tool counts; the helper returns zero for image/tool-only usage. Activation restrictions and mesh/gateway follow-ups are in spec §12.8.
   - F4 costliest fallback — fixed: ranked by `priceWeight` (input + max(output, reasoning) + image + tool + min charge).
   - F5 workspace-less caller — fixed: refused as audited `missing_bucket` when the tenant has any workspace bucket; tested.
   - F6 empty quote / bad maxAttempts — documented exception: the gateway never admits an empty quote, mesh bounds maxAttempts 1..8, and the 0008 reason CHECK has no code for it (a new code needs a migration); guard now runs first and writes no row.
@@ -90,6 +92,12 @@
 - **Mono-branch**: no UI change in this lot; no browser UAT (spec §10: no web/Chrome/VSCode feature change).
 
 ## Plan / Todo (lot-based)
+- [ ] **Fix round 2 — Complementary review findings**
+  - [x] Verify all four findings; correct the reasoning/image/tool comment and F3 wording; record activation caveats and requested follow-ups in spec §12.8.
+  - [ ] Isolate and count reaper hold failures; add a poisoned-hold Postgres regression in `api/tests/api/llm-budget-ledger.test.ts`.
+  - [ ] Fence foreign-hold collision redelivery; add a Postgres regression in `api/tests/api/llm-budget-ledger.test.ts`.
+  - [ ] Run typecheck/lint, scoped llm-metering tests, full API unit/endpoints, scope check, then down and verify no services remain (ports `9477` / `5677` / `1577`).
+
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, spec §2, §5, §10, §12.
   - [x] Confirm worktree/branch and command style `make ... API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-product-admission`.
