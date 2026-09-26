@@ -288,6 +288,18 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
   },
+  // Direct OpenAI Responses API (HTTP 200) and Codex availability verified
+  // by conductor real calls on 2026-09-26; capabilities copied from gpt-5.6
+  // (unverified), with matching Sol task hints;
+  // no context window / max output declared (unknown).
+  {
+    providerId: 'openai',
+    modelId: 'gpt-6-sol',
+    label: 'GPT-6 Sol',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
   {
     providerId: 'openai',
     modelId: 'gpt-6-astra',
@@ -308,6 +320,18 @@ export const modelProfiles = [
     providerId: 'openai',
     modelId: 'gpt-5.6-luna',
     label: 'GPT-5.6 Luna',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'summary'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
+  // Direct OpenAI Responses API (HTTP 200) and Codex availability verified
+  // by conductor real calls on 2026-09-26; capabilities copied from gpt-5.6
+  // (unverified), with matching Luna task hints;
+  // no context window / max output declared (unknown).
+  {
+    providerId: 'openai',
+    modelId: 'gpt-6-luna',
+    label: 'GPT-6 Luna',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),

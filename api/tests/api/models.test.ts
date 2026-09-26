@@ -55,6 +55,8 @@ describe('llm-mesh model projections', () => {
       'gpt-5.6-sol',
       'gpt-5.6-terra',
       'gpt-6-astra',
+      'gpt-6-luna',
+      'gpt-6-sol',
     ]);
     expect(modelsByProvider('gemini')).toEqual([
       'gemini-3.1-flash-lite',
@@ -81,7 +83,7 @@ describe('llm-mesh model projections', () => {
       'muse-spark-1.3',
       'muse-spark-1.3-contributor',
     ]);
-    expect(data.models).toHaveLength(26);
+    expect(data.models).toHaveLength(28);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');

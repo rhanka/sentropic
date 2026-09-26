@@ -129,7 +129,7 @@ describe('route candidate selection', () => {
         diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai',
         transportProviderId: 'codex',
-        supportedModelIds: ['gpt-5.6-luna'],
+        supportedModelIds: ['gpt-6-luna'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready',
         revision: 'r1',
@@ -138,7 +138,7 @@ describe('route candidate selection', () => {
 
     expect(selection.kind).toBe('candidates');
     expect(selection.candidates[0]).toMatchObject({
-      target: { providerId: 'openai', modelId: 'gpt-5.6-luna' },
+      target: { providerId: 'openai', modelId: 'gpt-6-luna' },
     });
   });
 
