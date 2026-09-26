@@ -144,6 +144,16 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
     if (!hold || hold.requestId !== requestId || hold.tenantId !== cost.tenantId) {
       throw new RouteSettlementError('settlement does not match its hold');
     }
+    const open = hold.status === 'held' || hold.status === 'dispatched';
+    if (!open) {
+      if (hold.status !== 'reconciled') return;
+      // Only this hold's pending row can fence a correction. Foreign/observer rows cannot:
+      // retain the conservative reaper charge until reconciliation can safely resolve them.
+      const pending = await tx.execute(sql`SELECT id FROM control.cost_ledger
+        WHERE idempotency_key = ${requestId} AND hold_id = ${holdRef} AND reconciliation_state = 'pending'
+        FOR UPDATE`);
+      if (pending.rows.length === 0) return;
+    }
     const principal = principalOf(cost);
     const pricing = await pinnedPricing(tx, hold.pricingVersions);
     let total = 0n;
@@ -218,7 +228,6 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
       // Otherwise the request id collides with another hold's row: that row is kept untouched and
       // this hold is still closed below with its full charge (never left for a zero-charge reaper).
     }
-    const open = hold.status === 'held' || hold.status === 'dispatched';
     // A reconciled hold was already charged its liability by the reaper: only the difference moves.
     const charge = hold.status === 'reconciled' ? total - hold.liability : total;
     await lockBudgets(tx, hold.budgetIds);

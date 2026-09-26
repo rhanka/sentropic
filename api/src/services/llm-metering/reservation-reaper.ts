@@ -10,12 +10,14 @@
  */
 import { sql } from 'drizzle-orm';
 
+import { logger } from '../../logger';
 import { createId } from '../../utils/id';
 import { lockBudgets, pgTextArray, type LedgerDatabase } from './budget-admission';
 
 export interface ReapResult {
   readonly released: number;
   readonly reconciled: number;
+  readonly failed: number;
 }
 
 export const reapExpiredHolds = async (options: {
@@ -29,6 +31,7 @@ export const reapExpiredHolds = async (options: {
     ORDER BY deadline_at, id LIMIT ${options.limit ?? 100}`)).rows as Array<{ id: string }>;
   let released = 0;
   let reconciled = 0;
+  let failed = 0;
   // One short transaction per hold: hold row first, then its buckets in the shared lock order.
   for (const candidate of candidates) {
     const outcome = await options.database.transaction(async (tx) => {
@@ -68,9 +71,15 @@ export const reapExpiredHolds = async (options: {
       await tx.execute(sql`UPDATE control.budget_holds SET status = 'reconciled', settled_at = ${now}, updated_at = ${now}
         WHERE id = ${String(hold.id)}`);
       return 'reconciled' as const;
+    }).catch(() => {
+      // The transaction has rolled back; a poisoned hold must not abort later candidates.
+      // Errors can contain SQL parameters, so log only the count, never the error or row.
+      failed += 1;
+      logger.error({ failed }, 'reservation-reaper: hold transaction failed');
+      return 'failed' as const;
     });
     if (outcome === 'released') released += 1;
     if (outcome === 'reconciled') reconciled += 1;
   }
-  return { released, reconciled };
+  return { released, reconciled, failed };
 };

@@ -49,6 +49,7 @@
 
 ## Feedback Loop
 - [x] `attention`: B3c-R2 activation defaults — exclude Gemini thinking models from the product `/gw` catalog until thought tokens reach settlement; require null image/tool rates until those units reach settlement. Reservation alone does not cover their actual charge; these conservative restrictions prevent documented undercharge from becoming an implicit product policy.
+- [x] `attention`: B3c-R2 collision fence — closed holds can change spend only with their own pending reconciliation row; otherwise retain the reaper liability because a foreign/observer row cannot fence a correction. The broader reconciliation mismatch remains a spec §12.8 follow-up.
 - `acknowledge`: BRDP-EX9 (conductor-approved) — reason: product lane migrates `gw.ts` onto the cluster gateway namespace module with real admission, D2 partition rejection, settlement and readiness, and adds the application ledger adapters; `api/package.json` gains `@sentropic/llm-gateway` `^0.19.0` (workspace link, not `file:`) so product code stops importing gateway source by relative path; impact: product `/gw` requires an active cutover record, a verified partition revision, a tenant strategy, pricing and a tenant bucket before any dispatch; no dispatch-generation change; rollback: restore prior `gw.ts` and dependency, ledger rows preserved, product author fence unchanged.
 - `acknowledge`: BRDP-EX6 (conductor-approved) — reason: root `package-lock.json` refreshed through `make lock-root` for the new api dependency only; impact: lockfile-gated CI jobs run; rollback: revert the manifest and lockfile hunks.
 - `acknowledge`: BRDP-EX13 (conductor-approved in fix round 1) — `api/vitest.config.ts` one alias line `@sentropic/cluster-mesh/compose/gateway` → package source; reason: the existing `@sentropic/cluster-mesh` alias prefix-matches the subpath and breaks every API test importing `gw.ts` (the product must use the SAME `createGatewayNamespaceModule` as the host); impact: test resolution only, no runtime/build change; rollback: remove the line.
@@ -94,8 +95,9 @@
 ## Plan / Todo (lot-based)
 - [ ] **Fix round 2 — Complementary review findings**
   - [x] Verify all four findings; correct the reasoning/image/tool comment and F3 wording; record activation caveats and requested follow-ups in spec §12.8.
-  - [ ] Isolate and count reaper hold failures; add a poisoned-hold Postgres regression in `api/tests/api/llm-budget-ledger.test.ts`.
-  - [ ] Fence foreign-hold collision redelivery; add a Postgres regression in `api/tests/api/llm-budget-ledger.test.ts`.
+  - [x] Isolate and count/log reaper hold failures without error/row data; poisoned-hold Postgres regression in `api/tests/api/llm-budget-ledger.test.ts`.
+  - [x] Fence foreign-hold collision redelivery; Postgres regressions for settled and reaper-reconciled holds in `api/tests/api/llm-budget-ledger.test.ts`.
+  - [x] Regression evidence: scoped Postgres file failed on all three new assertions before the fixes (22003 overflow, spend 600 instead of 400, spend 0 instead of 3250); after fixes, 36/36 passed.
   - [ ] Run typecheck/lint, scoped llm-metering tests, full API unit/endpoints, scope check, then down and verify no services remain (ports `9477` / `5677` / `1577`).
 
 - [x] **Lot 0 — Baseline & constraints**
