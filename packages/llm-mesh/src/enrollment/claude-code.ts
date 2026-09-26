@@ -36,6 +36,10 @@ const BUNDLED_PROFILE: ClaudeOAuthProfile = {
   source: 'https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.80',
 };
 const failure = (reason: string): Error => new Error(`Claude enrollment: ${reason}; reauthenticate`);
+// Only local preparation failures may permit replaying the same refresh grant.
+export class ClaudeRefreshPreparationError extends Error {
+  constructor() { super('Claude refresh preparation failed; retry later'); }
+}
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 const token = (value: unknown): value is string =>
@@ -98,7 +102,10 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
     if (refresh && (!configRef || configRef === 'v1.0.0')) throw failure('unknown OAuth profile');
     let value: unknown;
     try { value = await this.options.configResolver?.resolveConfig(configRef); }
-    catch { throw failure('OAuth profile resolution failed'); }
+    catch {
+      if (refresh) throw new ClaudeRefreshPreparationError();
+      throw failure('OAuth profile resolution failed');
+    }
     if (!this.options.configResolver || (object(value) && Object.keys(value).length === 0)) {
       if (refresh) throw failure('unknown OAuth profile');
       return BUNDLED_PROFILE;
@@ -219,7 +226,7 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
 
   async refresh(input: RefreshInput): Promise<PreparedCredential> {
     const profile = await this.profile(input.credentialVersion, true);
-    if (!token(input.refreshToken)) throw failure('missing refresh token');
+    if (!token(input.refreshToken)) throw new ClaudeRefreshPreparationError();
     const value = await this.exchange(profile, { grant_type: 'refresh_token',
       refresh_token: input.refreshToken, client_id: profile.clientId, scope: profile.refreshScopes.join(' ') });
     return this.grant(value, profile, input.accountId, 'refresh', input.refreshToken);
