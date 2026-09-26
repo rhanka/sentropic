@@ -101,6 +101,13 @@ export interface LlmMeshAccountAdministration {
 }
 
 export interface LlmMeshFacade {
+  /** Trusted in-process inputs only; keep codes and credential JSON out of agent tools. */
+  completeClaudeEnrollment?(
+    enrollmentId: string, code: string, ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion>;
+  completeClaudeCredentialImport?(
+    credentialJson: string, ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion>;
   // CLI enrollment
   enroll(
     providerId: AccountTransportProviderId,
@@ -162,7 +169,7 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
       new CloudCodeEnrollmentProvider({ configResolver: options.configResolver }),
     ],
     ['codex', new CodexEnrollmentProvider({ configResolver: options.configResolver })],
-    ['claude-code', new ClaudeCodeEnrollmentProvider()],
+    ['claude-code', new ClaudeCodeEnrollmentProvider({ configResolver: options.configResolver })],
     ['muse', new MuseEnrollmentProvider()],
     ['muse-code', new MuseCodeEnrollmentProvider()],
   ]);
@@ -175,6 +182,12 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
   );
 
   return {
+    async completeClaudeEnrollment(enrollmentId, code, ownerScopeRef) {
+      return service.completeClaudeEnrollment(enrollmentId, code, ownerScopeRef);
+    },
+    async completeClaudeCredentialImport(credentialJson, ownerScopeRef) {
+      return service.completeClaudeCredentialImport(credentialJson, ownerScopeRef);
+    },
     async enroll(providerId, input) {
       return service.enroll(providerId, input);
     },
