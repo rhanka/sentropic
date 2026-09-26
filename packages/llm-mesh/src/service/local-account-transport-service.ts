@@ -477,6 +477,22 @@ export class LocalAccountTransportService {
     return { accountId: credential.accountId, label };
   }
 
+  private async hasClaudeGrant(credential: PreparedCredential, ownerScopeRef: string): Promise<boolean> {
+    const index = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
+    for (const accountId of this.parseAccountIndex(index)) {
+      const record = await this.readPublicRecord(accountId);
+      if (!record || record.account.transportProviderId !== 'claude-code'
+        || record.account.ownerScopeRef !== ownerScopeRef || await this.isPublicRecordRemoved(record)
+        || !(await this.isPublicRecordOwnerClaimValid(record))) continue;
+      const raw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`);
+      if (!raw) continue;
+      const stored = JSON.parse(raw) as CredentialEnvelope;
+      // Compare only in process; never produce a token fingerprint or diagnostic.
+      if (stored.accountId === accountId && stored.refreshToken === credential.refreshToken) return true;
+    }
+    return false;
+  }
+
   private async persistClaudeCompletion(credential: PreparedCredential, ownerScopeRef: string,
     provider: EnrollmentProvider, assertCurrent: () => void): Promise<EnrollmentCompletion> {
     // Serialize Claude enrollment index updates; no account is executable during the writes.
@@ -486,8 +502,11 @@ export class LocalAccountTransportService {
     await previous;
     const id = credential.accountId;
     let claimed = false;
+    let duplicate = false;
     try {
       assertCurrent();
+      duplicate = await this.hasClaudeGrant(credential, ownerScopeRef);
+      if (duplicate) throw new Error('Duplicate Claude grant');
       const metadata = await provider.resolve(credential);
       const barrier = await this.removalBarrierForEnrollment(id, ownerScopeRef);
       claimed = true;
@@ -520,7 +539,8 @@ export class LocalAccountTransportService {
         this.credentialVersions.delete(id);
         this.accountRemovalBarrierRefs.delete(id);
       }
-      throw new Error('Claude enrollment could not be saved; reauthenticate');
+      throw new Error(duplicate ? 'This Claude credential is already enrolled'
+        : 'Claude enrollment could not be saved; reauthenticate');
     } finally {
       this.pendingClaudeAccounts.delete(id);
       unlock();
