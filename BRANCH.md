@@ -55,6 +55,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-28` — attention — owner: implementer — Fix round 2 uses one service-local public-write promise chain per account; preserve keyring/schema contracts, the no-bump exception and conductor-owned review/release.
 - [x] `CS-27` — attention — owner: implementer — Full gate exposed the facade fixture reusing its browser grant as a second account; change the successful import to a distinct fake grant and explicitly assert facade duplicate refusal.
 - [x] `CS-26` — attention — owner: implementer — Compare same-owner Claude refresh grants only in process under the existing enrollment persistence queue; enforce one account/refresh holder per grant without hashes, output, or a new schema. Cross-process grant ownership remains the documented single-service responsibility.
 - [x] `CS-25` — attention — owner: implementer — Omitted refresh scope reuses persisted validated grant scopes, never the broader requested profile scopes; explicit invalid scope and scope-less initial enrollment still fail closed. Keep this capability Claude-local without changing shared contracts.
@@ -150,6 +151,10 @@
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [ ] Fix round 2: serialize every public-record write and reproduce a route write started before refresh with a slow keyring.
+- [x] Fix round 2: missing refresh material requires reauthentication; only profile resolver exceptions remain retryable provider preparation errors. Scoped Claude service suite: 34 passed; regression first reproduced retry-later instead of reauthentication.
+- [ ] Fix round 2: skip corrupt envelopes during duplicate-grant scans without diagnostics containing stored data.
+- [ ] Fix round 2: run all six requested gates, review scope/diff, commit below 150 changed lines and clean up the dedicated environment.
 - [x] Fix round 1: all six findings accepted after code verification; no disagreement. Changed files: `BRANCH.md`, `packages/llm-mesh/README.md`, `src/enrollment/claude-code.ts`, `src/service/local-account-transport-service.ts`, `tests/enrollment/claude-code.test.ts`, `tests/service/{facade,local-account-transport-service,local-account-transport-service-claude}.test.ts` under llm-mesh.
 - [x] Fix round 1 full `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS, 383 tests / 34 files / zero failures or skips; 21 new cases in this round. First run failed the now-corrected facade duplicate fixture (CS-27).
 - [x] Fix round 1 `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`, `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`, and `make build-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
