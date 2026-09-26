@@ -951,6 +951,8 @@ export class LocalAccountTransportService {
         ...persistedAccount
       } = account;
       if (await this.isAccountRemoved(account.accountId)) return;
+      // Route outcomes must not clear the durable no-replay fence during rotation.
+      if (this.refreshInFlight.has(account.accountId) && account.status !== 'reauth_required') return;
       await this.keyring.setSecret(key, JSON.stringify({
         ...current,
         status: account.status ?? current.status,
