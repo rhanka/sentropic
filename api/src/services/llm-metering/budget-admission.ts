@@ -253,3 +253,128 @@ export const createBudgetAdmission = (options: BudgetAdmissionOptions): BudgetAd
     },
   };
 };
+
+/**
+ * D2 partition (spec §2): the trusted server configuration revision is the sole authority on which
+ * host serves a verified identity. Both hosts verify revision and content hash before admission;
+ * missing, mismatched or overlapping configuration fails closed (503), and an identity assigned to
+ * the other host, or to none, is refused as unauthenticated (401) before any account or budget effect.
+ */
+export type GatewayHostKind = 'product' | 'standalone';
+
+export interface RoutePartitionRevision { readonly revision: string; readonly hash: string }
+
+export interface RoutePartitionConfig extends RoutePartitionRevision {
+  /** Per tenant: verified principal ids served by each host (disjoint sets). */
+  readonly tenants: Readonly<Record<string, Readonly<Partial<Record<GatewayHostKind, readonly string[]>>>>>;
+  readonly previous?: RoutePartitionRevision;
+}
+
+export interface RoutePartitionSource {
+  /** Trusted server configuration (never request input). */
+  load(): Promise<RoutePartitionConfig | undefined> | RoutePartitionConfig | undefined;
+  /** Revision pinned by the operator (product: the `/gw` cutover evidence). */
+  expected(): Promise<RoutePartitionRevision | undefined> | RoutePartitionRevision | undefined;
+}
+
+export class RoutePartitionUnavailableError extends Error {
+  readonly code = 'llm_route_partition_unavailable';
+  constructor() { super('route partition configuration unavailable'); this.name = 'RoutePartitionUnavailableError'; }
+}
+
+const sortedTenants = (tenants: RoutePartitionConfig['tenants']) => Object.keys(tenants).sort().map((tenant) => [
+  tenant, (['product', 'standalone'] as const).map((host) => [host, [...(tenants[tenant]?.[host] ?? [])].sort()]),
+]);
+
+/** Content hash of a partition revision: sha256 over the canonical revision and assignments. */
+export const routePartitionHash = (revision: string, tenants: RoutePartitionConfig['tenants']): string =>
+  quoteHash({ revision, tenants: sortedTenants(tenants) });
+
+export const createRoutePartition = (host: GatewayHostKind, source: RoutePartitionSource) => {
+  const verified = async (): Promise<RoutePartitionConfig> => {
+    let config: RoutePartitionConfig | undefined;
+    let expected: RoutePartitionRevision | undefined;
+    try {
+      [config, expected] = await Promise.all([source.load(), source.expected()]);
+    } catch {
+      throw new RoutePartitionUnavailableError();
+    }
+    if (!config || !expected || typeof config.revision !== 'string' || !config.tenants
+      || config.revision !== expected.revision || config.hash !== expected.hash
+      || routePartitionHash(config.revision, config.tenants) !== config.hash) throw new RoutePartitionUnavailableError();
+    for (const assignment of Object.values(config.tenants)) {
+      const product = new Set(assignment.product ?? []);
+      if ((assignment.standalone ?? []).some((principal) => product.has(principal))) throw new RoutePartitionUnavailableError();
+    }
+    return config;
+  };
+  return {
+    host,
+    /** True only when the verified principal is assigned to this host in its tenant. */
+    async assigned(cost: Pick<CostContext, 'tenantId' | 'principalId'>): Promise<boolean> {
+      const config = await verified();
+      return (config.tenants[cost.tenantId]?.[host] ?? []).includes(cost.principalId);
+    },
+    async ready(): Promise<boolean> {
+      await verified();
+      return true;
+    },
+  };
+};
+
+export type RoutePartition = ReturnType<typeof createRoutePartition>;
+
+/** Caller auth that refuses (401) identities not assigned to this host; configuration errors throw (503). */
+export const withRoutePartition = (inner: CallerAuthPort, partition: RoutePartition): CallerAuthPort => ({
+  async verify(headers, context) {
+    const result = await inner.verify(headers, context);
+    if (!result.ok || !result.cost) return result;
+    if (!(await partition.assigned(result.cost))) return { ok: false, reason: 'identity not assigned to this gateway host' };
+    return result;
+  },
+});
+
+/**
+ * Pure, synchronous quote seam for catalog-backed planners (product and host route planes): the
+ * candidates are the catalog entries of the requested model, one attempt, no account touched.
+ * `plan({ quote })` refuses (`quote-mismatch`) any target the quote did not cover.
+ */
+export const withCatalogQuote = (planner: RoutePlanner, options: {
+  readonly catalog: { listModels(): readonly { readonly modelId: string; readonly providerId: string }[] };
+  readonly councilRevision: string;
+  /** Providers whose transport may drop the output ceiling (codex). */
+  readonly unenforcedProviders?: readonly string[];
+}): RoutePlanner => {
+  const unenforced = new Set(options.unenforcedProviders ?? ['codex']);
+  const quote = (input: RouteQuoteInput): RouteQuote => {
+    const { ceiling } = input;
+    const count = (value: unknown, min: number) => typeof value === 'number' && Number.isSafeInteger(value) && value >= min;
+    if (!(input.now instanceof Date) || Number.isNaN(input.now.getTime()) || !count(ceiling?.inputTokens, 0)
+      || !count(ceiling?.outputTokens, 1)) throw new RouteQuoteError('invalid usage ceiling', 'invalid-ceiling');
+    const models = options.catalog.listModels().filter((model) => model.modelId === input.requestedModel);
+    if (models.length === 0) throw new RouteQuoteError('Unknown requested model', 'unknown-model');
+    const candidates: QuotedRouteCandidate[] = models.map((model) => ({
+      providerId: model.providerId, modelId: model.modelId, reason: 'exact',
+      allowance: { ...ceiling }, outputCeilingEnforced: !unenforced.has(model.providerId),
+    }));
+    const body = {
+      requestedModel: input.requestedModel, candidates, maxAttempts: 1, quotedAt: input.now.toISOString(),
+      policyRevision: 'default', councilRevision: options.councilRevision,
+    };
+    return { quoteRef: `quote_${quoteHash(body).slice(0, 32)}`, ...body };
+  };
+  return {
+    ...planner,
+    quote,
+    async plan(subject, input) {
+      const plan = await planner.plan(subject, input);
+      const pinned = input.quote;
+      if (pinned && (pinned.councilRevision !== plan.councilRevision || !plan.diagnostics.every((target) =>
+        pinned.candidates.some((candidate) => candidate.providerId === target.actualProviderId
+          && candidate.modelId === target.actualModelId)))) {
+        throw new RoutePlanError('Planned target is not covered by the quote', 'quote-mismatch');
+      }
+      return plan;
+    },
+  };
+};
