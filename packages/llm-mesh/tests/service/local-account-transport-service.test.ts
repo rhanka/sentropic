@@ -6,6 +6,42 @@ import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 describe('LocalAccountTransportService', () => {
+  it.each(['cloud-code', 'codex'] as const)('does not replay %s refresh while the removal check awaits', async (transportProviderId) => {
+    const keyring = new InMemoryKeyring();
+    let responded = false;
+    let blocked = false;
+    let enter!: () => void;
+    let finish!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const read = keyring.getSecret.bind(keyring);
+    keyring.getSecret = async (key) => {
+      if (responded && !blocked && key.endsWith(':removed')) {
+        blocked = true; enter(); await gate;
+      }
+      return read(key);
+    };
+    const refresh = vi.fn(async (input) => {
+      responded = true;
+      return { accountId: input.accountId, accessToken: 'fresh', refreshToken: 'rotated',
+        expiresAt: '2099-01-01T00:00:00Z', authClientConfigVersion: 'v1.0.0' };
+    });
+    const service = new LocalAccountTransportService(keyring,
+      new Map([[transportProviderId, { refresh } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } });
+    service.registerAccount({ accountId: 'removal-window', targetProviderId: 'openai', transportProviderId,
+      accessToken: 'old', refreshToken: 'old-refresh', expiresAt: '2000-01-01T00:00:00Z', status: 'active' });
+    const input = { targetProviderId: 'openai' as const, transportProviderId };
+    const first = service.acquire(input);
+    await entered;
+    const second = service.acquire(input);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    finish();
+    expect((await Promise.all([first, second])).every((value) => value.material.refreshToken === 'rotated')).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['cloud-code', 'codex'] as const)('holds %s refresh until durable publication', async (transportProviderId) => {
     for (const failSave of [false, true]) {
       const keyring = new InMemoryKeyring();

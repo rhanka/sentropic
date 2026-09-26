@@ -203,8 +203,9 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
         try {
           response = await this.fetchFn(profile.tokenUrl, { method: 'POST', redirect: 'error',
             headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
-          value = await response.json();
         } catch { throw failure('token request failed'); }
+        try { value = await response.json(); }
+        catch { throw failure(`HTTP ${response.status} invalid_response`); }
         if (!response.ok) {
           const code = object(value) && typeof value.error === 'string'
             && ['invalid_grant', 'invalid_request', 'invalid_client', 'unauthorized_client',
