@@ -55,6 +55,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-27` — attention — owner: implementer — Full gate exposed the facade fixture reusing its browser grant as a second account; change the successful import to a distinct fake grant and explicitly assert facade duplicate refusal.
 - [x] `CS-26` — attention — owner: implementer — Compare same-owner Claude refresh grants only in process under the existing enrollment persistence queue; enforce one account/refresh holder per grant without hashes, output, or a new schema. Cross-process grant ownership remains the documented single-service responsibility.
 - [x] `CS-25` — attention — owner: implementer — Omitted refresh scope reuses persisted validated grant scopes, never the broader requested profile scopes; explicit invalid scope and scope-less initial enrollment still fail closed. Keep this capability Claude-local without changing shared contracts.
 - [x] `CS-24` — attention — owner: implementer — Retry only proven pre-request failures; terminal profile errors and possible provider rotation remain fenced. Restore a preflight fence best-effort while retaining single-flight; a continuing storage outage can leave a conservative durable fence until storage recovers.
