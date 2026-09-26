@@ -34,6 +34,93 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it.each(['envelope', 'public', 'index'])('fails closed on partial %s save without publishing secrets', async (part) => {
+    const { service, create, keyring } = setup();
+    const save = keyring.setSecret.bind(keyring);
+    let failed = false;
+    keyring.setSecret = async (key, value) => {
+      // Fail after the write too: the caller cannot infer whether storage committed.
+      await save(key, value);
+      if (!failed && key.endsWith(`:${part}`)) { failed = true; throw new Error(`${ACCESS} ${REFRESH}`); }
+    };
+    await assertSafe(service.completeClaudeCredentialImport(paste(), owner));
+    await expect(service.listAccounts(owner)).resolves.toEqual([]);
+    await expect(create().listAccounts(owner)).resolves.toEqual([]);
+    await assertSafe(create().acquire(acquire));
+  });
+
+  it.each(['success', 'cancel', 'remove'])('keeps completion unavailable during index save, then %s', async (mode) => {
+    const { service, keyring } = setup();
+    const save = keyring.setSecret.bind(keyring);
+    let enter!: () => void;
+    let finish!: () => void;
+    const paused = new Promise<void>((resolve) => { enter = resolve; });
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    let accountId = '';
+    keyring.setSecret = async (key, value) => {
+      if (key.endsWith(':index')) { accountId = JSON.parse(value)[0]; enter(); await gate; }
+      await save(key, value);
+    };
+    const session = await service.enroll('claude-code', start);
+    const completion = service.completeClaudeEnrollment(session.enrollmentId, codeFor(session), owner);
+    await paused;
+    await assertSafe(service.acquire(acquire));
+    expect(await service.listAccounts(owner)).toEqual([]);
+    if (mode === 'cancel') await service.cancel(session.enrollmentId);
+    if (mode === 'remove') await service.removeAccount(accountId, owner);
+    finish();
+    if (mode === 'success') {
+      expect((await completion).accountId).toBe(accountId);
+      expect((await service.acquire(acquire)).material.accountId).toBe(accountId);
+    } else {
+      await assertSafe(completion);
+      await assertSafe(service.acquire(acquire));
+      expect(await keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`)).toBeNull();
+    }
+  });
+
+  it.each(['network', 'invalid_grant', 'unknown-profile', 'empty-refresh'])(
+    'keeps %s refresh failure and AcquireError secret-free across restart', async (kind) => {
+      const { service, fetchFn, keyring, create } = setup();
+      const { accountId } = await service.completeClaudeCredentialImport(paste(true), owner);
+      if (kind === 'network') fetchFn.mockRejectedValue(new Error(`${ACCESS} ${REFRESH} ${CODE}`));
+      if (kind === 'invalid_grant') fetchFn.mockResolvedValue(new Response(JSON.stringify({
+        error: 'invalid_grant', error_description: `${ACCESS} ${REFRESH}` }), { status: 400 }));
+      if (kind === 'empty-refresh') fetchFn.mockResolvedValue(new Response(JSON.stringify({
+        access_token: ACCESS, refresh_token: '', expires_in: 3600, scope: 'user:inference' })));
+      if (kind === 'unknown-profile') {
+        const key = `sentropic-llm-mesh:${accountId}:envelope`;
+        const envelope = JSON.parse((await keyring.getSecret(key))!);
+        await keyring.setSecret(key, JSON.stringify({ ...envelope, authClientConfigVersion: 'v1.0.0' }));
+      }
+      const error = await assertSafe(create().acquire(acquire));
+      expect(error).toBeInstanceOf(AccountTransportAcquireError);
+      expect(String(error)).toContain('reauthentication required');
+      expect((await service.listAccounts(owner))[0].status).toBe('reauth_required');
+      await assertSafe(create().acquire(acquire));
+      expect(fetchFn).toHaveBeenCalledTimes(kind === 'unknown-profile' ? 0 : 1);
+    });
+
+  it.each(['cancel', 'expire', 'remove'])('cannot resurrect an account after %s during HTTP', async (mode) => {
+    const { service, fetchFn, create } = setup();
+    let complete!: (value: Response) => void;
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    fetchFn.mockImplementation(() => { enter(); return new Promise((resolve) => { complete = resolve; }); });
+    const session = await service.enroll('claude-code', start);
+    let accountId: string | undefined;
+    if (mode === 'remove') accountId = (await service.completeClaudeCredentialImport(paste(true), owner)).accountId;
+    const pending = accountId ? service.acquire(acquire)
+      : service.completeClaudeEnrollment(session.enrollmentId, codeFor(session), owner);
+    await entered;
+    if (mode === 'remove') await service.removeAccount(accountId!, owner);
+    if (mode === 'cancel') await service.cancel(session.enrollmentId);
+    if (mode === 'expire') { vi.useFakeTimers(); vi.setSystemTime(Date.now() + 16 * 60_000); }
+    complete(response());
+    await assertSafe(pending);
+    await service.cancel(session.enrollmentId);
+    expect(await create().listAccounts(owner)).toEqual([]);
+  });
   it.each(['browser', 'paste'])('persists and restores %s with owner-scoped secret-free completion/listing', async (method) => {
     const { service, create, keyring, fetchFn } = setup();
     const session = method === 'browser' ? await service.enroll('claude-code', start) : undefined;
