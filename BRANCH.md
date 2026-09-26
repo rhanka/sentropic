@@ -59,7 +59,7 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 
 - [ ] **Lot 3 — Provenance source commit**
   - [x] Post-publication qualification compares the SLSA v1 `resolvedDependencies[].digest.gitCommit` with `QUALIFY_PROVENANCE_SHA`.
-  - [ ] ci.yml steady-state mcp-auth and cluster-mesh qualification pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"`.
+  - [x] ci.yml steady-state mcp-auth and cluster-mesh qualification pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"`.
 
 - [ ] **Lot N — Final validation**
   - [ ] `make test-publishable-manifests ENV=test-registry-waits`
