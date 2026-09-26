@@ -52,8 +52,11 @@ describe('LlmMeshFacade', () => {
     if (session.kind !== 'authorization-url') throw new Error('Wrong session');
     const code = `FAKE_FACADE_CODE_CANARY#${new URL(session.url).searchParams.get('state')}`;
     const browser = await completeClaudeEnrollment!(session.enrollmentId, code, 'owner');
+    await expect(completeClaudeCredentialImport!(JSON.stringify({ accessToken: access,
+      refreshToken: refresh, expiresAt: Date.now() + 3600_000, scopes: ['user:inference'] }), 'owner'))
+      .rejects.toThrow('This Claude credential is already enrolled');
     const imported = await completeClaudeCredentialImport!(JSON.stringify({ accessToken: access,
-      refreshToken: refresh, expiresAt: Date.now() + 3600_000, scopes: ['user:inference'] }), 'owner');
+      refreshToken: `${refresh}_IMPORT`, expiresAt: Date.now() + 3600_000, scopes: ['user:inference'] }), 'owner');
     expect(resolveConfig).toHaveBeenLastCalledWith('claude-code');
     expect(browser.accountId).not.toBe(imported.accountId);
     expect(JSON.stringify([browser, imported, await facade.listAccounts({ ownerScope: 'owner' })])).not.toContain('CANARY');
