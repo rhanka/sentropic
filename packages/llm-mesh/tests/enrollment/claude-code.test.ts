@@ -180,6 +180,7 @@ describe('Claude renewable enrollment', () => {
     const session = await provider.start(start);
     const error = await safeFailure(provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) }));
     if (kind === 'body') expect(String(error)).toContain('HTTP 400 invalid_grant');
+    if (kind === 'json') expect(String(error)).toContain('HTTP 500 invalid_response');
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 

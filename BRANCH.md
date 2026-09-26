@@ -55,6 +55,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-20` — attention — owner: implementer — Conservatively discard descriptive identity fields and reject scopes outside the selected profile; retain actual accepted scopes. Non-JSON HTTP failures expose status plus static invalid_response only.
 - [x] `CS-19` — attention — owner: implementer — A reproduced post-rotation storage outage replayed the old grant after restart; persist existing reauth status before refresh and clear it only with the fresh durable save, preserving the schema.
 - [x] `CS-16` — acknowledge — owner: conductor — Explicit LOT 1 no-bump instruction overrides the general bump rule; conductor owns release/version qualification.
 - [x] `CS-17` — attention — owner: implementer — Apply harness plan/debug/test within allowed files; no recorder/Track artifacts outside scope; independent review remains conductor-owned.
@@ -131,16 +132,17 @@
     - [x] Partial writes, pending durability, cancellation/expiry/removal and AcquireError canary regressions added.
   - [x] Facade, enrollment contracts and unchanged auth regressions in their named test files.
   - [x] README configuration, trusted secret boundary, renewable import and sourced Terms of use.
-  - [ ] Full `make test-llm-mesh ENV=test-llm-mesh-claude-seat` with exact counts.
-  - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`.
-  - [ ] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`.
-  - [ ] `make build-llm-mesh ENV=test-llm-mesh-claude-seat`.
+  - [x] Full `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: 354 passed, 34 files, zero failures/skips.
+  - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+  - [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+  - [x] `make build-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
   - [ ] `make test-cluster-mesh ENV=test-llm-mesh-claude-seat`; explicitly report llm-surface and packaging coverage/skips.
   - [ ] Scope/diff review and dedicated environment cleanup; final commit/gate/risk handoff, no push.
 - [ ] **Implementation lot 2 — official CLI execution or `not-covered`**: injected subprocess bridge/h2a runner, access-only 0600 file in per-run 0700 config directory, mesh-only refresh, process isolation/cleanup; transport/auth/consumer tests in spec §5; keep `adapter-auth.ts` unchanged.
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [x] Added explicit Cloud Code/Codex regression for the post-response removal-check window, alongside durable-save publication regressions.
 - [x] Storage-outage regression first reproduced two refresh calls; preflight durable reauth fencing addresses D5's no-replay requirement without a migration.
 - [x] Step A2: executable LOT 1 plan, exact allowed files/tests, no-bump decision and environment mapping recorded.
 - [x] Step A1: reconcile O5 and Muse M1–M6/minor corrections, additive export, baseline citation, isolated fix, lot 2 gates and mission evidence.
