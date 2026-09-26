@@ -184,6 +184,31 @@ function importEntry(consumer, entry, env, log) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Tarball publishing records no gitHead: the SLSA v1 provenance statement (npm attestations endpoint)
+// must name the workflow commit as its only source commit and the published tarball as its subject.
+export const SLSA_V1 = 'https://slsa.dev/provenance/v1';
+export function checkProvenance(doc, { name, version, integrity, commit }) {
+  const problems = [];
+  const bundle = (doc?.attestations ?? []).find((a) => a?.predicateType === SLSA_V1);
+  if (!bundle) return { problems: [`no SLSA v1 provenance attestation for ${name}@${version}`], sourceCommits: [] };
+  let statement;
+  try {
+    statement = JSON.parse(Buffer.from(bundle.bundle?.dsseEnvelope?.payload ?? '', 'base64').toString('utf8'));
+  } catch (error) {
+    return { problems: [`unreadable SLSA provenance payload for ${name}@${version}: ${error.message}`], sourceCommits: [] };
+  }
+  const sourceCommits = (statement?.predicate?.buildDefinition?.resolvedDependencies ?? []).map((d) => d?.digest?.gitCommit).filter(Boolean);
+  if (sourceCommits.length === 0) problems.push(`SLSA provenance of ${name}@${version} names no source gitCommit`);
+  else if (!sourceCommits.every((c) => c === commit)) problems.push(`SLSA provenance source commit ${sourceCommits.join(',')} differs from the workflow commit ${commit}`);
+  const match = typeof integrity === 'string' && integrity.match(/^sha512-([A-Za-z0-9+/=]+)$/);
+  const digest = match ? Buffer.from(match[1], 'base64').toString('hex') : null;
+  const subjectName = `pkg:npm/${name.replace(/^@/, '%40')}@${version}`;
+  if (!(statement?.subject ?? []).some((s) => s?.name === subjectName && digest && s?.digest?.sha512 === digest)) {
+    problems.push(`SLSA provenance subject does not match ${subjectName} with the published sha512`);
+  }
+  return { problems, sourceCommits };
+}
 const lockEntries = (dir) => {
   try {
     return JSON.parse(fs.readFileSync(path.join(dir, 'package-lock.json'), 'utf8')).packages ?? {};
@@ -204,6 +229,10 @@ export async function qualify(opts) {
   if (!['candidate', 'published', 'post-publication'].includes(mode)) throw new GuardError(`unknown mode ${mode}`);
   if (Boolean(opts.pkg) === Boolean(opts.tarball)) throw new GuardError('exactly one of PKG=<name>@<exact-version> or TARBALL=<path> is required');
   if (opts.siblingsDir && (opts.pkg || mode !== 'candidate')) throw new GuardError('sibling injection is restricted to TARBALL candidate qualification');
+  if (opts.provenanceCommit) {
+    if (!/^[0-9a-f]{40}$/.test(opts.provenanceCommit)) throw new GuardError(`provenance commit must be a 40-hex git SHA, got ${JSON.stringify(opts.provenanceCommit)}`);
+    if (!opts.pkg || mode !== 'post-publication') throw new GuardError('provenance check is restricted to PKG post-publication qualification');
+  }
   // Post-publication waits share the registry visibility budget (default 18 x 10 s); other modes never wait.
   const budget = waitBudget({ attempts: opts.attempts, delaySeconds: opts.delaySeconds });
   const attempts = mode === 'post-publication' ? budget.attempts : 1;
@@ -251,6 +280,28 @@ export async function qualify(opts) {
       primary = published.manifest;
       report.resolved = { name, version, integrity: published.integrity, sha256: published.sha256 };
       installSpec = `${name}@${version}`;
+      if (opts.provenanceCommit) {
+        // Attestations may lag the packument: wait within the same budget, then compare once.
+        let doc = null;
+        let lastError = 'not published yet';
+        for (let i = 1; i <= attempts && !doc; i += 1) {
+          try {
+            doc = await registry.attestations(name, version);
+          } catch (error) {
+            lastError = error.message;
+          }
+          if (!doc && i < attempts) {
+            fs.appendFileSync(log, `waiting for provenance of ${name}@${version} (${i}/${attempts})\n`);
+            await sleep(delayMs);
+          }
+        }
+        if (!doc) report.problems.push(`provenance attestations for ${name}@${version} unavailable after ${attempts} x ${budget.delaySeconds}s (${lastError})`);
+        else {
+          const provenance = checkProvenance(doc, { name, version, integrity: published.integrity, commit: opts.provenanceCommit });
+          report.provenance = { commit: opts.provenanceCommit, sourceCommits: provenance.sourceCommits, ok: provenance.problems.length === 0 };
+          report.problems.push(...provenance.problems);
+        }
+      }
     } else {
       const stat = fs.lstatSync(opts.tarball, { throwIfNoEntry: false });
       if (!stat?.isFile() || !opts.tarball.endsWith('.tgz')) throw new GuardError(`TARBALL must be an existing regular .tgz file: ${opts.tarball}`);
@@ -374,7 +425,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     peers: peers ? peers.split(',').filter(Boolean) : [], mode: argValue(argv, '--mode'), registry: argValue(argv, '--registry'),
     reportDir: argValue(argv, '--report-dir') ?? '/reports', headSha: argValue(argv, '--head-sha') || null,
     image: process.env.QUALIFY_IMAGE ?? null, job: process.env.GITHUB_JOB ?? null,
-    attempts: argValue(argv, '--attempts'), delaySeconds: argValue(argv, '--delay'),
+    attempts: argValue(argv, '--attempts'), delaySeconds: argValue(argv, '--delay'), provenanceCommit: argValue(argv, '--provenance-commit'),
   }).then((code) => process.exit(code), (error) => {
     process.stdout.write(`qualify-published-install: ERROR ${error.message}\n`);
     process.exit(1);

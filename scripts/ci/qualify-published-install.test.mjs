@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { GuardError, createRegistry, readPackedManifest, runNpmPack, sha256File } from './publishable-manifests.mjs';
-import { checkSiblingRanges, entryPoints, loadSiblings, missingSibling, parseExactSpec, qualify, registryNotVisible } from './qualify-published-install.mjs';
+import { SLSA_V1, checkProvenance, checkSiblingRanges, entryPoints, loadSiblings, missingSibling, parseExactSpec, qualify, registryNotVisible } from './qualify-published-install.mjs';
 
 const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
 function build(manifest, files) {
@@ -251,6 +251,64 @@ test('post-publication: a PEERS version still invisible after the budget fails',
     const reportDir = tmp('qrep-');
     assert.equal(await qualify({ pkg: '@fx/host@1.0.0', peers: ['@fx/lagpeer@1.0.0'], mode: 'post-publication', registry: server.url, reportDir, attempts: 2, delaySeconds: 0 }), 1);
     assert.equal(readReport(reportDir).peersAdded[0].attempts, 2);
+  } finally {
+    server.child.kill();
+  }
+});
+
+// ---- SLSA provenance source commit (tarball publishing records no gitHead)
+const SHA = 'a'.repeat(40);
+const slsaDoc = ({ name, version, integrity, commits, subjectName }) => ({
+  attestations: [
+    { predicateType: 'https://github.com/npm/attestation/tree/main/specs/publish/v0.1', bundle: {} },
+    { predicateType: SLSA_V1, bundle: { dsseEnvelope: { payload: Buffer.from(JSON.stringify({
+      _type: 'https://in-toto.io/Statement/v1', predicateType: SLSA_V1,
+      subject: [{ name: subjectName ?? `pkg:npm/${name.replace(/^@/, '%40')}@${version}`, digest: { sha512: Buffer.from(integrity.slice(7), 'base64').toString('hex') } }],
+      predicate: { buildDefinition: { resolvedDependencies: commits.map((c) => ({ uri: 'git+https://github.com/o/r@refs/heads/main', digest: { gitCommit: c } })) } },
+    })).toString('base64') } } },
+  ],
+});
+
+test('provenance check: workflow commit and published subject must match the SLSA v1 statement', () => {
+  const integrity = `sha512-${createHash('sha512').update('x').digest('base64')}`;
+  const id = { name: '@fx/p', version: '1.0.0', integrity, commit: SHA };
+  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), id), { problems: [], sourceCommits: [SHA] });
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: ['b'.repeat(40)] }), id).problems.join(), /differs from the workflow commit/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [] }), id).problems.join(), /names no source gitCommit/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA], subjectName: 'pkg:npm/%40fx/other@1.0.0' }), id).problems.join(), /subject does not match/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), { ...id, integrity: `sha512-${createHash('sha512').update('y').digest('base64')}` }).problems.join(), /subject does not match/);
+  assert.match(checkProvenance({ attestations: [] }, id).problems.join(), /no SLSA v1 provenance/);
+});
+
+test('provenance commit input: 40-hex SHA, PKG post-publication only', async () => {
+  await assert.rejects(probe({ pkg: '@fx/a@1.0.0', mode: 'post-publication', provenanceCommit: 'HEAD' }), /40-hex/);
+  await assert.rejects(probe({ pkg: '@fx/a@1.0.0', provenanceCommit: SHA }), /restricted to PKG post-publication/);
+  await assert.rejects(probe({ tarball: '/x.tgz', mode: 'post-publication', provenanceCommit: SHA }), /restricted to PKG post-publication/);
+});
+
+test('post-publication: provenance is awaited within the budget and gates the qualification', async () => {
+  const tgz = build({ name: '@fx/prov', exports: './index.js' }, { 'index.js': 'export default 1;' });
+  const server = await serveRegistry(tgz);
+  const integrity = `sha512-${createHash('sha512').update(fs.readFileSync(tgz)).digest('base64')}`;
+  const run = async (answers, attempts = 3) => {
+    let calls = 0;
+    const registryClient = { ...createRegistry({ registry: server.url, delayMs: 0 }), attestations: async () => answers[Math.min((calls += 1), answers.length) - 1] };
+    const reportDir = tmp('qrep-');
+    const code = await qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceCommit: SHA, registryClient, registry: server.url, reportDir, attempts, delaySeconds: 0 });
+    return { code, calls, report: readReport(reportDir), log: fs.readFileSync(path.join(reportDir, 'qualify.log'), 'utf8') };
+  };
+  try {
+    const good = await run([null, slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: [SHA] })]);
+    assert.equal(good.code, 0, JSON.stringify(good.report.problems));
+    assert.deepEqual(good.report.provenance, { commit: SHA, sourceCommits: [SHA], ok: true });
+    assert.match(good.log, /waiting for provenance of @fx\/prov@1\.0\.0 \(1\/3\)/);
+    const other = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)] })]);
+    assert.equal(other.code, 1);
+    assert.match(other.report.problems.join(), /differs from the workflow commit/);
+    const never = await run([null], 2);
+    assert.equal(never.code, 1);
+    assert.equal(never.calls, 2);
+    assert.match(never.report.problems.join(), /provenance attestations for @fx\/prov@1\.0\.0 unavailable after 2 x 0s/);
   } finally {
     server.child.kill();
   }
