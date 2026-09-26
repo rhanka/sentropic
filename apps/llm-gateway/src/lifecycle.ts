@@ -62,10 +62,12 @@ export const startHost = async (
   const streams = new Set<Cancel>();
 
   // SSE bodies stay cancellable from here; the gateway cancel resolves after settlement.
-  const track = (response: Response): Response => {
+  // `done` runs once the stream completes, fails or is cancelled (detaches the abort forwarder).
+  const track = (response: Response, done: () => void): Response => {
     const reader = response.body!.getReader();
+    const finish = (): void => { streams.delete(cancel); done(); };
     const cancel: Cancel = (reason) => {
-      streams.delete(cancel);
+      finish();
       return reader.cancel(reason).catch(() => undefined);
     };
     streams.add(cancel);
@@ -73,9 +75,9 @@ export const startHost = async (
       async pull(controller) {
         try {
           const next = await reader.read();
-          if (next.done) { streams.delete(cancel); controller.close(); } else controller.enqueue(next.value);
+          if (next.done) { finish(); controller.close(); } else controller.enqueue(next.value);
         } catch (error) {
-          streams.delete(cancel);
+          finish();
           controller.error(error);
         }
       },
@@ -89,8 +91,12 @@ export const startHost = async (
     // A client disconnect (the listener's own signal) still aborts through the same controller.
     const controller = new AbortController();
     const forward = (): void => controller.abort(request.signal.reason);
+    const detach = (): void => request.signal.removeEventListener('abort', forward);
     if (request.signal.aborted) forward();
     else request.signal.addEventListener('abort', forward, { once: true });
+    // Body/duplex assumption: `init` carries no body, so this transfers the incoming request's
+    // not-yet-read body stream as-is (no copy, no buffering, no `duplex` option needed). The
+    // original `request` body is never read afterwards; only the scoped request is handed on.
     const scoped = new Request(request, { signal: controller.signal });
     const responding = host.app.fetch(scoped) as Promise<Response>;
     const cancel: Cancel = (reason) => {
@@ -101,12 +107,16 @@ export const startHost = async (
       );
     };
     requests.add(cancel);
+    let streaming = false;
     try {
       const response = await responding;
       if (controller.signal.aborted) return response;
-      return response.body && isEventStream(response) ? track(response) : response;
+      streaming = Boolean(response.body) && isEventStream(response);
+      // A tracked SSE stream keeps forwarding client aborts until it completes.
+      return streaming ? track(response, detach) : response;
     } finally {
       requests.delete(cancel);
+      if (!streaming) detach();
     }
   };
 
@@ -136,9 +146,14 @@ export const startHost = async (
     idleWaiters.add(wake);
   });
 
+  // A rejected unit of work is not settled: it resolves false at once (no unhandled rejection,
+  // no timer left behind), exactly like a bound that was reached.
   const within = (work: Promise<unknown>, timeoutMs: number): Promise<boolean> => new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), timeoutMs);
-    void work.then(() => { clearTimeout(timer); resolve(true); });
+    work.then(
+      () => { clearTimeout(timer); resolve(true); },
+      () => { clearTimeout(timer); resolve(false); },
+    );
   });
 
   let stopping: Promise<StopReport> | undefined;

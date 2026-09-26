@@ -7,13 +7,14 @@ import {
 import type {
   CanonicalIngressResult,
   CostContext,
-} from '../../../../packages/llm-gateway/src/index';
+} from '@sentropic/llm-gateway';
 
 import { providerRegistry } from '../provider-registry';
 import {
   applicationGatewayRuntime,
   type GatewayRuntimeDispatchPort,
 } from './gateway-wire-adapter';
+import { withCatalogQuote } from '../llm-metering/budget-admission';
 import { resolveRuntimeSelection } from './index';
 import {
   createGatewayRoutePlane,
@@ -46,17 +47,30 @@ const resolveTarget = async (
   };
 };
 
+const APPLICATION_COUNCIL_REVISION = 'application-runtime-v1';
+const applicationCatalog = { listModels: () => providerRegistry.listModels() };
+
+/**
+ * Product route plane. Its planner carries the catalog quote seam (B3c): budget admission quotes
+ * the requested model's catalog entries and the plan refuses any target outside that quote.
+ */
 export const createApplicationGatewayRoutePlane = (options?: {
   readonly dispatch?: GatewayRuntimeDispatchPort;
   readonly observeShadow?: (evidence: GatewayRouteIntentEvidence) => void;
 }): {
   readonly planner: RoutePlanner;
   readonly shadowRouteIntent: (input: GatewayShadowRouteIntentInput) => Promise<void>;
-} => createGatewayRoutePlane({
-  name: 'application',
-  councilRevision: 'application-runtime-v1',
-  targets: { resolve: resolveTarget },
-  catalog: { listModels: () => providerRegistry.listModels() },
-  dispatch: options?.dispatch ?? applicationGatewayRuntime,
-  ...(options?.observeShadow ? { observeShadow: options.observeShadow } : {}),
-});
+} => {
+  const plane = createGatewayRoutePlane({
+    name: 'application',
+    councilRevision: APPLICATION_COUNCIL_REVISION,
+    targets: { resolve: resolveTarget },
+    catalog: applicationCatalog,
+    dispatch: options?.dispatch ?? applicationGatewayRuntime,
+    ...(options?.observeShadow ? { observeShadow: options.observeShadow } : {}),
+  });
+  return {
+    ...plane,
+    planner: withCatalogQuote(plane.planner, { catalog: applicationCatalog, councilRevision: APPLICATION_COUNCIL_REVISION }),
+  };
+};

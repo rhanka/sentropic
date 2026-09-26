@@ -72,6 +72,14 @@ describe('injected dependency ports', () => {
     ['routing without prepareAttempt', { routing: { planner: { plan: async () => ({}) }, ready: async (): Promise<boolean> => true } }],
     ['settlement without settleRoute', { settlement: { metering: {}, ready: async (): Promise<boolean> => true } }],
     ['settlement as a non-object', { settlement: { metering: 'noop', ready: async (): Promise<boolean> => true } }],
+    ['routing without the quote seam', { routing: {
+      planner: { plan: async () => ({}), prepareAttempt: async () => ({}) }, ready: async (): Promise<boolean> => true,
+    } }],
+    ['budget without release', { budget: {
+      port: { admit: async () => ({ kind: 'unavailable' }), markDispatched: async () => {} }, ready: async (): Promise<boolean> => true,
+    } }],
+    ['budget without readiness probe', { budget: { port: { admit: async () => ({}), markDispatched: async () => {}, release: async () => {} } } }],
+    ['partition without an expected revision', { partition: { source: { load: () => undefined } } }],
   ])('refuses %s', async (_name, dependencies) => {
     await expect(compose(dependencies as unknown as HostDependencies))
       .rejects.toMatchObject({ code: 'invalid_llm_gateway_host_composition' });
