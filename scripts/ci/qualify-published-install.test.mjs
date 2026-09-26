@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { GuardError, createRegistry, readPackedManifest, runNpmPack, sha256File } from './publishable-manifests.mjs';
-import { checkSiblingRanges, entryPoints, loadSiblings, missingSibling, parseExactSpec, qualify } from './qualify-published-install.mjs';
+import { SLSA_V1, checkProvenance, checkSiblingRanges, entryPoints, loadSiblings, missingSibling, parseExactSpec, qualify, registryNotVisible } from './qualify-published-install.mjs';
 
 const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
 function build(manifest, files) {
@@ -155,18 +155,29 @@ test('confirmed missing sibling: pending (non-blocking) in PR candidates, blocki
 });
 
 // ---- post-publication propagation: a lagging first lookup must not be cached
-async function serveRegistry(tgz) {
-  const manifest = readPackedManifest(fs.readFileSync(tgz));
-  const integrity = `sha512-${createHash('sha512').update(fs.readFileSync(tgz)).digest('base64')}`;
-  const script = path.join(tmp('qreg-'), 'server.cjs');
-  fs.writeFileSync(script, `const fs=require('fs');const http=require('http');const m=${JSON.stringify(manifest)};const tgz=${JSON.stringify(tgz)};
-const s=http.createServer((q,r)=>{const base='http://127.0.0.1:'+s.address().port;const url=decodeURIComponent(q.url);
-if(url==='/'+m.name){r.writeHead(200,{'content-type':'application/json'});return r.end(JSON.stringify({name:m.name,'dist-tags':{latest:m.version},versions:{[m.version]:{...m,dist:{tarball:base+'/pkg.tgz',integrity:${JSON.stringify(integrity)}}}}}));}
-if(url==='/pkg.tgz'){r.writeHead(200,{'content-type':'application/octet-stream'});return r.end(fs.readFileSync(tgz));}
+// Serves packuments/tarballs (query strings ignored); `lag[name]` 404s the first N packument reads,
+// `forbidden` names answer 403 on their tarball. Requests are logged in `server.requests()`.
+async function serveRegistry(tgzs, { lag = {}, forbidden = [] } = {}) {
+  const pkgs = [tgzs].flat().map((tgz, i) => {
+    const bytes = fs.readFileSync(tgz);
+    const manifest = readPackedManifest(bytes);
+    const digest = createHash('sha512').update(bytes).digest('base64');
+    return { manifest, tgz, file: `/pkg${i}.tgz`, integrity: `sha512-${digest}`, forbidden: forbidden.includes(manifest.name) };
+  });
+  const dir = tmp('qreg-');
+  const script = path.join(dir, 'server.cjs');
+  fs.writeFileSync(script, `const fs=require('fs');const http=require('http');const pkgs=${JSON.stringify(pkgs)};const lag=${JSON.stringify(lag)};const log=${JSON.stringify(path.join(dir, 'requests.log'))};
+const s=http.createServer((q,r)=>{const base='http://127.0.0.1:'+s.address().port;const url=decodeURIComponent(q.url.split('?')[0]);fs.appendFileSync(log,url+'\\n');
+for(const p of pkgs){const m=p.manifest;
+if(url==='/'+m.name){if(lag[m.name]>0){lag[m.name]-=1;r.writeHead(404,{'content-type':'application/json'});return r.end('{}');}
+r.writeHead(200,{'content-type':'application/json'});return r.end(JSON.stringify({name:m.name,'dist-tags':{latest:m.version},versions:{[m.version]:{...m,dist:{tarball:base+p.file,integrity:p.integrity}}}}));}
+if(url===p.file&&p.forbidden){r.writeHead(403,{'content-type':'application/json'});return r.end('{"error":"forbidden"}');}
+if(url===p.file){r.writeHead(200,{'content-type':'application/octet-stream'});return r.end(fs.readFileSync(p.tgz));}}
 r.writeHead(404,{'content-type':'application/json'});r.end('{}');});s.listen(0,'127.0.0.1',()=>console.log(s.address().port));`);
   const child = spawn(process.execPath, [script], { stdio: ['ignore', 'pipe', 'inherit'] });
   const port = await new Promise((resolve) => child.stdout.once('data', (d) => resolve(String(d).trim())));
-  return { url: `http://127.0.0.1:${port}`, child, manifest };
+  const requests = () => (fs.existsSync(path.join(dir, 'requests.log')) ? fs.readFileSync(path.join(dir, 'requests.log'), 'utf8').split('\n').filter(Boolean) : []);
+  return { url: `http://127.0.0.1:${port}`, child, manifest: pkgs[0].manifest, requests };
 }
 
 test('post-publication: an absent-then-present registry answer passes after a fresh re-lookup', async () => {
@@ -175,7 +186,7 @@ test('post-publication: an absent-then-present registry answer passes after a fr
   try {
     let packumentCalls = 0;
     const fetchImpl = async (url, init) => {
-      if (url === `${server.url}/@fx%2Flate` && (packumentCalls += 1) === 1) return { status: 404, ok: false };
+      if (url.split('?')[0] === `${server.url}/@fx%2Flate` && (packumentCalls += 1) === 1) return { status: 404, ok: false };
       return fetch(url, init);
     };
     const registryClient = createRegistry({ registry: server.url, fetchImpl, delayMs: 0 });
@@ -184,6 +195,141 @@ test('post-publication: an absent-then-present registry answer passes after a fr
     assert.equal(code, 0, JSON.stringify(readReport(reportDir).problems));
     assert.equal(packumentCalls, 2, 'second attempt re-fetched the packument instead of reusing the cached 404');
     assert.match(fs.readFileSync(path.join(reportDir, 'qualify.log'), 'utf8'), /waiting for @fx\/late@1.0.0 \(1\/3\)/);
+  } finally {
+    server.child.kill();
+  }
+});
+
+// ---- post-publication PEERS: registry-not-yet-visible errors are retried within the budget, others fail at once
+function peerHost() {
+  const peer = build({ name: '@fx/lagpeer', version: '1.0.0' }, { 'index.js': 'export const p = 1;' });
+  const host = build({ name: '@fx/host', peerDependencies: { '@fx/lagpeer': '^1.0.0' }, peerDependenciesMeta: { '@fx/lagpeer': { optional: true } }, exports: { '.': './index.js', './adapter': './adapter.js' } },
+    { 'index.js': 'export default 1;', 'adapter.js': "export * from '@fx/lagpeer';" });
+  return { peer, host };
+}
+
+test('registry-not-yet-visible classifier: ETARGET/E404/notarget only', () => {
+  for (const out of ['npm error code ETARGET', 'npm error notarget No matching version found for @fx/a@1.0.0.', 'npm error code E404', "npm error 404 Not Found - GET http://r/@fx%2fa - Not found"]) assert.ok(registryNotVisible(out), out);
+  for (const out of ['npm error code EINTEGRITY', 'npm error code E401', 'npm error code ENEEDAUTH', 'npm error ECONNREFUSED']) assert.equal(registryNotVisible(out), false, out);
+});
+
+test('post-publication: a lagging registry PEERS version is retried until visible', async () => {
+  const { peer, host } = peerHost();
+  // The core install reads the optional peer packument once (ignored 404); the first PEERS install gets the second 404.
+  const server = await serveRegistry([host, peer], { lag: { '@fx/lagpeer': 2 } });
+  try {
+    const reportDir = tmp('qrep-');
+    const code = await qualify({ pkg: '@fx/host@1.0.0', peers: ['@fx/lagpeer@1.0.0'], mode: 'post-publication', registry: server.url, reportDir, attempts: 3, delaySeconds: 0 });
+    const report = readReport(reportDir);
+    assert.equal(code, 0, JSON.stringify(report.problems));
+    assert.deepEqual(report.peersAdded.map((p) => `${p.name}@${p.version}:${p.exit}:${p.attempts}`), ['@fx/lagpeer@1.0.0:0:2']);
+    assert.match(fs.readFileSync(path.join(reportDir, 'qualify.log'), 'utf8'), /waiting for optional peer @fx\/lagpeer@1\.0\.0 \(1\/3\)/);
+  } finally {
+    server.child.kill();
+  }
+});
+
+test('post-publication: a PEERS install error other than not-yet-visible fails without retry', async () => {
+  const { peer, host } = peerHost();
+  const server = await serveRegistry([host, peer], { forbidden: ['@fx/lagpeer'] });
+  try {
+    const reportDir = tmp('qrep-');
+    const code = await qualify({ pkg: '@fx/host@1.0.0', peers: ['@fx/lagpeer@1.0.0'], mode: 'post-publication', registry: server.url, reportDir, attempts: 3, delaySeconds: 0 });
+    const report = readReport(reportDir);
+    assert.equal(code, 1);
+    assert.equal(report.peersAdded[0].attempts, 1, 'E403 is not retried');
+    assert.match(report.problems.join('\n'), /optional peer install failed: @fx\/lagpeer@1\.0\.0/);
+  } finally {
+    server.child.kill();
+  }
+});
+
+test('post-publication: a PEERS version still invisible after the budget fails', async () => {
+  const { peer, host } = peerHost();
+  const server = await serveRegistry([host, peer], { lag: { '@fx/lagpeer': 99 } });
+  try {
+    const reportDir = tmp('qrep-');
+    assert.equal(await qualify({ pkg: '@fx/host@1.0.0', peers: ['@fx/lagpeer@1.0.0'], mode: 'post-publication', registry: server.url, reportDir, attempts: 2, delaySeconds: 0 }), 1);
+    assert.equal(readReport(reportDir).peersAdded[0].attempts, 2);
+  } finally {
+    server.child.kill();
+  }
+});
+
+// ---- SLSA provenance source commit (tarball publishing records no gitHead)
+const SHA = 'a'.repeat(40);
+const slsaDoc = ({ name, version, integrity, commits, subjectName, extra = [], runId }) => ({
+  attestations: [
+    { predicateType: 'https://github.com/npm/attestation/tree/main/specs/publish/v0.1', bundle: {} },
+    { predicateType: SLSA_V1, bundle: { dsseEnvelope: { payload: Buffer.from(JSON.stringify({
+      _type: 'https://in-toto.io/Statement/v1', predicateType: SLSA_V1,
+      subject: [{ name: subjectName ?? `pkg:npm/${name.replace(/^@/, '%40')}@${version}`, digest: { sha512: Buffer.from(integrity.slice(7), 'base64').toString('hex') } }],
+      predicate: { buildDefinition: { resolvedDependencies: [...commits.map((c) => ({ uri: 'git+https://github.com/rhanka/sentropic@refs/heads/main', digest: { gitCommit: c } })), ...extra] }, ...(runId ? { runDetails: { metadata: { invocationId: `https://github.com/rhanka/sentropic/actions/runs/${runId}/attempts/1` } } } : {}) },
+    })).toString('base64') } } },
+  ],
+});
+
+test('provenance check: workflow commit and published subject must match the SLSA v1 statement', () => {
+  const integrity = `sha512-${createHash('sha512').update('x').digest('base64')}`;
+  const id = { name: '@fx/p', version: '1.0.0', integrity, commit: SHA };
+  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), id), { problems: [], sourceCommits: [SHA], runId: null });
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: ['b'.repeat(40)] }), id).problems.join(), /differs from the workflow commit/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [] }), id).problems.join(), /has 0 git\+https:\/\/github\.com\/rhanka\/sentropic@refs\/\* source entries/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA], subjectName: 'pkg:npm/%40fx/other@1.0.0' }), id).problems.join(), /subject does not match/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), { ...id, integrity: `sha512-${createHash('sha512').update('y').digest('base64')}` }).problems.join(), /subject does not match/);
+  assert.match(checkProvenance({ attestations: [] }, id).problems.join(), /no SLSA v1 provenance/);
+  // Only the repository source entry is compared: an unrelated resolved dependency does not matter.
+  const reusable = { uri: 'git+https://github.com/other/reusable-workflows@refs/heads/main', digest: { gitCommit: 'd'.repeat(40) } };
+  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA], extra: [reusable] }), id), { problems: [], sourceCommits: [SHA], runId: null });
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: ['e'.repeat(40)], extra: [{ ...reusable, digest: { gitCommit: SHA } }] }), id).problems.join(), /source commit e{40} differs from the workflow commit/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [], extra: [{ ...reusable, digest: { gitCommit: SHA } }] }), id).problems.join(), /has 0 .* source entries/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA, SHA] }), id).problems.join(), /has 2 .* source entries \(expected exactly one\)/);
+});
+
+test('provenance commit input: 40-hex SHA, PKG post-publication only', async () => {
+  await assert.rejects(probe({ pkg: '@fx/a@1.0.0', mode: 'post-publication', provenanceCommit: 'HEAD' }), /40-hex/);
+  await assert.rejects(probe({ pkg: '@fx/a@1.0.0', provenanceCommit: SHA }), /restricted to PKG post-publication/);
+  await assert.rejects(probe({ tarball: '/x.tgz', mode: 'post-publication', provenanceCommit: SHA }), /restricted to PKG post-publication/);
+});
+
+test('post-publication: provenance is awaited within the budget and gates the qualification', async () => {
+  const tgz = build({ name: '@fx/prov', exports: './index.js' }, { 'index.js': 'export default 1;' });
+  const server = await serveRegistry(tgz);
+  const integrity = `sha512-${createHash('sha512').update(fs.readFileSync(tgz)).digest('base64')}`;
+  const run = async (answers, attempts = 3, extra = {}) => {
+    let calls = 0;
+    const registryClient = { ...createRegistry({ registry: server.url, delayMs: 0 }), attestations: async () => answers[Math.min((calls += 1), answers.length) - 1] };
+    const reportDir = tmp('qrep-');
+    const code = await qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceCommit: SHA, registryClient, registry: server.url, reportDir, attempts, delaySeconds: 0, ...extra });
+    return { code, calls, report: readReport(reportDir), log: fs.readFileSync(path.join(reportDir, 'qualify.log'), 'utf8') };
+  };
+  try {
+    const good = await run([null, slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: [SHA] })]);
+    assert.equal(good.code, 0, JSON.stringify(good.report.problems));
+    assert.deepEqual(good.report.provenance, { commit: SHA, sourceCommits: [SHA], runId: null, ok: true });
+    assert.match(good.log, /waiting for provenance of @fx\/prov@1\.0\.0 \(1\/3\)/);
+    const other = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)] })]);
+    assert.equal(other.code, 1);
+    assert.match(other.report.problems.join(), /differs from the workflow commit/);
+    const never = await run([null], 2);
+    assert.equal(never.code, 1);
+    assert.equal(never.calls, 2);
+    assert.match(never.report.problems.join(), /provenance attestations for @fx\/prov@1\.0\.0 unavailable after 2 x 0s/);
+    // Re-run heal (--provenance-run): another run's publication is a stale skip (exit 0, nothing installed);
+    // this run's publication is fully checked, commit included.
+    const stale = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)], runId: '111' })], 3, { provenanceRun: '222' });
+    assert.equal(stale.code, 0, JSON.stringify(stale.report.problems));
+    assert.equal(stale.report.status, 'stale-skip');
+    assert.equal(stale.report.install, undefined, 'a stale skip installs nothing');
+    const sameRun = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: [SHA], runId: '222' })], 3, { provenanceRun: '222' });
+    assert.equal(sameRun.code, 0, JSON.stringify(sameRun.report.problems));
+    assert.equal(sameRun.report.status, 'pass');
+    const sameRunWrongCommit = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)], runId: '222' })], 3, { provenanceRun: '222' });
+    assert.equal(sameRunWrongCommit.code, 1);
+    const noRunId = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)] })], 3, { provenanceRun: '222' });
+    assert.equal(noRunId.code, 1, 'an attestation without a run id is never treated as stale');
+    await assert.rejects(qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceRun: '222', registry: server.url, reportDir: tmp('qrep-') }), /requires a provenance commit/);
+    await assert.rejects(qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceCommit: SHA, provenanceRun: '0x1', registry: server.url, reportDir: tmp('qrep-') }), /numeric GitHub run id/);
   } finally {
     server.child.kill();
   }

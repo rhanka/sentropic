@@ -215,20 +215,20 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
-    if (slug === 'cluster-mesh') {
-      // Release train (BRDP-EX10): a skipped receipt is healed only on a re-run, when the version is on the registry.
-      const run = publish[at + 1].run;
-      assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, 'first attempt: a skip is a prior publication');
-      assert.match(run, /if ! curl -fsS -o \/dev\/null "https:\/\/registry\.npmjs\.org\/[^\n]*then echo "::error [^\n]*absent from the registry"; exit 1; fi/);
-      assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
-      assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" PEERS=\S+ QUALIFY_MODE=post-publication REPORT_DIR="\$report_dir"/);
-      assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
-      const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === 'Qualify bootstrap-published cluster-mesh');
-      assert.ok(bootstrap.run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'bootstrap qualification uses the same optional peers');
-    } else {
-      assert.match(publish[at + 1].run, /if \[ "\$status" != published \]; then .*exit 0; fi\n.*make qualify-published-install/s, 'qualify only a new publication, never a skip');
-      assert.match(publish[at + 1].run, new RegExp(`make qualify-published-install PKG="\\$pkg"${peers} QUALIFY_MODE=post-publication`));
-    }
+    // Release train (BRDP-EX10, BRCIW-EX3 for mcp-auth): an equal-integrity conflict is qualified at once; a plain
+    // skip is healed only on a re-run, after a cache-busted, retried presence check, with the run id so that a
+    // version published by an earlier run is a stale skip (notice) rather than a red provenance check.
+    const run = publish[at + 1].run;
+    assert.match(run, /conflict="\$\(sed -n 's\/\^conflict=\/\/p' "\$receipt"\)"\n\s*provenance_run=\n/, `${slug}: reads the conflict kind`);
+    assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$conflict" = equal-integrity \]; then echo "::notice [^\n]*"\n\s*else\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, `${slug}: first attempt: a plain skip is a prior publication`);
+    assert.match(run, /if ! curl -fsS --retry 3 --retry-all-errors -o \/dev\/null -H 'cache-control: no-cache' "https:\/\/registry\.npmjs\.org\/[^\n]*\?cachebust=\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}-\$\(date \+%s\)"; then echo "::error [^\n]*absent from the registry"; exit 1; fi\n\s*provenance_run="\$GITHUB_RUN_ID"\n/, `${slug}: cache-busted presence check, then run-scoped heal`);
+    assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
+    const reportDir = slug === 'cluster-mesh' ? 'REPORT_DIR="\\$report_dir"' : `REPORT_DIR=tmp\\/ci-manifest-guard\\/qualify-${slug}`;
+    assert.match(run, new RegExp(`\\*\\) echo "::error [^\\n]*unexpected publication outcome"; exit 1 ;;\\n\\s*esac\\n\\s*make qualify-published-install PKG="\\$pkg" PEERS=\\S+ QUALIFY_MODE=post-publication ${reportDir} QUALIFY_PROVENANCE_SHA="\\$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="\\$provenance_run" ENV=test-ci-${slug}\\n?$`), `${slug}: exact qualification command`);
+    if (slug === 'cluster-mesh') assert.match(run, /\n\s*report_dir=tmp\/ci-manifest-guard\/qualify-cluster-mesh\n/);
+    assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
+    const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === `Qualify bootstrap-published ${slug}`);
+    assert.ok(bootstrap.run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'bootstrap qualification uses the same optional peers');
     assert.ok(!/SIBLING_ARCHIVES_FILE|TARBALL=/.test(publish[at + 1].run), 'registry-only after publication');
     assert.equal(publish[at + 2].if, 'always()');
   }
@@ -366,7 +366,8 @@ test('post-publication qualification fails on a missing or status-less receipt',
 });
 
 // BRDP-EX11: run the host guard lines of qualify-published-install (before mkdir/docker) with sh, one shell per line as Make does.
-const runQualifyGuards = (vars) => {
+const runQualifyGuards = (overrides) => {
+  const vars = { QUALIFY_WAIT_ATTEMPTS: '18', QUALIFY_WAIT_SECONDS: '10', ...overrides };
   const lines = recipe('qualify-published-install').split('\n');
   const guards = lines.slice(0, lines.findIndex((l) => l.startsWith('\t@mkdir')));
   for (const line of guards) {
@@ -388,4 +389,47 @@ test('qualify-published-install: TARBALL mode without PEERS/QUALIFY_MODE passes 
   assert.equal(bad.status, 1);
   assert.match(bad.out, /ERROR: PKG\/PEERS\/QUALIFY_MODE contain unsupported characters/);
   assert.equal(runQualifyGuards({ TARBALL: tgz, PEERS: '@x/a@1.0.0,b@2.0.0', QUALIFY_MODE: 'registry' }).status, 0);
+});
+
+test('qualify-published-install: registry wait budget defaults to 18 x 10 s and only accepts integers', () => {
+  assert.match(makefile, /^QUALIFY_WAIT_ATTEMPTS \?= 18$/m);
+  assert.match(makefile, /^QUALIFY_WAIT_SECONDS \?= 10$/m);
+  assert.match(recipe('qualify-published-install'), /--attempts "\$\(QUALIFY_WAIT_ATTEMPTS\)" --delay "\$\(QUALIFY_WAIT_SECONDS\)"/);
+  const tgz = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qguard-')), 'candidate.tgz');
+  fs.writeFileSync(tgz, '');
+  for (const bad of [{ QUALIFY_WAIT_ATTEMPTS: '0' }, { QUALIFY_WAIT_ATTEMPTS: '1;x' }, { QUALIFY_WAIT_SECONDS: 'ten' }, { QUALIFY_WAIT_SECONDS: '' }]) {
+    assert.match(runQualifyGuards({ TARBALL: tgz, ...bad }).out, /QUALIFY_WAIT_ATTEMPTS\/QUALIFY_WAIT_SECONDS must be integers/, JSON.stringify(bad));
+  }
+});
+
+test('steady-state OIDC post-publication qualification checks the SLSA provenance commit; bootstrap token publishes do not', () => {
+  for (const slug of ['mcp-auth', 'cluster-mesh']) {
+    const publish = jobs[`publish-${slug}`].steps;
+    const step = publish[publish.findIndex((s) => s.run === `make publish-${slug}`) + 1];
+    assert.match(step.run, /make qualify-published-install PKG="\$pkg" [^\n]* QUALIFY_PROVENANCE_SHA="\$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="\$provenance_run" ENV=test-ci-/, slug);
+    const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === `Qualify bootstrap-published ${slug}`);
+    assert.ok(!bootstrap.run.includes('QUALIFY_PROVENANCE_SHA'), `${slug}: bootstrap publishes carry no provenance`);
+  }
+  assert.match(recipe('qualify-published-install'), /\$\(if \$\(QUALIFY_PROVENANCE_SHA\),--provenance-commit "\$\(QUALIFY_PROVENANCE_SHA\)"\)/);
+  const tgz = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qguard-')), 'candidate.tgz');
+  fs.writeFileSync(tgz, '');
+  assert.equal(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_SHA: 'a'.repeat(40) }).status, 0);
+  for (const bad of ['HEAD', 'A'.repeat(40), `${'a'.repeat(40)};x`]) {
+    assert.match(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_SHA: bad }).out, /QUALIFY_PROVENANCE_SHA must be a 40-hex commit SHA/, bad);
+  }
+  assert.match(recipe('qualify-published-install'), /\$\(if \$\(QUALIFY_PROVENANCE_RUN\),--provenance-run "\$\(QUALIFY_PROVENANCE_RUN\)"\)/);
+  assert.equal(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_RUN: '36222109704' }).status, 0);
+  for (const bad of ['0', 'abc', '12;x']) {
+    assert.match(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_RUN: bad }).out, /QUALIFY_PROVENANCE_RUN must be a numeric run id/, bad);
+  }
+});
+
+test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
+  assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_ATTEMPTS \?= 18$/m);
+  assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_SECONDS \?= 10$/m);
+  const mesh = recipe('wait-llm-gateway-mesh-dependency');
+  assert.match(mesh, /publishable-manifests\.mjs wait --spec "@sentropic\/llm-mesh@\$\$version"/);
+  assert.ok(!mesh.includes('npm view'), 'no cached npm view poll');
+  assert.match(recipe('wait-llm-gateway-auth-dependencies'), /npm_config_prefer_online=true node scripts\/auth-registry\.mjs/);
+  assert.match(makefile, /^manifest_guard_publish = .* publish --slug \$\(1\) --wait-attempts "\$\(LLM_MESH_REGISTRY_WAIT_ATTEMPTS\)" --wait-delay "\$\(LLM_MESH_REGISTRY_WAIT_SECONDS\)" -- \$\(2\)$/m, 'publish conflict re-read uses the Make wait budget');
 });
