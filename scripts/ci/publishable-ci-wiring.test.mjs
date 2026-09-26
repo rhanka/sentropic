@@ -215,20 +215,16 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
-    if (slug === 'cluster-mesh') {
-      // Release train (BRDP-EX10): a skipped receipt is healed only on a re-run, when the version is on the registry.
-      const run = publish[at + 1].run;
-      assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, 'first attempt: a skip is a prior publication');
-      assert.match(run, /if ! curl -fsS -o \/dev\/null "https:\/\/registry\.npmjs\.org\/[^\n]*then echo "::error [^\n]*absent from the registry"; exit 1; fi/);
-      assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
-      assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" PEERS=\S+ QUALIFY_MODE=post-publication REPORT_DIR="\$report_dir"/);
-      assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
-      const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === 'Qualify bootstrap-published cluster-mesh');
-      assert.ok(bootstrap.run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'bootstrap qualification uses the same optional peers');
-    } else {
-      assert.match(publish[at + 1].run, /if \[ "\$status" != published \]; then .*exit 0; fi\n.*make qualify-published-install/s, 'qualify only a new publication, never a skip');
-      assert.match(publish[at + 1].run, new RegExp(`make qualify-published-install PKG="\\$pkg"${peers} QUALIFY_MODE=post-publication`));
-    }
+    // Release train (BRDP-EX10, BRCIW-EX3 for mcp-auth): a skipped receipt is healed only on a re-run,
+    // after a cache-busted registry presence check.
+    const run = publish[at + 1].run;
+    assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, `${slug}: first attempt: a skip is a prior publication`);
+    assert.match(run, /if ! curl -fsS -o \/dev\/null -H 'cache-control: no-cache' "https:\/\/registry\.npmjs\.org\/[^\n]*\?cachebust=\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}-\$\(date \+%s\)"; then echo "::error [^\n]*absent from the registry"; exit 1; fi/, `${slug}: cache-busted presence check`);
+    assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
+    assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" PEERS=\S+ QUALIFY_MODE=post-publication REPORT_DIR=/, slug);
+    assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
+    const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === `Qualify bootstrap-published ${slug}`);
+    assert.ok(bootstrap.run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'bootstrap qualification uses the same optional peers');
     assert.ok(!/SIBLING_ARCHIVES_FILE|TARBALL=/.test(publish[at + 1].run), 'registry-only after publication');
     assert.equal(publish[at + 2].if, 'always()');
   }
