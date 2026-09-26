@@ -13,6 +13,7 @@
   - `packages/llm-mesh/**`
   - `scripts/llm-model-equivalences/**`
   - `BRANCH.md`
+  - `package-lock.json`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - `api/**`
   - `packages/llm-gateway/**`
@@ -20,7 +21,7 @@
   - `Makefile`
   - `docker-compose*.yml`
   - `.github/workflows/**`
-- [x] **Conditional Paths**: `package-lock.json` via make if bump requires it; `docs/runbooks/model-update-launch-packet.md` only for an incorrect procedure.
+- [x] **Conditional Paths**: `docs/runbooks/model-update-launch-packet.md` only for an incorrect procedure.
 - [x] Exceptions: none; explicit owner scope supersedes wider runbook consumer/publication requirements.
 
 ## Feedback Loop
@@ -30,6 +31,7 @@
 - [x] G6-04 attention: council generator supports exclusions only; classify new models as excluded like matching 5.6 models, without asserting benchmark equivalence.
 - [x] G6-05 attention: retain GPT-5.6 catalog entries and faithful direct routes for reversibility; switch standard alias targets only.
 - [x] G6-06 attention: owner limits consumer changes; gateway/cluster compatibility tested against workspace; product/API and external host defaults remain conductor work.
+- [x] G6-07 acknowledge: owner-authorized root lock refresh via `make lock-root` changes only mesh version 0.22.0 to 0.22.1; gateway `^0.22.0` and cluster `>=0.22.0 <0.23.0` accept it.
 
 ## AI Flaky tests
 - [x] No live tests or flaky acceptance planned; conductor receipts establish model availability only.
@@ -44,6 +46,6 @@
 - [x] Lot 0: read rules, template, runbook, scaffold tests/script; confirm npm latest 0.22.0 and branch.
 - [x] Lot 1: scaffold Sol/Luna; review catalog/providers; bump package.json and CHANGELOG; remove scaffold markers.
 - [x] Lot 2: switch standard routing targets; classify council source and regenerate output; Cloud Code capability aliases need no change.
-- [ ] Lot 3: update routing-targets, route-selection, facade, budget-quote and add-model-script tests; assert new Codex routes and no GPT-6 Terra target.
+- [x] Lot 3: update routing-targets, route-selection, facade, budget-quote and add-model-script tests; assert new Codex routes and no GPT-6 Terra target.
 - [ ] Lot 4: typecheck, lint, full mesh tests, build, pack and council freshness checks.
 - [ ] Lot 5: gateway and cluster workspace regression tests; scope checks; candidate SHA-256 and commit history; environment cleanup.
