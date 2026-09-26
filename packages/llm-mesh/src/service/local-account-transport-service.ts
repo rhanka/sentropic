@@ -538,7 +538,7 @@ export class LocalAccountTransportService {
     // Check if access token is expired
     if (account && account.expiresAt) {
       const expiresAtMs = new Date(account.expiresAt).getTime();
-      if (expiresAtMs <= nowMs) {
+      if (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId)) {
         try {
           const version = this.credentialVersions.get(account.accountId) ?? 'v1.0.0';
           const refreshed = await this.refreshToken({
@@ -547,54 +547,24 @@ export class LocalAccountTransportService {
             credentialVersion: version,
           });
 
-          if (await this.isAccountRemoved(account.accountId)) {
-            await acquisition.release?.();
-            throw new AccountTransportAcquireError(
-              `Account ${account.accountId} has been removed`,
-              'no_active_account',
-            );
-          }
-
-          // Atomic persistence of updated credentials
-          account.accessToken = refreshed.accessToken;
-          if (refreshed.refreshToken) {
-            account.refreshToken = refreshed.refreshToken;
-          }
-          account.expiresAt = refreshed.expiresAt;
-
-          await this.persistCredential(
-            {
-              accountId: account.accountId,
-              accountLabel: account.accountLabel ?? undefined,
-              providerId: account.transportProviderId,
-              status: 'active',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-            {
-              accountId: account.accountId,
-              accessToken: refreshed.accessToken,
-              refreshToken: account.refreshToken ?? undefined,
-              expiresAt: refreshed.expiresAt,
-              authClientConfigVersion: refreshed.authClientConfigVersion,
-            },
-            account,
-          );
-
           // Update material with refreshed token
           acquisition.material.accessToken = refreshed.accessToken;
           if (refreshed.refreshToken) {
             acquisition.material.refreshToken = refreshed.refreshToken;
           }
           acquisition.material.expiresAt = refreshed.expiresAt;
-        } catch (refreshErr) {
-          await this.markReauthRequired(account.accountId);
+        } catch {
+          await acquisition.release?.();
           throw new AccountTransportAcquireError(
-            `Account ${account.accountId} token refresh failed: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`,
+            `Account ${account.accountId} token refresh failed; reauthentication required`,
             'no_active_account',
           );
         }
       }
+      // Acquisition may have snapshotted the old token before another caller published.
+      acquisition.material.accessToken = account.accessToken;
+      acquisition.material.refreshToken = account.refreshToken;
+      acquisition.material.expiresAt = account.expiresAt;
     }
 
     return acquisition;
@@ -758,7 +728,28 @@ export class LocalAccountTransportService {
           throw new Error(`No provider registered for refresh: ${providerId}`);
         }
 
-        return await provider.refresh(input);
+        const refreshed = await provider.refresh(input);
+        if (!account || refreshed.accountId !== input.accountId
+          || !refreshed.accessToken?.trim() || /[\r\n]/.test(refreshed.accessToken)
+          || !Number.isFinite(Date.parse(refreshed.expiresAt))
+          || Date.parse(refreshed.expiresAt) <= Date.now()
+          || refreshed.authClientConfigVersion !== input.credentialVersion
+          || (refreshed.refreshToken !== undefined && (!refreshed.refreshToken.trim()
+            || /[\r\n]/.test(refreshed.refreshToken)))) throw new Error('Invalid refresh grant');
+        const updated = { ...account, accessToken: refreshed.accessToken,
+          refreshToken: refreshed.refreshToken ?? account.refreshToken, expiresAt: refreshed.expiresAt };
+        const now = new Date().toISOString();
+        await this.persistCredential({ accountId: account.accountId,
+          accountLabel: account.accountLabel ?? undefined, providerId, status: 'active',
+          createdAt: account.enrollmentCompletedAt ?? now, updatedAt: now },
+        { ...refreshed, refreshToken: updated.refreshToken ?? undefined }, updated);
+        if (await this.isAccountRemoved(input.accountId)) throw new Error('Account removed');
+        Object.assign(account, updated);
+        this.credentialVersions.set(input.accountId, refreshed.authClientConfigVersion);
+        return { ...refreshed, refreshToken: updated.refreshToken ?? undefined };
+      } catch {
+        await this.markReauthRequired(input.accountId).catch(() => {});
+        throw new Error('Token refresh failed; reauthentication required');
       } finally {
         this.refreshInFlight.delete(input.accountId);
       }

@@ -6,6 +6,55 @@ import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 describe('LocalAccountTransportService', () => {
+  it.each(['cloud-code', 'codex'] as const)('holds %s refresh until durable publication', async (transportProviderId) => {
+    for (const failSave of [false, true]) {
+      const keyring = new InMemoryKeyring();
+      let entered!: () => void;
+      let resume!: () => void;
+      const saving = new Promise<void>((resolve) => { entered = resolve; });
+      const gate = new Promise<void>((resolve) => { resume = resolve; });
+      const save = keyring.setSecret.bind(keyring);
+      keyring.setSecret = async (key, value) => {
+        if (key.endsWith(':envelope')) {
+          entered();
+          await gate;
+          if (failSave) throw new Error('CANARY_STORAGE_SECRET');
+        }
+        await save(key, value);
+      };
+      const refresh = vi.fn(async (input) => ({
+        accountId: input.accountId, accessToken: 'fresh', refreshToken: 'rotated',
+        expiresAt: '2099-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+      }));
+      const provider = { refresh } as unknown as EnrollmentProvider;
+      const service = new LocalAccountTransportService(keyring,
+        new Map([[transportProviderId, provider]]), { async resolveConfig() { return {}; } });
+      service.registerAccount({ accountId: 'race', targetProviderId: 'openai',
+        transportProviderId, accessToken: 'old', refreshToken: 'old-refresh',
+        expiresAt: '2000-01-01T00:00:00Z', status: 'active' });
+      const input = { targetProviderId: 'openai' as const, transportProviderId };
+      let published = 0;
+      const acquire = () => service.acquire(input).then((result) => { published++; return result; });
+      const first = acquire();
+      await saving;
+      const second = acquire();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(published).toBe(0);
+      resume();
+      const results = await Promise.allSettled([first, second]);
+      expect(results.map((result) => result.status)).toEqual(
+        failSave ? ['rejected', 'rejected'] : ['fulfilled', 'fulfilled']);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      if (failSave) {
+        expect(JSON.stringify(results)).not.toContain('CANARY_STORAGE_SECRET');
+        await expect(service.acquire(input)).rejects.toBeInstanceOf(AccountTransportAcquireError);
+      } else {
+        expect((await service.acquire(input)).material.accessToken).toBe('fresh');
+      }
+    }
+  });
+
   it('restores a Cloud Code enrollment in a fresh runtime service', async () => {
     const keyring = new InMemoryKeyring();
     const provider = {
