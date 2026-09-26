@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  GuardError, REGISTRY, checkManifest, createRegistry, loadSemver, readPackedManifest, sha256File,
+  GuardError, REGISTRY, checkManifest, createRegistry, loadSemver, readPackedManifest, sha256File, waitBudget, waitForVersion,
 } from './publishable-manifests.mjs';
 
 const EXACT_PKG = /^((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)@([^@\s]+)$/;
@@ -74,8 +74,14 @@ function cleanEnv(consumer, registry) {
     npm_config_globalconfig: emptyGlobal,
     npm_config_registry: registry,
     npm_config_update_notifier: 'false',
+    // Revalidate registry metadata instead of trusting a cached packument (post-publication lag).
+    npm_config_prefer_online: 'true',
   };
 }
+
+// npm install output of a version the registry (or its CDN) does not serve yet; retried within the wait budget.
+export const registryNotVisible = (output) =>
+  /\b(?:ETARGET|E404)\b|\bnotarget\b|No matching version found|is not in this registry|404 Not Found/i.test(output);
 
 function run(cmd, args, { cwd, env, log, timeout = 600_000 }) {
   const result = spawnSync(cmd, args, { cwd, env, encoding: 'utf8', timeout, maxBuffer: 64 * 1024 * 1024 });
@@ -178,6 +184,41 @@ function importEntry(consumer, entry, env, log) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Tarball publishing records no gitHead: in the SLSA v1 provenance statement (npm attestations endpoint)
+// the repository source entry (git+<repo>@refs/...) must carry the workflow commit, and the subject must
+// be the published tarball. Other resolved dependencies (e.g. reusable workflows) are ignored.
+// `runId` is the GitHub Actions run named by runDetails.metadata.invocationId (null when absent).
+export const SLSA_V1 = 'https://slsa.dev/provenance/v1';
+export const SOURCE_REPOSITORY = 'https://github.com/rhanka/sentropic';
+// The third argument is TEST-ONLY: qualify() (the CLI path) never passes it, so production is frozen
+// on SOURCE_REPOSITORY.
+export function checkProvenance(doc, { name, version, integrity, commit }, { repository = SOURCE_REPOSITORY } = {}) {
+  const problems = [];
+  const bundle = (doc?.attestations ?? []).find((a) => a?.predicateType === SLSA_V1);
+  if (!bundle) return { problems: [`no SLSA v1 provenance attestation for ${name}@${version}`], sourceCommits: [], runId: null };
+  let statement;
+  try {
+    statement = JSON.parse(Buffer.from(bundle.bundle?.dsseEnvelope?.payload ?? '', 'base64').toString('utf8'));
+  } catch (error) {
+    return { problems: [`unreadable SLSA provenance payload for ${name}@${version}: ${error.message}`], sourceCommits: [], runId: null };
+  }
+  const invocation = statement?.predicate?.runDetails?.metadata?.invocationId;
+  const runMatch = typeof invocation === 'string' && invocation.startsWith(`${repository}/actions/runs/`) ? invocation.match(/\/actions\/runs\/(\d+)(?:\/|$)/) : null;
+  const runId = runMatch ? runMatch[1] : null;
+  const prefix = `git+${repository}@refs/`;
+  const sources = (statement?.predicate?.buildDefinition?.resolvedDependencies ?? []).filter((d) => typeof d?.uri === 'string' && d.uri.startsWith(prefix));
+  const sourceCommits = sources.map((d) => d?.digest?.gitCommit ?? null);
+  if (sources.length !== 1) problems.push(`SLSA provenance of ${name}@${version} has ${sources.length} ${prefix}* source entries (expected exactly one)`);
+  else if (sourceCommits[0] !== commit) problems.push(`SLSA provenance source commit ${sourceCommits[0]} differs from the workflow commit ${commit}`);
+  const match = typeof integrity === 'string' && integrity.match(/^sha512-([A-Za-z0-9+/=]+)$/);
+  const digest = match ? Buffer.from(match[1], 'base64').toString('hex') : null;
+  const subjectName = `pkg:npm/${name.replace(/^@/, '%40')}@${version}`;
+  if (!(statement?.subject ?? []).some((s) => s?.name === subjectName && digest && s?.digest?.sha512 === digest)) {
+    problems.push(`SLSA provenance subject does not match ${subjectName} with the published sha512`);
+  }
+  return { problems, sourceCommits, runId };
+}
 const lockEntries = (dir) => {
   try {
     return JSON.parse(fs.readFileSync(path.join(dir, 'package-lock.json'), 'utf8')).packages ?? {};
@@ -198,8 +239,19 @@ export async function qualify(opts) {
   if (!['candidate', 'published', 'post-publication'].includes(mode)) throw new GuardError(`unknown mode ${mode}`);
   if (Boolean(opts.pkg) === Boolean(opts.tarball)) throw new GuardError('exactly one of PKG=<name>@<exact-version> or TARBALL=<path> is required');
   if (opts.siblingsDir && (opts.pkg || mode !== 'candidate')) throw new GuardError('sibling injection is restricted to TARBALL candidate qualification');
-  const attempts = mode === 'post-publication' ? Number(opts.attempts ?? 12) : 1;
-  const delayMs = Number(opts.delaySeconds ?? 5) * 1000;
+  if (opts.provenanceCommit) {
+    if (!/^[0-9a-f]{40}$/.test(opts.provenanceCommit)) throw new GuardError(`provenance commit must be a 40-hex git SHA, got ${JSON.stringify(opts.provenanceCommit)}`);
+    if (!opts.pkg || mode !== 'post-publication') throw new GuardError('provenance check is restricted to PKG post-publication qualification');
+  }
+  // Re-run heal: a version whose provenance names another workflow run was published before this run
+  // (stale skip, e.g. a no-bump change): report `stale-skip` and exit 0 without qualifying it.
+  if (opts.provenanceRun && (!/^[1-9][0-9]*$/.test(opts.provenanceRun) || !opts.provenanceCommit)) {
+    throw new GuardError('provenance run must be a numeric GitHub run id and requires a provenance commit');
+  }
+  // Post-publication waits share the registry visibility budget (default 18 x 10 s); other modes never wait.
+  const budget = waitBudget({ attempts: opts.attempts, delaySeconds: opts.delaySeconds });
+  const attempts = mode === 'post-publication' ? budget.attempts : 1;
+  const delayMs = budget.delaySeconds * 1000;
   const reportDir = opts.reportDir;
   fs.mkdirSync(reportDir, { recursive: true });
   const log = path.join(reportDir, 'qualify.log');
@@ -219,7 +271,7 @@ export async function qualify(opts) {
       ...report.problems.map((p) => `  PROBLEM ${p}`)];
     fs.writeFileSync(path.join(reportDir, 'qualify-summary.txt'), `${lines.join('\n')}\n`);
     process.stdout.write(`${lines.join('\n')}\n`);
-    return status === 'pass' || (status === 'pending-sibling-publish' && mode === 'candidate') ? 0 : 1;
+    return status === 'pass' || status === 'stale-skip' || (status === 'pending-sibling-publish' && mode === 'candidate') ? 0 : 1;
   };
   try {
     fs.mkdirSync(consumer.dir);
@@ -232,13 +284,9 @@ export async function qualify(opts) {
     let primary;
     if (opts.pkg) {
       const { name, version } = parseExactSpec(opts.pkg, semver);
-      let found;
-      for (let i = 1; i <= attempts; i += 1) {
-        found = await registry.lookup(name, version, { fresh: true });
-        if (found.status === 'present' || i === attempts) break;
-        fs.appendFileSync(log, `waiting for ${name}@${version} (${i}/${attempts})\n`);
-        await sleep(delayMs);
-      }
+      const found = await waitForVersion(registry, name, version, {
+        attempts, delaySeconds: budget.delaySeconds, onWait: (i, n) => fs.appendFileSync(log, `waiting for ${name}@${version} (${i}/${n})\n`),
+      });
       if (found.status !== 'present') {
         report.problems.push(`${name}@${version} is not published on ${registryUrl}`);
         return finish('fail');
@@ -247,6 +295,33 @@ export async function qualify(opts) {
       primary = published.manifest;
       report.resolved = { name, version, integrity: published.integrity, sha256: published.sha256 };
       installSpec = `${name}@${version}`;
+      if (opts.provenanceCommit) {
+        // Attestations may lag the packument: wait within the same budget, then compare once.
+        let doc = null;
+        let lastError = 'not published yet';
+        for (let i = 1; i <= attempts && !doc; i += 1) {
+          try {
+            doc = await registry.attestations(name, version);
+          } catch (error) {
+            lastError = error.message;
+          }
+          if (!doc && i < attempts) {
+            fs.appendFileSync(log, `waiting for provenance of ${name}@${version} (${i}/${attempts})\n`);
+            await sleep(delayMs);
+          }
+        }
+        if (!doc) report.problems.push(`provenance attestations for ${name}@${version} unavailable after ${attempts} x ${budget.delaySeconds}s (${lastError})`);
+        else {
+          const provenance = checkProvenance(doc, { name, version, integrity: published.integrity, commit: opts.provenanceCommit });
+          report.provenance = { commit: opts.provenanceCommit, sourceCommits: provenance.sourceCommits, runId: provenance.runId, ok: provenance.problems.length === 0 };
+          if (opts.provenanceRun && provenance.runId && provenance.runId !== opts.provenanceRun) {
+            report.provenance.stale = `published by run ${provenance.runId}, not this run ${opts.provenanceRun}`;
+            report.problems.push(`stale skip: ${name}@${version} was ${report.provenance.stale}; nothing to qualify`);
+            return finish('stale-skip');
+          }
+          report.problems.push(...provenance.problems);
+        }
+      }
     } else {
       const stat = fs.lstatSync(opts.tarball, { throwIfNoEntry: false });
       if (!stat?.isFile() || !opts.tarball.endsWith('.tgz')) throw new GuardError(`TARBALL must be an existing regular .tgz file: ${opts.tarball}`);
@@ -279,8 +354,9 @@ export async function qualify(opts) {
       install = run('npm', installArgs, { cwd: consumer.dir, env, log });
       if (install.status === 0) break;
       const missing = missingSibling(install.output);
-      if (!missing || !(await confirmMissing(registry, missing, semver))) break;
-      report.pendingSibling = { ...missing, intended: 'awaiting publication', attempt: i };
+      if (missing && (await confirmMissing(registry, missing, semver))) report.pendingSibling = { ...missing, intended: 'awaiting publication', attempt: i };
+      else if (!registryNotVisible(install.output)) break;
+      else fs.appendFileSync(log, `registry not yet serving the install graph (${i}/${attempts})\n`);
       if (i < attempts) await sleep(delayMs);
     }
     report.install = { command: `npm ${installArgs.join(' ')}`, exit: install.status };
@@ -323,8 +399,17 @@ export async function qualify(opts) {
       if (range === undefined) throw new GuardError(`PEERS entry ${name} is not a declared peerDependency of ${primary.name}`);
       if (!semver.satisfies(version, range, { includePrerelease: true })) throw new GuardError(`PEERS entry ${name}@${version} does not satisfy ${range}`);
       const sib = siblings.find((s) => s.name === name && s.version === version);
-      const r = run('npm', ['install', sib ? sib.file : `${name}@${version}`, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
-      report.peersAdded.push({ name, version, source: sib ? 'sibling-receipt' : 'registry', exit: r.status });
+      // Registry peers published by the same train may lag: retry only "not yet visible" errors.
+      let r;
+      let tries = 0;
+      while (tries < attempts) {
+        tries += 1;
+        r = run('npm', ['install', sib ? sib.file : `${name}@${version}`, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
+        if (r.status === 0 || sib || !registryNotVisible(r.output) || tries === attempts) break;
+        fs.appendFileSync(log, `waiting for optional peer ${name}@${version} (${tries}/${attempts})\n`);
+        await sleep(delayMs);
+      }
+      report.peersAdded.push({ name, version, source: sib ? 'sibling-receipt' : 'registry', exit: r.status, attempts: tries });
       if (r.status !== 0) report.problems.push(`optional peer install failed: ${name}@${version}`);
     }
     if (report.peersAdded.length) report.treeAfter = tree(consumer, env, log);
@@ -360,7 +445,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     peers: peers ? peers.split(',').filter(Boolean) : [], mode: argValue(argv, '--mode'), registry: argValue(argv, '--registry'),
     reportDir: argValue(argv, '--report-dir') ?? '/reports', headSha: argValue(argv, '--head-sha') || null,
     image: process.env.QUALIFY_IMAGE ?? null, job: process.env.GITHUB_JOB ?? null,
-    attempts: argValue(argv, '--attempts'), delaySeconds: argValue(argv, '--delay'),
+    attempts: argValue(argv, '--attempts'), delaySeconds: argValue(argv, '--delay'), provenanceCommit: argValue(argv, '--provenance-commit'), provenanceRun: argValue(argv, '--provenance-run'),
   }).then((code) => process.exit(code), (error) => {
     process.stdout.write(`qualify-published-install: ERROR ${error.message}\n`);
     process.exit(1);
