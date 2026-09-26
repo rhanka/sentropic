@@ -59,6 +59,7 @@ Make the packed `tuple-skew.spec.ts` assert registry-state independent invariant
   - [x] Add `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (negative fakes: old tuple accepted by plain install -> violation; skewed tree not refused -> violation; valid outcomes -> no violation).
   - [x] Rewrite `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts` (old-tuple and partial-bump) on the invariants; print the recorded npm outcomes.
   - [x] Update `packages/cluster-mesh/tests/packaging/prepare.sh` comments (recorded behavior no longer frozen).
+  - [x] Review finding: `prepare.sh` partial-bump skew check derives the candidate version from `package.json` instead of the `0.13.0` literal; registry-mode packed run green (10 files, 63 tests).
   - [x] Review other packed assertions for frozen pre-publication registry behavior (none: `selected` is pinned by the committed lock and resolved from the registry; `latest` asserts in-range only).
   - [x] Lot gate:
     - [x] Baseline (before fix) registry mode reproduces the CI failure: old-tuple `plain-exit=1`, `skew-build=force`.
