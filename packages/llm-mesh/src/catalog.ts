@@ -288,6 +288,16 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
   },
+  // Codex availability verified by conductor on 2026-09-26; inherited
+  // gpt-5.6-sol capabilities/task hints are unverified for this model.
+  {
+    providerId: 'openai',
+    modelId: 'gpt-6-sol',
+    label: 'GPT-6 Sol',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
   {
     providerId: 'openai',
     modelId: 'gpt-6-astra',
@@ -308,6 +318,16 @@ export const modelProfiles = [
     providerId: 'openai',
     modelId: 'gpt-5.6-luna',
     label: 'GPT-5.6 Luna',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'summary'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
+  // Codex availability verified by conductor on 2026-09-26; inherited
+  // gpt-5.6-luna capabilities/task hints are unverified for this model.
+  {
+    providerId: 'openai',
+    modelId: 'gpt-6-luna',
+    label: 'GPT-6 Luna',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
