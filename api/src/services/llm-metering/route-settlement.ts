@@ -13,7 +13,7 @@ import type { CallerAuthPort, CostContext, RouteAttemptSettlement, RouteMetering
 import { createId } from '../../utils/id';
 import { outboxWriter } from '../outbox/outbox-writer';
 import {
-  modelBucketKey, pgTextArray, principalOf, usageCost, type LedgerDatabase, type LedgerTx, type PricingRow,
+  lockBudgets, modelBucketKey, pgTextArray, priceWeight, principalOf, usageCost, type LedgerDatabase, type LedgerTx, type PricingRow,
 } from './budget-admission';
 
 // --- Operation (generate | stream) of a settled request, carried from ingress to settlement. ---
@@ -119,7 +119,7 @@ const pinnedPricing = async (tx: LedgerTx, ids: readonly string[]): Promise<Map<
 
 /** The most expensive pinned price: a served model outside the quote is never cheaper than the quote. */
 const costliest = (pricing: Map<string, PricingRow>): PricingRow | undefined => [...pricing.values()]
-  .sort((left, right) => Number((right.input + right.output) - (left.input + left.output)))[0];
+  .sort((left, right) => (priceWeight(right) > priceWeight(left) ? 1 : priceWeight(right) < priceWeight(left) ? -1 : 0))[0];
 
 export class RouteSettlementError extends Error {
   readonly code = 'llm_route_settlement_refused';
@@ -175,37 +175,61 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
         ${servedAttempt?.pricingVersion ?? null}, ${values.result}, ${holdRef}, ${hold.quoteRef}, ${state},
         ${values.attempts}::jsonb)
       ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`);
-    if (inserted.rows.length === 0) {
-      // Fenced: a duplicate settlement or redelivery adds nothing. Only the reaper's conservative
-      // estimate is corrected, once, to the actual charge (auditable: state becomes `reconciled`).
-      const [row] = (await tx.execute(sql`SELECT cost_micro_usd, reconciliation_state FROM control.cost_ledger
-        WHERE idempotency_key = ${requestId} FOR UPDATE`)).rows as Array<Record<string, unknown>>;
-      if (hold.status !== 'reconciled' || row?.reconciliation_state !== 'pending') return;
-      const delta = total - BigInt(row.cost_micro_usd as string);
-      await tx.execute(sql`UPDATE control.cost_ledger SET cost_micro_usd = ${total.toString()}, input_tokens = ${values.input},
-          output_tokens = ${values.output}, total_tokens = ${values.input + values.output}, result = ${values.result},
-          attempts = ${values.attempts}::jsonb, reconciliation_state = 'reconciled'
-        WHERE idempotency_key = ${requestId}`);
-      await tx.execute(sql`UPDATE control.budgets SET updated_at = ${now},
-          spent_micro_usd = GREATEST(0, spent_micro_usd + ${delta.toString()}::bigint)
-        WHERE id = ANY(${pgTextArray(hold.budgetIds)})`);
-      return;
-    }
-    const open = hold.status === 'held' || hold.status === 'dispatched';
-    await tx.execute(sql`UPDATE control.budgets SET updated_at = ${now},
-        reserved_micro_usd = GREATEST(0, reserved_micro_usd - ${(open ? hold.liability : 0n).toString()}::bigint),
-        spent_micro_usd = spent_micro_usd + ${total.toString()}::bigint
-      WHERE id = ANY(${pgTextArray(hold.budgetIds)})`);
-    await tx.execute(sql`UPDATE control.budget_holds SET updated_at = ${now}, settled_at = ${now},
-        status = CASE WHEN status IN ('held', 'dispatched') THEN 'settled' ELSE status END
-      WHERE id = ${holdRef}`);
-    if ((settlement.overrun?.length ?? 0) > 0 || total > hold.liability) {
+    const auditOverrun = async (charged: bigint): Promise<void> => {
+      if ((settlement.overrun?.length ?? 0) === 0 && charged <= hold.liability) return;
       await tx.execute(sql`INSERT INTO control.blocked_attempts (id, request_id, tenant_id, workspace_id, principal_kind,
           principal_key, budget_strategy_id, reason, requested_model, hold_id, quote_ref, liability_micro_usd)
         VALUES (${createId()}, ${requestId}, ${hold.tenantId}, ${hold.workspaceId}, ${principal.kind}, ${principal.key},
           ${hold.strategyId}, 'overrun', ${id(settlement.requestedModel) ?? null}, ${holdRef}, ${hold.quoteRef},
-          ${total.toString()})`);
+          ${charged.toString()})`);
+    };
+    if (inserted.rows.length === 0) {
+      const [row] = (await tx.execute(sql`SELECT cost_micro_usd, reconciliation_state, hold_id FROM control.cost_ledger
+        WHERE idempotency_key = ${requestId} FOR UPDATE`)).rows as Array<Record<string, unknown>>;
+      if (row?.hold_id === holdRef) {
+        // Fenced: a duplicate settlement or redelivery adds nothing. Only the reaper's conservative
+        // estimate is corrected, once, to the actual charge (auditable: state becomes `reconciled`).
+        if (hold.status !== 'reconciled' || row.reconciliation_state !== 'pending') return;
+        const delta = total - BigInt(row.cost_micro_usd as string);
+        await tx.execute(sql`UPDATE control.cost_ledger SET cost_micro_usd = ${total.toString()}, input_tokens = ${values.input},
+            output_tokens = ${values.output}, total_tokens = ${values.input + values.output}, result = ${values.result},
+            attempts = ${values.attempts}::jsonb, reconciliation_state = 'reconciled'
+          WHERE idempotency_key = ${requestId}`);
+        await lockBudgets(tx, hold.budgetIds);
+        await tx.execute(sql`UPDATE control.budgets SET updated_at = ${now},
+            spent_micro_usd = GREATEST(0, spent_micro_usd + ${delta.toString()}::bigint)
+          WHERE id = ANY(${pgTextArray(hold.budgetIds)})`);
+        await auditOverrun(total);
+        return;
+      }
+      if (row && row.hold_id === null) {
+        // A hold-less row keyed by this server request id (observer redelivery that arrived first):
+        // the settlement is the authority for its request, so it becomes the request's one row.
+        await tx.execute(sql`UPDATE control.cost_ledger SET user_id = ${principal.kind === 'user' ? principal.key : null},
+            workspace_id = ${hold.workspaceId}, tenant_id = ${hold.tenantId}, operation = ${settlementOperation(cost)},
+            provider_id = ${servedAttempt?.providerId ?? 'none'},
+            model_id = ${servedAttempt?.modelId ?? (id(settlement.requestedModel) ?? 'none')}, input_tokens = ${values.input},
+            output_tokens = ${values.output}, total_tokens = ${values.input + values.output}, cost_micro_usd = ${total.toString()},
+            principal_kind = ${principal.kind}, principal_key = ${principal.key}, budget_strategy_id = ${hold.strategyId},
+            pricing_version = ${servedAttempt?.pricingVersion ?? null}, result = ${values.result}, hold_id = ${holdRef},
+            quote_ref = ${hold.quoteRef}, reconciliation_state = ${state}, attempts = ${values.attempts}::jsonb
+          WHERE idempotency_key = ${requestId}`);
+      }
+      // Otherwise the request id collides with another hold's row: that row is kept untouched and
+      // this hold is still closed below with its full charge (never left for a zero-charge reaper).
     }
+    const open = hold.status === 'held' || hold.status === 'dispatched';
+    // A reconciled hold was already charged its liability by the reaper: only the difference moves.
+    const charge = hold.status === 'reconciled' ? total - hold.liability : total;
+    await lockBudgets(tx, hold.budgetIds);
+    await tx.execute(sql`UPDATE control.budgets SET updated_at = ${now},
+        reserved_micro_usd = GREATEST(0, reserved_micro_usd - ${(open ? hold.liability : 0n).toString()}::bigint),
+        spent_micro_usd = GREATEST(0, spent_micro_usd + ${charge.toString()}::bigint)
+      WHERE id = ANY(${pgTextArray(hold.budgetIds)})`);
+    await tx.execute(sql`UPDATE control.budget_holds SET updated_at = ${now}, settled_at = ${now},
+        status = CASE WHEN status IN ('held', 'dispatched') THEN 'settled' ELSE status END
+      WHERE id = ${holdRef}`);
+    await auditOverrun(total);
     await outboxWriter.append(tx as Parameters<typeof outboxWriter.append>[0], {
       aggregateType: 'llm_request', aggregateId: requestId!, channel: 'llm_settlement',
       tenantId: hold.tenantId, workspaceId: hold.workspaceId,
