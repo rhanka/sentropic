@@ -1,5 +1,5 @@
 {
-  "id": "a20491b4-d95f-4f89-ab91-5a4f86f1ef8a",
+  "id": "582b4373-5146-4273-8fc0-a72205309c96",
   "prevId": "6b0bb925-412d-4285-9b56-6724a3893870",
   "version": "7",
   "dialect": "postgresql",
@@ -766,7 +766,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "budget_holds_budget_strategy_id_tenant_budget_strategy_id_fk": {
+          "name": "budget_holds_budget_strategy_id_tenant_budget_strategy_id_fk",
+          "tableFrom": "budget_holds",
+          "tableTo": "tenant_budget_strategy",
+          "schemaTo": "control",
+          "columnsFrom": [
+            "budget_strategy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
