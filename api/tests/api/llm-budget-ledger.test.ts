@@ -11,6 +11,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { createHostApp, createLedgerDependencies, createRoutingDependency } from '../../../apps/llm-gateway/src/app';
 import { db } from '../../src/db/client';
+import { logger } from '../../src/logger';
 import { createGwNamespaceModule, GW_AUTHOR, GW_DEFAULT_OUTPUT_TOKENS } from '../../src/routes/namespaces/gw';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
@@ -281,13 +282,37 @@ describe('route settlement: one ledger row per settled request', () => {
 describe('reservation reaper', () => {
   const past = createBudgetAdmission({ database: db, ownerRef: 'test', now: () => new Date(Date.now() - 2 * 3_600_000), holdTtlMs: 60_000 });
 
+  it('should roll back a poisoned hold and reap later holds in the same batch', async () => {
+    await seedTenant();
+    const poisoned = await admitted(`poison-${run}`, undefined, past);
+    const later = await admitted(`later-${run}`, undefined, past);
+    await past.markDispatched(poisoned, 0);
+    await past.markDispatched(later, 0);
+    // Force the first hold's budget UPDATE to overflow after its ledger INSERT.
+    await db.execute(sql`UPDATE control.budget_holds SET liability_micro_usd = 9223372036854775807,
+      deadline_at = ${new Date(0)} WHERE id = ${poisoned}`);
+    await db.execute(sql`UPDATE control.budgets SET spent_micro_usd = 1 WHERE tenant_id = ${TENANT}`);
+    const logged = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    try {
+      expect(await reapExpiredHolds({ database: db })).toEqual({ released: 0, reconciled: 1, failed: 1 });
+      expect(await ledger(`poison-${run}`)).toEqual([]);
+      expect(await rows(sql`SELECT status FROM control.budget_holds WHERE id = ${poisoned}`))
+        .toEqual([{ status: 'dispatched' }]);
+      expect(await ledger(`later-${run}`)).toMatchObject([{ hold_id: later, reconciliation_state: 'pending' }]);
+      expect(await bucket(TENANT)).toEqual({ reserved: 3_250, spent: 3_251 });
+      expect(logged).toHaveBeenCalledExactlyOnceWith({ failed: 1 }, 'reservation-reaper: hold transaction failed');
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it('releases an expired never-dispatched hold, reconciles a dispatched one, and a late settlement corrects it once', async () => {
     await seedTenant();
     await admitted(`k1a-${run}`, undefined, past);
     const dispatched = await admitted(`k1b-${run}`, undefined, past);
     await past.markDispatched(dispatched, 0);
     expect(await reapExpiredHolds({ database: db })).toMatchObject({ released: 1, reconciled: 1 });
-    expect(await reapExpiredHolds({ database: db })).toEqual({ released: 0, reconciled: 0 });
+    expect(await reapExpiredHolds({ database: db })).toEqual({ released: 0, reconciled: 0, failed: 0 });
     const [pending] = await ledger(`k1b-${run}`);
     expect(pending).toMatchObject({ reconciliation_state: 'pending', hold_id: dispatched });
     expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 3_250 });
@@ -415,9 +440,26 @@ describe('fix round 1: lock order, codex quote, workspace caps, collisions', () 
     await db.execute(sql`INSERT INTO control.cost_ledger (id, idempotency_key, tenant_id, operation, provider_id, model_id, hold_id)
       VALUES (${`x2-${run}`}, ${`x2-${run}`}, ${TENANT}, 'generate', 'p', 'm', 'another-hold')`);
     await settle(`x2-${run}`, colliding, [attempt('cheap', 100, 50)]);
+    // Redelivery must preserve the foreign row and must not add this hold's spend again.
+    await settle(`x2-${run}`, colliding, [attempt('cheap', 100, 50)]);
     expect(await rows(sql`SELECT status FROM control.budget_holds WHERE id = ${colliding}`)).toEqual([{ status: 'settled' }]);
     expect(await ledger(`x2-${run}`)).toMatchObject([{ hold_id: 'another-hold', cost_micro_usd: null }]);
     expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 400 });
+  });
+
+  it('should retain the reaper charge when a foreign ledger row cannot fence a late correction', async () => {
+    await seedTenant();
+    // Use current pricing at admission, then expire the dispatched hold.
+    const holdRef = await admitted(`foreign-late-${run}`);
+    await admission.markDispatched(holdRef, 0);
+    await db.execute(sql`UPDATE control.budget_holds SET deadline_at = ${new Date(0)} WHERE id = ${holdRef}`);
+    await db.execute(sql`INSERT INTO control.cost_ledger (id, idempotency_key, tenant_id, operation, provider_id, model_id, hold_id)
+      VALUES (${`foreign-late-${run}`}, ${`foreign-late-${run}`}, ${TENANT}, 'generate', 'p', 'm', 'another-hold')`);
+    await reapExpiredHolds({ database: db });
+    await settle(`foreign-late-${run}`, holdRef, [attempt('cheap', 100, 50)]);
+    await settle(`foreign-late-${run}`, holdRef, [attempt('cheap', 100, 50)]);
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 3_250 });
+    expect(await ledger(`foreign-late-${run}`)).toMatchObject([{ hold_id: 'another-hold', cost_micro_usd: null }]);
   });
 });
 
