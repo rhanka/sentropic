@@ -104,8 +104,8 @@
   - [x] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process ... ENV=test-llm-identity` PASS (5 files, 56 tests)
   - [x] `make scope-check` PASS C2 (clean tree); committed range `merge-base..HEAD` limited to Allowed Paths
   - [x] `make down API_PORT=9466 UI_PORT=5666 MAILDEV_UI_PORT=1566 ENV=test-llm-identity` done; `make ps` with the same ports/ENV lists no container
-- [ ] **Lot 5 — Fix round 1 (schema-owner review + muse)**
+- [x] **Lot 5 — Fix round 1 (schema-owner review + muse)**
   - [x] 0008: NOT VALID + VALIDATE CHECKs, RESTRICT FK `budget_holds.budget_strategy_id`, `principal_key` comments; regenerated snapshot/journal
   - [x] Tests: shape, validated CHECKs, comments, FK restrict, replay/idempotence
   - [x] BRDP-EX12 one-line regex `/^\d+_cluster_mesh/`; spec §12.5/§12.7 edits
-  - [ ] Gates re-run on a fresh disposable DB
+  - [x] Gates re-run on a fresh disposable DB (`make clean ... ENV=test-llm-identity` volume reset, then `up-api-test`): `llm-admission-schema` 20/20 twice, `cluster-mesh-migration` 16/16, `service-auth-middleware` 8/8, `llm-identity-directory` 13/13; `make test-api-unit` 113 files / 993 passed, 2 skipped; `make test-api-endpoints` 119/119 files, 934/934; `typecheck-api` + `lint-api` (0 errors); gateway host typecheck/lint/test 5 files / 56; `scope-check` PASS C2; `make down` + `make ps` empty
