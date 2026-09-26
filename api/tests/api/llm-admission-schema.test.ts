@@ -318,8 +318,8 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
         VALUES ('n-${column}', 'n-${column}', 'generate', 'p', 'm', '${value}')`).then(() => null, (error: { code?: string; constraint?: string }) => error);
       expect(refused).toMatchObject({ code: '23514', constraint: `cost_ledger_${column}_check` });
       const updated = await pool.query(`UPDATE control.cost_ledger SET ${column} = '${value}' WHERE id = 'h1'`)
-        .then(() => null, (error: { code?: string }) => error);
-      expect(updated).toMatchObject({ code: '23514' });
+        .then(() => null, (error: { code?: string; constraint?: string }) => error);
+      expect(updated).toMatchObject({ code: '23514', constraint: `cost_ledger_${column}_check` });
     }
     await pool.query(`INSERT INTO control.cost_ledger (id, idempotency_key, operation, provider_id, model_id, result, principal_kind,
       reconciliation_state) VALUES ('n-ok', 'n-ok', 'generate', 'p', 'm', 'ok', 'service', 'none')`);
