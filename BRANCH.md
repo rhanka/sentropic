@@ -38,6 +38,7 @@
 - [x] `CS-06` — attention — owner: conductor — Prefer one additive `0.22.x` patch under the owner's policy to preserve cluster-mesh 0.13 compatibility; no bump in this lot.
 - [x] `CS-07` — attention — owner: custody lane — Custody-only rotation is a controlling design requirement, not implemented protection in the current local account service; qualify the separate resolver/job before enabling custody seats.
 - [x] `CS-08` — attention — owner: conductor — Before the live mission, nominate isolated grants and one operator/refresh owner, then verify current wire profile and per-device revocation. See spec O2; no real credentials handled here.
+- [x] `CS-09` — attention — owner: design author — Round 1 uses sessionless paste, internal provider capabilities, offline labels, and strict versioned config; these preserve the existing contracts and avoid an unverified profile request.
 
 ## AI Flaky tests
 - [x] Not applicable: no tests or live provider calls in this design lot.
@@ -66,6 +67,11 @@
   - [x] List future unit/integration test files and h2a mission steps/evidence; no test execution in this lot.
   - [x] Record only real owner decisions with recommendations; reconcile every deliverable section and evidence reference.
   - [x] Run final scope check, inspect complete diff, commit, clean up the dedicated environment, and report final commit log.
+- [ ] **Lot 4 — Review revision round 1 (planning only)**
+  - [x] Verify claims in contracts, Muse facades, service refresh/persistence, provider config, app constants, runtime clients, exports, and consumer tests.
+  - [x] Reduce Claude API, keep provider internal, define refresh config resolution/offline labels, correct citations, and document the shared refresh race.
+  - [ ] Split future implementation lots, preserve auth validation, add O3–O5, and strengthen regression/mission evidence.
+  - [ ] Run scope/diff checks, commit the two-file revision, clean up, and report O1–O5 and review disposition.
 
 ## Validation Evidence
 - [x] `harness check branch` — PASS C1; branch is `spec/llm-mesh-claude-seat`.
