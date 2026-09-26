@@ -1,7 +1,7 @@
 # Feature: Claude subscription seat LOT 1
 
 ## Objective
-- [ ] Implement approved D1–D5: browser enrollment, renewable paste, refresh and durable ordinary Claude seats; execution remains LOT 2.
+- [x] Implement approved D1–D5: browser enrollment, renewable paste, refresh and durable ordinary Claude seats; execution remains LOT 2.
 
 ## Scope / Guardrails
 - [x] LOT 1 only on `spec/llm-mesh-claude-seat` in `/home/antoinefa/src/sentropic/tmp/llm-mesh-claude-seat`; base `origin/main`.
@@ -55,13 +55,15 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [ ] `CS-21` — blocked — owner: conductor/release lane — Candidate packaging stops before types-and-bundlers: the selected lock's llm-mesh 0.22.0 integrity differs from candidate bytes. The required `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` update is forbidden here. Refresh that lock against the exact release candidate and rerun `test-lazy-package`; no bypass or consumer edit made.
+- [x] `CS-22` — attention — owner: implementer — Cluster setup initially failed on root-owned llm-mesh Vitest cache; `make clean-node-modules ENV=test-llm-mesh-claude-seat` repaired generated artifacts and the unchanged full cluster gate passed.
 - [x] `CS-20` — attention — owner: implementer — Conservatively discard descriptive identity fields and reject scopes outside the selected profile; retain actual accepted scopes. Non-JSON HTTP failures expose status plus static invalid_response only.
 - [x] `CS-19` — attention — owner: implementer — A reproduced post-rotation storage outage replayed the old grant after restart; persist existing reauth status before refresh and clear it only with the fresh durable save, preserving the schema.
 - [x] `CS-16` — acknowledge — owner: conductor — Explicit LOT 1 no-bump instruction overrides the general bump rule; conductor owns release/version qualification.
 - [x] `CS-17` — attention — owner: implementer — Apply harness plan/debug/test within allowed files; no recorder/Track artifacts outside scope; independent review remains conductor-owned.
 - [x] `CS-18` — attention — owner: implementer — Fail closed on ambiguous rotation/save failures; use an offline strict profile and bounded 30-second token requests with no retries.
 - [x] `CS-01` — attention — owner: conductor — Use existing seat contracts and custody rules; reversible design choices are recorded in the spec without interrupting the design lot.
-- [x] `CS-02` — deferred — owner: conductor — Cross-review, implementation/build/tests (astra), live h2a mission, one llm-mesh bump and one h2a 0.97 bump belong to later lots per owner instruction; no consensus claimed here.
+- [x] `CS-02` — acknowledge — owner: conductor — LOT 1 implementation/build/tests now executed below; independent review, live h2a mission, llm-mesh bump and h2a 0.97 bump remain conductor-owned.
 - [x] `CS-03` — attention — owner: design author — Apply harness brainstorm/plan structure within the two allowed files; omit recorder/Track writes because their artifacts are outside this lot's allowed paths.
 - [x] `CS-04` — attention — owner: conductor — Prefer browser PKCE with manual code return: verified Claude behavior, shared PKCE reuse, no loopback helper change.
 - [x] `CS-05` — acknowledge — owner: conductor, 2026-09-26 — O1 decided: renewable JSON only; no access-only paste in this lot.
@@ -86,7 +88,7 @@
 ## UAT Management (in orchestration context)
 - [x] No web, Chrome, or VSCode UAT surface changed; design the later h2a browser/paste/run/refresh mission in the spec.
 
-## Plan / Todo (lot-based)
+## Completed design plan (history)
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read mandatory rules, branch template, project context, and harness workflow.
   - [x] Verify branch with `git branch --show-current` and `harness check branch` (PASS C1).
@@ -136,12 +138,20 @@
   - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
   - [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
   - [x] `make build-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
-  - [ ] `make test-cluster-mesh ENV=test-llm-mesh-claude-seat`; explicitly report llm-surface and packaging coverage/skips.
-  - [ ] Scope/diff review and dedicated environment cleanup; final commit/gate/risk handoff, no push.
+  - [x] `make test-cluster-mesh ENV=test-llm-mesh-claude-seat`: 394 passed / 34 skipped; 53 files passed / 5 skipped; llm-surface 9/9 passed.
+  - [ ] `make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json ENV=test-llm-mesh-claude-seat`: FAIL at frozen-lock integrity; 16 types-and-bundlers cases not executed (CS-21).
+  - [x] Scope/diff review and dedicated environment cleanup; final commit/gate/risk handoff with CS-21 outstanding, no push.
 - [ ] **Implementation lot 2 — official CLI execution or `not-covered`**: injected subprocess bridge/h2a runner, access-only 0600 file in per-run 0700 config directory, mesh-only refresh, process isolation/cleanup; transport/auth/consumer tests in spec §5; keep `adapter-auth.ts` unchanged.
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [x] Supplemental `make qualify-published-install TARBALL=tmp/ci-manifest-guard/siblings/cluster-mesh/llm-mesh/sentropic-llm-mesh-0.22.0.tgz REPORT_DIR=tmp/claude-seat-qualification ENV=test-llm-mesh-claude-seat`: PASS, 6 import probes (core plus all 5 public entry points); does not replace the blocked types-and-bundlers gate.
+- [x] Final `make down COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat` and identical `make ps` mapping: PASS, no services. `harness check branch` PASS C1; `git diff --check` PASS.
+- [x] LOT 1 full gates: llm-mesh 354/354 in 34 files; typecheck/lint/build PASS. Includes Claude provider 53, Claude service 23, shared service 19, facade 7, contracts 4 and auth 13 cases.
+- [x] README reviewed for feasibility, individual responsibility, suspension/refused-call risk and the exact legal-and-compliance source link; explicitly enrollment-only.
+- [x] Candidate pack guard PASS: llm-mesh 0.22.0 at source commit `7cc4c3ab8a0ef00f0b49bc6dcb62fda728129b7e`, SHA-256 `7b6bc06bd9abdd51c4ed8a1bd0377fe55ca6898755c0c4422ce7ff7cab01a8c2`; receipt in ignored `tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json`. Candidate selection uses the changed llm-mesh path in `CI_MANIFEST_CONTEXT`; first attempt supplied arrays instead of encoded CI string outputs and was corrected.
+- [x] Candidate packaging integrity evidence: selected lock `sha512-YVFfN3/+so6MXDxoYoSXg8Xyelp4T5iKnlbgn8ZKukCtSLOHcBWUjN7SnCMY5Di/vMdr8hZUj4caM30Htq0mvw==`; candidate `sha512-JU9YZyhskJvZ4GREgeDvDQwr+At9+K5BF/t0kJ89WURt6gGFnUD0VUnTkvoZ2mGKQNY4XW1qzMlJHQmQoO2tgg==`. No packed-consumer pass claimed.
+- [x] Scope reviewed against starting commit `059850fc2`: only 13 allowed files; no version/contracts/auth/provider/catalog/keyring/runtime-export/consumer changes. New commits are below 150 changed lines each. Origin/main has advanced with GPT-6 changes; this branch was not rebased.
 - [x] Added explicit Cloud Code/Codex regression for the post-response removal-check window, alongside durable-save publication regressions.
 - [x] Storage-outage regression first reproduced two refresh calls; preflight durable reauth fencing addresses D5's no-replay requirement without a migration.
 - [x] Step A2: executable LOT 1 plan, exact allowed files/tests, no-bump decision and environment mapping recorded.
@@ -153,4 +163,4 @@
 - [x] `git diff --check` — PASS; final tracked diff contains only the two Allowed Paths.
 - [x] `make down COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat` — PASS.
 - [x] `make ps COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat` — PASS, no services. Compose only warned about unset optional configuration; no service was started.
-- [x] No functional tests, llm-mesh build, real-token handling, package bump, push, PR, merge, or publication; no scope exception.
+- [x] Design-phase history only: no functional tests/builds were run then. This implementation uses no real-token handling, package bump, push, PR, merge or publication; no scope exception.
