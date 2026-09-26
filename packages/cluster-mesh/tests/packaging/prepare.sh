@@ -11,6 +11,14 @@ set -eu
 work="$1"
 here="$(pwd)/tests/packaging"
 fixtures="$here/fixtures"
+# Workspace manifests keep new same-PR siblings selectable while refreshing the old lock.
+train_version() {
+  node -e 'const name = process.argv[1]; const { version } = require("../" + name + "/package.json");
+    if (typeof version !== "string" || !version.trim()) throw new Error("Missing workspace version for " + name);
+    process.stdout.write(version);' "$1"
+}
+MESH="$(train_version llm-mesh)"
+GATEWAY="$(train_version llm-gateway)"
 rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
 quiet="--no-audit --no-fund --loglevel=error"
@@ -21,10 +29,6 @@ npm install --prefix "$work/tools" $quiet vitest@4.1.5 typescript@5.9.3 @types/n
 if [ -n "${CLUSTER_MESH_SIBLING_RECEIPTS:-}" ]; then
   MANIFEST_GUARD_TOOL_DIR="$work/tools" node "$here/siblings.mjs" verify "$CLUSTER_MESH_SIBLING_RECEIPTS" "$siblings"
 fi
-
-# Train tuple of this release; the old tuple is only used by the refusal fixture.
-MESH=0.22.1
-GATEWAY=0.19.0
 
 # Candidate tarball, packed exactly as published (files/exports/sideEffects). A verified receipt for
 # cluster-mesh itself replaces it: the qualified bytes are then exactly the bytes that will be published.
@@ -132,7 +136,7 @@ elif [ -f "$siblings/index.json" ]; then
 fi
 tuple selected
 
-# Session mode: the public auth-hono tarball at llm-gateway 0.19.0's declared peer range.
+# Session mode: the public auth-hono tarball at llm-gateway's declared peer range.
 consumer "$work/selected-session" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
   "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" "@sentropic/auth-hono=0.15.0" "hono=4.10.7"
 sources "$work/selected-session"
