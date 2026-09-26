@@ -215,13 +215,17 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
-    // Release train (BRDP-EX10, BRCIW-EX3 for mcp-auth): a skipped receipt is healed only on a re-run,
-    // after a cache-busted registry presence check.
+    // Release train (BRDP-EX10, BRCIW-EX3 for mcp-auth): an equal-integrity conflict is qualified at once; a plain
+    // skip is healed only on a re-run, after a cache-busted, retried presence check, with the run id so that a
+    // version published by an earlier run is a stale skip (notice) rather than a red provenance check.
     const run = publish[at + 1].run;
-    assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, `${slug}: first attempt: a skip is a prior publication`);
-    assert.match(run, /if ! curl -fsS -o \/dev\/null -H 'cache-control: no-cache' "https:\/\/registry\.npmjs\.org\/[^\n]*\?cachebust=\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}-\$\(date \+%s\)"; then echo "::error [^\n]*absent from the registry"; exit 1; fi/, `${slug}: cache-busted presence check`);
+    assert.match(run, /conflict="\$\(sed -n 's\/\^conflict=\/\/p' "\$receipt"\)"\n\s*provenance_run=\n/, `${slug}: reads the conflict kind`);
+    assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$conflict" = equal-integrity \]; then echo "::notice [^\n]*"\n\s*else\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, `${slug}: first attempt: a plain skip is a prior publication`);
+    assert.match(run, /if ! curl -fsS --retry 3 --retry-all-errors -o \/dev\/null -H 'cache-control: no-cache' "https:\/\/registry\.npmjs\.org\/[^\n]*\?cachebust=\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}-\$\(date \+%s\)"; then echo "::error [^\n]*absent from the registry"; exit 1; fi\n\s*provenance_run="\$GITHUB_RUN_ID"\n/, `${slug}: cache-busted presence check, then run-scoped heal`);
     assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
-    assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" PEERS=\S+ QUALIFY_MODE=post-publication REPORT_DIR=/, slug);
+    const reportDir = slug === 'cluster-mesh' ? 'REPORT_DIR="\\$report_dir"' : `REPORT_DIR=tmp\\/ci-manifest-guard\\/qualify-${slug}`;
+    assert.match(run, new RegExp(`\\*\\) echo "::error [^\\n]*unexpected publication outcome"; exit 1 ;;\\n\\s*esac\\n\\s*make qualify-published-install PKG="\\$pkg" PEERS=\\S+ QUALIFY_MODE=post-publication ${reportDir} QUALIFY_PROVENANCE_SHA="\\$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="\\$provenance_run" ENV=test-ci-${slug}\\n?$`), `${slug}: exact qualification command`);
+    if (slug === 'cluster-mesh') assert.match(run, /\n\s*report_dir=tmp\/ci-manifest-guard\/qualify-cluster-mesh\n/);
     assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
     const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === `Qualify bootstrap-published ${slug}`);
     assert.ok(bootstrap.run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'bootstrap qualification uses the same optional peers');
@@ -402,7 +406,7 @@ test('steady-state OIDC post-publication qualification checks the SLSA provenanc
   for (const slug of ['mcp-auth', 'cluster-mesh']) {
     const publish = jobs[`publish-${slug}`].steps;
     const step = publish[publish.findIndex((s) => s.run === `make publish-${slug}`) + 1];
-    assert.match(step.run, /make qualify-published-install PKG="\$pkg" [^\n]* QUALIFY_PROVENANCE_SHA="\$GITHUB_SHA" ENV=test-ci-/, slug);
+    assert.match(step.run, /make qualify-published-install PKG="\$pkg" [^\n]* QUALIFY_PROVENANCE_SHA="\$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="\$provenance_run" ENV=test-ci-/, slug);
     const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === `Qualify bootstrap-published ${slug}`);
     assert.ok(!bootstrap.run.includes('QUALIFY_PROVENANCE_SHA'), `${slug}: bootstrap publishes carry no provenance`);
   }
@@ -412,6 +416,11 @@ test('steady-state OIDC post-publication qualification checks the SLSA provenanc
   assert.equal(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_SHA: 'a'.repeat(40) }).status, 0);
   for (const bad of ['HEAD', 'A'.repeat(40), `${'a'.repeat(40)};x`]) {
     assert.match(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_SHA: bad }).out, /QUALIFY_PROVENANCE_SHA must be a 40-hex commit SHA/, bad);
+  }
+  assert.match(recipe('qualify-published-install'), /\$\(if \$\(QUALIFY_PROVENANCE_RUN\),--provenance-run "\$\(QUALIFY_PROVENANCE_RUN\)"\)/);
+  assert.equal(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_RUN: '36222109704' }).status, 0);
+  for (const bad of ['0', 'abc', '12;x']) {
+    assert.match(runQualifyGuards({ TARBALL: tgz, QUALIFY_PROVENANCE_RUN: bad }).out, /QUALIFY_PROVENANCE_RUN must be a numeric run id/, bad);
   }
 });
 
