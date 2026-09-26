@@ -64,8 +64,8 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - [ ] **Lot 4 — Review fix 1**
   - [x] mcp-auth post-publication qualification heals `skipped` only on a re-run after a cache-busted presence check (aligned with cluster-mesh).
   - [x] Cluster-mesh presence check `curl` sends `cache-control: no-cache` with a cache-busting query.
-  - [ ] Test: generic E403 without "cannot publish over" is not a conflict.
-  - [ ] Conflict re-read budget wired to the Make wait variables.
+  - [x] Test: generic E403 without "cannot publish over" is not a conflict.
+  - [x] Conflict re-read budget wired to the Make wait variables.
   - [ ] Provenance: only the repository source entry must equal the workflow commit.
 
 - [x] **Lot N — Final validation**
