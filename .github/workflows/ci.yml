@@ -1640,7 +1640,7 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::mcp-auth publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           if [ "$status" != published ]; then echo "::notice title=Publication qualification::mcp-auth status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth ENV=test-ci-mcp-auth
+          make qualify-published-install PKG="$pkg" PEERS=hono@4.10.7 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-mcp-auth QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" ENV=test-ci-mcp-auth
       - name: Upload MCP Auth publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -1869,7 +1869,7 @@ jobs:
               echo "::notice title=Publication qualification::cluster-mesh status=skipped on run attempt ${GITHUB_RUN_ATTEMPT}, ${pkg} present on the registry: running post-publication qualification" ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
