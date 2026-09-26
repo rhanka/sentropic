@@ -855,7 +855,9 @@ export class LocalAccountTransportService {
           }));
         }
         requestMayHaveBeenSent = true;
-        const refreshed = await provider.refresh(input);
+        const refreshInput = providerId === 'claude-code'
+          ? { ...input, grantedScopes: account?.metadata?.scopes } : input;
+        const refreshed = await provider.refresh(refreshInput);
         if (!account || refreshed.accountId !== input.accountId
           || !refreshed.accessToken?.trim() || /[\r\n]/.test(refreshed.accessToken)
           || !Number.isFinite(Date.parse(refreshed.expiresAt))
