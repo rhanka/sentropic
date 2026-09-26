@@ -55,6 +55,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-25` — attention — owner: implementer — Omitted refresh scope reuses persisted validated grant scopes, never the broader requested profile scopes; explicit invalid scope and scope-less initial enrollment still fail closed. Keep this capability Claude-local without changing shared contracts.
 - [x] `CS-24` — attention — owner: implementer — Retry only proven pre-request failures; terminal profile errors and possible provider rotation remain fenced. Restore a preflight fence best-effort while retaining single-flight; a continuing storage outage can leave a conservative durable fence until storage recovers.
 - [x] `CS-23` — attention — owner: implementer — Fix round 1 preserves the refresh fence against concurrent route persistence; reproduced active/cooldown overwrites. Keep the explicit no-bump and conductor-owned review/release scope (CS-16/17).
 - [ ] `CS-21` — blocked — owner: conductor/release lane — Candidate packaging stops before types-and-bundlers: the selected lock's llm-mesh 0.22.0 integrity differs from candidate bytes. The required `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` update is forbidden here. Refresh that lock against the exact release candidate and rerun `test-lazy-package`; no bypass or consumer edit made.
@@ -147,6 +148,7 @@
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [x] Finding 4 verified: omitted refresh scope reproduced reauth; provider tests distinguish omission from invalid values, and service tests preserve the previous scopes through two refreshes across restarts.
 - [x] Finding 3 verified: five local-failure cases and refresh-time removal reproduced incorrect reauth errors; distinguish retryable preparation, terminal/ambiguous failures, and removed accounts without reflecting secret-bearing causes.
 - [x] Finding 2 verified: real Muse provider schema 1-to-2 refresh failed before the fix; exact profile-version enforcement is now Claude-only, with durable schema update/restart coverage in the allowed shared service test file.
 - [x] Fix round 1 baseline: branch check PASS C1, clean worktree at `110231cc3`, and `origin/main` is an ancestor of HEAD.
