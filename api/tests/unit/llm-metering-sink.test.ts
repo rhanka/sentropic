@@ -15,7 +15,12 @@ vi.mock('../../src/utils/id', () => ({
 }));
 
 import { costLedger } from '../../src/db/control-schema';
-import { recordLlmUsage } from '../../src/services/llm-metering';
+import { RouteQuoteError, type RoutePlanner } from '@sentropic/llm-mesh';
+
+import {
+  createRoutePartition, recordLlmUsage, routePartitionHash, RoutePartitionUnavailableError, settlementOperation,
+  withCatalogQuote, withSettlementMode,
+} from '../../src/services/llm-metering';
 
 describe('recordLlmUsage', () => {
   beforeEach(() => {
@@ -89,5 +94,60 @@ describe('recordLlmUsage', () => {
       usageRaw: null,
       costMicroUsd: null,
     }));
+  });
+});
+
+describe('gateway ledger helpers (Lot D B3c)', () => {
+  const planner = (actualModelId: string): RoutePlanner => ({
+    async plan() {
+      return {
+        planRef: 'p', expiresAt: new Date().toISOString(), candidateRefs: ['c'], councilRevision: 'rev',
+        policy: {} as never, diagnostics: [{ candidateRef: 'c', diagnosticAccountRef: 'provider-owned', requestedModel: 'm',
+          actualProviderId: 'openai', actualModelId, actualTransportProviderId: 't', reason: 'exact', cacheContinuityRisk: false }],
+      };
+    },
+    prepareAttempt: vi.fn(), describeAffinity: () => null, resetAffinity: () => false,
+    promoteAffinity: vi.fn(), rebindAffinity: vi.fn(),
+  }) as unknown as RoutePlanner;
+  const catalog = { listModels: () => [{ modelId: 'm', providerId: 'openai' }, { modelId: 'x', providerId: 'codex' }] };
+  const subject = { principalRef: 'u', ownerScopeRef: 'o' };
+  const ceiling = { inputTokens: 10, outputTokens: 20 };
+
+  it('quotes the exact catalog entries purely and refuses a plan outside the quote', async () => {
+    const quoted = withCatalogQuote(planner('m'), { catalog, councilRevision: 'rev' });
+    const quote = quoted.quote!({ requestedModel: 'm', ceiling, now: new Date(0) });
+    expect(quote).toMatchObject({ requestedModel: 'm', maxAttempts: 1, councilRevision: 'rev',
+      candidates: [{ providerId: 'openai', modelId: 'm', allowance: ceiling, outputCeilingEnforced: true }] });
+    expect(quoted.quote!({ requestedModel: 'm', ceiling, now: new Date(0) }).quoteRef).toBe(quote.quoteRef);
+    expect(quoted.quote!({ requestedModel: 'x', ceiling, now: new Date(0) }).candidates[0]!.outputCeilingEnforced).toBe(false);
+    expect(() => quoted.quote!({ requestedModel: 'unknown', ceiling, now: new Date(0) })).toThrow(RouteQuoteError);
+    await expect(quoted.plan(subject, { requestedModel: 'm', quote })).resolves.toMatchObject({ planRef: 'p' });
+    const alias = withCatalogQuote(planner('other'), { catalog, councilRevision: 'rev' });
+    await expect(alias.plan(subject, { requestedModel: 'm', quote })).rejects.toMatchObject({ code: 'quote-mismatch' });
+  });
+
+  it('binds the settlement operation from a trusted header, never from a forged value', async () => {
+    const auth = withSettlementMode({ verify: async () => ({ ok: true, cost: { tenantId: 't', principalId: 'u' } as never }) });
+    const headers: Record<string, string> = { 'x-sentropic-internal-settlement-mode': 'stream' };
+    const result = await auth.verify(headers, { method: 'POST', url: 'http://x/v1', requestId: 'r' });
+    expect(headers).toEqual({});
+    expect(settlementOperation(result.cost!)).toBe('stream');
+    expect(settlementOperation({ tenantId: 't' } as never)).toBe('generate');
+  });
+
+  it('verifies partition revisions and refuses other-host, unassigned and overlapping identities', async () => {
+    const tenants = { t: { product: ['u'], standalone: ['s'] } };
+    const config = { revision: 'r', hash: routePartitionHash('r', tenants), tenants };
+    const product = createRoutePartition('product', { load: () => config, expected: () => ({ revision: 'r', hash: config.hash }) });
+    expect(await product.assigned({ tenantId: 't', principalId: 'u' })).toBe(true);
+    expect(await product.assigned({ tenantId: 't', principalId: 's' })).toBe(false);
+    expect(await product.assigned({ tenantId: 'other', principalId: 'u' })).toBe(false);
+    const overlap = { t: { product: ['u'], standalone: ['u'] } };
+    const broken = createRoutePartition('product', {
+      load: () => ({ revision: 'r', hash: routePartitionHash('r', overlap), tenants: overlap }),
+      expected: () => ({ revision: 'r', hash: routePartitionHash('r', overlap) }),
+    });
+    await expect(broken.ready()).rejects.toBeInstanceOf(RoutePartitionUnavailableError);
+    expect(routePartitionHash('r', { t: { product: ['b', 'a'] } })).toBe(routePartitionHash('r', { t: { product: ['a', 'b'] } }));
   });
 });
