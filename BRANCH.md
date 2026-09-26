@@ -70,6 +70,11 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
   - [x] Conflict re-read budget wired to the Make wait variables.
   - [x] Provenance: only the repository source entry must equal the workflow commit.
 
+- [ ] **Lot 5 — Review fix 2**
+  - [x] Publish receipt `publish-output` carries `conflict=<kind>`; qualify `--provenance-run`: another run's publication is `stale-skip` (exit 0), this run's is fully checked; repository frozen for the CLI path (parameter test-only).
+  - [ ] ci.yml re-run heal: `conflict=equal-integrity` qualifies at once; a plain `skipped` re-run passes `QUALIFY_PROVENANCE_RUN` (stale = notice); presence curls retry; wiring tests assert the exact REPORT_DIR forms.
+  - [ ] `rules/workflow.md`: bootstrap token publishes are exempt from the provenance check.
+
 - [x] **Lot N — Final validation**
   - [x] `make test-publishable-manifests ENV=test-registry-waits`
   - [x] `make test-qualify-published-install ENV=test-registry-waits`

@@ -223,7 +223,7 @@ test('publish conflict with the same bytes on the registry is treated as already
   assert.equal(r.receipt.status, 'skipped');
   assert.equal(r.receipt.conflict, 'equal-integrity');
   assert.equal(r.receipt.registry_integrity, npm.integrity());
-  assert.match(r.output, /^status=skipped$/m);
+  assert.equal(r.output, 'pkg=@fx/events@1.0.0\nstatus=skipped\nconflict=equal-integrity\n');
   assert.match(r.out, /::notice .*publish conflict: the registry already holds the verified archive/);
   assert.deepEqual(registry.calls.slice(2), [true, true], 'conflict re-reads are fresh and retried until visible');
 });

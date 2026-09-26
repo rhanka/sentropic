@@ -774,7 +774,8 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
   const budget = waitBudget({ attempts: opts['wait-attempts'], delaySeconds: opts['wait-delay'] });
   const writeReceipt = (status, extra = {}) => {
     reporter.write(`${opts.slug}.json`, { slug: opts.slug, name: snap.name, version: snap.version, status, ...extra });
-    reporter.write(`${opts.slug}.publish-output`, `pkg=${snap.name}@${snap.version}\nstatus=${status}\n`);
+    // `conflict=` lets CI qualify an equal-integrity conflict (bytes landed in this run) at once.
+    reporter.write(`${opts.slug}.publish-output`, `pkg=${snap.name}@${snap.version}\nstatus=${status}\n${extra.conflict ? `conflict=${extra.conflict}\n` : ''}`);
   };
   const skip = (why) => {
     reporter.warn(opts.slug, `${snap.name}@${snap.version} already exists (${why}); skipping publish without candidate pack`);
