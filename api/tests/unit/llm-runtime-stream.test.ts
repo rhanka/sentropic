@@ -1470,6 +1470,8 @@ function addSharedNormalizerFixture(
 
 addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Astra');
+addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-sol', 'GPT-6 Sol');
+addTransportEquivalentFixture('openai', 'gpt-5.6-luna', 'gpt-6-luna', 'GPT-6 Luna');
 addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 'Gemini 3.8 Flash');
 // Meta Muse (S4): callLLMStream falls through to the OpenAI Responses
 // normalization path for `muse`, and mesh-dispatch delegates to the registry
