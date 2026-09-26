@@ -160,7 +160,7 @@ test.describe('chat steering core after the Flow cutover', () => {
         steerMessage,
       );
       const timelineContainer = page.locator(
-        '#chat-widget-dialog .h-full.overflow-y-auto.p-3.space-y-2.slim-scroll',
+        '#chat-widget-dialog .h-full.overflow-y-auto.p-3.space-y-3.slim-scroll',
       );
       await expect(timelineContainer).toBeVisible();
       const timelineShape = await timelineContainer.evaluate(

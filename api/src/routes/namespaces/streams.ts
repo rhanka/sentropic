@@ -581,6 +581,10 @@ streamsRouter.get('/sse', async (c) => {
         onNotification,
       });
 
+      // Presence may have been announced before LISTEN was ready. Refresh it
+      // immediately on connection instead of waiting for the periodic heartbeat.
+      push(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+
       // abort client
       c.req.raw.signal.addEventListener('abort', () => {
         void cleanup();

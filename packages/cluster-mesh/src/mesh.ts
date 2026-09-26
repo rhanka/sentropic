@@ -8,8 +8,9 @@ import {
   type MembershipDomain,
 } from './membership.js';
 import { createH2aNhiLifecycle, type CommandRunnerPort, type NhiLifecyclePort } from './nhi.js';
-import { createLocalProjectionDomain, type LocalProjectionPort, type ProjectionDomain } from './projection.js';
+import { createLocalProjectionDomain, type LocalProjectionPort, type ProjectionDomain, type ProjectionKind } from './projection.js';
 import { createGatedTrustDomain, type TrustDomain } from './trust.js';
+import type { ClusterMeshModules, ModuleCapabilityMap } from './modules/contracts.js';
 
 export interface WrapDomain {
   readonly projections: ProjectionDomain;
@@ -25,11 +26,15 @@ export interface ClusterMesh {
   readonly boundaries: BoundaryDomain;
   readonly capabilities: {
     readonly mode: 'single-node';
-    readonly localDevices: 'available';
-    readonly localProjection: 'available';
+    readonly localDevices: 'available' | 'gated';
+    readonly localProjection: 'available' | 'gated';
+    /** Effective kinds; optional for compatibility with older capability providers. */
+    readonly localProjectionKinds?: readonly ProjectionKind[];
     readonly interServerDirectory: 'gated';
     readonly tokenExchange: 'gated';
     readonly memoryReplication: 'gated';
+    /** Package availability snapshot; present only when a module registry is injected. */
+    readonly modules?: ModuleCapabilityMap;
   };
 }
 
@@ -39,30 +44,51 @@ export function createDegenerateClusterMesh(input: {
   readonly workstations: LocalWorkstationDirectoryPort;
   readonly memberships: ValidatedMembershipPort;
   readonly projections: LocalProjectionPort;
-  readonly nhiRunner: CommandRunnerPort;
+  readonly nhiRunner?: CommandRunnerPort;
+  readonly nhi?: NhiLifecyclePort;
   readonly devices: LocalDeviceAttachmentPort;
+  readonly modules?: ClusterMeshModules;
 }): ClusterMesh {
+  if (input.nhi !== undefined) {
+    for (const method of ['attest', 'offboard', 'exportBundle'] as const) {
+      if (typeof input.nhi?.[method] !== 'function') {
+        throw new TypeError(`nhi.${method} must be a function`);
+      }
+    }
+  }
+  const nhi = input.nhi ?? (input.nhiRunner ? createH2aNhiLifecycle(input.nhiRunner) : undefined);
+  if (!nhi) throw new TypeError('nhi or nhiRunner is required');
   const boundaries = createBoundaryDomain({
     homeNodeId: input.self.nodeId,
     memberships: input.memberships,
   });
+  const capabilities: ClusterMesh['capabilities'] = {
+    mode: 'single-node',
+    get localDevices() { return input.devices.availability ?? 'available'; },
+    get localProjection() { return input.projections.availability ?? 'available'; },
+    get localProjectionKinds(): readonly ProjectionKind[] {
+      if (input.projections.availability === 'gated') return [];
+      return [...(input.projections.supportedKinds ?? ['human_identity', 'agent_identity', 'memory_snapshot'])];
+    },
+    interServerDirectory: 'gated',
+    tokenExchange: 'gated',
+    memoryReplication: 'gated',
+  };
+  const modules = input.modules;
+  if (modules) {
+    // Live getter over the registry; absent for callers that inject no registry.
+    Object.defineProperty(capabilities, 'modules', { get: () => modules.snapshot(), enumerable: true });
+  }
   return {
     membership: createSingleNodeMembership({ ...input, boundaries }),
     trust: createGatedTrustDomain(),
     wrap: {
       projections: createLocalProjectionDomain({ homeNodeId: input.self.nodeId, local: input.projections }),
-      nhi: createH2aNhiLifecycle(input.nhiRunner),
+      nhi,
       memoryReplication: createGatedMemoryReplication(),
     },
     devices: createLocalDeviceDomain(input.devices),
     boundaries,
-    capabilities: {
-      mode: 'single-node',
-      localDevices: 'available',
-      localProjection: 'available',
-      interServerDirectory: 'gated',
-      tokenExchange: 'gated',
-      memoryReplication: 'gated',
-    },
+    capabilities,
   };
 }

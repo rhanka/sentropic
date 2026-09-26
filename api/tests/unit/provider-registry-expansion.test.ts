@@ -4,7 +4,7 @@ import { providerRegistry } from '../../src/services/provider-registry';
 import { providerIds } from '../../src/services/provider-runtime';
 
 describe('ProviderRegistry expansion', () => {
-  it('should list all 7 providers', () => {
+  it('should list all 8 providers', () => {
     const providers = providerRegistry.listProviders();
     const ids = providers.map((p) => p.providerId);
 
@@ -15,14 +15,15 @@ describe('ProviderRegistry expansion', () => {
     expect(ids).toContain('cohere');
     expect(ids).toContain('gcp');
     expect(ids).toContain('local');
-    expect(ids).toHaveLength(7);
+    expect(ids).toContain('muse');
+    expect(ids).toHaveLength(8);
   });
 
   it('should have all provider IDs in the providerIds constant', () => {
     expect(providerIds).toEqual(
-      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local']),
+      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local', 'muse']),
     );
-    expect(providerIds).toHaveLength(7);
+    expect(providerIds).toHaveLength(8);
   });
 
   it('should resolve each provider via getProvider', () => {
@@ -45,7 +46,7 @@ describe('ProviderRegistry expansion', () => {
     ).toThrow('Provider not found');
   });
 
-  it('should list models from all 7 providers', () => {
+  it('should list models from all serving providers (muse lists since its S4 upstream transport landed)', () => {
     const models = providerRegistry.listModels();
     const providerIdsInModels = [...new Set(models.map((m) => m.providerId))];
 
@@ -55,6 +56,7 @@ describe('ProviderRegistry expansion', () => {
     expect(providerIdsInModels).toContain('mistral');
     expect(providerIdsInModels).toContain('cohere');
     expect(providerIdsInModels).toContain('gcp');
+    expect(providerIdsInModels).toContain('muse');
   });
 
   it('should have correct capabilities per provider', () => {

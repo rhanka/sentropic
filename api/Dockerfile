@@ -60,6 +60,7 @@ COPY packages/chat-core/package.json ./packages/chat-core/package.json
 COPY packages/chat-server/package.json ./packages/chat-server/package.json
 COPY packages/cluster-mesh/package.json ./packages/cluster-mesh/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
+COPY packages/llm-gateway/package.json ./packages/llm-gateway/package.json
 COPY packages/flow/package.json ./packages/flow/package.json
 COPY packages/skills/package.json ./packages/skills/package.json
 COPY packages/oauth-verify/package.json ./packages/oauth-verify/package.json
@@ -67,7 +68,6 @@ COPY packages/mcp-auth/package.json ./packages/mcp-auth/package.json
 COPY packages/mcp-platform/package.json ./packages/mcp-platform/package.json
 COPY packages/connector-host/package.json ./packages/connector-host/package.json
 COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
-COPY packages/focus/package.json ./packages/focus/package.json
 COPY packages/ubo-contracts/package.json ./packages/ubo-contracts/package.json
 RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
     else npm install --workspaces --include-workspace-root; fi
@@ -76,22 +76,22 @@ RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-ro
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
 COPY . .
+RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/oauth-verify run build
+RUN npm --workspace @sentropic/mcp-auth run build
 RUN npm --workspace @sentropic/auth-hono run build
+RUN npm --workspace @sentropic/llm-gateway run build
 RUN npm --workspace @sentropic/auth-client run build
 RUN npm --workspace @sentropic/contracts run build
 RUN npm --workspace @sentropic/events run build
 RUN npm --workspace @sentropic/chat-core run build
 RUN npm --workspace @sentropic/chat-server run build
 RUN npm --workspace @sentropic/cluster-mesh run build
-RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/flow run build
 RUN npm --workspace @sentropic/comments run build
-RUN npm --workspace @sentropic/mcp-auth run build
 RUN npm --workspace @sentropic/mcp-platform run build
 RUN npm --workspace @sentropic/connector-host run build
 RUN npm --workspace @sentropic/mcp-connector-google run build
-RUN npm --workspace @sentropic/focus run build
 RUN npm --workspace @sentropic/ubo-contracts run build
 
 FROM base AS development

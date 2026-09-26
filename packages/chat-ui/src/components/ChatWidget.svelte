@@ -1,7 +1,12 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import ChatWidgetTabBar from './ChatWidgetTabBar.svelte';
 
-  type ChatWidgetTab = 'chat' | 'queue' | 'comments';
+  import ChatWidgetPager from './ChatWidgetPager.svelte';
+  import type { AgentsListProps } from './AgentsList.svelte';
+  import { resolveChatWidgetPanelVisibility } from '../state/chatWidgetShell.js';
+
+  import type { ChatWidgetTab } from '../state/chatWidgetShell.js';
 
   export let activeTab: ChatWidgetTab = 'chat';
   export let activeJobsCount = 0;
@@ -11,15 +16,31 @@
   export let queueTabLabel = 'Jobs';
   export let widgetLabel = 'Chat';
   export let showCommentsTab = true;
+  export let tabBarVariant: 'default' | 'extension' = 'default';
+  export let showJobsBadge = true;
   export let onActiveTabChange:
     | ((tab: ChatWidgetTab) => void)
     | undefined = undefined;
   export let onPurgeJobs: (() => void | Promise<void>) | undefined = undefined;
-  export let renderShell: Snippet<[]> | undefined = undefined;
+  export let renderContentGate: Snippet<[Snippet<[]>]> | undefined = undefined;
+  export let agentsView: 'list' | 'conversation' = 'conversation';
+  export let canAgentsListBeDefaultView = false;
+  export let agentsList: AgentsListProps | undefined = undefined;
+  export let renderAgentsListHeader: Snippet<[]> | undefined = undefined;
+  export let renderConversationHeader: Snippet<[]> | undefined = undefined;
+  export let agentsViewAnnouncement = '';
   export let renderJobsPanel: Snippet<[]> | undefined = undefined;
   export let renderCommentsPanel: Snippet<[]> | undefined = undefined;
   export let renderChatPanel: Snippet<[]> | undefined = undefined;
+  export let renderHeaderLeading: Snippet<[]> | undefined = undefined;
+  export let renderHeaderActions: Snippet<[]> | undefined = undefined;
+  export let headerGrip:
+    | { enabled?: boolean; dragging?: boolean; onPointerDown?: (event: PointerEvent) => void }
+    | undefined = undefined;
 
+  $: panelVisibility = resolveChatWidgetPanelVisibility({
+    activeTab, isPluginMode: !showCommentsTab, hasCommentContext: false,
+  });
   let totalJobsCount = 0;
   $: totalJobsCount = activeJobsCount + failedJobsCount;
 
@@ -33,58 +54,38 @@
   };
 </script>
 
-{#if renderShell}
-  {@render renderShell()}
-{:else}
-  <section
-    class="chat-widget-shell flex h-full min-h-0 flex-col bg-white text-slate-900"
-    aria-label={widgetLabel}
+  <div
+    class="chat-widget-shell flex h-full min-h-0 flex-col"
   >
-    <header class="flex h-14 items-center justify-between border-b border-slate-200 px-4">
-      <nav class="flex items-center gap-1 rounded bg-slate-50 p-1" aria-label={widgetLabel}>
-        {#if showCommentsTab}
-          <button
-            class="rounded px-2 py-1 text-xs transition {activeTab === 'comments'
-              ? 'bg-white font-semibold text-slate-900 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'}"
-            type="button"
-            aria-pressed={activeTab === 'comments'}
-            on:click={() => setActiveTab('comments')}
-          >
-            {commentsTabLabel}
-          </button>
-        {/if}
-        <button
-          class="rounded px-2 py-1 text-xs transition {activeTab === 'chat'
-            ? 'bg-white font-semibold text-slate-900 shadow-sm'
-            : 'text-slate-500 hover:text-slate-700'}"
-          type="button"
-          aria-pressed={activeTab === 'chat'}
-          on:click={() => setActiveTab('chat')}
-        >
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <header
+      class="chat-widget-header flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4"
+      class:cursor-grab={headerGrip?.enabled && !headerGrip?.dragging}
+      class:cursor-grabbing={headerGrip?.dragging}
+      data-chat-header-grip={headerGrip?.enabled ? 'true' : undefined}
+      data-dragging={headerGrip?.dragging ? 'true' : undefined}
+      on:pointerdown={headerGrip?.onPointerDown}
+    >
+      <div class="flex items-center gap-2">
+        {#if renderHeaderLeading}{@render renderHeaderLeading()}{/if}
+        <ChatWidgetTabBar
+          {activeTab}
+          {showCommentsTab}
           {chatTabLabel}
-        </button>
-        <button
-          class="rounded px-2 py-1 text-xs transition {activeTab === 'queue'
-            ? 'bg-white font-semibold text-slate-900 shadow-sm'
-            : 'text-slate-500 hover:text-slate-700'}"
-          type="button"
-          aria-pressed={activeTab === 'queue'}
-          on:click={() => setActiveTab('queue')}
-        >
-          <span>{queueTabLabel}</span>
-          {#if totalJobsCount > 0}
-            <span
-              class="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-slate-200 px-1 text-[10px] text-slate-700"
-              aria-label={`${totalJobsCount} jobs`}
-            >
-              {totalJobsCount}
-            </span>
-          {/if}
-        </button>
-      </nav>
+          {commentsTabLabel}
+          {queueTabLabel}
+          variant={tabBarVariant}
+          {showJobsBadge}
+          jobsBadgeCount={totalJobsCount}
+          ariaLabel={widgetLabel}
+          onSelect={setActiveTab}
+        />
+      </div>
 
-      {#if activeTab === 'queue' && onPurgeJobs}
+      <div class="flex items-center gap-2">
+        {#if renderHeaderActions}
+          {@render renderHeaderActions()}
+        {:else if activeTab === 'queue' && onPurgeJobs}
         <button
           class="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
           type="button"
@@ -92,11 +93,17 @@
         >
           Purge
         </button>
-      {/if}
+        {/if}
+      </div>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-hidden">
-      {#if activeTab === 'queue'}
+    <div class="min-h-0 flex-1">
+      {#if renderContentGate}{@render renderContentGate(renderReady)}{:else}{@render renderReady()}{/if}
+    </div>
+  </div>
+
+{#snippet renderReady()}
+      {#if panelVisibility.showQueuePanel}
         {#if renderJobsPanel}
           {@render renderJobsPanel()}
         {:else}
@@ -104,7 +111,7 @@
             {queueTabLabel}
           </div>
         {/if}
-      {:else if activeTab === 'comments'}
+      {:else if panelVisibility.showCommentsPanel}
         {#if renderCommentsPanel}
           {@render renderCommentsPanel()}
         {:else}
@@ -112,13 +119,20 @@
             {commentsTabLabel}
           </div>
         {/if}
-      {:else if renderChatPanel}
-        {@render renderChatPanel()}
-      {:else}
-        <div class="flex h-full items-center justify-center p-4 text-xs text-slate-500">
-          {chatTabLabel}
-        </div>
       {/if}
-    </div>
-  </section>
-{/if}
+      <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
+        <ChatWidgetPager
+          {agentsView}
+          {canAgentsListBeDefaultView}
+          {agentsList}
+          {renderAgentsListHeader}
+          {renderConversationHeader}
+          renderChatPanel={renderChatPanel ?? renderDefaultChatPanel}
+          {agentsViewAnnouncement}
+        />
+      </div>
+{/snippet}
+
+{#snippet renderDefaultChatPanel()}
+  <div class="flex h-full items-center justify-center p-4 text-xs text-slate-500">{chatTabLabel}</div>
+{/snippet}

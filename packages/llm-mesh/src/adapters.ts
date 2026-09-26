@@ -16,6 +16,7 @@ export interface MistralAdapterClient extends ProviderAdapterClient {}
 export interface CohereAdapterClient extends ProviderAdapterClient {}
 export interface GcpAdapterClient extends ProviderAdapterClient {}
 export interface LocalAdapterClient extends ProviderAdapterClient {}
+export interface MuseAdapterClient extends ProviderAdapterClient {}
 
 export class OpenAIAdapter extends BaseProviderAdapter<OpenAIAdapterClient> {
   constructor(options: ProviderAdapterOptions<OpenAIAdapterClient> = {}) {
@@ -74,6 +75,16 @@ export class LocalAdapter extends BaseProviderAdapter<LocalAdapterClient> {
   }
 }
 
+// Meta Muse adapter: token-bearing like the sibling adapters (default
+// `validateAdapterAuthSource`). The actual baseURL/transport is supplied by
+// the api/gateway layer — account transport (Lot 2) or MUSE_API_KEY (Lot 1);
+// this package stays transport-free.
+export class MuseAdapter extends BaseProviderAdapter<MuseAdapterClient> {
+  constructor(options: ProviderAdapterOptions<MuseAdapterClient> = {}) {
+    super('muse', options);
+  }
+}
+
 export interface DefaultProviderAdapterClients {
   openai?: OpenAIAdapterClient;
   gemini?: GeminiAdapterClient;
@@ -82,6 +93,7 @@ export interface DefaultProviderAdapterClients {
   cohere?: CohereAdapterClient;
   gcp?: GcpAdapterClient;
   local?: LocalAdapterClient;
+  muse?: MuseAdapterClient;
 }
 
 export const createDefaultProviderAdapters = (
@@ -95,5 +107,6 @@ export const createDefaultProviderAdapters = (
     new CohereAdapter({ client: clients.cohere }),
     new GcpAdapter({ client: clients.gcp }),
     new LocalAdapter({ client: clients.local }),
+    new MuseAdapter({ client: clients.muse }),
   ];
 };
