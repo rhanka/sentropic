@@ -186,17 +186,32 @@ export function readPackedManifest(tgz) {
 // ---------------------------------------------------------------- registry
 const registryPath = (name) => (name.startsWith('@') ? `@${encodeURIComponent(name.slice(1))}` : encodeURIComponent(name));
 
+// Registry visibility budget after a publication (CDN propagation measured at 110-170 s): 18 x 10 s.
+export const REGISTRY_WAIT = { attempts: 18, delaySeconds: 10 };
+export function waitBudget({ attempts, delaySeconds } = {}) {
+  const budget = { attempts: Number(attempts ?? REGISTRY_WAIT.attempts), delaySeconds: Number(delaySeconds ?? REGISTRY_WAIT.delaySeconds) };
+  if (!Number.isInteger(budget.attempts) || budget.attempts < 1 || !Number.isFinite(budget.delaySeconds) || budget.delaySeconds < 0) {
+    throw new GuardError(`invalid registry wait budget ${JSON.stringify({ attempts, delaySeconds })}`);
+  }
+  return budget;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// A fresh read must not be answered by the CDN: no-cache headers plus a unique cache-busting query.
+export const cacheBusted = (url) => `${url}${url.includes('?') ? '&' : '?'}cachebust=${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const FRESH_HEADERS = { 'cache-control': 'no-cache', pragma: 'no-cache' };
+
 // Only packuments that exist are cached, and a cached packument answers only versions it already
 // lists (published versions are immutable). 404s and not-yet-listed versions are always refetched;
-// `{ fresh: true }` bypasses the cache entirely (propagation waits, pre-publish recheck).
+// `{ fresh: true }` bypasses the local cache and the registry CDN (propagation waits, pre-publish recheck).
 export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fetch, attempts = 3, delayMs = 1000 } = {}) {
   const packuments = new Map();
-  async function request(url, accept) {
+  async function request(url, accept, { fresh = false } = {}) {
     let lastError;
     let transient = true;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const response = await fetchImpl(url, { headers: { accept }, cache: 'no-store' });
+        const target = fresh ? cacheBusted(url) : url;
+        const response = await fetchImpl(target, { headers: fresh ? { accept, ...FRESH_HEADERS } : { accept }, cache: 'no-store' });
         if (response.status === 404) return { status: 404 };
         if (response.ok) return { status: response.status, response };
         lastError = `HTTP ${response.status}`;
@@ -213,7 +228,7 @@ export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fet
   async function packument(name, { fresh = false } = {}) {
     if (!fresh && packuments.has(name)) return packuments.get(name);
     const url = `${registry}/${registryPath(name)}`;
-    const res = await request(url, 'application/vnd.npm.install-v1+json');
+    const res = await request(url, 'application/vnd.npm.install-v1+json', { fresh });
     let doc = null;
     if (res.status !== 404) {
       try {
@@ -252,7 +267,50 @@ export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fet
     }
     return { manifest: readPackedManifest(bytes), sha256: createHash('sha256').update(bytes).digest('hex'), integrity };
   }
-  return { lookup, packument, fetchPublishedManifest, registry };
+  // Sigstore attestation bundles of a published version (null while absent), always read fresh.
+  async function attestations(name, version) {
+    const res = await request(`${registry}/-/npm/v1/attestations/${registryPath(name)}@${encodeURIComponent(version)}`, 'application/json', { fresh: true });
+    if (res.status === 404) return null;
+    try {
+      return await res.response.json();
+    } catch (error) {
+      throw new GuardError(`malformed attestations response for ${name}@${version}: ${error.message}`, { transient: true });
+    }
+  }
+  return { lookup, packument, fetchPublishedManifest, attestations, registry };
+}
+
+// Polls fresh (cache-bypassing) lookups until name@version is visible or the budget is exhausted.
+export async function waitForVersion(registry, name, version, { attempts, delaySeconds, onWait = () => {} } = {}) {
+  const budget = waitBudget({ attempts, delaySeconds });
+  let found;
+  for (let i = 1; i <= budget.attempts; i += 1) {
+    found = await registry.lookup(name, version, { fresh: true });
+    if (found.status === 'present' || i === budget.attempts) break;
+    onWait(i, budget.attempts);
+    await sleep(budget.delaySeconds * 1000);
+  }
+  return found;
+}
+
+const splitSpec = (spec) => {
+  const at = typeof spec === 'string' ? spec.lastIndexOf('@') : -1;
+  if (at <= 0 || at === spec.length - 1) throw new GuardError(`expected --spec <name>@<version>, got ${JSON.stringify(spec)}`);
+  return { name: spec.slice(0, at), version: spec.slice(at + 1) };
+};
+
+// `wait --spec <name>@<version> [--attempts N] [--delay S]`: registry visibility wait for Make recipes.
+export async function commandWait(opts, { registry = createRegistry(), out } = {}) {
+  const { name, version } = splitSpec(opts.spec);
+  const sink = out ?? process.stdout;
+  const budget = waitBudget({ attempts: opts.attempts, delaySeconds: opts.delay });
+  const found = await waitForVersion(registry, name, version, { ...budget, onWait: (i, n) => sink.write(`Waiting for ${name}@${version} (${i}/${n})\n`) });
+  if (found.status !== 'present') {
+    sink.write(`${name}@${version} is not visible on ${registry.registry} after ${budget.attempts} x ${budget.delaySeconds}s\n`);
+    return 1;
+  }
+  sink.write(`${name}@${version} is visible on ${registry.registry}\n`);
+  return 0;
 }
 
 // D7: compare runtime/peer/optional maps exactly (sorted keys, absent == empty).
@@ -802,9 +860,9 @@ export async function main(argv, deps = {}) {
   const opts = parseArgs(rest);
   const commands = {
     pack: commandPack, check: commandCheck, inventory: commandInventory, publish: commandPublish,
-    'sibling-plan': commandSiblingPlan, 'sibling-collect': commandSiblingCollect,
+    'sibling-plan': commandSiblingPlan, 'sibling-collect': commandSiblingCollect, wait: commandWait,
   };
-  if (!commands[command]) throw new GuardError(`unknown command ${JSON.stringify(command)} (pack|check|inventory|publish|sibling-plan|sibling-collect)`);
+  if (!commands[command]) throw new GuardError(`unknown command ${JSON.stringify(command)} (pack|check|inventory|publish|sibling-plan|sibling-collect|wait)`);
   return commands[command](opts, deps);
 }
 

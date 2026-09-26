@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
-import { GuardError, TRANSIENT_HINT, commandPack, commandPublish, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, withManifestTransform } from './publishable-manifests.mjs';
+import { GuardError, TRANSIENT_HINT, commandPack, commandPublish, commandWait, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, waitBudget, withManifestTransform } from './publishable-manifests.mjs';
 
 const sink = () => {
   const chunks = [];
@@ -219,6 +219,36 @@ test('registry cache: present packuments are reused for listed versions only; fr
   assert.equal((await registry.lookup('@fx/a', '1.1.0')).status, 'present', 'unlisted version refetched');
   await registry.lookup('@fx/a', '1.0.0', { fresh: true });
   assert.equal(calls.length, 3);
+});
+
+test('fresh registry reads bypass the CDN: no-cache headers and a unique cache-busting query', async () => {
+  const { fetchImpl, calls } = sequenceFetch([{ versions: {} }]);
+  const registry = createRegistry({ registry: 'http://registry.test', fetchImpl, delayMs: 0 });
+  await registry.lookup('@fx/a', '1.0.0', { fresh: true });
+  await registry.lookup('@fx/a', '1.0.0', { fresh: true });
+  for (const { url, init } of calls) {
+    assert.match(url, /^http:\/\/registry\.test\/@fx%2Fa\?cachebust=\d+-[a-z0-9]+$/);
+    assert.equal(init.headers['cache-control'], 'no-cache');
+    assert.equal(init.headers.pragma, 'no-cache');
+  }
+  assert.notEqual(calls[0].url, calls[1].url, 'each fresh read has its own cache key');
+});
+
+test('wait: default budget is 18 x 10 s; polls fresh lookups until visible, fails after the budget', async () => {
+  assert.deepEqual(waitBudget(), { attempts: 18, delaySeconds: 10 });
+  assert.throws(() => waitBudget({ attempts: 0 }), /invalid registry wait budget/);
+  const { fetchImpl, calls } = sequenceFetch([null, { versions: {} }, { versions: { '0.22.0': {} } }]);
+  const out = sink();
+  const registry = createRegistry({ registry: 'http://registry.test', fetchImpl, delayMs: 0 });
+  assert.equal(await commandWait({ spec: '@fx/mesh@0.22.0', attempts: '5', delay: '0' }, { registry, out }), 0);
+  assert.equal(calls.length, 3);
+  assert.match(out.text(), /Waiting for @fx\/mesh@0\.22\.0 \(2\/5\)/);
+  const never = sequenceFetch([null]);
+  const late = sink();
+  assert.equal(await commandWait({ spec: '@fx/mesh@0.22.0', attempts: '3', delay: '0' }, { registry: createRegistry({ registry: 'http://registry.test', fetchImpl: never.fetchImpl, delayMs: 0 }), out: late }), 1);
+  assert.equal(never.calls.length, 3);
+  assert.match(late.text(), /is not visible .* after 3 x 0s/);
+  await assert.rejects(commandWait({ spec: 'nover', attempts: '1', delay: '0' }, { registry, out }), /expected --spec/);
 });
 
 test('registry request: 400/401/403 are permanent (no retry); 408/429/5xx and network exceptions are transient', async () => {
