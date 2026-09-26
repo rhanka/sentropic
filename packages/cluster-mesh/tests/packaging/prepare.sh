@@ -30,7 +30,8 @@ GATEWAY=0.19.0
 # cluster-mesh itself replaces it: the qualified bytes are then exactly the bytes that will be published.
 npm pack --silent --pack-destination "$work" >/dev/null
 tgz="$(ls "$work"/sentropic-cluster-mesh-*.tgz)"
-receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/cluster-mesh "$(node -p "require('./package.json').version")")"
+candidate_version="$(node -p "require('./package.json').version")"
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/cluster-mesh "$candidate_version")"
 if [ -n "$receipt" ]; then
   echo "[candidate] local pack sha256 $(sha256sum "$tgz" | cut -d' ' -f1); qualifying the receipt archive sha256 $(sha256sum "$receipt" | cut -d' ' -f1)"
   cp "$receipt" "$tgz"
@@ -216,7 +217,7 @@ consumer "$work/partial-bump" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/ll
 attempt "$work/partial-bump" plain
 skew=none
 case "$(installed "$work/partial-bump")" in
-  "@sentropic/cluster-mesh@0.13.0 @sentropic/llm-mesh@0.21."*" @sentropic/llm-gateway@0.18."*) ;;
+  "@sentropic/cluster-mesh@$candidate_version @sentropic/llm-mesh@0.21."*" @sentropic/llm-gateway@0.18."*) ;;
   *) skew=legacy-peer-deps; attempt "$work/partial-bump" legacy-peer-deps --legacy-peer-deps ;;
 esac
 echo "skew-build=$skew" >> "$work/partial-bump/npm-install-detail"
