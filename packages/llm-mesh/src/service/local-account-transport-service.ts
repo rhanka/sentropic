@@ -49,6 +49,13 @@ interface AccountOwnerClaim {
   ownerScopeRef: string;
 }
 
+interface ClaudeEnrollmentSession {
+  ownerScope: string;
+  expiresAt: number;
+  completing: boolean;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 // Cloud Code does not currently return a per-account model inventory during
 // enrollment. Advertise only the model proven executable by the live transport
 // contract; explicit account.modelIds may override this after provider evidence.
@@ -91,6 +98,7 @@ export class LocalAccountTransportService {
   private readonly enrollmentProviders = new Map<string, string>();
   private readonly pendingClaudeAccounts = new Set<string>();
   private claudePersistenceTail: Promise<void> = Promise.resolve();
+  private readonly claudeSessions = new Map<string, ClaudeEnrollmentSession>();
   private routeAttemptSequence = 0;
 
   constructor(
@@ -108,9 +116,59 @@ export class LocalAccountTransportService {
     if (!provider) {
       throw new Error(`Enrollment provider '${providerId}' not registered`);
     }
-    const session = await provider.start(input);
-    this.enrollmentProviders.set(session.enrollmentId, providerId);
+    if (providerId !== 'claude-code') {
+      const session = await provider.start(input);
+      this.enrollmentProviders.set(session.enrollmentId, providerId);
+      return session;
+    }
+    const ownerScope = this.requireOwnerScope(input.ownerScope);
+    const session = await provider.start({ ...input, ownerScope });
+    const expiresAt = Date.parse(session.expiresAt);
+    const timer = setTimeout(() => { void this.cancel(session.enrollmentId); }, Math.max(0, expiresAt - Date.now()));
+    (timer as unknown as { unref?: () => void }).unref?.();
+    this.claudeSessions.set(session.enrollmentId, { ownerScope, expiresAt, completing: false, timer });
     return session;
+  }
+
+  async completeClaudeEnrollment(enrollmentId: string, code: string,
+    ownerScopeRef: string): Promise<EnrollmentCompletion> {
+    const owner = this.requireOwnerScope(ownerScopeRef);
+    const session = this.claudeSessions.get(enrollmentId);
+    const provider = this.providers.get('claude-code');
+    if (!provider || !session || session.ownerScope !== owner || session.completing) {
+      throw new Error('Claude enrollment session unavailable for owner');
+    }
+    session.completing = true;
+    const assertCurrent = () => {
+      if (this.claudeSessions.get(enrollmentId) !== session || Date.now() >= session.expiresAt) {
+        throw new Error('Claude enrollment cancelled or expired');
+      }
+    };
+    try {
+      assertCurrent();
+      const credential = await provider.complete({ enrollmentId, code });
+      assertCurrent();
+      return await this.persistClaudeCompletion(credential, owner, provider, assertCurrent);
+    } finally {
+      clearTimeout(session.timer);
+      this.claudeSessions.delete(enrollmentId);
+      await provider.cancel?.(enrollmentId);
+    }
+  }
+
+  async completeClaudeCredentialImport(credentialJson: string,
+    ownerScopeRef: string): Promise<EnrollmentCompletion> {
+    const owner = this.requireOwnerScope(ownerScopeRef);
+    const provider = this.providers.get('claude-code');
+    // Capability stays Claude-local; the common provider contract remains unchanged.
+    if (!provider || !('importCredential' in provider) || typeof provider.importCredential !== 'function') {
+      throw new Error('Claude credential import unavailable');
+    }
+    const importer = provider as EnrollmentProvider & {
+      importCredential(value: string): Promise<PreparedCredential>;
+    };
+    const credential = await importer.importCredential(credentialJson);
+    return this.persistClaudeCompletion(credential, owner, provider, () => {});
   }
 
   async waitForCallback(enrollmentId: string): Promise<EnrollmentCompletion> {
@@ -488,6 +546,9 @@ export class LocalAccountTransportService {
   }
 
   async cancel(enrollmentId: string): Promise<void> {
+    const session = this.claudeSessions.get(enrollmentId);
+    if (session) clearTimeout(session.timer);
+    this.claudeSessions.delete(enrollmentId);
     for (const provider of this.providers.values()) {
       if (provider.cancel) {
         await provider.cancel(enrollmentId);
@@ -632,7 +693,7 @@ export class LocalAccountTransportService {
         }
       }
       // Acquisition may have snapshotted the old token before another caller published.
-      acquisition.material.accessToken = account.accessToken;
+      acquisition.material.accessToken = account.accessToken ?? undefined;
       acquisition.material.refreshToken = account.refreshToken;
       acquisition.material.expiresAt = account.expiresAt ?? undefined;
     }
