@@ -89,3 +89,15 @@ export const createHostReadiness = (options: HostReadinessOptions): HostReadines
     },
   };
 };
+
+/**
+ * B3c ledger/budget/partition store probe: one bounded query through the injected adapter. A
+ * rejection (unreachable store, missing 0008 table or column, unverified partition revision) or a
+ * `false` is not-ready; the caller's abort (probe timeout) resolves not-ready without waiting.
+ */
+export const storeProbe = (check: () => Promise<boolean>) => (signal: AbortSignal): Promise<boolean> =>
+  new Promise<boolean>((resolve) => {
+    if (signal.aborted) return resolve(false);
+    signal.addEventListener('abort', () => resolve(false), { once: true });
+    check().then((ready) => resolve(ready === true), () => resolve(false));
+  });
