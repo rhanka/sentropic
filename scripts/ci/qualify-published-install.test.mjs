@@ -258,13 +258,13 @@ test('post-publication: a PEERS version still invisible after the budget fails',
 
 // ---- SLSA provenance source commit (tarball publishing records no gitHead)
 const SHA = 'a'.repeat(40);
-const slsaDoc = ({ name, version, integrity, commits, subjectName }) => ({
+const slsaDoc = ({ name, version, integrity, commits, subjectName, extra = [] }) => ({
   attestations: [
     { predicateType: 'https://github.com/npm/attestation/tree/main/specs/publish/v0.1', bundle: {} },
     { predicateType: SLSA_V1, bundle: { dsseEnvelope: { payload: Buffer.from(JSON.stringify({
       _type: 'https://in-toto.io/Statement/v1', predicateType: SLSA_V1,
       subject: [{ name: subjectName ?? `pkg:npm/${name.replace(/^@/, '%40')}@${version}`, digest: { sha512: Buffer.from(integrity.slice(7), 'base64').toString('hex') } }],
-      predicate: { buildDefinition: { resolvedDependencies: commits.map((c) => ({ uri: 'git+https://github.com/o/r@refs/heads/main', digest: { gitCommit: c } })) } },
+      predicate: { buildDefinition: { resolvedDependencies: [...commits.map((c) => ({ uri: 'git+https://github.com/rhanka/sentropic@refs/heads/main', digest: { gitCommit: c } })), ...extra] } },
     })).toString('base64') } } },
   ],
 });
@@ -274,10 +274,16 @@ test('provenance check: workflow commit and published subject must match the SLS
   const id = { name: '@fx/p', version: '1.0.0', integrity, commit: SHA };
   assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), id), { problems: [], sourceCommits: [SHA] });
   assert.match(checkProvenance(slsaDoc({ ...id, commits: ['b'.repeat(40)] }), id).problems.join(), /differs from the workflow commit/);
-  assert.match(checkProvenance(slsaDoc({ ...id, commits: [] }), id).problems.join(), /names no source gitCommit/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [] }), id).problems.join(), /has 0 git\+https:\/\/github\.com\/rhanka\/sentropic@refs\/\* source entries/);
   assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA], subjectName: 'pkg:npm/%40fx/other@1.0.0' }), id).problems.join(), /subject does not match/);
   assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), { ...id, integrity: `sha512-${createHash('sha512').update('y').digest('base64')}` }).problems.join(), /subject does not match/);
   assert.match(checkProvenance({ attestations: [] }, id).problems.join(), /no SLSA v1 provenance/);
+  // Only the repository source entry is compared: an unrelated resolved dependency does not matter.
+  const reusable = { uri: 'git+https://github.com/other/reusable-workflows@refs/heads/main', digest: { gitCommit: 'd'.repeat(40) } };
+  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA], extra: [reusable] }), id), { problems: [], sourceCommits: [SHA] });
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: ['e'.repeat(40)], extra: [{ ...reusable, digest: { gitCommit: SHA } }] }), id).problems.join(), /source commit e{40} differs from the workflow commit/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [], extra: [{ ...reusable, digest: { gitCommit: SHA } }] }), id).problems.join(), /has 0 .* source entries/);
+  assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA, SHA] }), id).problems.join(), /has 2 .* source entries \(expected exactly one\)/);
 });
 
 test('provenance commit input: 40-hex SHA, PKG post-publication only', async () => {
