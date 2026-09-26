@@ -30,7 +30,8 @@ GATEWAY=0.19.0
 # cluster-mesh itself replaces it: the qualified bytes are then exactly the bytes that will be published.
 npm pack --silent --pack-destination "$work" >/dev/null
 tgz="$(ls "$work"/sentropic-cluster-mesh-*.tgz)"
-receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/cluster-mesh "$(node -p "require('./package.json').version")")"
+candidate_version="$(node -p "require('./package.json').version")"
+receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/cluster-mesh "$candidate_version")"
 if [ -n "$receipt" ]; then
   echo "[candidate] local pack sha256 $(sha256sum "$tgz" | cut -d' ' -f1); qualifying the receipt archive sha256 $(sha256sum "$receipt" | cut -d' ' -f1)"
   cp "$receipt" "$tgz"
@@ -187,7 +188,9 @@ old_installed="@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0"
 # Old tuple (llm-mesh 0.21.2, llm-gateway 0.18.0), registry only: npm must refuse the out-of-range optional
 # peers. npm 11 either fails with ERESOLVE or exits 0 after dropping the conflicting root requests
 # ("ERESOLVE overriding peer dependency"); both leave the old tuple uninstalled and count as refused.
-# npm 11 --force applies the same override; --legacy-peer-deps then builds the skewed tree for the runtime refusal.
+# The skewed tree for the runtime refusal is built by --force, else by --legacy-peer-deps; which one works
+# depends on npm and on the registry state (--force dropped the old pair before the train was published and
+# builds it since), so the outcome is recorded here and only its invariants are asserted (skew-invariants.ts).
 fixture old-tuple
 : > "$work/old-tuple/npm-install-detail"
 attempt "$work/old-tuple" plain "$tgz" $old_installed
@@ -206,14 +209,15 @@ echo "[old-tuple] outcome $(cat "$work/old-tuple/npm-install-outcome")"; cat "$w
 tuple old-tuple
 
 # Partial bump: the consumer moves cluster-mesh to the candidate but keeps its own direct llm-mesh ^0.21.2 and
-# llm-gateway ^0.18.0 (registry). What npm does is recorded as is; when it drops the old pins the tree is
-# rebuilt with --legacy-peer-deps so the runtime refusal is asserted on the skewed tree.
+# llm-gateway ^0.18.0 (registry). What npm does is recorded as is; unless the plain install already built the
+# skewed tree (an invariant violation asserted by the spec) it is rebuilt with --legacy-peer-deps so the runtime
+# refusal is asserted on the skewed tree.
 consumer "$work/partial-bump" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/llm-mesh=^0.21.2" "@sentropic/llm-gateway=^0.18.0"
 : > "$work/partial-bump/npm-install-detail"
 attempt "$work/partial-bump" plain
 skew=none
 case "$(installed "$work/partial-bump")" in
-  "@sentropic/cluster-mesh@0.13.0 @sentropic/llm-mesh@0.21."*" @sentropic/llm-gateway@0.18."*) ;;
+  "@sentropic/cluster-mesh@$candidate_version @sentropic/llm-mesh@0.21."*" @sentropic/llm-gateway@0.18."*) ;;
   *) skew=legacy-peer-deps; attempt "$work/partial-bump" legacy-peer-deps --legacy-peer-deps ;;
 esac
 echo "skew-build=$skew" >> "$work/partial-bump/npm-install-detail"
