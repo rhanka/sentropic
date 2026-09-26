@@ -564,7 +564,7 @@ export class LocalAccountTransportService {
       // Acquisition may have snapshotted the old token before another caller published.
       acquisition.material.accessToken = account.accessToken;
       acquisition.material.refreshToken = account.refreshToken;
-      acquisition.material.expiresAt = account.expiresAt;
+      acquisition.material.expiresAt = account.expiresAt ?? undefined;
     }
 
     return acquisition;
