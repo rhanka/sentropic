@@ -117,7 +117,7 @@
   - [x] Isolated shared refresh fix with Cloud Code/Codex save-window/failure regressions and existing removal coverage; reproduced premature publication before fix.
   - [x] Versioned Claude profile validation/resolution and renewable paste parsing in `src/enrollment/claude-code.ts`.
     - [x] A2 bundle and fail-closed enrollment/exact-version refresh profile resolver.
-  - [ ] PKCE/manual completion, one-use cancellation/TTL/timeout and JSON refresh in the Claude provider.
+  - [x] PKCE/manual completion, one-use cancellation/TTL/timeout and JSON refresh in the Claude provider.
     - [x] Bounded JSON grant wire, strict rotation validation and offline allowlisted metadata.
   - [ ] Claude provider validation/configuration/grant/error tests in `tests/enrollment/claude-code.test.ts`.
   - [ ] Owner-bound sessions and common durable completion helper in `src/service/local-account-transport-service.ts`.
