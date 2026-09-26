@@ -122,9 +122,9 @@
   - [x] Claude provider validation/configuration/grant/error tests in `tests/enrollment/claude-code.test.ts`.
     - [x] Browser wire/PKCE/replay and offline import/O5/allowlist/UTF-8 validation tests added.
     - [x] State/TTL/cancel/concurrent completion/timeout, malformed grants, rotation and secret-error tests added.
-  - [ ] Owner-bound sessions and common durable completion helper in `src/service/local-account-transport-service.ts`.
+  - [x] Owner-bound sessions and common durable completion helper in `src/service/local-account-transport-service.ts`.
     - [x] Serialized Claude persistence with pending-account exclusion, rollback tombstones and persisted refresh scopes.
-  - [ ] Optional facade methods/configuration and additive completion type export.
+  - [x] Optional facade methods/configuration and additive completion type export.
   - [ ] Claude service persistence/restore/concurrency/removal/canary tests in `tests/service/local-account-transport-service-claude.test.ts`.
   - [ ] Facade, enrollment contracts and unchanged auth regressions in their named test files.
   - [ ] README configuration, trusted secret boundary, renewable import and sourced Terms of use.

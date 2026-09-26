@@ -3,6 +3,7 @@
 export type {
   AccountPublic,
   CredentialEnvelope,
+  EnrollmentCompletion,
   EnrollmentProvider,
   EnrollmentSession,
   PreparedCredential,
