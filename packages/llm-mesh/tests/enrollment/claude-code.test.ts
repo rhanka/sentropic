@@ -29,6 +29,75 @@ async function safeFailure(promise: Promise<unknown>) {
 afterEach(() => vi.useRealTimers());
 
 describe('Claude renewable enrollment', () => {
+  it('uses bundled refresh without the host resolver and rejects old/unknown references offline', async () => {
+    const resolveConfig = vi.fn(async () => ({}));
+    const fetchFn = vi.fn(async () => response());
+    const provider = new ClaudeCodeEnrollmentProvider({ configResolver: { resolveConfig }, fetchFn, nowFn: () => NOW });
+    const credential = await provider.importCredential(JSON.stringify(document()));
+    expect(resolveConfig).toHaveBeenCalledWith('claude-code');
+    resolveConfig.mockClear();
+    await provider.refresh({ accountId: credential.accountId, refreshToken: REFRESH, credentialVersion: VERSION });
+    expect(resolveConfig).not.toHaveBeenCalled();
+    fetchFn.mockClear();
+    for (const credentialVersion of ['', 'v1.0.0', 'unknown']) {
+      await safeFailure(provider.refresh({ accountId: 'opaque', refreshToken: REFRESH, credentialVersion }));
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it.each([null, [], { id: 'incomplete' }, 'throw'])(
+    'fails closed on nonempty invalid or throwing resolver (%j)', async (value) => {
+      const fetchFn = vi.fn();
+      const provider = new ClaudeCodeEnrollmentProvider({ fetchFn, configResolver: {
+        async resolveConfig() { if (value === 'throw') throw new Error(CODE); return value as any; },
+      } });
+      await safeFailure(provider.start(start));
+      await safeFailure(provider.importCredential(JSON.stringify(document())));
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+  it('snapshots a custom profile and restores its exact version through a new provider', async () => {
+    const profile = { id: 'qualified-profile-v2', authorizationUrl: 'https://auth.example.test/authorize',
+      tokenUrl: 'https://auth.example.test/token', redirectUri: 'https://auth.example.test/callback',
+      clientId: 'public-client-id', source: 'https://source.example.test/v2',
+      authorizationScopes: ['user:inference'], refreshScopes: ['user:inference'], requiredScopes: ['user:inference'] };
+    const original = structuredClone(profile);
+    const resolveConfig = vi.fn(async () => profile);
+    const fetchFn = vi.fn(async () => response());
+    const options = { configResolver: { resolveConfig }, fetchFn, nowFn: () => NOW };
+    const provider = new ClaudeCodeEnrollmentProvider(options);
+    const session = await provider.start({ ...start, configRef: 'host-profile' });
+    profile.tokenUrl = 'https://changed.example.test/token';
+    profile.requiredScopes.push('user:profile');
+    const credential = await provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) });
+    expect(fetchFn.mock.calls[0][0]).toBe(original.tokenUrl);
+    expect(credential.authClientConfigVersion).toBe(original.id);
+    Object.assign(profile, original);
+    const restored = new ClaudeCodeEnrollmentProvider(options);
+    await restored.refresh({ accountId: credential.accountId, refreshToken: REFRESH, credentialVersion: original.id });
+    expect(resolveConfig).toHaveBeenLastCalledWith(original.id);
+    fetchFn.mockClear();
+    profile.id = 'wrong-version';
+    await safeFailure(restored.refresh({ accountId: 'opaque', refreshToken: REFRESH, credentialVersion: original.id }));
+    profile.id = VERSION;
+    await safeFailure(restored.start(start));
+    profile.id = original.id;
+    profile.tokenUrl = 'http://unsafe.example.test/token';
+    await safeFailure(restored.start(start));
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('requires enrollment refresh material and rejects reflected OAuth error codes', async () => {
+    const body = grant();
+    delete (body as Partial<typeof body>).refresh_token;
+    const { provider, fetchFn } = setup(vi.fn(async () => response(body)));
+    const session = await provider.start(start);
+    await safeFailure(provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) }));
+    fetchFn.mockResolvedValue(response({ error: CODE } as any, 401));
+    const error = await safeFailure(provider.refresh({ accountId: 'opaque', refreshToken: REFRESH, credentialVersion: VERSION }));
+    expect(String(error)).toContain('HTTP 401 oauth_error');
+  });
+
   it.each(['missing', 'mismatch', 'extra', 'blank', 'expired', 'cancelled'])(
     'refuses %s manual return before exchange', async (mode) => {
       let now = NOW;
