@@ -49,10 +49,10 @@
   - [x] Read mandatory rules, branch template, project context, and harness workflow.
   - [x] Verify branch with `git branch --show-current` and `harness check branch` (PASS C1).
   - [x] Establish path boundaries, environment mapping, and Make targets before writing the spec.
-- [ ] **Lot 1 — Evidence and current state**
-  - [ ] Read enrollment, auth, transport, catalog, custody/service/node layers and enrollment tests; capture file:line evidence.
-  - [ ] Verify Anthropic facts using public documentation and the public Claude Code package; label unverifiable details.
-  - [ ] Commit current-state and external-source findings after `make scope-check`.
+- [x] **Lot 1 — Evidence and current state**
+  - [x] Read enrollment, auth, transport, catalog, custody/service/node layers and enrollment tests; capture file:line evidence.
+  - [x] Verify Anthropic facts using public documentation and the public Claude Code package; label unverifiable details.
+  - [x] Commit current-state and external-source findings after `make scope-check`.
 - [ ] **Lot 2 — Minimal design and security**
   - [ ] Specify browser PKCE first, credential paste second, and refresh ownership third.
   - [ ] List exact future files/public additions and justify compatible version policy; specify token safety and revocation limits.
