@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AccountTransportAcquireError } from '../../src/account-transports.js';
 import type { EnrollmentProvider, PreparedCredential } from '../../src/enrollment/contracts.js';
+import { MuseEnrollmentProvider } from '../../src/enrollment/muse.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
 import { InMemoryRoutePlanner } from '../../src/route-planner.js';
 import { LAUNCH_ALIAS_TARGET_MAPPINGS } from '../../src/routing-targets.js';
@@ -8,6 +9,31 @@ import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 describe('LocalAccountTransportService', () => {
+  it('persists a changed Muse CLI schema version on refresh and restores it', async () => {
+    let schemaVersion = 1;
+    const keyring = new InMemoryKeyring();
+    const provider = new MuseEnrollmentProvider({
+      readAuthFile: async () => JSON.stringify({ schema_version: schemaVersion,
+        providers: { meta: { access_token: 'fake-muse-login', user_email: 'owner@example.test' } } }),
+      fetchFn: vi.fn(async () => new Response(JSON.stringify({ api_key: 'fake-muse-serving-key' }))),
+    });
+    const providers = new Map([['muse', provider]]);
+    const config = { async resolveConfig() { return {}; } };
+    const service = new LocalAccountTransportService(keyring, providers, config);
+    const session = await service.enroll('muse', { configRef: 'default', mode: 'cli',
+      redirectUri: '', ownerScope: 'owner' });
+    const { accountId } = await service.completeMuseImport(session.enrollmentId, '', 'owner');
+    schemaVersion = 2;
+    const input = { targetProviderId: 'muse' as const, transportProviderId: 'muse' as const,
+      ownerScopeRef: 'owner' };
+    expect((await service.acquire({ ...input, now: Date.now() + 7200_000 })).material.accountId).toBe(accountId);
+    const envelope = JSON.parse((await keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`))!);
+    expect(envelope.authClientConfigVersion).toBe('2');
+    const restored = new LocalAccountTransportService(keyring, providers, config);
+    expect((await restored.acquire(input)).material.accessToken).toBe('fake-muse-serving-key');
+    expect((await restored.listAccounts('owner'))[0].status).toBe('active');
+  });
+
   it.each(['cloud-code', 'codex'] as const)('does not replay %s refresh while the removal check awaits', async (transportProviderId) => {
     const keyring = new InMemoryKeyring();
     let responded = false;

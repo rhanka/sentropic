@@ -146,6 +146,7 @@
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [x] Finding 2 verified: real Muse provider schema 1-to-2 refresh failed before the fix; exact profile-version enforcement is now Claude-only, with durable schema update/restart coverage in the allowed shared service test file.
 - [x] Fix round 1 baseline: branch check PASS C1, clean worktree at `110231cc3`, and `origin/main` is an ancestor of HEAD.
 - [x] Finding 1 verified: paused refresh plus route failure/cooldown overwrote the fence before the fix; both regressions now require durable reauth and one provider call across restart.
 - [x] Supplemental `make qualify-published-install TARBALL=tmp/ci-manifest-guard/siblings/cluster-mesh/llm-mesh/sentropic-llm-mesh-0.22.0.tgz REPORT_DIR=tmp/claude-seat-qualification ENV=test-llm-mesh-claude-seat`: PASS, 6 import probes (core plus all 5 public entry points); does not replace the blocked types-and-bundlers gate.
