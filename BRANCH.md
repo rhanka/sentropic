@@ -49,8 +49,8 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
   - [x] Declare BRCIW-EX1/EX2/EX3.
 
 - [ ] **Lot 1 — Registry visibility waits**
-  - [ ] Fresh registry requests send `cache-control: no-cache` with a cache-busting query; shared 18 x 10 s budget; `wait` subcommand.
-  - [ ] Makefile mesh/auth waits use the bypassing wait and the configurable 18 x 10 s budget.
+  - [x] Fresh registry requests send `cache-control: no-cache` with a cache-busting query; shared 18 x 10 s budget; `wait` subcommand.
+  - [x] Makefile mesh/auth waits use the bypassing wait and the configurable 18 x 10 s budget.
   - [ ] qualify-published-install: 18 x 10 s primary wait (configurable), core/PEERS installs retried on ETARGET/E404/notarget within the budget, other errors fail immediately.
 
 - [ ] **Lot 2 — Publish conflict**
