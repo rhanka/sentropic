@@ -34,14 +34,15 @@
 - [x] `CS-02` — deferred — owner: conductor — Cross-review, implementation/build/tests (astra), live h2a mission, one llm-mesh bump and one h2a 0.97 bump belong to later lots per owner instruction; no consensus claimed here.
 - [x] `CS-03` — attention — owner: design author — Apply harness brainstorm/plan structure within the two allowed files; omit recorder/Track writes because their artifacts are outside this lot's allowed paths.
 - [x] `CS-04` — attention — owner: conductor — Prefer browser PKCE with manual code return: verified Claude behavior, shared PKCE reuse, no loopback helper change.
-- [x] `CS-05` — attention — owner: conductor — Require a renewable JSON credential for paste; bare access tokens cannot establish refresh parity. See spec O1.
+- [x] `CS-05` — acknowledge — owner: conductor, 2026-09-26 — O1 decided: renewable JSON only; no access-only paste in this lot.
 - [x] `CS-06` — attention — owner: conductor — Prefer one additive `0.22.x` patch under the owner's policy to preserve cluster-mesh 0.13 compatibility; no bump in this lot.
 - [x] `CS-07` — attention — owner: custody lane — Custody-only rotation is a controlling design requirement, not implemented protection in the current local account service; qualify the separate resolver/job before enabling custody seats.
-- [x] `CS-08` — attention — owner: conductor — Before the live mission, nominate isolated grants and one operator/refresh owner, then verify current wire profile and per-device revocation. See spec O2; no real credentials handled here.
+- [x] `CS-08` — acknowledge — owner: conductor, 2026-09-26 — O2 decided: conductor drives owner's Chrome/CDP 9222, h-cond verifies, operator returns code through trusted masked input outside transcripts; one refresh holder per grant. CDP capture risk is explicit in M2.
 - [x] `CS-09` — attention — owner: design author — Round 1 uses sessionless paste, internal provider capabilities, offline labels, and strict versioned config; these preserve the existing contracts and avoid an unverified profile request.
-- [x] `CS-10` — attention — owner: conductor — O3 recommends pinned CLI 2.1.80 values with M2 profile evidence; O4 recommends accepting rejected serving without impersonation; both avoid speculative wire changes.
-- [x] `CS-11` — attention — owner: conductor — O5 recommends accepting expired renewable JSON and refreshing on first acquire; import stays offline and the operator avoids a competing CLI rotation.
+- [x] `CS-10` — acknowledge — owner: conductor, 2026-09-26 — O3 decided: versioned/configurable profile with M2 evidence; O4 decided NOT pursued: no impersonation, official CLI subprocess or execution `not-covered`.
+- [x] `CS-11` — acknowledge — owner: conductor, 2026-09-26 — O5 decided: accept expired renewable JSON, import offline, refresh on first acquire and persist before use.
 - [x] `CS-12` — attention — owner: implementer — Widen refresh single-flight as a shared bug fix with Cloud Code/Codex regression tests; native Muse dispatch is separately reported and remains outside scope.
+- [x] `CS-13` — acknowledge — owner: conductor, 2026-09-26 — Continue feasibility work; enrolling users own terms compliance and risk suspension/refused calls. Sourced README Terms of use is a lot 1 acceptance gate.
 
 ## AI Flaky tests
 - [x] Not applicable: no tests or live provider calls in this design lot.
@@ -75,9 +76,13 @@
   - [x] Reduce Claude API, keep provider internal, define refresh config resolution/offline labels, correct citations, and document the shared refresh race.
   - [x] Split future implementation lots, preserve auth validation, add O3–O5, and strengthen regression/mission evidence.
   - [x] Complete the two-file revision and diff review; clean up the dedicated environment; prepare the checked scope/commit handoff with O1–O5 and review disposition.
+- [ ] **Lot 5 — Owner decisions, revision round 2 (planning only)**
+  - [x] Close O1–O5, source Terms of use and require README text in the change set/acceptance gates; specify conductor/CDP/h-cond mission ownership and code secrecy.
+  - [ ] Replace D6 with source-grounded official CLI subprocess execution, single refresh ownership, isolation and `not-covered` fallback; reconcile lot split and release gates.
+  - [ ] Check final two-file diff, scope, line limit and cleanup; commit without push and report remaining evidence requirements.
 
 ## Future implementation handoff (not authorized in this branch)
-- [ ] **Implementation lot 1 — enrollment, refresh, persistence**: provider, facade/service and completion type export; enrollment/contracts/service/auth tests listed in spec §5, including Cloud Code/Codex race regression and AcquireError canaries.
+- [ ] **Implementation lot 1 — enrollment, refresh, persistence**: browser + renewable paste, provider, facade/service and completion type export, README Terms of use and shared single-flight fix; spec §5 tests include Cloud Code/Codex race regression, AcquireError canaries and README acceptance.
 - [ ] **Implementation lot 2 — runtime client parity**: new Claude Messages client/private headers and root export; transport/auth tests plus cluster-mesh `tests/integrations/llm-surface.spec.ts` and `tests/packaging/types-and-bundlers.spec.ts`; keep generic auth validation unchanged.
 - [ ] **Implementation lot 3 — consumer qualification**: conductor scopes h2a files, runs M0–M7 with M2 profile provenance and M5 counting fetch, then completes docs and one bump per package; custody remains separate.
 
