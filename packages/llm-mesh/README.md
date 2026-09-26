@@ -149,8 +149,10 @@ acquire. Import uses the host's `claude-code` profile, never a profile in the pa
 CLI mode defaults to an encrypted file keyring. Portal mode defaults to memory;
 provide a durable keyring with atomic owner claims for restart persistence.
 Both paths save the envelope, public record and index before local eligibility.
-Refresh stays single-flight through validation, save and publication; failures
-require reauthentication. Scope metadata records the actual validated grant scopes.
+Refresh stays single-flight through validation, save and publication. Local storage
+or preparation outages before a provider request are retryable; terminal errors or
+failures after a request may have been sent require reauthentication. Scope metadata
+records the actual validated grant scopes.
 Use one credential-owning service per grant. Before importing, disable/logout the
 source CLI and record transfer evidence; copying a file does not transfer refresh
 ownership or create a new provider device. Local removal does not prove provider

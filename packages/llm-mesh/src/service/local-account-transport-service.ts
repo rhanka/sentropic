@@ -17,6 +17,7 @@ import type {
   StartEnrollmentInput,
 } from '../enrollment/contracts.js';
 import { MUSE_DIRECT_BILLING_TYPE } from '../enrollment/muse.js';
+import { ClaudeRefreshPreparationError } from '../enrollment/claude-code.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 import { listModelProfilesByProvider } from '../catalog.js';
 import type { LlmMesh } from '../mesh.js';
@@ -665,8 +666,9 @@ export class LocalAccountTransportService {
             acquisition.material.refreshToken = refreshed.refreshToken;
           }
           acquisition.material.expiresAt = refreshed.expiresAt;
-        } catch {
+        } catch (error) {
           await acquisition.release?.();
+          if (error instanceof AccountTransportAcquireError) throw error;
           throw new AccountTransportAcquireError(
             `Account ${account.accountId} token refresh failed; reauthentication required`,
             'no_active_account',
@@ -831,8 +833,9 @@ export class LocalAccountTransportService {
     }
 
     const refreshPromise = (async () => {
+      const account = this.accountsMap.get(input.accountId);
+      let requestMayHaveBeenSent = false;
       try {
-        const account = this.accountsMap.get(input.accountId);
         const providerId = account?.transportProviderId ?? 'cloud-code';
         const provider = this.providers.get(providerId);
 
@@ -851,6 +854,7 @@ export class LocalAccountTransportService {
             ...record, status: 'reauth_required', account: { ...record.account, status: 'reauth_required' },
           }));
         }
+        requestMayHaveBeenSent = true;
         const refreshed = await provider.refresh(input);
         if (!account || refreshed.accountId !== input.accountId
           || !refreshed.accessToken?.trim() || /[\r\n]/.test(refreshed.accessToken)
@@ -875,9 +879,19 @@ export class LocalAccountTransportService {
         Object.assign(account, updated);
         this.credentialVersions.set(input.accountId, refreshed.authClientConfigVersion);
         return { ...refreshed, refreshToken: updated.refreshToken ?? undefined };
-      } catch {
+      } catch (error) {
+        if ((account && !this.accountsMap.has(input.accountId))
+          || await this.isAccountRemoved(input.accountId).catch(() => false)) {
+          throw new AccountTransportAcquireError(`Account ${input.accountId} has been removed`, 'no_active_account');
+        }
+        if ((!requestMayHaveBeenSent || error instanceof ClaudeRefreshPreparationError)
+          && account?.status !== 'reauth_required') {
+          // A fence write can commit and then throw, but no provider request occurred.
+          if (account) await this.persistAccountState(account, true).catch(() => {});
+          throw new AccountTransportAcquireError('Token refresh preparation failed; retry later', 'no_active_account');
+        }
         await this.markReauthRequired(input.accountId).catch(() => {});
-        throw new Error('Token refresh failed; reauthentication required');
+        throw new AccountTransportAcquireError('Token refresh failed; reauthentication required', 'no_active_account');
       } finally {
         this.refreshInFlight.delete(input.accountId);
       }
@@ -935,7 +949,7 @@ export class LocalAccountTransportService {
     }
   }
 
-  private async persistAccountState(account: AccountTransportAccount): Promise<void> {
+  private async persistAccountState(account: AccountTransportAccount, restoreBeforeRequest = false): Promise<void> {
     await this.assertAccountOwnerClaim(account.accountId, account.ownerScopeRef);
     if (await this.isAccountRemoved(account.accountId)) return;
     const key = `sentropic-llm-mesh:${account.accountId}:public`;
@@ -952,7 +966,8 @@ export class LocalAccountTransportService {
       } = account;
       if (await this.isAccountRemoved(account.accountId)) return;
       // Route outcomes must not clear the durable no-replay fence during rotation.
-      if (this.refreshInFlight.has(account.accountId) && account.status !== 'reauth_required') return;
+      if (!restoreBeforeRequest && this.refreshInFlight.has(account.accountId)
+        && account.status !== 'reauth_required') return;
       await this.keyring.setSecret(key, JSON.stringify({
         ...current,
         status: account.status ?? current.status,

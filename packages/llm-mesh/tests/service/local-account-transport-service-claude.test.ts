@@ -34,6 +34,42 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it.each(['read', 'write', 'write-then-throw', 'profile', 'missing-token'])(
+    'keeps a pre-request %s failure retryable without requiring reauthentication', async (kind) => {
+      const { service, keyring, fetchFn, configResolver, create } = setup();
+      const custom = { id: 'custom-retry-v1', authorizationUrl: 'https://auth.example.test/authorize',
+        tokenUrl: 'https://auth.example.test/token', redirectUri: 'https://auth.example.test/callback',
+        clientId: 'test-client', source: 'https://source.example.test/v1', authorizationScopes: ['user:inference'],
+        refreshScopes: ['user:inference'], requiredScopes: ['user:inference'] };
+      if (kind === 'profile') configResolver.resolveConfig.mockResolvedValue(custom);
+      const { accountId } = await service.completeClaudeCredentialImport(paste(true), owner);
+      const pubKey = `sentropic-llm-mesh:${accountId}:public`;
+      const read = keyring.getSecret.bind(keyring);
+      const save = keyring.setSecret.bind(keyring);
+      if (kind === 'read') keyring.getSecret = async (key) => {
+        if (key === pubKey) { keyring.getSecret = read; throw new Error(REFRESH); }
+        return read(key);
+      };
+      if (kind.startsWith('write')) keyring.setSecret = async (key, value) => {
+        if (key === pubKey) {
+          keyring.setSecret = save;
+          if (kind === 'write-then-throw') await save(key, value);
+          throw new Error(REFRESH);
+        }
+        await save(key, value);
+      };
+      if (kind === 'profile') configResolver.resolveConfig.mockRejectedValueOnce(new Error(REFRESH));
+      if (kind === 'missing-token') (service as any).accountsMap.get(accountId).refreshToken = undefined;
+      const error = await assertSafe(service.acquire(acquire));
+      expect(error).toBeInstanceOf(AccountTransportAcquireError);
+      expect(String(error)).toContain('retry');
+      expect(String(error)).not.toContain('reauthentication required');
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect((await service.listAccounts(owner))[0].status).toBe('active');
+      expect((await create().acquire(acquire)).material.accountId).toBe(accountId);
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    });
+
   it.each(['provider-5xx', 'rate-limited'] as const)('keeps the refresh fence when a concurrent route records %s', async (reason) => {
     const { service, keyring, fetchFn, create } = setup();
     const { accountId } = await service.completeClaudeCredentialImport(paste(), owner);
@@ -217,7 +253,8 @@ describe('Claude service enrollment', () => {
     if (mode === 'cancel') await service.cancel(session.enrollmentId);
     if (mode === 'expire') { vi.useFakeTimers(); vi.setSystemTime(Date.now() + 16 * 60_000); }
     complete(response());
-    await assertSafe(pending);
+    const error = await assertSafe(pending);
+    if (mode === 'remove') expect(String(error)).toContain('has been removed');
     await service.cancel(session.enrollmentId);
     expect(await create().listAccounts(owner)).toEqual([]);
   });
