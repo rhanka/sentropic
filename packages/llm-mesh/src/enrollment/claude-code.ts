@@ -187,14 +187,17 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
   }
 
   private grant(value: unknown, profile: ClaudeOAuthProfile, accountId: string,
-    method: string, previousRefresh?: string): PreparedCredential {
+    method: string, previousRefresh?: string, previousScopes?: unknown): PreparedCredential {
     if (!object(value) || typeof value.expires_in !== 'number' || !Number.isFinite(value.expires_in)
-      || value.expires_in <= 0 || typeof value.scope !== 'string') throw failure('invalid token response');
+      || value.expires_in <= 0 || (Object.hasOwn(value, 'scope') && typeof value.scope !== 'string')) {
+      throw failure('invalid token response');
+    }
     const expiry = this.now() + value.expires_in * 1000;
     if (expiry <= this.now()) throw failure('invalid token expiry');
     return this.prepare(value.access_token,
       Object.hasOwn(value, 'refresh_token') ? value.refresh_token : previousRefresh,
-      expiry, value.scope.split(' '), profile, accountId, method);
+      expiry, typeof value.scope === 'string' ? value.scope.split(' ') : previousScopes,
+      profile, accountId, method);
   }
 
   private async exchange(profile: ClaudeOAuthProfile, body: Record<string, string>,
@@ -224,12 +227,12 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
     } finally { clearTimeout(timer); }
   }
 
-  async refresh(input: RefreshInput): Promise<PreparedCredential> {
+  async refresh(input: RefreshInput & { grantedScopes?: unknown }): Promise<PreparedCredential> {
     const profile = await this.profile(input.credentialVersion, true);
     if (!token(input.refreshToken)) throw new ClaudeRefreshPreparationError();
     const value = await this.exchange(profile, { grant_type: 'refresh_token',
       refresh_token: input.refreshToken, client_id: profile.clientId, scope: profile.refreshScopes.join(' ') });
-    return this.grant(value, profile, input.accountId, 'refresh', input.refreshToken);
+    return this.grant(value, profile, input.accountId, 'refresh', input.refreshToken, input.grantedScopes);
   }
 
   async cancel(enrollmentId: string): Promise<void> {

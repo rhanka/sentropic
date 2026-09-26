@@ -34,6 +34,18 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it('retains previously granted scopes across restart when refresh omits scope', async () => {
+    const { service, create, fetchFn, keyring } = setup();
+    const { accountId } = await service.completeClaudeCredentialImport(paste(true), owner);
+    fetchFn.mockImplementation(async () => new Response(JSON.stringify({ access_token: ACCESS,
+      refresh_token: REFRESH, expires_in: 3600 })));
+    await create().acquire(acquire);
+    const pub = JSON.parse((await keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`))!);
+    expect(pub.account.metadata.scopes).toEqual(['user:inference']);
+    await create().acquire({ ...acquire, now: Date.now() + 7200_000 });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['read', 'write', 'write-then-throw', 'profile', 'missing-token'])(
     'keeps a pre-request %s failure retryable without requiring reauthentication', async (kind) => {
       const { service, keyring, fetchFn, configResolver, create } = setup();

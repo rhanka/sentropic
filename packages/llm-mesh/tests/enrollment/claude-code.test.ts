@@ -29,6 +29,17 @@ async function safeFailure(promise: Promise<unknown>) {
 afterEach(() => vi.useRealTimers());
 
 describe('Claude renewable enrollment', () => {
+  it.each([undefined, null, '', ['user:inference']])('uses prior scopes only for omitted refresh scope (%j)', async (scope) => {
+    const { provider } = setup(vi.fn(async () => response(grant({ scope }))));
+    const pending = provider.refresh({ accountId: 'opaque', refreshToken: REFRESH,
+      credentialVersion: VERSION, grantedScopes: ['user:inference'] });
+    if (scope === undefined) {
+      expect((await provider.resolve(await pending)).scopes).toEqual(['user:inference']);
+    } else await safeFailure(pending);
+    const session = await provider.start(start);
+    await safeFailure(provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) }));
+  });
+
   it('uses bundled refresh without the host resolver and rejects old/unknown references offline', async () => {
     const resolveConfig = vi.fn(async () => ({}));
     const fetchFn = vi.fn(async () => response());
