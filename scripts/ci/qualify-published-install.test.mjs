@@ -258,13 +258,13 @@ test('post-publication: a PEERS version still invisible after the budget fails',
 
 // ---- SLSA provenance source commit (tarball publishing records no gitHead)
 const SHA = 'a'.repeat(40);
-const slsaDoc = ({ name, version, integrity, commits, subjectName, extra = [] }) => ({
+const slsaDoc = ({ name, version, integrity, commits, subjectName, extra = [], runId }) => ({
   attestations: [
     { predicateType: 'https://github.com/npm/attestation/tree/main/specs/publish/v0.1', bundle: {} },
     { predicateType: SLSA_V1, bundle: { dsseEnvelope: { payload: Buffer.from(JSON.stringify({
       _type: 'https://in-toto.io/Statement/v1', predicateType: SLSA_V1,
       subject: [{ name: subjectName ?? `pkg:npm/${name.replace(/^@/, '%40')}@${version}`, digest: { sha512: Buffer.from(integrity.slice(7), 'base64').toString('hex') } }],
-      predicate: { buildDefinition: { resolvedDependencies: [...commits.map((c) => ({ uri: 'git+https://github.com/rhanka/sentropic@refs/heads/main', digest: { gitCommit: c } })), ...extra] } },
+      predicate: { buildDefinition: { resolvedDependencies: [...commits.map((c) => ({ uri: 'git+https://github.com/rhanka/sentropic@refs/heads/main', digest: { gitCommit: c } })), ...extra] }, ...(runId ? { runDetails: { metadata: { invocationId: `https://github.com/rhanka/sentropic/actions/runs/${runId}/attempts/1` } } } : {}) },
     })).toString('base64') } } },
   ],
 });
@@ -272,7 +272,7 @@ const slsaDoc = ({ name, version, integrity, commits, subjectName, extra = [] })
 test('provenance check: workflow commit and published subject must match the SLSA v1 statement', () => {
   const integrity = `sha512-${createHash('sha512').update('x').digest('base64')}`;
   const id = { name: '@fx/p', version: '1.0.0', integrity, commit: SHA };
-  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), id), { problems: [], sourceCommits: [SHA] });
+  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA] }), id), { problems: [], sourceCommits: [SHA], runId: null });
   assert.match(checkProvenance(slsaDoc({ ...id, commits: ['b'.repeat(40)] }), id).problems.join(), /differs from the workflow commit/);
   assert.match(checkProvenance(slsaDoc({ ...id, commits: [] }), id).problems.join(), /has 0 git\+https:\/\/github\.com\/rhanka\/sentropic@refs\/\* source entries/);
   assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA], subjectName: 'pkg:npm/%40fx/other@1.0.0' }), id).problems.join(), /subject does not match/);
@@ -280,7 +280,7 @@ test('provenance check: workflow commit and published subject must match the SLS
   assert.match(checkProvenance({ attestations: [] }, id).problems.join(), /no SLSA v1 provenance/);
   // Only the repository source entry is compared: an unrelated resolved dependency does not matter.
   const reusable = { uri: 'git+https://github.com/other/reusable-workflows@refs/heads/main', digest: { gitCommit: 'd'.repeat(40) } };
-  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA], extra: [reusable] }), id), { problems: [], sourceCommits: [SHA] });
+  assert.deepEqual(checkProvenance(slsaDoc({ ...id, commits: [SHA], extra: [reusable] }), id), { problems: [], sourceCommits: [SHA], runId: null });
   assert.match(checkProvenance(slsaDoc({ ...id, commits: ['e'.repeat(40)], extra: [{ ...reusable, digest: { gitCommit: SHA } }] }), id).problems.join(), /source commit e{40} differs from the workflow commit/);
   assert.match(checkProvenance(slsaDoc({ ...id, commits: [], extra: [{ ...reusable, digest: { gitCommit: SHA } }] }), id).problems.join(), /has 0 .* source entries/);
   assert.match(checkProvenance(slsaDoc({ ...id, commits: [SHA, SHA] }), id).problems.join(), /has 2 .* source entries \(expected exactly one\)/);
@@ -296,17 +296,17 @@ test('post-publication: provenance is awaited within the budget and gates the qu
   const tgz = build({ name: '@fx/prov', exports: './index.js' }, { 'index.js': 'export default 1;' });
   const server = await serveRegistry(tgz);
   const integrity = `sha512-${createHash('sha512').update(fs.readFileSync(tgz)).digest('base64')}`;
-  const run = async (answers, attempts = 3) => {
+  const run = async (answers, attempts = 3, extra = {}) => {
     let calls = 0;
     const registryClient = { ...createRegistry({ registry: server.url, delayMs: 0 }), attestations: async () => answers[Math.min((calls += 1), answers.length) - 1] };
     const reportDir = tmp('qrep-');
-    const code = await qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceCommit: SHA, registryClient, registry: server.url, reportDir, attempts, delaySeconds: 0 });
+    const code = await qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceCommit: SHA, registryClient, registry: server.url, reportDir, attempts, delaySeconds: 0, ...extra });
     return { code, calls, report: readReport(reportDir), log: fs.readFileSync(path.join(reportDir, 'qualify.log'), 'utf8') };
   };
   try {
     const good = await run([null, slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: [SHA] })]);
     assert.equal(good.code, 0, JSON.stringify(good.report.problems));
-    assert.deepEqual(good.report.provenance, { commit: SHA, sourceCommits: [SHA], ok: true });
+    assert.deepEqual(good.report.provenance, { commit: SHA, sourceCommits: [SHA], runId: null, ok: true });
     assert.match(good.log, /waiting for provenance of @fx\/prov@1\.0\.0 \(1\/3\)/);
     const other = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)] })]);
     assert.equal(other.code, 1);
@@ -315,6 +315,21 @@ test('post-publication: provenance is awaited within the budget and gates the qu
     assert.equal(never.code, 1);
     assert.equal(never.calls, 2);
     assert.match(never.report.problems.join(), /provenance attestations for @fx\/prov@1\.0\.0 unavailable after 2 x 0s/);
+    // Re-run heal (--provenance-run): another run's publication is a stale skip (exit 0, nothing installed);
+    // this run's publication is fully checked, commit included.
+    const stale = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)], runId: '111' })], 3, { provenanceRun: '222' });
+    assert.equal(stale.code, 0, JSON.stringify(stale.report.problems));
+    assert.equal(stale.report.status, 'stale-skip');
+    assert.equal(stale.report.install, undefined, 'a stale skip installs nothing');
+    const sameRun = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: [SHA], runId: '222' })], 3, { provenanceRun: '222' });
+    assert.equal(sameRun.code, 0, JSON.stringify(sameRun.report.problems));
+    assert.equal(sameRun.report.status, 'pass');
+    const sameRunWrongCommit = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)], runId: '222' })], 3, { provenanceRun: '222' });
+    assert.equal(sameRunWrongCommit.code, 1);
+    const noRunId = await run([slsaDoc({ name: '@fx/prov', version: '1.0.0', integrity, commits: ['c'.repeat(40)] })], 3, { provenanceRun: '222' });
+    assert.equal(noRunId.code, 1, 'an attestation without a run id is never treated as stale');
+    await assert.rejects(qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceRun: '222', registry: server.url, reportDir: tmp('qrep-') }), /requires a provenance commit/);
+    await assert.rejects(qualify({ pkg: '@fx/prov@1.0.0', mode: 'post-publication', provenanceCommit: SHA, provenanceRun: '0x1', registry: server.url, reportDir: tmp('qrep-') }), /numeric GitHub run id/);
   } finally {
     server.child.kill();
   }
