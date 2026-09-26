@@ -13,6 +13,8 @@ import type {
 import { ClaudeCodeEnrollmentProvider } from '../enrollment/claude-code.js';
 import { CloudCodeEnrollmentProvider } from '../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../enrollment/codex.js';
+import { MuseEnrollmentProvider } from '../enrollment/muse.js';
+import { MuseCodeEnrollmentProvider } from '../enrollment/muse-code.js';
 import { EncryptedFileKeyring } from '../node/keyring/encrypted-file-keyring.js';
 import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
 import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
@@ -106,6 +108,25 @@ export interface LlmMeshFacade {
   ): Promise<EnrollmentSession>;
   waitForCallback(enrollmentId: string): Promise<EnrollmentCompletion>;
   pollForCompletion(enrollmentId: string): Promise<EnrollmentCompletion>;
+  // Muse CLI import completion (BR75): the caller binds the enrolling owner.
+  completeMuseImport(
+    enrollmentId: string,
+    code: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion>;
+  // Muse direct-key import (BR75): raw MUSE_API_KEY as a pay-as-you-go
+  // account; the caller binds the enrolling owner.
+  completeMuseDirectImport(
+    apiKey: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion>;
+  // Muse native device-flow completion (S5): Meta device grant + key mint;
+  // the caller binds the enrolling owner.
+  completeMuseDeviceImport(
+    enrollmentId: string,
+    ownerScopeRef: string,
+    maxAttempts?: number,
+  ): Promise<EnrollmentCompletion>;
   cancel(enrollmentId: string): Promise<void>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
@@ -142,6 +163,8 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     ],
     ['codex', new CodexEnrollmentProvider({ configResolver: options.configResolver })],
     ['claude-code', new ClaudeCodeEnrollmentProvider()],
+    ['muse', new MuseEnrollmentProvider()],
+    ['muse-code', new MuseCodeEnrollmentProvider()],
   ]);
 
   const service = new LocalAccountTransportService(
@@ -160,6 +183,15 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async pollForCompletion(enrollmentId) {
       return service.pollForCompletion(enrollmentId);
+    },
+    async completeMuseImport(enrollmentId, code, ownerScopeRef) {
+      return service.completeMuseImport(enrollmentId, code, ownerScopeRef);
+    },
+    async completeMuseDirectImport(apiKey, ownerScopeRef) {
+      return service.completeMuseDirectImport(apiKey, ownerScopeRef);
+    },
+    async completeMuseDeviceImport(enrollmentId, ownerScopeRef, maxAttempts) {
+      return service.completeMuseDeviceImport(enrollmentId, ownerScopeRef, maxAttempts);
     },
     async cancel(enrollmentId) {
       return service.cancel(enrollmentId);

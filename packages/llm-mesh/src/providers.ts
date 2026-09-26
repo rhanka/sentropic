@@ -1,10 +1,10 @@
-export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local'] as const;
+export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local', 'muse'] as const;
 
 export type ProviderId = (typeof providerIds)[number];
 
 export type ProviderStatus = 'ready' | 'planned';
 
-export type ProviderFamily = 'openai' | 'google' | 'anthropic' | 'mistral' | 'cohere';
+export type ProviderFamily = 'openai' | 'google' | 'anthropic' | 'mistral' | 'cohere' | 'meta';
 
 export type ReasoningTier = 'none' | 'light' | 'standard' | 'advanced';
 
@@ -51,6 +51,11 @@ export const knownModelIds = [
   // baseURL/transport is configured in the api/gateway layer (the package stays
   // transport-free). Multiple local models can be exposed under this provider.
   'laneformer-2b-it',
+  // Meta Muse (Muse Code): `muse-spark-1.3` base + `-contributor` discounted
+  // tier option (content may train product). invoked via the `muse` account
+  // transport (CLI login) or MUSE_API_KEY; wire/transport lives in api/gateway.
+  'muse-spark-1.3',
+  'muse-spark-1.3-contributor',
 ] as const;
 
 export type KnownModelId = (typeof knownModelIds)[number];
@@ -75,6 +80,7 @@ export const knownModelIdsByProvider = {
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],
   local: ['laneformer-2b-it'],
+  muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor'],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 
 export interface ModelReference {

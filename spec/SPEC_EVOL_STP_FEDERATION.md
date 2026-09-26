@@ -1,5 +1,7 @@
 # SPEC EVOL — `stp` Federation Roster + Verb-Vocabulary Harmonization
 
+> **Superseded — eradicated (BRERAD, 2026-09-25).** `packages/cli`, `packages/build-cli` and `packages/focus` were removed from sentropic and the API no longer consumes focus. CLI = h2a; focus = h2a. This document is kept as history only.
+
 **Status: Scoping / brainstorm (planning-only). No code, no plan yet.**
 Branch: `feat/stp-federation-42i` (BR-42i). Part of the BR-42 CLI-ecosystem coordinator umbrella.
 

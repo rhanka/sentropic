@@ -40,9 +40,45 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(a.headers?.['Retry-After']).toBe('5');
   });
 
+  it('maps budget-unavailable to the sanitized pooled 503 on both wires, without Retry-After', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const budget = toProviderShapedError(wire, new GatewayError('budget-unavailable', 'pricing row missing'));
+      expect(budget).toEqual(mapGatewayError(wire, 'pooled-account-unavailable'));
+      expect(budget.headers).toBeUndefined();
+      expect(JSON.stringify(budget.body)).not.toContain('pricing');
+    }
+  });
+
+  it('maps a budget over-budget GatewayError to the frozen 429 with its bounded Retry-After', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const refusal = toProviderShapedError(wire, new GatewayError('over-budget', 'cap', 60));
+      expect(refusal).toEqual(mapGatewayError(wire, 'upstream-rate-limited', 60));
+      expect(refusal.headers).toEqual({ 'Retry-After': '60' });
+    }
+  });
+
   it('maps pooled-account-unavailable to 503', () => {
     const o = mapGatewayError('openai-chat-completions', 'pooled-account-unavailable');
     expect(o.status).toBe(503);
+  });
+
+  it('maps upstream-auth-failed to 401 authentication_error per wire', () => {
+    const a = mapGatewayError('anthropic-messages', 'upstream-auth-failed');
+    expect(a.status).toBe(401);
+    expect((a.body as { error: { type: string } }).error.type).toBe('authentication_error');
+    const o = mapGatewayError('openai-chat-completions', 'upstream-auth-failed');
+    expect(o.status).toBe(401);
+    expect((o.body as { error: { type: string } }).error.type).toBe('authentication_error');
+  });
+
+  it('maps upstream-rate-limited to 429 with Retry-After', () => {
+    const a = mapGatewayError('anthropic-messages', 'upstream-rate-limited', 9);
+    expect(a.status).toBe(429);
+    expect((a.body as { error: { type: string } }).error.type).toBe('rate_limit_error');
+    expect(a.headers?.['Retry-After']).toBe('9');
+    const o = mapGatewayError('openai-chat-completions', 'upstream-rate-limited', 9);
+    expect(o.status).toBe(429);
+    expect(o.headers?.['Retry-After']).toBe('9');
   });
 
   it('maps bad-request to 400', () => {

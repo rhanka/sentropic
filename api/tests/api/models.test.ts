@@ -39,6 +39,7 @@ describe('llm-mesh model projections', () => {
     expect(providerIds).toContain('mistral');
     expect(providerIds).toContain('cohere');
     expect(providerIds).toContain('gcp');
+    expect(providerIds).toContain('muse');
 
     const modelsByProvider = (pid: string) =>
       data.models
@@ -76,7 +77,11 @@ describe('llm-mesh model projections', () => {
       'google/gemini-3.1-flash-lite@gcp',
       'google/gemini-3.5-flash@gcp',
     ]);
-    expect(data.models).toHaveLength(24);
+    expect(modelsByProvider('muse')).toEqual([
+      'muse-spark-1.3',
+      'muse-spark-1.3-contributor',
+    ]);
+    expect(data.models).toHaveLength(26);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');

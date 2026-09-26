@@ -222,6 +222,22 @@ export const providerProfiles = {
       structuredOutputLevel: 'none',
     }),
   },
+  // Meta Muse (Muse Code 1.3): agentic coding model served via the `muse`
+  // account transport (CLI login import) or MUSE_API_KEY. Wire shape is
+  // unverified: structured output stays at the conservative
+  // `tool-input-schema` (partial) template until the transport proves the
+  // wire.
+  muse: {
+    providerId: 'muse',
+    family: 'meta',
+    label: 'Meta Muse',
+    status: 'planned',
+    capabilities: capabilities({
+      reasoningTier: 'advanced',
+      structuredOutputLevel: 'tool-input-schema',
+      accountTransports: ['muse'],
+    }),
+  },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
 
 const modelCapabilities = (
@@ -478,6 +494,24 @@ export const modelProfiles = [
   // directly when selected; advertising it in the static catalog (with capability
   // + streaming-normalization fixtures) is a follow-up so this change stays
   // scoped to the provider surface and does not touch the runtime stream path.
+  {
+    providerId: 'muse',
+    modelId: 'muse-spark-1.3',
+    label: 'Muse Spark 1.3',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+  },
+  {
+    // Discounted contributor tier (content may improve the product).
+    // Tier is an option; the gateway default is contributor (BR75-Q3).
+    providerId: 'muse',
+    modelId: 'muse-spark-1.3-contributor',
+    label: 'Muse Spark 1.3 Contributor',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+  },
 ] as const satisfies readonly ModelProfile[];
 
 export const providerCapabilityMatrix = providerProfiles;

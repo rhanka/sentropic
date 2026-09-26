@@ -4,12 +4,14 @@
   "workspaces": [
     "api",
     "ui",
-    "packages/*"
+    "packages/*",
+    "apps/llm-gateway"
   ],
   "devDependencies": {
     "typescript": "5.4.5"
   },
   "overrides": {
+    "image-size": "2.0.3",
     "@sentropic/track": "0.91.1",
     "@hono/node-server": "^1.19.17",
     "svelte": "^5.55.7",

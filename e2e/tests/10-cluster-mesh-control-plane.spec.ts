@@ -11,7 +11,7 @@ const MCP_QUALIFICATION_URL = process.env.CLUSTER_MESH_MCP_QUALIFICATION_URL;
 const CLI_QUALIFICATION_URL = process.env.CLUSTER_MESH_CLI_QUALIFICATION_URL;
 const CAPACITY_QUALIFICATION_URL = process.env.CLUSTER_MESH_CAPACITY_QUALIFICATION_URL;
 const EXPECTED_NAMESPACES = [
-  '/session', '/cli', '/mcp', '/oauth', '/gw', '/chat', '/focus', '/track', '/memory',
+  '/session', '/cli', '/mcp', '/oauth', '/gw', '/chat', '/track', '/memory',
   '/health', '/apps', '/catalog', '/resources', '/admin', '/clients', '/transfers',
   '/documents', '/config', '/auth', '/llm-mesh', '/workflows', '/comments', '/connectors',
   '/agents', '/streams', '/locks', '/business', '/analytics', '/workspaces',
@@ -35,7 +35,7 @@ test.describe('Cluster Mesh central control plane A1 qualification', () => {
         const refused = await api.post('/api/v1/auth/session/control/drive', {
           headers: { 'content-type': 'application/json' },
           data: {
-            commandId: 'a1-source-gap',
+            commandRef: 'a1-source-gap',
             targetRegistrationId: 'unavailable-real-target',
             idempotencyKey: 'a1-source-gap',
           },
@@ -56,7 +56,7 @@ test.describe('Cluster Mesh central control plane A1 qualification', () => {
           'x-correlation-id': `a1-${commandId}`,
         },
         data: {
-          commandId,
+          commandRef: commandId,
           targetRegistrationId: A1_REGISTRATION,
           idempotencyKey: `a1-${commandId}`,
         },
@@ -206,7 +206,7 @@ test.describe('Cluster Mesh capacity qualification', () => {
 });
 
 test.describe('Cluster Mesh module and cutover qualification', () => {
-  test('reports 29 modules, disables CLI, and serves canonical catalog/streams paths', async () => {
+  test('reports 28 modules, disables CLI, and serves canonical catalog/streams paths', async () => {
     const api = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     try {
       const health = await api.get('/api/v1/health');
@@ -246,7 +246,7 @@ test.describe('Cluster Mesh final LOST qualification', () => {
           'x-correlation-id': 'a4-lost',
         },
         data: {
-          commandId: 'a4-wake-dead-target',
+          commandRef: 'a4-wake-dead-target',
           targetRegistrationId: A1_REGISTRATION,
           idempotencyKey: 'a4-wake-dead-target',
         },

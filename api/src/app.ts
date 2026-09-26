@@ -17,7 +17,6 @@ import {
 import { productAuthPlugin } from './routes/namespaces/auth';
 import { GW_PATHS, productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
-import { productFocusModule } from './routes/namespaces/focus';
 import { productTrackModule, TRACK_READ_PATHS } from './routes/namespaces/track';
 import { MEMORY_PATHS, productMemoryModule } from './routes/namespaces/memory';
 import {
@@ -121,7 +120,6 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
   { namespace: '/oauth', module: productOAuthModule, mount: '/oauth', authPaths: OAUTH_PATHS },
   { namespace: '/gw', module: productGwModule, mount: '/gw', authPaths: GW_PATHS },
   { namespace: '/chat', module: productChatModule, mount: '/chat', authPaths: null },
-  { namespace: '/focus', module: productFocusModule, mount: '/focus', authPaths: null },
   {
     namespace: '/track',
     module: productTrackModule,

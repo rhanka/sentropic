@@ -12,7 +12,7 @@ import {
 } from '../../src/app';
 
 const EXPECTED_NAMESPACES = [
-  '/session', '/cli', '/mcp', '/oauth', '/gw', '/chat', '/focus', '/track', '/memory',
+  '/session', '/cli', '/mcp', '/oauth', '/gw', '/chat', '/track', '/memory',
   '/health', '/apps', '/catalog', '/resources', '/admin', '/clients', '/transfers',
   '/documents', '/config', '/auth', '/llm-mesh', '/workflows', '/comments', '/connectors',
   '/agents', '/streams', '/locks', '/business', '/analytics', '/workspaces',
@@ -22,14 +22,14 @@ const routeKeys = (routes: ReadonlyArray<{ method: string; path: string }>): Set
   new Set(routes.map(({ method, path }) => `${method}:${path}`));
 
 describe('Cluster Mesh namespace inventory', () => {
-  it('registers exactly 29 namespace keys with one module author each', () => {
+  it('registers exactly 28 namespace keys with one module author each', () => {
     const namespaces = MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace);
     const modules = MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module);
 
     expect(namespaces).toEqual(EXPECTED_NAMESPACES);
-    expect(new Set(namespaces).size).toBe(29);
-    expect(new Set(modules).size).toBe(29);
-    expect(PREFIX_MOUNTED_NAMESPACE_REGISTRY).toHaveLength(9);
+    expect(new Set(namespaces).size).toBe(28);
+    expect(new Set(modules).size).toBe(28);
+    expect(PREFIX_MOUNTED_NAMESPACE_REGISTRY).toHaveLength(8);
     expect(ROOT_MOUNTED_NAMESPACE_REGISTRY).toHaveLength(20);
     for (const { namespace, module } of MOUNTED_NAMESPACE_REGISTRY) {
       expect(module.namespace).toBe(namespace);

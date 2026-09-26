@@ -16,7 +16,7 @@ export type RouteCandidateSelection =
   | { readonly kind: 'capabilities-unmet'; readonly requestedModel: string }
   | { readonly kind: 'no-eligible-account'; readonly requestedModel: string };
 
-interface ResolvedRouteTarget {
+export interface ResolvedRouteTarget {
   readonly providerId: string;
   readonly modelId: string;
   readonly transportProviderId?: string;
@@ -44,7 +44,7 @@ const selectorMatches = (
   && (!selector.diagnosticAccountRef
     || selector.diagnosticAccountRef === candidate.account.diagnosticAccountRef);
 
-type RequestedTargetResolution =
+export type RequestedTargetResolution =
   | { readonly kind: 'known'; readonly targets: readonly {
   providerId: string;
   model: string;
@@ -65,7 +65,7 @@ const sameTarget = (left: {
   && left.model === right.model
   && left.effort === right.effort;
 
-const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolution => {
+export const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolution => {
   const { requestedModel } = request;
   const canonicalTargets = resolveCanonicalTargets(requestedModel);
   const profile = modelProfiles.find((candidate) => candidate.modelId === requestedModel);
@@ -98,16 +98,30 @@ const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolu
   };
 };
 
-export const selectRouteCandidates = (input: {
-  readonly request: RoutePlanInput;
-  readonly policy: RoutePolicy;
-  readonly council: ModelEquivalenceCouncil;
-  readonly accounts: readonly EligibleAccountDescriptor[];
-  readonly roundRobinOffset?: number;
-  readonly now?: Date;
-  readonly applyAttemptLimit?: boolean;
-}): RouteCandidateSelection => {
-  const resolution = resolveRequestedTargets(input.request);
+export type RouteTargetResolution =
+  | {
+    readonly kind: 'targets';
+    /** Requested targets followed by fresh council equivalents, before the capability filter. */
+    readonly targets: readonly ResolvedRouteTarget[];
+    readonly capableTargets: readonly ResolvedRouteTarget[];
+    /** Known Claude id: only the first capable target that has accounts is planned. */
+    readonly faithfulClaude: boolean;
+  }
+  | { readonly kind: 'unknown-model'; readonly requestedModel: string }
+  | { readonly kind: 'capabilities-unmet'; readonly requestedModel: string };
+
+/**
+ * Account-independent target resolution shared by planning and quoting:
+ * requested targets, council equivalents fresh at `now`, capability filter and
+ * the faithful Claude rule. Pure: no clock read, no I/O.
+ */
+export const resolveRouteTargets = (
+  request: RoutePlanInput,
+  policy: RoutePolicy,
+  council: ModelEquivalenceCouncil,
+  now: Date,
+): RouteTargetResolution => {
+  const resolution = resolveRequestedTargets(request);
   if (resolution.kind === 'unknown-model') return resolution;
   const targets: ResolvedRouteTarget[] = resolution.targets.map((resolved) => ({
     providerId: resolved.providerId,
@@ -118,11 +132,11 @@ export const selectRouteCandidates = (input: {
       : {}),
     reason: resolved.reason,
   }));
-  if (input.policy.allowEquivalentModels) {
-    const now = (input.now ?? new Date()).getTime();
+  if (policy.allowEquivalentModels) {
+    const nowMs = now.getTime();
     for (const resolved of resolution.targets) {
-      const group = input.council.groups.find((candidate) =>
-        Date.parse(candidate.expiresAt) > now
+      const group = council.groups.find((candidate) =>
+        Date.parse(candidate.expiresAt) > nowMs
         && candidate.evidence.length > 0
         && candidate.members.some((member) =>
           member.providerId === resolved.providerId && member.modelId === resolved.model));
@@ -151,18 +165,34 @@ export const selectRouteCandidates = (input: {
     const targetProfile = modelProfiles.find((profile) =>
       profile.providerId === capabilitySource.providerId
       && profile.modelId === capabilitySource.model);
-    return supportsCapabilities(targetProfile, input.request.requiredCapabilities);
+    return supportsCapabilities(targetProfile, request.requiredCapabilities);
   };
-  const faithfulClaude = resolution.kind === 'known'
-    && input.request.requestedModel.startsWith('claude-')
+  const faithfulClaude = request.requestedModel.startsWith('claude-')
     && resolution.useFaithfulAnthropicTarget;
   if (faithfulClaude && targets[0] && !supportsTargetCapabilities(targets[0])) {
-    return { kind: 'capabilities-unmet', requestedModel: input.request.requestedModel };
+    return { kind: 'capabilities-unmet', requestedModel: request.requestedModel };
   }
   const capableTargets = targets.filter(supportsTargetCapabilities);
   if (!faithfulClaude && targets.length > 0 && capableTargets.length === 0) {
-    return { kind: 'capabilities-unmet', requestedModel: input.request.requestedModel };
+    return { kind: 'capabilities-unmet', requestedModel: request.requestedModel };
   }
+  return { kind: 'targets', targets, capableTargets, faithfulClaude };
+};
+
+export const selectRouteCandidates = (input: {
+  readonly request: RoutePlanInput;
+  readonly policy: RoutePolicy;
+  readonly council: ModelEquivalenceCouncil;
+  readonly accounts: readonly EligibleAccountDescriptor[];
+  readonly roundRobinOffset?: number;
+  readonly now?: Date;
+  readonly applyAttemptLimit?: boolean;
+}): RouteCandidateSelection => {
+  const resolution = resolveRouteTargets(
+    input.request, input.policy, input.council, input.now ?? new Date(),
+  );
+  if (resolution.kind !== 'targets') return resolution;
+  const { targets, capableTargets, faithfulClaude } = resolution;
   const candidatesFor = (target: ResolvedRouteTarget): RankedRouteCandidate[] => input.accounts
       .filter((account) => account.readiness === 'ready'
         && account.targetProviderId === target.providerId
