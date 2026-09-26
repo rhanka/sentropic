@@ -34,6 +34,37 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it.each(['provider-5xx', 'rate-limited'] as const)('keeps the refresh fence when a concurrent route records %s', async (reason) => {
+    const { service, keyring, fetchFn, create } = setup();
+    const { accountId } = await service.completeClaudeCredentialImport(paste(), owner);
+    const directory = service.createRouteDirectory({ generate: vi.fn(), stream: vi.fn() });
+    const attempt = await directory.prepareAttempt({
+      subject: { principalRef: 'test', ownerScopeRef: owner }, accountRef: accountId,
+      target: { requestedModel: 'claude-opus-4-6', providerId: 'anthropic',
+        modelId: 'claude-opus-4-6', transportProviderId: 'claude-code', reason: 'exact' },
+      requestId: 'fence-race', attemptIndex: 0,
+    });
+    let finish!: (value: Response) => void;
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    fetchFn.mockImplementationOnce(() => { enter(); return new Promise((resolve) => { finish = resolve; }); });
+    const pending = service.acquire({ ...acquire, now: Date.now() + 7200_000 });
+    await entered;
+    await attempt.recordOutcome({ reason, retryAfterMs: 1, retryable: true, healthScope: 'account' });
+    const pub = JSON.parse((await keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`))!);
+    const save = keyring.setSecret.bind(keyring);
+    keyring.setSecret = async () => { throw new Error(REFRESH); };
+    finish(response());
+    await assertSafe(pending);
+    keyring.setSecret = save;
+    const restored = create().acquire({ ...acquire, now: Date.now() + 7200_000 });
+    const result = await restored.then(() => null, (error) => error);
+    expect(pub.status).toBe('reauth_required');
+    expect(pub.account.status).toBe('reauth_required');
+    expect(result).toBeInstanceOf(AccountTransportAcquireError);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('does not replay old refresh material after rotation followed by a storage outage', async () => {
     const { service, keyring, fetchFn, create } = setup();
     await service.completeClaudeCredentialImport(paste(true), owner);
