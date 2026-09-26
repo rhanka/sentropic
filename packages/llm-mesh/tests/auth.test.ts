@@ -99,6 +99,12 @@ describe('adapter auth validation', () => {
 });
 
 describe('claude-code-account auth material', () => {
+  it('keeps generic Claude seat validation header-free and descriptors secret-free', () => {
+    const material = { type: 'account-transport' as const, provider: 'claude-code' as const,
+      accessToken: 'FAKE_AUTH_ACCESS_CANARY', refreshToken: 'FAKE_AUTH_REFRESH_CANARY', accountId: 'opaque' };
+    expect(validateAdapterAuthSource(material)).toEqual({ ok: true });
+    expect(JSON.stringify(describeAuthMaterial(material))).not.toContain('CANARY');
+  });
   it('builds a descriptor for ClaudeCodeAccountAuthMaterial', () => {
     const material: ClaudeCodeAccountAuthMaterial = {
       type: 'claude-code-account',
