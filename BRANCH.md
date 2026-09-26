@@ -129,7 +129,7 @@
     - [x] Real-provider browser/paste restore, owner isolation, concurrent distinct IDs and first-acquire refresh tests added.
     - [x] Partial writes, pending durability, cancellation/expiry/removal and AcquireError canary regressions added.
   - [x] Facade, enrollment contracts and unchanged auth regressions in their named test files.
-  - [ ] README configuration, trusted secret boundary, renewable import and sourced Terms of use.
+  - [x] README configuration, trusted secret boundary, renewable import and sourced Terms of use.
   - [ ] Full `make test-llm-mesh ENV=test-llm-mesh-claude-seat` with exact counts.
   - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`.
   - [ ] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`.
