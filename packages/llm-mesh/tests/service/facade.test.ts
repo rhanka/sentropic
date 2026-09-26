@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
 import {
   createLlmMeshFacade,
@@ -6,6 +7,7 @@ import {
   type FacadeOptions,
   type KeyringAdapter,
   type LlmMeshAdministrativeFacade,
+  type LlmMeshFacade,
 } from '../../src/service/facade.js';
 
 const seedPersistedAccount = async (
@@ -30,6 +32,51 @@ const seedPersistedAccount = async (
 };
 
 describe('LlmMeshFacade', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it('supplies optional Claude methods, resolver configuration and secret-free completions', async () => {
+    const access = 'FAKE_FACADE_ACCESS_CANARY';
+    const refresh = 'FAKE_FACADE_REFRESH_CANARY';
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ access_token: access,
+      refresh_token: refresh, expires_in: 3600, scope: 'user:inference' })));
+    vi.stubGlobal('fetch', fetchFn);
+    const resolveConfig = vi.fn(async () => ({}));
+    const facade = createLlmMeshFacade({ mode: 'portal', configResolver: { resolveConfig } });
+    const { completeClaudeEnrollment, completeClaudeCredentialImport, ...oldSurface } = facade;
+    const oldMock: LlmMeshFacade = oldSurface;
+    expect(oldMock.completeClaudeEnrollment).toBeUndefined();
+    expect(oldMock.completeClaudeCredentialImport).toBeUndefined();
+    const session = await facade.enroll('claude-code', { ownerScope: 'owner', configRef: 'claude-profile',
+      mode: 'portal', redirectUri: '' });
+    expect(resolveConfig).toHaveBeenCalledWith('claude-profile');
+    if (session.kind !== 'authorization-url') throw new Error('Wrong session');
+    const code = `FAKE_FACADE_CODE_CANARY#${new URL(session.url).searchParams.get('state')}`;
+    const browser = await completeClaudeEnrollment!(session.enrollmentId, code, 'owner');
+    const imported = await completeClaudeCredentialImport!(JSON.stringify({ accessToken: access,
+      refreshToken: refresh, expiresAt: Date.now() + 3600_000, scopes: ['user:inference'] }), 'owner');
+    expect(resolveConfig).toHaveBeenLastCalledWith('claude-code');
+    expect(browser.accountId).not.toBe(imported.accountId);
+    expect(JSON.stringify([browser, imported, await facade.listAccounts({ ownerScope: 'owner' })])).not.toContain('CANARY');
+    const cancelled = await facade.enroll('claude-code', { ownerScope: 'owner', configRef: '', mode: 'cli', redirectUri: '' });
+    await facade.cancel(cancelled.enrollmentId);
+    await expect(completeClaudeEnrollment!(cancelled.enrollmentId, code, 'owner')).rejects.toThrow('unavailable');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(() => facade.getAdapter('claude-code')).toThrow('not available locally');
+  });
+
+  it('retains existing callback, polling and Muse completion delegation', async () => {
+    const facade = createLlmMeshFacade({ mode: 'portal', configResolver: { async resolveConfig() { return {}; } } });
+    for (const name of ['waitForCallback', 'pollForCompletion', 'completeMuseImport',
+      'completeMuseDirectImport', 'completeMuseDeviceImport'] as const) {
+      const spy = vi.spyOn(LocalAccountTransportService.prototype, name).mockResolvedValue({ accountId: 'safe', label: 'Safe' });
+      const result = name === 'completeMuseImport' ? await facade[name]('session', '', 'owner')
+        : name === 'completeMuseDirectImport' || name === 'completeMuseDeviceImport' ? await facade[name]('input', 'owner')
+          : await facade[name]('session');
+      expect(result).toEqual({ accountId: 'safe', label: 'Safe' });
+      expect(spy).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it('creates a facade instance with valid options', () => {
     const mockConfigResolver: ConfigResolver = {
       async resolveConfig(configRef) {
@@ -99,7 +146,7 @@ describe('LlmMeshFacade', () => {
         redirectUri: 'https://localhost/cb',
         ownerScope: 'test',
       }),
-    ).rejects.toThrow('UNSUPPORTED');
+    ).rejects.toThrow('redirect mismatch');
 
     const adapter = facade.getAdapter('cloud-code');
     expect(adapter).toBeDefined();
