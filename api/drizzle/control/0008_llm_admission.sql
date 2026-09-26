@@ -114,6 +114,12 @@ ALTER TABLE "control"."cost_ledger" ADD COLUMN "hold_id" text;--> statement-brea
 ALTER TABLE "control"."cost_ledger" ADD COLUMN "quote_ref" text;--> statement-breakpoint
 ALTER TABLE "control"."cost_ledger" ADD COLUMN "reconciliation_state" text;--> statement-breakpoint
 ALTER TABLE "control"."cost_ledger" ADD COLUMN "attempts" jsonb;--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "control"."budget_holds" ADD CONSTRAINT "budget_holds_budget_strategy_id_tenant_budget_strategy_id_fk" FOREIGN KEY ("budget_strategy_id") REFERENCES "control"."tenant_budget_strategy"("id") ON DELETE restrict ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "blocked_attempts_tenant_workspace_created_idx" ON "control"."blocked_attempts" USING btree ("tenant_id","workspace_id","created_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "blocked_attempts_request_id_idx" ON "control"."blocked_attempts" USING btree ("request_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "budget_holds_request_id_unique" ON "control"."budget_holds" USING btree ("request_id");--> statement-breakpoint
@@ -123,6 +129,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS "budgets_tenant_scope_period_unique" ON "contr
 CREATE INDEX IF NOT EXISTS "budgets_tenant_workspace_idx" ON "control"."budgets" USING btree ("tenant_id","workspace_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "model_pricing_provider_model_effective_from_unique" ON "control"."model_pricing" USING btree ("provider_id","model_id","effective_from");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "tenant_budget_strategy_active_tenant_unique" ON "control"."tenant_budget_strategy" USING btree ("tenant_id") WHERE "control"."tenant_budget_strategy"."status" = 'active';--> statement-breakpoint
-ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_principal_kind_check" CHECK ("control"."cost_ledger"."principal_kind" IS NULL OR "control"."cost_ledger"."principal_kind" IN ('user', 'service', 'guest', 'anonymous', 'system'));--> statement-breakpoint
-ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_result_check" CHECK ("control"."cost_ledger"."result" IS NULL OR "control"."cost_ledger"."result" IN ('ok', 'capped', 'error', 'aborted'));--> statement-breakpoint
-ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_reconciliation_state_check" CHECK ("control"."cost_ledger"."reconciliation_state" IS NULL OR "control"."cost_ledger"."reconciliation_state" IN ('none', 'estimated', 'pending', 'reconciled'));
+ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_principal_kind_check" CHECK ("control"."cost_ledger"."principal_kind" IS NULL OR "control"."cost_ledger"."principal_kind" IN ('user', 'service', 'guest', 'anonymous', 'system')) NOT VALID;--> statement-breakpoint
+ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_result_check" CHECK ("control"."cost_ledger"."result" IS NULL OR "control"."cost_ledger"."result" IN ('ok', 'capped', 'error', 'aborted')) NOT VALID;--> statement-breakpoint
+ALTER TABLE "control"."cost_ledger" ADD CONSTRAINT "cost_ledger_reconciliation_state_check" CHECK ("control"."cost_ledger"."reconciliation_state" IS NULL OR "control"."cost_ledger"."reconciliation_state" IN ('none', 'estimated', 'pending', 'reconciled')) NOT VALID;--> statement-breakpoint
+-- Hand-edited (drizzle-kit cannot emit NOT VALID / VALIDATE / COMMENT): see BRANCH.md.
+ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "cost_ledger_principal_kind_check";--> statement-breakpoint
+ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "cost_ledger_result_check";--> statement-breakpoint
+ALTER TABLE "control"."cost_ledger" VALIDATE CONSTRAINT "cost_ledger_reconciliation_state_check";--> statement-breakpoint
+COMMENT ON COLUMN "control"."cost_ledger"."principal_key" IS 'Opaque principal id or keyed hash only; never an e-mail, raw IP or other personal data in clear.';--> statement-breakpoint
+COMMENT ON COLUMN "control"."budget_holds"."principal_key" IS 'Opaque principal id or keyed hash only; never an e-mail, raw IP or other personal data in clear.';--> statement-breakpoint
+COMMENT ON COLUMN "control"."blocked_attempts"."principal_key" IS 'Opaque principal id or keyed hash only; never an e-mail, raw IP or other personal data in clear.';

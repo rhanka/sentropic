@@ -405,7 +405,7 @@ export const costLedger = controlSchema.table(
     // G1a settlement attribution (0008, expand-first): all NULLABLE so historical observe-only rows
     // keep NULL (never rewritten as zero cost). Values are ids/refs/codes, never model output.
     principalKind: text('principal_kind'),
-    principalKey: text('principal_key'),
+    principalKey: text('principal_key'),                  // opaque id or keyed hash only (COMMENT ON COLUMN in 0008)
     budgetStrategyId: text('budget_strategy_id'),         // soft ref → tenant_budget_strategy.id
     pricingVersion: text('pricing_version'),              // soft ref → model_pricing.id
     result: text('result'),
@@ -448,6 +448,8 @@ export type CostLedgerInsert = typeof costLedger.$inferInsert;
  * G1a budget admission (BRDP-EX5, migration 0008; SPEC_EVOL_LLM_DEPLOYABLE_PROCESS §5/§12.5,
  * SPEC_EVOL_QUOTA_LEDGER §2/§6). Expand-first: new tables only. Soft refs, no cross-namespace FK.
  * Money is exact integer micro-USD. No column stores prompt/completion text or provider JSON.
+ * `principal_key` holds an opaque principal id or keyed hash only, never an e-mail or raw IP
+ * (COMMENT ON COLUMN, hand-added to 0008 because drizzle-kit does not emit column comments).
  */
 const PRINCIPAL_KINDS = sql`('user', 'service', 'guest', 'anonymous', 'system')`;
 
@@ -582,7 +584,10 @@ export const budgetHolds = controlSchema.table(
     workspaceId: text('workspace_id'),
     principalKind: text('principal_kind').notNull(),
     principalKey: text('principal_key').notNull(),
-    budgetStrategyId: text('budget_strategy_id').notNull(),
+    // Strategies are retired, never deleted: RESTRICT keeps every hold attributable.
+    budgetStrategyId: text('budget_strategy_id')
+      .notNull()
+      .references(() => tenantBudgetStrategy.id, { onDelete: 'restrict' }),
     budgetIds: text('budget_ids').array().notNull(),
     quoteRef: text('quote_ref').notNull(),
     pricingVersions: text('pricing_versions').array().notNull(),
