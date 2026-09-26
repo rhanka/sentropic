@@ -770,6 +770,8 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
   const reporter = new Reporter({ reportDir: receiptDir, out });
   const sources = sourceManifests(cwd, env);
   const snap = snapshotPackage(cwd);
+  // Conflict re-read budget (Make: LLM_MESH_REGISTRY_WAIT_*), validated before anything is published.
+  const budget = waitBudget({ attempts: opts['wait-attempts'], delaySeconds: opts['wait-delay'] });
   const writeReceipt = (status, extra = {}) => {
     reporter.write(`${opts.slug}.json`, { slug: opts.slug, name: snap.name, version: snap.version, status, ...extra });
     reporter.write(`${opts.slug}.publish-output`, `pkg=${snap.name}@${snap.version}\nstatus=${status}\n`);
@@ -805,7 +807,6 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
       return 1;
     }
     // Version conflict: success only when the registry (read without cache) holds exactly these bytes.
-    const budget = waitBudget({ attempts: opts['wait-attempts'], delaySeconds: opts['wait-delay'] });
     let published = null;
     let lastError = 'not visible';
     for (let i = 1; i <= budget.attempts && !published; i += 1) {
