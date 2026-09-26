@@ -1,15 +1,17 @@
 /**
- * LLM metering — cost-ledger sink (observe-only v0).
+ * LLM metering — cost-ledger sink (observe-only, NON-gateway API calls).
  *
- * Records ONE `control.cost_ledger` row per LLM call. Fed (later) by the
- * `@sentropic/llm-mesh` `onResponse` hook via the mesh-dispatch wiring (Lot 2).
+ * Records ONE `control.cost_ledger` row per observed LLM call of the product runtime.
  *
  * Design anchor: `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md` + integration spec §D/§E.
  * - Persistence is app/control-plane owned (ACCOUNT_TRANSPORTS D2: llm-mesh stays DB-agnostic).
  * - Idempotency: `callId` maps to `cost_ledger.idempotency_key` (UNIQUE); the insert uses
  *   `ON CONFLICT DO NOTHING`, so a double-fire (retry/replay) is a no-op.
- * - Observe-only: `usage` is optional/absent on most provider paths today → token counts and
- *   `cost_micro_usd` are null until the usage-envelope / pricing lots.
+ * - Observe-only: `usage` is optional/absent on most provider paths → token counts and
+ *   `cost_micro_usd` stay null (never rewritten as zero).
+ * - Gateway requests (Lot D B3c) are settled by `route-settlement.ts` with
+ *   `idempotency_key = requestId`; the gateway never wires this sink, and an observer redelivery
+ *   keyed by that request id hits the same unique key, so it can never add a second row.
  */
 
 import type { TokenUsage } from '@sentropic/llm-mesh';
@@ -63,7 +65,7 @@ export const recordLlmUsage = async (obs: MeteringObservation): Promise<void> =>
       reasoningTokens: obs.usage?.reasoningTokens ?? null,
       totalTokens: obs.usage?.totalTokens ?? null,
       usageRaw: obs.usage?.providerRawUsage ?? null,
-      costMicroUsd: null, // pricing is a later lot
+      costMicroUsd: null, // observe-only: priced settlement is the gateway route settlement
     })
     .onConflictDoNothing({ target: costLedger.idempotencyKey });
 };
