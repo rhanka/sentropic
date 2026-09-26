@@ -422,4 +422,5 @@ test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () =>
   assert.match(mesh, /publishable-manifests\.mjs wait --spec "@sentropic\/llm-mesh@\$\$version"/);
   assert.ok(!mesh.includes('npm view'), 'no cached npm view poll');
   assert.match(recipe('wait-llm-gateway-auth-dependencies'), /npm_config_prefer_online=true node scripts\/auth-registry\.mjs/);
+  assert.match(makefile, /^manifest_guard_publish = .* publish --slug \$\(1\) --wait-attempts "\$\(LLM_MESH_REGISTRY_WAIT_ATTEMPTS\)" --wait-delay "\$\(LLM_MESH_REGISTRY_WAIT_SECONDS\)" -- \$\(2\)$/m, 'publish conflict re-read uses the Make wait budget');
 });

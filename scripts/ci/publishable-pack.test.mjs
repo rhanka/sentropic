@@ -191,7 +191,7 @@ function failingNpm(stderr, code = 1) {
   const stub = path.join(dir, 'npm');
   fs.writeFileSync(stub, `#!/usr/bin/env node\nconst fs=require('fs');const c=require('crypto');const a=process.argv.slice(2);fs.writeFileSync(${JSON.stringify(path.join(dir, 'integrity'))},'sha512-'+c.createHash('sha512').update(fs.readFileSync(a[1])).digest('base64'));process.stderr.write(${JSON.stringify(stderr)});process.exit(${code});\n`);
   fs.chmodSync(stub, 0o755);
-  return { stub, integrity: () => fs.readFileSync(path.join(dir, 'integrity'), 'utf8') };
+  return { stub, integrity: () => fs.readFileSync(path.join(dir, 'integrity'), 'utf8'), called: () => fs.existsSync(path.join(dir, 'integrity')) };
 }
 const CONFLICT = 'npm error code E403\nnpm error 403 403 Forbidden - PUT https://registry.npmjs.org/@fx%2fevents - You cannot publish over the previously published versions: 1.0.0.\n';
 // Absent for the two pre-publish lookups, then `after(call)` for the fresh conflict re-reads.
@@ -251,15 +251,25 @@ test('publish conflict whose registry integrity stays unreadable fails after the
   assert.equal(registry.calls.length, 5, 'two pre-publish lookups + three conflict re-reads');
 });
 
-test('non-conflict publish failures (auth, network) fail without any registry re-read', async () => {
-  for (const stderr of ['npm error code E401\nnpm error 401 Unauthorized\n', 'npm error code ENEEDAUTH\nnpm error need auth\n', 'npm error code ECONNRESET\nnpm error network aborted\n']) {
+test('non-conflict publish failures (auth, generic 403, network) fail without any registry re-read', async () => {
+  for (const stderr of ['npm error code E401\nnpm error 401 Unauthorized\n', 'npm error code ENEEDAUTH\nnpm error need auth\n', 'npm error code ECONNRESET\nnpm error network aborted\n',
+    'npm error code E403\nnpm error 403 403 Forbidden - PUT https://registry.npmjs.org/@fx%2fevents - Forbidden\n']) {
     const registry = conflictRegistry(() => { throw new Error('must not be called'); });
-    const r = await publishWith(failingNpm(stderr), registry);
+    const npm = failingNpm(stderr);
+    const r = await publishWith(npm, registry);
+    assert.ok(npm.called(), `${stderr}: npm publish was called`);
     assert.equal(r.code, 1, stderr);
     assert.equal(r.receipt.status, 'failed', stderr);
     assert.equal(r.receipt.conflict, undefined, stderr);
     assert.equal(registry.calls.length, 2, stderr);
   }
+});
+
+test('an invalid conflict re-read budget is refused before any publication', async () => {
+  const npm = failingNpm(CONFLICT);
+  const dir = fixture('events', {});
+  await assert.rejects(commandPublish({ slug: 'events', passthrough: [], 'receipt-dir': path.join(dir, '..', 'r'), 'wait-attempts': '0', 'wait-delay': '0' }, { env: {}, cwd: dir, registry: absentRegistry, out: sink(), npm: npm.stub }), /invalid registry wait budget/);
+  assert.equal(npm.called(), false);
 });
 
 // ---- registry freshness: absent/404 answers are never cached; rechecks always hit the registry

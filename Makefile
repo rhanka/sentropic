@@ -533,7 +533,8 @@ MANIFEST_GUARD_ENV = -e CI_MANIFEST_CONTEXT -e CI_MANIFEST_EVENT -e CI_MANIFEST_
 # Transform lanes (chat-ui, cited-source-viewer): pack/publish the dist-form manifest, restore on any exit.
 MANIFEST_DIST_FORM = cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json;
 # Guarded publication tail for existing publish recipes: $(call manifest_guard_publish,<slug>,<npm publish flags>)
-manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/publishable-manifests.mjs publish --slug $(1) -- $(2)
+# A version conflict re-reads the registry integrity within the registry wait budget (BRCIW-EX1).
+manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/publishable-manifests.mjs publish --slug $(1) --wait-attempts "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" --wait-delay "$(LLM_MESH_REGISTRY_WAIT_SECONDS)" -- $(2)
 
 # $(1)=package slug; $(2)=optional in-container pre-pack commands.
 define manifest_guard_pack
