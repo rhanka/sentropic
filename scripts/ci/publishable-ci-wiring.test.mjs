@@ -200,8 +200,11 @@ test('lint wiring follows baseline evidence, independently per package, before t
   }
 });
 
+// Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0';
+
 test('candidate and post-publication qualification for mcp-auth and cluster-mesh', () => {
-  for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', '']]) {
+  for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', CLUSTER_MESH_PEERS]]) {
     const steps = jobs[`validate-${slug}`].steps;
     const pack = steps.find((s) => s.id === 'pack');
     assert.equal(pack.run, `make pack-${slug} PACK_DESTINATION=tmp/ci-manifest-guard/candidate/${slug} PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-${slug}`);
@@ -218,7 +221,10 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
       assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, 'first attempt: a skip is a prior publication');
       assert.match(run, /if ! curl -fsS -o \/dev\/null "https:\/\/registry\.npmjs\.org\/[^\n]*then echo "::error [^\n]*absent from the registry"; exit 1; fi/);
       assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
-      assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" QUALIFY_MODE=post-publication REPORT_DIR="\$report_dir"/);
+      assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" PEERS=\S+ QUALIFY_MODE=post-publication REPORT_DIR="\$report_dir"/);
+      assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
+      const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === 'Qualify bootstrap-published cluster-mesh');
+      assert.ok(bootstrap.run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'bootstrap qualification uses the same optional peers');
     } else {
       assert.match(publish[at + 1].run, /if \[ "\$status" != published \]; then .*exit 0; fi\n.*make qualify-published-install/s, 'qualify only a new publication, never a skip');
       assert.match(publish[at + 1].run, new RegExp(`make qualify-published-install PKG="\\$pkg"${peers} QUALIFY_MODE=post-publication`));
