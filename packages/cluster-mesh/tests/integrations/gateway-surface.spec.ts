@@ -61,7 +61,7 @@ describe('gateway static leaves', () => {
     expect(report.gateway).toMatchObject({ version: '0.19.0' });
     expect(report.gateway?.llmMesh?.path).toBe(report.llmMesh?.path);
     const snapshot = await createClusterMeshModules().probe();
-    expect(snapshot['llm-mesh']).toMatchObject({ state: 'installed', installedVersion: '0.22.0' });
+    expect(snapshot['llm-mesh']).toMatchObject({ state: 'installed', installedVersion: '0.22.1' });
     expect(snapshot.gateway).toMatchObject({ state: 'installed', installedVersion: '0.19.0' });
   });
 });

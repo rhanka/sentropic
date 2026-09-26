@@ -288,7 +288,8 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
   },
-  // Codex availability verified by conductor on 2026-09-26; inherited
+  // Direct OpenAI Responses API (HTTP 200) and Codex availability verified
+  // by conductor real calls on 2026-09-26; inherited
   // gpt-5.6-sol capabilities/task hints are unverified for this model.
   {
     providerId: 'openai',
@@ -322,7 +323,8 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
   },
-  // Codex availability verified by conductor on 2026-09-26; inherited
+  // Direct OpenAI Responses API (HTTP 200) and Codex availability verified
+  // by conductor real calls on 2026-09-26; inherited
   // gpt-5.6-luna capabilities/task hints are unverified for this model.
   {
     providerId: 'openai',
