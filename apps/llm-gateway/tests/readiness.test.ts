@@ -63,7 +63,7 @@ describe('host readiness probes', () => {
 describe('explicit 503 while B2-B4 dependencies are absent', () => {
   it('keeps health live, readiness 503 and admission refused on both wires', async () => {
     const host = await createHostApp({ config: testConfig(), dependencies: {} });
-    expect(host.pending).toEqual(['identity', 'routing', 'settlement']);
+    expect(host.pending).toEqual(['identity', 'routing', 'budget', 'settlement', 'partition']);
 
     const health = await host.app.request('/healthz');
     expect(health.status).toBe(200);
@@ -94,7 +94,7 @@ describe('explicit 503 while B2-B4 dependencies are absent', () => {
     const host = await createHostApp({
       config: testConfig(), dependencies: { identity: dependencies.identity, routing: dependencies.routing },
     });
-    expect(host.pending).toEqual(['settlement']);
+    expect(host.pending).toEqual(['budget', 'settlement', 'partition']);
     expect((await host.app.request('/readyz')).status).toBe(503);
     expect((await host.app.request('/v1/chat/completions', chatRequest(false))).status).toBe(503);
     expect(verify).not.toHaveBeenCalled();
