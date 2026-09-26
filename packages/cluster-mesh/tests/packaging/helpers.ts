@@ -2,6 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Match prepare.sh: workspace versions keep same-PR siblings selectable during lock refresh.
+export const trainVersion = (name: string): string => {
+  const { version } = JSON.parse(readFileSync(new URL(`../../../${name}/package.json`, import.meta.url), 'utf8'));
+  if (typeof version !== 'string' || !version.trim()) throw new Error(`Missing workspace version for ${name}`);
+  return version;
+};
+
 /** Set by packaging.mk; packaging specs are skipped in the ordinary package test run. */
 export const ROOT = process.env.CLUSTER_MESH_PACKAGING_DIR ?? '';
 export const enabled = ROOT !== '';
