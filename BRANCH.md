@@ -34,7 +34,7 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - [x] `acknowledge` BRCIW-EX2 (`scripts/ci/**`): reason = registry client, publish conflict, qualification retries and provenance check live there; impact = CI guard scripts and their fixture tests; rollback = revert the commits.
 - [x] `acknowledge` BRCIW-EX3 (ci.yml): reason = pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"` to the steady-state OIDC post-publication qualification of mcp-auth and cluster-mesh; impact = two run lines; rollback = drop the variable.
 - [ ] `attention` `packages/llm-gateway/scripts/auth-registry.mjs` is not modified (a change would need a llm-gateway bump): cache bypass is applied through `npm_config_prefer_online=true` and the 18 x 10 s budget from the Makefile recipe.
-- [ ] `attention` an equal-bytes publish conflict writes receipt `status=skipped` (plus `conflict=equal-integrity`) so the existing ci.yml status handling applies unchanged; post-publication qualification then follows the existing `skipped` rules.
+- [ ] `attention` an equal-bytes publish conflict writes `status=skipped` (receipt JSON `conflict: equal-integrity`) so the existing ci.yml status handling applies unchanged; post-publication qualification then follows the existing `skipped` rules.
 - [ ] `attention` bootstrap token publications (`--no-provenance`) do not get the provenance check: the variable is only wired in the steady-state OIDC jobs.
 
 ## Orchestration Mode (AI-selected)
@@ -43,26 +43,26 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - Rationale: one small CI lot.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`.
   - [x] Confirm worktree `tmp/registry-visibility-waits` on branch `ci/registry-visibility-waits`.
   - [x] Declare BRCIW-EX1/EX2/EX3.
 
-- [ ] **Lot 1 — Registry visibility waits**
+- [x] **Lot 1 — Registry visibility waits**
   - [x] Fresh registry requests send `cache-control: no-cache` with a cache-busting query; shared 18 x 10 s budget; `wait` subcommand.
   - [x] Makefile mesh/auth waits use the bypassing wait and the configurable 18 x 10 s budget.
   - [x] qualify-published-install: 18 x 10 s primary wait (configurable), core/PEERS installs retried on ETARGET/E404/notarget within the budget, other errors fail immediately.
 
-- [ ] **Lot 2 — Publish conflict**
+- [x] **Lot 2 — Publish conflict**
   - [x] commandPublish: version conflict re-reads registry integrity without cache; equal = skipped, different = failure, unreadable after budget = failure.
   - [x] Tests: auth error, network error, different bytes, unreadable integrity fail; equal bytes pass.
 
-- [ ] **Lot 3 — Provenance source commit**
+- [x] **Lot 3 — Provenance source commit**
   - [x] Post-publication qualification compares the SLSA v1 `resolvedDependencies[].digest.gitCommit` with `QUALIFY_PROVENANCE_SHA`.
   - [x] ci.yml steady-state mcp-auth and cluster-mesh qualification pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"`.
 
-- [ ] **Lot N — Final validation**
-  - [ ] `make test-publishable-manifests ENV=test-registry-waits`
-  - [ ] `make test-qualify-published-install ENV=test-registry-waits`
-  - [ ] `make check-ci-version-filters ENV=test-registry-waits`
-  - [ ] `make scope-check ENV=test-registry-waits`
+- [x] **Lot N — Final validation**
+  - [x] `make test-publishable-manifests ENV=test-registry-waits`
+  - [x] `make test-qualify-published-install ENV=test-registry-waits`
+  - [x] `make check-ci-version-filters ENV=test-registry-waits`
+  - [x] `make scope-check ENV=test-registry-waits`
