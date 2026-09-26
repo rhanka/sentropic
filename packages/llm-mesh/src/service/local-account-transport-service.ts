@@ -79,6 +79,8 @@ export class LocalAccountTransportService {
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
   private readonly accountRemovalBarrierRefs = new Map<string, string>();
   private readonly claimedOwnerScopes = new Map<string, string>();
+  private readonly pendingClaudeAccounts = new Set<string>();
+  private claudePersistenceTail: Promise<void> = Promise.resolve();
   private routeAttemptSequence = 0;
 
   constructor(
@@ -418,6 +420,56 @@ export class LocalAccountTransportService {
     return { accountId: credential.accountId, label };
   }
 
+  private async persistClaudeCompletion(credential: PreparedCredential, ownerScopeRef: string,
+    provider: EnrollmentProvider, assertCurrent: () => void): Promise<EnrollmentCompletion> {
+    // Serialize Claude enrollment index updates; no account is executable during the writes.
+    const previous = this.claudePersistenceTail;
+    let unlock!: () => void;
+    this.claudePersistenceTail = new Promise<void>((resolve) => { unlock = resolve; });
+    await previous;
+    const id = credential.accountId;
+    let claimed = false;
+    try {
+      assertCurrent();
+      const metadata = await provider.resolve(credential);
+      const barrier = await this.removalBarrierForEnrollment(id, ownerScopeRef);
+      claimed = true;
+      if (barrier) this.accountRemovalBarrierRefs.set(id, barrier);
+      this.pendingClaudeAccounts.add(id);
+      const now = new Date().toISOString();
+      const label = `Claude (${id})`;
+      const account: AccountTransportAccount = { accountId: id, ownerScopeRef, accountLabel: label,
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code', status: 'active',
+        accessToken: credential.accessToken, refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt, enrollmentCompletedAt: now, metadata };
+      assertCurrent();
+      await this.persistCredential({ accountId: id, accountLabel: label, providerId: 'claude-code',
+        status: 'active', createdAt: now, updatedAt: now }, credential, account);
+      assertCurrent();
+      await this.assertAccountOwnerClaim(id, ownerScopeRef);
+      if (await this.isAccountRemoved(id)) throw new Error('Account removed');
+      assertCurrent();
+      this.registerAccount(account, credential.authClientConfigVersion, barrier);
+      return { accountId: id, label };
+    } catch {
+      if (claimed) {
+        // Keep the immutable owner claim and fence any partial writes on restart.
+        await this.keyring.setSecret(this.removalKey(id), JSON.stringify({ v: 1,
+          accountId: id, ownerScopeRef, removedAt: this.nextRemovalTimestamp() })).catch(() => {});
+        await this.keyring.deleteSecret(`sentropic-llm-mesh:${id}:public`).catch(() => {});
+        await this.keyring.deleteSecret(`sentropic-llm-mesh:${id}:envelope`).catch(() => {});
+        this.coordinator.removeAccount(id);
+        this.accountsMap.delete(id);
+        this.credentialVersions.delete(id);
+        this.accountRemovalBarrierRefs.delete(id);
+      }
+      throw new Error('Claude enrollment could not be saved; reauthenticate');
+    } finally {
+      this.pendingClaudeAccounts.delete(id);
+      unlock();
+    }
+  }
+
   async cancel(enrollmentId: string): Promise<void> {
     for (const provider of this.providers.values()) {
       if (provider.cancel) {
@@ -432,6 +484,7 @@ export class LocalAccountTransportService {
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     const accounts: AccountPublic[] = [];
     for (const accountId of this.parseAccountIndex(rawIndex)) {
+      if (this.pendingClaudeAccounts.has(accountId)) continue;
       const record = await this.readPublicRecord(accountId);
       if (
         !record
@@ -738,6 +791,11 @@ export class LocalAccountTransportService {
             || /[\r\n]/.test(refreshed.refreshToken)))) throw new Error('Invalid refresh grant');
         const updated = { ...account, accessToken: refreshed.accessToken,
           refreshToken: refreshed.refreshToken ?? account.refreshToken, expiresAt: refreshed.expiresAt };
+        if (providerId === 'claude-code') {
+          const metadata = await provider.resolve(refreshed);
+          updated.metadata = { ...account.metadata, ...metadata,
+            enrollmentMethod: account.metadata?.enrollmentMethod };
+        }
         const now = new Date().toISOString();
         await this.persistCredential({ accountId: account.accountId,
           accountLabel: account.accountLabel ?? undefined, providerId, status: 'active',
@@ -1017,7 +1075,7 @@ export class LocalAccountTransportService {
     }
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     for (const accountId of this.parseAccountIndex(rawIndex)) {
-      if (this.accountsMap.has(accountId)) continue;
+      if (this.accountsMap.has(accountId) || this.pendingClaudeAccounts.has(accountId)) continue;
       const publicRaw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`);
       const envelopeRaw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`);
       if (!publicRaw || !envelopeRaw) continue;
