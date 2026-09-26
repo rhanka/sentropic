@@ -142,16 +142,29 @@ test('frozen packages are not bootstrap targets: absent from options, guard allo
   }
 });
 
+// Release train (BRDP-EX10): a train upstream counts as skipped only when its own publish filter is false.
+const strictWait = (sibling, filter) => `(needs.${sibling}.result == 'success' || (needs.${sibling}.result == 'skipped' && needs.changes.outputs.${filter} != 'true'))`;
+const TRAIN_VALIDATES = [['validate-llm-mesh', 'llm_mesh'], ['validate-llm-gateway', 'llm_gateway'], ['validate-cluster-mesh', 'cluster_mesh']];
+const TRAIN_UPSTREAMS = {
+  'publish-llm-mesh': [],
+  'publish-llm-gateway': [['publish-llm-mesh', 'llm_mesh_publish']],
+  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish']],
+};
+
 test('publisher ordering: gateway waits for mesh; N1 lockstep siblings gate mcp-auth and cluster-mesh', () => {
   const waits = (job, sibling) => {
     assert.ok(needsOf(job).includes(sibling), `${job} needs ${sibling}`);
     assert.ok(jobs[job].if.includes(`(needs.${sibling}.result == 'success' || needs.${sibling}.result == 'skipped')`));
     assert.ok(jobs[job].if.startsWith('always() &&'));
   };
-  waits('publish-llm-gateway', 'publish-llm-mesh');
   waits('publish-mcp-auth', 'publish-oauth-verify');
-  waits('publish-cluster-mesh', 'publish-events');
-  waits('publish-cluster-mesh', 'publish-contracts');
+  for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
+    for (const [sibling, filter] of upstreams) {
+      assert.ok(needsOf(job).includes(sibling), `${job} needs ${sibling}`);
+      assert.ok(jobs[job].if.includes(strictWait(sibling, filter)), `${job} waits strictly for ${sibling}`);
+      assert.ok(!jobs[job].if.includes(`needs.${sibling}.result == 'skipped')`), `${job}: no bare skipped for ${sibling}`);
+    }
+  }
   assert.ok(jobs['publish-mcp-auth'].if.includes("needs.validate-mcp-auth.result == 'success'"));
   assert.ok(jobs['publish-cluster-mesh'].if.includes("needs.validate-cluster-mesh.result == 'success'"));
   for (const slug of STEADY_STATE_PUBLISHERS) {
@@ -187,8 +200,11 @@ test('lint wiring follows baseline evidence, independently per package, before t
   }
 });
 
+// Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0';
+
 test('candidate and post-publication qualification for mcp-auth and cluster-mesh', () => {
-  for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', '']]) {
+  for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', CLUSTER_MESH_PEERS]]) {
     const steps = jobs[`validate-${slug}`].steps;
     const pack = steps.find((s) => s.id === 'pack');
     assert.equal(pack.run, `make pack-${slug} PACK_DESTINATION=tmp/ci-manifest-guard/candidate/${slug} PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-${slug}`);
@@ -199,11 +215,61 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
-    assert.match(publish[at + 1].run, /if \[ "\$status" != published \]; then .*exit 0; fi\n.*make qualify-published-install/s, 'qualify only a new publication, never a skip');
-    assert.match(publish[at + 1].run, new RegExp(`make qualify-published-install PKG="\\$pkg"${peers} QUALIFY_MODE=post-publication`));
+    if (slug === 'cluster-mesh') {
+      // Release train (BRDP-EX10): a skipped receipt is healed only on a re-run, when the version is on the registry.
+      const run = publish[at + 1].run;
+      assert.match(run, /case "\$status" in\n\s*published\) ;;\n\s*skipped\)\n\s*if \[ "\$GITHUB_RUN_ATTEMPT" -le 1 \]; then echo "::notice [^\n]*"; exit 0; fi\n/, 'first attempt: a skip is a prior publication');
+      assert.match(run, /if ! curl -fsS -o \/dev\/null "https:\/\/registry\.npmjs\.org\/[^\n]*then echo "::error [^\n]*absent from the registry"; exit 1; fi/);
+      assert.ok(!run.includes('qualify-report.json'), 'no dead report existence test');
+      assert.match(run, /\*\) echo "::error [^\n]*unexpected publication outcome"; exit 1 ;;\n\s*esac\n\s*make qualify-published-install PKG="\$pkg" PEERS=\S+ QUALIFY_MODE=post-publication REPORT_DIR="\$report_dir"/);
+      assert.ok(run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'post-publication qualification imports every leaf with its optional peers');
+      const bootstrap = jobs['bootstrap-publish'].steps.find((s) => s.name === 'Qualify bootstrap-published cluster-mesh');
+      assert.ok(bootstrap.run.includes(`make qualify-published-install PKG="$pkg"${peers} QUALIFY_MODE=post-publication `), 'bootstrap qualification uses the same optional peers');
+    } else {
+      assert.match(publish[at + 1].run, /if \[ "\$status" != published \]; then .*exit 0; fi\n.*make qualify-published-install/s, 'qualify only a new publication, never a skip');
+      assert.match(publish[at + 1].run, new RegExp(`make qualify-published-install PKG="\\$pkg"${peers} QUALIFY_MODE=post-publication`));
+    }
     assert.ok(!/SIBLING_ARCHIVES_FILE|TARBALL=/.test(publish[at + 1].run), 'registry-only after publication');
     assert.equal(publish[at + 2].if, 'always()');
   }
+});
+
+test('release train: validation barrier, strict chain, serialization, lock-sync and lock integrity (BRDP-EX10)', () => {
+  const validated = TRAIN_VALIDATES.map(([job, filter]) => `(needs.${job}.result == 'success' || (needs.${job}.result == 'skipped' && needs.changes.outputs.${filter} != 'true' && needs.changes.outputs.global != 'true'))`);
+  for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
+    const cond = jobs[job].if;
+    const slug = job.slice('publish-'.length);
+    // `!cancelled()` instead of design section 5's `always()`: a manual cancel stops the train.
+    assert.ok(cond.startsWith(`!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && needs.changes.outputs.${publishFilter(slug)} == 'true' && `), `${job}: barrier prefix`);
+    assert.equal(cond, [cond.slice(0, cond.indexOf(' && (')), ...validated, ...upstreams.map(([s, f]) => strictWait(s, f))].join(' && '), `${job}: exact condition`);
+    assert.deepEqual(needsOf(job), ['changes', ...TRAIN_VALIDATES.map(([v]) => v), ...upstreams.map(([s]) => s)], `${job}: needs`);
+    assert.deepEqual(jobs[job].concurrency, { group: 'npm-publish-train', 'cancel-in-progress': false }, `${job}: concurrency`);
+  }
+  for (const name of Object.keys(jobs)) {
+    if (!(name in TRAIN_UPSTREAMS)) assert.notEqual(jobs[name].concurrency?.group, 'npm-publish-train', `${name}: not in the train group`);
+  }
+  const sync = jobs.changes.steps.find((s) => s.name === 'Assert train package versions match the root lockfile');
+  assert.ok(jobs.changes.steps.indexOf(sync) < jobs.changes.steps.findIndex((s) => s.id === 'filter'), 'lock-sync before the filters');
+  assert.match(sync.run, /for slug in llm-mesh llm-gateway cluster-mesh; do/);
+  assert.match(sync.run, /jq -r --arg key "packages\/\$\{slug\}" '\.packages\[\$key\]\.version \/\/ "missing"' package-lock\.json/);
+  assert.match(sync.run, /if \[ "\$manifest" != "\$locked" \]; then\n\s*echo "::error [^\n]*"\n\s*exit 1/);
+  const verify = jobs['verify-train-lock-integrity'];
+  assert.deepEqual(needsOf('verify-train-lock-integrity'), ['changes', 'publish-llm-mesh', 'publish-llm-gateway']);
+  assert.equal(verify.if, "!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')");
+  assert.deepEqual(verify.permissions, { contents: 'read' });
+  const check = verify.steps.find((s) => /check-train-lock-integrity/.test(s.run ?? ''));
+  assert.deepEqual(check.env, { LLM_MESH_PUBLISH_RESULT: '${{ needs.publish-llm-mesh.result }}', LLM_GATEWAY_PUBLISH_RESULT: '${{ needs.publish-llm-gateway.result }}' });
+  assert.match(check.run, /if \[ "\$LLM_MESH_PUBLISH_RESULT" = success \]; then required="@sentropic\/llm-mesh"; fi/);
+  assert.match(check.run, /if \[ "\$LLM_GATEWAY_PUBLISH_RESULT" = success \]; then required="[^\n]*@sentropic\/llm-gateway"; fi/);
+  assert.match(check.run, /make -f packages\/cluster-mesh\/packaging\.mk check-train-lock-integrity REQUIRE_PUBLISHED="\$required" ENV=test-ci-cluster-mesh$/m);
+  for (const name of Object.keys(jobs)) assert.ok(!needsOf(name).includes('verify-train-lock-integrity'), `${name}: integrity check never stops the chain`);
+  const steps = jobs['validate-cluster-mesh'].steps;
+  const index = (pattern) => steps.findIndex((s) => pattern.test(s.run ?? ''));
+  const lazy = index(/packaging\.mk test-lazy-package/);
+  assert.ok(index(/make pack-cluster-mesh /) < index(/make pack-candidate-siblings /) && index(/make pack-candidate-siblings /) < lazy, 'candidate and siblings packed before the lazy qualification');
+  assert.equal(steps[lazy].if, undefined, 'lazy qualification always runs');
+  assert.match(steps[lazy].run, /if \[ -f "\$receipts" \]; then\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package SIBLING_ARCHIVES_FILE="\$receipts" ENV=test\n\s*else\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package ENV=test\n\s*fi/);
+  assert.match(steps[lazy].run, /receipts=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
 });
 
 test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publish remains', () => {
@@ -297,4 +363,29 @@ test('post-publication qualification fails on a missing or status-less receipt',
     assert.match(s.run, /if \[ ! -f "\$receipt" \]; then echo "::error title=Publication qualification::.*"; exit 1; fi/, s.name);
     assert.match(s.run, /if \[ -z "\$status" \]; then echo "::error title=Publication qualification::.*"; exit 1; fi/, s.name);
   }
+});
+
+// BRDP-EX11: run the host guard lines of qualify-published-install (before mkdir/docker) with sh, one shell per line as Make does.
+const runQualifyGuards = (vars) => {
+  const lines = recipe('qualify-published-install').split('\n');
+  const guards = lines.slice(0, lines.findIndex((l) => l.startsWith('\t@mkdir')));
+  for (const line of guards) {
+    const cmd = line.replace(/^\t@/, '').replace(/\$\(([A-Z_]+)\)/g, (_, k) => vars[k] ?? '').replaceAll('$$', '$');
+    const r = spawnSync('sh', ['-c', cmd], { encoding: 'utf8' });
+    if (r.status !== 0) return { status: r.status, out: r.stdout + r.stderr };
+  }
+  return { status: 0, out: '' };
+};
+
+test('qualify-published-install: TARBALL mode without PEERS/QUALIFY_MODE passes the character guard; invalid PEERS still refused', () => {
+  const tgz = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qguard-')), 'candidate.tgz');
+  fs.writeFileSync(tgz, '');
+  assert.deepEqual(runQualifyGuards({ TARBALL: tgz }), { status: 0, out: '' });
+  const missing = runQualifyGuards({ TARBALL: `${tgz}.absent` });
+  assert.equal(missing.status, 1);
+  assert.match(missing.out, /ERROR: TARBALL .* is not a file/);
+  const bad = runQualifyGuards({ TARBALL: tgz, PEERS: 'a@1;rm' });
+  assert.equal(bad.status, 1);
+  assert.match(bad.out, /ERROR: PKG\/PEERS\/QUALIFY_MODE contain unsupported characters/);
+  assert.equal(runQualifyGuards({ TARBALL: tgz, PEERS: '@x/a@1.0.0,b@2.0.0', QUALIFY_MODE: 'registry' }).status, 0);
 });

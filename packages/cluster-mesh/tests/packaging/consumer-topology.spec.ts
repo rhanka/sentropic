@@ -4,7 +4,21 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cloneFixture, enabled, fixtureDir, nodeJson, runNode } from './helpers.js';
 
+const LEAVES = ['llm-mesh', 'llm-mesh/facade', 'llm-mesh/enrollment', 'llm-mesh/node', 'llm-mesh/transport/cloud-code',
+  'gateway', 'gateway/auth', 'gateway/auth-hono'];
+const ALL_IMPORTED = Object.fromEntries(LEAVES.map((leaf) => [leaf, 'imported']));
+
 describe.skipIf(!enabled)('packed consumer topology (npm, single process)', () => {
+  it('should import every leaf through the range guard in a correctly bumped single tree', () => {
+    const leaves = nodeJson(fixtureDir('latest'), `
+      const leaves = {};
+      for (const leaf of ${JSON.stringify(LEAVES)}) {
+        leaves[leaf] = await import('@sentropic/cluster-mesh/' + leaf).then(() => 'imported', (error) => error.code ?? error.message);
+      }
+      console.log(JSON.stringify(leaves));`);
+    expect(leaves).toEqual(ALL_IMPORTED);
+  });
+
   it('should resolve one cluster-mesh and one llm-mesh shared with the gateway', () => {
     const report = nodeJson<{ instances: unknown[]; llmMesh: { path: string }; gateway: { llmMesh: { path: string } } }>(
       fixtureDir('selected'), `
@@ -74,7 +88,7 @@ describe.skipIf(!enabled)('packed global consumer + separately installed runtime
     const run = runBin(prefix, 'fixture-global-consumer');
     expect(run.status, run.stderr).toBe(0);
     const report = JSON.parse(run.stdout.trim()) as Record<string, unknown>;
-    expect(report).toMatchObject({ instances: copies, leaf: 'function', service: 'function', health: 200 });
+    expect(report).toMatchObject({ instances: copies, leaf: 'function', service: 'function', health: 200, leaves: ALL_IMPORTED });
     expect(report.gatewayLlmMesh).toBe(report.llmMesh);
   });
 

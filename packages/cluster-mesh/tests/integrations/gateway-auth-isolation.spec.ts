@@ -160,6 +160,23 @@ describe('gateway auth startup matrix', () => {
     expect(await refusedStartup('service')).toMatchObject({ reason: 'load_failed', packageName: '@sentropic/mcp-auth' });
   });
 
+  it.each(['service', 'session', 'host'] as const)(
+    'should refuse the old 0.21.2/0.18.0 tuple in %s mode before evaluating any auth peer', async (authMode) => {
+      tree.cleanup();
+      tree = new PackageTree();
+      anchorDir = tree.dir('app/node_modules/@sentropic/cluster-mesh/dist/modules');
+      tree.install('app', fakeMesh('old-mesh', '0.21.2'));
+      tree.install('app', fakeGateway('old-gw', '0.18.0'));
+      tree.install('app', fakeMcpAuth('mcp-auth'));
+      tree.install('app', fakeJose('jose'));
+      tree.install('app', fakeAuthHono('auth-hono'));
+      evaluations().length = 0;
+      expect(await refusedStartup(authMode)).toMatchObject({
+        moduleId: 'gateway', reason: 'incompatible_version', packageName: '@sentropic/llm-gateway', installedVersion: '0.18.0',
+      });
+      expect(evaluations()).toEqual([]);
+    });
+
   it('should reject the documented static preflight with a code recognized across copies', async () => {
     const modules = createModuleRegistry({}, { anchorDir });
     const error = await loadGatewayAuth(modules).catch((caught: unknown) => caught);

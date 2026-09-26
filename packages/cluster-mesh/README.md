@@ -103,7 +103,7 @@ topology introduced in 0.1: one Sentropic server, its attached local workstation
 local signed projections, and the existing device-code lifecycle. It does not
 implement server-to-server federation.
 
-## Lazy integration surface in 0.12
+## Lazy integration surface (0.12+, tuple of 0.13)
 
 Cluster Mesh is the single integration surface for llm-mesh and llm-gateway. Those
 providers stay independent packages and never depend on cluster-mesh. They are
@@ -112,8 +112,8 @@ providers stay independent packages and never depend on cluster-mesh. They are
 
 | Entry | Provider | Selected optional peers |
 |---|---|---|
-| `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`, `/llm-mesh/transport/cloud-code` | matching `@sentropic/llm-mesh` entry | `@sentropic/llm-mesh >=0.21.2 <0.22.0` |
-| `/gateway` | `@sentropic/llm-gateway` root (neither auth mode) | llm-mesh + `@sentropic/llm-gateway >=0.18.0 <0.19.0` |
+| `/llm-mesh`, `/llm-mesh/facade`, `/llm-mesh/enrollment`, `/llm-mesh/node`, `/llm-mesh/transport/cloud-code` | matching `@sentropic/llm-mesh` entry | `@sentropic/llm-mesh >=0.22.0 <0.23.0` |
+| `/gateway` | `@sentropic/llm-gateway` root (neither auth mode) | llm-mesh + `@sentropic/llm-gateway >=0.19.0 <0.20.0` |
 | `/gateway/auth` (service mode) | `@sentropic/llm-gateway/auth` | gateway + `@sentropic/mcp-auth >=0.2.1 <0.3.0`, `jose ^5.10.0` |
 | `/gateway/auth-hono` (session mode) | `@sentropic/llm-gateway/auth-hono` | gateway + `@sentropic/auth-hono ^0.15.0` |
 | `/loaders/<leaf>` | async typed loader (`loadLlmMesh`, `loadGateway`, `loadGatewayAuth`, ...) | as its leaf, resolved on call |
@@ -140,16 +140,25 @@ before binding any listener; they resolve and evaluate the selected peer graph
 { enabled, authMode: 'service' | 'session' | 'host', createRouter })` does this for
 you; `host` selects no gateway auth peer (host-injected `CallerAuthPort`).
 
-**Topology guard.** Every leaf, loader and compose entry first runs the guard: more
-than one evaluated cluster-mesh copy, or an llm-mesh resolved from cluster-mesh that
-differs from the gateway's, makes the import throw `ClusterMeshTopologyError`
-(`code: 'cluster_mesh_topology_invalid'`, message naming the conflicting paths).
+**Topology guard.** Every leaf, loader and compose entry first runs the guard, once
+per set of evaluated copies: more than one evaluated cluster-mesh copy, an llm-mesh
+resolved from cluster-mesh that differs from the gateway's, or (since 0.13.0) an
+installed provider outside its accepted range makes the import throw
+`ClusterMeshTopologyError` (`code: 'cluster_mesh_topology_invalid'`, reason
+`duplicate_instance`, `divergent_llm_mesh` or `incompatible_version`, message naming
+the paths, or the installed version and the required range). llm-mesh entries check
+the llm-mesh range; gateway entries check the llm-gateway and llm-mesh ranges. Ranges
+are checked on the copies cluster-mesh actually resolves (llm-mesh and llm-gateway from
+its own physical location, the gateway's llm-mesh from the gateway's location), release
+versions only: a prerelease version never satisfies, and `+build` metadata is ignored
+as npm does (`0.22.0+build.1` satisfies `>=0.22.0 <0.23.0`). An absent
+provider is left to the leaf import itself.
 Copies are keyed by module URL without `?query`/`#hash`: a copy loaded from another
 path (nested install, `npm link`, a `--preserve-symlinks` link path) is a duplicate,
 while re-evaluating the same file (Vite dev/HMR, `vi.resetModules`, cache-busting
-query imports in test runners) replaces its entry and is not reported. Call
-`verifyClusterMeshTopology({ require })` from the root at startup for an earlier,
-explicit check that also enforces the accepted ranges. Guard state lives on
+query imports in test runners) replaces its entry and is not reported.
+`verifyClusterMeshTopology({ require })` from the root is an optional, earlier check
+of both providers' ranges plus the `require` list. Guard state lives on
 `globalThis`, so it is per thread (each `worker_threads` worker checks its own
 copies); cross-process consistency stays with install/qualification gates. Limits:
 under `--preserve-symlinks`, two llm-mesh instances sharing one realpath are not
@@ -160,7 +169,7 @@ next to it (remove that gateway copy or align its llm-mesh).
 **Consumer rules.** Every manifest that declares cluster-mesh and imports a leaf
 also declares that leaf's selected peers at the qualified versions; the installed
 tree must hold exactly one cluster-mesh and one llm-mesh shared with the gateway.
-0.12.0 is qualified with **npm only** (flat project installs, `npm ci` from a lockfile,
+0.13.0 is qualified with **npm only** (flat project installs, `npm ci` from a lockfile,
 and a global consumer beside a separately installed runtime); other package managers
 are not qualified. The tested bundler is esbuild with `@sentropic/cluster-mesh` **and**
 `@sentropic/cluster-mesh/*` (and the peer packages) externalized, which keeps the
@@ -168,10 +177,37 @@ resolution anchor at the installed package; bundling the root inline (as the API
 build does) embeds no provider code. TypeScript >= 5.7 is required with
 `skipLibCheck: false` (hono's declarations); with `skipLibCheck: true`, a missing
 peer surfaces as TS2305 on the named import. Frozen tuple (committed lockfile):
-cluster-mesh 0.12.0, llm-mesh 0.21.2, llm-gateway 0.18.0, mcp-auth 0.2.1,
+cluster-mesh 0.13.0, llm-mesh 0.22.0, llm-gateway 0.19.0, mcp-auth 0.2.1,
 oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7; session mode with auth-hono 0.15.0
-(llm-gateway 0.18.0's published peer range `^0.15.0`); the latest versions inside
-every declared range are re-qualified on each release run.
+(llm-gateway 0.19.0's declared peer range `^0.15.0`); the latest versions inside
+every declared range are re-qualified on each release run. The previous tuple
+(llm-mesh 0.21.x, llm-gateway 0.18.x) is refused, see "Upgrading to 0.13" below.
+Release-train runs qualify the unpublished llm-mesh and llm-gateway candidates from
+same-PR sibling archives validated by the CI `loadSiblings` rules (sha256, packed
+identity and manifest guard, receipts packed from the current commit, no unlisted
+archive) (`make -f packages/cluster-mesh/packaging.mk test-lazy-package
+SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json`); a
+receipt for cluster-mesh itself replaces the local pack as the qualified candidate. The
+committed `selected` lockfile carries their registry URL and the sha512 of those bytes.
+
+**Upgrading to 0.13.** Bump cluster-mesh 0.13, llm-mesh 0.22 and llm-gateway 0.19 in
+the same commit; npm may not error on a partial bump. Measured with npm 11.19: a
+consumer keeping its own `^0.21.2`/`^0.18.0` pins fails with `ERESOLVE`, while
+`npm install <candidate> @sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0`
+exits 0 after "ERESOLVE overriding peer dependency" and silently drops the old pair.
+What is automatic: the topology guard runs when a leaf, loader or compose module is
+first evaluated, so a skewed tree (for example built with `--legacy-peer-deps`) fails
+there with `incompatible_version`, naming the installed version and the required
+range, before any provider module evaluates; nothing has to be called. The registry
+loaders (`modules.load('gateway')`) refuse with `cluster_mesh_module_unavailable` /
+`incompatible_version` as well. `verifyClusterMeshTopology()` is an optional earlier
+check for hosts that mount routes before importing any leaf.
+
+**Namespace remap.** `createClusterMeshPlugin({ mounts })` mounts each enabled module
+once at `mounts[namespace] ?? namespace`. A standalone gateway host passes
+`mounts: { '/gw': '/' }` and serves exactly `/healthz`, `/readyz`, `/v1/messages`,
+`/v1/chat/completions` and `/v1/models` (nothing under `/gw`); the product keeps
+`/gw` under its own prefix.
 
 ## Available in v1
 

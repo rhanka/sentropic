@@ -89,6 +89,31 @@ const facade = createLlmMeshFacade({
 That migration option is only for pre-ownerScope local records. New enrollment
 always takes ownership from `StartEnrollmentInput.ownerScope`.
 
+## Route quote
+
+`quoteRoute(input, { council, profiles })` (or `routePlanner.quote(input)`)
+returns side-effect-free candidate and usage bounds for budget admission. It is
+synchronous, reads no clock (`now` is an input), performs no I/O and never calls
+the account directory. The quote lists every model any plan could select for
+the request (aliases, fallbacks and fresh council equivalents, filtered by
+required capabilities but not by accounts or health), at most
+`MAX_ROUTE_QUOTE_CANDIDATES` (16), with the policy attempt cap (1..8) and a
+per-attempt allowance derived from the caller ceiling. Output allowance is
+bounded by a model's `maxOutputTokens`; input above a declared context window
+is refused. Candidates that may run on the Codex transport carry
+`outputCeilingEnforced: false` because that wire cannot send an output limit.
+Errors are `RouteQuoteError` codes `unknown-model`, `capabilities-unmet`,
+`invalid-ceiling` and `too-many-candidates`. Mesh never reads prices or
+budgets.
+
+Pass the quote to `plan({ ..., quote })`: the plan keeps only quoted targets,
+caps attempts at `quote.maxAttempts`, and throws `RoutePlanError` code
+`quote-mismatch` when the quote reference, council or policy revision differs,
+or when no planned route is covered by the quote. A pinned plan evaluates
+council freshness at `quote.quotedAt` (the quote's `now`), shares its target
+resolution with `quoteRoute`, and ignores a sticky affinity whose target the
+quote does not cover. `requiredCapabilities` order does not affect `quoteRef`.
+
 ## Cloud Code OAuth client rotation
 
 The embedded Antigravity OAuth client credential is distributable client configuration, not a

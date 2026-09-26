@@ -19,7 +19,7 @@ let self: ClusterMeshInstanceEntry;
 beforeEach(() => {
   tree = new PackageTree();
   evaluations().length = 0;
-  const clusterDir = tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.12.0' });
+  const clusterDir = tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.13.0' });
   anchorDir = tree.dir('app/node_modules/@sentropic/cluster-mesh/dist/modules');
   self = { token: Symbol('self'), moduleUrl: pathToFileURL(join(clusterDir, 'dist/modules/topology.js')).href };
 });
@@ -43,8 +43,8 @@ describe('cluster-mesh topology guard', () => {
     tree.install('app', fakeGateway('gw'));
     const report = inspect([self], true, ['llm-mesh', 'gateway']);
     expect(report.llmMesh?.path).toBe(meshDir);
-    expect(report.gateway).toMatchObject({ version: '0.18.0', llmMesh: { path: meshDir } });
-    expect(report.instances).toEqual([{ path: join(tree.root, 'app/node_modules/@sentropic/cluster-mesh'), version: '0.12.0' }]);
+    expect(report.gateway).toMatchObject({ version: '0.19.0', llmMesh: { path: meshDir } });
+    expect(report.instances).toEqual([{ path: join(tree.root, 'app/node_modules/@sentropic/cluster-mesh'), version: '0.13.0' }]);
     expect(evaluations()).toEqual([]);
   });
 
@@ -79,7 +79,7 @@ describe('cluster-mesh topology guard', () => {
     const copy = { token: Symbol('copy'), moduleUrl: pathToFileURL(join(other, 'dist/index.js')).href };
     const error = thrown(() => inspect([self, copy]));
     expect(error.message).toContain(`${other}@0.9.0`);
-    expect(error.message).toContain('@0.12.0');
+    expect(error.message).toContain('@0.13.0');
   });
 
   it('should refuse divergent llm-mesh realpaths from cluster-mesh and gateway', () => {
@@ -91,14 +91,17 @@ describe('cluster-mesh topology guard', () => {
     expect(evaluations()).toEqual([]);
   });
 
-  it('should check versions and requirements only in the explicit preflight', () => {
+  it('should check requirements only in the explicit preflight and ranges only there or for a leaf family', () => {
     tree.install('app', fakeMesh('mesh'));
-    tree.install('app', fakeGateway('gw', '0.17.1'));
+    tree.install('app', fakeGateway('gw', '0.18.0'));
     expect(() => inspect([self])).not.toThrow();
+    expect(() => inspectTopology({ anchorDir, instances: [self], strict: false, family: 'llm-mesh' })).not.toThrow();
+    expect(thrown(() => inspectTopology({ anchorDir, instances: [self], strict: false, family: 'gateway' })))
+      .toMatchObject({ reason: 'incompatible_version' });
     expect(thrown(() => inspect([self], true))).toMatchObject({ reason: 'incompatible_version' });
     tree.cleanup();
     tree = new PackageTree();
-    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.12.0' });
+    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.13.0' });
     anchorDir = tree.dir('app/node_modules/@sentropic/cluster-mesh/dist/modules');
     expect(() => inspect([self], true)).not.toThrow();
     expect(thrown(() => inspect([self], true, ['gateway']))).toMatchObject({ reason: 'not_installed' });
@@ -111,6 +114,8 @@ describe('cluster-mesh topology guard', () => {
     const fresh = await import('../../src/modules/topology.js');
     await import('../../src/modules/topology.js?hmr=1');
     await expect(import('../../src/modules/topology-guard.js?hmr=2')).resolves.toBeDefined();
+    await expect(import('../../src/modules/topology-guard-llm-mesh.js?hmr=3')).resolves.toBeDefined();
+    await expect(import('../../src/modules/topology-guard-gateway.js?hmr=4')).resolves.toBeDefined();
     expect(registry()).toHaveLength(1);
     expect(() => fresh.verifyClusterMeshTopology()).not.toThrow();
     expect(() => root.verifyClusterMeshTopology()).not.toThrow();

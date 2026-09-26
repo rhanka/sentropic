@@ -2,9 +2,11 @@ import type { PreparedRouteAttempt, StreamEvent, RouteFailureClassification } fr
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage, terminalGatewayError,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, routeUsage,
+  settleRouteRequest, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
+import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 import type { GatewayDispatchStreamEvent } from './ports/dispatch.js';
@@ -157,8 +159,7 @@ export const runRouteStreamFlow = async (
   const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
     if (settled) return;
     settled = true;
-    await deps.metering.settleRoute({ cost: prepared.cost, wire: request.wire, requestedModel: request.model,
-      outcome, usage: aggregateUsage(attempts), attempts });
+    await settleRouteRequest(deps, prepared, request, outcome, attempts);
   };
   for (let index = 0; index < prepared.plan.candidateRefs.length; index += 1) {
     const candidateRef = prepared.plan.candidateRefs[index]!;
@@ -175,6 +176,7 @@ export const runRouteStreamFlow = async (
       );
       const preparedAttempt = attempt;
       signal?.throwIfAborted();
+      await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       const source = await (deps.dispatch ?? defaultDispatch).stream({ attempt: preparedAttempt, request: {
         ...prepared.canonical.request,
@@ -221,6 +223,9 @@ export const runRouteStreamFlow = async (
       if (execution?.terminal) {
         try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
         throw error;
+      }
+      if (error instanceof BudgetDispatchMarkError) {
+        throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
       }
       try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
       const classification = classifyRouteError(error, signal?.aborted);
