@@ -34,6 +34,21 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it('does not replay old refresh material after rotation followed by a storage outage', async () => {
+    const { service, keyring, fetchFn, create } = setup();
+    await service.completeClaudeCredentialImport(paste(true), owner);
+    const save = keyring.setSecret.bind(keyring);
+    let storageUnavailable = false;
+    keyring.setSecret = async (key, value) => {
+      if (storageUnavailable) throw new Error(REFRESH);
+      await save(key, value);
+    };
+    fetchFn.mockImplementation(async () => { storageUnavailable = true; return response(); });
+    await assertSafe(service.acquire(acquire));
+    storageUnavailable = false;
+    await assertSafe(create().acquire(acquire));
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
   it('refuses a colliding immutable foreign owner claim without touching its records', async () => {
     const { provider, service, keyring } = setup();
     const credential = await provider.importCredential(paste());

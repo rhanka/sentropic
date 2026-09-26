@@ -675,7 +675,7 @@ export class LocalAccountTransportService {
       }
       // Acquisition may have snapshotted the old token before another caller published.
       acquisition.material.accessToken = account.accessToken ?? undefined;
-      acquisition.material.refreshToken = account.refreshToken;
+      acquisition.material.refreshToken = account.refreshToken ?? undefined;
       acquisition.material.expiresAt = account.expiresAt ?? undefined;
     }
 
@@ -840,6 +840,17 @@ export class LocalAccountTransportService {
           throw new Error(`No provider registered for refresh: ${providerId}`);
         }
 
+        if (account?.status === 'reauth_required') throw new Error('Reauthentication required');
+        // Fence persisted grants before a potentially rotating request. A crash or
+        // storage outage afterwards must not make a restart replay the old token.
+        const record = await this.readPublicRecord(input.accountId);
+        if (record) {
+          await this.assertAccountOwnerClaim(input.accountId, account?.ownerScopeRef);
+          if (await this.isAccountRemoved(input.accountId)) throw new Error('Account removed');
+          await this.keyring.setSecret(`sentropic-llm-mesh:${input.accountId}:public`, JSON.stringify({
+            ...record, status: 'reauth_required', account: { ...record.account, status: 'reauth_required' },
+          }));
+        }
         const refreshed = await provider.refresh(input);
         if (!account || refreshed.accountId !== input.accountId
           || !refreshed.accessToken?.trim() || /[\r\n]/.test(refreshed.accessToken)

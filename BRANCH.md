@@ -55,6 +55,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-19` — attention — owner: implementer — A reproduced post-rotation storage outage replayed the old grant after restart; persist existing reauth status before refresh and clear it only with the fresh durable save, preserving the schema.
 - [x] `CS-16` — acknowledge — owner: conductor — Explicit LOT 1 no-bump instruction overrides the general bump rule; conductor owns release/version qualification.
 - [x] `CS-17` — attention — owner: implementer — Apply harness plan/debug/test within allowed files; no recorder/Track artifacts outside scope; independent review remains conductor-owned.
 - [x] `CS-18` — attention — owner: implementer — Fail closed on ambiguous rotation/save failures; use an offline strict profile and bounded 30-second token requests with no retries.
@@ -140,6 +141,7 @@
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [x] Storage-outage regression first reproduced two refresh calls; preflight durable reauth fencing addresses D5's no-replay requirement without a migration.
 - [x] Step A2: executable LOT 1 plan, exact allowed files/tests, no-bump decision and environment mapping recorded.
 - [x] Step A1: reconcile O5 and Muse M1–M6/minor corrections, additive export, baseline citation, isolated fix, lot 2 gates and mission evidence.
 - [x] Round 1: all nine reviewer requests verified against code and accepted; spec is 250 lines, external evidence qualifications preserved; no disagreement or new consensus claim.
