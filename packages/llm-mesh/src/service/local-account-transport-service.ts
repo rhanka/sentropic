@@ -856,7 +856,7 @@ export class LocalAccountTransportService {
           || !refreshed.accessToken?.trim() || /[\r\n]/.test(refreshed.accessToken)
           || !Number.isFinite(Date.parse(refreshed.expiresAt))
           || Date.parse(refreshed.expiresAt) <= Date.now()
-          || refreshed.authClientConfigVersion !== input.credentialVersion
+          || (providerId === 'claude-code' && refreshed.authClientConfigVersion !== input.credentialVersion)
           || (refreshed.refreshToken !== undefined && (!refreshed.refreshToken.trim()
             || /[\r\n]/.test(refreshed.refreshToken)))) throw new Error('Invalid refresh grant');
         const updated = { ...account, accessToken: refreshed.accessToken,
