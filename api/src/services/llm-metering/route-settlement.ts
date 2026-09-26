@@ -120,3 +120,110 @@ const pinnedPricing = async (tx: LedgerTx, ids: readonly string[]): Promise<Map<
 /** The most expensive pinned price: a served model outside the quote is never cheaper than the quote. */
 const costliest = (pricing: Map<string, PricingRow>): PricingRow | undefined => [...pricing.values()]
   .sort((left, right) => Number((right.input + right.output) - (left.input + left.output)))[0];
+
+export class RouteSettlementError extends Error {
+  readonly code = 'llm_route_settlement_refused';
+  constructor(message: string) { super(message); this.name = 'RouteSettlementError'; }
+}
+
+export interface RouteSettlementOptions {
+  readonly database: LedgerDatabase;
+  readonly now?: () => Date;
+}
+
+export const createRouteSettlement = (options: RouteSettlementOptions): RouteMeteringSink & {
+  /** Readiness: the 0008 ledger attribution columns answer a bounded query. */
+  probe(): Promise<boolean>;
+} => {
+  const { database } = options;
+  const clock = options.now ?? (() => new Date());
+
+  const settleIn = async (tx: LedgerTx, settlement: RouteRequestSettlement, now: Date): Promise<void> => {
+    const { requestId, holdRef, cost } = settlement;
+    const hold = await lockHold(tx, holdRef!);
+    if (!hold || hold.requestId !== requestId || hold.tenantId !== cost.tenantId) {
+      throw new RouteSettlementError('settlement does not match its hold');
+    }
+    const principal = principalOf(cost);
+    const pricing = await pinnedPricing(tx, hold.pricingVersions);
+    let total = 0n;
+    const attempts = settlement.attempts.map((attempt) => {
+      const price = pricing.get(modelBucketKey(attempt.providerId, attempt.modelId)) ?? costliest(pricing);
+      const charged = price ? usageCost(price, attempt.usage) : 0n;
+      if (!price && (attempt.usage.inputTokens > 0 || attempt.usage.outputTokens > 0)) {
+        throw new RouteSettlementError('dispatched attempt has no pinned price');
+      }
+      total += charged;
+      return redactSettlementAttempt(attempt, charged, price?.id);
+    });
+    const served = [...settlement.attempts].reverse().find((attempt) => attempt.usage.inputTokens > 0
+      || attempt.usage.outputTokens > 0) ?? settlement.attempts.at(-1);
+    const servedAttempt = served ? attempts[settlement.attempts.indexOf(served)] : undefined;
+    const state = settlement.usage.estimated ? 'estimated' : 'none';
+    const values = {
+      input: settlement.usage.inputTokens, output: settlement.usage.outputTokens,
+      result: RESULT[settlement.outcome], attempts: JSON.stringify(attempts),
+    };
+    const inserted = await tx.execute(sql`INSERT INTO control.cost_ledger (id, idempotency_key, user_id, workspace_id,
+        tenant_id, operation, provider_id, model_id, input_tokens, output_tokens, total_tokens, cost_micro_usd,
+        principal_kind, principal_key, budget_strategy_id, pricing_version, result, hold_id, quote_ref,
+        reconciliation_state, attempts)
+      VALUES (${createId()}, ${requestId}, ${principal.kind === 'user' ? principal.key : null}, ${hold.workspaceId},
+        ${hold.tenantId}, ${settlementOperation(cost)}, ${servedAttempt?.providerId ?? 'none'},
+        ${servedAttempt?.modelId ?? (id(settlement.requestedModel) ?? 'none')}, ${values.input}, ${values.output},
+        ${values.input + values.output}, ${total.toString()}, ${principal.kind}, ${principal.key}, ${hold.strategyId},
+        ${servedAttempt?.pricingVersion ?? null}, ${values.result}, ${holdRef}, ${hold.quoteRef}, ${state},
+        ${values.attempts}::jsonb)
+      ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`);
+    if (inserted.rows.length === 0) {
+      // Fenced: a duplicate settlement or redelivery adds nothing. Only the reaper's conservative
+      // estimate is corrected, once, to the actual charge (auditable: state becomes `reconciled`).
+      const [row] = (await tx.execute(sql`SELECT cost_micro_usd, reconciliation_state FROM control.cost_ledger
+        WHERE idempotency_key = ${requestId} FOR UPDATE`)).rows as Array<Record<string, unknown>>;
+      if (hold.status !== 'reconciled' || row?.reconciliation_state !== 'pending') return;
+      const delta = total - BigInt(row.cost_micro_usd as string);
+      await tx.execute(sql`UPDATE control.cost_ledger SET cost_micro_usd = ${total.toString()}, input_tokens = ${values.input},
+          output_tokens = ${values.output}, total_tokens = ${values.input + values.output}, result = ${values.result},
+          attempts = ${values.attempts}::jsonb, reconciliation_state = 'reconciled'
+        WHERE idempotency_key = ${requestId}`);
+      await tx.execute(sql`UPDATE control.budgets SET updated_at = ${now},
+          spent_micro_usd = GREATEST(0, spent_micro_usd + ${delta.toString()}::bigint)
+        WHERE id = ANY(${pgTextArray(hold.budgetIds)})`);
+      return;
+    }
+    const open = hold.status === 'held' || hold.status === 'dispatched';
+    await tx.execute(sql`UPDATE control.budgets SET updated_at = ${now},
+        reserved_micro_usd = GREATEST(0, reserved_micro_usd - ${(open ? hold.liability : 0n).toString()}::bigint),
+        spent_micro_usd = spent_micro_usd + ${total.toString()}::bigint
+      WHERE id = ANY(${pgTextArray(hold.budgetIds)})`);
+    await tx.execute(sql`UPDATE control.budget_holds SET updated_at = ${now}, settled_at = ${now},
+        status = CASE WHEN status IN ('held', 'dispatched') THEN 'settled' ELSE status END
+      WHERE id = ${holdRef}`);
+    if ((settlement.overrun?.length ?? 0) > 0 || total > hold.liability) {
+      await tx.execute(sql`INSERT INTO control.blocked_attempts (id, request_id, tenant_id, workspace_id, principal_kind,
+          principal_key, budget_strategy_id, reason, requested_model, hold_id, quote_ref, liability_micro_usd)
+        VALUES (${createId()}, ${requestId}, ${hold.tenantId}, ${hold.workspaceId}, ${principal.kind}, ${principal.key},
+          ${hold.strategyId}, 'overrun', ${id(settlement.requestedModel) ?? null}, ${holdRef}, ${hold.quoteRef},
+          ${total.toString()})`);
+    }
+    await outboxWriter.append(tx as Parameters<typeof outboxWriter.append>[0], {
+      aggregateType: 'llm_request', aggregateId: requestId!, channel: 'llm_settlement',
+      tenantId: hold.tenantId, workspaceId: hold.workspaceId,
+      envelope: { type: 'llm.request.settled', requestId, holdId: holdRef, costMicroUsd: Number(total), result: values.result },
+    });
+  };
+
+  return {
+    async settleRoute(settlement) {
+      if (!settlement.requestId || !settlement.holdRef) {
+        throw new RouteSettlementError('gateway settlement requires an admitted request');
+      }
+      const now = clock();
+      await database.transaction((tx) => settleIn(tx, settlement, now));
+    },
+    async probe() {
+      await database.execute(sql`SELECT hold_id, quote_ref, principal_key, attempts FROM control.cost_ledger LIMIT 0`);
+      return true;
+    },
+  };
+};
