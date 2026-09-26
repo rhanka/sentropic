@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
 import type { RouteMeteringSink, RouteRequestSettlement } from '@sentropic/llm-gateway';
-import type { RouteQuote } from '@sentropic/llm-mesh';
+import type { RoutePlanner, RouteQuote } from '@sentropic/llm-mesh';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { Hono } from 'hono';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -16,7 +16,7 @@ import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import {
   createBudgetAdmission, createRouteSettlement, insertModelPricing, principalOf, reapExpiredHolds, recordLlmUsage,
-  redactSettlementAttempt, routePartitionHash, PrincipalKeyError, type RoutePartitionConfig,
+  redactSettlementAttempt, routePartitionHash, PrincipalKeyError, withCatalogQuote, type RoutePartitionConfig,
 } from '../../src/services/llm-metering';
 import { createApplicationGatewayRoutePlane } from '../../src/services/llm-runtime/gateway-route-plane';
 
@@ -160,7 +160,7 @@ describe('budget admission over the 0008 tables', () => {
 
   it('keeps principal_key opaque: an e-mail or IP principal is refused and never stored', async () => {
     expect(principalOf({ principalId: 'service:svc-1' })).toEqual({ kind: 'service', key: 'service:svc-1' });
-    for (const principalId of ['alice@example.com', '10.0.0.1', '2001:db8::1', 'has space']) {
+    for (const principalId of ['alice@example.com', '10.0.0.1', '2001:db8::1', 'has space', 'example.com']) {
       expect(() => principalOf({ principalId })).toThrow(PrincipalKeyError);
     }
     await seedTenant();
@@ -228,10 +228,11 @@ describe('route settlement: one ledger row per settled request', () => {
     await admission.markDispatched(holdRef, 1);
     await settle(requestId, holdRef, [attempt('cheap', 10, 0, { outcome: 'provider-5xx' }), attempt('dear', 100, 50)]);
     const [row] = await ledger(requestId);
-    expect(num(row!.cost_micro_usd)).toBe(10 + 1_000 + 1_000);
+    // dear output is billed at its reasoning rate (30 > 20), as reserved: 100 × 10 + 50 × 30.
+    expect(num(row!.cost_micro_usd)).toBe(10 + 1_000 + 1_500);
     expect(row!.model_id).toBe('dear');
     expect((row!.attempts as Array<Record<string, unknown>>).map((entry) => [entry.modelId, entry.costMicroUsd, entry.pricingVersion]))
-      .toEqual([['cheap', 10, `${PROVIDER}-cheap`], ['dear', 2_000, `${PROVIDER}-dear`]]);
+      .toEqual([['cheap', 10, `${PROVIDER}-cheap`], ['dear', 2_500, `${PROVIDER}-dear`]]);
   });
 
   it('charges an overrun in full and audits it with the hold and quote references', async () => {
@@ -329,6 +330,94 @@ describe('model pricing single writer (B0-A4)', () => {
     expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
     expect(outcomes.find((outcome) => outcome.status === 'rejected')).toMatchObject({ reason: { code: 'model_pricing_overlap' } });
     expect(await rows(sql`SELECT id FROM control.model_pricing WHERE provider_id = ${PROVIDER} AND model_id = 'race'`)).toHaveLength(1);
+  });
+});
+
+describe('fix round 1: lock order, codex quote, workspace caps, collisions', () => {
+  it('never deadlocks when admissions, settlements and releases hit the same multi-bucket set concurrently', async () => {
+    await seedStrategy(TENANT);
+    // Physical insertion order is the reverse of id order, so an unordered UPDATE locks backwards.
+    await seedBucket(TENANT, 'workspace', `${TENANT}-ws`, null, { workspaceId: `${TENANT}-ws` });
+    await seedBucket(TENANT, 'tenant', TENANT, null);
+    await seedBucket(TENANT, 'model', `${PROVIDER}/cheap`, null);
+    let settledCost = 0;
+    for (let round = 0; round < 8; round += 1) {
+      const held = await Promise.all([0, 1, 2, 3].map((index) => admitted(`d${round}-${index}-${run}`)));
+      await Promise.all(held.slice(0, 2).map((holdRef) => admission.markDispatched(holdRef, 0)));
+      const outcomes = await Promise.allSettled([
+        ...held.slice(0, 2).map((holdRef, index) => settle(`d${round}-${index}-${run}`, holdRef, [attempt('cheap', 100, 50)])),
+        ...held.slice(2).map((holdRef) => admission.release(holdRef)),
+        ...[4, 5, 6].map((index) => admit(`d${round}-${index}-${run}`, quote([{ model: 'cheap' }]))),
+      ]);
+      const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
+      expect(failures).toEqual([]);
+      const admissions = outcomes.slice(4).map((outcome) => (outcome as PromiseFulfilledResult<{ kind: string }>).value.kind);
+      expect(admissions).toEqual(['admitted', 'admitted', 'admitted']);
+      settledCost += 2 * 200;
+    }
+    for (const scope of ['tenant', 'workspace', 'model']) {
+      expect(await bucket(TENANT, scope)).toEqual({ reserved: 8 * 3 * 3_250, spent: settledCost });
+    }
+  }, 30_000);
+
+  it('reserves a codex-capable catalog model (provider openai) at the model maximum output', async () => {
+    const model = `llmbl-${run}-codex`;
+    await insertModelPricing(db, { id: `${PROVIDER}-openai-codex`, providerId: 'openai', modelId: model,
+      inputMicroUsdPerMtok: 1_000_000, outputMicroUsdPerMtok: 1_000_000, effectiveFrom: new Date(Date.now() - DAY) });
+    try {
+      await seedTenant();
+      const planner = withCatalogQuote({} as RoutePlanner, {
+        catalog: { listModels: () => [{ modelId: model, providerId: 'openai' }] }, councilRevision: 'test',
+      });
+      const codexQuote = planner.quote!({ requestedModel: model, ceiling: { inputTokens: 1_000, outputTokens: 100 }, now: new Date() });
+      expect(codexQuote.candidates[0]!.outputCeilingEnforced).toBe(false);
+      expect(await admit(`c1-${run}`, codexQuote)).toMatchObject({ kind: 'admitted' });
+      expect((await bucket(TENANT)).reserved).toBe(1_250 + 10_000);
+    } finally {
+      await db.execute(sql`DELETE FROM control.model_pricing WHERE id = ${`${PROVIDER}-openai-codex`}`);
+    }
+  });
+
+  it('refuses a workspace-less caller as missing_bucket when a workspace cap exists', async () => {
+    await seedTenant();
+    await seedBucket(TENANT, 'workspace', `${TENANT}-ws`, 1, { workspaceId: `${TENANT}-ws` });
+    expect(await admit(`w1-${run}`, quote([{ model: 'cheap' }]), { ...cost(), workspaceId: undefined } as never))
+      .toEqual({ kind: 'unavailable' });
+    expect(await rows(sql`SELECT reason FROM control.blocked_attempts WHERE request_id = ${`w1-${run}`}`))
+      .toEqual([{ reason: 'missing_bucket' }]);
+  });
+
+  it('audits an overrun found by a late settlement correcting the reaper estimate', async () => {
+    await seedTenant();
+    const past = createBudgetAdmission({ database: db, ownerRef: 'test', now: () => new Date(Date.now() - 7_200_000), holdTtlMs: 60_000 });
+    const holdRef = await admitted(`o1-${run}`, undefined, past);
+    await past.markDispatched(holdRef, 0);
+    await reapExpiredHolds({ database: db });
+    await settle(`o1-${run}`, holdRef, [attempt('cheap', 100, 5_000)]);
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 10_100 });
+    expect(await rows(sql`SELECT reason, hold_id FROM control.blocked_attempts WHERE request_id = ${`o1-${run}`}`))
+      .toEqual([{ reason: 'overrun', hold_id: holdRef }]);
+  });
+
+  it('adopts a hold-less observation row keyed by the request id, and still charges on a foreign-hold collision', async () => {
+    await seedTenant();
+    const adopted = await admitted(`x1-${run}`);
+    await admission.markDispatched(adopted, 0);
+    await recordLlmUsage({ callId: `x1-${run}`, operation: 'generate', providerId: PROVIDER, modelId: 'cheap' });
+    await settle(`x1-${run}`, adopted, [attempt('cheap', 100, 50)]);
+    const [row, ...more] = await ledger(`x1-${run}`);
+    expect(more).toEqual([]);
+    expect(row).toMatchObject({ hold_id: adopted, tenant_id: TENANT, principal_key: 'user-1', result: 'ok' });
+    expect(num(row!.cost_micro_usd)).toBe(200);
+
+    const colliding = await admitted(`x2-${run}`);
+    await admission.markDispatched(colliding, 0);
+    await db.execute(sql`INSERT INTO control.cost_ledger (id, idempotency_key, tenant_id, operation, provider_id, model_id, hold_id)
+      VALUES (${`x2-${run}`}, ${`x2-${run}`}, ${TENANT}, 'generate', 'p', 'm', 'another-hold')`);
+    await settle(`x2-${run}`, colliding, [attempt('cheap', 100, 50)]);
+    expect(await rows(sql`SELECT status FROM control.budget_holds WHERE id = ${colliding}`)).toEqual([{ status: 'settled' }]);
+    expect(await ledger(`x2-${run}`)).toMatchObject([{ hold_id: 'another-hold', cost_micro_usd: null }]);
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 400 });
   });
 });
 
