@@ -93,12 +93,19 @@
 - **Mono-branch**: no UI change in this lot; no browser UAT (spec §10: no web/Chrome/VSCode feature change).
 
 ## Plan / Todo (lot-based)
-- [ ] **Fix round 2 — Complementary review findings**
+- [x] **Fix round 2 — Complementary review findings**
   - [x] Verify all four findings; correct the reasoning/image/tool comment and F3 wording; record activation caveats and requested follow-ups in spec §12.8.
   - [x] Isolate and count/log reaper hold failures without error/row data; poisoned-hold Postgres regression in `api/tests/api/llm-budget-ledger.test.ts`.
   - [x] Fence foreign-hold collision redelivery; Postgres regressions for settled and reaper-reconciled holds in `api/tests/api/llm-budget-ledger.test.ts`.
   - [x] Regression evidence: scoped Postgres file failed on all three new assertions before the fixes (22003 overflow, spend 600 instead of 400, spend 0 instead of 3250); after fixes, 36/36 passed.
-  - [ ] Run typecheck/lint, scoped llm-metering tests, full API unit/endpoints, scope check, then down and verify no services remain (ports `9477` / `5677` / `1577`).
+  - [x] PASS: `make typecheck-api lint-api REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission`.
+  - [x] PASS (36/36, real Postgres): `make test-api-endpoints SCOPE=tests/api/llm-budget-ledger.test.ts REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission`.
+  - [x] PASS (8/8): `make test-api-unit SCOPE=tests/unit/llm-metering-sink.test.ts REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission`.
+  - [x] PASS (113 files, 999 passed, 2 skipped): `make test-api-unit REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission`.
+  - [x] PASS (120 files, 973 passed): `make test-api-endpoints REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission`.
+  - [x] PASS C2 before commits and cleanup: `make scope-check REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission`.
+  - [x] Bootstrap recovered: initial scoped run had no running API; initial `up-api-test` needed `REGISTRY=local` to avoid an invalid image reference. After workspace rebuilding interrupted the API watcher, `make restart-api` and `make wait-ready-api` (same registry/ports/ENV) passed; final `make logs-api TAIL=20` showed successful startup.
+  - [x] PASS: `make down REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission`; `make ps REGISTRY=local API_PORT=9477 UI_PORT=5677 MAILDEV_UI_PORT=1577 ENV=test-llm-product-admission` confirmed no services remain.
 
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, spec §2, §5, §10, §12.
