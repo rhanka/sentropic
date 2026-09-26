@@ -221,7 +221,12 @@ export const createGwNamespaceModule = async (
   } catch {
     return unavailableGwModule();
   }
-  return prepared;
+  // The product router uses no invocation context or receipts: keep `createRouter()` callable
+  // without the plugin input (route-fence inspection), always delegating to the shared module.
+  return {
+    ...prepared,
+    createRouter: (input) => prepared.createRouter(input ?? ({} as Parameters<typeof prepared.createRouter>[0])),
+  };
 };
 
 export const productGwModule = await createGwNamespaceModule();
