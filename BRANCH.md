@@ -80,11 +80,11 @@
 - [x] **Lot 2 — Identity directory and caller auth (BRDP-EX8)**
   - [x] `caller-auth.ts`: service vs user principal resolution, trusted service bindings, trusted owner mapping, fail-closed directory errors.
   - [x] `directory.ts`: read-only resolution over memberships / service_clients.
-- [ ] **Lot 3 — Tests**
+- [x] **Lot 3 — Tests**
   - [x] `api/tests/unit/llm-identity-directory.test.ts` (13 tests PASS)
   - [x] `api/tests/api/llm-admission-schema.test.ts` (expand-first shape, pricing concurrency, disposable upgrade + restore; 18 tests PASS twice)
   - [x] `api/tests/api/auth/service-auth-middleware.test.ts` (extend: real IdP token → gateway service bridge → caller identity; 8 tests PASS)
-  - [ ] `apps/llm-gateway/tests/auth.test.ts`
+  - [x] `apps/llm-gateway/tests/auth.test.ts` (host: service DPoP/replay/URL, issuer/audience/expiry/scope, revoked/null/wrong tenant, forged headers/body, session memberships, DB outage 503; 12 tests PASS)
 - [ ] **Lot 4 — Gates**
   - [ ] `make typecheck-api lint-api API_PORT=9466 UI_PORT=5666 MAILDEV_UI_PORT=1566 ENV=test-llm-identity`
   - [ ] `make test-api-<suite> SCOPE=<file> ... ENV=test-llm-identity` for each new/changed file, then the affected api suites
