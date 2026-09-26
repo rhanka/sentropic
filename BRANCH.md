@@ -33,6 +33,10 @@
 - [x] `CS-01` — attention — owner: conductor — Use existing seat contracts and custody rules; reversible design choices are recorded in the spec without interrupting the design lot.
 - [x] `CS-02` — deferred — owner: conductor — Cross-review, implementation/build/tests (astra), live h2a mission, one llm-mesh bump and one h2a 0.97 bump belong to later lots per owner instruction; no consensus claimed here.
 - [x] `CS-03` — attention — owner: design author — Apply harness brainstorm/plan structure within the two allowed files; omit recorder/Track writes because their artifacts are outside this lot's allowed paths.
+- [x] `CS-04` — attention — owner: conductor — Prefer browser PKCE with manual code return: verified Claude behavior, shared PKCE reuse, no loopback helper change.
+- [x] `CS-05` — attention — owner: conductor — Require a renewable JSON credential for paste; bare access tokens cannot establish refresh parity. See spec O1.
+- [x] `CS-06` — attention — owner: conductor — Prefer one additive `0.22.x` patch under the owner's policy to preserve cluster-mesh 0.13 compatibility; no bump in this lot.
+- [x] `CS-07` — attention — owner: custody lane — Custody-only rotation is a controlling design requirement, not implemented protection in the current local account service; qualify the separate resolver/job before enabling custody seats.
 
 ## AI Flaky tests
 - [x] Not applicable: no tests or live provider calls in this design lot.
@@ -53,10 +57,10 @@
   - [x] Read enrollment, auth, transport, catalog, custody/service/node layers and enrollment tests; capture file:line evidence.
   - [x] Verify Anthropic facts using public documentation and the public Claude Code package; label unverifiable details.
   - [x] Commit current-state and external-source findings after `make scope-check`.
-- [ ] **Lot 2 — Minimal design and security**
-  - [ ] Specify browser PKCE first, credential paste second, and refresh ownership third.
-  - [ ] List exact future files/public additions and justify compatible version policy; specify token safety and revocation limits.
-  - [ ] Commit design and security after `make scope-check`.
+- [x] **Lot 2 — Minimal design and security**
+  - [x] Specify browser PKCE first, credential paste second, and refresh ownership third.
+  - [x] List exact future files/public additions and justify compatible version policy; specify token safety and revocation limits.
+  - [x] Commit design and security after `make scope-check`.
 - [ ] **Lot 3 — Validation plan and handoff**
   - [ ] List future unit/integration test files and h2a mission steps/evidence; no test execution in this lot.
   - [ ] Record only real owner decisions with recommendations; reconcile every deliverable section and evidence reference.
