@@ -4,11 +4,14 @@
 
 - Add GPT-6 Sol and Luna profiles, provider registrations and Codex routes;
   switch standard Sol/Luna routing targets to GPT-6, preserving effort tiers.
-- Conductor verified `gpt-6-sol`, `gpt-6-luna` and existing `gpt-6-astra`
-  using real ChatGPT-account Codex calls on 2026-09-26. Direct API availability
-  and inherited 5.6 capabilities remain unverified; no new limits are claimed.
-- Omit GPT-6 Terra: Codex rejected it with HTTP 400; API availability is
-  unverified. Keep GPT-5.6 Terra routes and all GPT-5.6 catalog entries.
+- Conductor real calls on 2026-09-26 verified `gpt-6-sol` and `gpt-6-luna`
+  with HTTP 200 on the direct OpenAI Responses API and working through Codex.
+  Existing `gpt-6-astra` was also verified through ChatGPT-account Codex calls.
+  Inherited 5.6 capabilities, including context window/max output where inherited,
+  remain unverified; no new limits are claimed.
+- Omit GPT-6 Terra: conductor real calls on 2026-09-26 returned HTTP 404 on
+  the OpenAI API and HTTP 400 through Codex (ChatGPT account).
+  Keep GPT-5.6 Terra routes and all GPT-5.6 catalog entries.
 - Explicitly exclude the new models from benchmark council equivalence until
   evidence exists. Additive patch and target cutover; no public API change.
 
