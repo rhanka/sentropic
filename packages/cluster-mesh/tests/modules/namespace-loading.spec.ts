@@ -83,6 +83,28 @@ describe('lazy namespace preparation', () => {
     expect((await plugin.request('/gw/healthz')).status).toBe(404);
   });
 
+  it('should project /gw at the root for a standalone host with exactly the five gateway paths', async () => {
+    let routers = 0;
+    const module = await createGatewayNamespaceModule(createClusterMeshModules(), {
+      enabled: true,
+      authMode: 'host',
+      createRouter: ({ gateway }) => {
+        routers += 1;
+        return gateway.createGatewayRouter({ config: gateway.stubGatewayConfig });
+      },
+    });
+    const plugin = createClusterMeshPlugin({ runtime: runtime(), namespaces: [module], mounts: { '/gw': '/' } });
+    expect(routers).toBe(1);
+    const statuses = Object.fromEntries(await Promise.all([
+      ['GET', '/healthz'], ['GET', '/readyz'], ['POST', '/v1/messages'], ['POST', '/v1/chat/completions'], ['GET', '/v1/models'],
+    ].map(async ([method, path]) => [path, (await plugin.request(path!, { method })).status] as const)));
+    expect(statuses['/healthz']).toBe(200);
+    for (const path of ['/readyz', '/v1/messages', '/v1/chat/completions', '/v1/models']) expect(statuses[path], path).not.toBe(404);
+    expect(statuses['/v1/models']).toBe(401);
+    expect((await plugin.request('/gw/healthz')).status).toBe(404);
+    expect((await plugin.request('/gw/v1/models')).status).toBe(404);
+  });
+
   it('should hand the preflighted service-auth namespace to the host router', async () => {
     const modules = createClusterMeshModules();
     const module = await createGatewayNamespaceModule(modules, {

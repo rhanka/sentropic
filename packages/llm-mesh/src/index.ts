@@ -15,6 +15,9 @@ export * from './routing-policy.js';
 export * from './routing-contracts.js';
 export * from './route-selection.js';
 export * from './route-planner.js';
+export {
+  MAX_ROUTE_QUOTE_CANDIDATES, RouteQuoteError, quoteRoute, type RouteQuoteOptions,
+} from './route-quote.js';
 export { RoutePlanError } from './route-planner-state.js';
 export * from './codex.js';
 export * from './transport/codex-runtime-client.js';

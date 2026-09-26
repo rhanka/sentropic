@@ -101,11 +101,19 @@ function describeInstance(entry: ClusterMeshInstanceEntry): TopologyPackage {
 
 const label = (pkg: TopologyPackage): string => `${pkg.path}${pkg.version ? `@${pkg.version}` : ''}`;
 
+/** Provider family of a guarded leaf, loader or compose entry. */
+export type ClusterMeshLeafFamily = 'llm-mesh' | 'gateway';
+
 export interface InspectTopologyInput extends VerifyClusterMeshTopologyOptions {
   readonly anchorDir: string;
   readonly instances: readonly ClusterMeshInstanceEntry[];
-  /** Explicit preflight also enforces accepted ranges; the automatic guard checks identity only. */
+  /** Explicit preflight: every accepted range, plus the `require` list. */
   readonly strict: boolean;
+  /**
+   * Automatic guard: accepted ranges of the installed providers of this family (`gateway` also covers
+   * llm-mesh). An absent provider is not checked here; its leaf import fails on its own.
+   */
+  readonly family?: ClusterMeshLeafFamily;
 }
 
 /** Metadata-only inspection; never imports a provider. Throws `ClusterMeshTopologyError`. */
@@ -134,20 +142,24 @@ export function inspectTopology(input: InspectTopologyInput): ClusterMeshTopolog
           `${name === 'llm-mesh' ? LLM_MESH_PACKAGE : LLM_GATEWAY_PACKAGE} is not reachable from cluster-mesh`);
       }
     }
-    const ranged: [typeof mesh, string, string][] = [
-      [mesh, LLM_MESH_PACKAGE, LLM_MESH_RANGE], [gateway, LLM_GATEWAY_PACKAGE, LLM_GATEWAY_RANGE],
-      [gatewayMesh, LLM_MESH_PACKAGE, LLM_MESH_RANGE],
-    ];
-    for (const [found, name, range] of ranged) {
-      if (found && !satisfiesRange(found.version, range)) {
-        throw new ClusterMeshTopologyError('incompatible_version', [found.dir],
-          `${name} at ${label(pkg(found))} does not satisfy "${range}"`);
-      }
+  }
+  // Ranges are checked on the copies this cluster-mesh actually resolves: llm-mesh and llm-gateway from its
+  // own physical location, the gateway's llm-mesh from the gateway's physical location.
+  const families: readonly ClusterMeshLeafFamily[] = input.strict || input.family === 'gateway'
+    ? ['llm-mesh', 'gateway'] : input.family ? [input.family] : [];
+  const ranged: [typeof mesh, string, string, ClusterMeshLeafFamily][] = [
+    [mesh, LLM_MESH_PACKAGE, LLM_MESH_RANGE, 'llm-mesh'], [gateway, LLM_GATEWAY_PACKAGE, LLM_GATEWAY_RANGE, 'gateway'],
+    [gatewayMesh, LLM_MESH_PACKAGE, LLM_MESH_RANGE, 'llm-mesh'],
+  ];
+  for (const [found, name, range, family] of ranged) {
+    if (found && families.includes(family) && !satisfiesRange(found.version, range)) {
+      throw new ClusterMeshTopologyError('incompatible_version', [found.dir],
+        `installed ${name}@${String(found.version ?? 'unknown')} at ${found.dir} does not satisfy the required range "${range}"`);
     }
-    if (gateway && !gatewayMesh) {
-      throw new ClusterMeshTopologyError('not_installed', [gateway.dir],
-        `${LLM_MESH_PACKAGE} is not reachable from ${LLM_GATEWAY_PACKAGE} at ${gateway.dir}`);
-    }
+  }
+  if (input.strict && gateway && !gatewayMesh) {
+    throw new ClusterMeshTopologyError('not_installed', [gateway.dir],
+      `${LLM_MESH_PACKAGE} is not reachable from ${LLM_GATEWAY_PACKAGE} at ${gateway.dir}`);
   }
   return {
     instances,
@@ -157,31 +169,37 @@ export function inspectTopology(input: InspectTopologyInput): ClusterMeshTopolog
 }
 
 const ANCHOR_DIR = physicalDirOf(import.meta.url);
-let memo: { tokens: readonly symbol[]; outcome: { report: ClusterMeshTopologyReport } | { error: unknown } } | undefined;
+type GuardOutcome = { report: ClusterMeshTopologyReport } | { error: unknown };
+let memo: { tokens: readonly symbol[]; outcomes: Map<string, GuardOutcome> } | undefined;
 
 const sameTokens = (a: readonly symbol[], b: readonly ClusterMeshInstanceEntry[]): boolean =>
   a.length === b.length && b.every((entry, index) => entry.token === a[index]);
 
 /**
- * Automatic guard run by every leaf, loader and compose entry; memoized per registered copy set.
- * State lives on `globalThis`, so it is per thread (each worker_thread has its own registry).
+ * Automatic guard run by every leaf, loader and compose entry: one evaluated copy, one llm-mesh shared
+ * with the gateway, and the accepted ranges of the entry's provider family. Memoized per registered copy
+ * set and family. State lives on `globalThis`, so it is per thread (each worker_thread has its own registry).
  */
-export function assertClusterMeshTopology(): void {
+export function assertClusterMeshTopology(family?: ClusterMeshLeafFamily): void {
   const instances = instanceRegistry();
-  if (!memo || !sameTokens(memo.tokens, instances)) {
-    const tokens = instances.map((entry) => entry.token);
+  if (!memo || !sameTokens(memo.tokens, instances)) memo = { tokens: instances.map((entry) => entry.token), outcomes: new Map() };
+  const key = family ?? 'identity';
+  let outcome = memo.outcomes.get(key);
+  if (!outcome) {
     try {
-      memo = { tokens, outcome: { report: inspectTopology({ anchorDir: ANCHOR_DIR, instances, strict: false }) } };
+      outcome = { report: inspectTopology({ anchorDir: ANCHOR_DIR, instances, strict: false, ...(family ? { family } : {}) }) };
     } catch (error) {
-      memo = { tokens, outcome: { error } };
+      outcome = { error };
     }
+    memo.outcomes.set(key, outcome);
   }
-  if ('error' in memo.outcome) throw memo.outcome.error;
+  if ('error' in outcome) throw outcome.error;
 }
 
 /**
  * Explicit startup preflight: one evaluated cluster-mesh copy, one llm-mesh shared
- * with the installed gateway, and accepted ranges. Call it before binding a listener.
+ * with the installed gateway, accepted ranges of both providers and `require`. Optional: every leaf
+ * already runs the automatic guard; call it to fail before mounting routes that import no leaf.
  */
 export function verifyClusterMeshTopology(options: VerifyClusterMeshTopologyOptions = {}): ClusterMeshTopologyReport {
   return inspectTopology({ anchorDir: ANCHOR_DIR, instances: instanceRegistry(), strict: true, ...options });

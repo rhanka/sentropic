@@ -25,6 +25,24 @@ const run = (command: string, args: string[], cwd: string) => {
 };
 let tarball: string;
 let servicePublished = false;
+// The mesh floor follows the workspace mesh version. Until that version is on
+// npm (publication train: mesh before gateway), the sibling workspace mesh
+// candidate tarball stands in; network failures still fail.
+const meshVersion = JSON.parse(readFileSync('../llm-mesh/package.json', 'utf8')).version as string;
+let meshSpec = `@sentropic/llm-mesh@${meshVersion}`;
+let meshSource: 'registry' | 'workspace-candidate' = 'registry';
+const resolveMesh = () => {
+  let published = false;
+  try {
+    published = run('npm', ['view', meshSpec, 'version', '--json'], temp).includes(`"${meshVersion}"`);
+  } catch (error) {
+    if (!String((error as { stderr?: string }).stderr).includes('E404')) throw error;
+  }
+  if (published) return;
+  const packedMesh = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', temp], join(process.cwd(), '../llm-mesh')));
+  meshSpec = join(temp, packedMesh[0].filename);
+  meshSource = 'workspace-candidate';
+};
 
 beforeAll(() => {
   run(process.execPath, [tsc, '-p', 'tsconfig.json'], process.cwd());
@@ -32,6 +50,7 @@ beforeAll(() => {
   for (const file of ['package.json', 'README.md', 'LICENSE']) cpSync(file, join(candidate, file));
   const packed = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', temp], candidate));
   tarball = join(temp, packed[0].filename);
+  resolveMesh();
   rmSync(qualification, { recursive: true, force: true });
   mkdirSync(qualification, { recursive: true });
   cpSync(tarball, join(qualification, 'candidate.tgz'));
@@ -48,6 +67,7 @@ beforeAll(() => {
   writeFileSync(join(qualification, 'candidate.json'), JSON.stringify({
     sha256: createHash('sha256').update(readFileSync(tarball)).digest('hex'),
     serviceInstall: servicePublished ? 'scheduled' : 'pending-mcp-auth-0.2.1',
+    mesh: { version: meshVersion, source: meshSource },
   }, null, 2));
 }, 180_000);
 afterAll(() => rmSync(temp, { recursive: true, force: true }));
@@ -56,7 +76,7 @@ const install = (mode: string, peers: string[] = []) => {
   const dir = mkdtempSync(join(temp, `${mode}-`));
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
   run('npm', ['install', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund',
-    tarball, '@types/node@22.20.1', 'typescript@5.9.3', 'hono@4.10.7', '@sentropic/llm-mesh@0.21.2', ...peers], dir);
+    tarball, '@types/node@22.20.1', 'typescript@5.9.3', 'hono@4.10.7', meshSpec, ...peers], dir);
   cpSync(join(dir, 'package-lock.json'), join(qualification, `${mode}-package-lock.json`));
   return dir;
 };

@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.13.0
+
+- Move the optional peers to the Lot D release tuple: llm-mesh `>=0.22.0 <0.23.0`
+  (route quote API) and llm-gateway `>=0.19.0 <0.20.0` (opt-in budget admission).
+  mcp-auth `>=0.2.1 <0.3.0`, auth-hono `^0.15.0` and jose `^5.10.0` are unchanged.
+  The previous tuple (llm-mesh 0.21.x, llm-gateway 0.18.x) is refused at install
+  (npm peer resolution: `ERESOLVE`, or the old pair dropped) and at runtime.
+- **Behavior change:** the automatic topology guard of every leaf, loader and compose
+  entry now also enforces the accepted peer ranges (llm-mesh entries: llm-mesh;
+  gateway entries: llm-gateway and llm-mesh), on the copies cluster-mesh resolves.
+  A static-leaf consumer with an out-of-range peer (partial bump, forced tree) now
+  fails at first leaf evaluation with `ClusterMeshTopologyError`
+  (`cluster_mesh_topology_invalid`, reason `incompatible_version`, message naming the
+  installed version and the required range) instead of later. Previously only
+  `verifyClusterMeshTopology` and the loaders checked ranges; it remains an optional
+  earlier check. `sideEffects` lists the two new family guard modules. Range checks
+  accept release versions only: prereleases never satisfy, `+build` metadata is
+  ignored (npm parity).
+- **Public union change:** the gated module ids `focus`, `cli` and `build-cli` are
+  removed from `CLUSTER_MESH_GATED_MODULE_IDS`, `ClusterMeshGatedModuleId` and
+  `ClusterMeshModuleId` (and from the module catalog and `probe()`/`snapshot()` maps).
+  Reason: the owner removes cli, build-cli and focus from sentropic; focus is
+  reintroduced only after an owner decision on who carries it. The `/cli` transport
+  namespace of the Hono plugin is a separate contract and is unchanged.
+- Lazy surface otherwise identical to 0.12.0: same leaves, loaders, compose entries
+  and `cluster_mesh_topology_invalid` code. A standalone gateway host can project
+  `/gw` at the root with `mounts: { '/gw': '/' }` (no source change).
+- Packed qualification (`packaging.mk`): optional `SIBLING_ARCHIVES_FILE` (exactly
+  `tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json`) resolves the train
+  fixtures from sibling archives validated by the CI `loadSiblings` (receipts packed at
+  the current commit) with registry fallback; a cluster-mesh receipt is the qualified
+  candidate; the `selected` lockfile pins the registry URL and the sibling bytes'
+  sha512; `check-train-lock-integrity` compares it with the published `dist.tarball`
+  and `dist.integrity`. New packed cases: missing-jose refusal, old-tuple and partial-
+  bump refusal at install (recorded npm outcome) and runtime, every leaf importing in
+  single-tree and global topologies.
+
 ## 0.12.0
 
 - Add the lazy LLM/gateway integration surface: static `export *` leaves
