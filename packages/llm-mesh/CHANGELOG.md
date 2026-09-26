@@ -3,12 +3,14 @@
 ## 0.22.1
 
 - Add GPT-6 Sol and Luna profiles, provider registrations and Codex routes;
-  switch standard Sol/Luna routing targets to GPT-6, preserving effort tiers.
+  switch `claude-opus-5` → `gpt-6-sol`; `claude-sonnet-5`,
+  `claude-sonnet-5-xhigh`, `claude-sonnet-4-6` → `gpt-6-luna` (effort preserved).
+  `claude-opus-4-8` stays on `gpt-5.6-terra`.
 - Conductor real calls on 2026-09-26 verified `gpt-6-sol` and `gpt-6-luna`
   with HTTP 200 on the direct OpenAI Responses API and working through Codex.
   Existing `gpt-6-astra` was also verified through ChatGPT-account Codex calls.
-  Inherited 5.6 capabilities, including context window/max output where inherited,
-  remain unverified; no new limits are claimed.
+  Capabilities copied from gpt-5.6 (unverified);
+  no context window / max output declared (unknown).
 - Omit GPT-6 Terra: conductor real calls on 2026-09-26 returned HTTP 404 on
   the OpenAI API and HTTP 400 through Codex (ChatGPT account).
   Keep GPT-5.6 Terra routes and all GPT-5.6 catalog entries.
