@@ -96,9 +96,19 @@ describe('standalone composition without the product app or a remote control pla
     const sources = readdirSync(join(here, '../src')).map((name) => join(here, '../src', name));
     const standalonePorts = join(here, '../../../api/src/services/llm-runtime/standalone-ports.ts');
     const specifiers = [...sources, standalonePorts].flatMap(importsOf);
+    // B3c: the ledger adapters are the only other product modules, with an injected database.
+    const allowed = ['llm-runtime/standalone-ports', 'llm-metering/budget-admission', 'llm-metering/route-settlement'];
     const product = specifiers.filter((specifier) => specifier.includes('api/src/')
-      && !specifier.endsWith('api/src/services/llm-runtime/standalone-ports'));
+      && !allowed.some((module) => specifier.endsWith(`api/src/services/${module}`)));
     expect(product).toEqual([]);
+    const valueImports = (file: string) => [...readFileSync(file, 'utf8')
+      .matchAll(/^import\s+(?!type)[^;]*from\s+'([^']+)'/gm)].map((match) => match[1]!);
+    for (const adapter of ['budget-admission', 'route-settlement']) {
+      const imports = valueImports(join(here, `../../../api/src/services/llm-metering/${adapter}.ts`));
+      for (const forbidden of ['api/src/app', 'routes/', 'cluster-mesh-adapter', 'queue', 'db/client', 'config/env']) {
+        expect(imports.filter((specifier) => specifier.includes(forbidden))).toEqual([]);
+      }
+    }
     expect(importsOf(standalonePorts)).toEqual(['@sentropic/llm-mesh']);
     for (const forbidden of ['api/src/app', 'routes/namespaces', 'cluster-mesh-adapter', 'queue', 'db/', 'drizzle']) {
       expect(specifiers.filter((specifier) => specifier.includes(forbidden))).toEqual([]);

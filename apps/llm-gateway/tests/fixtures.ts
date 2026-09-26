@@ -1,9 +1,12 @@
 // Deterministic fixture ports for host tests: generated caller identity, a fake
 // provider dispatch and an in-memory settlement sink. No provider call, no secret.
 import { vi } from 'vitest';
-import type { CallerAuthPort, RouteRequestSettlement } from '@sentropic/llm-gateway';
+import type { BudgetAdmissionPort, CallerAuthPort, RouteRequestSettlement } from '@sentropic/llm-gateway';
 import type { GenerateResponse, StreamEvent, StreamRequest } from '@sentropic/llm-mesh';
 
+import {
+  routePartitionHash, type RoutePartitionConfig, type RoutePartitionSource,
+} from '../../../api/src/services/llm-metering/budget-admission';
 import { createRoutingDependency, type HostDependencies } from '../src/app';
 import type { HostConfig } from '../src/config';
 
@@ -95,10 +98,33 @@ export const fixtureDependencies = (
       dispatch: { generate, stream },
       ready: async () => true,
     }),
+    budget: { port: fixtureBudget(), ready: async () => true, defaultOutputTokens: 1_024 },
     settlement: { metering: { settleRoute: (value) => { settlements.push(value); } }, ready: async () => true },
+    partition: { source: fixturePartitionSource() },
   };
   return { dependencies, settlements, generate };
 };
+
+/** In-memory budget port admitting every quoted request (real adapter: `llm-budget-ledger` API test). */
+export const fixtureBudget = (): BudgetAdmissionPort => {
+  let sequence = 0;
+  return {
+    async admit() { sequence += 1; return { kind: 'admitted', holdRef: `hold-fixture-${sequence}` }; },
+    async markDispatched() {},
+    async release() {},
+  };
+};
+
+/** Trusted partition revision assigning the fixture principals to the standalone host. */
+export const fixturePartition = (tenants: RoutePartitionConfig['tenants'] = {
+  'tenant-1': { standalone: ['user-1'] },
+  'tenant-a': { standalone: ['user-1', 'service:svc'] },
+}): RoutePartitionConfig => ({ revision: 'fixture-r1', hash: routePartitionHash('fixture-r1', tenants), tenants });
+
+export const fixturePartitionSource = (config: RoutePartitionConfig = fixturePartition()): RoutePartitionSource => ({
+  load: () => config,
+  expected: () => ({ revision: config.revision, hash: config.hash }),
+});
 
 export const chatRequest = (stream: boolean): RequestInit => ({
   method: 'POST',
