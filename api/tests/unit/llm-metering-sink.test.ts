@@ -18,7 +18,8 @@ import { costLedger } from '../../src/db/control-schema';
 import { RouteQuoteError, type RoutePlanner } from '@sentropic/llm-mesh';
 
 import {
-  createRoutePartition, recordLlmUsage, routePartitionHash, RoutePartitionUnavailableError, settlementOperation,
+  attemptLiability, createRoutePartition, mayUseUnenforcedTransport, priceWeight, principalOf, PrincipalKeyError,
+  recordLlmUsage, routePartitionHash, RoutePartitionUnavailableError, settlementOperation, usageCost,
   withCatalogQuote, withSettlementMode,
 } from '../../src/services/llm-metering';
 
@@ -103,13 +104,14 @@ describe('gateway ledger helpers (Lot D B3c)', () => {
       return {
         planRef: 'p', expiresAt: new Date().toISOString(), candidateRefs: ['c'], councilRevision: 'rev',
         policy: {} as never, diagnostics: [{ candidateRef: 'c', diagnosticAccountRef: 'provider-owned', requestedModel: 'm',
-          actualProviderId: 'openai', actualModelId, actualTransportProviderId: 't', reason: 'exact', cacheContinuityRisk: false }],
+          actualProviderId: 'anthropic', actualModelId, actualTransportProviderId: 't', reason: 'exact', cacheContinuityRisk: false }],
       };
     },
     prepareAttempt: vi.fn(), describeAffinity: () => null, resetAffinity: () => false,
     promoteAffinity: vi.fn(), rebindAffinity: vi.fn(),
   }) as unknown as RoutePlanner;
-  const catalog = { listModels: () => [{ modelId: 'm', providerId: 'openai' }, { modelId: 'x', providerId: 'codex' }] };
+  // Codex rule mirrored from llm-mesh: provider `openai` has the `codex` account transport, `anthropic` does not.
+  const catalog = { listModels: () => [{ modelId: 'm', providerId: 'anthropic' }, { modelId: 'x', providerId: 'openai' }] };
   const subject = { principalRef: 'u', ownerScopeRef: 'o' };
   const ceiling = { inputTokens: 10, outputTokens: 20 };
 
@@ -117,7 +119,7 @@ describe('gateway ledger helpers (Lot D B3c)', () => {
     const quoted = withCatalogQuote(planner('m'), { catalog, councilRevision: 'rev' });
     const quote = quoted.quote!({ requestedModel: 'm', ceiling, now: new Date(0) });
     expect(quote).toMatchObject({ requestedModel: 'm', maxAttempts: 1, councilRevision: 'rev',
-      candidates: [{ providerId: 'openai', modelId: 'm', allowance: ceiling, outputCeilingEnforced: true }] });
+      candidates: [{ providerId: 'anthropic', modelId: 'm', allowance: ceiling, outputCeilingEnforced: true }] });
     expect(quoted.quote!({ requestedModel: 'm', ceiling, now: new Date(0) }).quoteRef).toBe(quote.quoteRef);
     expect(quoted.quote!({ requestedModel: 'x', ceiling, now: new Date(0) }).candidates[0]!.outputCeilingEnforced).toBe(false);
     expect(() => quoted.quote!({ requestedModel: 'unknown', ceiling, now: new Date(0) })).toThrow(RouteQuoteError);
@@ -149,5 +151,34 @@ describe('gateway ledger helpers (Lot D B3c)', () => {
     });
     await expect(broken.ready()).rejects.toBeInstanceOf(RoutePartitionUnavailableError);
     expect(routePartitionHash('r', { t: { product: ['b', 'a'] } })).toBe(routePartitionHash('r', { t: { product: ['a', 'b'] } }));
+  });
+});
+
+describe('gateway pricing rules (Lot D B3c fix round 1)', () => {
+  const price = { id: 'p', input: 1_000_000n, output: 2_000_000n, reasoning: 5_000_000n, image: 7n, toolCall: 11n, minCharge: 0n };
+
+  it('bills settled output at max(output, reasoning) rate, like the reservation, plus image and tool units', () => {
+    expect(usageCost(price, { inputTokens: 10, outputTokens: 100 })).toBe(10n + 500n);
+    expect(usageCost({ ...price, reasoning: 0n }, { inputTokens: 10, outputTokens: 100 })).toBe(10n + 200n);
+    expect(usageCost(price, { inputTokens: 1, outputTokens: 1, imageUnits: 2, toolCalls: 3 })).toBe(1n + 5n + 14n + 33n);
+    expect(usageCost(price, { inputTokens: 0, outputTokens: 0 })).toBe(0n);
+    expect(attemptLiability(price, { inputTokens: 10, outputTokens: 100 }, 100)).toBe(usageCost(price, { inputTokens: 10, outputTokens: 100 }));
+  });
+
+  it('mirrors the llm-mesh unenforced-ceiling rule (pinned transport first, else provider account transports)', () => {
+    expect(mayUseUnenforcedTransport('openai')).toBe(true);
+    expect(mayUseUnenforcedTransport('anthropic')).toBe(false);
+    expect(mayUseUnenforcedTransport('openai', 'openai-api')).toBe(false);
+    expect(mayUseUnenforcedTransport('anthropic', 'codex')).toBe(true);
+    expect(mayUseUnenforcedTransport('unknown-provider')).toBe(false);
+  });
+
+  it('ranks fallback prices by full liability weight and accepts only opaque principal ids', () => {
+    expect(priceWeight(price)).toBe(1_000_000n + 5_000_000n + 7n + 11n);
+    expect(principalOf({ principalId: 'service:svc-1' })).toEqual({ kind: 'service', key: 'service:svc-1' });
+    expect(principalOf({ principalId: '0b3e7c1a-9f2d-4c1e-8a7b-5d6e7f8a9b0c' }).kind).toBe('user');
+    for (const principalId of ['example.com', 'service:host.example', 'alice@example.com', '10.0.0.1', '::1', 'a b', 'service:']) {
+      expect(() => principalOf({ principalId })).toThrow(PrincipalKeyError);
+    }
   });
 });
