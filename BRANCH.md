@@ -27,6 +27,7 @@
 - [x] BRG6-EX2 acknowledge: stale train pin blocks CI; impact limited to Cluster Mesh packaging tests/fixtures, no source/version change; rollback: revert this fix commit.
 - [x] G6-13 attention: preserve supported peer ranges and old-tuple 0.21.2 refusal; change only selected train pins and keep mismatch cases distinct.
 - [x] G6-14 attention: independent review and push remain conductor responsibilities per launch packet.
+- [x] BRG6-EX3 acknowledge: Fix 4 extends packaging-only scope to derive train versions from workspace manifests, including matching installed-tuple assertions; refresh can select new same-PR siblings; rollback: revert the Fix 4 commit.
 
 ## AI Flaky tests
 - [x] No live model calls or flaky acceptance.
@@ -42,6 +43,8 @@
 - [x] Lot 1: update prepare.sh, selected/package.json, optional-install, release-matrix, release-matrix-sources, siblings, lock-integrity and lock-integrity-registry specs; regenerate selected/package-lock.json.
 - [x] Lot 2: packed qualification, full Cluster Mesh suite, scope check, hashes and gateway lock comparison.
 - [x] Lot 3: environment cleanup; deliver this lot via selective staging and make commit; no push.
+- [x] Fix 4: derive train versions, preserve frozen refusal tuple, compare registry-only baseline, qualify siblings, run Cluster Mesh tests and scope check, clean up and commit.
+- [x] Fix 4 evidence: regenerated sibling receipts match Fix 3 bytes; packed qualification 63/63; Cluster Mesh 394 passed, 34 packaging-only skips; scope C2 passed. Plain packaging fails with the identical llm-mesh 0.22.1 tarball E404 before and after this change; publication remains required.
 
 ## Checks and Candidate Evidence
 - [x] PASS `make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh MANIFEST_CONTEXT_FILE=tmp/gpt6-fix3-context.json ENV=test-llm-mesh-gpt6`; pull_request context uses merge-base and origin/main...HEAD files; two BLOCK receipts.
