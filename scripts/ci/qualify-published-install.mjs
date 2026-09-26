@@ -185,10 +185,12 @@ function importEntry(consumer, entry, env, log) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Tarball publishing records no gitHead: the SLSA v1 provenance statement (npm attestations endpoint)
-// must name the workflow commit as its only source commit and the published tarball as its subject.
+// Tarball publishing records no gitHead: in the SLSA v1 provenance statement (npm attestations endpoint)
+// the repository source entry (git+<repo>@refs/...) must carry the workflow commit, and the subject must
+// be the published tarball. Other resolved dependencies (e.g. reusable workflows) are ignored.
 export const SLSA_V1 = 'https://slsa.dev/provenance/v1';
-export function checkProvenance(doc, { name, version, integrity, commit }) {
+export const SOURCE_REPOSITORY = 'https://github.com/rhanka/sentropic';
+export function checkProvenance(doc, { name, version, integrity, commit, repository = SOURCE_REPOSITORY }) {
   const problems = [];
   const bundle = (doc?.attestations ?? []).find((a) => a?.predicateType === SLSA_V1);
   if (!bundle) return { problems: [`no SLSA v1 provenance attestation for ${name}@${version}`], sourceCommits: [] };
@@ -198,9 +200,11 @@ export function checkProvenance(doc, { name, version, integrity, commit }) {
   } catch (error) {
     return { problems: [`unreadable SLSA provenance payload for ${name}@${version}: ${error.message}`], sourceCommits: [] };
   }
-  const sourceCommits = (statement?.predicate?.buildDefinition?.resolvedDependencies ?? []).map((d) => d?.digest?.gitCommit).filter(Boolean);
-  if (sourceCommits.length === 0) problems.push(`SLSA provenance of ${name}@${version} names no source gitCommit`);
-  else if (!sourceCommits.every((c) => c === commit)) problems.push(`SLSA provenance source commit ${sourceCommits.join(',')} differs from the workflow commit ${commit}`);
+  const prefix = `git+${repository}@refs/`;
+  const sources = (statement?.predicate?.buildDefinition?.resolvedDependencies ?? []).filter((d) => typeof d?.uri === 'string' && d.uri.startsWith(prefix));
+  const sourceCommits = sources.map((d) => d?.digest?.gitCommit ?? null);
+  if (sources.length !== 1) problems.push(`SLSA provenance of ${name}@${version} has ${sources.length} ${prefix}* source entries (expected exactly one)`);
+  else if (sourceCommits[0] !== commit) problems.push(`SLSA provenance source commit ${sourceCommits[0]} differs from the workflow commit ${commit}`);
   const match = typeof integrity === 'string' && integrity.match(/^sha512-([A-Za-z0-9+/=]+)$/);
   const digest = match ? Buffer.from(match[1], 'base64').toString('hex') : null;
   const subjectName = `pkg:npm/${name.replace(/^@/, '%40')}@${version}`;
