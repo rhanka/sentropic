@@ -76,11 +76,11 @@
 - [x] **Lot 1 — G1a migration 0008 (BRDP-EX5)**
   - [x] `control-schema.ts`: `tenant_budget_strategy`, `budgets`, `model_pricing`, `budget_holds`, `blocked_attempts`, nullable `cost_ledger` attribution.
   - [x] Generated `0008_llm_admission.sql`, `_journal.json` idx 8, `0008_snapshot.json`.
-- [ ] **Lot 2 — Identity directory and caller auth (BRDP-EX8)**
+- [x] **Lot 2 — Identity directory and caller auth (BRDP-EX8)**
   - [x] `caller-auth.ts`: service vs user principal resolution, trusted service bindings, trusted owner mapping, fail-closed directory errors.
-  - [ ] `directory.ts`: read-only resolution over memberships / service_clients.
+  - [x] `directory.ts`: read-only resolution over memberships / service_clients.
 - [ ] **Lot 3 — Tests**
-  - [ ] `api/tests/unit/llm-identity-directory.test.ts`
+  - [x] `api/tests/unit/llm-identity-directory.test.ts` (13 tests PASS)
   - [ ] `api/tests/api/llm-admission-schema.test.ts` (expand-first shape, pricing concurrency, disposable upgrade + restore)
   - [ ] `api/tests/api/auth/service-auth-middleware.test.ts` (extend)
   - [ ] `apps/llm-gateway/tests/auth.test.ts`
