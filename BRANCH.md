@@ -54,14 +54,15 @@ Make the packed `tuple-skew.spec.ts` assert registry-state independent invariant
   - [x] Env `test-cluster-mesh-tskew`; ports API 9468 / UI 5668 / Maildev 1568 (no service stack started by these targets).
   - [x] Scope boundaries validated; no exception needed.
 
-- [ ] **Lot 1 — Registry-independent skew invariants**
+- [x] **Lot 1 — Registry-independent skew invariants**
   - [x] Add `packages/cluster-mesh/tests/packaging/skew-invariants.ts` (pure invariant checks over the recorded npm detail and the runtime probe).
   - [x] Add `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (negative fakes: old tuple accepted by plain install -> violation; skewed tree not refused -> violation; valid outcomes -> no violation).
-  - [ ] Rewrite `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts` (old-tuple and partial-bump) on the invariants; print the recorded npm outcomes.
-  - [ ] Update `packages/cluster-mesh/tests/packaging/prepare.sh` comments (recorded behavior no longer frozen).
-  - [ ] Review other packed assertions for frozen pre-publication registry behavior.
-  - [ ] Lot gate:
-    - [ ] Mutation run: old tuple accepted by plain install -> red.
-    - [ ] Mutation run: skewed tree not refused at runtime -> red.
-    - [ ] `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-cluster-mesh-tskew` (registry mode) green.
-    - [ ] `make test-cluster-mesh ENV=test-cluster-mesh-tskew` green.
+  - [x] Rewrite `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts` (old-tuple and partial-bump) on the invariants; print the recorded npm outcomes.
+  - [x] Update `packages/cluster-mesh/tests/packaging/prepare.sh` comments (recorded behavior no longer frozen).
+  - [x] Review other packed assertions for frozen pre-publication registry behavior (none: `selected` is pinned by the committed lock and resolved from the registry; `latest` asserts in-range only).
+  - [x] Lot gate:
+    - [x] Baseline (before fix) registry mode reproduces the CI failure: old-tuple `plain-exit=1`, `skew-build=force`.
+    - [x] Mutation run (temporary, not committed): old-tuple plain install ends with 0.21.2/0.18.0 installed -> red (2 violations).
+    - [x] Mutation run (same packed run): partial-bump tree reports in-range versions -> red (preflight, 7 entries, load not refused).
+    - [x] `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-cluster-mesh-tskew` (registry mode, restored) green: 10 files, 63 tests.
+    - [x] `make test-cluster-mesh ENV=test-cluster-mesh-tskew` green: 53 files passed, 5 skipped; 394 tests passed.
