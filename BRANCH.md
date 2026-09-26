@@ -32,7 +32,7 @@
 ## Feedback Loop
 - [x] G6-01 acknowledge: conductor real calls on 2026-09-26 verified GPT-6 Sol/Luna with HTTP 200 on the direct OpenAI Responses API and working through Codex; existing Astra was also verified through Codex with ChatGPT-account login.
 - [x] G6-02 acknowledge: conductor real calls on 2026-09-26 returned HTTP 404 for GPT-6 Terra on the direct OpenAI API and HTTP 400 through Codex with ChatGPT-account login; omit it and retain GPT-5.6 Terra targets.
-- [x] G6-03 attention: inherit matching 5.6 profile capabilities as unverified, including context window/max output where inherited, with code comments; no invented limits.
+- [x] G6-03 attention: capabilities copied from matching gpt-5.6 profiles (unverified); no context window / max output declared (unknown).
 - [x] G6-04 attention: council generator supports exclusions only; classify new models as excluded like matching 5.6 models, without asserting benchmark equivalence.
 - [x] G6-05 attention: retain GPT-5.6 catalog entries and faithful direct routes for reversibility; switch standard alias targets only.
 - [x] G6-06 attention: owner limits consumer changes; gateway/cluster compatibility checks use workspace; product/API and external host defaults remain conductor work.
@@ -42,6 +42,7 @@
 - [x] G6-10 acknowledge: BRG6-EX1 authorizes updating both cluster integration expectations to workspace mesh 0.22.1. Acceptance: cluster suite green; rollback: restore two expected versions.
 - [x] BRG6-EX1 acknowledge: conductor-approved scope extension; reason: consumer tests pin workspace mesh values; impact: tests only, no consumer source/package.json changes, version bumps or republishing; rollback: revert the three test-file changes.
 - [x] G6-11 attention: pack guard rejected the occupied candidate directory; conservatively preserve it as `tmp/llm-mesh-gpt6-candidate-before-fix1` and repack at the requested path for byte comparison.
+- [x] G6-12 attention: preserve the Fix 1 candidate as `tmp/llm-mesh-gpt6-candidate-before-fix2` before repacking; retain evidence without overwriting the earlier archive.
 
 ## AI Flaky tests
 - [x] No live tests or flaky acceptance planned; conductor receipts establish model availability only.
@@ -60,8 +61,14 @@
 - [x] Lot 4: typecheck, lint, full mesh tests (278), build, pack and council freshness checks.
 - [x] Lot 5: gateway and cluster workspace regression tests; scope checks; candidate SHA-256 and commit history; environment cleanup.
 - [x] Fix 1: apply approved consumer expectations and verified availability notes; rerun consumer/mesh tests, pack and scope check.
+- [x] Fix 2: name exact alias switches and unknown limits in text; rerun pack/tests and record SHA-256.
 
 ## Checks and Candidate Evidence
+- [x] PASS Fix 2 `make scope-check ENV=test-llm-mesh-gpt6` (C2); `harness check branch` (C1); text-only diff reviewed.
+- [x] PASS Fix 2 `make pack-llm-mesh PACK_DESTINATION=tmp/llm-mesh-gpt6-candidate ENV=test-llm-mesh-gpt6`; archive excludes CHANGELOG.md; catalog comments change packed bytes.
+- [x] Fix 2 candidate `tmp/llm-mesh-gpt6-candidate/sentropic-llm-mesh-0.22.1.tgz`; SHA-256 `4ed4e32c11d5dd58b38695c5147a6d15df41bcea04381862f606e05f426f9385`.
+- [x] PASS Fix 2 `make test-llm-mesh ENV=test-llm-mesh-gpt6` (32 files, 278 tests); registry latest rechecked as 0.22.0, candidate 0.22.1 remains greater.
+- [x] PASS Fix 2 cleanup: `make down API_PORT=9472 UI_PORT=5672 MAILDEV_UI_PORT=1572 ENV=test-llm-mesh-gpt6`; `make ps API_PORT=9472 UI_PORT=5672 MAILDEV_UI_PORT=1572 ENV=test-llm-mesh-gpt6` (no services).
 - [x] PASS `make llm-mesh-add-model MODEL=gpt-6-sol BASE=gpt-5.6-sol DRY_RUN=1 ENV=test-llm-mesh-gpt6` and apply without `DRY_RUN=1`.
 - [x] PASS `make llm-mesh-add-model MODEL=gpt-6-luna BASE=gpt-5.6-luna DRY_RUN=1 ENV=test-llm-mesh-gpt6` and apply without `DRY_RUN=1`.
 - [x] PASS `make refresh-llm-model-equivalences check-llm-model-equivalences ENV=test-llm-mesh-gpt6`.
