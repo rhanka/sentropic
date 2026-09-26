@@ -125,7 +125,7 @@
   - [x] Owner-bound sessions and common durable completion helper in `src/service/local-account-transport-service.ts`.
     - [x] Serialized Claude persistence with pending-account exclusion, rollback tombstones and persisted refresh scopes.
   - [x] Optional facade methods/configuration and additive completion type export.
-  - [ ] Claude service persistence/restore/concurrency/removal/canary tests in `tests/service/local-account-transport-service-claude.test.ts`.
+  - [x] Claude service persistence/restore/concurrency/removal/canary tests in `tests/service/local-account-transport-service-claude.test.ts`.
     - [x] Real-provider browser/paste restore, owner isolation, concurrent distinct IDs and first-acquire refresh tests added.
     - [x] Partial writes, pending durability, cancellation/expiry/removal and AcquireError canary regressions added.
   - [ ] Facade, enrollment contracts and unchanged auth regressions in their named test files.
