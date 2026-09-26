@@ -78,37 +78,37 @@
 - **Mono-branch**: no UI change in this lot; no browser UAT (spec §10: no web/Chrome/VSCode feature change).
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `plan/BRANCH_TEMPLATE.md`, spec §2, §5, §10, §12.
   - [x] Confirm worktree/branch and command style `make ... API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-product-admission`.
   - [x] Validate scope boundaries and record BRDP-EX6 / BRDP-EX9.
 
-- [ ] **Lot 1 — Application ledger adapters**
+- [x] **Lot 1 — Application ledger adapters**
   - [x] `model-pricing-writer.ts`: B0-A4 protocol verbatim (advisory xact lock, predecessor `FOR UPDATE`, overlap check, unique key backstop).
   - [x] `budget-admission.ts`: tenant strategy, pricing (max over effort variants, codex at model max output, input margin), atomic multi-bucket reservation, blocked attempts, durable dispatch marker, idempotent release, D2 partition guard, catalog quote seam, store probe.
   - [x] `route-settlement.ts`: one `cost_ledger` row per settled request, hold settle/release, overrun audit, allowlisted `attempts`, opaque `principal_key`, settlement outbox event, ledger probe.
   - [x] `reservation-reaper.ts`: expire holds past deadline (release never-dispatched, reconcile dispatched), idempotent and concurrency safe.
   - [x] `cost-ledger-sink.ts` / `index.ts`: observe-only sink kept for non-gateway API calls; barrel exports; gateway settlement never wires `recordLlmUsage`.
 
-- [ ] **Lot 2 — Product `/gw` and host wiring**
+- [x] **Lot 2 — Product `/gw` and host wiring**
   - [x] `api/package.json` `@sentropic/llm-gateway` `^0.19.0` + `make lock-root`; product code imports no gateway source by relative path.
   - [x] `gw.ts` on `createGatewayNamespaceModule` (one mount) with budget, B2 identity, partition, settlement, readiness; remove `stubGatewayConfig`, noop `settleRoute()`, boot/request-time cutover activation; keep the author fence.
   - [x] `apps/llm-gateway/src/app.ts` budget slot + identity, `readiness.ts` store probes, `lifecycle.ts` B1 minors.
 
-- [ ] **Lot 3 — Tests and gates**
-  - [ ] `api/tests/api/llm-budget-ledger.test.ts` (new, real Postgres).
-  - [ ] `api/tests/unit/llm-metering-sink.test.ts` (update).
-  - [ ] `api/tests/api/cluster-mesh-gw.test.ts` (update).
-  - [ ] `apps/llm-gateway/tests/*.test.ts` (update for the budget slot).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api lint-api API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-product-admission`
-    - [ ] Scoped runs per new/changed test file with `SCOPE`.
-    - [ ] `make test-api-unit` + `make test-api-endpoints` (ports, ENV last).
-    - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process` (ports, ENV last).
-    - [ ] `make build-api REGISTRY=local` (ports, ENV last).
-    - [ ] `make scope-check`, `make down` + `make ps` (ports, ENV last).
+- [x] **Lot 3 — Tests and gates**
+  - [x] `api/tests/api/llm-budget-ledger.test.ts` (new, real Postgres).
+  - [x] `api/tests/unit/llm-metering-sink.test.ts` (update).
+  - [x] `api/tests/api/cluster-mesh-gw.test.ts` (update).
+  - [x] `apps/llm-gateway/tests/*.test.ts` (update for the budget slot).
+  - [x] Lot gate:
+    - [x] `make typecheck-api lint-api API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-product-admission`
+    - [x] Scoped runs per new/changed test file with `SCOPE`.
+    - [x] `make test-api-unit` + `make test-api-endpoints` (ports, ENV last).
+    - [x] `make typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process` (ports, ENV last).
+    - [x] `make build-api REGISTRY=local` (ports, ENV last).
+    - [x] `make scope-check`, `make down` + `make ps` (ports, ENV last).
 
-- [ ] **Lot N-1 — Docs consolidation**
+- [x] **Lot N-1 — Docs consolidation**
   - [x] Spec: the `file:../packages/llm-gateway` line and the B3c status.
 
 - [ ] **Lot N — Final validation**
