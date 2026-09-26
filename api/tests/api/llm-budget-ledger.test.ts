@@ -171,3 +171,155 @@ describe('budget admission over the 0008 tables', () => {
     }
   });
 });
+
+const attempt = (model: string, input: number, output: number, extra: Record<string, unknown> = {}) => ({
+  candidateRef: 'application-gateway-candidate-7', providerId: PROVIDER, modelId: model, transportProviderId: 'fixture',
+  outcome: 'success', usage: { inputTokens: input, outputTokens: output, estimated: false }, ...extra,
+}) as unknown as RouteRequestSettlement['attempts'][number];
+
+const settle = (requestId: string, holdRef: string, attempts: RouteRequestSettlement['attempts'],
+  extra: Partial<RouteRequestSettlement> = {}) => settlement.settleRoute({
+  cost: cost(), wire: 'openai-chat-completions', requestedModel: 'cheap', outcome: 'success',
+  usage: {
+    inputTokens: attempts.reduce((total, entry) => total + entry.usage.inputTokens, 0),
+    outputTokens: attempts.reduce((total, entry) => total + entry.usage.outputTokens, 0), estimated: false,
+  },
+  attempts, requestId, holdRef, quoteRef: `quote_${run}`, ...extra,
+});
+
+const admitted = async (requestId: string, q = quote([{ model: 'cheap' }]), port = admission) => {
+  const decision = await port.admit({ requestId, cost: cost(), wire: 'openai-chat-completions', quote: q });
+  if (decision.kind !== 'admitted') throw new Error(`expected admission, got ${decision.kind}`);
+  return decision.holdRef;
+};
+
+const ledger = (requestId: string) => rows<Record<string, unknown>>(sql`SELECT * FROM control.cost_ledger
+  WHERE idempotency_key = ${requestId}`);
+
+describe('route settlement: one ledger row per settled request', () => {
+  it('writes one attributed row, settles the hold and fences duplicate settlement and observer redelivery', async () => {
+    await seedTenant();
+    const requestId = `s1-${run}`;
+    const holdRef = await admitted(requestId);
+    await admission.markDispatched(holdRef, 0);
+    await settle(requestId, holdRef, [attempt('cheap', 100, 50)]);
+    await settle(requestId, holdRef, [attempt('cheap', 100, 50)]);
+    await recordLlmUsage({ callId: requestId, operation: 'generate', providerId: PROVIDER, modelId: 'cheap' });
+    const [row, ...more] = await ledger(requestId);
+    expect(more).toEqual([]);
+    expect(row).toMatchObject({
+      tenant_id: TENANT, workspace_id: `${TENANT}-ws`, user_id: 'user-1', operation: 'generate', provider_id: PROVIDER,
+      model_id: 'cheap', input_tokens: 100, output_tokens: 50, result: 'ok', hold_id: holdRef, quote_ref: `quote_${run}`,
+      principal_kind: 'user', principal_key: 'user-1', budget_strategy_id: `${TENANT}-strategy`,
+      pricing_version: `${PROVIDER}-cheap`, reconciliation_state: 'none',
+    });
+    expect(num(row!.cost_micro_usd)).toBe(200);
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 200 });
+    expect(await rows(sql`SELECT status FROM control.budget_holds WHERE id = ${holdRef}`)).toEqual([{ status: 'settled' }]);
+    expect(await rows(sql`SELECT envelope->>'type' AS type FROM control.event_outbox WHERE aggregate_id = ${requestId}`))
+      .toEqual([{ type: 'llm.request.settled' }]);
+  });
+
+  it('prices each attempt at its own quoted pricing version (mixed prices across a fallback)', async () => {
+    await seedTenant();
+    const requestId = `s2-${run}`;
+    const holdRef = await admitted(requestId, quote([{ model: 'cheap' }, { model: 'dear' }], 2));
+    await admission.markDispatched(holdRef, 0);
+    await admission.markDispatched(holdRef, 1);
+    await settle(requestId, holdRef, [attempt('cheap', 10, 0, { outcome: 'provider-5xx' }), attempt('dear', 100, 50)]);
+    const [row] = await ledger(requestId);
+    expect(num(row!.cost_micro_usd)).toBe(10 + 1_000 + 1_000);
+    expect(row!.model_id).toBe('dear');
+    expect((row!.attempts as Array<Record<string, unknown>>).map((entry) => [entry.modelId, entry.costMicroUsd, entry.pricingVersion]))
+      .toEqual([['cheap', 10, `${PROVIDER}-cheap`], ['dear', 2_000, `${PROVIDER}-dear`]]);
+  });
+
+  it('charges an overrun in full and audits it with the hold and quote references', async () => {
+    await seedTenant();
+    const requestId = `s3-${run}`;
+    const holdRef = await admitted(requestId, quote([{ model: 'codex', enforced: false }]));
+    await admission.markDispatched(holdRef, 0);
+    await settle(requestId, holdRef, [attempt('codex', 100, 50_000)], { overrun: [] });
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 50_100 });
+    expect(await rows(sql`SELECT reason, hold_id, quote_ref, liability_micro_usd FROM control.blocked_attempts
+      WHERE request_id = ${requestId}`)).toEqual([{ reason: 'overrun', hold_id: holdRef, quote_ref: `quote_${run}`, liability_micro_usd: '50100' }]);
+  });
+
+  it('builds attempts only from allowlisted ids and numbers (unexpected text dropped)', async () => {
+    const redacted = redactSettlementAttempt(attempt('cheap', 3, 4, {
+      providerId: 'openai ignore previous instructions', transportProviderId: 'acct_secret@example.com',
+      outcome: 'Some provider message', text: 'secret prompt', accountId: 'account-1',
+    }), 7n, 'pricing-1');
+    expect(redacted).toEqual({ modelId: 'cheap', inputTokens: 3, outputTokens: 4, estimated: false, costMicroUsd: 7, pricingVersion: 'pricing-1' });
+    await seedTenant();
+    const requestId = `s4-${run}`;
+    const holdRef = await admitted(requestId);
+    await admission.markDispatched(holdRef, 0);
+    await settle(requestId, holdRef, [attempt('cheap', 3, 4, { text: 'secret prompt', usage: { inputTokens: 3, outputTokens: 4, estimated: false, raw: 'x' } })]);
+    const [row] = await ledger(requestId);
+    const stored = JSON.stringify(row!.attempts);
+    for (const leak of ['secret', 'candidate', 'raw', 'text']) expect(stored).not.toContain(leak);
+  });
+
+  it('releases only never-dispatched holds, idempotently, and never frees a dispatched hold', async () => {
+    await seedTenant();
+    const released = await admitted(`s5a-${run}`);
+    await admission.release(released);
+    await admission.release(released);
+    await expect(admission.markDispatched(released, 0)).rejects.toThrow();
+    const dispatched = await admitted(`s5b-${run}`);
+    await admission.markDispatched(dispatched, 0);
+    await admission.release(dispatched);
+    expect(await rows(sql`SELECT request_id, status FROM control.budget_holds WHERE tenant_id = ${TENANT} ORDER BY request_id`))
+      .toEqual([{ request_id: `s5a-${run}`, status: 'released' }, { request_id: `s5b-${run}`, status: 'dispatched' }]);
+    expect((await bucket(TENANT)).reserved).toBe(3_250);
+    await expect(settle(`s5c-${run}`, dispatched, [])).rejects.toMatchObject({ code: 'llm_route_settlement_refused' });
+  });
+});
+
+describe('reservation reaper', () => {
+  const past = createBudgetAdmission({ database: db, ownerRef: 'test', now: () => new Date(Date.now() - 2 * 3_600_000), holdTtlMs: 60_000 });
+
+  it('releases an expired never-dispatched hold, reconciles a dispatched one, and a late settlement corrects it once', async () => {
+    await seedTenant();
+    await admitted(`k1a-${run}`, undefined, past);
+    const dispatched = await admitted(`k1b-${run}`, undefined, past);
+    await past.markDispatched(dispatched, 0);
+    expect(await reapExpiredHolds({ database: db })).toMatchObject({ released: 1, reconciled: 1 });
+    expect(await reapExpiredHolds({ database: db })).toEqual({ released: 0, reconciled: 0 });
+    const [pending] = await ledger(`k1b-${run}`);
+    expect(pending).toMatchObject({ reconciliation_state: 'pending', hold_id: dispatched });
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 3_250 });
+    await settle(`k1b-${run}`, dispatched, [attempt('cheap', 100, 50)]);
+    await settle(`k1b-${run}`, dispatched, [attempt('cheap', 100, 50)]);
+    const [corrected, ...more] = await ledger(`k1b-${run}`);
+    expect(more).toEqual([]);
+    expect(corrected).toMatchObject({ reconciliation_state: 'reconciled' });
+    expect(num(corrected!.cost_micro_usd)).toBe(200);
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 200 });
+  });
+
+  it('processes each expired hold once under concurrent reapers', async () => {
+    await seedTenant();
+    for (const suffix of ['a', 'b', 'c']) await admitted(`k2${suffix}-${run}`, undefined, past);
+    const results = await Promise.all([reapExpiredHolds({ database: db }), reapExpiredHolds({ database: db })]);
+    expect(results.reduce((total, result) => total + result.released + result.reconciled, 0)).toBe(3);
+    expect((await bucket(TENANT)).reserved).toBe(0);
+  });
+
+  it('keeps one row and the actual spend whether settlement or the reaper wins a race', async () => {
+    await seedTenant();
+    const holdRef = await admitted(`k3-${run}`, undefined, past);
+    await past.markDispatched(holdRef, 0);
+    await Promise.all([settle(`k3-${run}`, holdRef, [attempt('cheap', 100, 50)]), reapExpiredHolds({ database: db })]);
+    const rowsFor = await ledger(`k3-${run}`);
+    expect(rowsFor).toHaveLength(1);
+    expect(num(rowsFor[0]!.cost_micro_usd)).toBe(200);
+    expect(await bucket(TENANT)).toEqual({ reserved: 0, spent: 200 });
+  });
+});
+
+describe('model pricing single writer (B0-A4)', () => {
+  it('lets exactly one of two parallel overlapping writes succeed', async () => {
+    const write = (id: string, from: number, to: number | null) => insertModelPricing(db, {
+      id: `${PROVIDER}-${id}`, providerId: PROVIDER, modelId: 'race', inputMicroUsdPerMtok: 1, outputMicroUsdPerMtok: 1,
