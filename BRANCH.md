@@ -109,6 +109,7 @@
   - [x] 0008: 3 `VALIDATE CONSTRAINT` removed; spec §12.5 and this file record the later maintenance migration
   - [x] Test: `convalidated = false`; new non-conforming inserts/updates refused (23514); history untouched; replay updated
   - [x] Fresh disposable DB (`make clean` + `up-api-test`, ENV=test-llm-identity): `llm-admission-schema` 20/20 twice, `cluster-mesh-migration` 16/16, `service-auth-middleware` 8/8, `llm-identity-directory` 13/13; full `make test-api-endpoints` 119/119 files, 934/934
+  - [x] §12.5 rehearsal on real preprod dump (sha256 `39dd0a84…e353ec`, ENV=verify-preprod-0008, ports 9470/5670/1570): `db-restore` clean; 84 tables / 182 rows before; `db-migrate` 17.6 s cold (no-op rerun 2.5 s); control migrations 8→9, 5 new empty tables, 3 ledger CHECKs `convalidated=false`, FK present, public migrations 42 unchanged, every pre-existing table count identical; API boot health 200; stack and volume removed
 - [x] **Lot 5 — Fix round 1 (schema-owner review + muse)**
   - [x] 0008: NOT VALID CHECKs (VALIDATE removed, option (b): later maintenance migration), RESTRICT FK `budget_holds.budget_strategy_id`, `principal_key` comments; regenerated snapshot/journal
   - [x] Tests: shape, validated CHECKs, comments, FK restrict, replay/idempotence
