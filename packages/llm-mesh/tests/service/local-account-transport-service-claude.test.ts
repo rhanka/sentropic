@@ -34,6 +34,60 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it('refuses a colliding immutable foreign owner claim without touching its records', async () => {
+    const { provider, service, keyring } = setup();
+    const credential = await provider.importCredential(paste());
+    vi.spyOn(provider, 'importCredential').mockResolvedValue(credential);
+    const prefix = `sentropic-llm-mesh:${credential.accountId}`;
+    await keyring.setSecret(`${prefix}:owner`, JSON.stringify({ v: 1, accountId: credential.accountId, ownerScopeRef: 'foreign' }));
+    await keyring.setSecret(`${prefix}:envelope`, 'foreign-envelope-canary');
+    await assertSafe(service.completeClaudeCredentialImport(paste(), owner));
+    expect(await keyring.getSecret(`${prefix}:envelope`)).toBe('foreign-envelope-canary');
+    expect(await keyring.getSecret(`${prefix}:removed`)).toBeNull();
+  });
+
+  it('does not enroll without atomic owner-claim support', async () => {
+    const { service, keyring } = setup();
+    keyring.setSecretIfAbsent = undefined as any;
+    await assertSafe(service.completeClaudeCredentialImport(paste(), owner));
+    expect(await keyring.getSecret('sentropic-llm-mesh:accounts:index')).toBeNull();
+  });
+
+  it.each([false, true])('holds real Claude refresh through save failure=%s', async (fail) => {
+    const { service, keyring, create, fetchFn } = setup();
+    const { accountId } = await service.completeClaudeCredentialImport(paste(true), owner);
+    fetchFn.mockResolvedValue(new Response(JSON.stringify({ access_token: 'FAKE_FRESH_ACCESS_CANARY',
+      refresh_token: 'FAKE_ROTATED_REFRESH_CANARY', expires_in: 3600, scope: 'user:inference user:profile' })));
+    const save = keyring.setSecret.bind(keyring);
+    let enter!: () => void;
+    let finish!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    keyring.setSecret = async (key, value) => {
+      if (key.endsWith(':envelope')) { enter(); await gate; if (fail) throw new Error(REFRESH); }
+      await save(key, value);
+    };
+    let served = 0;
+    const request = () => service.acquire(acquire).then((value) => { served++; return value; });
+    const first = request();
+    await entered;
+    const second = request();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(served).toBe(0);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    finish();
+    if (fail) {
+      await Promise.all([assertSafe(first), assertSafe(second)]);
+      await assertSafe(create().acquire(acquire));
+    } else {
+      expect((await Promise.all([first, second])).every((value) => value.material.accessToken === 'FAKE_FRESH_ACCESS_CANARY')).toBe(true);
+      const pub = JSON.parse((await keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`))!);
+      expect(pub.account.metadata.scopes).toEqual(['user:inference', 'user:profile']);
+      expect(pub.account.metadata.enrollmentMethod).toBe('credential-import');
+      expect((await create().acquire(acquire)).material.refreshToken).toBe('FAKE_ROTATED_REFRESH_CANARY');
+    }
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
   it.each(['envelope', 'public', 'index'])('fails closed on partial %s save without publishing secrets', async (part) => {
     const { service, create, keyring } = setup();
     const save = keyring.setSecret.bind(keyring);
