@@ -15,6 +15,33 @@ import { modelProfiles } from '../src/catalog.js';
 describe('canonical model targets', () => {
   const resolve = createCanonicalTargetResolver();
   const resolveCandidates = createCanonicalTargetCandidatesResolver();
+
+  it.each(['gpt-6-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
+    const target = { providerId: 'openai', transportProviderId: 'codex', model };
+    expect(resolve(model)).toEqual(target);
+    expect(resolveCandidates(model)).toEqual([target]);
+  });
+
+  it('keeps Terra on 5.6 and excludes unverified GPT-6 Terra from all targets', () => {
+    expect(resolve('gpt-6-terra')).toBeUndefined();
+    expect(resolveCandidates('gpt-6-terra')).toEqual([]);
+    expect(describeCanonicalTargetRoutes().some(({ model }) => model === 'gpt-6-terra')).toBe(false);
+    expect(resolveCandidates('claude-opus-4-8')[1]).toEqual({
+      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
+    });
+  });
+
+  it.each([
+    ['claude-sonnet-5', undefined],
+    ['claude-sonnet-5-xhigh', 'xhigh'],
+    ['claude-sonnet-4-6', undefined],
+  ])('routes %s through GPT-6 Luna with preserved effort', (alias, effort) => {
+    expect(resolveCandidates(alias!).filter(({ transportProviderId }) => transportProviderId === 'codex'))
+      .toEqual([{
+        providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-luna',
+        ...(effort ? { effort } : {}),
+      }]);
+  });
   const faithfulClaudeModel = (requestedId: string): string =>
     requestedId.replace(/-(?:high|xhigh|max)$/, '');
   const hasModelProfile = (providerId: string, model: string): boolean =>
@@ -133,7 +160,7 @@ describe('canonical model targets', () => {
       {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-5.6-luna',
+        model: 'gpt-6-luna',
       },
       {
         providerId: 'gemini',
@@ -259,7 +286,7 @@ describe('canonical model targets', () => {
 
   it('routes Opus 5 base through Sol and high/xhigh through Astra medium', () => {
     expect(resolveCandidates('claude-opus-5')[1]).toEqual({
-      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol',
+      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-sol',
     });
     for (const effort of ['high', 'xhigh'] as const) {
       const candidates = resolveCandidates(`claude-opus-5-${effort}`);

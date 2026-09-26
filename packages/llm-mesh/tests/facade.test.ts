@@ -298,6 +298,17 @@ describe('createLlmMesh', () => {
     );
   });
 
+  it.each(['sol', 'luna'])('exposes GPT-6 %s with explicitly inherited capabilities', (family) => {
+    const profile = getModelProfile('openai', `gpt-6-${family}`);
+    expect(profile).toMatchObject({
+      providerId: 'openai', modelId: `gpt-6-${family}`, reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities).toEqual(
+      getModelProfile('openai', `gpt-5.6-${family}`)?.capabilities,
+    );
+    expect(getModelProfile('openai', 'gpt-6-terra')).toBeNull();
+  });
+
   it('advertises image input only for verified vision-capable provider families', () => {
     expect(getModelProfile('openai', 'gpt-5.5')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
