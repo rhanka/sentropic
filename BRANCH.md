@@ -109,7 +109,7 @@
     - [ ] `make scope-check`, `make down` + `make ps` (ports, ENV last).
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Spec: the `file:../packages/llm-gateway` line and the B3c status.
+  - [x] Spec: the `file:../packages/llm-gateway` line and the B3c status.
 
 - [ ] **Lot N — Final validation**
   - [ ] Conductor: independent review, PR from `BRANCH.md`, CI, then removal of `BRANCH.md` before merge.
