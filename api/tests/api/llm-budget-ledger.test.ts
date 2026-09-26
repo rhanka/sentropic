@@ -323,3 +323,198 @@ describe('model pricing single writer (B0-A4)', () => {
   it('lets exactly one of two parallel overlapping writes succeed', async () => {
     const write = (id: string, from: number, to: number | null) => insertModelPricing(db, {
       id: `${PROVIDER}-${id}`, providerId: PROVIDER, modelId: 'race', inputMicroUsdPerMtok: 1, outputMicroUsdPerMtok: 1,
+      effectiveFrom: new Date(Date.UTC(2026, 9, from)), effectiveTo: to === null ? null : new Date(Date.UTC(2026, 9, to)),
+    });
+    const outcomes = await Promise.allSettled([write('wa', 1, 20), write('wb', 10, null)]);
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.find((outcome) => outcome.status === 'rejected')).toMatchObject({ reason: { code: 'model_pricing_overlap' } });
+    expect(await rows(sql`SELECT id FROM control.model_pricing WHERE provider_id = ${PROVIDER} AND model_id = 'race'`)).toHaveLength(1);
+  });
+});
+
+// --- Product `/api/v1/gw` and the standalone host over the same ledger adapters. ---
+const P_TENANT = `llmbp-${run}`;
+const P_MODEL = { providerId: 'openai', modelId: 'gpt-5.6-terra' };
+const cutovers = new PostgresClusterMeshCutoverStore();
+const CUTOVER_KEY = { compositionRoot: 'product' as const, namespace: '/gw' as const };
+const partitionOf = (tenants: RoutePartitionConfig['tenants']): RoutePartitionConfig =>
+  ({ revision: `p-${run}`, hash: routePartitionHash(`p-${run}`, tenants), tenants });
+const productPartition = partitionOf({ [P_TENANT]: { product: ['user-p'], standalone: ['host-user'] } });
+const sourceOf = (config: RoutePartitionConfig) => ({ load: () => config, expected: () => ({ revision: config.revision, hash: config.hash }) });
+const clearCutover = () => db.execute(sql`DELETE FROM control.cluster_mesh_namespace_cutovers
+  WHERE composition_root = 'product' AND namespace = '/gw'`);
+
+const productApp = async (options: {
+  generate?: ReturnType<typeof vi.fn>; stream?: ReturnType<typeof vi.fn>;
+  partition?: RoutePartitionConfig; settlement?: RouteMeteringSink;
+} = {}) => {
+  const generate = options.generate ?? vi.fn().mockResolvedValue({
+    id: 'r', providerId: 'openai', modelId: P_MODEL.modelId, message: { role: 'assistant', content: 'ok' }, text: 'ok',
+    toolCalls: [], finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 },
+  });
+  const stream = options.stream ?? vi.fn(async () => (async function* () {
+    yield { type: 'content_delta', data: { delta: 'ok' } };
+    yield { type: 'done', data: { finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 } } };
+  })());
+  const module = await createGwNamespaceModule({
+    routePlane: createApplicationGatewayRoutePlane({ dispatch: { generate, stream } }),
+    authenticate: async (_context, next) => next(),
+    resolveCaller: () => ({
+      tenantId: P_TENANT, workspaceId: `${P_TENANT}-ws`, principalId: 'user-p', source: 'test',
+      ownerScopeRef: `workspace:${P_TENANT}-ws:principal:user-p`, correlationId: randomUUID(), callSite: '/api/v1/gw',
+    }),
+    partition: sourceOf(options.partition ?? productPartition),
+    ...(options.settlement ? { settlement: options.settlement } : {}),
+  });
+  const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+    runtime: clusterMeshAdapter.sessionControl!.runtime, namespaces: [module],
+  }));
+  return { app, generate, stream };
+};
+
+const openai = (stream: boolean) => ({
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ model: P_MODEL.modelId, stream, messages: [{ role: 'user', content: 'hello' }] }),
+});
+const anthropic = (stream: boolean) => ({
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ model: P_MODEL.modelId, stream, max_tokens: 64, messages: [{ role: 'user', content: 'hello' }] }),
+});
+const tenantLedger = () => rows<Record<string, unknown>>(sql`SELECT * FROM control.cost_ledger WHERE tenant_id = ${P_TENANT}`);
+
+describe('product /api/v1/gw over the ledger', () => {
+  beforeAll(async () => {
+    await db.execute(sql`DELETE FROM control.model_pricing WHERE provider_id = ${P_MODEL.providerId} AND model_id = ${P_MODEL.modelId}`);
+    await insertModelPricing(db, { id: `llmbp-${run}-price`, ...P_MODEL, inputMicroUsdPerMtok: 1_000_000,
+      outputMicroUsdPerMtok: 2_000_000, effectiveFrom: new Date(Date.now() - DAY) });
+    await insertModelPricing(db, { id: `llmbp-${run}-host`, providerId: PROVIDER, modelId: 'host-model',
+      inputMicroUsdPerMtok: 1_000_000, outputMicroUsdPerMtok: 1_000_000, effectiveFrom: new Date(Date.now() - DAY) });
+    await clearCutover();
+    await cutovers.activate({
+      ...CUTOVER_KEY, selectedGenerationId: clusterMeshAdapter.sessionControl!.runtime.generation.generationId,
+      previousGenerationId: 'application-llm-adapter-v1', activeAuthor: GW_AUTHOR, status: 'active',
+      shadowComparison: { strategy: 'operator-activation', partition: { revision: productPartition.revision, hash: productPartition.hash } },
+      rollbackCheckpoint: { generationId: 'application-llm-adapter-v1', activeAuthor: 'application-llm-adapter' },
+    });
+  });
+  afterAll(async () => {
+    await clearCutover();
+    await db.execute(sql`DELETE FROM control.model_pricing WHERE id IN (${`llmbp-${run}-price`}, ${`llmbp-${run}-host`})`);
+  });
+  afterEach(() => cleanTenant(P_TENANT));
+
+  const seedProduct = async (cap: number) => {
+    await seedStrategy(P_TENANT);
+    await seedBucket(P_TENANT, 'tenant', P_TENANT, cap);
+  };
+
+  it.each([
+    ['openai JSON', 'chat/completions', openai(false)], ['openai SSE', 'chat/completions', openai(true)],
+    ['anthropic JSON', 'messages', anthropic(false)], ['anthropic SSE', 'messages', anthropic(true)],
+  ])('returns the real 429 before any acquisition on %s, with zero cost rows', async (_name, path, init) => {
+    await seedProduct(100);
+    const { app, generate, stream } = await productApp();
+    const response = await app.request(`/api/v1/gw/v1/${path}`, init);
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(generate).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(await tenantLedger()).toEqual([]);
+    expect(await rows(sql`SELECT reason FROM control.blocked_attempts WHERE tenant_id = ${P_TENANT}`)).toEqual([{ reason: 'cap' }]);
+  });
+
+  it.each([[false, 'generate'], [true, 'stream']])('settles one priced row per request (stream=%s)', async (streamed, operation) => {
+    await seedProduct(1_000_000);
+    const { app } = await productApp();
+    const response = await app.request('/api/v1/gw/v1/chat/completions', openai(streamed));
+    expect(response.status).toBe(200);
+    await response.text();
+    const [row, ...more] = await tenantLedger();
+    expect(more).toEqual([]);
+    expect(row).toMatchObject({ operation, result: 'ok', provider_id: 'openai', model_id: P_MODEL.modelId,
+      principal_key: 'user-p', pricing_version: `llmbp-${run}-price`, reconciliation_state: 'none' });
+    expect(num(row!.cost_micro_usd)).toBe(4);
+    expect(await bucket(P_TENANT)).toEqual({ reserved: 0, spent: 4 });
+  });
+
+  it('charges the quoted allowance when the provider reports no usage', async () => {
+    await seedProduct(1_000_000);
+    const generate = vi.fn().mockResolvedValue({ id: 'r', providerId: 'openai', modelId: P_MODEL.modelId,
+      message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop' });
+    const { app } = await productApp({ generate });
+    expect((await app.request('/api/v1/gw/v1/chat/completions', openai(false))).status).toBe(200);
+    const [row] = await tenantLedger();
+    expect(row!.reconciliation_state).toBe('estimated');
+    expect(num(row!.cost_micro_usd)).toBeGreaterThanOrEqual(GW_DEFAULT_OUTPUT_TOKENS * 2);
+  });
+
+  it('never repeats dispatch when settlement storage fails after generation', async () => {
+    await seedProduct(1_000_000);
+    const { app, generate } = await productApp({ settlement: { settleRoute: async () => { throw new Error('ledger down'); } } });
+    await app.request('/api/v1/gw/v1/chat/completions', openai(false));
+    expect(generate).toHaveBeenCalledOnce();
+    expect(await tenantLedger()).toEqual([]);
+  });
+
+  it('settles an aborted stream once as aborted', async () => {
+    await seedProduct(1_000_000);
+    const stream = vi.fn(async (_subject: unknown, _workspace: unknown, _target: unknown, request: { signal?: AbortSignal }) =>
+      (async function* () {
+        yield { type: 'content_delta', data: { delta: 'one' } };
+        await new Promise((_resolve, reject) => {
+          request.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+        });
+      })());
+    const { app } = await productApp({ stream });
+    const response = await app.request('/api/v1/gw/v1/chat/completions', openai(true));
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await vi.waitFor(async () => expect(await tenantLedger()).toHaveLength(1), { timeout: 2_000 });
+    expect((await tenantLedger())[0]).toMatchObject({ result: 'aborted', operation: 'stream' });
+  });
+
+  it('refuses an identity assigned to the standalone host (401, models too) and a tampered revision (503), before any budget effect', async () => {
+    await seedProduct(1_000_000);
+    const { app, generate } = await productApp({ partition: partitionOf({ [P_TENANT]: { standalone: ['user-p'] } }) });
+    expect((await app.request('/api/v1/gw/v1/chat/completions', openai(false))).status).toBe(401);
+    expect((await app.request('/api/v1/gw/v1/models')).status).toBe(401);
+    const pinned = await productApp({ partition: { ...productPartition, tenants: { [P_TENANT]: { standalone: ['user-p'] } } } });
+    expect((await pinned.app.request('/api/v1/gw/v1/chat/completions', openai(false))).status).toBe(503);
+    expect(generate).not.toHaveBeenCalled();
+    expect(await rows(sql`SELECT id FROM control.budget_holds WHERE tenant_id = ${P_TENANT}`)).toEqual([]);
+  });
+
+  it('writes one ledger row per settled request from the standalone host too', async () => {
+    await seedProduct(1_000_000);
+    const ledgerDeps = createLedgerDependencies({ database: db, ownerRef: 'host-test', defaultOutputTokens: 256 });
+    const host = await createHostApp({
+      config: { mode: 'test', port: 0, host: '127.0.0.1', drainTimeoutMs: 1_000 },
+      dependencies: {
+        identity: { ready: async () => true, callerAuth: { async verify(_headers, context) {
+          return { ok: true, cost: { tenantId: P_TENANT, workspaceId: `${P_TENANT}-ws`, principalId: 'host-user',
+            ownerScopeRef: `workspace:${P_TENANT}-ws:principal:host-user`, source: 'host', correlationId: context.requestId } };
+        } } },
+        routing: createRoutingDependency({
+          councilRevision: 'host-v1', ready: async () => true,
+          targets: { resolve: async (_subject, requestedModel) => ({ requestedModel, providerId: PROVIDER, modelId: requestedModel,
+            transportProviderId: 'fixture', reason: 'exact' }) },
+          catalog: { listModels: () => [{ modelId: 'host-model', providerId: PROVIDER }] },
+          dispatch: { generate: vi.fn().mockResolvedValue({ id: 'h', providerId: PROVIDER, modelId: 'host-model',
+            message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop',
+            usage: { inputTokens: 3, outputTokens: 2 } }), stream: vi.fn() },
+        }),
+        ...ledgerDeps,
+        partition: { source: sourceOf(productPartition) },
+      },
+    });
+    expect((await host.app.request('/readyz')).status).toBe(200);
+    const response = await host.app.request('/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'host-model', messages: [{ role: 'user', content: 'hi' }] }) });
+    expect(response.status).toBe(200);
+    const [row, ...more] = await tenantLedger();
+    expect(more).toEqual([]);
+    expect(row).toMatchObject({ principal_key: 'host-user', result: 'ok', model_id: 'host-model' });
+    expect(num(row!.cost_micro_usd)).toBe(5);
+  });
+});
