@@ -54,8 +54,8 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
   - [x] qualify-published-install: 18 x 10 s primary wait (configurable), core/PEERS installs retried on ETARGET/E404/notarget within the budget, other errors fail immediately.
 
 - [ ] **Lot 2 — Publish conflict**
-  - [ ] commandPublish: version conflict re-reads registry integrity without cache; equal = skipped, different = failure, unreadable after budget = failure.
-  - [ ] Tests: auth error, network error, different bytes, unreadable integrity fail; equal bytes pass.
+  - [x] commandPublish: version conflict re-reads registry integrity without cache; equal = skipped, different = failure, unreadable after budget = failure.
+  - [x] Tests: auth error, network error, different bytes, unreadable integrity fail; equal bytes pass.
 
 - [ ] **Lot 3 — Provenance source commit**
   - [ ] Post-publication qualification compares the SLSA v1 `resolvedDependencies[].digest.gitCommit` with `QUALIFY_PROVENANCE_SHA`.

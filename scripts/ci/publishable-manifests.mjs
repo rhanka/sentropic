@@ -758,8 +758,12 @@ export async function commandInventory(opts, { env = process.env, root = process
   return reporter.errors === 0 ? 0 : 1;
 }
 
+// npm's answer when the version already exists (registry E403 text or the EPUBLISHCONFLICT code).
+export const PUBLISH_CONFLICT = /EPUBLISHCONFLICT|cannot publish over (?:the )?previously published version/i;
+
 // Guarded publication: packed identity -> registry lookup -> existing version skips (WARN) BEFORE
-// candidate packing -> strict candidate check -> recheck -> npm publish <verified.tgz>.
+// candidate packing -> strict candidate check -> recheck -> npm publish <verified.tgz>; a version
+// conflict passes only when a no-cache registry read shows the verified archive's sha512.
 export async function commandPublish(opts, { env = process.env, cwd = process.cwd(), registry = createRegistry(), out, npm = 'npm' } = {}) {
   requireSlug(opts.slug, cwd);
   const receiptDir = opts['receipt-dir'] ?? path.resolve(cwd, '..', '..', 'tmp', 'ci-manifest-guard', 'publish');
@@ -788,9 +792,47 @@ export async function commandPublish(opts, { env = process.env, cwd = process.cw
     }
     if ((await registry.lookup(snap.name, snap.version, { fresh: true })).status === 'present') return skip('recheck before publish');
     (out ?? process.stdout).write(`publishing verified archive ${path.basename(archive)} sha256=${result.sha256}\n`);
-    const run = spawnSync(npm, ['publish', archive, ...opts.passthrough], { cwd, stdio: 'inherit' });
-    writeReceipt(run.status === 0 ? 'published' : 'failed', { sha256: result.sha256, npm_exit: run.status });
-    return run.status === 0 ? 0 : 1;
+    const integrity = `sha512-${createHash('sha512').update(fs.readFileSync(archive)).digest('base64')}`;
+    const run = spawnSync(npm, ['publish', archive, ...opts.passthrough], { cwd, encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+    (out ?? process.stdout).write(run.stdout ?? '');
+    process.stderr.write(run.stderr ?? '');
+    if (run.status === 0) {
+      writeReceipt('published', { sha256: result.sha256, npm_exit: run.status });
+      return 0;
+    }
+    if (!PUBLISH_CONFLICT.test(`${run.stdout ?? ''}${run.stderr ?? ''}`)) {
+      writeReceipt('failed', { sha256: result.sha256, npm_exit: run.status });
+      return 1;
+    }
+    // Version conflict: success only when the registry (read without cache) holds exactly these bytes.
+    const budget = waitBudget({ attempts: opts['wait-attempts'], delaySeconds: opts['wait-delay'] });
+    let published = null;
+    let lastError = 'not visible';
+    for (let i = 1; i <= budget.attempts && !published; i += 1) {
+      try {
+        const found = await registry.lookup(snap.name, snap.version, { fresh: true });
+        const value = found.status === 'present' ? found.meta?.dist?.integrity : null;
+        if (typeof value === 'string' && value.startsWith('sha512-')) published = value;
+        else lastError = found.status === 'present' ? 'no sha512 integrity' : 'not visible';
+      } catch (error) {
+        lastError = error.message;
+      }
+      if (!published && i < budget.attempts) await sleep(budget.delaySeconds * 1000);
+    }
+    const conflict = { sha256: result.sha256, npm_exit: run.status, integrity, registry_integrity: published };
+    if (published === integrity) {
+      reporter.notice(opts.slug, `${snap.name}@${snap.version} publish conflict: the registry already holds the verified archive (same sha512); treated as already published`);
+      writeReceipt('skipped', { ...conflict, conflict: 'equal-integrity' });
+      return 0;
+    }
+    if (published) {
+      reporter.error(opts.slug, `${snap.name}@${snap.version} publish conflict: the registry holds DIFFERENT bytes (${published}) than the verified archive (${integrity})`);
+      writeReceipt('failed', { ...conflict, conflict: 'different-integrity' });
+      return 1;
+    }
+    reporter.error(opts.slug, `${snap.name}@${snap.version} version exists, integrity could not be verified after ${budget.attempts} x ${budget.delaySeconds}s (${lastError})`);
+    writeReceipt('failed', { ...conflict, conflict: 'unverified' });
+    return 1;
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
