@@ -73,10 +73,21 @@ export interface ClaudeCodeEnrollmentOptions {
   nowFn?: () => number;
 }
 
+interface ClaudeSession {
+  profile: ClaudeOAuthProfile;
+  verifier: string;
+  state: string;
+  expiresAt: number;
+  consumed: boolean;
+  controller: AbortController;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
   private readonly metadata = new WeakMap<PreparedCredential, ResolvedProviderMetadata>();
+  private readonly sessions = new Map<string, ClaudeSession>();
   constructor(private readonly options: ClaudeCodeEnrollmentOptions = {}) {
     this.fetchFn = options.fetchFn ?? fetch;
     this.now = options.nowFn ?? Date.now;
@@ -97,16 +108,40 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
     return profile;
   }
 
-  async start(_input: StartEnrollmentInput): Promise<EnrollmentSession> {
-    throw new Error(
-      'UNSUPPORTED: claude-code account transport enrollment is portal-only and unsupported locally in h2a-runtime.',
-    );
+  async start(input: StartEnrollmentInput): Promise<EnrollmentSession> {
+    if (!input.ownerScope?.trim()) throw failure('ownerScope is required');
+    const profile = await this.profile(input.configRef);
+    if (input.redirectUri && input.redirectUri !== profile.redirectUri) throw failure('redirect mismatch');
+    const { codeVerifier, codeChallenge } = generatePkcePair();
+    const state = generateNonce();
+    const enrollmentId = `enr_claude_${generateNonce()}`;
+    const expiresAt = this.now() + 15 * 60_000;
+    const url = new URL(profile.authorizationUrl);
+    url.search = new URLSearchParams({ code: 'true', response_type: 'code', client_id: profile.clientId,
+      redirect_uri: profile.redirectUri, scope: profile.authorizationScopes.join(' '),
+      code_challenge: codeChallenge, code_challenge_method: 'S256', state }).toString();
+    const timer = setTimeout(() => { void this.cancel(enrollmentId); }, 15 * 60_000);
+    (timer as unknown as { unref?: () => void }).unref?.();
+    this.sessions.set(enrollmentId, { profile, verifier: codeVerifier, state, expiresAt,
+      consumed: false, controller: new AbortController(), timer });
+    return { kind: 'authorization-url', enrollmentId, url: url.toString(), expiresAt: new Date(expiresAt).toISOString() };
   }
 
-  async complete(_input: CompleteEnrollmentInput): Promise<PreparedCredential> {
-    throw new Error(
-      'UNSUPPORTED: claude-code account transport enrollment is portal-only and unsupported locally in h2a-runtime.',
-    );
+  async complete(input: CompleteEnrollmentInput): Promise<PreparedCredential> {
+    const session = this.sessions.get(input.enrollmentId);
+    if (!session || session.consumed) throw failure('session unavailable');
+    session.consumed = true;
+    try {
+      const parts = typeof input.code === 'string' ? input.code.split('#') : [];
+      if (this.now() >= session.expiresAt || parts.length !== 2 || !token(parts[0])
+        || parts[1] !== session.state) throw failure('invalid code, state or expired session');
+      const value = await this.exchange(session.profile, { grant_type: 'authorization_code',
+        code: parts[0], state: session.state, code_verifier: session.verifier,
+        client_id: session.profile.clientId, redirect_uri: session.profile.redirectUri }, session.controller);
+      if (this.sessions.get(input.enrollmentId) !== session || session.controller.signal.aborted
+        || this.now() >= session.expiresAt) throw failure('session cancelled or expired');
+      return this.grant(value, session.profile, `acct_claude_${generateNonce()}`, 'browser');
+    } finally { await this.cancel(input.enrollmentId); }
   }
 
   async importCredential(credentialJson: string): Promise<PreparedCredential> {
@@ -189,7 +224,13 @@ export class ClaudeCodeEnrollmentProvider implements EnrollmentProvider {
     return this.grant(value, profile, input.accountId, 'refresh', input.refreshToken);
   }
 
-  async cancel(_enrollmentId: string): Promise<void> {
-    // no-op stub
+  async cancel(enrollmentId: string): Promise<void> {
+    const session = this.sessions.get(enrollmentId);
+    if (!session) return;
+    this.sessions.delete(enrollmentId);
+    clearTimeout(session.timer);
+    session.controller.abort();
+    session.verifier = '';
+    session.state = '';
   }
 }
