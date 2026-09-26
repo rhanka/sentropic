@@ -89,6 +89,82 @@ const facade = createLlmMeshFacade({
 That migration option is only for pre-ownerScope local records. New enrollment
 always takes ownership from `StartEnrollmentInput.ownerScope`.
 
+## Claude subscription enrollment (LOT 1)
+
+The facade supports browser PKCE enrollment and renewable Claude CLI credential
+import, durable ordinary seats, and refresh on acquire. This is **enrollment only**:
+official CLI execution is **`not-covered`** until LOT 2 qualification. No Claude
+runtime client/export, Messages fallback or client impersonation is supplied here.
+
+```ts
+import { createLlmMeshFacade } from '@sentropic/llm-mesh/facade';
+import type { EnrollmentCompletion } from '@sentropic/llm-mesh/enrollment';
+
+const facade = createLlmMeshFacade({
+  mode: 'cli',
+  configResolver: { async resolveConfig() { return {}; } },
+});
+const session = await facade.enroll('claude-code', {
+  configRef: 'claude-code', mode: 'cli', redirectUri: '', ownerScope: verifiedOwner,
+});
+// A trusted local component opens session.url and captures <code>#<state>.
+// Capability-check optional methods when supporting older mesh versions.
+if (!facade.completeClaudeEnrollment) throw new Error('Claude enrollment unavailable');
+const completion: EnrollmentCompletion = await facade.completeClaudeEnrollment(
+  session.enrollmentId, maskedCodeInput, verifiedOwner,
+);
+```
+
+The authenticated host supplies the owner. Code/credential inputs and the
+authorization URL stay inside trusted local UI/provider/storage components:
+never put them in agent or MCP arguments, shell text, argv, environment variables,
+logs, traces, snapshots, history, clipboard diagnostics or exception receipts.
+Completion/list results contain only public account references and labels. A
+browser session expires after 15 minutes; each completion is one-use, with strict
+state, cancellation and a 30-second token-request deadline. Failed/ambiguous
+exchanges require a fresh enrollment; codes are never retried automatically.
+
+`{}` selects the provisional A2 profile `claude-code-oauth-2.1.80-v1`, sourced from
+the [official 2.1.80 package](https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.80).
+Current provider acceptance remains unverified. Nonempty resolver results must be
+complete profiles: `id`, `authorizationUrl`, `tokenUrl`, `clientId`, `redirectUri`,
+`authorizationScopes`, `refreshScopes`, `requiredScopes`, `source`. URLs use HTTPS;
+required scopes include `user:inference` and must occur in authorization/refresh
+scopes. IDs are immutable; the bundled ID cannot be redefined. Redirect input must
+be empty or exactly the configured manual callback. No client secret is required.
+Custom refresh resolves the stored ID and requires an exact version match; keep
+old profiles available while grants exist. Bundled refresh bypasses the host
+resolver. Unknown IDs and legacy `v1.0.0` require reauthentication before HTTP.
+
+For sessionless paste, the trusted component calls the optional
+`facade.completeClaudeCredentialImport(maskedCredentialJson, verifiedOwner)`.
+Accept either the full JSON document containing `claudeAiOauth` or that inner
+object: `accessToken`, `refreshToken`, `expiresAt` (epoch milliseconds), `scopes`.
+The limit is 64 KiB in UTF-8. Access-only strings/setup tokens are refused; missing
+refresh material, blank/CR/LF tokens, invalid expiry or incompatible scopes fail.
+Unknown fields and descriptive identity data are discarded; labels use opaque
+random account IDs. Valid past expiry is accepted offline and refreshed on first
+acquire. Import uses the host's `claude-code` profile, never a profile in the paste.
+
+CLI mode defaults to an encrypted file keyring. Portal mode defaults to memory;
+provide a durable keyring with atomic owner claims for restart persistence.
+Both paths save the envelope, public record and index before local eligibility.
+Refresh stays single-flight through validation, save and publication; failures
+require reauthentication. Scope metadata records the actual validated grant scopes.
+Use one credential-owning service per grant. Before importing, disable/logout the
+source CLI and record transfer evidence; copying a file does not transfer refresh
+ownership or create a new provider device. Local removal does not prove provider
+revocation. Custody-managed access projections belong to the separate custody host,
+not this ordinary local enrollment/refresh path.
+
+### Terms of use
+
+This tool demonstrates feasibility. Each user who enrolls a subscription is
+responsible for complying with Anthropic's terms. Risks include account suspension
+or refused calls. [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance.md)
+restricts third-party subscription login and credential intermediation. Executing
+the official binary does not establish that mesh enrollment/storage is permitted.
+
 ## Route quote
 
 `quoteRoute(input, { council, profiles })` (or `routePlanner.quote(input)`)
