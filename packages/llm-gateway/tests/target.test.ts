@@ -226,14 +226,14 @@ describe('describeTargetRoutes (discovery)', () => {
       ['claude-fable-5-xhigh', [Muse('max'), Codex('gpt-6-astra', 'xhigh'), Cloud()]],
       ['claude-fable-5-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
       ['claude-fable-5-1-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
-      ['claude-opus-5', [Codex('gpt-5.6-sol'), Cloud()]],
+      ['claude-opus-5', [Codex('gpt-6-sol'), Cloud()]],
       ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
       ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
       ['claude-opus-5-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
       ['claude-opus-4-8', [Codex('gpt-5.6-terra'), Cloud()]],
       ['claude-opus-4-8-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
       ['claude-opus-4-8-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
-      ['claude-sonnet-5', [Codex('gpt-5.6-luna'), Cloud()]],
+      ['claude-sonnet-5', [Codex('gpt-6-luna'), Cloud()]],
     ];
     for (const [alias, expected] of cases) {
       expect(resolveCandidates(alias).slice(1)).toEqual(expected);
