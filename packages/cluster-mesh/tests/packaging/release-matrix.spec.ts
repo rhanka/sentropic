@@ -38,13 +38,13 @@ describe.skipIf(!enabled)('packed release matrix', () => {
       expect(lock.packages[`node_modules/${name}`]?.version, name).toBe(version);
     }
     expect(tuple).toMatchObject({
-      '@sentropic/llm-mesh': '0.22.0', '@sentropic/llm-gateway': '0.19.0', '@sentropic/mcp-auth': '0.2.1',
+      '@sentropic/llm-mesh': '0.22.1', '@sentropic/llm-gateway': '0.19.0', '@sentropic/mcp-auth': '0.2.1',
       '@sentropic/oauth-verify': '0.1.0', jose: '5.10.0', hono: '4.10.7', '@sentropic/auth-hono': 'absent',
     });
   });
 
   it('should source each train package from a verified sibling archive only when its receipt was verified', () => {
-    const pinned: Record<string, string> = { '@sentropic/llm-mesh': '0.22.0', '@sentropic/llm-gateway': '0.19.0' };
+    const pinned: Record<string, string> = { '@sentropic/llm-mesh': '0.22.1', '@sentropic/llm-gateway': '0.19.0' };
     const index = siblingIndex();
     for (const fixture of ['selected', 'selected-session', 'latest', 'src/separate-runtime']) {
       const lines = read(join(fixtureDir(fixture), 'sources.txt')).trim().split('\n').map((line) => line.split(' '));
