@@ -11,7 +11,7 @@ const VERSION = 'claude-code-oauth-2.1.80-v1';
 const owner = 'tenant:test:user:a';
 const acquire = { ownerScopeRef: owner, targetProviderId: 'anthropic' as const, transportProviderId: 'claude-code' as const };
 const start = { ownerScope: owner, configRef: 'claude-code', mode: 'cli' as const, redirectUri: '' };
-const paste = (expired = false) => JSON.stringify({ accessToken: ACCESS, refreshToken: REFRESH,
+const paste = (expired = false, refreshToken = REFRESH) => JSON.stringify({ accessToken: ACCESS, refreshToken,
   expiresAt: Date.now() + (expired ? -1000 : 3600_000), scopes: ['user:inference'] });
 const response = () => new Response(JSON.stringify({ access_token: ACCESS, refresh_token: REFRESH,
   expires_in: 3600, scope: 'user:inference' }));
@@ -34,6 +34,31 @@ function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
+  it('refuses an already stored Claude grant for the same owner after restart', async () => {
+    const { service, create } = setup();
+    const first = await service.completeClaudeCredentialImport(paste(), owner);
+    const error = await assertSafe(create().completeClaudeCredentialImport(paste(), owner));
+    expect((error as Error).message).toBe('This Claude credential is already enrolled');
+    expect((await service.listAccounts(owner)).map((account) => account.accountId)).toEqual([first.accountId]);
+    await service.completeClaudeCredentialImport(paste(), 'another-owner');
+    await service.removeAccount(first.accountId, owner);
+    const next = await service.completeClaudeCredentialImport(paste(), owner);
+    expect(next.accountId).not.toBe(first.accountId);
+    expect(await service.listAccounts(owner)).toHaveLength(1);
+  });
+
+  it('serializes duplicate grant checks with concurrent import persistence', async () => {
+    const { service, create } = setup();
+    const results = await Promise.allSettled([
+      service.completeClaudeCredentialImport(paste(), owner),
+      service.completeClaudeCredentialImport(paste(), owner),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason.message).toBe('This Claude credential is already enrolled');
+    expect(await create().listAccounts(owner)).toHaveLength(1);
+  });
+
   it('retains previously granted scopes across restart when refresh omits scope', async () => {
     const { service, create, fetchFn, keyring } = setup();
     const { accountId } = await service.completeClaudeCredentialImport(paste(true), owner);
@@ -317,7 +342,8 @@ describe('Claude service enrollment', () => {
 
   it('gives concurrent imports distinct opaque identities without losing the account index', async () => {
     const { service, create } = setup();
-    const results = await Promise.all(Array.from({ length: 4 }, () => service.completeClaudeCredentialImport(paste(), owner)));
+    const results = await Promise.all(Array.from({ length: 4 }, (_, index) =>
+      service.completeClaudeCredentialImport(paste(false, `${REFRESH}_${index}`), owner)));
     expect(new Set(results.map((result) => result.accountId)).size).toBe(4);
     expect(await create().listAccounts(owner)).toHaveLength(4);
   });

@@ -55,6 +55,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-26` — attention — owner: implementer — Compare same-owner Claude refresh grants only in process under the existing enrollment persistence queue; enforce one account/refresh holder per grant without hashes, output, or a new schema. Cross-process grant ownership remains the documented single-service responsibility.
 - [x] `CS-25` — attention — owner: implementer — Omitted refresh scope reuses persisted validated grant scopes, never the broader requested profile scopes; explicit invalid scope and scope-less initial enrollment still fail closed. Keep this capability Claude-local without changing shared contracts.
 - [x] `CS-24` — attention — owner: implementer — Retry only proven pre-request failures; terminal profile errors and possible provider rotation remain fenced. Restore a preflight fence best-effort while retaining single-flight; a continuing storage outage can leave a conservative durable fence until storage recovers.
 - [x] `CS-23` — attention — owner: implementer — Fix round 1 preserves the refresh fence against concurrent route persistence; reproduced active/cooldown overwrites. Keep the explicit no-bump and conductor-owned review/release scope (CS-16/17).
@@ -148,6 +149,7 @@
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
+- [x] Finding 5 verified: sequential/restored and concurrent duplicate imports succeeded before the fix; same-owner duplicates now receive the exact non-echoing refusal. Distinct grants, owner isolation and removal remain covered; README documents one grant/account/refresh holder.
 - [x] Finding 4 verified: omitted refresh scope reproduced reauth; provider tests distinguish omission from invalid values, and service tests preserve the previous scopes through two refreshes across restarts.
 - [x] Finding 3 verified: five local-failure cases and refresh-time removal reproduced incorrect reauth errors; distinguish retryable preparation, terminal/ambiguous failures, and removed accounts without reflecting secret-bearing causes.
 - [x] Finding 2 verified: real Muse provider schema 1-to-2 refresh failed before the fix; exact profile-version enforcement is now Claude-only, with durable schema update/restart coverage in the allowed shared service test file.
