@@ -548,11 +548,13 @@ jobs:
           else
             make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test
           fi
+      # Release train (BRDP-EX10): every leaf needs its optional peers (release-matrix tuple); a peer matching a
+      # sibling receipt installs from that archive, the others from the registry (hono is a runtime dependency).
       - name: Qualify Cluster Mesh candidate install
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh candidate qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -1867,7 +1869,7 @@ jobs:
               echo "::notice title=Publication qualification::cluster-mesh status=skipped on run attempt ${GITHUB_RUN_ATTEMPT}, ${pkg} present on the registry: running post-publication qualification" ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -2004,7 +2006,7 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          make qualify-published-install PKG="$pkg" QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload bootstrap publication receipts and qualification reports
         if: always()
         uses: actions/upload-artifact@v4
