@@ -43,7 +43,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, template, runbook, scaffold tests/script; confirm npm latest 0.22.0 and branch.
 - [x] Lot 1: scaffold Sol/Luna; review catalog/providers; bump package.json and CHANGELOG; remove scaffold markers.
-- [ ] Lot 2: switch standard routing targets; classify council source and regenerate output.
+- [x] Lot 2: switch standard routing targets; classify council source and regenerate output; Cloud Code capability aliases need no change.
 - [ ] Lot 3: update routing-targets, route-selection, facade, budget-quote and add-model-script tests; assert new Codex routes and no GPT-6 Terra target.
 - [ ] Lot 4: typecheck, lint, full mesh tests, build, pack and council freshness checks.
 - [ ] Lot 5: gateway and cluster workspace regression tests; scope checks; candidate SHA-256 and commit history; environment cleanup.
