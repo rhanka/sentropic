@@ -23,7 +23,7 @@ if [ -n "${CLUSTER_MESH_SIBLING_RECEIPTS:-}" ]; then
 fi
 
 # Train tuple of this release; the old tuple is only used by the refusal fixture.
-MESH=0.22.0
+MESH=0.22.1
 GATEWAY=0.19.0
 
 # Candidate tarball, packed exactly as published (files/exports/sideEffects). A verified receipt for

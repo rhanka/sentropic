@@ -48,7 +48,7 @@ describe.skipIf(!enabled)('packed optional install', () => {
 
   it('should probe metadata without evaluating an untouched installed peer', () => {
     const dir = cloneFixture('bare', 'bare-poisoned');
-    for (const [name, version] of [['llm-gateway', '0.19.0'], ['llm-mesh', '0.22.0']] as const) {
+    for (const [name, version] of [['llm-gateway', '0.19.0'], ['llm-mesh', '0.22.1']] as const) {
       const packageDir = join(dir, 'node_modules/@sentropic', name);
       mkdirSync(join(packageDir, 'dist'), { recursive: true });
       writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
@@ -63,7 +63,7 @@ describe.skipIf(!enabled)('packed optional install', () => {
       console.log(JSON.stringify({ gateway: probe.gateway, mesh: probe['llm-mesh'] }));`);
     expect(result).toMatchObject({
       gateway: { availability: 'available', state: 'installed', installedVersion: '0.19.0' },
-      mesh: { availability: 'available', state: 'installed', installedVersion: '0.22.0' },
+      mesh: { availability: 'available', state: 'installed', installedVersion: '0.22.1' },
     });
   });
 
