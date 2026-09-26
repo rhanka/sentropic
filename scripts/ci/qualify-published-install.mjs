@@ -188,18 +188,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Tarball publishing records no gitHead: in the SLSA v1 provenance statement (npm attestations endpoint)
 // the repository source entry (git+<repo>@refs/...) must carry the workflow commit, and the subject must
 // be the published tarball. Other resolved dependencies (e.g. reusable workflows) are ignored.
+// `runId` is the GitHub Actions run named by runDetails.metadata.invocationId (null when absent).
 export const SLSA_V1 = 'https://slsa.dev/provenance/v1';
 export const SOURCE_REPOSITORY = 'https://github.com/rhanka/sentropic';
-export function checkProvenance(doc, { name, version, integrity, commit, repository = SOURCE_REPOSITORY }) {
+// The third argument is TEST-ONLY: qualify() (the CLI path) never passes it, so production is frozen
+// on SOURCE_REPOSITORY.
+export function checkProvenance(doc, { name, version, integrity, commit }, { repository = SOURCE_REPOSITORY } = {}) {
   const problems = [];
   const bundle = (doc?.attestations ?? []).find((a) => a?.predicateType === SLSA_V1);
-  if (!bundle) return { problems: [`no SLSA v1 provenance attestation for ${name}@${version}`], sourceCommits: [] };
+  if (!bundle) return { problems: [`no SLSA v1 provenance attestation for ${name}@${version}`], sourceCommits: [], runId: null };
   let statement;
   try {
     statement = JSON.parse(Buffer.from(bundle.bundle?.dsseEnvelope?.payload ?? '', 'base64').toString('utf8'));
   } catch (error) {
-    return { problems: [`unreadable SLSA provenance payload for ${name}@${version}: ${error.message}`], sourceCommits: [] };
+    return { problems: [`unreadable SLSA provenance payload for ${name}@${version}: ${error.message}`], sourceCommits: [], runId: null };
   }
+  const invocation = statement?.predicate?.runDetails?.metadata?.invocationId;
+  const runMatch = typeof invocation === 'string' && invocation.startsWith(`${repository}/actions/runs/`) ? invocation.match(/\/actions\/runs\/(\d+)(?:\/|$)/) : null;
+  const runId = runMatch ? runMatch[1] : null;
   const prefix = `git+${repository}@refs/`;
   const sources = (statement?.predicate?.buildDefinition?.resolvedDependencies ?? []).filter((d) => typeof d?.uri === 'string' && d.uri.startsWith(prefix));
   const sourceCommits = sources.map((d) => d?.digest?.gitCommit ?? null);
@@ -211,7 +217,7 @@ export function checkProvenance(doc, { name, version, integrity, commit, reposit
   if (!(statement?.subject ?? []).some((s) => s?.name === subjectName && digest && s?.digest?.sha512 === digest)) {
     problems.push(`SLSA provenance subject does not match ${subjectName} with the published sha512`);
   }
-  return { problems, sourceCommits };
+  return { problems, sourceCommits, runId };
 }
 const lockEntries = (dir) => {
   try {
@@ -237,6 +243,11 @@ export async function qualify(opts) {
     if (!/^[0-9a-f]{40}$/.test(opts.provenanceCommit)) throw new GuardError(`provenance commit must be a 40-hex git SHA, got ${JSON.stringify(opts.provenanceCommit)}`);
     if (!opts.pkg || mode !== 'post-publication') throw new GuardError('provenance check is restricted to PKG post-publication qualification');
   }
+  // Re-run heal: a version whose provenance names another workflow run was published before this run
+  // (stale skip, e.g. a no-bump change): report `stale-skip` and exit 0 without qualifying it.
+  if (opts.provenanceRun && (!/^[1-9][0-9]*$/.test(opts.provenanceRun) || !opts.provenanceCommit)) {
+    throw new GuardError('provenance run must be a numeric GitHub run id and requires a provenance commit');
+  }
   // Post-publication waits share the registry visibility budget (default 18 x 10 s); other modes never wait.
   const budget = waitBudget({ attempts: opts.attempts, delaySeconds: opts.delaySeconds });
   const attempts = mode === 'post-publication' ? budget.attempts : 1;
@@ -260,7 +271,7 @@ export async function qualify(opts) {
       ...report.problems.map((p) => `  PROBLEM ${p}`)];
     fs.writeFileSync(path.join(reportDir, 'qualify-summary.txt'), `${lines.join('\n')}\n`);
     process.stdout.write(`${lines.join('\n')}\n`);
-    return status === 'pass' || (status === 'pending-sibling-publish' && mode === 'candidate') ? 0 : 1;
+    return status === 'pass' || status === 'stale-skip' || (status === 'pending-sibling-publish' && mode === 'candidate') ? 0 : 1;
   };
   try {
     fs.mkdirSync(consumer.dir);
@@ -302,7 +313,12 @@ export async function qualify(opts) {
         if (!doc) report.problems.push(`provenance attestations for ${name}@${version} unavailable after ${attempts} x ${budget.delaySeconds}s (${lastError})`);
         else {
           const provenance = checkProvenance(doc, { name, version, integrity: published.integrity, commit: opts.provenanceCommit });
-          report.provenance = { commit: opts.provenanceCommit, sourceCommits: provenance.sourceCommits, ok: provenance.problems.length === 0 };
+          report.provenance = { commit: opts.provenanceCommit, sourceCommits: provenance.sourceCommits, runId: provenance.runId, ok: provenance.problems.length === 0 };
+          if (opts.provenanceRun && provenance.runId && provenance.runId !== opts.provenanceRun) {
+            report.provenance.stale = `published by run ${provenance.runId}, not this run ${opts.provenanceRun}`;
+            report.problems.push(`stale skip: ${name}@${version} was ${report.provenance.stale}; nothing to qualify`);
+            return finish('stale-skip');
+          }
           report.problems.push(...provenance.problems);
         }
       }
@@ -429,7 +445,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     peers: peers ? peers.split(',').filter(Boolean) : [], mode: argValue(argv, '--mode'), registry: argValue(argv, '--registry'),
     reportDir: argValue(argv, '--report-dir') ?? '/reports', headSha: argValue(argv, '--head-sha') || null,
     image: process.env.QUALIFY_IMAGE ?? null, job: process.env.GITHUB_JOB ?? null,
-    attempts: argValue(argv, '--attempts'), delaySeconds: argValue(argv, '--delay'), provenanceCommit: argValue(argv, '--provenance-commit'),
+    attempts: argValue(argv, '--attempts'), delaySeconds: argValue(argv, '--delay'), provenanceCommit: argValue(argv, '--provenance-commit'), provenanceRun: argValue(argv, '--provenance-run'),
   }).then((code) => process.exit(code), (error) => {
     process.stdout.write(`qualify-published-install: ERROR ${error.message}\n`);
     process.exit(1);
