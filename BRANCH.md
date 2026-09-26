@@ -83,7 +83,7 @@
 - [ ] **Lot 3 — Tests**
   - [x] `api/tests/unit/llm-identity-directory.test.ts` (13 tests PASS)
   - [x] `api/tests/api/llm-admission-schema.test.ts` (expand-first shape, pricing concurrency, disposable upgrade + restore; 18 tests PASS twice)
-  - [ ] `api/tests/api/auth/service-auth-middleware.test.ts` (extend)
+  - [x] `api/tests/api/auth/service-auth-middleware.test.ts` (extend: real IdP token → gateway service bridge → caller identity; 8 tests PASS)
   - [ ] `apps/llm-gateway/tests/auth.test.ts`
 - [ ] **Lot 4 — Gates**
   - [ ] `make typecheck-api lint-api API_PORT=9466 UI_PORT=5666 MAILDEV_UI_PORT=1566 ENV=test-llm-identity`
