@@ -50,7 +50,7 @@ describe('listen and stop', () => {
     const lines: string[] = [];
     const running = await main({ env: { NODE_ENV: 'test', PORT: '0', HOST: '127.0.0.1' }, log: (line) => lines.push(line) });
     expect(running.port).toBeGreaterThan(0);
-    expect(lines).toContain(`llm-gateway-host listening port=${running.port} pending=identity,routing,settlement`);
+    expect(lines).toContain(`llm-gateway-host listening port=${running.port} pending=identity,routing,budget,settlement,partition`);
     expect((await fetch(url(running, '/healthz'))).status).toBe(200);
     expect((await fetch(url(running, '/readyz'))).status).toBe(503);
 
