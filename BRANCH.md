@@ -25,6 +25,7 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile` (BRCIW-EX1: registry-wait recipes only)
   - `.github/workflows/ci.yml` (BRCIW-EX3: provenance check wiring only)
+  - `rules/workflow.md` (BRCIW-EX4: Package Publication section only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -33,6 +34,7 @@ Make post-publication registry waits cache-bypassing with a configurable ~180 s 
 - [x] `acknowledge` BRCIW-EX1 (Makefile): reason = registry waits (`wait-llm-gateway-mesh-dependency`, `wait-llm-gateway-auth-dependencies`, `qualify-published-install` wait budget and provenance variable) used a cached 60 s budget; impact = CI publish/qualification recipes only; rollback = revert the Makefile hunks.
 - [x] `acknowledge` BRCIW-EX2 (`scripts/ci/**`): reason = registry client, publish conflict, qualification retries and provenance check live there; impact = CI guard scripts and their fixture tests; rollback = revert the commits.
 - [x] `acknowledge` BRCIW-EX3 (ci.yml): reason = pass `QUALIFY_PROVENANCE_SHA="$GITHUB_SHA"` to the steady-state OIDC post-publication qualification of mcp-auth and cluster-mesh, align the mcp-auth `skipped` handling with cluster-mesh (heal on re-run only) and cache-bust both registry presence checks (review fix 1); impact = the two steady-state post-publication qualification steps; rollback = revert those hunks.
+- [x] `acknowledge` BRCIW-EX4 (`rules/workflow.md`, Package Publication section only; conductor decision): reason = the Consumer qualification rule described the old behavior (qualify only on `published`); impact = one updated sentence plus one new line on registry waits, conflict integrity and provenance commit; rollback = revert that hunk.
 - [ ] `attention` `packages/llm-gateway/scripts/auth-registry.mjs` is not modified (a change would need a llm-gateway bump): cache bypass is applied through `npm_config_prefer_online=true` and the 18 x 10 s budget from the Makefile recipe.
 - [ ] `attention` an equal-bytes publish conflict writes `status=skipped` (receipt JSON `conflict: equal-integrity`) ; mcp-auth and cluster-mesh both qualify a `skipped` receipt only on a re-run (first attempt = notice).
 - [ ] `attention` bootstrap token publications (`--no-provenance`) do not get the provenance check: the variable is only wired in the steady-state OIDC jobs.
