@@ -153,6 +153,9 @@ Refresh stays single-flight through validation, save and publication. Local stor
 or preparation outages before a provider request are retryable; terminal errors or
 failures after a request may have been sent require reauthentication. Scope metadata
 records the actual validated grant scopes.
+One grant means one mesh account and one refresh holder. Imports with a refresh
+token already stored for a Claude account of the same owner are refused with
+"This Claude credential is already enrolled"; comparisons stay in process.
 Use one credential-owning service per grant. Before importing, disable/logout the
 source CLI and record transfer evidence; copying a file does not transfer refresh
 ownership or create a new provider device. Local removal does not prove provider
