@@ -782,17 +782,18 @@ package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact 
 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; mkdir -p /artifacts/qualification; cp -R tmp/llm-gateway-qualification/. /artifacts/qualification/; gateway="$$(node -p "require(\"./packages/llm-gateway/package.json\").version")"; cmp "/artifacts/sentropic-llm-gateway-$$gateway.tgz" /artifacts/qualification/candidate.tgz'
 
-LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 12
-LLM_MESH_REGISTRY_WAIT_SECONDS ?= 5
+# Registry visibility budget (CDN propagation measured at 110-170 s): cache-bypassing reads, 18 x 10 s (BRCIW-EX1).
+LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 18
+LLM_MESH_REGISTRY_WAIT_SECONDS ?= 10
 
 .PHONY: wait-llm-gateway-mesh-dependency
-wait-llm-gateway-mesh-dependency: ## Wait until the gateway's mesh dependency floor is visible on npm
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; attempt=1; while ! npm view "@sentropic/llm-mesh@$$version" version >/dev/null 2>&1; do if [ "$$attempt" -ge "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" ]; then echo "@sentropic/llm-mesh@$$version is not visible" >&2; exit 1; fi; echo "Waiting for @sentropic/llm-mesh@$$version ($$attempt/$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS))"; sleep "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"; attempt=$$((attempt + 1)); done'
+wait-llm-gateway-mesh-dependency: ## Wait until the gateway's mesh dependency floor is visible on npm (no-cache, cache-busted reads)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; node scripts/ci/publishable-manifests.mjs wait --spec "@sentropic/llm-mesh@$$version" --attempts "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" --delay "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"'
 
 .PHONY: publish-llm-gateway
 .PHONY: wait-llm-gateway-auth-dependencies
 wait-llm-gateway-auth-dependencies: ## Fail closed until every transitive auth dependency floor is registry-resolvable
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /tmp $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; npm_config_cache=/tmp/npm-cache npm install --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; mkdir -p scripts; cp /workspace/packages/llm-gateway/scripts/auth-registry.mjs scripts/; cp /workspace/packages/llm-gateway/package.json .; node scripts/auth-registry.mjs $(LLM_MESH_REGISTRY_WAIT_ATTEMPTS) $(LLM_MESH_REGISTRY_WAIT_SECONDS)'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /tmp $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; npm_config_cache=/tmp/npm-cache npm install --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; mkdir -p scripts; cp /workspace/packages/llm-gateway/scripts/auth-registry.mjs scripts/; cp /workspace/packages/llm-gateway/package.json .; npm_config_prefer_online=true node scripts/auth-registry.mjs $(LLM_MESH_REGISTRY_WAIT_ATTEMPTS) $(LLM_MESH_REGISTRY_WAIT_SECONDS)'
 
 publish-llm-gateway: check-llm-model-equivalences wait-llm-gateway-mesh-dependency wait-llm-gateway-auth-dependencies build-llm-gateway ## Publish @sentropic/llm-gateway from CI OIDC trusted publishing
 	@docker run --rm \
