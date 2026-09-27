@@ -6,7 +6,7 @@
  *   A late settlement corrects that row once to the actual charge (see `route-settlement.ts`).
  * Idempotent and concurrency safe: `FOR UPDATE SKIP LOCKED` claims, open-status predicates, and the
  * ledger `idempotency_key` fence shared with settlement; one short transaction per hold and the
- * shared bucket lock order (`lockBudgets`). Scheduling is a follow-up lot (see spec runbook).
+ * shared bucket lock order (`lockBudgets`).
  */
 import { sql } from 'drizzle-orm';
 
@@ -19,6 +19,68 @@ export interface ReapResult {
   readonly reconciled: number;
   readonly failed: number;
 }
+
+export interface ReaperConfig {
+  readonly enabled: boolean;
+  readonly intervalMs: number;
+  readonly limit: number;
+}
+
+export const loadReservationReaperConfig = (
+  env: Readonly<Record<string, string | undefined>>, servesGateway: boolean,
+): ReaperConfig => {
+  const positive = (field: string, fallback: number): number => {
+    const raw = env[field];
+    if (raw === undefined) return fallback;
+    const value = Number(raw);
+    if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647) {
+      throw new Error(`${field}: must be a positive 32-bit integer`);
+    }
+    return value;
+  };
+  const enabled = env.LLM_RESERVATION_REAPER_ENABLED;
+  if (enabled !== undefined && enabled !== 'true' && enabled !== 'false') {
+    throw new Error('LLM_RESERVATION_REAPER_ENABLED: must be true or false');
+  }
+  return {
+    enabled: servesGateway && enabled !== 'false',
+    intervalMs: positive('LLM_RESERVATION_REAPER_INTERVAL_MS', 300_000),
+    limit: positive('LLM_RESERVATION_REAPER_LIMIT', 100),
+  };
+};
+
+/** Errors may contain SQL parameters: emit counts only, including candidate-query failures. */
+export const runReservationReaperSweep = async (
+  options: Parameters<typeof reapExpiredHolds>[0],
+): Promise<ReapResult> => {
+  const counts = await reapExpiredHolds(options).catch(() => ({ released: 0, reconciled: 0, failed: 1 }));
+  logger.info(counts, 'reservation-reaper: sweep');
+  return counts;
+};
+
+/** Boot sweep plus non-overlapping ticks; stop synchronously fences future work. */
+export const startReservationReaper = (
+  config: ReaperConfig, sweep: (limit: number) => Promise<unknown>,
+): { stop(): Promise<void> } => {
+  let stopped = false;
+  let running: Promise<void> | undefined;
+  const tick = (): void => {
+    if (stopped || running) return;
+    running = Promise.resolve().then(() => {
+      if (!stopped) return sweep(config.limit);
+    }).then(() => undefined).catch(() => {
+      logger.info({ released: 0, reconciled: 0, failed: 1 }, 'reservation-reaper: sweep');
+    }).finally(() => { running = undefined; });
+  };
+  const timer = config.enabled ? setInterval(tick, config.intervalMs) : undefined;
+  timer?.unref();
+  if (config.enabled) tick();
+  return { stop() {
+    stopped = true;
+    if (timer) clearInterval(timer);
+    return running ?? Promise.resolve();
+  } };
+};
 
 export const reapExpiredHolds = async (options: {
   readonly database: LedgerDatabase;
