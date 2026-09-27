@@ -60,7 +60,7 @@
   - [ ] Add `api/tests/unit/reservation-reaper-schedule.test.ts` for defaults, disable, failures and overlap prevention.
 - [ ] **Lot 2 — Host scheduler**
   - [x] Resolve BRRS-B1 before implementation.
-  - [ ] Configure and bind boot/periodic sweeps to the host ledger with shutdown cancellation and no overlap.
+  - [x] Configure and bind boot/periodic sweeps to the host ledger with shutdown cancellation and no overlap.
   - [ ] Add `apps/llm-gateway/tests/lifecycle-reaper.test.ts` for configuration, boot, periodic execution and SIGTERM.
 - [ ] **Lot 3 — Accounting proof and documentation**
   - [ ] Extend `api/tests/api/llm-budget-ledger.test.ts` with two concurrent reapers; assert terminal states, exact budget deltas and ledger cardinality.
