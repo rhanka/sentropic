@@ -173,9 +173,13 @@ Established distinctions, **verified (source, 2026-09-26)** in
 
 | Account | Publicly established | Unverified for this mesh deployment |
 | --- | --- | --- |
-| Individual Pro/Max | [Consumer Terms](https://www.anthropic.com/legal/consumer-terms); ordinary native-app OAuth use. Developers may not route requests through Free/Pro/Max credentials on users' behalf. | Permission for mesh enrollment/storage/execution. |
-| Organization Team/Enterprise | [Commercial Terms](https://www.anthropic.com/legal/commercial-terms); ordinary native-app OAuth use. General third-party Claude.ai login and credential/session-token collection, storage and intermediation restrictions still apply. | Organization-specific agreements/exceptions; the individual-plan routing sentence establishes no organizational exemption. |
+| Individual Pro/Max | [Consumer Terms](https://www.anthropic.com/legal/consumer-terms); ordinary native-app OAuth use; advertised limits assume ordinary individual Claude Code/Agent SDK use. Developers may not route requests through Free/Pro/Max credentials on users' behalf. General third-party Claude.ai login restrictions also apply; developers “may not collect, store, or intermediate Claude.ai credentials or session tokens — sign-in to a Claude account must complete through Anthropic's own flow”. | Applicability of these restrictions to this user-enrolled arrangement is unverified. |
+| Organization Team/Enterprise | [Commercial Terms](https://www.anthropic.com/legal/commercial-terms); ordinary native-app OAuth use. General third-party Claude.ai login and credential/session-token collection, storage and intermediation restrictions still apply; sign-in to a Claude account must complete through Anthropic's own flow. | Applicability of these restrictions to this user-enrolled arrangement is unverified, as are organization-specific agreements/exceptions; the individual-plan routing sentence establishes no organizational exemption. |
 | API key / [Console](https://platform.claude.com/) | [Commercial Terms](https://www.anthropic.com/legal/commercial-terms); recommended developer authentication. Customer-managed keys for authorized users are permitted subject to billing to the key owner and the stated no-resale/intermediation conditions. | Compliance of the actual deployment; API-key guidance does not authorize subscription-token substitution. |
+
+The credential and sign-in restrictions are stated generally for all subscription
+plans. They are relevant to credential-paste enrollment (M4) and mesh storage of
+grants; user enrollment and the owner's decision do not establish an exception.
 
 **Verified (source):** the same page permits hosting the unmodified official binary
 under stated conditions: Commercial Terms, no built-in auth method restricted,
