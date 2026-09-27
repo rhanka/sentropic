@@ -338,6 +338,9 @@ describe('Claude CLI tool history integrity', () => {
       { role: 'assistant', content: [{ type: 'text', text: 'Done' }] },
       { role: 'user', content: [{ type: 'text', text: 'Next' }] },
     ]);
+    const projectedCall = run.mock.calls[0][0].request.messages[1].content[1];
+    expect(projectedCall.type).toBe('tool_use');
+    if (projectedCall.type === 'tool_use') expect(JSON.stringify(projectedCall.input)).toBe(calls[1].argumentsText);
   });
   it('should reject arguments whose values differ after canonicalization', async () => {
     const { client, run } = fixture(success, caps);
@@ -346,13 +349,14 @@ describe('Claude CLI tool history integrity', () => {
       result] }, { auth: credential() })).rejects.toMatchObject({ code: 'claude_cli_unsupported' });
     expect(run).not.toHaveBeenCalled();
   });
-  it('should snapshot tool schemas before deferred iteration', async () => {
+  it('should snapshot tool schemas before deferred iteration while preserving nested key order', async () => {
     const { client, run } = fixture(success, caps);
-    const schema = { type: 'object', properties: { q: { type: 'string' } } };
+    const schema = { type: 'object', properties: { z: { type: 'string' }, a: { type: 'number' } }, required: ['z', 'a'] };
+    const original = JSON.stringify(schema);
     const source = await client.stream({ ...request(), tools: [{ ...tool, inputSchema: schema }] }, { auth: credential() });
-    schema.properties.q.type = 'number';
+    schema.properties.z.type = 'number';
     await collect(source);
-    expect(run.mock.calls[0][0].request.tools?.[0].inputSchema).toEqual({ type: 'object', properties: { q: { type: 'string' } } });
+    expect(JSON.stringify(run.mock.calls[0][0].request.tools?.[0].inputSchema)).toBe(original);
   });
 });
 
@@ -389,12 +393,13 @@ describe('Claude CLI final protocol checks', () => {
       { ...capabilities, tools: 'fake-qualified-tools' });
     await expect(client.generate(toolRequest, { auth: credential() })).rejects.toMatchObject({ code: 'claude_cli_runner' });
   });
-  it('should stream complete tool arguments once before a tool terminal result', async () => {
-    const { client } = fixture([call, { type: 'result', finishReason: 'tool_calls' }],
+  it('should stream complete tool arguments once in original key order before a tool terminal result', async () => {
+    const input = { b: 2, a: [{ y: 2, x: 1 }] };
+    const { client } = fixture([{ ...call, input }, { type: 'result', finishReason: 'tool_calls' }],
       { ...capabilities, tools: 'fake-qualified-tools' });
     expect(await collect(await client.stream(toolRequest, { auth: credential() }))).toEqual([
       { type: 'tool_call_start', data: { toolCallId: 'id', providerCallId: 'id', name: 'lookup',
-        argumentsText: '{"q":"test"}', arguments: { q: 'test' }, inputState: 'complete' } },
+        argumentsText: JSON.stringify(input), arguments: input, inputState: 'complete' } },
       { type: 'done', data: { finishReason: 'tool_calls', providerId: 'anthropic', modelId: request().modelId } },
     ]);
   });
