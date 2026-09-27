@@ -48,6 +48,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-44` — attention — owner: implementer — Round 1 cluster setup hit EACCES removing llm-mesh/node_modules/.vite in install-internal-packages; the requested clean-node-modules target passed and the unchanged gate then passed 394 tests (34 packaging skips). No build configuration or dependency edits; CS-21 remains release-owned.
 - [x] `CS-43` — attention — owner: h2a lane — Enforce inference-only egress for the whole runner tree; M5 is a separate fixture-CA/DNS regression probe. Require startup/boot orphan sweeps (default five-minute age, retry young orphans), no-follow/content-blind deletion and crash reaping; retain real expiry and reject excessive TTL rather than claiming shortened provider validity. Post-refresh freshness does not reduce token exposure.
 - [x] `CS-42` — attention — owner: conductor — Public A4 establishes account-specific terms and hosted-binary conditions, not mesh permission. A7 documents SDK user-message input but A2's CLI parser accepts assistant/system records; keep universal user-only claims unverified and history/tools expected not-covered pending M3. Record adapter-auth headers as a separate follow-up.
 - [x] `CS-41` — attention — owner: implementer — Empty normalized usage and constant response IDs reproduced; omit empty usage and use Web Crypto UUIDs. README now distinguishes mesh model normalization from direct runtime-client requirements.
@@ -86,7 +87,34 @@
 - [x] Document baseline-only CLI expectation, production egress enforcement, account-specific terms, orphan cleanup and real expiry bounds; record adapter-auth follow-up.
   - [x] Source-verified account table and owner decision in README/spec; baseline expectation and input-source caveat; adapter-auth follow-up only.
   - [x] Host contract/test list covers production egress, SIGKILL/crash/startup/boot orphan sweeps, staleness/no-follow deletion and TTL limits; mesh projection regression expanded to long real expiry with no refresh material.
-- [ ] Run all six requested gates, cleanup, and provide conductor summary; no bump, push, PR or real credentials.
+- [x] Run all six requested gates, cleanup, and provide conductor summary; no bump, push, PR or real credentials.
+
+## LOT 2 fix round 1 validation
+- [x] `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat`: PASS 105/105 (15 additional cases); initial focused runs reproduced six auth/routing, two history and three response-metadata failures before fixes.
+- [x] `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS 491/491 in 35 files.
+- [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make build-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make test-cluster-mesh ENV=test-llm-mesh-claude-seat`: PASS 394 tests, 34 packaging cases skipped (53 passing files, five skipped), after the setup failure recorded in CS-44.
+- [x] `make clean-node-modules ENV=test-llm-mesh-claude-seat`: PASS; explicitly requested recovery for root-owned generated artifacts.
+- [x] `make scope-check ENV=test-llm-mesh-claude-seat`: PASS C2 before each commit; `harness check branch`: PASS C1; `git diff --check`: PASS.
+- [x] `make down COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make ps COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat`: PASS, no services. No stack started.
+- [x] Five allowed files changed from round baseline `9dd8eb21d`; six atomic commits below 150 changed lines each, no attribution trailers. No scope exceptions or forbidden edits; final status/log checked after the validation commit.
+- [x] Reviewed each runtime/test/doc hunk against findings 1–11; existing public index export exercised by transport tests; no source changes outside the runtime client. Independent re-review and live M3/M5 remain conductor-owned.
+- [x] Read set: MASTER/workflow/subagents/testing/template, RTK, harness using/debug/test/review, README/TODO/PLAN/BRANCH, seat spec, runtime/auth/adapter-auth/mesh/tests; public legal/headless/SDK documentation and static official 2.1.80 archive. No real credentials or CLI execution.
+
+## Conductor summary — items 9 and 10 (10 lines)
+- [x] Pro/Max: Consumer Terms and ordinary native-app OAuth use are source-verified; on-behalf-of-user routing is expressly restricted.
+- [x] Team/Enterprise: Commercial Terms and general credential restrictions are source-verified; no organizational exemption is inferred.
+- [x] API key/Console: Commercial Terms; source allows customer-managed keys for authorized users under billing/resale conditions.
+- [x] Hosted official CLI has explicit unmodified-binary/auth/direct-billing conditions; this mesh arrangement's permission remains unverified.
+- [x] “Each user assumes” compliance and suspension/refused-call risk is explicitly the owner's decision, not provider approval.
+- [x] Prefer verified tmpfs; otherwise dedicated 0700 storage with exclusive/no-follow 0600 credentials and lstat validation.
+- [x] SIGKILL/crash can leave access material; a host supervisor must reap the complete process tree.
+- [x] Sweep at runner start and host boot using lock/PID/start/boot identity and finite staleness (five-minute default; retry younger orphans).
+- [x] Delete without reading credentials or following symlinks; preserve live/ambiguous runs and do not promise secure erasure/revocation.
+- [x] Preserve real expiry without refresh material; a host TTL ceiling may refuse runs, while post-refresh freshness usually increases exposure duration.
 
 ## LOT 2 validation and handoff (before fix round 1)
 - [x] `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS, 476 tests in 35 files, including 90 new transport cases; fake credentials only.
