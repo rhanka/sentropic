@@ -486,9 +486,13 @@ export class LocalAccountTransportService {
         || !(await this.isPublicRecordOwnerClaimValid(record))) continue;
       const raw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`);
       if (!raw) continue;
-      const stored = JSON.parse(raw) as CredentialEnvelope;
-      // Compare only in process; never produce a token fingerprint or diagnostic.
-      if (stored.accountId === accountId && stored.refreshToken === credential.refreshToken) return true;
+      try {
+        const stored = JSON.parse(raw) as CredentialEnvelope;
+        // Compare only in process; never produce a token fingerprint or diagnostic.
+        if (stored.accountId === accountId && stored.refreshToken === credential.refreshToken) return true;
+      } catch {
+        // Ignore corrupt entries, as restore does; never log stored contents.
+      }
     }
     return false;
   }
