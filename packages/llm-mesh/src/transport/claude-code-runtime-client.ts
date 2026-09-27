@@ -72,7 +72,8 @@ const jsonCopy = (value: unknown): unknown => {
     || (typeof value === 'number' && Number.isFinite(value))) return value;
   if (Array.isArray(value)) return value.map(jsonCopy);
   if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, jsonCopy(entry)]));
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .map(([key, entry]) => [key, jsonCopy(entry)]));
   }
   throw failure('unsupported');
 };
@@ -120,39 +121,46 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
       inputSchema: jsonObject(tool.inputSchema) };
   });
   if (tools && new Set(tools.map((tool) => tool.name)).size !== tools.length) throw failure('unsupported');
-  const pending = new Map<string, string>(); const seen = new Set<string>();
-  const messages: ClaudeCodeCliRequest['messages'] = request.messages.map((message) => {
+  const pending = new Map<string, { name: string; toolCallId: string }>(); const seen = new Set<string>();
+  const messages: { role: 'user' | 'assistant'; content: ClaudeCodeCliContent[] }[] = [];
+  for (const message of request.messages) {
     if (message.role === 'system' || message.role === 'developer' || message.name || message.metadata) throw failure('unsupported');
     if (message.role === 'tool') {
       const result = message.toolResult;
-      const id = result.providerCallId ?? result.toolCallId;
+      const matches = [...pending].filter(([id, call]) => id === result.providerCallId || call.toolCallId === result.toolCallId);
+      const id = matches.length === 1 ? matches[0][0] : undefined;
       if (!textValue(caps.tools) || result.content || result.error || result.annotations
         || result.metadata || result.continuation || typeof result.output !== 'string'
-        || !pending.has(id) || (result.name !== undefined && result.name !== pending.get(id))
+        || !id || (result.name !== undefined && result.name !== pending.get(id)?.name)
         || (message.content !== '' && message.content !== result.output)) throw failure('unsupported');
       pending.delete(id);
-      return { role: 'user', content: [{ type: 'tool_result',
+      const content: ClaudeCodeCliContent = { type: 'tool_result',
         tool_use_id: id, content: result.output,
-        ...(result.isError !== undefined ? { is_error: result.isError } : {}) }] };
+        ...(result.isError !== undefined ? { is_error: result.isError } : {}) };
+      const previous = messages[messages.length - 1];
+      if (previous?.role === 'user' && previous.content[0]?.type === 'tool_result') previous.content.push(content);
+      else messages.push({ role: 'user', content: [content] });
+      continue;
     }
     if (pending.size) throw failure('unsupported');
     const content: ClaudeCodeCliContent[] = typeof message.content === 'string'
-      ? [{ type: 'text', text: message.content }]
-      : message.content.map((part) => {
+      ? (message.content === '' ? [] : [{ type: 'text', text: message.content }])
+      : message.content.flatMap((part) => {
         if (part.type !== 'text' || typeof part.text !== 'string') throw failure('unsupported');
-        return { type: 'text', text: part.text };
+        return part.text === '' ? [] : [{ type: 'text' as const, text: part.text }];
       });
     if (message.role === 'assistant') for (const call of message.toolCalls ?? []) {
       const id = call.providerCallId ?? call.toolCallId;
-      if (!textValue(caps.tools) || !textValue(id) || seen.has(id) || call.annotations || call.metadata
+      if (!textValue(caps.tools) || !textValue(id) || !textValue(call.toolCallId)
+        || seen.has(id) || seen.has(call.toolCallId) || call.annotations || call.metadata
         || !tools?.some((tool) => tool.name === call.name)) throw failure('unsupported');
       const input = jsonObject(JSON.parse(call.argumentsText));
       if (call.arguments !== undefined && JSON.stringify(jsonCopy(call.arguments)) !== JSON.stringify(input)) throw failure('unsupported');
-      seen.add(id); pending.set(id, call.name);
+      seen.add(id); seen.add(call.toolCallId); pending.set(id, { name: call.name, toolCallId: call.toolCallId });
       content.push({ type: 'tool_use', id, name: call.name, input });
     }
-    return { role: message.role, content };
-  });
+    messages.push({ role: message.role, content });
+  }
   if (pending.size) throw failure('unsupported');
   return { modelId: request.modelId, messages, ...(tools?.length ? { tools } : {}) };
 };
