@@ -272,3 +272,42 @@ describe('Claude CLI tool history integrity', () => {
     expect(run.mock.calls[0][0].request.tools?.[0].inputSchema).toEqual({ type: 'object', properties: { q: { type: 'string' } } });
   });
 });
+
+describe('Claude CLI final protocol checks', () => {
+  it.each([null, [], 'raw-child-output'].map((usage) => ({ usage })))(
+    'should refuse malformed usage $usage', async ({ usage }) => {
+    const { client } = fixture([{ type: 'result', finishReason: 'stop', usage } as ClaudeCodeCliEvent]);
+    await expect(client.generate(request(), { auth: credential() })).rejects.toMatchObject({ code: 'claude_cli_runner' });
+  });
+  it('should refuse usage totals outside the safe integer range', async () => {
+    const { client } = fixture([{ type: 'result', finishReason: 'stop',
+      usage: { inputTokens: Number.MAX_SAFE_INTEGER, outputTokens: 1 } }]);
+    await expect(client.generate(request(), { auth: credential() })).rejects.toMatchObject({ code: 'claude_cli_runner' });
+  });
+  const call: ClaudeCodeCliEvent = { type: 'tool_use', id: 'id', name: 'lookup', input: { q: 'test' } };
+  const toolRequest = { ...request(), tools: [{ type: 'function' as const, name: 'lookup', inputSchema: { type: 'object' } }] };
+  it.each([
+    [call, call], [call, { type: 'result', finishReason: 'stop' }],
+    [{ ...call, input: { bad: undefined } }], [{ ...call, input: [] }], [{ ...call, input: null }],
+  ])('should refuse duplicate, lossy or contradictory tool output %j', async (...events) => {
+    const { client } = fixture([...events, { type: 'result', finishReason: 'tool_calls' }] as ClaudeCodeCliEvent[],
+      { ...capabilities, tools: 'fake-qualified-tools' });
+    await expect(client.generate(toolRequest, { auth: credential() })).rejects.toMatchObject({ code: 'claude_cli_runner' });
+  });
+  it('should stream complete tool arguments once before a tool terminal result', async () => {
+    const { client } = fixture([call, { type: 'result', finishReason: 'tool_calls' }],
+      { ...capabilities, tools: 'fake-qualified-tools' });
+    expect(await collect(await client.stream(toolRequest, { auth: credential() }))).toEqual([
+      { type: 'tool_call_start', data: { toolCallId: 'id', providerCallId: 'id', name: 'lookup',
+        argumentsText: '{"q":"test"}', arguments: { q: 'test' }, inputState: 'complete' } },
+      { type: 'done', data: { finishReason: 'tool_calls', providerId: 'anthropic', modelId: request().modelId } },
+    ]);
+  });
+  it('should not invoke the runner if aborted between stream creation and iteration', async () => {
+    const { client, run } = fixture(); const controller = new AbortController();
+    const source = await client.stream({ ...request(), signal: controller.signal }, { auth: credential() });
+    controller.abort('fake-canary');
+    await expect(collect(source)).rejects.toMatchObject({ name: 'AbortError', code: 'claude_cli_aborted' });
+    expect(run).not.toHaveBeenCalled();
+  });
+});
