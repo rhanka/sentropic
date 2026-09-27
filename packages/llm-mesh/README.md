@@ -164,11 +164,26 @@ not this ordinary local enrollment/refresh path.
 
 ### Terms of use
 
-This tool demonstrates feasibility. Each user who enrolls a subscription is
-responsible for complying with Anthropic's terms. Risks include account suspension
-or refused calls. [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance.md)
-restricts third-party subscription login and credential intermediation. Executing
-the official binary does not establish that mesh enrollment/storage is permitted.
+This tool demonstrates feasibility. **Owner decision:** “each user assumes”
+responsibility for compliance and the risks of account suspension or refused calls.
+This is the owner's allocation of responsibility, not Anthropic permission.
+
+Established distinctions, **verified (source, 2026-09-26)** in
+[Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance.md):
+
+| Account | Publicly established | Unverified for this mesh deployment |
+| --- | --- | --- |
+| Individual Pro/Max | [Consumer Terms](https://www.anthropic.com/legal/consumer-terms); ordinary native-app OAuth use. Developers may not route requests through Free/Pro/Max credentials on users' behalf. | Permission for mesh enrollment/storage/execution. |
+| Organization Team/Enterprise | [Commercial Terms](https://www.anthropic.com/legal/commercial-terms); ordinary native-app OAuth use. General third-party Claude.ai login and credential/session-token collection, storage and intermediation restrictions still apply. | Organization-specific agreements/exceptions; the individual-plan routing sentence establishes no organizational exemption. |
+| API key / [Console](https://platform.claude.com/) | [Commercial Terms](https://www.anthropic.com/legal/commercial-terms); recommended developer authentication. Customer-managed keys for authorized users are permitted subject to billing to the key owner and the stated no-resale/intermediation conditions. | Compliance of the actual deployment; API-key guidance does not authorize subscription-token substitution. |
+
+**Verified (source):** the same page permits hosting the unmodified official binary
+under stated conditions: Commercial Terms, no built-in auth method restricted,
+end-user authentication/direct billing, and no paying/reselling/intermediating their
+usage. It preserves end users' own subscription sign-in to that binary.
+**Unverified:** whether mesh credential projection and runner restrictions meet
+those conditions; executing the official binary alone does not establish permission
+to enroll, store or intermediate subscription credentials.
 
 ## Claude official CLI execution (LOT 2 mesh bridge)
 
@@ -206,8 +221,14 @@ No refresh token, headers, account metadata or request auth reaches the runner.
 The versioned capability profile requires `cliVersion`, `source` and
 `qualificationRef` for protocol `claude-code-stream-json-v1`. These references are
 trusted host attestations, not verification by mesh. Default request support is
-an explicit `modelId` and one user text message. `history` and `tools` require
-separate source/qualification references. The tool subset accepts JSON function
+an explicit `modelId` and one user text message. Only this baseline is expected to
+qualify with the official CLI; `history` and `tools` are expected **`not-covered`**
+unless M3 proves otherwise, with separate source/qualification references.
+**Verified (source):** the [SDK input contract](https://platform.claude.com/docs/en/agent-sdk/typescript)
+uses `SDKUserMessage` streams. “All CLI stream-json input is user-only” remains
+**unverified**: the inspected official 2.1.80 parser also accepts assistant/system
+records (spec A7). Neither fact proves history or mesh-owned tool continuation.
+The tool subset accepts JSON function
 schemas, complete call IDs/arguments and matching string results; it rejects
 incomplete histories and unsupported extras. System/developer prompts, media,
 reasoning, sampling/token limits, structured output, forced/parallel tools and
