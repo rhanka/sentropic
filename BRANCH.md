@@ -48,6 +48,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-40` — attention — owner: implementer — Tool-only history failures reproduced; preserve canonical provider IDs while accepting unambiguous mesh-ID results, merge each result group, omit empty text, and sort JSON object keys recursively without changing array order.
 - [x] `CS-39` — attention — owner: implementer — Round 1 confirms expiry remapping and conflicting fallback auth; preserve sanitized failure codes, strip mismatched request auth, and fill only absent custody scopes from the trusted resolution descriptor (never replace explicit invalid scopes).
 - [x] `CS-29` — acknowledge — owner: conductor — LOT 2 repeats the explicit no-bump exception; general package bump rule is deferred to the conductor's single release bump after qualification.
 - [x] `CS-30` — attention — owner: implementer — Conservative capability profile requires source and qualification references; history/tools remain opt-in and unsupported controls fail before runner invocation. Host attestation is not independent proof.
@@ -77,7 +78,7 @@
 
 ## LOT 2 fix round 1
 - [x] Preserve deferred-expiry auth failures, isolate fallback auth, and fill absent custody scopes; six reproduced failures fixed, focused suite 97/97 including forged-code sanitization and request-only API auth.
-- [ ] Normalize tool-only history, group results, accept mesh IDs and compare JSON arguments independent of key order.
+- [x] Normalize tool-only history, group results, accept mesh IDs and compare JSON arguments independent of key order; focused 100/100 after two reproduced failures, plus ambiguous-ID refusal regression.
 - [ ] Omit empty usage, generate unique response IDs and clarify model selection.
 - [ ] Document baseline-only CLI expectation, production egress enforcement, account-specific terms, orphan cleanup and real expiry bounds; record adapter-auth follow-up.
 - [ ] Run all six requested gates, cleanup, and provide conductor summary; no bump, push, PR or real credentials.

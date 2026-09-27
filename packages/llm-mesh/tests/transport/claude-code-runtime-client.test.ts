@@ -291,8 +291,10 @@ describe('Claude CLI tool history integrity', () => {
   const tool = { type: 'function' as const, name: 'lookup', inputSchema: { type: 'object' } };
   it.each([
     [result], [assistant], [assistant, result, result],
-    [assistant, { ...result, toolResult: { ...result.toolResult, providerCallId: 'wrong-id' } }],
+    [assistant, { ...result, toolResult: { ...result.toolResult, providerCallId: 'wrong-id', toolCallId: 'wrong-id' } }],
     [{ ...assistant, toolCalls: [call, call] }, result],
+    [{ ...assistant, toolCalls: [call, { ...call, toolCallId: 'call-2', providerCallId: 'provider-2' }] },
+      { ...result, toolResult: { ...result.toolResult, providerCallId: 'provider-2' } }],
     [assistant, { ...result, toolResult: { ...result.toolResult, name: 'wrong-tool' } }],
     [{ ...assistant, toolCalls: [{ ...call, argumentsText: '[]' }] }, result],
     [{ ...assistant, toolCalls: [{ ...call, metadata: { ignored: true } }] }, result],
@@ -302,6 +304,35 @@ describe('Claude CLI tool history integrity', () => {
     await expect(client.generate({ ...request(), tools: [tool],
       messages: [...request().messages, ...messages] } as StreamRequest, { auth: credential() }))
       .rejects.toMatchObject({ code: 'claude_cli_unsupported' });
+    expect(run).not.toHaveBeenCalled();
+  });
+  it.each([{ content: '' }, { content: [{ type: 'text' as const, text: '' }] }])(
+    'should group results, omit empty assistant text and match mesh IDs with canonical arguments (%j)', async ({ content }) => {
+    const { client, run } = fixture(success, caps);
+    const calls = [call, { ...call, toolCallId: 'call-2', providerCallId: 'provider-2',
+      argumentsText: '{"b":2,"a":[{"y":2,"x":1}]}', arguments: { a: [{ x: 1, y: 2 }], b: 2 } }];
+    await client.generate({ ...request(), tools: [tool], messages: [...request().messages,
+      { ...assistant, content, toolCalls: calls },
+      { ...result, toolResult: { ...result.toolResult, toolCallId: 'call-2', providerCallId: undefined } },
+      { ...result, toolResult: { ...result.toolResult, providerCallId: 'different-provider-id' } },
+      { role: 'assistant', content: 'Done' }, { role: 'user', content: 'Next' }] }, { auth: credential() });
+    expect(run.mock.calls[0][0].request.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+      { role: 'assistant', content: [
+        { type: 'tool_use', id: 'provider-1', name: 'lookup', input: { q: 'test' } },
+        { type: 'tool_use', id: 'provider-2', name: 'lookup', input: { a: [{ x: 1, y: 2 }], b: 2 } }] },
+      { role: 'user', content: [
+        { type: 'tool_result', tool_use_id: 'provider-2', content: 'found' },
+        { type: 'tool_result', tool_use_id: 'provider-1', content: 'found' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'Done' }] },
+      { role: 'user', content: [{ type: 'text', text: 'Next' }] },
+    ]);
+  });
+  it('should reject arguments whose values differ after canonicalization', async () => {
+    const { client, run } = fixture(success, caps);
+    await expect(client.generate({ ...request(), tools: [tool], messages: [...request().messages,
+      { ...assistant, toolCalls: [{ ...call, argumentsText: '{"a":[1,2]}', arguments: { a: [2, 1] } }] },
+      result] }, { auth: credential() })).rejects.toMatchObject({ code: 'claude_cli_unsupported' });
     expect(run).not.toHaveBeenCalled();
   });
   it('should snapshot tool schemas before deferred iteration', async () => {
