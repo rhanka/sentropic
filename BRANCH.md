@@ -151,7 +151,7 @@
 - [ ] **Acceptance/release across both lots**: conductor scopes h2a files and runs M0–M7 (M2 CDP/h-cond/profile provenance, M5 separate mesh/child refresh counts); one llm-mesh bump after both lots or after lot 1 if execution is `not-covered`, with enrollment-only README labeling. Custody and h2a release remain separate.
 
 ## Validation Evidence
-- [ ] Fix round 2: serialize every public-record write and reproduce a route write started before refresh with a slow keyring.
+- [x] Fix round 2: serialize fence, route, credential and restore public-record writes per account. The gated encrypted-file regression first reproduced active on disk during HTTP and credential save; 37 scoped service tests now pass, with reauth held until durable success.
 - [x] Fix round 2: missing refresh material requires reauthentication; only profile resolver exceptions remain retryable provider preparation errors. Scoped Claude service suite: 34 passed; regression first reproduced retry-later instead of reauthentication.
 - [x] Fix round 2: skip corrupt envelopes during duplicate-grant scans without diagnostics containing stored data. Invalid JSON and JSON null both reproduced blocked enrollment; 36 scoped service tests pass, including acquiring the new account after restart.
 - [ ] Fix round 2: run all six requested gates, review scope/diff, commit below 150 changed lines and clean up the dedicated environment.
