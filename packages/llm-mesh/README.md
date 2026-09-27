@@ -241,7 +241,33 @@ The host must prove isolated credential/config files, environment allowlisting,
 tool/hook/MCP confinement, bounded parsing, cross-process serialization,
 descendant reaping/cleanup and zero child refresh. Abort and consumer early-close
 signal cancellation; the trusted host owns process termination. A final runner
-result must certify successful cleanup, followed by EOF. The precise contract,
+result must certify successful cleanup, followed by EOF.
+
+Production must enforce default-deny egress for the runner's **whole process tree**
+using a network namespace or equivalent: allow only qualified inference origins,
+block the OAuth token endpoint and all alternate destinations, and prevent bypass
+by descendants, proxies, direct IPs or inherited host access. Shared inference/token
+origins require enforceable endpoint separation or refusal. The M5 probe is a
+regression check, not this enforcement. Its fixture CA/DNS overrides and fake token
+endpoint are test-only; production denies those overrides and token egress.
+
+The host prefers verified tmpfs (e.g. `$XDG_RUNTIME_DIR`); otherwise it uses a
+dedicated 0700 directory, with exclusive 0600 files, `O_EXCL | O_NOFOLLOW` and
+`lstat` checks. SIGKILL/crash can bypass cleanup and leave an access-only file.
+A supervisor reaps descendants; orphan sweeps run at the next runner start **and
+host boot**, using lock/PID/start/boot identity and a configured staleness threshold
+(default five minutes, with retry for younger orphans). Live or ambiguous owners
+prevent deletion. Sweeps delete within the dedicated root without following
+symlinks or reading credential contents; tmpfs/deletion do not guarantee erasure
+from swap, dumps or storage.
+
+The projection contains the **real expiry**, never a refresh token. Writing an
+earlier timestamp cannot shorten provider validity. The host can refuse remaining
+TTL above `maxRemainingTtlMs` or below its run deadline. Running immediately after
+refresh improves freshness but usually maximizes remaining TTL and does not reduce
+exposure; it may conflict with that maximum. Cleanup cannot revoke a stolen token.
+These host requirements are **unverified implementations** until qualified in h2a.
+The precise contract,
 proposed h2a tests and fake-credential M5 counting probe are in
 [`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md`](../../spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md).
 No real CLI qualification is claimed by the mesh fake-runner tests. Until the
