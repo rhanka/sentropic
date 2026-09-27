@@ -48,6 +48,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-46` — attention — owner: implementer — Round 2 confirmed root:root 0755 llm-mesh/node_modules/.vite after tests; cleared generated dependencies with the existing Make target before cluster setup. Cluster passed; its 34 packaging skips leave CS-21 with the conductor/release lane.
 - [x] `CS-45` — attention — owner: implementer — Round 2 follows the explicit no-bump scope (CS-29); reject empty projected messages and conflicting explicit provider IDs, and restrict JSON canonicalization to equality comparisons to preserve caller key order.
 - [x] `CS-44` — attention — owner: implementer — Round 1 cluster setup hit EACCES removing llm-mesh/node_modules/.vite in install-internal-packages; the requested clean-node-modules target passed and the unchanged gate then passed 394 tests (34 packaging skips). No build configuration or dependency edits; CS-21 remains release-owned.
 - [x] `CS-43` — attention — owner: h2a lane — Enforce inference-only egress for the whole runner tree; M5 is a separate fixture-CA/DNS regression probe. Require startup/boot orphan sweeps (default five-minute age, retry young orphans), no-follow/content-blind deletion and crash reaping; retain real expiry and reject excessive TTL rather than claiming shortened provider validity. Post-refresh freshness does not reduce token exposure.
@@ -85,7 +86,20 @@
 - [x] MINOR-A — Re-read live A4; quote the all-plan credential/sign-in restriction in both Pro/Max rows and retain it for Team/Enterprise. README/spec explicitly connect it to M4 and mesh grant storage; applicability remains unverified and “each user assumes” remains the owner's decision.
 - [x] MINOR-B/C — Refuse empty/whitespace-only projected messages and conflicting explicit tool-result provider IDs before invoking the runner; three failures reproduced, then focused suite PASS 108/108 (ten empty-content variants across both roles).
 - [x] NIT-D — Preserve schema/input/output argument key order; canonicalize only comparisons. Four key-order failures reproduced, then focused suite PASS 108/108 including schema snapshot isolation and array-order mismatch refusal.
-- [ ] Run all six gates, inspect scope/diff, commit below 150 changed lines and clean up the dedicated environment.
+- [x] Run all six gates, inspect scope/diff, commit below 150 changed lines and clean up the dedicated environment.
+
+## LOT 2 fix round 2 validation
+- [x] `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat`: final PASS 108/108; initial runs reproduced three refusal failures and four key-order failures before fixes.
+- [x] `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS 494/494 in 35 files, no skips.
+- [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make build-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make clean-node-modules ENV=test-llm-mesh-claude-seat`: PASS; generated cache preparation recorded in CS-46.
+- [x] `make test-cluster-mesh ENV=test-llm-mesh-claude-seat`: PASS 394 tests / 34 packaging skips, 53 passing files / five skipped; llm-surface 9/9.
+- [x] `make scope-check ENV=test-llm-mesh-claude-seat`: PASS C2 before every commit; `harness check branch`: PASS C1; `git diff --check c731eb471`: PASS.
+- [x] `make down COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make ps COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat`: PASS, no services remain.
+- [x] Reviewed every changed hunk against MINOR-A/B/C and NIT-D: five allowed files, no scope exception, no bump/push/PR/merge/publication or real credentials. Four commits below 150 changed lines each; independent rereview and live CLI/custody qualification remain conductor-owned.
 
 ## LOT 2 fix round 1
 - [x] Preserve deferred-expiry auth failures, isolate fallback auth, and fill absent custody scopes; six reproduced failures fixed, focused suite 97/97 including forged-code sanitization and request-only API auth.
