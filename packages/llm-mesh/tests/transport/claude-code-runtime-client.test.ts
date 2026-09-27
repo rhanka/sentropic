@@ -303,6 +303,7 @@ describe('Claude CLI tool history integrity', () => {
     [result], [assistant], [assistant, result, result],
     [assistant, { ...result, toolResult: { ...result.toolResult, providerCallId: 'wrong-id', toolCallId: 'wrong-id' } }],
     [assistant, { ...result, toolResult: { ...result.toolResult, providerCallId: 'wrong-id' } }],
+    [assistant, { ...result, toolResult: { ...result.toolResult, toolCallId: 'wrong-id' } }],
     [{ ...assistant, toolCalls: [call, call] }, result],
     [{ ...assistant, toolCalls: [call, { ...call, toolCallId: 'call-2', providerCallId: 'provider-2' }] },
       { ...result, toolResult: { ...result.toolResult, providerCallId: 'provider-2' } }],
@@ -317,7 +318,8 @@ describe('Claude CLI tool history integrity', () => {
       .rejects.toMatchObject({ code: 'claude_cli_unsupported' });
     expect(run).not.toHaveBeenCalled();
   });
-  it.each([{ content: '' }, { content: [{ type: 'text' as const, text: '' }] }])(
+  it.each([{ content: '' }, { content: [{ type: 'text' as const, text: '' }] },
+    { content: ' \t\n' }, { content: [{ type: 'text' as const, text: ' \t\n' }] }])(
     'should group results, omit empty assistant text and match mesh IDs with canonical arguments (%j)', async ({ content }) => {
     const { client, run } = fixture(success, caps);
     const calls = [call, { ...call, toolCallId: 'call-2', providerCallId: 'provider-2',
@@ -341,6 +343,15 @@ describe('Claude CLI tool history integrity', () => {
     const projectedCall = run.mock.calls[0][0].request.messages[1].content[1];
     expect(projectedCall.type).toBe('tool_use');
     if (projectedCall.type === 'tool_use') expect(JSON.stringify(projectedCall.input)).toBe(calls[1].argumentsText);
+  });
+  it.each(['user', 'assistant'] as const)('should omit blank parts and preserve non-empty %s text', async (role) => {
+    const { client, run } = fixture(success, caps);
+    await client.generate({ ...request(), messages: [{ role, content: [
+      { type: 'text', text: ' \t\n' }, { type: 'text', text: ' Hello ' }, { type: 'text', text: '\n ' },
+    ] }] }, { auth: credential() });
+    expect(run.mock.calls[0][0].request.messages).toEqual([
+      { role, content: [{ type: 'text', text: ' Hello ' }] },
+    ]);
   });
   it('should reject arguments whose values differ after canonicalization', async () => {
     const { client, run } = fixture(success, caps);
