@@ -134,6 +134,7 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
         || result.metadata || result.continuation || typeof result.output !== 'string'
         || !id || (result.name !== undefined && result.name !== pending.get(id)?.name)
         || (result.providerCallId !== undefined && result.providerCallId !== id)
+        || result.toolCallId !== pending.get(id)?.toolCallId
         || (message.content !== '' && message.content !== result.output)) throw failure('unsupported');
       pending.delete(id);
       const content: ClaudeCodeCliContent = { type: 'tool_result',
@@ -146,10 +147,10 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
     }
     if (pending.size) throw failure('unsupported');
     const content: ClaudeCodeCliContent[] = typeof message.content === 'string'
-      ? (message.content === '' ? [] : [{ type: 'text', text: message.content }])
+      ? (message.content.trim() === '' ? [] : [{ type: 'text', text: message.content }])
       : message.content.flatMap((part) => {
         if (part.type !== 'text' || typeof part.text !== 'string') throw failure('unsupported');
-        return part.text === '' ? [] : [{ type: 'text' as const, text: part.text }];
+        return part.text.trim() === '' ? [] : [{ type: 'text' as const, text: part.text }];
       });
     if (message.role === 'assistant') for (const call of message.toolCalls ?? []) {
       const id = call.providerCallId ?? call.toolCallId;
