@@ -54,6 +54,7 @@
 - [x] `CS-32` — attention — owner: conductor — Preserve CS-17 scope: no Track/recorder artifacts or agent launches; independent implementation review and live qualification remain conductor-owned.
 - [x] `CS-33` — attention — owner: implementer — Ten new regressions exposed unmatched/lossy tool histories and mutable schemas; validate complete call/result identity and copy JSON before deferred execution, preserving the conservative CLI subset.
 - [x] `CS-34` — attention — owner: implementer — Reject malformed usage containers, unsafe totals and lossy tool-output JSON; focused regressions reproduced each acceptance gap before the fix.
+- [x] `CS-35` — attention — owner: implementer — First full typecheck/build caught loss of TypeScript narrowing through the original toolResult path; project through the validated local result alias. Full tests 476/476 and lint passed before this type-only correction.
 
 ## Implementation plan (LOT 2 authorized)
 - [x] Step A — source-grounded runner contract, exact proposed h2a tests and fake-only M5 counting probe recorded before runtime code.
