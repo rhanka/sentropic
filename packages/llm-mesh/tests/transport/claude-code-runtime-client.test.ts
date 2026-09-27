@@ -88,17 +88,17 @@ describe('Claude CLI capability boundary', () => {
 });
 
 describe('Claude CLI access and routing', () => {
-  it('should project only access, expiry and actual grant scopes through the Anthropic adapter', async () => {
+  it.each([60_000, 86_400_000])('should project real expiry without refresh material (remaining TTL %i)', async (ttl) => {
     const { client, run } = fixture();
     const adapter = createDefaultProviderAdapters({ anthropic: client }).find((a) => a.provider.providerId === 'anthropic')!;
-    const auth = credential();
+    const auth = { ...credential(), expiresAt: new Date(now + ttl).toISOString() };
     const response = await adapter.generate({ ...request(), auth }, { auth });
     expect(response).toMatchObject({ providerId: 'anthropic', modelId: 'claude-sonnet-4-6', text: 'Hi',
       finishReason: 'stop', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } });
     expect(run).toHaveBeenCalledOnce();
     const input = run.mock.calls[0][0];
     expect(Object.keys(input).sort()).toEqual(['access', 'request', 'signal']);
-    expect(input.access).toEqual({ accessToken: auth.accessToken, expiresAt: now + 60_000, scopes });
+    expect(input.access).toEqual({ accessToken: auth.accessToken, expiresAt: now + ttl, scopes });
     expect(input.access.scopes).not.toBe(scopes);
     expect(input.request).toEqual({ modelId: request().modelId,
       messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }] });

@@ -48,6 +48,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-43` — attention — owner: h2a lane — Enforce inference-only egress for the whole runner tree; M5 is a separate fixture-CA/DNS regression probe. Require startup/boot orphan sweeps (default five-minute age, retry young orphans), no-follow/content-blind deletion and crash reaping; retain real expiry and reject excessive TTL rather than claiming shortened provider validity. Post-refresh freshness does not reduce token exposure.
 - [x] `CS-42` — attention — owner: conductor — Public A4 establishes account-specific terms and hosted-binary conditions, not mesh permission. A7 documents SDK user-message input but A2's CLI parser accepts assistant/system records; keep universal user-only claims unverified and history/tools expected not-covered pending M3. Record adapter-auth headers as a separate follow-up.
 - [x] `CS-41` — attention — owner: implementer — Empty normalized usage and constant response IDs reproduced; omit empty usage and use Web Crypto UUIDs. README now distinguishes mesh model normalization from direct runtime-client requirements.
 - [x] `CS-40` — attention — owner: implementer — Tool-only history failures reproduced; preserve canonical provider IDs while accepting unambiguous mesh-ID results, merge each result group, omit empty text, and sort JSON object keys recursively without changing array order.
@@ -82,8 +83,9 @@
 - [x] Preserve deferred-expiry auth failures, isolate fallback auth, and fill absent custody scopes; six reproduced failures fixed, focused suite 97/97 including forged-code sanitization and request-only API auth.
 - [x] Normalize tool-only history, group results, accept mesh IDs and compare JSON arguments independent of key order; focused 100/100 after two reproduced failures, plus ambiguous-ID refusal regression.
 - [x] Omit empty usage, generate unique response IDs and clarify model selection; three reproduced failures addressed.
-- [ ] Document baseline-only CLI expectation, production egress enforcement, account-specific terms, orphan cleanup and real expiry bounds; record adapter-auth follow-up.
+- [x] Document baseline-only CLI expectation, production egress enforcement, account-specific terms, orphan cleanup and real expiry bounds; record adapter-auth follow-up.
   - [x] Source-verified account table and owner decision in README/spec; baseline expectation and input-source caveat; adapter-auth follow-up only.
+  - [x] Host contract/test list covers production egress, SIGKILL/crash/startup/boot orphan sweeps, staleness/no-follow deletion and TTL limits; mesh projection regression expanded to long real expiry with no refresh material.
 - [ ] Run all six requested gates, cleanup, and provide conductor summary; no bump, push, PR or real credentials.
 
 ## LOT 2 validation and handoff (before fix round 1)
