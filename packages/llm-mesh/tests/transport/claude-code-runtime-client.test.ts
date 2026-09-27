@@ -346,6 +346,18 @@ describe('Claude CLI tool history integrity', () => {
 });
 
 describe('Claude CLI final protocol checks', () => {
+  it.each([{}, { providerRawUsage: 'fake-private-canary' }])('should omit empty normalized usage (%j)', async (usage) => {
+    const { client } = fixture([{ type: 'result', finishReason: 'stop', usage } as ClaudeCodeCliEvent]);
+    expect(await client.generate(request(), { auth: credential() })).not.toHaveProperty('usage');
+    const events = await collect(await client.stream(request(), { auth: credential() }));
+    expect(events).toEqual([{ type: 'done', data: { finishReason: 'stop', providerId: 'anthropic', modelId: request().modelId } }]);
+  });
+  it('should assign unique response IDs across concurrent calls and client instances', async () => {
+    const { client } = fixture(); const other = fixture().client;
+    const responses = await Promise.all([client, client, other].map((c) => c.generate(request(), { auth: credential() })));
+    expect(new Set(responses.map((response) => response.id)).size).toBe(3);
+    expect(responses.every((response) => response.id.startsWith('claude_cli_'))).toBe(true);
+  });
   it.each([null, [], 'raw-child-output'].map((usage) => ({ usage })))(
     'should refuse malformed usage $usage', async ({ usage }) => {
     const { client } = fixture([{ type: 'result', finishReason: 'stop', usage } as ClaudeCodeCliEvent]);

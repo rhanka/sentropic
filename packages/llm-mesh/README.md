@@ -191,13 +191,16 @@ const adapters = createDefaultProviderAdapters({
 ```
 
 Only `account-transport` with provider `claude-code`, and `claude-code-account`,
-reach the runner. Every other auth shape delegates unchanged to the supplied
-direct client, or is refused when no fallback exists. A seat failure never falls
+reach the runner. Other auth delegates to the supplied direct client, or is
+refused when no fallback exists. Conflicting request auth is removed; the selected
+auth remains in the context. Unresolved auth callbacks without a trusted context
+are refused. A seat failure never falls
 back to metered API authentication. The in-process input contains only access
 token, finite unexpired epoch-millisecond expiry and the actual grant scopes,
 the projected request, and an abort signal. Ordinary scopes come from
 `material.metadata.scopes`; access-only custody uses trusted
-`material.descriptor.metadata.scopes` or resolution `descriptor.metadata.scopes`.
+`material.descriptor.metadata.scopes`, filling absent scopes from trusted resolution
+`descriptor.metadata.scopes`; explicit invalid scopes are never replaced.
 No refresh token, headers, account metadata or request auth reaches the runner.
 
 The versioned capability profile requires `cliVersion`, `source` and
@@ -208,8 +211,10 @@ separate source/qualification references. The tool subset accepts JSON function
 schemas, complete call IDs/arguments and matching string results; it rejects
 incomplete histories and unsupported extras. System/developer prompts, media,
 reasoning, sampling/token limits, structured output, forced/parallel tools and
-provider overrides are refused before running. Mesh-normalized model selection
-is supported; direct client calls must supply `modelId` without `model`.
+provider overrides are refused before running. Callers using `createLlmMesh` may
+use its model-selection contract; mesh resolves it to `modelId` and removes `model`
+before delegation. Direct runtime-client calls must supply `modelId` and omit
+`model`; this client does not resolve aliases or choose a default model.
 
 The host must prove isolated credential/config files, environment allowlisting,
 tool/hook/MCP confinement, bounded parsing, cross-process serialization,
