@@ -67,13 +67,14 @@ class ClaudeCodeFailure extends Error {
 const failure = (code: ConstructorParameters<typeof ClaudeCodeFailure>[0]) => new ClaudeCodeFailure(code);
 const textValue = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && !value.includes('\0');
-const jsonCopy = (value: unknown): unknown => {
+const jsonCopy = (value: unknown, canonical = false): unknown => {
   if (value === null || typeof value === 'string' || typeof value === 'boolean'
     || (typeof value === 'number' && Number.isFinite(value))) return value;
-  if (Array.isArray(value)) return value.map(jsonCopy);
+  if (Array.isArray(value)) return value.map((entry) => jsonCopy(entry, canonical));
   if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
-    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
-      .map(([key, entry]) => [key, jsonCopy(entry)]));
+    const entries = Object.entries(value);
+    if (canonical) entries.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    return Object.fromEntries(entries.map(([key, entry]) => [key, jsonCopy(entry, canonical)]));
   }
   throw failure('unsupported');
 };
@@ -156,7 +157,8 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
         || seen.has(id) || seen.has(call.toolCallId) || call.annotations || call.metadata
         || !tools?.some((tool) => tool.name === call.name)) throw failure('unsupported');
       const input = jsonObject(JSON.parse(call.argumentsText));
-      if (call.arguments !== undefined && JSON.stringify(jsonCopy(call.arguments)) !== JSON.stringify(input)) throw failure('unsupported');
+      if (call.arguments !== undefined && JSON.stringify(jsonCopy(call.arguments, true))
+        !== JSON.stringify(jsonCopy(input, true))) throw failure('unsupported');
       seen.add(id); seen.add(call.toolCallId); pending.set(id, { name: call.name, toolCallId: call.toolCallId });
       content.push({ type: 'tool_use', id, name: call.name, input });
     }

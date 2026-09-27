@@ -84,7 +84,7 @@
 ## LOT 2 fix round 2
 - [ ] MINOR-A — Re-read A4; include all-plan credential/sign-in restrictions in both subscription rows and their relevance to M4 and mesh grant storage; retain the labelled owner decision and unverified applicability.
 - [x] MINOR-B/C — Refuse empty/whitespace-only projected messages and conflicting explicit tool-result provider IDs before invoking the runner; three failures reproduced, then focused suite PASS 108/108 (ten empty-content variants across both roles).
-- [ ] NIT-D — Preserve schema/input/output argument key order; canonicalize only comparisons and verify nested order and array semantics.
+- [x] NIT-D — Preserve schema/input/output argument key order; canonicalize only comparisons. Four key-order failures reproduced, then focused suite PASS 108/108 including schema snapshot isolation and array-order mismatch refusal.
 - [ ] Run all six gates, inspect scope/diff, commit below 150 changed lines and clean up the dedicated environment.
 
 ## LOT 2 fix round 1
