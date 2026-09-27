@@ -28,6 +28,65 @@ const collect = async (source: AsyncIterable<unknown>) => {
 beforeEach(() => vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Network forbidden'); })));
 afterEach(() => { expect(fetch).not.toHaveBeenCalled(); vi.unstubAllGlobals(); });
 
+describe('Claude CLI capability boundary', () => {
+  const tool = { type: 'function' as const, name: 'lookup', inputSchema: { type: 'object' } };
+  it.each([
+    { temperature: 0 }, { topP: 1 }, { maxOutputTokens: 10 }, { reasoning: {} },
+    { providerOptions: {} }, { previousResponseId: 'fake-continuation' }, { parallelToolCalls: false },
+    { responseFormat: { type: 'json-object' } }, { toolChoice: 'required' }, { toolChoice: 'none' },
+    { toolChoice: { type: 'tool', name: 'lookup' } }, { tools: [tool] },
+    { providerId: 'openai' }, { model: 'anthropic/claude-sonnet-4-6' }, { modelId: '--bad' },
+    { modelId: undefined }, { messages: [] }, { messages: [{ role: 'system', content: 'private' }] },
+    { messages: [{ role: 'developer', content: 'private' }] },
+    { messages: [{ role: 'user', content: [{ type: 'image', url: 'https://example.invalid' }] }] },
+    { messages: [{ role: 'user', content: [{ type: 'file', data: 'fake' }] }] },
+    { messages: [{ role: 'user', content: [{ type: 'reasoning', text: 'fake' }] }] },
+    { messages: [...request().messages, { role: 'assistant', content: 'prior' }] },
+  ])('should refuse unsupported request %j before any runner call', async (patch) => {
+    const { client, run } = fixture();
+    await expect(client.generate({ ...request(), ...patch } as StreamRequest, { auth: credential() }))
+      .rejects.toMatchObject({ code: 'claude_cli_unsupported' });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it.each([{ protocol: 'other' }, { cliVersion: '' }, { source: '' }, { qualificationRef: '' }])(
+    'should refuse incomplete host qualification %j', async (patch) => {
+      const { client, run } = fixture(success, { ...capabilities, ...patch } as ClaudeCodeCliCapabilities);
+      await expect(client.generate(request(), { auth: credential() })).rejects.toMatchObject({ code: 'claude_cli_unsupported' });
+      expect(run).not.toHaveBeenCalled();
+    });
+
+  it('should map qualified text parts, tool calls and a subsequent tool result without auth/metadata', async () => {
+    const caps = { ...capabilities, tools: 'fake-tool-source-and-receipt', history: 'fake-history-source-and-receipt' };
+    const { client, run } = fixture([{ type: 'text_delta', text: 'Looking' },
+      { type: 'tool_use', id: 'call-1', name: 'lookup', input: { q: 'test' } },
+      { type: 'result', finishReason: 'tool_calls', usage: { inputTokens: 8, outputTokens: 4 } }], caps);
+    const input = { ...request(), tools: [tool], messages: [{ role: 'user' as const,
+      content: [{ type: 'text' as const, text: 'Look up' }, { type: 'text' as const, text: ' test' }] }] };
+    const first = await client.generate(input, { auth: credential() });
+    expect(first.toolCalls).toEqual([{ toolCallId: 'call-1', providerCallId: 'call-1', name: 'lookup',
+      arguments: { q: 'test' }, argumentsText: '{"q":"test"}', inputState: 'complete' }]);
+    expect(first.finishReason).toBe('tool_calls');
+    const second = fixture(success, caps);
+    await second.client.generate({ ...input, messages: [...input.messages, first.message,
+      { role: 'tool', content: '', toolResult: { toolCallId: 'call-1', output: 'found', isError: false } }] },
+    { auth: credential() });
+    expect(second.run.mock.calls[0][0].request.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'Look up' }, { type: 'text', text: ' test' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'Looking' },
+        { type: 'tool_use', id: 'call-1', name: 'lookup', input: { q: 'test' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call-1', content: 'found', is_error: false }] },
+    ]);
+    expect(run.mock.calls[0][0].request.tools).toEqual([{ name: 'lookup', inputSchema: { type: 'object' } }]);
+    const streaming = fixture(success);
+    expect(await collect(await streaming.client.stream(request(), { auth: credential() }))).toEqual([
+      { type: 'content_delta', data: { delta: 'Hi' } },
+      { type: 'done', data: { finishReason: 'stop', providerId: 'anthropic', modelId: request().modelId,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } } },
+    ]);
+  });
+});
+
 describe('Claude CLI access and routing', () => {
   it('should project only access, expiry and actual grant scopes through the Anthropic adapter', async () => {
     const { client, run } = fixture();
