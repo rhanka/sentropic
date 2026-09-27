@@ -56,6 +56,16 @@ describe('Claude CLI capability boundary', () => {
       expect(run).not.toHaveBeenCalled();
     });
 
+  it.each(['user', 'assistant'] as const)('should refuse empty projected %s messages before run', async (role) => {
+    for (const content of ['', [], [{ type: 'text' as const, text: '' }], ' \t\n',
+      [{ type: 'text' as const, text: ' \t\n' }]]) {
+      const { client, run } = fixture(success, { ...capabilities, history: 'fake-history-qualified' });
+      await expect(client.generate({ ...request(), messages: [{ role, content }] }, { auth: credential() }))
+        .rejects.toMatchObject({ code: 'claude_cli_unsupported' });
+      expect(run).not.toHaveBeenCalled();
+    }
+  });
+
   it('should map qualified text parts, tool calls and a subsequent tool result without auth/metadata', async () => {
     const caps = { ...capabilities, tools: 'fake-tool-source-and-receipt', history: 'fake-history-source-and-receipt' };
     const { client, run } = fixture([{ type: 'text_delta', text: 'Looking' },
@@ -292,6 +302,7 @@ describe('Claude CLI tool history integrity', () => {
   it.each([
     [result], [assistant], [assistant, result, result],
     [assistant, { ...result, toolResult: { ...result.toolResult, providerCallId: 'wrong-id', toolCallId: 'wrong-id' } }],
+    [assistant, { ...result, toolResult: { ...result.toolResult, providerCallId: 'wrong-id' } }],
     [{ ...assistant, toolCalls: [call, call] }, result],
     [{ ...assistant, toolCalls: [call, { ...call, toolCallId: 'call-2', providerCallId: 'provider-2' }] },
       { ...result, toolResult: { ...result.toolResult, providerCallId: 'provider-2' } }],
@@ -314,7 +325,7 @@ describe('Claude CLI tool history integrity', () => {
     await client.generate({ ...request(), tools: [tool], messages: [...request().messages,
       { ...assistant, content, toolCalls: calls },
       { ...result, toolResult: { ...result.toolResult, toolCallId: 'call-2', providerCallId: undefined } },
-      { ...result, toolResult: { ...result.toolResult, providerCallId: 'different-provider-id' } },
+      result,
       { role: 'assistant', content: 'Done' }, { role: 'user', content: 'Next' }] }, { auth: credential() });
     expect(run.mock.calls[0][0].request.messages).toEqual([
       { role: 'user', content: [{ type: 'text', text: 'Hello' }] },

@@ -132,6 +132,7 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
       if (!textValue(caps.tools) || result.content || result.error || result.annotations
         || result.metadata || result.continuation || typeof result.output !== 'string'
         || !id || (result.name !== undefined && result.name !== pending.get(id)?.name)
+        || (result.providerCallId !== undefined && result.providerCallId !== id)
         || (message.content !== '' && message.content !== result.output)) throw failure('unsupported');
       pending.delete(id);
       const content: ClaudeCodeCliContent = { type: 'tool_result',
@@ -159,6 +160,7 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
       seen.add(id); seen.add(call.toolCallId); pending.set(id, { name: call.name, toolCallId: call.toolCallId });
       content.push({ type: 'tool_use', id, name: call.name, input });
     }
+    if (!content.some((part) => part.type !== 'text' || part.text.trim().length > 0)) throw failure('unsupported');
     messages.push({ role: message.role, content });
   }
   if (pending.size) throw failure('unsupported');
