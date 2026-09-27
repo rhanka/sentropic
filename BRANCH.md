@@ -61,6 +61,7 @@
   - [x] Implement non-seat delegation, seat stream/generate, terminal/usage/tool validation and cancellation without raw errors.
 - [ ] Step B3 — additive runtime/type exports and README host qualification/terms guidance.
 - [ ] Step B4 — `tests/transport/claude-code-runtime-client.test.ts`: projection, both seat shapes, other auth routing, unsupported requests, stream/generate/tools, abort, malformed/truncated events, canary errors and no network.
+  - [x] Add fake-only projection and auth coexistence matrix with a forbidden-network guard.
 - [ ] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
 - [ ] Cleanup — `make down` and `make ps` with dedicated compose project and ports 9395/5595/1495; final diff and commit log.
 
