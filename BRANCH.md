@@ -56,12 +56,12 @@
 
 ## Implementation plan (LOT 2 authorized)
 - [x] Step A — source-grounded runner contract, exact proposed h2a tests and fake-only M5 counting probe recorded before runtime code.
-- [ ] Step B1 — runner interfaces, access projection and conservative request validation.
+- [x] Step B1 — runner interfaces, access projection and conservative request validation.
 - [x] Tool-history integrity and schema snapshot regressions reproduced before tightening request projection.
   - [x] Define v1 runner/capability types and explicit access/request projections; no process/network imports.
-- [ ] Step B2 — generate/stream mapping, terminal validation, abort and sanitized failures.
+- [x] Step B2 — generate/stream mapping, terminal validation, abort and sanitized failures.
   - [x] Implement non-seat delegation, seat stream/generate, terminal/usage/tool validation and cancellation without raw errors.
-- [ ] Step B3 — additive runtime/type exports and README host qualification/terms guidance.
+- [x] Step B3 — additive runtime/type exports and README host qualification/terms guidance.
 - [ ] Step B4 — `tests/transport/claude-code-runtime-client.test.ts`: projection, both seat shapes, other auth routing, unsupported requests, stream/generate/tools, abort, malformed/truncated events, canary errors and no network.
   - [x] Add fake-only projection and auth coexistence matrix with a forbidden-network guard.
   - [x] Add pre-run capability refusals and generate/stream/tool-result round-trip mapping with source-qualified fake profiles.
