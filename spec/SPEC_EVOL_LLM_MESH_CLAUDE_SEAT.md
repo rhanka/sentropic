@@ -1,6 +1,6 @@
 # Claude subscription accounts as llm-mesh seats
 
-Design approved; LOT 1 implementation authorized, 2026-09-26. Repository baseline: `origin/main` at `1dfbc69ca8f8ac116efbb3095f71b62064a5821e`. Browser enrollment is the primary acceptance criterion. LOT 2, independent implementation review, live h2a qualification and release remain separate; this lot has no version bump.
+Design approved; LOT 1 completed and cross-reviewed APPROVE per conductor; LOT 2 mesh build authorized, 2026-09-26. Repository observation baseline: `origin/main` at `1dfbc69ca8f8ac116efbb3095f71b62064a5821e`. Browser enrollment remains the primary acceptance criterion. LOT 2 independent implementation review, h2a runner/live qualification and release remain separate; this build has no version bump.
 
 Evidence convention: repository observations cite `file:line` at the baseline above. Every external claim is labeled **verified (source)** or **unverified**. Verified package behavior means inspected public package bytes, not a live provider test, a supported third-party API contract, or proof about every subsequent CLI release. Decisions D1–D8 below are design choices, not external facts.
 
@@ -142,7 +142,7 @@ Custody enforcement is a separate host responsibility, not a caller-supplied met
 
 ### LOT 2 start gate — runner contract and evidence (2026-09-26)
 
-LOT 2 mesh implementation is authorized; the exported bridge is an injection seam, not a bundled or qualified CLI runner. No host runner is installed by default. This supersedes the older conditional-export wording below for this build; serving/release still require M3/M5 and independent review.
+LOT 2 mesh implementation is authorized; the exported bridge is an injection seam, not a bundled or qualified CLI runner. No host runner is installed by default. Serving/release still require M3/M5 and independent review.
 
 **H1 refreshed — installed h2a 0.97.x, unverified in repo:** inspected read-only `/home/antoinefa/.npm-global/lib/node_modules/@sentropic/h2a` (0.97.9), `dist/runtime/mcp/agent-launch.js`, `executeH2aRunWithSpawn` (shell false, piped stdin, bounded launch); `dist/runtime/host-config-root.js`, `resolveHostConfigRoot` (CLAUDE_CONFIG_DIR). Sibling `h2a-runtime` 0.97.6 `dist/agent-launch-args.js`, `buildAgentLaunchArgs`/`buildAgentLaunchStdin`, selects Claude `-p --input-format text` and stdin prompts. These are launch precedents only: they do not implement this streaming seat runner, secret isolation or refresh probe. Proposed paths below are h2a-lane deliverables, not observed repository files.
 
@@ -162,6 +162,8 @@ The runner privately parses CLI NDJSON into `text_delta {text}`, complete `tool_
 
 Host runner must implement D6's lock-before-acquire, fresh 0700 run/config/home and exclusive 0600 access-only file, fixed clean CWD, bounded frame/total-output/deadline, controlled tool bridge, process-group kill/reap, stale-run reaper and read-back/cleanup checks. AbortSignal includes consumer early-close; cancel stops child work even if iterator.next is pending. Iterator return must be idempotent; terminal result certifies cleanup. A trusted runner that ignores cancellation violates the contract; mesh cannot reap a process itself. No raw stdout/stderr, environment, credential files or error objects leave the host boundary.
 
+Lock ordering belongs to the outer h2a attempt coordinator: acquire the owner/account lock, acquire/refresh the grant, then bind a per-attempt runner closure to that lease and inject the client. `run` validates its bound live lease; it cannot acquire the lock retroactively after receiving the projection. Owner/account identity stays in that trusted closure, never inferred from a token or caller request metadata. Tool qualification must specifically prove returning a mesh-owned call without executing it, and resuming from the later caller result without duplicate side effects; CLI auto-executed tools are not equivalent. If the selected CLI cannot support that lifecycle and terminal/cleanup contract, omit the tools capability and reject such requests.
+
 **Exact proposed h2a-lane files (installed h2a 0.97.x, unverified in repo):** new `packages/h2a-runtime/src/claude-code-cli-runner.ts`, wired by the h2a owner through its Anthropic client composition; align paths with the actual h2a checkout before editing there. Required tests:
 
 | Proposed h2a test file | Required behavior |
@@ -179,7 +181,7 @@ Before negative assertions, require positive controls: a harness request increme
 
 ## 3. Minimal change set and public compatibility — D7
 
-These are exact library paths; only LOT 1 paths and their tests are authorized here. No new dependency, provider ID, account schema migration, session variant, catalog fork, HTTP enrollment server, generic OAuth framework, or CLI executable is proposed.
+These are exact library paths across both lots; LOT 1 is frozen and LOT 2 mesh paths/tests are authorized in BRANCH.md. No new dependency, provider ID, account schema migration, session variant, catalog fork, HTTP enrollment server, generic OAuth framework, or CLI executable is proposed.
 
 | Future file | Change |
 | --- | --- |
@@ -187,8 +189,8 @@ These are exact library paths; only LOT 1 paths and their tests are authorized h
 | Modify `packages/llm-mesh/src/enrollment/index.ts` | Add an export of the existing internal `EnrollmentCompletion` type, which is not exported from this entry point today; no new completion union or runtime provider export. |
 | Modify `packages/llm-mesh/src/service/facade.ts` | Configure the Claude provider with `configResolver`; add/delegate the two optional per-flow methods below. Keep existing signatures/factories working. |
 | Modify `packages/llm-mesh/src/service/local-account-transport-service.ts` | Bind Claude browser session owner/expiry, narrow the optional Claude-local import capability, and share the ownership/persistence helper. Publish only durable credentials. Include D5's shared single-flight bug fix through save/removal recheck/publication; retain Cloud Code/Codex tests. No custody ingestion. |
-| Add `packages/llm-mesh/src/transport/claude-code-runtime-client.ts` | Lot 2 only if qualified: Anthropic adapter bridge to injected official-CLI subprocess runner, access-only projection, response/events and safe errors. No fetch/Messages client, header builder, runtime refresh or Node imports. |
-| Modify `packages/llm-mesh/src/index.ts` | Lot 2 only when qualified: export `ClaudeCodeRuntimeClient` and options like existing runtime exports. Do not ship an unqualified bridge/export when execution is `not-covered`. |
+| Add `packages/llm-mesh/src/transport/claude-code-runtime-client.ts` | Lot 2 mesh bridge to injected official-CLI subprocess runner, access-only projection, response/events and safe errors. No fetch/Messages client, header builder, runtime refresh or Node imports; host qualification required before serving. |
+| Modify `packages/llm-mesh/src/index.ts` | Lot 2 exports `ClaudeCodeRuntimeClient`, options, capability profile and runner interface types. Additive injection seam only; no built-in runner or automatic execution enablement. |
 | Modify `packages/llm-mesh/README.md` | Lot 1: facade configuration, secret boundary, renewable paste, and the sourced Terms of use section required above; lot 2: document qualified CLI execution or explicit enrollment-only / execution `not-covered`. |
 | Modify `packages/llm-mesh/package.json`, root `package-lock.json` | Exactly one final llm-mesh bump/Make lock update after both lots, or after lot 1 if lot 2 is `not-covered`; no version changes here. |
 
@@ -212,12 +214,12 @@ The factory supplies both optional methods; consumers capability-check each so o
 
 No edits are expected in `enrollment/contracts.ts`, `node/index.ts`, `adapter-auth.ts`, `auth.ts`, `account-transports.ts`, `providers.ts`, `catalog.ts`, `pkce.ts`, `device-flow.ts`, existing providers, or keyrings. D6 uses existing extension points. Later h2a owns masked input, browser launch, completions, trusted Node subprocess runner, client injection and mission wiring. H1 grounds the launch precedent; conductor assigns exact consumer source/test paths at the LOT 2 start gate. Keep the existing one h2a `0.97.x` bump policy in that lane. Custody job/resolver delivery stays separate; no custody execution claim follows from this design.
 
-### Implementation lots (only LOT 1 authorized here)
+### Implementation lots (LOT 1 complete; LOT 2 mesh authorized)
 
 | Lot | Bounded scope and gate |
 | --- | --- |
 | 1 — enrollment, refresh, persistence | D1–D5, README Terms of use, provider, facade/service, completion type export, shared single-flight bug fix; enrollment/service/contract/auth regressions. Gate: durable browser/sessionless paste, restart, config rejection, offline labels, safe errors, Cloud Code/Codex race coverage and reviewed README terms/source. |
-| 2 — official CLI execution or `not-covered` | Start gate (M6): conductor assigns exact h2a runner test files and designs the M5 child-refresh counting probe before implementation, not in lot 1. Then D6 bridge/runner, conditional runtime export, h2a wiring and M3/M5 qualification; transport/auth/consumer regressions. Gate: official subprocess, safe injection/cleanup, zero child refresh, isolated runs, generate/stream/tool round trip. Failure keeps the seat enrollment-only. |
+| 2 — official CLI execution or `not-covered` | Start gate (M6) recorded in §2 before code: exact proposed h2a tests, runner contract and fake-only M5 probe. Mesh implements/tests D6 bridge and additive exports; h2a owns runner/wiring and M3/M5 qualification. Gate: official subprocess, safe injection/cleanup, zero child refresh, isolated runs, generate/stream/tool round trip. Unqualified hosts remain enrollment-only. |
 
 h2a enrollment wiring and M0–M7 are acceptance work across these two lots, not a third library lot. Make **one llm-mesh bump after both lots**, or **after lot 1 if lot 2 is `not-covered`**; qualify the exact bumped candidate before conductor release. Custody remains separate. README must describe the resulting capability accurately.
 
@@ -233,7 +235,7 @@ h2a enrollment wiring and M0–M7 are acceptance work across these two lots, not
 
 ## 5. Test plan and later h2a mission
 
-LOT 1 runs fake-clock, injected-fetch enrollment/service tests and package/consumer gates in the isolated environment. Tests use only fake credentials and isolated keyrings: no real token/browser session, access to real CLI credential files, or external provider traffic. `make scope-check` builds its harness dependency in Docker.
+LOT 1 uses fake-clock/injected-fetch enrollment/service tests; LOT 2 uses fake-runner transport tests and package/consumer gates in the isolated environment. Tests use only fake credentials and isolated keyrings: no real token/browser session, access to real CLI credential files, or external provider traffic. `make scope-check` builds its harness dependency in Docker.
 
 ### Automated coverage, exact future files
 
@@ -301,7 +303,7 @@ Owner decisions relayed by the product conductor, 2026-09-26:
 
 O1–O5 are decided. Remaining evidence: working OAuth profile, safe CDP handoff, official CLI execution/isolation, current model entitlement and per-device revocation; custody readiness belongs to its separate lane. Terms continuation and the release policy are decided, not new approval questions.
 
-Design status: approved. LOT 1 implementation and gate results are recorded in `BRANCH.md`; packed-consumer qualification still needs the conductor-owned candidate lock update. No live compatibility, independent implementation consensus, or custody readiness is claimed. The conductor receives a bounded library change set, explicit consumer/custody handoffs, and observable acceptance gates.
+Design status: approved. Both mesh implementation lots and gate results are recorded in `BRANCH.md`; packed-consumer qualification still needs the conductor-owned candidate lock update. LOT 1 cross-review APPROVE is conductor-reported; no LOT 2 independent consensus, live CLI compatibility or custody readiness is claimed. The conductor receives the mesh bridge, exact h2a contract/tests/probe and observable acceptance gates.
 
 ## Review disposition
 
