@@ -1,11 +1,12 @@
-# Feature: Claude subscription seat LOT 1
+# Feature: Claude subscription seat LOT 2
 
 ## Objective
 - [x] Implement approved D1–D5: browser enrollment, renewable paste, refresh and durable ordinary Claude seats; execution remains LOT 2.
+- [ ] Implement D6 mesh bridge to an injected official CLI runner; h2a owns subprocess qualification and release.
 
 ## Scope / Guardrails
-- [x] LOT 1 only on `spec/llm-mesh-claude-seat` in `/home/antoinefa/src/sentropic/tmp/llm-mesh-claude-seat`; base `origin/main`.
-- [x] English; fake credentials only; never read user credentials; no LOT 2 code, version bump, push, PR, merge or publication.
+- [x] LOT 2 mesh side on `spec/llm-mesh-claude-seat` in `/home/antoinefa/src/sentropic/tmp/llm-mesh-claude-seat`; LOT 1 frozen and cross-reviewed APPROVE.
+- [x] English; fake credentials only; never read user credentials; no version bump, push, PR, merge or publication.
 - [x] Use editing tools; selective staging and separate `make commit` calls; approximately 150 lines per commit.
 - [x] Make commands end with `ENV=test-llm-mesh-claude-seat`; no host Node/npm/Python or direct Docker.
 - [x] No services required; cleanup mapping: API `9395`, UI `5595`, Maildev UI `1495`.
@@ -14,16 +15,9 @@
 - [x] **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md`
-  - `packages/llm-mesh/src/enrollment/claude-code.ts`
-  - `packages/llm-mesh/src/enrollment/index.ts`
-  - `packages/llm-mesh/src/service/facade.ts`
-  - `packages/llm-mesh/src/service/local-account-transport-service.ts`
-  - `packages/llm-mesh/tests/enrollment/claude-code.test.ts`
-  - `packages/llm-mesh/tests/enrollment/contracts.test.ts`
-  - `packages/llm-mesh/tests/service/local-account-transport-service-claude.test.ts`
-  - `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`
-  - `packages/llm-mesh/tests/service/facade.test.ts`
-  - `packages/llm-mesh/tests/auth.test.ts`
+  - `packages/llm-mesh/src/transport/claude-code-runtime-client.ts`
+  - `packages/llm-mesh/src/index.ts`
+  - `packages/llm-mesh/tests/transport/**`
   - `packages/llm-mesh/README.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - `packages/llm-mesh/src/enrollment/contracts.ts`
@@ -37,8 +31,7 @@
   - `packages/llm-mesh/src/catalog.ts`
   - `packages/llm-mesh/src/providers.ts`
   - `packages/llm-mesh/src/node/**`
-  - `packages/llm-mesh/src/transport/**`
-  - `packages/llm-mesh/src/index.ts`
+  - `packages/llm-mesh/src/service/**`
   - `packages/llm-mesh/package.json`
   - `apps/**`
   - `api/**`
@@ -55,6 +48,21 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-29` — acknowledge — owner: conductor — LOT 2 repeats the explicit no-bump exception; general package bump rule is deferred to the conductor's single release bump after qualification.
+- [x] `CS-30` — attention — owner: implementer — Conservative capability profile requires source and qualification references; history/tools remain opt-in and unsupported controls fail before runner invocation. Host attestation is not independent proof.
+- [x] `CS-31` — attention — owner: h2a lane — Public docs say bare mode skips OAuth and managed hooks survive ordinary disableAllHooks; refuse unqualified isolation instead of assuming flags disable all discovery.
+- [x] `CS-32` — attention — owner: conductor — Preserve CS-17 scope: no Track/recorder artifacts or agent launches; independent implementation review and live qualification remain conductor-owned.
+
+## Implementation plan (LOT 2 authorized)
+- [x] Step A — source-grounded runner contract, exact proposed h2a tests and fake-only M5 counting probe recorded before runtime code.
+- [ ] Step B1 — runner interfaces, access projection and conservative request validation.
+- [ ] Step B2 — generate/stream mapping, terminal validation, abort and sanitized failures.
+- [ ] Step B3 — additive runtime/type exports and README host qualification/terms guidance.
+- [ ] Step B4 — `tests/transport/claude-code-runtime-client.test.ts`: projection, both seat shapes, other auth routing, unsupported requests, stream/generate/tools, abort, malformed/truncated events, canary errors and no network.
+- [ ] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
+- [ ] Cleanup — `make down` and `make ps` with dedicated compose project and ports 9395/5595/1495; final diff and commit log.
+
+## LOT 1 feedback history
 - [x] `CS-28` — attention — owner: implementer — Fix round 2 uses one service-local public-write promise chain per account; preserve keyring/schema contracts, the no-bump exception and conductor-owned review/release.
 - [x] `CS-27` — attention — owner: implementer — Full gate exposed the facade fixture reusing its browser grant as a second account; change the successful import to a distinct fake grant and explicitly assert facade duplicate refusal.
 - [x] `CS-26` — attention — owner: implementer — Compare same-owner Claude refresh grants only in process under the existing enrollment persistence queue; enforce one account/refresh holder per grant without hashes, output, or a new schema. Cross-process grant ownership remains the documented single-service responsibility.
