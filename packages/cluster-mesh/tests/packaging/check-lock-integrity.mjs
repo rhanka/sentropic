@@ -9,7 +9,7 @@
 //   registry <committed-lock> [required...]
 //       after publication: registry dist.tarball and dist.integrity of each published train package must equal the
 //       lock `resolved` and `integrity`; a required package (its publish job succeeded in this run) must be on the
-//       registry: cache-bypassing lookups retried 12 x 5 s, then an error; any other absent package is a notice
+//       registry: cache-bypassing lookups retried 18 x 10 s, then an error; any other absent package is a notice
 import fs from 'node:fs';
 import { readIndex } from './siblings.mjs';
 
@@ -18,8 +18,8 @@ const TRAIN = ['@sentropic/llm-mesh', '@sentropic/llm-gateway'];
 const CANDIDATE = '@sentropic/cluster-mesh';
 // Lookup base and retry budget; overridable for the unit tests only (lock `resolved` always names REGISTRY).
 const LOOKUP_REGISTRY = process.env.CLUSTER_MESH_REGISTRY_LOOKUP_URL ?? REGISTRY;
-const RETRIES = Number(process.env.CLUSTER_MESH_REGISTRY_RETRIES ?? 12);
-const DELAY_MS = Number(process.env.CLUSTER_MESH_REGISTRY_DELAY_MS ?? 5000);
+const RETRIES = Number(process.env.CLUSTER_MESH_REGISTRY_RETRIES ?? 18);
+const DELAY_MS = Number(process.env.CLUSTER_MESH_REGISTRY_DELAY_MS ?? 10000);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const tarballUrl = (name, version) => `${REGISTRY}/${name}/-/${name.split('/').pop()}-${version}.tgz`;
