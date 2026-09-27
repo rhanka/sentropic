@@ -2,7 +2,7 @@
 
 ## Objective
 - [x] Implement approved D1–D5: browser enrollment, renewable paste, refresh and durable ordinary Claude seats; execution remains LOT 2.
-- [ ] Implement D6 mesh bridge to an injected official CLI runner; h2a owns subprocess qualification and release.
+- [x] Implement D6 mesh bridge to an injected official CLI runner; h2a owns subprocess qualification and release.
 
 ## Scope / Guardrails
 - [x] LOT 2 mesh side on `spec/llm-mesh-claude-seat` in `/home/antoinefa/src/sentropic/tmp/llm-mesh-claude-seat`; LOT 1 frozen and cross-reviewed APPROVE.
@@ -55,6 +55,9 @@
 - [x] `CS-33` — attention — owner: implementer — Ten new regressions exposed unmatched/lossy tool histories and mutable schemas; validate complete call/result identity and copy JSON before deferred execution, preserving the conservative CLI subset.
 - [x] `CS-34` — attention — owner: implementer — Reject malformed usage containers, unsafe totals and lossy tool-output JSON; focused regressions reproduced each acceptance gap before the fix.
 - [x] `CS-35` — attention — owner: implementer — First full typecheck/build caught loss of TypeScript narrowing through the original toolResult path; project through the validated local result alias. Full tests 476/476 and lint passed before this type-only correction.
+- [x] `CS-36` — attention — owner: implementer — Cluster setup reproduced EACCES on llm-mesh/node_modules/.vite; stat confirmed root:root 0755 from the test target. `make clean-node-modules ENV=test-llm-mesh-claude-seat` removes generated dependencies within this worktree before retrying the unchanged gate.
+- [x] `CS-37` — attention — owner: h2a lane — Bind each runner to an owner/account lease acquired by the outer coordinator before grant acquisition. Tool capability additionally requires proving mesh-owned execution and replay-free continuation; auto-executed CLI tools do not qualify.
+- [x] `CS-38` — attention — owner: conductor/release lane — Cluster gate skips 34 packaging cases; historical CS-21 exact-candidate lock qualification remains separate. No LOT 2 independent review or live CLI/custody qualification is claimed.
 
 ## Implementation plan (LOT 2 authorized)
 - [x] Step A — source-grounded runner contract, exact proposed h2a tests and fake-only M5 counting probe recorded before runtime code.
@@ -68,8 +71,22 @@
   - [x] Add fake-only projection and auth coexistence matrix with a forbidden-network guard.
   - [x] Add pre-run capability refusals and generate/stream/tool-result round-trip mapping with source-qualified fake profiles.
   - [x] Add failure canaries, terminal validation, usage filtering, pending-read/early-close abort and deferred-expiry checks.
-- [ ] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
-- [ ] Cleanup — `make down` and `make ps` with dedicated compose project and ports 9395/5595/1495; final diff and commit log.
+- [x] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
+- [x] Cleanup — `make down` and `make ps` with dedicated compose project and ports 9395/5595/1495; final diff and commit log.
+
+## LOT 2 validation and handoff
+- [x] `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS, 476 tests in 35 files, including 90 new transport cases; fake credentials only.
+- [x] `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat`: PASS, 90/90 after the final type-only correction; tests import the public index.
+- [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS after fixing planned-account and tool-result narrowing; initial failures preserved in CS-35 and commit history.
+- [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make build-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS after the same narrowing fix; also rebuilt by the cluster gate.
+- [x] `make test-cluster-mesh ENV=test-llm-mesh-claude-seat`: PASS, 394 tests, 34 packaging cases skipped (53 passing files, five skipped); CS-36 records the resolved setup failure.
+- [x] `make scope-check ENV=test-llm-mesh-claude-seat`: PASS C2 before every commit; `harness check branch`: PASS C1; `git diff --check`: PASS.
+- [x] `make down COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make ps COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat`: PASS, no services. No stack started.
+- [x] Six allowed files changed since LOT 1 HEAD `11f893206`; all LOT 2 commits below 150 changed lines. No forbidden paths, version changes, real credentials, CLI execution, push, PR, merge or publication.
+- [x] Read set: mandatory MASTER/workflow/subagents/testing/template; RTK and harness using/brainstorm/test/review/debug; project/branch context; D6/spec; installed h2a 0.97.9 and h2a-runtime 0.97.6 launch sources; public A6 docs.
+- [x] Handoff: spec §2 records exact runner DTO/events, six proposed h2a tests, candidate invocation/isolation controls and fake-only M5 endpoint counters with positive controls. Unverified candidate behavior stays not-covered; no qualified runner is bundled.
 
 ## LOT 1 feedback history
 - [x] `CS-28` — attention — owner: implementer — Fix round 2 uses one service-local public-write promise chain per account; preserve keyring/schema contracts, the no-bump exception and conductor-owned review/release.
