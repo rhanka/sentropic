@@ -125,9 +125,8 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
         || (message.content !== '' && message.content !== result.output)) throw failure('unsupported');
       pending.delete(id);
       return { role: 'user', content: [{ type: 'tool_result',
-        tool_use_id: message.toolResult.providerCallId ?? message.toolResult.toolCallId,
-        content: message.toolResult.output, ...(message.toolResult.isError !== undefined
-          ? { is_error: message.toolResult.isError } : {}) }] };
+        tool_use_id: id, content: result.output,
+        ...(result.isError !== undefined ? { is_error: result.isError } : {}) }] };
     }
     if (pending.size) throw failure('unsupported');
     const content: ClaudeCodeCliContent[] = typeof message.content === 'string'
