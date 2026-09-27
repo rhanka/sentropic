@@ -85,6 +85,7 @@ export class LocalAccountTransportService {
   private readonly accountsMap = new Map<string, AccountTransportAccount>();
   private readonly credentialVersions = new Map<string, string>();
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
+  private readonly publicWrites = new Map<string, Promise<void>>();
   private readonly accountRemovalBarrierRefs = new Map<string, string>();
   private readonly claimedOwnerScopes = new Map<string, string>();
   private readonly pendingClaudeAccounts = new Set<string>();
@@ -874,7 +875,7 @@ export class LocalAccountTransportService {
         if (record) {
           await this.assertAccountOwnerClaim(input.accountId, account?.ownerScopeRef);
           if (await this.isAccountRemoved(input.accountId)) throw new Error('Account removed');
-          await this.keyring.setSecret(`sentropic-llm-mesh:${input.accountId}:public`, JSON.stringify({
+          await this.writePublicRecord(input.accountId, JSON.stringify({
             ...record, status: 'reauth_required', account: { ...record.account, status: 'reauth_required' },
           }));
         }
@@ -951,10 +952,7 @@ export class LocalAccountTransportService {
     await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
     await this.keyring.setSecret(`sentropic-llm-mesh:${pub.accountId}:envelope`, JSON.stringify(env));
     await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
-    await this.keyring.setSecret(
-      `sentropic-llm-mesh:${pub.accountId}:public`,
-      JSON.stringify(publicRecord),
-    );
+    await this.writePublicRecord(pub.accountId, JSON.stringify(publicRecord));
     if (await this.isAccountRemoved(pub.accountId)) {
       await this.cleanupRemovedPersistence(pub.accountId, removalBarrierRef);
       throw new Error(`Account '${pub.accountId}' has been removed`);
@@ -972,6 +970,19 @@ export class LocalAccountTransportService {
     if (await this.isAccountRemoved(pub.accountId)) {
       await this.cleanupRemovedPersistence(pub.accountId, removalBarrierRef);
       throw new Error(`Account '${pub.accountId}' has been removed`);
+    }
+  }
+
+  private async writePublicRecord(accountId: string, value: string): Promise<void> {
+    // A fence must land after every earlier route write, even one already in the keyring.
+    const previous = this.publicWrites.get(accountId) ?? Promise.resolve();
+    const pending = previous.catch(() => {}).then(() =>
+      this.keyring.setSecret(`sentropic-llm-mesh:${accountId}:public`, value));
+    this.publicWrites.set(accountId, pending);
+    try {
+      await pending;
+    } finally {
+      if (this.publicWrites.get(accountId) === pending) this.publicWrites.delete(accountId);
     }
   }
 
@@ -994,7 +1005,7 @@ export class LocalAccountTransportService {
       // Route outcomes must not clear the durable no-replay fence during rotation.
       if (!restoreBeforeRequest && this.refreshInFlight.has(account.accountId)
         && account.status !== 'reauth_required') return;
-      await this.keyring.setSecret(key, JSON.stringify({
+      await this.writePublicRecord(account.accountId, JSON.stringify({
         ...current,
         status: account.status ?? current.status,
         updatedAt: new Date().toISOString(),
@@ -1238,10 +1249,7 @@ export class LocalAccountTransportService {
           this.claimedOwnerScopes.set(accountId, ownerClaim.ownerScopeRef);
         }
         if (migrateLegacyOwner && restoredAccount.ownerScopeRef) {
-          await this.keyring.setSecret(
-            `sentropic-llm-mesh:${accountId}:public`,
-            JSON.stringify({ ...publicRecord, account: restoredAccount }),
-          );
+          await this.writePublicRecord(accountId, JSON.stringify({ ...publicRecord, account: restoredAccount }));
         }
       } catch {
         // Ignore incomplete/corrupt entries; another active account may still be usable.

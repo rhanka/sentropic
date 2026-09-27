@@ -1,7 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { AccountTransportAcquireError } from '../../src/account-transports.js';
 import { ClaudeCodeEnrollmentProvider } from '../../src/enrollment/claude-code.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
+import { EncryptedFileKeyring } from '../../src/node/keyring/encrypted-file-keyring.js';
+import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 const ACCESS = 'FAKE_SERVICE_ACCESS_CANARY_159';
@@ -15,7 +20,7 @@ const paste = (expired = false, refreshToken = REFRESH) => JSON.stringify({ acce
   expiresAt: Date.now() + (expired ? -1000 : 3600_000), scopes: ['user:inference'] });
 const response = () => new Response(JSON.stringify({ access_token: ACCESS, refresh_token: REFRESH,
   expires_in: 3600, scope: 'user:inference' }));
-function setup(keyring = new InMemoryKeyring(), fetchFn = vi.fn(async () => response())) {
+function setup(keyring: KeyringAdapter = new InMemoryKeyring(), fetchFn = vi.fn(async () => response())) {
   const configResolver = { resolveConfig: vi.fn(async () => ({})) };
   const provider = new ClaudeCodeEnrollmentProvider({ configResolver, fetchFn, nowFn: () => Date.now() });
   const create = () => new LocalAccountTransportService(keyring, new Map([['claude-code', provider]]), configResolver);
@@ -31,6 +36,11 @@ async function assertSafe(promise: Promise<unknown>) {
   return error;
 }
 function codeFor(session: { url?: string }) { return `${CODE}#${new URL(session.url!).searchParams.get('state')}`; }
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
 afterEach(() => vi.useRealTimers());
 
 describe('Claude service enrollment', () => {
@@ -165,6 +175,70 @@ describe('Claude service enrollment', () => {
     expect(pub.status).toBe('reauth_required');
     expect(pub.account.status).toBe('reauth_required');
     expect(result).toBeInstanceOf(AccountTransportAcquireError);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('orders the refresh fence after an already started route write on disk', async () => {
+    const path = await mkdtemp(join(tmpdir(), 'claude-fence-'));
+    onTestFinished(() => rm(path, { recursive: true, force: true }));
+    const { service, keyring, fetchFn } = setup(new EncryptedFileKeyring(path));
+    const reader = new EncryptedFileKeyring(path);
+    const { accountId } = await service.completeClaudeCredentialImport(paste(), owner);
+    const pubKey = `sentropic-llm-mesh:${accountId}:public`;
+    const envelopeKey = `sentropic-llm-mesh:${accountId}:envelope`;
+    const attempt = await service.createRouteDirectory({ generate: vi.fn(), stream: vi.fn() }).prepareAttempt({
+      subject: { principalRef: 'test', ownerScopeRef: owner }, accountRef: accountId,
+      target: { requestedModel: 'claude-opus-4-6', providerId: 'anthropic',
+        modelId: 'claude-opus-4-6', transportProviderId: 'claude-code', reason: 'exact' },
+      requestId: 'pending-route-write', attemptIndex: 0,
+    });
+    const routeStarted = deferred(), releaseRoute = deferred(), fenceQueued = deferred();
+    const requested = deferred(), providerResponse = deferred<Response>();
+    const savingGrant = deferred(), releaseGrant = deferred();
+    const save = keyring.setSecret.bind(keyring);
+    let holdRoute = true;
+    let fenceWrite = Promise.resolve();
+    keyring.setSecret = async (key, value) => {
+      if (key === pubKey && JSON.parse(value).status === 'reauth_required') {
+        fenceWrite = save(key, value);
+        return fenceWrite;
+      }
+      if (key === pubKey && holdRoute) {
+        holdRoute = false; routeStarted.resolve(); await releaseRoute.promise;
+      }
+      if (key === envelopeKey) { savingGrant.resolve(); await releaseGrant.promise; }
+      await save(key, value);
+    };
+    // Observe fence submission without timers or assuming the keyring already started it.
+    const writer = service as unknown as { writePublicRecord(id: string, value: string): Promise<void> };
+    const write = writer.writePublicRecord.bind(service);
+    vi.spyOn(writer, 'writePublicRecord').mockImplementation((id, value) => {
+      const pending = write(id, value);
+      if (JSON.parse(value).status === 'reauth_required') fenceQueued.resolve();
+      return pending;
+    });
+    fetchFn.mockImplementationOnce(() => { requested.resolve(); return providerResponse.promise; });
+    const route = attempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'account' });
+    await routeStarted.promise;
+    const refresh = service.acquire({ ...acquire, now: Date.now() + 7200_000 });
+    await fenceQueued.promise;
+    // An unordered keyring can finish the fence before the older route write.
+    await fenceWrite;
+    expect.soft(fetchFn).not.toHaveBeenCalled();
+    releaseRoute.resolve();
+    await Promise.all([route, requested.promise]);
+    const assertFenced = async () => expect.soft(JSON.parse((await reader.getSecret(pubKey))!))
+      .toMatchObject({ status: 'reauth_required', account: { status: 'reauth_required' } });
+    await assertFenced();
+    providerResponse.resolve(new Response(JSON.stringify({ access_token: 'FAKE_ROTATED_ACCESS',
+      refresh_token: 'FAKE_ROTATED_REFRESH', expires_in: 3600, scope: 'user:inference' })));
+    await savingGrant.promise;
+    await assertFenced();
+    releaseGrant.resolve();
+    expect((await refresh).material.accessToken).toBe('FAKE_ROTATED_ACCESS');
+    expect(JSON.parse((await reader.getSecret(pubKey))!))
+      .toMatchObject({ status: 'active', account: { status: 'active' } });
+    expect(JSON.parse((await reader.getSecret(envelopeKey))!).refreshToken).toBe('FAKE_ROTATED_REFRESH');
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
