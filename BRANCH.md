@@ -1,8 +1,8 @@
 # Feature: Schedule the reservation reaper
 
 ## Objective
-- [ ] Schedule crash recovery for expired gateway holds in the API and standalone host.
-- [ ] Prove concurrent schedulers cannot duplicate settlement or budget charges.
+- [x] Schedule crash recovery for expired gateway holds in the API and standalone host.
+- [x] Prove concurrent schedulers cannot duplicate settlement or budget charges.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/llm-reaper-schedule`; branch: `feat/llm-reaper-schedule`.
@@ -70,6 +70,18 @@
 - [ ] **Lot 4 — Final validation**
   - [x] Run targeted API and host tests: 12 scheduler tests, 5 lifecycle tests, 37 ledger tests passed.
   - [x] Run `make typecheck-api lint-api`; host typecheck and lint also passed.
-  - [ ] Run full `make test-api-unit test-api-endpoints` and `make test-llm-gateway-process`.
-  - [ ] Run `make scope-check` before each commit; update this plan in each commit.
-  - [ ] Run `make down`; report exact commands, counts and final commit log.
+  - [x] Run full API suites: 1,019 unit tests passed, 2 skipped; 974 endpoint tests passed.
+  - [ ] Pass full host suite: 76 passed, 1 failed (BRRS-B2); all 5 new host lifecycle tests passed.
+  - [x] Run `make scope-check` before each commit; update this plan in each commit.
+  - [x] Run `make down`; `make ps` confirms no remaining services; record commands and counts for handoff.
+
+## Validation Evidence
+- [x] PASS: `make typecheck-api lint-api REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [ ] FAIL (BRRS-B2 only): `make up-api-test typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`; startup, host typecheck and lint passed; host tests 76 passed / 1 failed across 7 files.
+- [x] PASS (12 tests): `make test-api-unit SCOPE=tests/unit/reservation-reaper-schedule.test.ts REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [x] PASS (37 tests, real Postgres): `make test-api-endpoints SCOPE=tests/api/llm-budget-ledger.test.ts REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [x] PASS (unit: 114 files, 1,019 passed / 2 skipped; endpoints: 120 files, 974 passed): `make test-api-unit test-api-endpoints REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [x] PASS C2: `make scope-check API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [x] PASS (healthy responses in inspected tail): `make logs-api TAIL=30 REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [x] PASS: `make down REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [x] PASS (empty): `make ps REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
