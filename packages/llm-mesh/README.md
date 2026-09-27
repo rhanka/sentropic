@@ -179,11 +179,12 @@ Messages transport, client headers, runtime refresh or automatic retry.
 
 ```ts
 import { ClaudeCodeRuntimeClient, createDefaultProviderAdapters } from '@sentropic/llm-mesh';
-import type { ClaudeCodeCliRunner, ClaudeCodeCliCapabilities } from '@sentropic/llm-mesh';
+import type { AnthropicAdapterClient, ClaudeCodeCliRunner, ClaudeCodeCliCapabilities } from '@sentropic/llm-mesh';
 
 // Trusted host supplies these after qualifying the exact CLI and isolated runner.
 declare const runner: ClaudeCodeCliRunner;
 declare const capabilities: ClaudeCodeCliCapabilities;
+declare const directAnthropicClient: AnthropicAdapterClient;
 const adapters = createDefaultProviderAdapters({
   anthropic: new ClaudeCodeRuntimeClient({ runner, capabilities, fallback: directAnthropicClient }),
 });
