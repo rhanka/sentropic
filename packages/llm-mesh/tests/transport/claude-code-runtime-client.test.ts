@@ -3,7 +3,7 @@ import { createDefaultProviderAdapters } from '../../src/adapters.js';
 import type { AuthInput, SecretAuthMaterial } from '../../src/auth.js';
 import type { StreamRequest } from '../../src/generation.js';
 import { ClaudeCodeRuntimeClient, type ClaudeCodeCliCapabilities,
-  type ClaudeCodeCliEvent, type ClaudeCodeCliRunner } from '../../src/transport/claude-code-runtime-client.js';
+  type ClaudeCodeCliEvent, type ClaudeCodeCliRunner } from '../../src/index.js';
 
 const now = Date.parse('2026-09-26T12:00:00Z');
 const scopes = ['user:profile', 'user:inference', 'user:sessions:claude_code'];
