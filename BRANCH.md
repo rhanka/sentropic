@@ -48,6 +48,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-39` — attention — owner: implementer — Round 1 confirms expiry remapping and conflicting fallback auth; preserve sanitized failure codes, strip mismatched request auth, and fill only absent custody scopes from the trusted resolution descriptor (never replace explicit invalid scopes).
 - [x] `CS-29` — acknowledge — owner: conductor — LOT 2 repeats the explicit no-bump exception; general package bump rule is deferred to the conductor's single release bump after qualification.
 - [x] `CS-30` — attention — owner: implementer — Conservative capability profile requires source and qualification references; history/tools remain opt-in and unsupported controls fail before runner invocation. Host attestation is not independent proof.
 - [x] `CS-31` — attention — owner: h2a lane — Public docs say bare mode skips OAuth and managed hooks survive ordinary disableAllHooks; refuse unqualified isolation instead of assuming flags disable all discovery.
@@ -74,7 +75,14 @@
 - [x] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
 - [x] Cleanup — `make down` and `make ps` with dedicated compose project and ports 9395/5595/1495; final diff and commit log.
 
-## LOT 2 validation and handoff
+## LOT 2 fix round 1
+- [x] Preserve deferred-expiry auth failures, isolate fallback auth, and fill absent custody scopes; six reproduced failures fixed, focused suite 97/97 including forged-code sanitization and request-only API auth.
+- [ ] Normalize tool-only history, group results, accept mesh IDs and compare JSON arguments independent of key order.
+- [ ] Omit empty usage, generate unique response IDs and clarify model selection.
+- [ ] Document baseline-only CLI expectation, production egress enforcement, account-specific terms, orphan cleanup and real expiry bounds; record adapter-auth follow-up.
+- [ ] Run all six requested gates, cleanup, and provide conductor summary; no bump, push, PR or real credentials.
+
+## LOT 2 validation and handoff (before fix round 1)
 - [x] `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS, 476 tests in 35 files, including 90 new transport cases; fake credentials only.
 - [x] `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat`: PASS, 90/90 after the final type-only correction; tests import the public index.
 - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS after fixing planned-account and tool-result narrowing; initial failures preserved in CS-35 and commit history.
