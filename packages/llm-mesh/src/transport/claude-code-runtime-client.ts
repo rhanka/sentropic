@@ -72,7 +72,7 @@ const projectAccess = (input: AuthInput | undefined, now: number): ClaudeCodeAcc
   const auth = getSecretAuthMaterial(input);
   if (!auth || (auth.type !== 'account-transport' && auth.type !== 'claude-code-account')
     || auth.provider !== 'claude-code' || ('status' in auth && auth.status === 'planned')) throw failure('auth');
-  const expiresAt = typeof auth.expiresAt === 'string' ? Date.parse(auth.expiresAt) : NaN;
+  const expiresAt = 'expiresAt' in auth && typeof auth.expiresAt === 'string' ? Date.parse(auth.expiresAt) : NaN;
   const descriptor = auth.descriptor ?? (input && 'material' in input ? input.descriptor : undefined);
   const scopes = auth.type === 'account-transport' ? auth.metadata?.scopes : descriptor?.metadata?.scopes;
   if (!textValue(auth.accessToken) || !Number.isFinite(now) || !Number.isFinite(expiresAt)
@@ -125,3 +125,112 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
   });
   return { modelId: request.modelId, messages, ...(tools?.length ? { tools } : {}) };
 };
+
+export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
+  private readonly capabilities: ClaudeCodeCliCapabilities;
+  constructor(private readonly options: ClaudeCodeRuntimeClientOptions) {
+    this.capabilities = { ...options.capabilities };
+  }
+
+  private auth(request: GenerateRequest, context?: ProviderRuntimeContext): AuthInput | undefined {
+    return context?.auth ?? (typeof request.auth === 'function' ? undefined : request.auth);
+  }
+
+  async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
+    const auth = this.auth(request, context);
+    if (!seat(auth)) {
+      if (!this.options.fallback) throw failure('auth');
+      return this.options.fallback.stream(request, context);
+    }
+    if (request.signal?.aborted) throw failure('aborted');
+    const access = projectAccess(auth, (this.options.now ?? Date.now)());
+    let projected: ClaudeCodeCliRequest;
+    try { projected = projectRequest(request, this.capabilities); }
+    catch { throw failure('unsupported'); }
+    return this.events(access, projected, request.signal);
+  }
+
+  private async *events(access: ClaudeCodeAccessProjection, request: ClaudeCodeCliRequest,
+    signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    const controller = new AbortController();
+    const abort = () => controller.abort(); // Never forward the caller's possibly secret reason.
+    signal?.addEventListener('abort', abort, { once: true });
+    let iterator: AsyncIterator<ClaudeCodeCliEvent> | undefined;
+    let cancelRead: (() => void) | undefined;
+    try {
+      if (signal?.aborted) abort();
+      if (controller.signal.aborted) throw failure('aborted');
+      if (access.expiresAt <= (this.options.now ?? Date.now)()) throw failure('auth');
+      iterator = this.options.runner.run({ access, request, signal: controller.signal })[Symbol.asyncIterator]();
+      let done: Extract<StreamEvent, { type: 'done' }> | undefined;
+      const calls = new Set<string>();
+      while (true) {
+        if (controller.signal.aborted) throw failure('aborted');
+        const cancelled = new Promise<never>((_, reject) => {
+          cancelRead = () => reject(failure('aborted'));
+          controller.signal.addEventListener('abort', cancelRead, { once: true });
+        });
+        const next = await Promise.race([iterator.next(), cancelled]);
+        controller.signal.removeEventListener('abort', cancelRead!);
+        if (controller.signal.aborted) throw failure('aborted');
+        if (next.done) break;
+        const event = next.value;
+        if (done || !event) throw failure('runner');
+        if (event.type === 'text_delta' && typeof event.text === 'string') {
+          yield { type: 'content_delta', data: { delta: event.text } };
+        } else if (event.type === 'tool_use') {
+          if (!textValue(event.id) || calls.has(event.id)
+            || !request.tools?.some((tool) => tool.name === event.name)
+            || !event.input || typeof event.input !== 'object' || Array.isArray(event.input)) throw failure('runner');
+          const argumentsText = JSON.stringify(event.input);
+          calls.add(event.id);
+          yield { type: 'tool_call_start', data: { toolCallId: event.id, providerCallId: event.id,
+            name: event.name, argumentsText, arguments: JSON.parse(argumentsText), inputState: 'complete' } };
+        } else if (event.type === 'result') {
+          if (!['stop', 'length', 'tool_calls'].includes(event.finishReason)
+            || (calls.size > 0) !== (event.finishReason === 'tool_calls')) throw failure('runner');
+          const usage: TokenUsage = {};
+          for (const key of ['inputTokens', 'outputTokens'] as const) {
+            const value = event.usage?.[key];
+            if (value !== undefined) {
+              if (!Number.isSafeInteger(value) || value < 0) throw failure('runner');
+              usage[key] = value;
+            }
+          }
+          if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
+            usage.totalTokens = usage.inputTokens + usage.outputTokens;
+          }
+          done = { type: 'done', data: { finishReason: event.finishReason,
+            ...(event.usage ? { usage } : {}), providerId: 'anthropic', modelId: request.modelId } };
+        } else throw failure('runner');
+      }
+      if (!done) throw failure('runner');
+      yield done;
+    } catch { throw failure(controller.signal.aborted ? 'aborted' : 'runner'); }
+    finally {
+      if (cancelRead) controller.signal.removeEventListener('abort', cancelRead);
+      abort();
+      signal?.removeEventListener('abort', abort);
+      // A pending next must not trap caller cancellation; host cancellation owns cleanup.
+      try { void Promise.resolve(iterator?.return?.()).catch(() => {}); } catch { /* private host failure */ }
+    }
+  }
+
+  async generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse> {
+    if (!seat(this.auth(request, context))) {
+      if (!this.options.fallback) throw failure('auth');
+      return this.options.fallback.generate(request, context);
+    }
+    let text = ''; const calls: ToolCall[] = [];
+    let done: Extract<StreamEvent, { type: 'done' }> | undefined;
+    for await (const event of await this.stream(request, context)) {
+      if (event.type === 'content_delta') text += event.data.delta;
+      if (event.type === 'tool_call_start') calls.push(event.data);
+      if (event.type === 'done') done = event;
+    }
+    return { id: 'claude_cli_response', providerId: 'anthropic', modelId: request.modelId!,
+      message: { role: 'assistant', content: text, ...(calls.length ? { toolCalls: calls } : {}) },
+      text, toolCalls: calls, finishReason: done!.data.finishReason!,
+      ...(done!.data.usage ? { usage: done!.data.usage } : {}) };
+  }
+}
