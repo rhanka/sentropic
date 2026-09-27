@@ -31,6 +31,7 @@ import {
   createRouteSettlement, settlementModeMiddleware, withSettlementMode,
 } from '../../../api/src/services/llm-metering/route-settlement';
 import type { HostConfig } from './config';
+import { runReservationReaperSweep, type ReapResult } from '../../../api/src/services/llm-metering/reservation-reaper';
 import {
   createHostReadiness, storeProbe, type DependencyProbe, type HostReadiness, type ProbeFailure,
 } from './readiness';
@@ -59,6 +60,7 @@ export interface BudgetDependency {
 export interface PartitionDependency { readonly source: RoutePartitionSource }
 
 export interface HostDependencies {
+  readonly reaper?: (limit: number) => Promise<ReapResult>;
   readonly identity?: IdentityDependency;
   readonly routing?: RoutingDependency;
   readonly budget?: BudgetDependency;
@@ -76,6 +78,7 @@ export class HostCompositionError extends Error {
 }
 
 export interface HostApp {
+  readonly reaper?: (limit: number) => Promise<ReapResult>;
   readonly app: Hono;
   readonly readiness: HostReadiness;
   /** Stops new admission: every `/v1/*` request then gets the frozen provider-shaped 503. */
@@ -114,7 +117,7 @@ export const createLedgerDependencies = (options: {
   readonly ownerRef: string;
   readonly defaultOutputTokens?: number;
   readonly now?: () => Date;
-}): { readonly budget: BudgetDependency; readonly settlement: SettlementDependency } => {
+}): { readonly budget: BudgetDependency; readonly settlement: SettlementDependency; readonly reaper: (limit: number) => Promise<ReapResult> } => {
   const port = createBudgetAdmission({
     database: options.database, ownerRef: options.ownerRef, ...(options.now ? { now: options.now } : {}),
   });
@@ -125,6 +128,7 @@ export const createLedgerDependencies = (options: {
       ...(options.defaultOutputTokens !== undefined ? { defaultOutputTokens: options.defaultOutputTokens } : {}),
     },
     settlement: { metering, ready: storeProbe(() => metering.probe()) },
+    reaper: (limit) => runReservationReaperSweep({ database: options.database, limit }),
   };
 };
 
@@ -248,6 +252,7 @@ export const createHostApp = async (options: CreateHostAppOptions): Promise<Host
     app,
     readiness,
     pending,
+    ...(dependencies.reaper ? { reaper: dependencies.reaper } : {}),
     closeAdmission() { admissionOpen = false; },
   };
 };
