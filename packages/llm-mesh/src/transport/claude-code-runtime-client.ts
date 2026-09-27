@@ -56,10 +56,15 @@ export interface ClaudeCodeRuntimeClientOptions {
   readonly now?: () => number;
 }
 
-const failure = (code: 'unsupported' | 'auth' | 'runner' | 'aborted') => Object.assign(
-  new Error(`Claude CLI ${code === 'aborted' ? 'request aborted' : `${code} unavailable`}`),
-  { code: `claude_cli_${code}`, ...(code === 'aborted' ? { name: 'AbortError' } : {}) },
-);
+class ClaudeCodeFailure extends Error {
+  readonly code: string;
+  constructor(code: 'unsupported' | 'auth' | 'runner' | 'aborted') {
+    super(`Claude CLI ${code === 'aborted' ? 'request aborted' : `${code} unavailable`}`);
+    this.code = `claude_cli_${code}`;
+    if (code === 'aborted') this.name = 'AbortError';
+  }
+}
+const failure = (code: ConstructorParameters<typeof ClaudeCodeFailure>[0]) => new ClaudeCodeFailure(code);
 const textValue = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && !value.includes('\0');
 const jsonCopy = (value: unknown): unknown => {
@@ -86,8 +91,10 @@ const projectAccess = (input: AuthInput | undefined, now: number): ClaudeCodeAcc
   if (!auth || (auth.type !== 'account-transport' && auth.type !== 'claude-code-account')
     || auth.provider !== 'claude-code' || ('status' in auth && auth.status === 'planned')) throw failure('auth');
   const expiresAt = 'expiresAt' in auth && typeof auth.expiresAt === 'string' ? Date.parse(auth.expiresAt) : NaN;
-  const descriptor = auth.descriptor ?? (input && 'material' in input ? input.descriptor : undefined);
-  const scopes = auth.type === 'account-transport' ? auth.metadata?.scopes : descriptor?.metadata?.scopes;
+  const resolution = input && 'material' in input ? input.descriptor : undefined;
+  const materialScopes = auth.descriptor?.metadata?.scopes;
+  const scopes = auth.type === 'account-transport' ? auth.metadata?.scopes
+    : materialScopes !== undefined ? materialScopes : resolution?.metadata?.scopes;
   if (!textValue(auth.accessToken) || !Number.isFinite(now) || !Number.isFinite(expiresAt)
     || expiresAt <= now || !Array.isArray(scopes) || !scopes.length
     || !scopes.every(textValue) || !scopes.includes('user:inference')) throw failure('auth');
@@ -160,11 +167,23 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
     return context?.auth ?? (typeof request.auth === 'function' ? undefined : request.auth);
   }
 
+  private delegatedRequest(request: StreamRequest, context?: ProviderRuntimeContext): StreamRequest {
+    // Never let a fallback resolve a second credential instead of the selected auth.
+    if (typeof request.auth === 'function' && !context?.auth) throw failure('auth');
+    if (request.auth !== undefined && (request.auth !== context?.auth
+      || (typeof request.auth !== 'function' && seat(request.auth)))) {
+      const { auth: _auth, ...input } = request;
+      return input;
+    }
+    return request;
+  }
+
   async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
     const auth = this.auth(request, context);
     if (!seat(auth)) {
       if (!this.options.fallback) throw failure('auth');
-      return this.options.fallback.stream(request, context);
+      return this.options.fallback.stream(this.delegatedRequest(request, context),
+        context?.auth || !auth ? context : { ...context, auth });
     }
     if (request.signal?.aborted) throw failure('aborted');
     const access = projectAccess(auth, (this.options.now ?? Date.now)());
@@ -206,7 +225,9 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
           if (!textValue(event.id) || calls.has(event.id)
             || !request.tools?.some((tool) => tool.name === event.name)
             || !event.input || typeof event.input !== 'object' || Array.isArray(event.input)) throw failure('runner');
-          const argumentsText = JSON.stringify(jsonObject(event.input));
+          let argumentsText: string;
+          try { argumentsText = JSON.stringify(jsonObject(event.input)); }
+          catch { throw failure('runner'); }
           calls.add(event.id);
           yield { type: 'tool_call_start', data: { toolCallId: event.id, providerCallId: event.id,
             name: event.name, argumentsText, arguments: JSON.parse(argumentsText), inputState: 'complete' } };
@@ -233,7 +254,11 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
       }
       if (!done) throw failure('runner');
       yield done;
-    } catch { throw failure(controller.signal.aborted ? 'aborted' : 'runner'); }
+    } catch (error) {
+      if (controller.signal.aborted) throw failure('aborted');
+      if (error instanceof ClaudeCodeFailure) throw error;
+      throw failure('runner');
+    }
     finally {
       if (cancelRead) controller.signal.removeEventListener('abort', cancelRead);
       abort();
@@ -244,9 +269,11 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
   }
 
   async generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse> {
-    if (!seat(this.auth(request, context))) {
+    const auth = this.auth(request, context);
+    if (!seat(auth)) {
       if (!this.options.fallback) throw failure('auth');
-      return this.options.fallback.generate(request, context);
+      return this.options.fallback.generate(this.delegatedRequest(request, context),
+        context?.auth || !auth ? context : { ...context, auth });
     }
     let text = ''; const calls: ToolCall[] = [];
     let done: Extract<StreamEvent, { type: 'done' }> | undefined;
