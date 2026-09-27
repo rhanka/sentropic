@@ -240,3 +240,35 @@ describe('Claude CLI failure and lifecycle boundaries', () => {
     expect(run).not.toHaveBeenCalled();
   });
 });
+
+describe('Claude CLI tool history integrity', () => {
+  const caps = { ...capabilities, tools: 'fake-tools-qualified', history: 'fake-history-qualified' };
+  const call = { toolCallId: 'call-1', providerCallId: 'provider-1', name: 'lookup', argumentsText: '{"q":"test"}' };
+  const assistant = { role: 'assistant' as const, content: '', toolCalls: [call] };
+  const result = { role: 'tool' as const, content: '',
+    toolResult: { toolCallId: 'call-1', providerCallId: 'provider-1', name: 'lookup', output: 'found' } };
+  const tool = { type: 'function' as const, name: 'lookup', inputSchema: { type: 'object' } };
+  it.each([
+    [result], [assistant], [assistant, result, result],
+    [assistant, { ...result, toolResult: { ...result.toolResult, providerCallId: 'wrong-id' } }],
+    [{ ...assistant, toolCalls: [call, call] }, result],
+    [assistant, { ...result, toolResult: { ...result.toolResult, name: 'wrong-tool' } }],
+    [{ ...assistant, toolCalls: [{ ...call, argumentsText: '[]' }] }, result],
+    [{ ...assistant, toolCalls: [{ ...call, metadata: { ignored: true } }] }, result],
+    [assistant, { ...result, content: 'silently lost' }],
+  ])('should refuse unmatched, incomplete or lossy tool history %j before run', async (...messages) => {
+    const { client, run } = fixture(success, caps);
+    await expect(client.generate({ ...request(), tools: [tool],
+      messages: [...request().messages, ...messages] } as StreamRequest, { auth: credential() }))
+      .rejects.toMatchObject({ code: 'claude_cli_unsupported' });
+    expect(run).not.toHaveBeenCalled();
+  });
+  it('should snapshot tool schemas before deferred iteration', async () => {
+    const { client, run } = fixture(success, caps);
+    const schema = { type: 'object', properties: { q: { type: 'string' } } };
+    const source = await client.stream({ ...request(), tools: [{ ...tool, inputSchema: schema }] }, { auth: credential() });
+    schema.properties.q.type = 'number';
+    await collect(source);
+    expect(run.mock.calls[0][0].request.tools?.[0].inputSchema).toEqual({ type: 'object', properties: { q: { type: 'string' } } });
+  });
+});

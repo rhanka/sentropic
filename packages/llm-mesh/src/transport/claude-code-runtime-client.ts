@@ -62,6 +62,19 @@ const failure = (code: 'unsupported' | 'auth' | 'runner' | 'aborted') => Object.
 );
 const textValue = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && !value.includes('\0');
+const jsonCopy = (value: unknown): unknown => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean'
+    || (typeof value === 'number' && Number.isFinite(value))) return value;
+  if (Array.isArray(value)) return value.map(jsonCopy);
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, jsonCopy(entry)]));
+  }
+  throw failure('unsupported');
+};
+const jsonObject = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw failure('unsupported');
+  return jsonCopy(value) as Record<string, unknown>;
+};
 const seat = (input?: AuthInput) => {
   const auth = getSecretAuthMaterial(input);
   return auth?.type === 'claude-code-account'
@@ -97,32 +110,44 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
     if (!textValue(caps.tools) || tool.type !== 'function' || !textValue(tool.name)
       || tool.strict !== undefined || tool.annotations || tool.metadata || tool.providerMetadata) throw failure('unsupported');
     return { name: tool.name, ...(tool.description !== undefined ? { description: tool.description } : {}),
-      inputSchema: tool.inputSchema };
+      inputSchema: jsonObject(tool.inputSchema) };
   });
   if (tools && new Set(tools.map((tool) => tool.name)).size !== tools.length) throw failure('unsupported');
+  const pending = new Map<string, string>(); const seen = new Set<string>();
   const messages: ClaudeCodeCliRequest['messages'] = request.messages.map((message) => {
     if (message.role === 'system' || message.role === 'developer' || message.name || message.metadata) throw failure('unsupported');
     if (message.role === 'tool') {
-      if (!textValue(caps.tools) || message.toolResult.content || message.toolResult.error
-        || typeof message.toolResult.output !== 'string') throw failure('unsupported');
+      const result = message.toolResult;
+      const id = result.providerCallId ?? result.toolCallId;
+      if (!textValue(caps.tools) || result.content || result.error || result.annotations
+        || result.metadata || result.continuation || typeof result.output !== 'string'
+        || !pending.has(id) || (result.name !== undefined && result.name !== pending.get(id))
+        || (message.content !== '' && message.content !== result.output)) throw failure('unsupported');
+      pending.delete(id);
       return { role: 'user', content: [{ type: 'tool_result',
         tool_use_id: message.toolResult.providerCallId ?? message.toolResult.toolCallId,
         content: message.toolResult.output, ...(message.toolResult.isError !== undefined
           ? { is_error: message.toolResult.isError } : {}) }] };
     }
+    if (pending.size) throw failure('unsupported');
     const content: ClaudeCodeCliContent[] = typeof message.content === 'string'
       ? [{ type: 'text', text: message.content }]
       : message.content.map((part) => {
-        if (part.type !== 'text') throw failure('unsupported');
+        if (part.type !== 'text' || typeof part.text !== 'string') throw failure('unsupported');
         return { type: 'text', text: part.text };
       });
     if (message.role === 'assistant') for (const call of message.toolCalls ?? []) {
-      if (!textValue(caps.tools)) throw failure('unsupported');
-      content.push({ type: 'tool_use', id: call.providerCallId ?? call.toolCallId,
-        name: call.name, input: JSON.parse(call.argumentsText) });
+      const id = call.providerCallId ?? call.toolCallId;
+      if (!textValue(caps.tools) || !textValue(id) || seen.has(id) || call.annotations || call.metadata
+        || !tools?.some((tool) => tool.name === call.name)) throw failure('unsupported');
+      const input = jsonObject(JSON.parse(call.argumentsText));
+      if (call.arguments !== undefined && JSON.stringify(jsonCopy(call.arguments)) !== JSON.stringify(input)) throw failure('unsupported');
+      seen.add(id); pending.set(id, call.name);
+      content.push({ type: 'tool_use', id, name: call.name, input });
     }
     return { role: message.role, content };
   });
+  if (pending.size) throw failure('unsupported');
   return { modelId: request.modelId, messages, ...(tools?.length ? { tools } : {}) };
 };
 

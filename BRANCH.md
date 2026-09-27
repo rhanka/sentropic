@@ -52,10 +52,12 @@
 - [x] `CS-30` — attention — owner: implementer — Conservative capability profile requires source and qualification references; history/tools remain opt-in and unsupported controls fail before runner invocation. Host attestation is not independent proof.
 - [x] `CS-31` — attention — owner: h2a lane — Public docs say bare mode skips OAuth and managed hooks survive ordinary disableAllHooks; refuse unqualified isolation instead of assuming flags disable all discovery.
 - [x] `CS-32` — attention — owner: conductor — Preserve CS-17 scope: no Track/recorder artifacts or agent launches; independent implementation review and live qualification remain conductor-owned.
+- [x] `CS-33` — attention — owner: implementer — Ten new regressions exposed unmatched/lossy tool histories and mutable schemas; validate complete call/result identity and copy JSON before deferred execution, preserving the conservative CLI subset.
 
 ## Implementation plan (LOT 2 authorized)
 - [x] Step A — source-grounded runner contract, exact proposed h2a tests and fake-only M5 counting probe recorded before runtime code.
 - [ ] Step B1 — runner interfaces, access projection and conservative request validation.
+- [x] Tool-history integrity and schema snapshot regressions reproduced before tightening request projection.
   - [x] Define v1 runner/capability types and explicit access/request projections; no process/network imports.
 - [ ] Step B2 — generate/stream mapping, terminal validation, abort and sanitized failures.
   - [x] Implement non-seat delegation, seat stream/generate, terminal/usage/tool validation and cancellation without raw errors.
