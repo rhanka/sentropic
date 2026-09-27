@@ -53,6 +53,7 @@
 - [x] `CS-31` — attention — owner: h2a lane — Public docs say bare mode skips OAuth and managed hooks survive ordinary disableAllHooks; refuse unqualified isolation instead of assuming flags disable all discovery.
 - [x] `CS-32` — attention — owner: conductor — Preserve CS-17 scope: no Track/recorder artifacts or agent launches; independent implementation review and live qualification remain conductor-owned.
 - [x] `CS-33` — attention — owner: implementer — Ten new regressions exposed unmatched/lossy tool histories and mutable schemas; validate complete call/result identity and copy JSON before deferred execution, preserving the conservative CLI subset.
+- [x] `CS-34` — attention — owner: implementer — Reject malformed usage containers, unsafe totals and lossy tool-output JSON; focused regressions reproduced each acceptance gap before the fix.
 
 ## Implementation plan (LOT 2 authorized)
 - [x] Step A — source-grounded runner contract, exact proposed h2a tests and fake-only M5 counting probe recorded before runtime code.
@@ -62,7 +63,7 @@
 - [x] Step B2 — generate/stream mapping, terminal validation, abort and sanitized failures.
   - [x] Implement non-seat delegation, seat stream/generate, terminal/usage/tool validation and cancellation without raw errors.
 - [x] Step B3 — additive runtime/type exports and README host qualification/terms guidance.
-- [ ] Step B4 — `tests/transport/claude-code-runtime-client.test.ts`: projection, both seat shapes, other auth routing, unsupported requests, stream/generate/tools, abort, malformed/truncated events, canary errors and no network.
+- [x] Step B4 — `tests/transport/claude-code-runtime-client.test.ts`: projection, both seat shapes, other auth routing, unsupported requests, stream/generate/tools, abort, malformed/truncated events, canary errors and no network.
   - [x] Add fake-only projection and auth coexistence matrix with a forbidden-network guard.
   - [x] Add pre-run capability refusals and generate/stream/tool-result round-trip mapping with source-qualified fake profiles.
   - [x] Add failure canaries, terminal validation, usage filtering, pending-read/early-close abort and deferred-expiry checks.

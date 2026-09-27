@@ -207,13 +207,15 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
           if (!textValue(event.id) || calls.has(event.id)
             || !request.tools?.some((tool) => tool.name === event.name)
             || !event.input || typeof event.input !== 'object' || Array.isArray(event.input)) throw failure('runner');
-          const argumentsText = JSON.stringify(event.input);
+          const argumentsText = JSON.stringify(jsonObject(event.input));
           calls.add(event.id);
           yield { type: 'tool_call_start', data: { toolCallId: event.id, providerCallId: event.id,
             name: event.name, argumentsText, arguments: JSON.parse(argumentsText), inputState: 'complete' } };
         } else if (event.type === 'result') {
           if (!['stop', 'length', 'tool_calls'].includes(event.finishReason)
             || (calls.size > 0) !== (event.finishReason === 'tool_calls')) throw failure('runner');
+          if (event.usage !== undefined && (!event.usage || typeof event.usage !== 'object'
+            || Array.isArray(event.usage))) throw failure('runner');
           const usage: TokenUsage = {};
           for (const key of ['inputTokens', 'outputTokens'] as const) {
             const value = event.usage?.[key];
@@ -224,6 +226,7 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
           }
           if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
             usage.totalTokens = usage.inputTokens + usage.outputTokens;
+            if (!Number.isSafeInteger(usage.totalTokens)) throw failure('runner');
           }
           done = { type: 'done', data: { finishReason: event.finishReason,
             ...(event.usage ? { usage } : {}), providerId: 'anthropic', modelId: request.modelId } };
