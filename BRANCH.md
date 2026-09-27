@@ -58,6 +58,7 @@
 - [ ] Step B1 — runner interfaces, access projection and conservative request validation.
   - [x] Define v1 runner/capability types and explicit access/request projections; no process/network imports.
 - [ ] Step B2 — generate/stream mapping, terminal validation, abort and sanitized failures.
+  - [x] Implement non-seat delegation, seat stream/generate, terminal/usage/tool validation and cancellation without raw errors.
 - [ ] Step B3 — additive runtime/type exports and README host qualification/terms guidance.
 - [ ] Step B4 — `tests/transport/claude-code-runtime-client.test.ts`: projection, both seat shapes, other auth routing, unsupported requests, stream/generate/tools, abort, malformed/truncated events, canary errors and no network.
 - [ ] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
