@@ -257,7 +257,7 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
             if (!Number.isSafeInteger(usage.totalTokens)) throw failure('runner');
           }
           done = { type: 'done', data: { finishReason: event.finishReason,
-            ...(event.usage ? { usage } : {}), providerId: 'anthropic', modelId: request.modelId } };
+            ...(Object.keys(usage).length ? { usage } : {}), providerId: 'anthropic', modelId: request.modelId } };
         } else throw failure('runner');
       }
       if (!done) throw failure('runner');
@@ -290,7 +290,7 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
       if (event.type === 'tool_call_start') calls.push(event.data);
       if (event.type === 'done') done = event;
     }
-    return { id: 'claude_cli_response', providerId: 'anthropic', modelId: request.modelId!,
+    return { id: `claude_cli_${globalThis.crypto.randomUUID()}`, providerId: 'anthropic', modelId: request.modelId!,
       message: { role: 'assistant', content: text, ...(calls.length ? { toolCalls: calls } : {}) },
       text, toolCalls: calls, finishReason: done!.data.finishReason!,
       ...(done!.data.usage ? { usage: done!.data.usage } : {}) };
