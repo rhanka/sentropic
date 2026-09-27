@@ -153,7 +153,7 @@
 ## Validation Evidence
 - [ ] Fix round 2: serialize every public-record write and reproduce a route write started before refresh with a slow keyring.
 - [x] Fix round 2: missing refresh material requires reauthentication; only profile resolver exceptions remain retryable provider preparation errors. Scoped Claude service suite: 34 passed; regression first reproduced retry-later instead of reauthentication.
-- [ ] Fix round 2: skip corrupt envelopes during duplicate-grant scans without diagnostics containing stored data.
+- [x] Fix round 2: skip corrupt envelopes during duplicate-grant scans without diagnostics containing stored data. Invalid JSON and JSON null both reproduced blocked enrollment; 36 scoped service tests pass, including acquiring the new account after restart.
 - [ ] Fix round 2: run all six requested gates, review scope/diff, commit below 150 changed lines and clean up the dedicated environment.
 - [x] Fix round 1: all six findings accepted after code verification; no disagreement. Changed files: `BRANCH.md`, `packages/llm-mesh/README.md`, `src/enrollment/claude-code.ts`, `src/service/local-account-transport-service.ts`, `tests/enrollment/claude-code.test.ts`, `tests/service/{facade,local-account-transport-service,local-account-transport-service-claude}.test.ts` under llm-mesh.
 - [x] Fix round 1 full `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS, 383 tests / 34 files / zero failures or skips; 21 new cases in this round. First run failed the now-corrected facade duplicate fixture (CS-27).
