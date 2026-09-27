@@ -150,3 +150,93 @@ describe('Claude CLI access and routing', () => {
     expect(run).not.toHaveBeenCalled();
   });
 });
+
+describe('Claude CLI failure and lifecycle boundaries', () => {
+  const canary = 'fake-access-canary fake-refresh-canary raw-child-output';
+  const assertSafe = (error: unknown) => {
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).not.toContain('canary');
+    expect(String(error)).not.toContain('raw-child-output');
+    expect(JSON.stringify(error)).not.toMatch(/canary|raw-child-output/);
+    expect(error).not.toHaveProperty('cause');
+    expect((error as Error).stack).not.toMatch(/canary|raw-child-output/);
+  };
+  it.each(['sync', 'next', 'event', 'after-result'])('should sanitize %s failures without direct fallback', async (mode) => {
+    const run = vi.fn<ClaudeCodeCliRunner['run']>(() => {
+      if (mode === 'sync') throw new Error(canary);
+      return (async function* () {
+        if (mode === 'after-result') yield success[1];
+        if (mode === 'event') yield { type: 'error', message: canary } as ClaudeCodeCliEvent;
+        throw Object.assign(new Error(canary), { cause: { token: canary }, status: 401 });
+      })();
+    });
+    const fallback = { generate: vi.fn(), stream: vi.fn() };
+    const client = new ClaudeCodeRuntimeClient({ runner: { run }, capabilities, fallback, now: () => now });
+    const error = await client.generate(request(), { auth: credential() }).catch((e) => e);
+    assertSafe(error);
+    expect(error.code).toBe('claude_cli_runner');
+    expect(fallback.generate).not.toHaveBeenCalled(); expect(fallback.stream).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [], [success[0]], [success[1], success[1]], [success[1], success[0]],
+    [{ type: 'raw', message: canary }], [{ type: 'text_delta', text: 3 }],
+    [{ type: 'result', finishReason: 'other' }], [{ type: 'result', finishReason: 'tool_calls' }],
+    [{ type: 'result', finishReason: 'stop', usage: { inputTokens: -1 } }],
+    [{ type: 'result', finishReason: 'stop', usage: { outputTokens: NaN } }],
+    [{ type: 'result', finishReason: 'stop', usage: { outputTokens: 1.5 } }],
+    [{ type: 'tool_use', id: 'call', name: 'undeclared', input: {} }],
+  ])('should reject truncated, malformed or contradictory event sequence %j', async (...events) => {
+    const { client } = fixture(events as ClaudeCodeCliEvent[]);
+    assertSafe(await client.generate(request(), { auth: credential() }).catch((e) => e));
+  });
+
+  it('should discard raw result metadata and preserve length and partial usage', async () => {
+    const { client } = fixture([{ type: 'result', finishReason: 'length', usage: { outputTokens: 2,
+      providerRawUsage: canary }, raw: canary } as ClaudeCodeCliEvent]);
+    const response = await client.generate(request(), { auth: credential() });
+    expect(response).toMatchObject({ finishReason: 'length', usage: { outputTokens: 2 } });
+    expect(response.usage).toEqual({ outputTokens: 2 });
+    expect(JSON.stringify(response)).not.toMatch(/canary|raw-child-output/);
+  });
+
+  it('should refuse already aborted requests without exposing the reason or calling the runner', async () => {
+    const { client, run } = fixture(); const controller = new AbortController(); controller.abort(canary);
+    const error = await client.stream({ ...request(), signal: controller.signal }, { auth: credential() }).catch((e) => e);
+    assertSafe(error); expect(error.name).toBe('AbortError'); expect(run).not.toHaveBeenCalled();
+  });
+
+  it('should abort a pending read promptly and ask the host to close with a safe reason', async () => {
+    let childSignal: AbortSignal | undefined;
+    const returned = vi.fn(async () => ({ done: true as const, value: undefined }));
+    let started!: () => void; const reading = new Promise<void>((resolve) => { started = resolve; });
+    const runner: ClaudeCodeCliRunner = { run({ signal }) { childSignal = signal;
+      return { [Symbol.asyncIterator]: () => ({ next: () => { started(); return new Promise(() => {}); }, return: returned }) };
+    } };
+    const client = new ClaudeCodeRuntimeClient({ runner, capabilities, now: () => now });
+    const controller = new AbortController();
+    const pending = client.generate({ ...request(), signal: controller.signal }, { auth: credential() }).catch((e) => e);
+    await reading; controller.abort(canary);
+    const error = await pending; assertSafe(error); expect(error.name).toBe('AbortError');
+    expect(childSignal?.aborted).toBe(true); expect(String(childSignal?.reason)).not.toContain(canary);
+    expect(returned).toHaveBeenCalledOnce();
+  });
+
+  it('should cancel the runner on consumer early-close and detach the caller abort listener', async () => {
+    const { client, run } = fixture(); const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    for await (const event of await client.stream({ ...request(), signal: controller.signal }, { auth: credential() })) {
+      expect(event.type).toBe('content_delta'); break;
+    }
+    expect(run.mock.calls[0][0].signal.aborted).toBe(true);
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
+
+  it('should recheck expiry before deferred iteration and never spawn with a stale projection', async () => {
+    const { run } = fixture(); let clock = now;
+    const client = new ClaudeCodeRuntimeClient({ runner: { run }, capabilities, now: () => clock });
+    const source = await client.stream(request(), { auth: credential() }); clock += 60_000;
+    await expect(collect(source)).rejects.toMatchObject({ code: 'claude_cli_runner' });
+    expect(run).not.toHaveBeenCalled();
+  });
+});
