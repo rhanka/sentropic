@@ -61,7 +61,7 @@
 - [ ] **Lot 2 — Host scheduler**
   - [x] Resolve BRRS-B1 before implementation.
   - [x] Configure and bind boot/periodic sweeps to the host ledger with shutdown cancellation and no overlap.
-  - [ ] Add `apps/llm-gateway/tests/lifecycle-reaper.test.ts` for configuration, boot, periodic execution and SIGTERM.
+  - [x] Add `apps/llm-gateway/tests/lifecycle-reaper.test.ts` for configuration, boot, periodic execution and SIGTERM.
 - [ ] **Lot 3 — Accounting proof and documentation**
   - [ ] Extend `api/tests/api/llm-budget-ledger.test.ts` with two concurrent reapers; assert terminal states, exact budget deltas and ledger cardinality.
   - [ ] Update spec section 12.8 only after scheduling is implemented and verified.
