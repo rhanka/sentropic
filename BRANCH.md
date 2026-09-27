@@ -39,6 +39,7 @@
 - [x] BRRS-A1 | attention | Owner: implementation | Use existing product partition configuration as scheduling eligibility; preserve cutover ownership and never activate `/gw` from the scheduler.
 - [x] BRRS-A2 | attention | Owner: implementation | Released never-dispatched holds create no cost row under the existing contract; assert zero rows for released requests and exactly one row for reconciled requests.
 - [x] BRRS-A3 | attention | Owner: implementation | Preserve the API's default signal termination; synchronous exit cleanup fences the scheduler. The host uses its existing bounded SIGTERM drain and awaits an active sweep there.
+- [ ] BRRS-B2 | blocked | Owner: conductor | Host tests: 76 passed, 1 failed at `apps/llm-gateway/tests/autonomy.test.ts:103`; its explicit product-adapter allowlist rejects the newly authorized reservation-reaper import. Required scope extension: this test file only, adding `llm-metering/reservation-reaper` to `allowed` and `reservation-reaper` to the adapter value-import checks. This retains and extends the no-product-globals boundary assertion; no runtime change. Acceptance: all 77 host tests pass. Rollback: revert both test-list additions. File remains untouched pending approval.
 - [x] Blocked handoff checks: `make scope-check API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed C2; `make down API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed. No runtime tests run; implementation stopped at the explicit scope boundary.
 
 ## AI Flaky tests
@@ -56,19 +57,19 @@
   - [x] Verify branch mechanically and inspect activation, lifecycle and ledger boundaries.
   - [x] Record real Postgres test file in approved scope.
   - [x] Discover host target: `make test-llm-gateway-process`.
-- [ ] **Lot 1 — API scheduler**
+- [x] **Lot 1 — API scheduler**
   - [x] Add counts-only sweep wrapper and boot/periodic scheduling with enable, interval and limit configuration.
   - [x] Add `api/tests/unit/reservation-reaper-schedule.test.ts` for defaults, disable, failures and overlap prevention.
-- [ ] **Lot 2 — Host scheduler**
+- [x] **Lot 2 — Host scheduler**
   - [x] Resolve BRRS-B1 before implementation.
   - [x] Configure and bind boot/periodic sweeps to the host ledger with shutdown cancellation and no overlap.
   - [x] Add `apps/llm-gateway/tests/lifecycle-reaper.test.ts` for configuration, boot, periodic execution and SIGTERM.
-- [ ] **Lot 3 — Accounting proof and documentation**
+- [x] **Lot 3 — Accounting proof and documentation**
   - [x] Extend `api/tests/api/llm-budget-ledger.test.ts` with two concurrent reapers; assert terminal states, exact budget deltas and ledger cardinality, preserving a live reserve across two budget buckets.
-  - [ ] Update spec section 12.8 only after scheduling is implemented and verified.
+  - [x] Update spec section 12.8 after focused scheduler (12), host lifecycle (5), and real Postgres ledger (37) tests pass.
 - [ ] **Lot 4 — Final validation**
-  - [ ] Run targeted API and host tests.
-  - [ ] Run `make typecheck-api lint-api`.
+  - [x] Run targeted API and host tests: 12 scheduler tests, 5 lifecycle tests, 37 ledger tests passed.
+  - [x] Run `make typecheck-api lint-api`; host typecheck and lint also passed.
   - [ ] Run full `make test-api-unit test-api-endpoints` and `make test-llm-gateway-process`.
   - [ ] Run `make scope-check` before each commit; update this plan in each commit.
   - [ ] Run `make down`; report exact commands, counts and final commit log.
