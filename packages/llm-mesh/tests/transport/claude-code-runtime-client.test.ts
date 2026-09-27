@@ -115,6 +115,33 @@ describe('Claude CLI access and routing', () => {
     expect(run.mock.calls[0][0].access).toEqual({ accessToken: 'fake-custody', expiresAt: now + 60_000, scopes });
   });
 
+  it('should fill missing custody scopes only from the trusted resolution descriptor', async () => {
+    const { client, run } = fixture();
+    const material = { type: 'claude-code-account' as const, provider: 'claude-code' as const,
+      accessToken: 'fake-custody', expiresAt: credential().expiresAt, descriptor: { metadata: { label: 'seat' } } };
+    const descriptor = { sourceType: 'claude-code-account' as const, metadata: { scopes } };
+    await client.generate(request(), { auth: { material, descriptor } });
+    expect(run.mock.calls[0][0].access.scopes).toEqual(scopes);
+    await expect(client.generate(request(), { auth: { material: { ...material,
+      descriptor: { metadata: { scopes: [] } } }, descriptor } })).rejects.toMatchObject({ code: 'claude_cli_auth' });
+    await expect(client.generate(request(), { auth: material })).rejects.toMatchObject({ code: 'claude_cli_auth' });
+  });
+
+  it.each([credential(), { material: credential() }, { type: 'direct-token', token: 'fake-other-key' },
+    () => credential()])('should strip conflicting request auth on both fallback paths (%j)', async (requestAuth) => {
+    const { run } = fixture();
+    const fallback = { generate: vi.fn(), stream: vi.fn() };
+    const client = new ClaudeCodeRuntimeClient({ runner: { run }, capabilities, fallback });
+    const context = { auth: { type: 'direct-token' as const, token: 'fake-key' } };
+    const input = { ...request(), auth: requestAuth } as StreamRequest;
+    await client.generate(input, context); await client.stream(input, context);
+    for (const method of [fallback.generate, fallback.stream]) {
+      expect(method).toHaveBeenCalledWith(request(), context);
+      expect(method.mock.calls[0][0]).not.toHaveProperty('auth');
+    }
+    expect(input.auth).toBe(requestAuth); expect(run).not.toHaveBeenCalled();
+  });
+
   const others: SecretAuthMaterial[] = [
     { type: 'direct-token', token: 'fake-key' }, { type: 'user-token', userId: 'u', token: 'fake' },
     { type: 'workspace-token', workspaceId: 'w', token: 'fake' },
@@ -122,6 +149,19 @@ describe('Claude CLI access and routing', () => {
     { type: 'codex-account', provider: 'codex', accessToken: 'fake' },
     { type: 'account-transport', provider: 'muse', accessToken: 'fake' },
   ];
+  it('should retain request-only API auth in the fallback context and refuse unresolved callbacks', async () => {
+    const { run } = fixture(); const fallback = { generate: vi.fn(), stream: vi.fn() };
+    const client = new ClaudeCodeRuntimeClient({ runner: { run }, capabilities, fallback });
+    const auth = { type: 'direct-token' as const, token: 'fake-key' };
+    await client.generate({ ...request(), auth }); await client.stream({ ...request(), auth });
+    expect(fallback.generate).toHaveBeenCalledWith(request(), { auth });
+    expect(fallback.stream).toHaveBeenCalledWith(request(), { auth });
+    const resolve = vi.fn(() => credential());
+    await expect(client.generate({ ...request(), auth: resolve })).rejects.toMatchObject({ code: 'claude_cli_auth' });
+    await expect(client.stream({ ...request(), auth: resolve })).rejects.toMatchObject({ code: 'claude_cli_auth' });
+    expect(resolve).not.toHaveBeenCalled(); expect(run).not.toHaveBeenCalled();
+    expect(fallback.generate).toHaveBeenCalledOnce(); expect(fallback.stream).toHaveBeenCalledOnce();
+  });
   it.each(others)('should delegate $type/$provider unchanged and never capture it', async (auth) => {
     const { run } = fixture();
     const fallback = { generate: vi.fn().mockResolvedValue({ sentinel: true }), stream: vi.fn().mockResolvedValue(success) };
@@ -161,12 +201,13 @@ describe('Claude CLI failure and lifecycle boundaries', () => {
     expect(error).not.toHaveProperty('cause');
     expect((error as Error).stack).not.toMatch(/canary|raw-child-output/);
   };
-  it.each(['sync', 'next', 'event', 'after-result'])('should sanitize %s failures without direct fallback', async (mode) => {
+  it.each(['sync', 'next', 'event', 'after-result', 'forged-code'])('should sanitize %s failures without direct fallback', async (mode) => {
     const run = vi.fn<ClaudeCodeCliRunner['run']>(() => {
       if (mode === 'sync') throw new Error(canary);
       return (async function* () {
         if (mode === 'after-result') yield success[1];
         if (mode === 'event') yield { type: 'error', message: canary } as ClaudeCodeCliEvent;
+        if (mode === 'forged-code') throw Object.assign(new Error(canary), { code: 'claude_cli_auth' });
         throw Object.assign(new Error(canary), { cause: { token: canary }, status: 401 });
       })();
     });
@@ -236,7 +277,7 @@ describe('Claude CLI failure and lifecycle boundaries', () => {
     const { run } = fixture(); let clock = now;
     const client = new ClaudeCodeRuntimeClient({ runner: { run }, capabilities, now: () => clock });
     const source = await client.stream(request(), { auth: credential() }); clock += 60_000;
-    await expect(collect(source)).rejects.toMatchObject({ code: 'claude_cli_runner' });
+    await expect(collect(source)).rejects.toMatchObject({ code: 'claude_cli_auth' });
     expect(run).not.toHaveBeenCalled();
   });
 });
