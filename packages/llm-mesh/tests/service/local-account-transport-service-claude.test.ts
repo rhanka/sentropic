@@ -77,6 +77,19 @@ describe('Claude service enrollment', () => {
     expect(await create().listAccounts(owner)).toHaveLength(1);
   });
 
+  it.each(['{invalid-json', 'null'])('skips a corrupt stored envelope during a new enrollment (%s)', async (raw) => {
+    const { service, keyring, create, fetchFn } = setup();
+    const first = await service.completeClaudeCredentialImport(paste(), owner);
+    const key = `sentropic-llm-mesh:${first.accountId}:envelope`;
+    await keyring.setSecret(key, raw);
+    const restored = create();
+    const next = await restored.completeClaudeCredentialImport(paste(false, `${REFRESH}_new`), owner);
+    expect(next.accountId).not.toBe(first.accountId);
+    expect((await create().acquire(acquire)).material.accountId).toBe(next.accountId);
+    expect(await keyring.getSecret(key)).toBe(raw);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it('retains previously granted scopes across restart when refresh omits scope', async () => {
     const { service, create, fetchFn, keyring } = setup();
     const { accountId } = await service.completeClaudeCredentialImport(paste(true), owner);
