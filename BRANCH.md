@@ -18,6 +18,7 @@
   - `api/src/services/llm-metering/reservation-reaper.ts`
   - `apps/llm-gateway/src/lifecycle.ts`
   - `apps/llm-gateway/src/config.ts`
+  - `apps/llm-gateway/src/app.ts`
   - `api/tests/unit/reservation-reaper-schedule.test.ts`
   - `apps/llm-gateway/tests/lifecycle-reaper.test.ts`
   - `api/tests/api/llm-budget-ledger.test.ts`
@@ -34,7 +35,7 @@
 - [x] **Exception process**: record scope blockers before editing any additional path.
 
 ## Feedback Loop
-- [ ] BRRS-B1 | blocked | Owner: conductor | Host database wiring requires an additional approved path: `apps/llm-gateway/src/app.ts`. `createLedgerDependencies` captures the injected database; `HostApp` exposes only app/readiness/admission/pending, and `startHost` cannot access that database. Proposed bounded change: expose a sweep callback bound to the same injected ledger database on the composed host, consumed by lifecycle. Acceptance: host boot and periodic sweeps use that exact store, stop at shutdown, and never overlap. Verify with lifecycle tests and real Postgres races. Rollback: remove callback and lifecycle wiring together. No additional path edited.
+- [x] BRRS-B1 | resolved | Owner: conductor | Approved minimal `apps/llm-gateway/src/app.ts` extension: expose a reaper bound to the same injected ledger database and consume it in lifecycle. Rollback: remove handle and lifecycle wiring together.
 - [x] BRRS-A1 | attention | Owner: implementation | Use existing product partition configuration as scheduling eligibility; preserve cutover ownership and never activate `/gw` from the scheduler.
 - [x] BRRS-A2 | attention | Owner: implementation | Released never-dispatched holds create no cost row under the existing contract; assert zero rows for released requests and exactly one row for reconciled requests.
 - [x] Blocked handoff checks: `make scope-check API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed C2; `make down API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed. No runtime tests run; implementation stopped at the explicit scope boundary.
@@ -55,10 +56,10 @@
   - [x] Record real Postgres test file in approved scope.
   - [x] Discover host target: `make test-llm-gateway-process`.
 - [ ] **Lot 1 — API scheduler**
-  - [ ] Add counts-only sweep wrapper and boot/periodic scheduling with enable, interval and limit configuration.
+  - [x] Add counts-only sweep wrapper and boot/periodic scheduling with enable, interval and limit configuration.
   - [ ] Add `api/tests/unit/reservation-reaper-schedule.test.ts` for defaults, disable, failures and overlap prevention.
 - [ ] **Lot 2 — Host scheduler**
-  - [ ] Resolve BRRS-B1 before implementation.
+  - [x] Resolve BRRS-B1 before implementation.
   - [ ] Configure and bind boot/periodic sweeps to the host ledger with shutdown cancellation and no overlap.
   - [ ] Add `apps/llm-gateway/tests/lifecycle-reaper.test.ts` for configuration, boot, periodic execution and SIGTERM.
 - [ ] **Lot 3 — Accounting proof and documentation**
