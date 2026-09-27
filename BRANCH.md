@@ -63,7 +63,7 @@
   - [x] Configure and bind boot/periodic sweeps to the host ledger with shutdown cancellation and no overlap.
   - [x] Add `apps/llm-gateway/tests/lifecycle-reaper.test.ts` for configuration, boot, periodic execution and SIGTERM.
 - [ ] **Lot 3 — Accounting proof and documentation**
-  - [ ] Extend `api/tests/api/llm-budget-ledger.test.ts` with two concurrent reapers; assert terminal states, exact budget deltas and ledger cardinality.
+  - [x] Extend `api/tests/api/llm-budget-ledger.test.ts` with two concurrent reapers; assert terminal states, exact budget deltas and ledger cardinality, preserving a live reserve across two budget buckets.
   - [ ] Update spec section 12.8 only after scheduling is implemented and verified.
 - [ ] **Lot 4 — Final validation**
   - [ ] Run targeted API and host tests.
