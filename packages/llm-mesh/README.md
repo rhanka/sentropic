@@ -92,9 +92,9 @@ always takes ownership from `StartEnrollmentInput.ownerScope`.
 ## Claude subscription enrollment (LOT 1)
 
 The facade supports browser PKCE enrollment and renewable Claude CLI credential
-import, durable ordinary seats, and refresh on acquire. This is **enrollment only**:
-official CLI execution is **`not-covered`** until LOT 2 qualification. No Claude
-runtime client/export, Messages fallback or client impersonation is supplied here.
+import, durable ordinary seats, and refresh on acquire. Hosts without a qualified
+official CLI runner remain **enrollment only**, execution **`not-covered`**.
+The LOT 2 bridge below provides the host injection seam.
 
 ```ts
 import { createLlmMeshFacade } from '@sentropic/llm-mesh/facade';
@@ -169,6 +169,58 @@ responsible for complying with Anthropic's terms. Risks include account suspensi
 or refused calls. [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance.md)
 restricts third-party subscription login and credential intermediation. Executing
 the official binary does not establish that mesh enrollment/storage is permitted.
+
+## Claude official CLI execution (LOT 2 mesh bridge)
+
+`ClaudeCodeRuntimeClient` implements the Anthropic client slot and accepts a
+host-provided `ClaudeCodeCliRunner`. The host executes the unmodified official
+`claude` subprocess; llm-mesh imports no process API and provides no runner,
+Messages transport, client headers, runtime refresh or automatic retry.
+
+```ts
+import { ClaudeCodeRuntimeClient, createDefaultProviderAdapters } from '@sentropic/llm-mesh';
+import type { ClaudeCodeCliRunner, ClaudeCodeCliCapabilities } from '@sentropic/llm-mesh';
+
+// Trusted host supplies these after qualifying the exact CLI and isolated runner.
+declare const runner: ClaudeCodeCliRunner;
+declare const capabilities: ClaudeCodeCliCapabilities;
+const adapters = createDefaultProviderAdapters({
+  anthropic: new ClaudeCodeRuntimeClient({ runner, capabilities, fallback: directAnthropicClient }),
+});
+```
+
+Only `account-transport` with provider `claude-code`, and `claude-code-account`,
+reach the runner. Every other auth shape delegates unchanged to the supplied
+direct client, or is refused when no fallback exists. A seat failure never falls
+back to metered API authentication. The in-process input contains only access
+token, finite unexpired epoch-millisecond expiry and the actual grant scopes,
+the projected request, and an abort signal. Ordinary scopes come from
+`material.metadata.scopes`; access-only custody uses trusted
+`material.descriptor.metadata.scopes` or resolution `descriptor.metadata.scopes`.
+No refresh token, headers, account metadata or request auth reaches the runner.
+
+The versioned capability profile requires `cliVersion`, `source` and
+`qualificationRef` for protocol `claude-code-stream-json-v1`. These references are
+trusted host attestations, not verification by mesh. Default request support is
+an explicit `modelId` and one user text message. `history` and `tools` require
+separate source/qualification references. The tool subset accepts JSON function
+schemas, complete call IDs/arguments and matching string results; it rejects
+incomplete histories and unsupported extras. System/developer prompts, media,
+reasoning, sampling/token limits, structured output, forced/parallel tools and
+provider overrides are refused before running. Mesh-normalized model selection
+is supported; direct client calls must supply `modelId` without `model`.
+
+The host must prove isolated credential/config files, environment allowlisting,
+tool/hook/MCP confinement, bounded parsing, cross-process serialization,
+descendant reaping/cleanup and zero child refresh. Abort and consumer early-close
+signal cancellation; the trusted host owns process termination. A final runner
+result must certify successful cleanup, followed by EOF. The precise contract,
+proposed h2a tests and fake-credential M5 counting probe are in
+[`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md`](../../spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md).
+No real CLI qualification is claimed by the mesh fake-runner tests. Until the
+host supplies a qualified runner, seats remain **enrollment only** and execution
+is **`not-covered`**. The Terms of use and suspension/refused-call risks above
+apply equally when the official CLI executes requests.
 
 ## Route quote
 
