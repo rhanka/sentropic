@@ -48,6 +48,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-47` — attention — owner: implementer — Round 3 mirrors provider-ID validation for mesh IDs and drops whitespace-only text without trimming non-empty text; five regressions reproduced. Preserve CS-29 no-bump authorization and conductor-owned review/release.
 - [x] `CS-46` — attention — owner: implementer — Round 2 confirmed root:root 0755 llm-mesh/node_modules/.vite after tests; cleared generated dependencies with the existing Make target before cluster setup. Cluster passed; its 34 packaging skips leave CS-21 with the conductor/release lane.
 - [x] `CS-45` — attention — owner: implementer — Round 2 follows the explicit no-bump scope (CS-29); reject empty projected messages and conflicting explicit provider IDs, and restrict JSON canonicalization to equality comparisons to preserve caller key order.
 - [x] `CS-44` — attention — owner: implementer — Round 1 cluster setup hit EACCES removing llm-mesh/node_modules/.vite in install-internal-packages; the requested clean-node-modules target passed and the unchanged gate then passed 394 tests (34 packaging skips). No build configuration or dependency edits; CS-21 remains release-owned.
@@ -81,6 +82,19 @@
   - [x] Add failure canaries, terminal validation, usage filtering, pending-read/early-close abort and deferred-expiry checks.
 - [x] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
 - [x] Cleanup — `make down` and `make ps` with dedicated compose project and ports 9395/5595/1495; final diff and commit log.
+
+## LOT 2 fix round 3
+- [x] MINOR-E — Reject a provider-matched result with a conflicting mesh toolCallId before runner invocation; add the inverse-ID regression to the existing table.
+- [x] NIT-F — Drop whitespace-only string/array text beside tool use or non-empty text; preserve non-empty text verbatim. Four new whitespace cases.
+- [x] NIT-G — README/spec state restrictions generally and retain unverified applicability in the adjacent column; the spec Team/Enterprise row already had the requested wording.
+- [x] `harness check branch`: PASS C1; `make scope-check ENV=test-llm-mesh-claude-seat`: PASS C2; `git diff --check`: PASS. One atomic commit below 150 changed lines.
+- [x] `make test-llm-mesh SCOPE=tests/transport/claude-code-runtime-client.test.ts ENV=test-llm-mesh-claude-seat`: five failures reproduced before fixes; final PASS 113/113.
+- [x] `make test-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS 499/499, 35 files, no skips.
+- [x] `make typecheck-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make lint-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make build-llm-mesh ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] `make down COMPOSE_PROJECT_NAME=test-llm-mesh-claude-seat API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-llm-mesh-claude-seat`: PASS.
+- [x] Reviewed all hunks: five allowed files; no bump, push, PR, merge, publication or credential access. Existing CS-21 packaging and live qualification remain conductor-owned.
 
 ## LOT 2 fix round 2
 - [x] MINOR-A — Re-read live A4; quote the all-plan credential/sign-in restriction in both Pro/Max rows and retain it for Team/Enterprise. README/spec explicitly connect it to M4 and mesh grant storage; applicability remains unverified and “each user assumes” remains the owner's decision.
