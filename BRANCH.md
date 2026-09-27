@@ -48,6 +48,7 @@
 - [x] **Exception process**: record `BR-CS-EXn` with rationale, impact, and rollback before requesting any irreversible scope expansion; none authorized.
 
 ## Feedback Loop
+- [x] `CS-45` — attention — owner: implementer — Round 2 follows the explicit no-bump scope (CS-29); reject empty projected messages and conflicting explicit provider IDs, and restrict JSON canonicalization to equality comparisons to preserve caller key order.
 - [x] `CS-44` — attention — owner: implementer — Round 1 cluster setup hit EACCES removing llm-mesh/node_modules/.vite in install-internal-packages; the requested clean-node-modules target passed and the unchanged gate then passed 394 tests (34 packaging skips). No build configuration or dependency edits; CS-21 remains release-owned.
 - [x] `CS-43` — attention — owner: h2a lane — Enforce inference-only egress for the whole runner tree; M5 is a separate fixture-CA/DNS regression probe. Require startup/boot orphan sweeps (default five-minute age, retry young orphans), no-follow/content-blind deletion and crash reaping; retain real expiry and reject excessive TTL rather than claiming shortened provider validity. Post-refresh freshness does not reduce token exposure.
 - [x] `CS-42` — attention — owner: conductor — Public A4 establishes account-specific terms and hosted-binary conditions, not mesh permission. A7 documents SDK user-message input but A2's CLI parser accepts assistant/system records; keep universal user-only claims unverified and history/tools expected not-covered pending M3. Record adapter-auth headers as a separate follow-up.
@@ -79,6 +80,12 @@
   - [x] Add failure canaries, terminal validation, usage filtering, pending-read/early-close abort and deferred-expiry checks.
 - [x] Gates — `make test-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-cluster-mesh`, `make scope-check`, all with `ENV=test-llm-mesh-claude-seat` last.
 - [x] Cleanup — `make down` and `make ps` with dedicated compose project and ports 9395/5595/1495; final diff and commit log.
+
+## LOT 2 fix round 2
+- [ ] MINOR-A — Re-read A4; include all-plan credential/sign-in restrictions in both subscription rows and their relevance to M4 and mesh grant storage; retain the labelled owner decision and unverified applicability.
+- [x] MINOR-B/C — Refuse empty/whitespace-only projected messages and conflicting explicit tool-result provider IDs before invoking the runner; three failures reproduced, then focused suite PASS 108/108 (ten empty-content variants across both roles).
+- [ ] NIT-D — Preserve schema/input/output argument key order; canonicalize only comparisons and verify nested order and array semantics.
+- [ ] Run all six gates, inspect scope/diff, commit below 150 changed lines and clean up the dedicated environment.
 
 ## LOT 2 fix round 1
 - [x] Preserve deferred-expiry auth failures, isolate fallback auth, and fill absent custody scopes; six reproduced failures fixed, focused suite 97/97 including forged-code sanitization and request-only API auth.
