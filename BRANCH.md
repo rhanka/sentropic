@@ -38,6 +38,7 @@
 - [x] BRRS-B1 | resolved | Owner: conductor | Approved minimal `apps/llm-gateway/src/app.ts` extension: expose a reaper bound to the same injected ledger database and consume it in lifecycle. Rollback: remove handle and lifecycle wiring together.
 - [x] BRRS-A1 | attention | Owner: implementation | Use existing product partition configuration as scheduling eligibility; preserve cutover ownership and never activate `/gw` from the scheduler.
 - [x] BRRS-A2 | attention | Owner: implementation | Released never-dispatched holds create no cost row under the existing contract; assert zero rows for released requests and exactly one row for reconciled requests.
+- [x] BRRS-A3 | attention | Owner: implementation | Preserve the API's default signal termination; synchronous exit cleanup fences the scheduler. The host uses its existing bounded SIGTERM drain and awaits an active sweep there.
 - [x] Blocked handoff checks: `make scope-check API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed C2; `make down API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed. No runtime tests run; implementation stopped at the explicit scope boundary.
 
 ## AI Flaky tests

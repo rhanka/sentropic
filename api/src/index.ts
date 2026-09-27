@@ -142,8 +142,7 @@ try {
 // Admin approval sweep (48h -> read-only). Run once at boot, then periodically.
 const reservationReaper = startReservationReaper(reservationReaperConfig,
   (limit) => runReservationReaperSweep({ database: db, limit }));
-process.once('SIGTERM', () => { void reservationReaper.stop(); });
-process.once('SIGINT', () => { void reservationReaper.stop(); });
+process.once('exit', () => { void reservationReaper.stop(); });
 
 if (process.env.NODE_ENV !== 'test') {
   try {
