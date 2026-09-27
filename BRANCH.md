@@ -57,7 +57,7 @@
   - [x] Discover host target: `make test-llm-gateway-process`.
 - [ ] **Lot 1 — API scheduler**
   - [x] Add counts-only sweep wrapper and boot/periodic scheduling with enable, interval and limit configuration.
-  - [ ] Add `api/tests/unit/reservation-reaper-schedule.test.ts` for defaults, disable, failures and overlap prevention.
+  - [x] Add `api/tests/unit/reservation-reaper-schedule.test.ts` for defaults, disable, failures and overlap prevention.
 - [ ] **Lot 2 — Host scheduler**
   - [x] Resolve BRRS-B1 before implementation.
   - [x] Configure and bind boot/periodic sweeps to the host ledger with shutdown cancellation and no overlap.
