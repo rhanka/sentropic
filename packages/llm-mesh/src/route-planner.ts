@@ -366,7 +366,17 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     this.commitRoundRobin(stored);
     if (!stored.affinityRef) return;
     const current = this.affinities.get(stored.affinityRef);
-    if (current && stored.policy.fallbackMode !== 'one-way') return;
+    // Exclusive-alias migration (owner "follow the /model"): a commit or
+    // success on the exclusive alias overwrites a stale incompatible affinity
+    // with the served Astra account and target through the existing audited
+    // rebind/promote path below (`cacheContinuityRisk` on account change).
+    const exclusiveMigration = Boolean(
+      EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[candidate.target.requestedModel] && current
+        && (current.target.providerId !== candidate.target.providerId
+          || current.target.modelId !== candidate.target.modelId
+          || current.target.transportProviderId !== candidate.target.transportProviderId),
+    );
+    if (current && stored.policy.fallbackMode !== 'one-way' && !exclusiveMigration) return;
     if (current?.target.providerId === candidate.target.providerId
       && current.target.modelId === candidate.target.modelId
       && current.target.transportProviderId === candidate.target.transportProviderId) return;
