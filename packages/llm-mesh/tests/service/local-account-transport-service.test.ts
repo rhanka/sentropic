@@ -873,6 +873,70 @@ describe('LocalAccountTransportService', () => {
     }));
   });
 
+  it.each([false, true])(
+    'drops a stored effort override when switching to the exclusive alias (quoted: %s)',
+    async (quoted) => {
+      const service = new LocalAccountTransportService(
+        new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+      );
+      service.registerAccount({
+        accountId: 'astra-account', targetProviderId: 'openai', transportProviderId: 'codex',
+        accessToken: 'astra-token', status: 'active', modelIds: ['gpt-6-astra'],
+        enrollmentCompletedAt: '2026-08-08T00:00:00Z',
+        ownerScopeRef: 'tenant-1:user-1',
+      });
+      const generate = vi.fn(async () => ({
+        id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-6-astra' as const,
+        message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+        finishReason: 'stop' as const, providerMetadata: {},
+      }));
+      const directory = service.createRouteDirectory({
+        generate,
+        async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+      });
+      const planner = new InMemoryRoutePlanner({ directory });
+      const subject = { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' };
+      const affinityKey = quoted ? 'effort-drop-quoted' : 'effort-drop';
+
+      // Bind the affinity through the effort-bearing Astra alias.
+      const first = await planner.plan(subject, {
+        requestedModel: 'claude-opus-5-high', affinityKey,
+      });
+      await (await planner.prepareAttempt(
+        subject, first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+      )).complete();
+      expect(planner.describeAffinity(subject, affinityKey)?.target).toMatchObject({
+        modelId: 'gpt-6-astra', effort: 'medium',
+      });
+
+      const quote = quoted ? planner.quote({
+        requestedModel: 'claude-opus-5-5',
+        ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
+        now: new Date(),
+      }) : undefined;
+      const plan = await planner.plan(subject, {
+        requestedModel: 'claude-opus-5-5', affinityKey, ...(quote ? { quote } : {}),
+      });
+      const attempt = await planner.prepareAttempt(
+        subject, plan.planRef, plan.candidateRefs[0]!, 'req-2', 0,
+      );
+
+      // No stored effort: the runtime forces no reasoning of its own ...
+      await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
+      expect(generate).toHaveBeenCalledWith(
+        expect.not.objectContaining({ reasoning: expect.anything() }),
+      );
+      // ... and the request's own effort passes through untouched.
+      await attempt.generate({
+        messages: [{ role: 'user', content: 'hello' }],
+        reasoning: { effort: 'xhigh' },
+      });
+      expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+        providerId: 'openai', modelId: 'gpt-6-astra', reasoning: { effort: 'xhigh' },
+      }));
+    },
+  );
+
   it('never serves anthropic, gemini or muse for the exclusive alias', async () => {
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
