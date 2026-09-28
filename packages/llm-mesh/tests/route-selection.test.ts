@@ -505,7 +505,8 @@ describe('route candidate selection', () => {
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
       supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
-      readiness: 'ready' as const, revision: 'r1',
+      readiness: 'ready' as 'ready' | 'disabled' | 'cooldown' | 'reauth-required',
+      revision: 'r1',
     };
     const selectAlias = (
       extra: {
