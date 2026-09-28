@@ -239,19 +239,33 @@ export const runRouteStreamFlow = async (
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
+      const terminal = () => terminalGatewayError(
+        classification, servedTargetFor(diagnostic), 'all planned streams failed',
+      );
       try {
         if (attempt) {
           if (classification.reason === 'cancelled') await attempt.releaseCancelled();
           else await attempt.recordOutcome(classification, attemptUsage(usage));
         }
-      } catch (hookError) { await settle('failed'); throw hookError; }
+      } catch (hookError) {
+        if (prepared.admission) { await settle('failed'); throw hookError; }
+        // Non-budget: a post-dispatch callback failure must never mask the
+        // terminal refusal — the generic mapper would turn the callback error
+        // into overloaded_error. Settle once (guarded), swallow, no retry.
+        try { await settle('failed'); } catch { /* The terminal refusal wins. */ }
+        throw terminal();
+      }
       if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
-      await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
+      try {
+        await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
+      } catch (error) {
+        // Same preservation for the settlement sink on the non-budget path.
+        // The admitted ledger failure still replaces the refusal by design.
+        if (prepared.admission) throw error;
+      }
       // Same terminal-class preservation as the JSON flow: a terminal
       // upstream refusal keeps its class, never a pooled 503.
-      throw terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned streams failed',
-      );
+      throw terminal();
     }
   }
   try {

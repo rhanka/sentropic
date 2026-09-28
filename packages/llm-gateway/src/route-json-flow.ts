@@ -83,24 +83,40 @@ export const runRouteJsonFlow = async (
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
+      const terminal = () => terminalGatewayError(
+        classification, servedTargetFor(diagnostic), 'all planned routes failed',
+      );
       try {
         if (attempt) {
           if (classification.reason === 'cancelled') await attempt.releaseCancelled();
           else await attempt.recordOutcome(classification, attemptUsage(usage));
         }
       } catch (hookError) {
-        await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
-        throw hookError;
+        if (prepared.admission) {
+          await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
+          throw hookError;
+        }
+        // Non-budget: a post-dispatch callback failure must never mask the
+        // terminal refusal — the generic mapper would turn the callback error
+        // into overloaded_error. Settle once (guarded), swallow, no retry.
+        try {
+          await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
+        } catch { /* The terminal refusal wins. */ }
+        throw terminal();
       }
       const hasNext = index + 1 < prepared.plan.candidateRefs.length;
       if (classification.retryable && hasNext) continue;
       const outcome = classification.reason === 'cancelled' ? 'cancelled' : 'failed';
-      await settle(outcome);
+      try {
+        await settle(outcome);
+      } catch (error) {
+        // Same preservation for the settlement sink on the non-budget path.
+        // The admitted ledger failure still replaces the refusal by design.
+        if (prepared.admission) throw error;
+      }
       // Terminal refusal keeps its upstream class (400/401/429) instead of
       // collapsing into pooled-account-unavailable (503).
-      throw terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned routes failed',
-      );
+      throw terminal();
     }
     const usage = response.usage ? routeUsage(response.usage) : estimate(response.text);
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
