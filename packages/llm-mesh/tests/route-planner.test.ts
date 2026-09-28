@@ -762,6 +762,91 @@ describe('opaque route planner', () => {
     expect(String((error as Error).message)).toContain('muse reauthenticate required');
   });
 
+  it('identifies unknown models and unavailable Astra with distinct names and codes', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory() });
+    const directory = new FakeRouteDirectory([]);
+    const empty = new InMemoryRoutePlanner({ directory });
+    const rejectOf = (promise: Promise<unknown>) => promise.then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+
+    const unknown = await rejectOf(planner.plan(routingSubject(), {
+      requestedModel: 'unknown-contract-model',
+    }));
+    expect(unknown).toBeInstanceOf(RoutePlanError);
+    expect(unknown).toMatchObject({ name: 'RoutePlanError', code: 'unknown-model' });
+
+    const unavailable = await rejectOf(empty.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    }));
+    expect(unavailable).toBeInstanceOf(RoutePlanError);
+    expect(unavailable).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
+    expect(String((unavailable as Error).message)).toBe('No eligible route');
+    // A failed plan prepares zero attempts.
+    expect(directory.prepared).toHaveLength(0);
+  });
+
+  it('keeps the requested alias and Astra triple in success diagnostics', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([{
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      }]),
+    });
+    const plan = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+
+    expect(plan.diagnostics).toEqual([{
+      candidateRef: expect.any(String),
+      diagnosticAccountRef: 'codex-redacted',
+      requestedModel: 'claude-opus-5-5',
+      actualProviderId: 'openai',
+      actualModelId: 'gpt-6-astra',
+      actualTransportProviderId: 'codex',
+      reason: 'alias',
+      cacheContinuityRisk: false,
+    }]);
+  });
+
+  it('binds the alias no-route diagnostic to the codex transport', async () => {
+    const codexReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'codex',
+      message: 'codex reauthenticate required',
+    };
+    const codexDirectory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly typeof codexReauth[]>;
+    };
+    codexDirectory.listDiagnostics = async () => [codexReauth];
+    const codexError = await new InMemoryRoutePlanner({ directory: codexDirectory })
+      .plan(routingSubject(), { requestedModel: 'claude-opus-5-5' }).then(
+        () => { throw new Error('expected rejection'); },
+        (error: unknown) => error,
+      );
+    expect((codexError as { code?: string }).code).toBe('no-route');
+    expect(String((codexError as Error).message)).toContain('codex reauthenticate required');
+
+    // An unrelated muse diagnostic is never surfaced for the alias.
+    const museReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'muse',
+      message: 'muse reauthenticate required',
+    };
+    const museDirectory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly typeof museReauth[]>;
+    };
+    museDirectory.listDiagnostics = async () => [museReauth];
+    const museError = await new InMemoryRoutePlanner({ directory: museDirectory })
+      .plan(routingSubject(), { requestedModel: 'claude-opus-5-5' }).then(
+        () => { throw new Error('expected rejection'); },
+        (error: unknown) => error,
+      );
+    expect((museError as { code?: string }).code).toBe('no-route');
+    expect(String((museError as Error).message)).toBe('No eligible route');
+  });
+
   it('rejects a plan after its named policy revision changes', async () => {
     const profiles = new InMemoryRoutePolicyProfiles([{
       name: 'coding', revision: 'r1', policy: DEFAULT_ROUTE_POLICY,
