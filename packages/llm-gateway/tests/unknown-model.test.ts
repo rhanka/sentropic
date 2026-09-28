@@ -2,6 +2,7 @@
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import { createGatewayRouter, stubGatewayConfig } from '../src/index.js';
+import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import {
   KNOWN_MODEL, UNKNOWN_MODEL, authHeaders, emptyMeshDirectory, meshDirectoryFor,
   realMeshPlanner, sendUnknown, unknownCallerAuth, unknownModelRouter, type UnknownRouterCalls,
@@ -301,4 +302,111 @@ describe('planning refusal survives a rejecting settlement sink', () => {
         type: 'authentication_error', code: 'provider_auth_required' } });
     expect(settles).toBe(1);
   });
+});
+
+describe('terminal upstream 404 survives post-dispatch callback failures (non-budget)', () => {
+  const wires = [
+    { path: '/v1/messages', stream: false },
+    { path: '/v1/messages', stream: true },
+    { path: '/v1/chat/completions', stream: false },
+    { path: '/v1/chat/completions', stream: true },
+  ];
+
+  const expectedKnownBody = (path: string): unknown => path === '/v1/messages'
+    ? { type: 'error', error: { type: 'not_found_error', message: `Unknown model: "${KNOWN_MODEL}"` } }
+    : { error: { message: `Unknown model: "${KNOWN_MODEL}"`,
+      type: 'invalid_request_error', code: 'model_not_found' } };
+
+  const terminalPlanner = (recordOutcome: () => Promise<void>): RoutePlanner => ({
+    async plan() {
+      return { planRef: 'plan-1', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: ['candidate-0'],
+        policy: stubPolicy, councilRevision: 'fixture', diagnostics: [{
+          candidateRef: 'candidate-0', diagnosticAccountRef: 'account-0', requestedModel: KNOWN_MODEL,
+          actualProviderId: 'openai', actualModelId: 'actual-model-x',
+          actualTransportProviderId: 'codex', reason: 'exact' as const, cacheContinuityRisk: false }] };
+    },
+    async prepareAttempt() {
+      return { attemptRef: 'attempt-0',
+        async generate() { throw new Error('unused'); },
+        async stream() { throw new Error('unused'); },
+        async recordOutcome() { await recordOutcome(); },
+        async markCommitted() {}, async complete() {}, async releaseCancelled() {} };
+    },
+    describeAffinity() { return null; },
+    promoteAffinity() { throw new Error('unused'); },
+    rebindAffinity() { throw new Error('unused'); },
+    resetAffinity() { return false; },
+  });
+
+  const callbackRouter = (input: {
+    readonly recordOutcome: () => Promise<void>;
+    readonly settleRoute: (value: RouteRequestSettlement) => Promise<void>;
+    readonly calls: { dispatch: { generate: number; stream: number }; settles: number };
+  }): ReturnType<typeof unknownModelRouter> => createGatewayRouter({
+    config: { ...stubGatewayConfig, callerAuth: unknownCallerAuth },
+    routePlanner: terminalPlanner(input.recordOutcome),
+    routeDispatch: {
+      async generate() { input.calls.dispatch.generate += 1; throw { status: 404 }; },
+      async stream() { input.calls.dispatch.stream += 1; throw { status: 404 }; },
+    },
+    routeMetering: { async settleRoute(value: RouteRequestSettlement) {
+      input.calls.settles += 1;
+      await input.settleRoute(value);
+    } },
+    requestId: () => 'req_unknown',
+  });
+
+  it.each(wires)('upstream 404 with rejecting settlement sink keeps the frozen 404 ($path stream=$stream)',
+    async ({ path, stream }) => {
+      const calls = { dispatch: { generate: 0, stream: 0 }, settles: 0 };
+      let outcomes = 0;
+      const app = callbackRouter({ calls,
+        recordOutcome: async () => { outcomes += 1; },
+        settleRoute: async () => { throw Object.assign(Error('sink down'), { status: 500 }); },
+      });
+      const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
+      expect(res.status).toBe(404);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      expect(res.headers.get('x-sentropic-request-id')).toBe('req_unknown');
+      expect(res.headers.get('x-sentropic-served')).toContain('model=actual-model-x');
+      expect(res.headers.get('retry-after')).toBeNull();
+      expect(res.headers.get('x-should-retry')).toBeNull();
+      // A pre-commit refusal is JSON, never an SSE prefix — even for stream:true.
+      const text = await res.text();
+      expect(text.startsWith('event:')).toBe(false);
+      expect(text.startsWith('data:')).toBe(false);
+      expect(text).not.toContain('overloaded');
+      expect(JSON.parse(text)).toEqual(expectedKnownBody(path));
+      expect(stream ? calls.dispatch.stream : calls.dispatch.generate).toBe(1);
+      expect(outcomes).toBe(1);
+      expect(calls.settles).toBe(1);
+    });
+
+  it.each(wires)('upstream 404 with rejecting recordOutcome keeps the frozen 404 ($path stream=$stream)',
+    async ({ path, stream }) => {
+      const calls = { dispatch: { generate: 0, stream: 0 }, settles: 0 };
+      const settlements: RouteRequestSettlement[] = [];
+      const app = callbackRouter({ calls,
+        recordOutcome: async () => { throw Object.assign(Error('hook down'), { status: 500 }); },
+        settleRoute: async (value: RouteRequestSettlement) => { settlements.push(value); },
+      });
+      const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
+      expect(res.status).toBe(404);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      expect(res.headers.get('x-sentropic-request-id')).toBe('req_unknown');
+      expect(res.headers.get('x-sentropic-served')).toContain('model=actual-model-x');
+      expect(res.headers.get('retry-after')).toBeNull();
+      expect(res.headers.get('x-should-retry')).toBeNull();
+      const text = await res.text();
+      expect(text.startsWith('event:')).toBe(false);
+      expect(text.startsWith('data:')).toBe(false);
+      expect(text).not.toContain('overloaded');
+      expect(JSON.parse(text)).toEqual(expectedKnownBody(path));
+      expect(stream ? calls.dispatch.stream : calls.dispatch.generate).toBe(1);
+      expect(calls.settles).toBe(1);
+      expect(settlements).toHaveLength(1);
+      expect(settlements[0]).toMatchObject({
+        outcome: 'failed', requestedModel: KNOWN_MODEL, attempts: [{ outcome: 'unsupported-model' }],
+      });
+    });
 });
