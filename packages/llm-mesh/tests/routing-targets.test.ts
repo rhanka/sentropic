@@ -6,6 +6,7 @@ import {
   STANDARD_ROUTE_DEFINITIONS,
   CANONICAL_TARGET_MAPPINGS,
   describeCanonicalTargetRoutes,
+  EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS,
   LAUNCH_ALIAS_TARGET_MAPPINGS,
   LAUNCH_ALIAS_ROUTE_MAPPINGS,
   resolveTargetCapabilitySource,
@@ -412,6 +413,23 @@ describe('canonical model targets', () => {
     expect(JSON.stringify(describeCanonicalTargetRoutes())).not.toMatch(
       /token|secret|accountId/i,
     );
+  });
+
+  it('routes claude-opus-5-5 exclusively to Astra on every muse position', () => {
+    const astra = {
+      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
+    };
+    expect(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS['claude-opus-5-5']).toEqual(astra);
+    for (const musePosition of ['off', 'after-claude', 'first', 'claude-last'] as const) {
+      const candidates = createCanonicalTargetCandidatesResolver({ musePosition })('claude-opus-5-5');
+      expect(candidates).toEqual([astra]);
+      expect(candidates.map((candidate) => candidate.providerId))
+        .toEqual(['openai']);
+    }
+    expect(resolve('claude-opus-5-5')).toEqual(astra);
+    expect(resolveCandidates('claude-opus-5-5')).toEqual([astra]);
+    expect(describeCanonicalTargetRoutes().filter((route) => route.requestedId === 'claude-opus-5-5'))
+      .toEqual([{ requestedId: 'claude-opus-5-5', ...astra, kind: 'alias' }]);
   });
 
   it('keeps CANONICAL_TARGET_MAPPINGS aligned with the selection-first target for each model', () => {
