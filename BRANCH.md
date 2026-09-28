@@ -65,7 +65,7 @@
 - [x] M5 — Health suppression and rotation
 - [x] M6 — Error identity and diagnostics
 - [x] M7 — listModels hides the alias
-- [ ] M8 — Quote as a single Astra candidate
+- [x] M8 — Quote as a single Astra candidate
 - [ ] M9 — Quote guards and matrix note
 - [ ] M10 — Execution rewrite, effort passthrough, negative sweep
 - [ ] M11 — Council pin, spec contract, 0.23.0
