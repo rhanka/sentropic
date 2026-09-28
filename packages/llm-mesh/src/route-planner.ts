@@ -6,6 +6,7 @@ import {
   routingOwnerRef, subjectRef, type StoredAffinity, type StoredPlan,
 } from './route-planner-state.js';
 import { resolveRequestedTargets, selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
+import { EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS } from './routing-targets.js';
 import type {
   AccountDirectoryPort, AffinityDescription, Clock, IdFactory, PreparedRouteAttempt,
   AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
@@ -13,6 +14,25 @@ import type {
 } from './routing-contracts.js';
 import { computeRouteQuoteRef, isQuotedRouteTarget, quoteRoute, resolveQuotePolicy } from './route-quote.js';
 import { InMemoryRoutePolicyProfiles, resolveRouteStrategy } from './routing-policy.js';
+/**
+ * Exclusive-alias migration (owner "follow the /model"): a stored affinity
+ * whose provider, model or transport differs from the exclusive target is
+ * treated as absent at plan time, so a `/model` switch plans fresh Astra and
+ * never emits the stale sticky candidate. Stored state is never mutated here;
+ * a later success rebinds it (see bind), a failure leaves it untouched.
+ * Quoted and unquoted plans behave the same.
+ */
+const isExclusiveAliasMismatch = (
+  requestedModel: string,
+  affinity: StoredAffinity | undefined,
+): boolean => {
+  const exclusive = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[requestedModel];
+  return Boolean(exclusive && affinity
+    && (affinity.target.providerId !== exclusive.providerId
+      || affinity.target.modelId !== exclusive.model
+      || affinity.target.transportProviderId !== exclusive.transportProviderId));
+};
+
 export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
   readonly council?: ModelEquivalenceCouncil;
@@ -111,7 +131,14 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     let candidates = selection.kind === 'candidates' ? [...selection.candidates] : [];
     // With a quote, an affinity to an unquoted target is ignored for selection
     // (for example a sticky model the request no longer asks for).
-    if (affinity && policy.stickyAccount && inQuoteTarget(affinity.target)) {
+    // An exclusive alias additionally migrates an incompatible stored affinity
+    // (see isExclusiveAliasMismatch): the stale sticky candidate is never
+    // emitted, quoted and unquoted alike.
+    if (
+      affinity && policy.stickyAccount
+      && !isExclusiveAliasMismatch(input.requestedModel, affinity)
+      && inQuoteTarget(affinity.target)
+    ) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
       if (!account || account.readiness !== 'ready') {
         candidates = [];
@@ -126,9 +153,19 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           account,
           target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
         };
-        candidates = this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
-          .filter((candidate) => !this.health.isSuppressed(candidate))
-          .slice(0, policy.maxAttempts);
+        // An exclusive alias keeps per-request explicit restrictions as
+        // restrictions: a compatible affinity that violates them fails closed
+        // instead of serving (or rebinding) the sticky candidate.
+        const exclusiveBlocked = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[input.requestedModel]
+          && input.explicit
+          && !candidates.some((candidate) =>
+            candidate.account.accountRef === affinity.accountRef
+            && this.isAffinityTarget(candidate, affinity));
+        candidates = exclusiveBlocked
+          ? []
+          : this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
+            .filter((candidate) => !this.health.isSuppressed(candidate))
+            .slice(0, policy.maxAttempts);
       }
     } else {
       candidates = this.keepQuoted(candidates, inQuote)
