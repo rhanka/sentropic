@@ -131,6 +131,92 @@ describe('opaque route planner', () => {
     }));
   });
 
+  it('plans fresh Astra for the exclusive alias despite a stale incompatible affinity', async () => {
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5', affinityKey: 'switch',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'switch');
+    expect(before?.target.providerId).toBe('anthropic');
+
+    const fresh = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'switch',
+    });
+    expect(fresh.diagnostics).toHaveLength(1);
+    expect(fresh.diagnostics[0]).toMatchObject({
+      requestedModel: 'claude-opus-5-5',
+      actualProviderId: 'openai', actualModelId: 'gpt-6-astra',
+      actualTransportProviderId: 'codex', reason: 'alias',
+      cacheContinuityRisk: true,
+    });
+    // Plan time never mutates stored state.
+    expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
+
+    // The quoted path behaves the same.
+    const quote = planner.quote({
+      requestedModel: 'claude-opus-5-5',
+      ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
+      now: new Date(),
+    });
+    const pinned = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'switch', quote,
+    });
+    expect(pinned.diagnostics[0]).toMatchObject({
+      actualProviderId: 'openai', actualModelId: 'gpt-6-astra', reason: 'alias',
+    });
+    expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
+  });
+
+  it('keeps a compatible Astra affinity closed under a violating explicit restriction', async () => {
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'codex-a', diagnosticAccountRef: 'acct_a',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-b', diagnosticAccountRef: 'acct_b',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'pinned',
+      explicit: { diagnosticAccountRef: 'acct_a' },
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'pinned');
+
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'pinned',
+      explicit: { diagnosticAccountRef: 'acct_b' },
+    })).rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'pinned')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
+  });
+
   it('suppresses a failed preferred route until the injected clock reaches TTL', async () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const directory = new FakeRouteDirectory();
