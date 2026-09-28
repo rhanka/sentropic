@@ -169,12 +169,49 @@ describe('provider-shaped error mapper (unit)', () => {
       Object.assign(new Error('x'), { code: 'unknown-model' }),
       new Error('unknown model: no-such-model'),
       Object.assign(new Error('x'), { name: 'SomethingElse', code: 'unknown-model' }),
-      new RoutePlanError('no route', 'no-route'),
+      new RoutePlanError('Route quote does not match this plan', 'quote-mismatch'),
     ];
     for (const error of negatives) {
       const mapped = toProviderShapedError('anthropic-messages', error, 'no-such-model');
       expect(mapped.status).toBe(503);
       expect(JSON.stringify(mapped.body)).not.toContain('no-such-model');
+    }
+  });
+
+  it('maps known-model no-route to the BR-REL-Q7 non-retryable 503', () => {
+    const a = mapGatewayError('anthropic-messages', 'no-route', undefined, 'known-model');
+    expect(a.status).toBe(503);
+    expect(a.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(a.body).toEqual({
+      type: 'error',
+      error: { type: 'api_error', message: 'No route available for model: "known-model"' },
+    });
+    // A supplied retry delay never becomes Retry-After on this branch.
+    const o = mapGatewayError('openai-chat-completions', 'no-route', 30, 'known-model');
+    expect(o.status).toBe(503);
+    expect(o.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(o.body).toEqual({
+      error: {
+        message: 'No route available for model: "known-model"',
+        type: 'server_error', code: 'no_route',
+      },
+    });
+    expect(JSON.stringify([a.body, o.body])).not.toContain('overloaded');
+    expect(JSON.stringify([a.body, o.body])).not.toContain('rate_limit');
+  });
+
+  it('maps structural no-route to the Q7 503 with the requested model', () => {
+    const failures: unknown[] = [
+      new RoutePlanError('No eligible route', 'no-route'),
+      Object.assign(new Error('No eligible route'), { name: 'RoutePlanError', code: 'no-route' }),
+    ];
+    for (const error of failures) {
+      for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+        const mapped = toProviderShapedError(wire, error, 'known-model');
+        expect(mapped.status).toBe(503);
+        expect(mapped.headers).toEqual({ 'x-should-retry': 'false' });
+        expect(JSON.stringify(mapped.body)).toContain('No route available for model: "known-model"');
+      }
     }
   });
 
