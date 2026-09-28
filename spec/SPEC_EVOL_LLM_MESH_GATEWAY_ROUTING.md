@@ -677,8 +677,11 @@ enrollment-action diagnostic is a non-retryable HTTP 503 (BR-REL-Q7: Anthropic
 `api_error` / OpenAI `server_error` code `no_route`, `x-should-retry: false`, no
 `Retry-After`); the enrollment-action branch (`authentication_error` +
 `X-Sentropic-Route-Action`) is unchanged. Requests refused before admission emit
-no financial settlement; once a hold exists the admitted-plan settlement rule
-applies. After response commitment the HTTP status is never rewritten.
+no durable or hold-bound financial event (package-level notification only); once
+a hold exists the admitted-plan settlement rule applies with release-before-metering,
+and a ledger/settlement or `recordOutcome` failure never replaces the typed/terminal
+refusal (attempted once, swallowed, original thrown). After response commitment
+the HTTP status is never rewritten.
 
 ### 5.4 Wire invariants
 

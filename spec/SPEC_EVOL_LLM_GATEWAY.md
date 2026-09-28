@@ -118,8 +118,9 @@ admin/status/debug.
   `X-Sentropic-Route-Action`). The table also governs pre-first-byte failures for `stream:true` (a provider-shaped
   HTTP error, never an empty 200 stream); availability failures are 503, not every pre-stream failure. Mid-stream
   provider failure: provider-native error event in the SSE, then settle (no HTTP-status rewrite after commitment).
-  A post-dispatch accounting or outcome-callback failure on the non-budget path never replaces the terminal
-  refusal; an admitted-ledger failure on the budget path still replaces it by design.
+  A post-dispatch accounting or outcome-callback failure never replaces the terminal
+  refusal (budget or not); an admitted ledger/settlement failure is attempted once,
+  swallowed, and the typed/terminal refusal wins.
 
 ## 4. Pool + auth-swap
 Pool STATE = gateway-owned: control-plane DB for metadata/leases/reservations/quota/cooldown/audit; KMS/
