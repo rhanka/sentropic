@@ -56,7 +56,7 @@
 - [ ] No web/Chrome/VSCode UI edits or UI-specific UAT for this package-only lot.
 
 ## Build Steps (M0-M11, design v2 + Muse v2 BUILD_READY_WITH_CHANGES corrections)
-- [ ] M0 — Branch plan commit
+- [x] M0 — Branch plan commit
 - [x] M1 — Exclusive alias in routing-targets
 - [x] M2 — Selection guards (override + council)
 - [x] M3 — Selection availability and restrictions
@@ -83,12 +83,12 @@
 - [x] **Lot 2 — Unknown-model typed errors**
   - [x] Keep `RoutePlanError`/`RouteQuoteError` `unknown-model` typed and structurally identifiable (code plus name) for the gateway 404 mapping of BR-REL-Q3.
   - [x] Tests in `packages/llm-mesh/tests/route-planner.test.ts` and `budget-quote.test.ts`: unknown model versus known model without route.
-- [ ] **Lot 3 — Documentation, package gate and final validation**
+- [x] **Lot 3 — Documentation, package gate and final validation**
   - [x] Update `packages/llm-mesh/CHANGELOG.md` Unreleased and the routing spec.
-  - [x] Check the published package version before bumping `packages/llm-mesh/package.json`; do not publish directly.
-  - [ ] Build by Muse 1.3 xhigh, review by Astra high; resolve findings.
-  - [ ] `make test-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`.
-  - [ ] `make typecheck-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`.
-  - [ ] `make build-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`.
-  - [ ] `make scope-check API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`.
-  - [ ] `make down API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`; report local checks separately from CI.
+  - [x] Check the published package version before bumping `packages/llm-mesh/package.json`; do not publish directly (`make audit-llm-routing-package-versions`: local 0.23.0 > registry 0.22.1).
+  - [x] Build by Muse 1.3 xhigh; review by Astra high (REQUEST_CHANGES, three P2 findings fixed in `f947a990f`, `66f76bd26`, `cda10ba70`), then by Muse 1.3 max after the owner switched reviewers (APPROVE on `3e628626a`).
+  - [x] `make test-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route` (32 files, 315 tests passed on `3e628626a`).
+  - [x] `make typecheck-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route` (pass on `3e628626a`).
+  - [x] `make build-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route` (pass on `3e628626a`).
+  - [x] `make scope-check API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route` (PASS C2 on `3e628626a`).
+  - [x] `make down API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`; local checks above, CI reported separately on the PR.
