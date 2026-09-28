@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
 import {
   GatewayError,
   mapGatewayError,
@@ -145,7 +146,68 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(JSON.stringify(mapped.body)).not.toContain('budget cap');
   });
 
-  it('maps an UNKNOWN internal error to a generic 503 (no leak)', () => {
+  it('maps real and structural plan/quote unknown-model to the Lot 1 404', () => {
+    const failures: unknown[] = [
+      new RoutePlanError('Unknown requested model', 'unknown-model'),
+      new RouteQuoteError('Unknown requested model', 'unknown-model'),
+      Object.assign(new Error('Unknown requested model'), { name: 'RoutePlanError', code: 'unknown-model' }),
+      Object.assign(new Error('Unknown requested model'), { name: 'RouteQuoteError', code: 'unknown-model' }),
+    ];
+    for (const error of failures) {
+      for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+        const mapped = toProviderShapedError(wire, error, 'no-such-model');
+        expect(mapped.status).toBe(404);
+        expect(mapped.headers).toBeUndefined();
+        expect(JSON.stringify(mapped.body)).toContain('Unknown model: "no-such-model"');
+        expect(JSON.stringify(mapped.body)).not.toContain('Unknown requested model');
+      }
+    }
+  });
+
+  it('rejects code-only, message-only and wrong-name model errors (generic 503)', () => {
+    const negatives: unknown[] = [
+      Object.assign(new Error('x'), { code: 'unknown-model' }),
+      new Error('unknown model: no-such-model'),
+      Object.assign(new Error('x'), { name: 'SomethingElse', code: 'unknown-model' }),
+      new RoutePlanError('no route', 'no-route'),
+    ];
+    for (const error of negatives) {
+      const mapped = toProviderShapedError('anthropic-messages', error, 'no-such-model');
+      expect(mapped.status).toBe(503);
+      expect(JSON.stringify(mapped.body)).not.toContain('no-such-model');
+    }
+  });
+
+  it('maps capability-invalid plan/quote and structural bad ceilings to 400', () => {
+    const failures: unknown[] = [
+      new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet'),
+      new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet'),
+      Object.assign(new Error('ceiling'), { name: 'RouteQuoteError', code: 'invalid-ceiling' }),
+    ];
+    for (const error of failures) {
+      for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+        const mapped = toProviderShapedError(wire, error, 'known-model');
+        expect(mapped.status).toBe(400);
+        expect(mapped.headers).toBeUndefined();
+        expect(JSON.stringify(mapped.body)).toContain('invalid_request_error');
+      }
+    }
+  });
+
+  it('keeps the enrollment-action branch ahead of structural recognition', () => {
+    const error = {
+      name: 'RoutePlanError', code: 'no-route',
+      diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' },
+    };
+    const mapped = toProviderShapedError('anthropic-messages', error, 'known-model');
+    expect(mapped).toMatchObject({
+      status: 503,
+      headers: { 'X-Sentropic-Route-Action': 'reauthenticate-cloud-code' },
+      body: { error: { type: 'authentication_error', message: 'cloud-code reauthenticate required' } },
+    });
+  });
+
+  it('maps an unclassified internal error to a generic 503 (no leak)', () => {
     const mapped = toProviderShapedError(
       'openai-chat-completions',
       new Error('Postgres connection to pool DB refused at 10.0.0.5'),

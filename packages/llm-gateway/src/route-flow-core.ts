@@ -226,7 +226,11 @@ export const classifyRouteError = (
   if (code.includes('invalid_request') || code === 'invalid-request' || code === 'bad_request') {
     return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
   }
-  if (status === 404 || code.includes('unsupported_model')) {
+  // Mesh normalizes Anthropic `not_found_error` and OpenAI `model_not_found`
+  // into `code`, so a status-less transport error with those codes is still an
+  // unsupported model — never a provider-5xx.
+  if (status === 404 || code.includes('unsupported_model')
+    || code.includes('model_not_found') || code.includes('not_found')) {
     return { reason: 'unsupported-model', retryable: false, healthScope: 'provider-model' };
   }
   if ((status !== undefined && status >= 500) || code.includes('overload')) {
