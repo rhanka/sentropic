@@ -247,21 +247,19 @@ export const runRouteStreamFlow = async (
           if (classification.reason === 'cancelled') await attempt.releaseCancelled();
           else await attempt.recordOutcome(classification, attemptUsage(usage));
         }
-      } catch (hookError) {
-        if (prepared.admission) { await settle('failed'); throw hookError; }
-        // Non-budget: a post-dispatch callback failure must never mask the
-        // terminal refusal — the generic mapper would turn the callback error
-        // into overloaded_error. Settle once (guarded), swallow, no retry.
+      } catch {
+        // A post-dispatch callback failure must never mask the terminal
+        // refusal (admitted or not). Settle once (guarded), swallow, no retry.
         try { await settle('failed'); } catch { /* The terminal refusal wins. */ }
         throw terminal();
       }
       if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
       try {
         await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
-      } catch (error) {
-        // Same preservation for the settlement sink on the non-budget path.
-        // The admitted ledger failure still replaces the refusal by design.
-        if (prepared.admission) throw error;
+      } catch {
+        // Same preservation for the settlement sink: a ledger failure must
+        // never replace the terminal refusal (admitted or not). One attempt,
+        // swallowed, no retry.
       }
       // Same terminal-class preservation as the JSON flow: a terminal
       // upstream refusal keeps its class, never a pooled 503.
@@ -270,11 +268,9 @@ export const runRouteStreamFlow = async (
   }
   try {
     await settle('failed');
-  } catch (error) {
-    // A non-budget sink failure must never mask the Q7 no-route refusal
-    // (same preservation as the planning-refusal path in route-flow-core).
-    // The admitted ledger failure still replaces the refusal by design.
-    if (prepared.admission) throw error;
+  } catch {
+    // A sink failure must never mask the Q7 no-route refusal (same
+    // preservation as the planning-refusal path in route-flow-core).
   }
   throw new GatewayError('no-route', 'route plan has no candidates');
 };
