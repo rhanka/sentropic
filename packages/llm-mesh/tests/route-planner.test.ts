@@ -217,6 +217,63 @@ describe('opaque route planner', () => {
     expect(directory.prepared).toHaveLength(1);
   });
 
+  it('fails closed when a compatible Astra affinity loses its advertised model', async () => {
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'astra-eligibility');
+
+    // The account stays ready but no longer advertises Astra.
+    directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
+
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility',
+    })).rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'astra-eligibility')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
+  });
+
+  it('fails closed with a quote when a compatible Astra affinity loses its advertised model', async () => {
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility-quoted',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'astra-eligibility-quoted');
+    const quote = planner.quote({
+      requestedModel: 'claude-opus-5-5',
+      ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
+      now: new Date(),
+    });
+
+    // The account stays ready but no longer advertises Astra.
+    directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
+
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility-quoted', quote,
+    })).rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'astra-eligibility-quoted')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
+  });
+
   it('rebinds a stale affinity to Astra on exclusive alias success', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
