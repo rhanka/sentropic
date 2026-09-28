@@ -21,7 +21,7 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { mapGatewayError, type GatewayFailureKind } from '../src/index.js';
+import { mapGatewayError, toProviderShapedError, type GatewayFailureKind } from '../src/index.js';
 import { FixtureTransport, anthropicFrames, openAiFrames } from './fixtures/transport.js';
 import { buildHarness, authHeaders } from './fixtures/harness.js';
 import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
@@ -383,6 +383,38 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
       'message',
       'type',
     ]);
+  });
+
+  it('freezes the generic fallback 503 bodies (unclassified errors)', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, new Error('boom'));
+      expect(mapped.status).toBe(503);
+      expect(mapped.headers).toBeUndefined();
+      expect(mapped.body).toEqual(wire === 'anthropic-messages'
+        ? { type: 'error', error: { type: 'overloaded_error', message: 'service temporarily unavailable' } }
+        : { error: { message: 'service temporarily unavailable',
+          type: 'rate_limit_error', code: 'overloaded' } });
+    }
+  });
+
+  it('freezes the enrollment-action 503 bodies and route-action headers', () => {
+    const cases = [
+      { diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' },
+        action: 'reauthenticate-cloud-code', message: 'cloud-code reauthenticate required' },
+      { diagnostic: { code: 'reenrollment-required', transportProviderId: 'codex' },
+        action: 're-enroll-codex', message: 'codex re-enroll required' },
+    ];
+    for (const { diagnostic, action, message } of cases) {
+      const error = { name: 'RoutePlanError', code: 'no-route', diagnostic };
+      const a = toProviderShapedError('anthropic-messages', error, 'known-model');
+      expect(a.status).toBe(503);
+      expect(a.headers).toEqual({ 'X-Sentropic-Route-Action': action });
+      expect(a.body).toEqual({ type: 'error', error: { type: 'authentication_error', message } });
+      const o = toProviderShapedError('openai-chat-completions', error, 'known-model');
+      expect(o.status).toBe(503);
+      expect(o.headers).toEqual({ 'X-Sentropic-Route-Action': action });
+      expect(o.body).toEqual({ error: { message, type: 'authentication_error', code: 'provider_auth_required' } });
+    }
   });
 });
 
