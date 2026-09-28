@@ -494,9 +494,9 @@ explicit switch to `claude-opus-5-5` (owner "follow the /model"). At plan
 time a provider/model/transport-incompatible stored affinity is treated as
 absent — the plan serves fresh Astra and never emits the stale sticky
 candidate, quoted and unquoted alike, without mutating stored state. A later
-commit or success overwrites the stale entry with the served Astra account
+success overwrites the stale entry with the served Astra account
 and target through the audited rebind/promote path (`cacheContinuityRisk` on
-account change); a failure leaves the stale affinity untouched. A compatible
+account change); a failure or cancellation leaves the stale affinity untouched. A compatible
 Astra affinity that violates a per-request explicit restriction still yields
 `no-route` with the affinity untouched. `cacheContinuityRisk` stays
 account-scoped: a same-account model switch reports no risk.

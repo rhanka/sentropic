@@ -360,6 +360,112 @@ describe('opaque route planner', () => {
     expect(planner.describeAffinity(routingSubject(), 'stale')).toEqual(before);
   });
 
+  it('leaves a stale affinity untouched on commit-then-failure or commit-then-cancellation', async () => {
+    const events: Array<{ operation: string }> = [];
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      affinityAudit: (event) => events.push(event),
+    });
+    for (const affinityKey of ['stale-commit-fail', 'stale-commit-cancel'] as const) {
+      const first = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5', affinityKey,
+      });
+      await (await planner.prepareAttempt(
+        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+      )).complete();
+    }
+    const beforeFail = planner.describeAffinity(routingSubject(), 'stale-commit-fail');
+    const beforeCancel = planner.describeAffinity(routingSubject(), 'stale-commit-cancel');
+
+    const failed = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-fail',
+    });
+    const failedAttempt = await planner.prepareAttempt(
+      routingSubject(), failed.planRef, failed.candidateRefs[0]!, 'req-2', 0,
+    );
+    await failedAttempt.markCommitted();
+    await failedAttempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+    expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
+
+    const cancelled = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-cancel',
+    });
+    const cancelledAttempt = await planner.prepareAttempt(
+      routingSubject(), cancelled.planRef, cancelled.candidateRefs[0]!, 'req-2', 0,
+    );
+    await cancelledAttempt.markCommitted();
+    await cancelledAttempt.releaseCancelled();
+    expect(planner.describeAffinity(routingSubject(), 'stale-commit-cancel')).toEqual(beforeCancel);
+
+    expect(events).toEqual([]);
+  });
+
+  it('migrates a stale affinity on commit-then-success', async () => {
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-success',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const fresh = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-success',
+    });
+    const attempt = await planner.prepareAttempt(
+      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
+    );
+    await attempt.markCommitted();
+    // The first validated frame must not migrate the stale affinity.
+    expect(planner.describeAffinity(routingSubject(), 'stale-commit-success')?.target.providerId)
+      .toBe('anthropic');
+    await attempt.complete();
+
+    const migrated = planner.describeAffinity(routingSubject(), 'stale-commit-success');
+    expect(migrated).toMatchObject({
+      revision: 2, diagnosticAccountRef: 'codex-redacted', promoted: false,
+    });
+    expect(migrated?.target).toMatchObject({
+      requestedModel: 'claude-opus-5-5',
+      providerId: 'openai', modelId: 'gpt-6-astra', transportProviderId: 'codex',
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      operation: 'rebind', cacheContinuityRisk: true,
+    }));
+  });
+
   it('promotes a same-account model switch without account-scoped cache risk', async () => {
     // Limitation: `cacheContinuityRisk` is account-scoped, so a same-account
     // model switch to Astra reports no risk.
