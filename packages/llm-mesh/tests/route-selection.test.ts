@@ -500,6 +500,93 @@ describe('route candidate selection', () => {
       .toEqual(['gpt-6-astra', 'gpt-6-luna']);
   });
 
+  it('fails closed when Astra is unavailable for the exclusive alias', () => {
+    const astraReady = {
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready' as const, revision: 'r1',
+    };
+    const selectAlias = (
+      extra: {
+        readonly explicit?: {
+          readonly providerId?: string;
+          readonly transportProviderId?: string;
+          readonly diagnosticAccountRef?: string;
+        };
+      } = {},
+      aliasAccounts = [astraReady],
+    ) =>
+      selectRouteCandidates({
+        request: { requestedModel: 'claude-opus-5-5', ...extra },
+        policy: DEFAULT_ROUTE_POLICY,
+        council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+        accounts: aliasAccounts,
+      });
+
+    expect(selectAlias({}, [])).toMatchObject({ kind: 'no-eligible-account' });
+    expect(selectAlias({}, [{
+      ...astraReady, targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+      supportedModelIds: ['gemini-3.8-flash'],
+    }])).toMatchObject({ kind: 'no-eligible-account' });
+    for (const readiness of ['disabled', 'cooldown', 'reauth-required'] as const) {
+      expect(selectAlias({}, [{ ...astraReady, readiness }]))
+        .toMatchObject({ kind: 'no-eligible-account' });
+    }
+    expect(selectAlias({ explicit: { providerId: 'anthropic' } }))
+      .toMatchObject({ kind: 'no-eligible-account' });
+    expect(selectAlias({ explicit: { transportProviderId: 'cloud-code' } }))
+      .toMatchObject({ kind: 'no-eligible-account' });
+    expect(selectAlias(
+      { explicit: { diagnosticAccountRef: 'codex-redacted' } },
+      [astraReady, { ...astraReady, accountRef: 'codex-2', diagnosticAccountRef: 'codex_2' }],
+    )).toMatchObject({ kind: 'candidates' });
+  });
+
+  it('keeps only Astra accounts under alias policies, capabilities and restrictions', () => {
+    const pair = (ref: string, at: string) => ({
+      accountRef: ref, diagnosticAccountRef: ref,
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: at,
+      readiness: 'ready' as const, revision: 'r1',
+    });
+    const duo = [pair('codex_old', '2026-08-01T00:00:00Z'), pair('codex_new', '2026-08-02T00:00:00Z')];
+
+    expect(candidatesOf(selectRouteCandidates({
+      request: {
+        requestedModel: 'claude-opus-5-5',
+        requiredCapabilities: ['tools', 'streaming', 'input:image'],
+        explicit: { diagnosticAccountRef: 'codex_new' },
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: duo,
+    })).map((candidate) => candidate.target.providerId)).toEqual(['openai']);
+    expect(selectRouteCandidates({
+      request: {
+        requestedModel: 'claude-opus-5-5', requiredCapabilities: ['input:audio'],
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: duo,
+    })).toMatchObject({ kind: 'capabilities-unmet' });
+    for (const policy of [{
+      ...DEFAULT_ROUTE_POLICY,
+      strategy: { kind: 'ordered' as const, preferences: [{ transportProviderId: 'codex' }] },
+    }, {
+      ...DEFAULT_ROUTE_POLICY,
+      strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
+    }]) {
+      const ordered = candidatesOf(selectRouteCandidates({
+        request: { requestedModel: 'claude-opus-5-5' },
+        policy, council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL, accounts: duo,
+      }));
+      expect(ordered).toHaveLength(2);
+      expect(ordered.map((candidate) => candidate.target.providerId))
+        .toEqual(['openai', 'openai']);
+    }
+  });
+
   it('distinguishes unknown ids, unmet capabilities, and no eligible account', () => {
     const selectSignal = (request: Parameters<typeof selectRouteCandidates>[0]['request'], accountsForSignal = accounts) =>
       selectRouteCandidates({

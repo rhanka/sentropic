@@ -59,7 +59,7 @@
 - [ ] M0 — Branch plan commit
 - [x] M1 — Exclusive alias in routing-targets
 - [x] M2 — Selection guards (override + council)
-- [ ] M3 — Selection availability and restrictions
+- [x] M3 — Selection availability and restrictions
 - [ ] M4a — Plan-time affinity migration
 - [ ] M4b — Success-time rebind, failure untouched
 - [ ] M5 — Health suppression and rotation
