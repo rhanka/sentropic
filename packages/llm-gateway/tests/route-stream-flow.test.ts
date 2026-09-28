@@ -1,5 +1,6 @@
 import type { PreparedRouteAttempt, RoutePlanner, StreamEvent } from '@sentropic/llm-mesh';
 import { describe, expect, it, vi } from 'vitest';
+import { createGatewayRouter } from '../src/index.js';
 import { runRouteStreamFlow } from '../src/route-stream-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
@@ -520,4 +521,85 @@ describe('route stream flow with budget admission', () => {
     expect(calls.prepare).toEqual([]);
     expect(recorder.settlements).toEqual([]);
   });
+});
+
+describe('route stream lifecycle through the router', () => {
+  const streamRouterApp = (attempts: PreparedRouteAttempt[], settlements: RouteRequestSettlement[]) =>
+    createGatewayRouter({
+      config, routePlanner: plannerFor(attempts),
+      routeMetering: { settleRoute(value) { settlements.push(value); } },
+      requestId: () => 'req-test',
+    });
+  const postStream = (app: ReturnType<typeof createGatewayRouter>, path: string) => app.request(path, {
+    method: 'POST',
+    headers: { authorization: 'Bearer [REDACTED]', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: request.model, stream: true, messages: [{ role: 'user', content: 'hello' }] }),
+  });
+  const frozen404 = (path: string) => path === '/v1/messages'
+    ? { type: 'error', error: { type: 'not_found_error', message: `Unknown model: "${request.model}"` } }
+    : { error: { message: `Unknown model: "${request.model}"`,
+      type: 'invalid_request_error', code: 'model_not_found' } };
+
+  it.each(['/v1/messages', '/v1/chat/completions'])(
+    'returns JSON 404 before commitment with no SSE bytes (%s)', async (path) => {
+      const opened: string[] = []; const firstHooks: string[] = []; const secondHooks: string[] = [];
+      const closed = vi.fn(); const settlements: RouteRequestSettlement[] = [];
+      const first = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        try {
+          opened.push('first');
+          yield { type: 'error', data: { providerId: 'openai', message: 'model not found',
+            code: 'model_not_found', retryable: false } };
+        } finally { closed(); }
+      }, firstHooks);
+      const second = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        opened.push('second');
+        yield { type: 'content_delta', data: { delta: 'wrong' } };
+      }, secondHooks);
+      const res = await postStream(streamRouterApp([first, second], settlements), path);
+      expect(res.status).toBe(404);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      const text = await res.text();
+      expect(text.startsWith('event:')).toBe(false);
+      expect(text.startsWith('data:')).toBe(false);
+      expect(JSON.parse(text)).toEqual(frozen404(path));
+      expect(opened).toEqual(['first']);
+      expect(firstHooks).toEqual(['outcome:unsupported-model']);
+      expect(secondHooks).toEqual([]);
+      expect(closed).toHaveBeenCalledTimes(1);
+      expect(settlements).toHaveLength(1);
+      expect(settlements[0]).toMatchObject({ outcome: 'failed', attempts: [{ outcome: 'unsupported-model' }] });
+    });
+
+  it.each(['/v1/messages', '/v1/chat/completions'])(
+    'keeps committed status with a sanitized terminal error (%s)', async (path) => {
+      const opened: string[] = []; const firstHooks: string[] = []; const secondHooks: string[] = [];
+      const closed = vi.fn(); const settlements: RouteRequestSettlement[] = [];
+      const first = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        try {
+          opened.push('first');
+          yield { type: 'content_delta', data: { delta: 'hello' } };
+          yield { type: 'error', data: { providerId: 'openai', message: 'model not found SECRET',
+            code: 'model_not_found', retryable: false } };
+        } finally { closed(); }
+      }, firstHooks);
+      const second = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        opened.push('second');
+        yield { type: 'content_delta', data: { delta: 'wrong' } };
+      }, secondHooks);
+      const res = await postStream(streamRouterApp([first, second], settlements), path);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/event-stream');
+      const text = await res.text();
+      expect(text).toContain('stream failed after commitment');
+      expect(text).not.toContain('Unknown model');
+      expect(text).not.toContain('SECRET');
+      if (path === '/v1/chat/completions') expect(text).not.toContain('[DONE]');
+      else expect(text).not.toContain('message_stop');
+      expect(opened).toEqual(['first']);
+      expect(firstHooks).toEqual(['committed', 'outcome:unsupported-model']);
+      expect(secondHooks).toEqual([]);
+      expect(closed).toHaveBeenCalledTimes(1);
+      expect(settlements).toHaveLength(1);
+      expect(settlements[0]?.outcome).toBe('failed');
+    });
 });
