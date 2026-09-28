@@ -5,7 +5,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   BudgetConfigurationError, budgetRetryAfterSeconds, createGatewayRouter, routeUsageCeiling,
-  runRouteJsonFlow, runRouteStreamFlow, toProviderShapedError,
+  runRouteJsonFlow, runRouteStreamFlow,
 } from '../src/index.js';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 import {
@@ -112,11 +112,17 @@ describe('budget admission quote and ceiling', () => {
         const recorder = recordingBudget();
         const response = await send(budgetRouter({ planner, recorder }), path, stream);
         expect(response.status).toBe(status);
-        // The router threads the requested model into the same mapper the unit tests pin.
-        const wire = path === '/v1/messages' ? 'anthropic-messages' : 'openai-chat-completions';
-        const golden = toProviderShapedError(wire, new RouteQuoteError(message, code), MODEL);
-        expect(golden.status).toBe(status);
-        expect(await response.json()).toEqual(golden.body);
+        // Literal frozen bodies (never built with the mapper under test).
+        const expectedBody = code === 'unknown-model'
+          ? path === '/v1/messages'
+            ? { type: 'error', error: { type: 'not_found_error', message: `Unknown model: "${MODEL}"` } }
+            : { error: { message: `Unknown model: "${MODEL}"`,
+              type: 'invalid_request_error', code: 'model_not_found' } }
+          : path === '/v1/messages'
+            ? { type: 'error', error: { type: 'invalid_request_error', message: 'invalid request' } }
+            : { error: { message: 'invalid request',
+              type: 'invalid_request_error', code: 'invalid_request' } };
+        expect(await response.json()).toEqual(expectedBody);
         expect(response.headers.get('content-type')).toMatch(/^application\/json/);
         expect(response.headers.get('x-sentropic-served')).toBeNull();
         expect(calls.quote).toHaveLength(1);
