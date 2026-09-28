@@ -8,7 +8,7 @@ import { expectedSource, siblingIndex, type SiblingIndexEntry } from './helpers.
 // (never from the mere presence of CLUSTER_MESH_SIBLING_RECEIPTS): an empty receipts file or a single sibling
 // leaves the other train packages on the registry.
 const MESH: SiblingIndexEntry = { name: '@sentropic/llm-mesh', version: '0.22.2' };
-const GATEWAY: SiblingIndexEntry = { name: '@sentropic/llm-gateway', version: '0.19.0' };
+const GATEWAY: SiblingIndexEntry = { name: '@sentropic/llm-gateway', version: '0.19.1' };
 const CANDIDATE: SiblingIndexEntry = { name: '@sentropic/cluster-mesh', version: '0.13.0' };
 
 let dir: string;
