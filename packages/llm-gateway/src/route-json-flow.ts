@@ -91,14 +91,12 @@ export const runRouteJsonFlow = async (
           if (classification.reason === 'cancelled') await attempt.releaseCancelled();
           else await attempt.recordOutcome(classification, attemptUsage(usage));
         }
-      } catch (hookError) {
-        if (prepared.admission) {
-          await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
-          throw hookError;
-        }
-        // Non-budget: a post-dispatch callback failure must never mask the
-        // terminal refusal — the generic mapper would turn the callback error
-        // into overloaded_error. Settle once (guarded), swallow, no retry.
+      } catch {
+        // A post-dispatch callback failure must never mask the terminal
+        // refusal — the generic mapper would turn the callback error into
+        // overloaded_error. Settle once (guarded), swallow, no retry. This
+        // holds on the admitted path too: the host already observes its own
+        // hook rejection, only the client-facing wire keeps the terminal.
         try {
           await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
         } catch { /* The terminal refusal wins. */ }
@@ -109,10 +107,10 @@ export const runRouteJsonFlow = async (
       const outcome = classification.reason === 'cancelled' ? 'cancelled' : 'failed';
       try {
         await settle(outcome);
-      } catch (error) {
-        // Same preservation for the settlement sink on the non-budget path.
-        // The admitted ledger failure still replaces the refusal by design.
-        if (prepared.admission) throw error;
+      } catch {
+        // Same preservation for the settlement sink: a ledger failure must
+        // never replace the terminal refusal (admitted or not). One attempt,
+        // swallowed, no retry.
       }
       // Terminal refusal keeps its upstream class (400/401/429) instead of
       // collapsing into pooled-account-unavailable (503).
@@ -129,11 +127,9 @@ export const runRouteJsonFlow = async (
   }
   try {
     await settle('failed');
-  } catch (error) {
-    // A non-budget sink failure must never mask the Q7 no-route refusal
-    // (same preservation as the planning-refusal path in route-flow-core).
-    // The admitted ledger failure still replaces the refusal by design.
-    if (prepared.admission) throw error;
+  } catch {
+    // A sink failure must never mask the Q7 no-route refusal (same
+    // preservation as the planning-refusal path in route-flow-core).
   }
   throw new GatewayError('no-route', 'route plan has no candidates');
 };
