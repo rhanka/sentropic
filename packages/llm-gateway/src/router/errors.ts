@@ -13,6 +13,7 @@
  *   503  budget-unavailable (BR-47)      -> same sanitized body (pricing/store failure)
  *   400  bad-request                     -> provider invalid-request
  *   404  unknown-model (Lot 1)             -> provider not-found (model-only message)
+ *   503  no-route (BR-REL-Q7)              -> provider api/server error + x-should-retry:false
  * The gateway maps internal failure CLASSES to these — callers see only the
  * provider-shaped surface, never `no_account` / lease / reservation internals.
  */
@@ -43,6 +44,7 @@ export type GatewayFailureKind =
   | 'upstream-rate-limited'
   | 'bad-request'
   | 'unknown-model'
+  | 'no-route'
   | 'cross-user-disabled';
 
 export class GatewayError extends Error {
@@ -99,6 +101,13 @@ const retryAfterHeader = (
  */
 const unknownModelMessage = (requestedModel?: string): string =>
   requestedModel ? `Unknown model: ${JSON.stringify(requestedModel)}` : 'Unknown model';
+
+/**
+ * BR-REL-Q7 known-model no-route message. Names ONLY the validated requested
+ * model — never overloaded/rate-limit wording, so SDKs do not retry-loop.
+ */
+const noRouteMessage = (requestedModel?: string): string =>
+  requestedModel ? `No route available for model: ${JSON.stringify(requestedModel)}` : 'No route available';
 
 /**
  * Map an internal failure class to a provider-shaped error for the wire. The
@@ -164,6 +173,15 @@ export const mapGatewayError = (
       return anthropic
         ? anthropicError(404, 'not_found_error', unknownModelMessage(requestedModel))
         : openAiError(404, 'invalid_request_error', unknownModelMessage(requestedModel), 'model_not_found');
+
+    case 'no-route': {
+      // BR-REL-Q7: non-retryable 503 with an explicit no-retry header and no
+      // Retry-After. Never overloaded_error/rate_limit_error.
+      const headers = { 'x-should-retry': 'false' };
+      return anthropic
+        ? anthropicError(503, 'api_error', noRouteMessage(requestedModel), headers)
+        : openAiError(503, 'server_error', noRouteMessage(requestedModel), 'no_route', headers);
+    }
   }
 };
 
@@ -196,6 +214,12 @@ export const toProviderShapedError = (
   // quote-mismatch and unclassified errors stay on the generic 503 below.
   if (isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')) {
     return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
+  }
+  // BR-REL-Q7: every known-model no-route without an enrollment diagnostic
+  // (checked above) becomes the non-retryable 503. The enrollment-action
+  // branch stays unchanged.
+  if (isRoutePlanError(error, 'no-route') || isRouteQuoteError(error, 'no-route')) {
+    return mapGatewayError(wire, 'no-route', undefined, requestedModel);
   }
   if (
     isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')

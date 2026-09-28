@@ -76,7 +76,7 @@ describe('route JSON flow', () => {
   it('settles an empty plan exactly once with zero usage', async () => {
     const settleRoute = vi.fn();
     await expect(runRouteJsonFlow({ config, routePlanner: routePlanner([]), metering: { settleRoute } }, request))
-      .rejects.toMatchObject({ kind: 'no-eligible-account' });
+      .rejects.toMatchObject({ kind: 'no-route' });
     expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       outcome: 'failed', attempts: [], usage: { inputTokens: 0, outputTokens: 0, estimated: false },
     }));

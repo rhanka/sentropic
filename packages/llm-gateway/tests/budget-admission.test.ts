@@ -133,6 +133,9 @@ describe('budget admission quote and ceiling', () => {
     const recorder = recordingBudget();
     const response = await send(budgetRouter({ planner, recorder }), '/v1/chat/completions', false);
     expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: {
+      message: `No route available for model: "${MODEL}"`, type: 'server_error', code: 'no_route' } });
+    expect(response.headers.get('x-should-retry')).toBe('false');
     expect(recorder.events).toEqual([]);
     expect(calls.plan).toEqual([]);
   });

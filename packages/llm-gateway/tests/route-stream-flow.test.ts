@@ -249,7 +249,7 @@ describe('route stream flow', () => {
   it('settles empty plans and closes empty streams before commitment', async () => {
     const settleRoute = vi.fn();
     await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([]), metering: { settleRoute } }, request))
-      .rejects.toMatchObject({ kind: 'no-eligible-account' });
+      .rejects.toMatchObject({ kind: 'no-route' });
     expect(settleRoute).toHaveBeenCalledTimes(1);
     const hooks: string[] = [];
     const source = attempt(async function* () {}, hooks);

@@ -112,5 +112,5 @@ export const runRouteJsonFlow = async (
     return { ...encoded, servedTarget: servedTargetFor(diagnostic) };
   }
   await settle('failed');
-  throw new GatewayError('no-eligible-account', 'route plan has no candidates');
+  throw new GatewayError('no-route', 'route plan has no candidates');
 };
