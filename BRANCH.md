@@ -67,7 +67,7 @@
 - [x] M7 — listModels hides the alias
 - [x] M8 — Quote as a single Astra candidate
 - [x] M9 — Quote guards and matrix note
-- [ ] M10 — Execution rewrite, effort passthrough, negative sweep
+- [x] M10 — Execution rewrite, effort passthrough, negative sweep
 - [ ] M11 — Council pin, spec contract, 0.23.0
 
 ## Plan / Todo (lot-based)
