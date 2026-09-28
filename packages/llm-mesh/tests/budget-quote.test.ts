@@ -251,6 +251,38 @@ describe('pure route quote', () => {
     })), 'too-many-candidates');
   });
 
+  it('names the unknown-model quote error structurally', () => {
+    let caught: unknown;
+    try { quoteRoute(quoteInput('unknown-contract-model')); } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(RouteQuoteError);
+    expect(caught).toMatchObject({ name: 'RouteQuoteError', code: 'unknown-model' });
+  });
+
+  it('quotes the exclusive alias as a single unenforced Astra candidate', async () => {
+    const directory = new SpyDirectory(new FakeRouteDirectory([]));
+    const planner = new InMemoryRoutePlanner({ directory, clock: fixedClock });
+    const quote = planner.quote(quoteInput('claude-opus-5-5'));
+
+    expect(directory.calls).toEqual([]);
+    expect(quote.requestedModel).toBe('claude-opus-5-5');
+    expect(quote.candidates).toEqual([{
+      providerId: 'openai', modelId: 'gpt-6-astra', transportProviderId: 'codex',
+      reason: 'alias',
+      allowance: { inputTokens: 1_000, outputTokens: 100_000 },
+      // The codex transport omits the output ceiling: enforced is false.
+      outputCeilingEnforced: false,
+    }]);
+
+    // An empty-directory plan on that valid quote reports no-route, not unknown-model.
+    const failure = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', quote,
+    }).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect(failure).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
+  });
+
   it('bounds output by the only profiles that declare maxOutputTokens', () => {
     expect(modelProfiles
       .filter((profile) => profile.capabilities.maxOutputTokens !== undefined)
