@@ -191,6 +191,16 @@ describe('BR-46 v1 wire contract snapshot — route inventory', () => {
           ? { headers: authHeaders('user-a'), body: JSON.stringify({ model: 'x', messages: [] }) }
           : {}),
       });
+      if (route.method === 'POST' && 'wire' in route && res.status === 404) {
+        // The probe model 'x' is unknown, so a mounted POST inference route
+        // answers the frozen unknown-model 404. Only that exact envelope
+        // counts as mounted; any other 404 (including Hono's default
+        // not-found) still fails.
+        const expected = mapGatewayError(route.wire, 'unknown-model', undefined, 'x');
+        expect(expected.status).toBe(404);
+        expect(await res.json()).toEqual(expected.body);
+        continue;
+      }
       // Mounted = anything but a 404. (Behaviour per route is asserted below.)
       expect(res.status).not.toBe(404);
     }
