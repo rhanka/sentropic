@@ -135,7 +135,9 @@ describe('route flow core', () => {
     // The wire message names the REQUESTED model, never the served detail.
     const mapped = toProviderShapedError('anthropic-messages', error, 'requested-x');
     expect(mapped.status).toBe(404);
-    expect(JSON.stringify(mapped.body)).toContain('Unknown model: "requested-x"');
+    expect((mapped.body as { error: { message: string } }).error.message).toBe(
+      'Unknown model: "requested-x"',
+    );
     expect(JSON.stringify(mapped.body)).not.toContain('gpt-5.6-terra');
   });
 

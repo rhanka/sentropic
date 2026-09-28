@@ -123,7 +123,9 @@ describe('provider-shaped error mapper (unit)', () => {
       'no-such-model',
     );
     expect(mapped.status).toBe(404);
-    expect(JSON.stringify(mapped.body)).toContain('Unknown model: "no-such-model"');
+    expect((mapped.body as { error: { message: string } }).error.message).toBe(
+      'Unknown model: "no-such-model"',
+    );
     // The internal detail (even a leaking one) NEVER reaches the wire body.
     const leaked = toProviderShapedError(
       'openai-chat-completions',
@@ -158,7 +160,9 @@ describe('provider-shaped error mapper (unit)', () => {
         const mapped = toProviderShapedError(wire, error, 'no-such-model');
         expect(mapped.status).toBe(404);
         expect(mapped.headers).toBeUndefined();
-        expect(JSON.stringify(mapped.body)).toContain('Unknown model: "no-such-model"');
+        expect((mapped.body as { error: { message: string } }).error.message).toBe(
+          'Unknown model: "no-such-model"',
+        );
         expect(JSON.stringify(mapped.body)).not.toContain('Unknown requested model');
       }
     }
@@ -210,7 +214,9 @@ describe('provider-shaped error mapper (unit)', () => {
         const mapped = toProviderShapedError(wire, error, 'known-model');
         expect(mapped.status).toBe(503);
         expect(mapped.headers).toEqual({ 'x-should-retry': 'false' });
-        expect(JSON.stringify(mapped.body)).toContain('No route available for model: "known-model"');
+        expect((mapped.body as { error: { message: string } }).error.message).toBe(
+          'No route available for model: "known-model"',
+        );
       }
     }
   });
