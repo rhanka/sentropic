@@ -276,16 +276,42 @@ describe('error mapping through the router (integration)', () => {
     expect(transport.seenMaterials).toHaveLength(0);
   });
 
-  it('returns 400 for an unsupported model', async () => {
+  it.each([
+    ['/v1/messages', false],
+    ['/v1/messages', true],
+    ['/v1/chat/completions', false],
+    ['/v1/chat/completions', true],
+  ])('returns the Lot 1 404 for an unknown personal model (%s stream=%s)', async (path, stream) => {
     const transport = new FixtureTransport();
-    const { app } = buildHarness({ transport });
-    const res = await app.request('/v1/chat/completions', {
+    const { app, metering } = buildHarness({ transport });
+    const res = await app.request(path, {
       method: 'POST',
       headers: authHeaders('user-a'),
-      body: JSON.stringify({ model: 'no-such-model', messages: [] }),
+      body: JSON.stringify({ model: 'no-such-model', messages: [], stream }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(res.headers.get('x-should-retry')).toBeNull();
+    expect(res.headers.get('x-sentropic-request-id')).toBe('req_fixture_id');
+    expect(res.headers.get('x-sentropic-served')).toBeNull();
+    const body = await res.json();
+    if (path === '/v1/messages') {
+      expect(body).toEqual({
+        type: 'error',
+        error: { type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
+      });
+    } else {
+      expect(body).toEqual({
+        error: {
+          message: 'Unknown model: "no-such-model"',
+          type: 'invalid_request_error',
+          code: 'model_not_found',
+        },
+      });
+    }
     expect(transport.seenMaterials).toHaveLength(0);
+    expect(metering.settlements).toHaveLength(0);
   });
 
   it('returns EXACTLY 400 for a malformed JSON body (§3b bad-request)', async () => {

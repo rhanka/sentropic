@@ -87,7 +87,8 @@ export interface ResolvedTarget {
 /**
  * Resolve provider/model + transport for a model string. v0 personal-passthrough
  * uses a minimal static map; Lot 3+ replaces it with the catalog/pool snapshot.
- * Unknown models throw a `bad-request` GatewayError (mapped to provider 400).
+ * Unknown models throw an `unknown-model` GatewayError (Lot 1 404); the router
+ * supplies the validated requested model for the wire message.
  */
 export type TargetResolver = (model: string) => ResolvedTarget | undefined;
 
@@ -154,7 +155,10 @@ const prepare = async (
   // 2. resolve provider/model from the body `model`.
   const target = deps.resolveTarget(request.model);
   if (!target) {
-    throw new GatewayError('bad-request', `unsupported model: ${request.model}`);
+    // Lot 1 404: fixed internal detail, zero acquisition/dispatch. The legacy
+    // personal settlement type requires a selected target, so no settlement is
+    // attempted here — the router maps this to the model-only 404.
+    throw new GatewayError('unknown-model', 'unknown model');
   }
 
   // 4. pool.select -> coordinator.acquire over the PERSONAL pool.
