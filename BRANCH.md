@@ -64,7 +64,7 @@
 - [x] M4b — Success-time rebind, failure untouched
 - [x] M5 — Health suppression and rotation
 - [x] M6 — Error identity and diagnostics
-- [ ] M7 — listModels hides the alias
+- [x] M7 — listModels hides the alias
 - [ ] M8 — Quote as a single Astra candidate
 - [ ] M9 — Quote guards and matrix note
 - [ ] M10 — Execution rewrite, effort passthrough, negative sweep

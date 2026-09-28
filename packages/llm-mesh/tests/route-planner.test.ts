@@ -847,6 +847,35 @@ describe('opaque route planner', () => {
     expect(String((museError as Error).message)).toBe('No eligible route');
   });
 
+  it('lists ready Astra inventory without the exclusive alias', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([
+        {
+          accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+          targetProviderId: 'openai', transportProviderId: 'codex',
+          // An explicit inventory advertising the alias never leaks it.
+          supportedModelIds: ['gpt-6-astra', 'claude-opus-5-5'],
+          enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+          targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+          supportedModelIds: ['gemini-3.8-flash'],
+          enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+      ]),
+    });
+
+    expect(await planner.listModels(routingSubject())).toEqual([
+      { modelId: 'gemini-3.8-flash', providerId: 'gemini' },
+      { modelId: 'gpt-6-astra', providerId: 'openai' },
+    ]);
+    const empty = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory([]) });
+    expect(await empty.listModels(routingSubject())).toEqual([]);
+  });
+
   it('rejects a plan after its named policy revision changes', async () => {
     const profiles = new InMemoryRoutePolicyProfiles([{
       name: 'coding', revision: 'r1', policy: DEFAULT_ROUTE_POLICY,
