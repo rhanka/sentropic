@@ -1,9 +1,11 @@
 /** Lot 1 unknown-model router matrix (plan path): REAL router + REAL mesh, both wires, JSON and `stream:true`. */
+import type { RoutePlanner } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import {
-  KNOWN_MODEL, UNKNOWN_MODEL, authHeaders, meshDirectoryFor,
+  KNOWN_MODEL, UNKNOWN_MODEL, authHeaders, emptyMeshDirectory, meshDirectoryFor,
   realMeshPlanner, sendUnknown, unknownModelRouter, type UnknownRouterCalls,
 } from './fixtures/unknown-model.js';
+import { recordingBudget } from './fixtures/budget.js';
 
 const freshCalls = (): UnknownRouterCalls => ({ settlements: [], dispatch: { generate: 0, stream: 0 } });
 
@@ -62,5 +64,100 @@ describe('unknown-model router matrix (real mesh, plan path)', () => {
       expect(missing.status).toBe(400);
     }
     expect(calls.settlements).toHaveLength(0);
+  });
+});
+
+describe('unknown-model budget quote path (real mesh)', () => {
+  it.each([
+    { path: '/v1/messages', stream: false },
+    { path: '/v1/messages', stream: true },
+    { path: '/v1/chat/completions', stream: false },
+    { path: '/v1/chat/completions', stream: true },
+  ])('returns the frozen 404 with zero admission ($path stream=$stream)', async ({ path, stream }) => {
+    const calls = freshCalls();
+    const recorder = recordingBudget();
+    const app = unknownModelRouter({
+      planner: realMeshPlanner(meshDirectoryFor([KNOWN_MODEL])), calls, budget: recorder.options,
+    });
+    const res = await sendUnknown(app, path, UNKNOWN_MODEL, stream);
+    expect(res.status).toBe(404);
+    expect(JSON.parse(await res.text())).toEqual(expectedBody(path));
+    expect(res.headers.get('x-sentropic-served')).toBeNull();
+    expect(calls.settlements).toEqual([]);
+    expect(recorder.admitted).toEqual([]);
+    expect(recorder.events).toEqual([]);
+    expect(calls.dispatch).toEqual({ generate: 0, stream: 0 });
+  });
+});
+
+describe('adversarial requested models', () => {
+  it('escapes hostile model strings in JSON with no header split', async () => {
+    const hostile = ['evil"model', 'line\nbreak', 'line\r\nbreak', 'modèle-日本語-🚀',
+      `x${'a'.repeat(5000)}`, 'quote\\"and\\\\backslash'];
+    const calls = freshCalls();
+    const app = unknownModelRouter({ planner: realMeshPlanner(meshDirectoryFor([KNOWN_MODEL])), calls });
+    for (const model of hostile) {
+      const res = await sendUnknown(app, '/v1/chat/completions', model, false);
+      expect(res.status).toBe(404);
+      const body = JSON.parse(await res.text()) as { error: { message: string } };
+      expect(body.error.message).toBe(`Unknown model: ${JSON.stringify(model)}`);
+      // The model is never reflected in headers: no split/smuggle channel.
+      res.headers.forEach((value) => {
+        expect(value).not.toContain('\n');
+        expect(value).not.toContain('\r');
+      });
+      expect(res.headers.get('x-sentropic-served')).toBeNull();
+    }
+  });
+});
+
+const stubPolicy = {
+  strategy: { kind: 'last-enrolled' as const }, rules: [], fallbackMode: 'retest-preferred' as const,
+  negativeCacheTtlMs: 300_000, maxAttempts: 2, preferSameTransport: true,
+  stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+};
+
+describe('terminal upstream 404 (requested versus actual model)', () => {
+  it('names the requested model while the served header keeps the actual model', async () => {
+    const planner: RoutePlanner = {
+      async plan() {
+        return { planRef: 'plan-1', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: ['candidate-0'],
+          policy: stubPolicy, councilRevision: 'fixture', diagnostics: [{
+            candidateRef: 'candidate-0', diagnosticAccountRef: 'account-0', requestedModel: KNOWN_MODEL,
+            actualProviderId: 'openai', actualModelId: 'actual-model-x',
+            actualTransportProviderId: 'codex', reason: 'exact' as const, cacheContinuityRisk: false }] };
+      },
+      async prepareAttempt() {
+        return { attemptRef: 'attempt-0',
+          async generate() { throw { status: 404 }; },
+          async stream() { throw new Error('unused'); },
+          async recordOutcome() {}, async markCommitted() {}, async complete() {}, async releaseCancelled() {} };
+      },
+      describeAffinity() { return null; }, promoteAffinity() { throw new Error('unused'); },
+      rebindAffinity() { throw new Error('unused'); }, resetAffinity() { return false; },
+    };
+    for (const path of ['/v1/messages', '/v1/chat/completions']) {
+      for (const stream of [false, true]) {
+        const calls = freshCalls();
+        const app = unknownModelRouter({ planner, calls, dispatchError: { status: 404 } });
+        const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
+        expect(res.status).toBe(404);
+        const body = JSON.parse(await res.text()) as { error: { message: string } };
+        expect(body.error.message).toBe(`Unknown model: "${KNOWN_MODEL}"`);
+        expect(JSON.stringify(body)).not.toContain('actual-model-x');
+        expect(res.headers.get('x-sentropic-served')).toContain('model=actual-model-x');
+        expect(stream ? calls.dispatch.stream : calls.dispatch.generate).toBe(1);
+        expect(calls.settlements).toHaveLength(1);
+      }
+    }
+  });
+
+  it('keeps a known-model no-route at 503, never 404', async () => {
+    const calls = freshCalls();
+    const app = unknownModelRouter({ planner: realMeshPlanner(emptyMeshDirectory()), calls });
+    const res = await sendUnknown(app, '/v1/chat/completions', KNOWN_MODEL, false);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('x-sentropic-served')).toBeNull();
+    expect(calls.settlements).toHaveLength(1);
   });
 });
