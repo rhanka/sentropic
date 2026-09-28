@@ -84,6 +84,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     for (const account of accounts) {
       if (account.readiness !== 'ready') continue;
       for (const modelId of account.supportedModelIds) {
+        // Exclusive launch aliases are request contracts, not inventory models.
+        if (EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[modelId]) continue;
         const key = `${account.targetProviderId}\u001f${modelId}`;
         inventory.set(key, { modelId, providerId: account.targetProviderId });
       }
