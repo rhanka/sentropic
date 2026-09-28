@@ -497,7 +497,12 @@ describe('admitted terminal refusal survives ledger/hook failures (router)', () 
     const res = await sendUnknown(app, path, MODEL, stream);
     expect(res.status).toBe(503);
     expect(res.headers.get('x-should-retry')).toBe('false');
-    expect((await res.text())).not.toContain('overloaded');
+    const text = await res.text();
+    const message = `No route available for model: "${MODEL}"`;
+    expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'api_error', message } }
+      : { error: { message, type: 'server_error', code: 'no_route' } });
+    expect(text).not.toContain('overloaded');
     expect(settles).toBe(1);
   });
 
@@ -515,7 +520,13 @@ describe('admitted terminal refusal survives ledger/hook failures (router)', () 
     const res = await sendUnknown(app, path, MODEL, stream);
     expect(res.status).toBe(503);
     expect(res.headers.get('x-sentropic-route-action')).toBe('reauthenticate-cloud-code');
-    expect((await res.text())).not.toContain('overloaded');
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'authentication_error',
+        message: 'cloud-code reauthenticate required' } }
+      : { error: { message: 'cloud-code reauthenticate required',
+        type: 'authentication_error', code: 'provider_auth_required' } });
+    expect(text).not.toContain('overloaded');
     expect(settles).toBe(1);
   });
 });
