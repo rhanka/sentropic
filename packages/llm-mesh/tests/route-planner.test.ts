@@ -343,6 +343,145 @@ describe('opaque route planner', () => {
     }));
   });
 
+  it.each(['route', 'account', 'transport', 'provider-model'] as const)(
+    'returns no-route when the sole Astra is suppressed at %s scope',
+    async (healthScope) => {
+      const directory = new FakeRouteDirectory([
+        {
+          accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+          targetProviderId: 'openai', transportProviderId: 'codex',
+          supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+          targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+          supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+      ]);
+      const planner = new InMemoryRoutePlanner({ directory });
+      const first = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5',
+      });
+      await (await planner.prepareAttempt(
+        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+      )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope });
+
+      // Another provider is never chosen for the exclusive alias.
+      await expect(planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5',
+      })).rejects.toMatchObject({ code: 'no-route' });
+    },
+  );
+
+  it('serves Astra again after the suppression TTL expires', async () => {
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      clock: { now: () => new Date(now) },
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    })).rejects.toMatchObject({ code: 'no-route' });
+
+    now += 300_000;
+    const retried = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+    expect(retried.diagnostics[0]).toMatchObject({
+      actualProviderId: 'openai', actualModelId: 'gpt-6-astra', reason: 'alias',
+    });
+  });
+
+  it('keeps a compatible sticky Astra without rotating to a second account', async () => {
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'sticky-astra',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const second = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'sticky-astra',
+    });
+    expect(second.diagnostics).toHaveLength(1);
+    expect(second.diagnostics[0]).toMatchObject({
+      diagnosticAccountRef: 'acct_new', actualProviderId: 'openai', reason: 'sticky',
+    });
+  });
+
+  it('serves only Astra on permitted rotation without rebinding the affinity', async () => {
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'rotate-astra',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const fallback = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'rotate-astra',
+      policyOverride: { fallbackMode: 'one-way', rotateEquivalentAccounts: true },
+    });
+    expect(fallback.diagnostics.map((entry) =>
+      [entry.diagnosticAccountRef, entry.actualProviderId, entry.reason]))
+      .toEqual([['acct_new', 'openai', 'sticky'], ['acct_old', 'openai', 'alias']]);
+    await (await planner.prepareAttempt(
+      routingSubject(), fallback.planRef, fallback.candidateRefs[1]!, 'req-2', 1,
+    )).complete();
+    // Same-triple rotation keeps the established affinity without an audit event.
+    expect(planner.describeAffinity(routingSubject(), 'rotate-astra')).toMatchObject({
+      diagnosticAccountRef: 'acct_new', revision: 1,
+    });
+    expect(events).toEqual([]);
+  });
+
   it('suppresses a failed preferred route until the injected clock reaches TTL', async () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const directory = new FakeRouteDirectory();
