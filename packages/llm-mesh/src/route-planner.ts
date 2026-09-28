@@ -155,11 +155,12 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           account,
           target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
         };
-        // An exclusive alias keeps per-request explicit restrictions as
-        // restrictions: a compatible affinity that violates them fails closed
-        // instead of serving (or rebinding) the sticky candidate.
+        // An exclusive alias serves a compatible affinity only when its
+        // account still resolves an eligible Astra candidate (same account,
+        // Astra target, account ready, Astra advertised/allowed): otherwise
+        // the plan fails closed with `no-route` (owner Q6) instead of
+        // serving the stale sticky candidate, regardless of `explicit`.
         const exclusiveBlocked = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[input.requestedModel]
-          && input.explicit
           && !candidates.some((candidate) =>
             candidate.account.accountRef === affinity.accountRef
             && this.isAffinityTarget(candidate, affinity));
