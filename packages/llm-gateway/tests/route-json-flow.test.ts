@@ -380,15 +380,84 @@ describe('route JSON flow with budget admission', () => {
       requestId: 'req-test', holdRef: 'hold-1', quoteRef: 'quote_fixture' });
     expect(toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra').status).toBe(404);
   });
-  it('lets an admitted-plan ledger failure replace the typed refusal (pinned)', async () => {
-    const { planner } = quotingPlanner([], {
-      plan: () => { throw new RoutePlanError('Unknown requested model', 'unknown-model'); },
-    });
+  it('preserves the typed refusal when the admitted-plan ledger fails', async () => {
+    const typed = new RoutePlanError('Unknown requested model', 'unknown-model');
+    const { planner } = quotingPlanner([], { plan: () => { throw typed; } });
     const recorder = recordingBudget();
     const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
-    await expect(runRouteJsonFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest))
-      .rejects.toThrow('ledger down');
+    const error = await runRouteJsonFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect(error).toBe(typed);
     expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.status).toBe(404);
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
+  });
+  it('preserves admitted terminal 404 when recordOutcome rejects', async () => {
+    const attempt: PreparedRouteAttempt = {
+      attemptRef: 'attempt-404',
+      generate: (async () => { throw { status: 404 }; }) as PreparedRouteAttempt['generate'],
+      async stream() { throw new Error('unused'); },
+      async recordOutcome() { throw Object.assign(Error('hook down'), { status: 500 }); },
+      async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+    };
+    const { planner } = quotingPlanner([attempt]);
+    const recorder = recordingBudget();
+    const error = await runRouteJsonFlow(deps(planner, recorder), budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect((error as { kind?: string }).kind).toBe('unknown-model');
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+    expect(recorder.settlements).toHaveLength(1);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.status).toBe(404);
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
+  });
+  it('preserves admitted terminal 404 when the ledger fails after upstream 404', async () => {
+    const attempt: PreparedRouteAttempt = {
+      attemptRef: 'attempt-404',
+      generate: (async () => { throw { status: 404 }; }) as PreparedRouteAttempt['generate'],
+      async stream() { throw new Error('unused'); },
+      async recordOutcome() {}, async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+    };
+    const { planner } = quotingPlanner([attempt]);
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    const error = await runRouteJsonFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect((error as { kind?: string }).kind).toBe('unknown-model');
+    expect((error as { servedTarget?: { model?: string } }).servedTarget?.model).toBe('gpt-5.6-terra');
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.status).toBe(404);
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
+  });
+  it('preserves admitted Q7 no-route when the empty-plan ledger fails', async () => {
+    const { planner } = quotingPlanner([]);
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    const error = await runRouteJsonFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect((error as { kind?: string }).kind).toBe('no-route');
+    expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.status).toBe(503);
+    expect(shaped.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
+  });
+  it('preserves the admitted enrollment refusal when the ledger fails', async () => {
+    const enrollment = { name: 'RoutePlanError', code: 'no-route',
+      diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' } };
+    const { planner } = quotingPlanner([], { plan: () => { throw enrollment; } });
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    const error = await runRouteJsonFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect(error).toBe(enrollment);
+    expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.status).toBe(503);
+    expect(shaped.headers).toEqual({ 'X-Sentropic-Route-Action': 'reauthenticate-cloud-code' });
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
   });
   it('releases a request cancelled after admission and before any dispatch', async () => {
     const controller = new AbortController();
