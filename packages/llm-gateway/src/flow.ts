@@ -428,8 +428,15 @@ export const runStreamFlow = async (
           // Re-acquisition failed — surface as provider error.
         }
       }
-      await settle(deps, request, prepared, 'failed', undefined);
-      if (isUnknownModelStreamOpenError(error)) {
+      const unknownModel = isUnknownModelStreamOpenError(error);
+      try {
+        await settle(deps, request, prepared, 'failed', undefined);
+      } catch {
+        // A settle failure must never mask the classification — the generic
+        // mapper would turn the settle error into overloaded_error. One
+        // attempt, swallowed, never exposed; the terminal refusal wins.
+      }
+      if (unknownModel) {
         throw new GatewayError('unknown-model', 'unknown model', undefined, prepared.target);
       }
       throw new GatewayError(
