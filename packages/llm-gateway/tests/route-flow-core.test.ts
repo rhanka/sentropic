@@ -1,6 +1,7 @@
 import type { RoutePlanInput, RoutePlanner, VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
-import { classifyRouteError, prepareRouteFlow } from '../src/route-flow-core.js';
+import { classifyRouteError, prepareRouteFlow, terminalGatewayError } from '../src/route-flow-core.js';
+import { toProviderShapedError } from '../src/index.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 
 describe('route flow core', () => {
@@ -120,6 +121,22 @@ describe('route flow core', () => {
     expect(classifyRouteError({ status: 404 })).toEqual({
       reason: 'unsupported-model', retryable: false, healthScope: 'provider-model',
     });
+  });
+
+  it('converts a terminal unsupported-model into unknown-model with the served target', () => {
+    const target = { providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra' };
+    const error = terminalGatewayError(
+      { reason: 'unsupported-model', retryable: false, healthScope: 'provider-model' },
+      target, 'all planned routes failed',
+    );
+    expect(error.kind).toBe('unknown-model');
+    expect(error.retryAfterSeconds).toBeUndefined();
+    expect(error.servedTarget).toBe(target);
+    // The wire message names the REQUESTED model, never the served detail.
+    const mapped = toProviderShapedError('anthropic-messages', error, 'requested-x');
+    expect(mapped.status).toBe(404);
+    expect(JSON.stringify(mapped.body)).toContain('Unknown model: "requested-x"');
+    expect(JSON.stringify(mapped.body)).not.toContain('gpt-5.6-terra');
   });
 
   it('classifies a pre-content provider invalid failure by code alone', () => {

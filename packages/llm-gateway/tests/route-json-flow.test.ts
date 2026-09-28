@@ -1,7 +1,8 @@
-import type { PreparedRouteAttempt, RoutePlanner } from '@sentropic/llm-mesh';
+import { RoutePlanError, type PreparedRouteAttempt, type RoutePlanner } from '@sentropic/llm-mesh';
 import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
+import { toProviderShapedError } from '../src/index.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import {
@@ -235,6 +236,57 @@ describe('route JSON flow', () => {
       (error: unknown) => error,
     );
     expect((error as { kind?: string }).kind).toBe('bad-request');
+  });
+
+  it('maps a terminal upstream 404 to unknown-model without a second candidate', async () => {
+    const generate = vi.fn(async () => { throw { status: 404 }; });
+    const failed = (): PreparedRouteAttempt => ({
+      attemptRef: 'attempt-404',
+      generate: generate as PreparedRouteAttempt['generate'],
+      async stream() { throw new Error('unused'); },
+      async recordOutcome() {}, async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+    });
+    const settlements: RouteRequestSettlement[] = [];
+
+    const error = await runRouteJsonFlow({
+      config, routePlanner: routePlanner([failed(), failed()]),
+      metering: { settleRoute(value) { settlements.push(value); } },
+    }, request).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    // Unsupported-model is terminal: exactly one invocation, one operational
+    // failure, one aggregate settlement, no second candidate.
+    expect((error as { kind?: string }).kind).toBe('unknown-model');
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      outcome: 'failed', attempts: [{ outcome: 'unsupported-model' }],
+    });
+    expect(toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra').status).toBe(404);
+  });
+
+  it('preserves a typed unknown-model planning failure with zero attempts', async () => {
+    const settlements: RouteRequestSettlement[] = [];
+    const failingPlanner = {
+      async plan() { throw new RoutePlanError('Unknown requested model', 'unknown-model'); },
+    } as unknown as RoutePlanner;
+
+    const error = await runRouteJsonFlow({
+      config, routePlanner: failingPlanner,
+      metering: { settleRoute(value) { settlements.push(value); } },
+    }, request).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect(error).toBeInstanceOf(RoutePlanError);
+    expect((error as RoutePlanError).code).toBe('unknown-model');
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      outcome: 'failed', requestedModel: 'gpt-5.6-terra',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: true }, attempts: [],
+    });
+    expect(toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra').status).toBe(404);
   });
 
   it('does not try another candidate after a terminal auth failure', async () => {

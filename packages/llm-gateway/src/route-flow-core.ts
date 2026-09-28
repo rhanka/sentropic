@@ -245,10 +245,13 @@ export const classifyRouteError = (
 /**
  * Map a terminal (no more candidates) route classification to the public
  * GatewayError. A terminal upstream invalid refusal is the caller's request,
- * not pool exhaustion: it surfaces as bad-request (400). Terminal upstream
- * auth/quota refusals keep their class (401/429 + Retry-After) instead of
- * collapsing into pooled-account-unavailable (503). Only genuine
- * unavailability falls back to the pooled 503.
+ * not pool exhaustion: it surfaces as bad-request (400). A terminal upstream
+ * unsupported-model becomes the Lot 1 unknown-model 404 with the fixed
+ * internal detail; the served target is preserved so the router keeps the
+ * `X-Sentropic-Served` actual-model header. Terminal upstream auth/quota
+ * refusals keep their class (401/429 + Retry-After) instead of collapsing
+ * into pooled-account-unavailable (503). Only genuine unavailability falls
+ * back to the pooled 503.
  */
 export const terminalGatewayError = (
   classification: RouteFailureClassification,
@@ -259,6 +262,9 @@ export const terminalGatewayError = (
     return new GatewayError(
       'bad-request', 'upstream refused the request as invalid', undefined, target,
     );
+  }
+  if (classification.reason === 'unsupported-model') {
+    return new GatewayError('unknown-model', 'unknown model', undefined, target);
   }
   if (classification.reason === 'auth-failed') {
     return new GatewayError(
