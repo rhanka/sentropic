@@ -57,7 +57,7 @@
 
 ## Build Steps (M0-M11, design v2 + Muse v2 BUILD_READY_WITH_CHANGES corrections)
 - [ ] M0 — Branch plan commit
-- [ ] M1 — Exclusive alias in routing-targets
+- [x] M1 — Exclusive alias in routing-targets
 - [ ] M2 — Selection guards (override + council)
 - [ ] M3 — Selection availability and restrictions
 - [ ] M4a — Plan-time affinity migration
