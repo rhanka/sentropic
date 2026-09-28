@@ -669,6 +669,17 @@ Terminal without fallback:
 - account auth failure when strict stickiness forbids another account and no
   same-account equivalent route exists.
 
+Unknown or unsupported model is terminal: no retry or fallback can produce the
+model, so the gateway answers 404 (Anthropic `not_found_error` / OpenAI
+`invalid_request_error` code `model_not_found`, requested-model-only message)
+instead of the misleading overloaded body. A known-model `no-route` without an
+enrollment-action diagnostic is a non-retryable HTTP 503 (BR-REL-Q7: Anthropic
+`api_error` / OpenAI `server_error` code `no_route`, `x-should-retry: false`, no
+`Retry-After`); the enrollment-action branch (`authentication_error` +
+`X-Sentropic-Route-Action`) is unchanged. Requests refused before admission emit
+no financial settlement; once a hold exists the admitted-plan settlement rule
+applies. After response commitment the HTTP status is never rewritten.
+
 ### 5.4 Wire invariants
 
 - Anthropic ingress returns Anthropic-shaped errors and event order.
