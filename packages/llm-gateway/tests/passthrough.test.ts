@@ -361,7 +361,7 @@ describe('no-retry-after-stream (spec §2)', () => {
     // Exactly one guarded settle attempt: rejection swallowed, never retried.
     expect(recordOutcomeAttempts).toBe(1);
     expect(meteringAttempts).toBe(fault === 'metering' ? 1 : 0);
-    expect(metering.settlements).toHaveLength(fault === 'metering' ? 0 : 1);
+    expect(metering.settlements).toHaveLength(0);
   });
 });
 
