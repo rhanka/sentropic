@@ -373,6 +373,20 @@ export interface GatewayStreamResult {
  * it to a real HTTP error, NEVER an empty 200 stream. A mid-stream failure
  * (after >=1 byte) settles failure WITHOUT throwing (no retry post-stream, §2).
  */
+/**
+ * Classify a stream-open (pre-first-byte) transport error like
+ * `classifyRouteError`: 404 / not_found / model_not_found / unsupported_model
+ * is an unknown model, never pool exhaustion. Other errors stay pooled 503.
+ */
+const isUnknownModelStreamOpenError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const record = error as { status?: unknown; statusCode?: unknown; code?: unknown };
+  if (record.status === 404 || record.statusCode === 404) return true;
+  const code = typeof record.code === 'string' ? record.code.toLowerCase() : '';
+  return code.includes('unsupported_model') || code.includes('model_not_found')
+    || code.includes('not_found');
+};
+
 export const runStreamFlow = async (
   deps: GatewayFlowDeps,
   request: GatewayFlowRequest,
@@ -415,6 +429,9 @@ export const runStreamFlow = async (
         }
       }
       await settle(deps, request, prepared, 'failed', undefined);
+      if (isUnknownModelStreamOpenError(error)) {
+        throw new GatewayError('unknown-model', 'unknown model', undefined, prepared.target);
+      }
       throw new GatewayError(
         'pooled-account-unavailable', 'stream failed before first byte', undefined, prepared.target,
       );

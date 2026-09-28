@@ -278,6 +278,28 @@ describe('no-retry-after-stream (spec §2)', () => {
     expect(metering.last?.outcome).toBe('failed');
     expect(JSON.stringify(body)).not.toContain('lease');
   });
+
+  it.each([
+    { path: '/v1/messages', body: anthropicRequest(true),
+      frozen: { type: 'error', error: { type: 'not_found_error', message: 'Unknown model: "claude-sonnet-4-6"' } } },
+    { path: '/v1/chat/completions', body: openAiRequest(true),
+      frozen: { error: { message: 'Unknown model: "gpt-5.5"',
+        type: 'invalid_request_error', code: 'model_not_found' } } },
+  ])('stream-open 404 maps to the frozen 404, never overloaded ($path)', async ({ path, body, frozen }) => {
+    const transport = new FixtureTransport({ streamOpenError: { status: 404 } });
+    const { app, metering } = buildHarness({ transport });
+    const res = await app.request(path, {
+      method: 'POST', headers: authHeaders('user-a'), body: JSON.stringify(body),
+    });
+    expect(res.status).toBe(404);
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    const text = await res.text();
+    expect(text.startsWith('event:')).toBe(false);
+    expect(text.startsWith('data:')).toBe(false);
+    expect(JSON.parse(text)).toEqual(frozen);
+    expect(text).not.toContain('overloaded');
+    expect(metering.settlements).toHaveLength(1);
+  });
 });
 
 describe('#4 provider response header passthrough', () => {
