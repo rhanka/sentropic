@@ -14,6 +14,11 @@
   `No route available for model: "<model>"`, `x-should-retry: false`, no `Retry-After`.
 - `capabilities-unmet` plan/quote failures map to 400 `invalid_request_error`;
   `quote-mismatch` and unclassified errors stay on the sanitized 503.
+- Terminal upstream refusals survive post-dispatch callback failures on the
+  non-budget path: a rejecting metering sink or `recordOutcome` hook no longer
+  replaces the terminal `unknown-model` 404 (or any other terminal refusal)
+  with a sanitized 503 `overloaded_error`. Settlement is attempted once and the
+  terminal error wins; admitted-ledger masking on the budget path is unchanged.
 
 ## 0.19.0
 
