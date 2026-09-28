@@ -60,7 +60,7 @@
 - [x] M1 — Exclusive alias in routing-targets
 - [x] M2 — Selection guards (override + council)
 - [x] M3 — Selection availability and restrictions
-- [ ] M4a — Plan-time affinity migration
+- [x] M4a — Plan-time affinity migration
 - [ ] M4b — Success-time rebind, failure untouched
 - [ ] M5 — Health suppression and rotation
 - [ ] M6 — Error identity and diagnostics
