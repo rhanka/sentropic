@@ -25,8 +25,9 @@
   - `.cursor/rules/**`
   - `packages/llm-mesh/src/adapter-auth.ts` (owned by another lane)
   - `packages/llm-gateway/**` (owned by `feat/llm-gateway-automode-relay`)
-  - `.github/**`, `package-lock.json`, `PLAN.md`
+  - `.github/**`, `PLAN.md`
 - **Conditional Paths (require an approved BR-OPR-EXn before any change)**:
+  - `package-lock.json` (BR-OPR-EX3) only for the `packages/llm-mesh` version entry refreshed through `make lock-root`.
   - `scripts/llm-model-equivalences/council.source.json` and its generated output (BR-OPR-EX1) only if the v2 design proves the equivalence check classifies an astra-only route alias.
   - `api/**` product catalog or `apps/llm-gateway/**` host catalog (BR-OPR-EX2) only if the route is not active through the package alone.
 - **Exception process**:
@@ -41,6 +42,7 @@
 - [x] BR-OPR-EX1: Not needed; council completeness iterates catalog profiles and alias metadata derives from launch mappings, so no council source or generated output change. Status: closed (v2 design + Muse v2 review).
 - [x] BR-OPR-Q7: Established non-Astra sticky affinity follows the `/model` switch: automatic migration to Astra with affinity reset on success; failure leaves the stale affinity untouched; an Astra affinity violating a per-request explicit restriction still yields `no-route`. Status: resolved by owner via conductor `sentropic-46` (2026-09-27, "follow the /model").
 - [x] BR-OPR-Q6: When `gpt-6-astra` has no ready account, return a clear explicit availability error with no Anthropic or Gemini fallback. Status: resolved by owner via conductor `sentropic-46` (2026-09-27).
+- [x] BR-OPR-EX3: Path `package-lock.json`, `packages/llm-mesh` version entry only. Evidence: PR #625 CI job `changes` failed "packages/llm-mesh/package.json version 0.23.0 differs from package-lock.json packages/llm-mesh version 0.22.1; refresh the root lockfile through Make". Reason: the train lock-sync gate requires the root lockfile to match every package version bump. Impact: version field of the workspace entry only; no dependency resolution change is accepted. Rollback: revert the lockfile commit together with the version bump. Decision: conductor, mechanical consequence of the owner-approved PR (2026-09-27); version lowered to 0.22.2 so the `^0.22.0` range of `@sentropic/llm-gateway` and the `<0.23.0` peer range of `@sentropic/cluster-mesh` still resolve the local package.
 
 ## AI Flaky tests
 - [ ] Only provider/network nondeterminism with a passing rerun on the same commit may be proposed for explicit owner sign-off; no timeout increases.
@@ -68,7 +70,7 @@
 - [x] M8 — Quote as a single Astra candidate
 - [x] M9 — Quote guards and matrix note
 - [x] M10 — Execution rewrite, effort passthrough, negative sweep
-- [x] M11 — Council pin, spec contract, 0.23.0
+- [x] M11 — Council pin, spec contract, version bump (0.22.2)
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and isolation**
@@ -85,7 +87,7 @@
   - [x] Tests in `packages/llm-mesh/tests/route-planner.test.ts` and `budget-quote.test.ts`: unknown model versus known model without route.
 - [x] **Lot 3 — Documentation, package gate and final validation**
   - [x] Update `packages/llm-mesh/CHANGELOG.md` Unreleased and the routing spec.
-  - [x] Check the published package version before bumping `packages/llm-mesh/package.json`; do not publish directly (`make audit-llm-routing-package-versions`: local 0.23.0 > registry 0.22.1).
+  - [x] Check the published package version before bumping `packages/llm-mesh/package.json`; do not publish directly (`make audit-llm-routing-package-versions`: local 0.22.2 > registry 0.22.1; patch bump like the GPT-6 Sol and Luna addition, because a 0.23.0 minor would break the `^0.22.0` range of `@sentropic/llm-gateway` and the `<0.23.0` peer range of `@sentropic/cluster-mesh`).
   - [x] Build by Muse 1.3 xhigh; review by Astra high (REQUEST_CHANGES, three P2 findings fixed in `f947a990f`, `66f76bd26`, `cda10ba70`), then by Muse 1.3 max after the owner switched reviewers (APPROVE on `3e628626a`).
   - [x] `make test-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route` (32 files, 315 tests passed on `3e628626a`).
   - [x] `make typecheck-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route` (pass on `3e628626a`).

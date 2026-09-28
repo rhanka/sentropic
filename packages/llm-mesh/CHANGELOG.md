@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.23.0
+## 0.22.2
 
 - Add the exclusive `claude-opus-5-5` launch alias: every request routes to
   `openai / gpt-6-astra / codex` with no effort override and no Anthropic,
