@@ -149,7 +149,10 @@ const prepareAdmittedRouteFlow = async (
     });
     return { cost, subject, canonical, plan, admission };
   } catch (error) {
-    // The admitted request's one zero-usage settlement, with hold release.
+    // The admitted request's one zero-usage settlement, with hold release. A
+    // ledger failure here replaces the typed refusal by design: the caller
+    // sees the sanitized 503 while the released hold expires at its deadline
+    // for host reconciliation by requestId.
     await settleRouteRequest(deps, { cost, admission }, request, 'failed', []);
     throw error;
   }
