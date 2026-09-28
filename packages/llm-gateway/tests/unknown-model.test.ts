@@ -223,6 +223,58 @@ describe('planning refusal survives a rejecting settlement sink', () => {
     expect(settles).toBe(1);
   });
 
+  const emptyPlanPlanner: RoutePlanner = {
+    async plan() {
+      return { planRef: 'plan-empty', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: [],
+        policy: stubPolicy, councilRevision: 'fixture', diagnostics: [] };
+    },
+    async prepareAttempt() { throw new Error('unused'); },
+    describeAffinity() { return null; },
+    promoteAffinity() { throw new Error('unused'); },
+    rebindAffinity() { throw new Error('unused'); },
+    resetAffinity() { return false; },
+  };
+
+  it.each(wires)('preserves the empty-plan no-route 503 when the sink rejects ($path stream=$stream)', async ({ path, stream }) => {
+    let settles = 0;
+    const app = rejectingRouter(emptyPlanPlanner, () => { settles += 1; });
+    const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
+    expect(res.status).toBe(503);
+    const message = `No route available for model: "${KNOWN_MODEL}"`;
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'api_error', message } }
+      : { error: { message, type: 'server_error', code: 'no_route' } });
+    expect(text).not.toContain('overloaded');
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    expect(res.headers.get('x-should-retry')).toBe('false');
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(text.startsWith('event:')).toBe(false);
+    expect(text.startsWith('data:')).toBe(false);
+    expect(settles).toBe(1);
+  });
+
+  it.each(wires)('keeps the empty-plan no-route 503 with an accepting sink ($path stream=$stream)', async ({ path, stream }) => {
+    const calls = freshCalls();
+    const app = unknownModelRouter({ planner: emptyPlanPlanner, calls });
+    const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
+    expect(res.status).toBe(503);
+    const message = `No route available for model: "${KNOWN_MODEL}"`;
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'api_error', message } }
+      : { error: { message, type: 'server_error', code: 'no_route' } });
+    expect(res.headers.get('x-should-retry')).toBe('false');
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(text.startsWith('event:')).toBe(false);
+    expect(text.startsWith('data:')).toBe(false);
+    expect(calls.settlements).toHaveLength(1);
+    expect(calls.settlements[0]).toMatchObject({
+      outcome: 'failed', requestedModel: KNOWN_MODEL, attempts: [],
+    });
+    expect(calls.dispatch).toEqual({ generate: 0, stream: 0 });
+  });
+
   it.each(wires)('preserves the enrollment 503 ($path stream=$stream)', async ({ path, stream }) => {
     let settles = 0;
     const planner: RoutePlanner = {

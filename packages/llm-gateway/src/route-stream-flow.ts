@@ -254,6 +254,13 @@ export const runRouteStreamFlow = async (
       );
     }
   }
-  await settle('failed');
+  try {
+    await settle('failed');
+  } catch {
+    // A non-budget sink failure must never mask the Q7 no-route refusal
+    // (same preservation as the planning-refusal path in route-flow-core).
+    // The admitted ledger failure still replaces the refusal by design.
+    if (prepared.admission) throw;
+  }
   throw new GatewayError('no-route', 'route plan has no candidates');
 };
