@@ -102,7 +102,17 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
     openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
+  'unknown-model': {
+    anthropic: { status: 404, type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
+    openai: { status: 404, type: 'invalid_request_error', message: 'Unknown model: "no-such-model"', code: 'model_not_found' },
+  },
 };
+
+/** Model-scoped failure kinds: the golden mapper calls supply the fixture model. */
+const MODEL_SCOPED_KINDS: ReadonlySet<GatewayFailureKind> = new Set(['unknown-model']);
+
+/** Fixture unknown model frozen across the Lot 1 contract goldens. */
+const UNKNOWN_MODEL_FIXTURE = 'no-such-model';
 
 /**
  * The actual (method, path) pairs registered on the real Hono router.
@@ -304,9 +314,10 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
   it('freezes the EXACT per-wire status + body (type, message, code) for every failure class', () => {
     for (const kind of Object.keys(FROZEN_ERROR_MAP) as GatewayFailureKind[]) {
       const golden = FROZEN_ERROR_MAP[kind];
+      const model = MODEL_SCOPED_KINDS.has(kind) ? UNKNOWN_MODEL_FIXTURE : undefined;
 
       // Anthropic: EXACT status + full `{type:'error', error:{type,message}}`.
-      const a = mapGatewayError('anthropic-messages', kind);
+      const a = mapGatewayError('anthropic-messages', kind, undefined, model);
       expect(a.status).toBe(golden.anthropic.status);
       expect(a.body).toEqual({
         type: 'error',
@@ -314,7 +325,7 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
       });
 
       // OpenAI: EXACT status + full `{error:{message,type,code}}`.
-      const o = mapGatewayError('openai-chat-completions', kind);
+      const o = mapGatewayError('openai-chat-completions', kind, undefined, model);
       expect(o.status).toBe(golden.openai.status);
       expect(o.body).toEqual({
         error: {
@@ -336,6 +347,9 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
     // Auth + bad-request never carry Retry-After (no headers at all).
     expect(mapGatewayError('anthropic-messages', 'caller-auth-failed', 7).headers).toBeUndefined();
     expect(mapGatewayError('openai-chat-completions', 'bad-request', 7).headers).toBeUndefined();
+    // Lot 1 404 never carries Retry-After or x-should-retry, even with a delay.
+    expect(mapGatewayError('anthropic-messages', 'unknown-model', 7, 'no-such-model').headers).toBeUndefined();
+    expect(mapGatewayError('openai-chat-completions', 'unknown-model', 7, 'no-such-model').headers).toBeUndefined();
   });
 
   it('freezes the two provider-shaped error envelope key-sets (Anthropic vs OpenAI)', () => {

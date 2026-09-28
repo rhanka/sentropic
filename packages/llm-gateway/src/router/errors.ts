@@ -11,7 +11,8 @@
  *   429  no-eligible-account             -> provider overloaded + Retry-After
  *   503  pooled-account-unavailable      -> provider overloaded (NOT pool detail)
  *   503  budget-unavailable (BR-47)      -> same sanitized body (pricing/store failure)
- *   400  bad-request / unsupported-model -> provider invalid-request
+ *   400  bad-request                     -> provider invalid-request
+ *   404  unknown-model (Lot 1)             -> provider not-found (model-only message)
  * The gateway maps internal failure CLASSES to these — callers see only the
  * provider-shaped surface, never `no_account` / lease / reservation internals.
  */
@@ -40,6 +41,7 @@ export type GatewayFailureKind =
   | 'upstream-auth-failed'
   | 'upstream-rate-limited'
   | 'bad-request'
+  | 'unknown-model'
   | 'cross-user-disabled';
 
 export class GatewayError extends Error {
@@ -88,6 +90,16 @@ const retryAfterHeader = (
     : undefined;
 
 /**
+ * Lot 1 unknown-model 404 message. Built ONLY from the validated requested
+ * model (`router/index.ts` `readModel`); never from `error.message`, an
+ * error-carried model, or the selected upstream model. The fallback covers
+ * direct mapper callers with no request context — HTTP inference routes must
+ * always supply their validated model.
+ */
+const unknownModelMessage = (requestedModel?: string): string =>
+  requestedModel ? `Unknown model: ${JSON.stringify(requestedModel)}` : 'Unknown model';
+
+/**
  * Map an internal failure class to a provider-shaped error for the wire. The
  * CLIENT-FACING message is a fixed, pool-internal-free string per class; the
  * internal `error.message` (with any account/lease detail) stays in logs only.
@@ -96,6 +108,7 @@ export const mapGatewayError = (
   wire: GatewayWire,
   kind: GatewayFailureKind,
   retryAfterSeconds?: number,
+  requestedModel?: string,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
@@ -143,6 +156,13 @@ export const mapGatewayError = (
       return anthropic
         ? anthropicError(400, 'invalid_request_error', 'invalid request')
         : openAiError(400, 'invalid_request_error', 'invalid request', 'invalid_request');
+
+    case 'unknown-model':
+      // Lot 1 404: no Retry-After, no x-should-retry, JSON content type is set
+      // by the router for both wires including stream:true.
+      return anthropic
+        ? anthropicError(404, 'not_found_error', unknownModelMessage(requestedModel))
+        : openAiError(404, 'invalid_request_error', unknownModelMessage(requestedModel), 'model_not_found');
   }
 };
 
@@ -150,9 +170,10 @@ export const mapGatewayError = (
 export const toProviderShapedError = (
   wire: GatewayWire,
   error: unknown,
+  requestedModel?: string,
 ): ProviderShapedError => {
   if (error instanceof GatewayError) {
-    return mapGatewayError(wire, error.kind, error.retryAfterSeconds);
+    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel);
   }
   const diagnostic = error && typeof error === 'object'
     ? (error as { diagnostic?: {
