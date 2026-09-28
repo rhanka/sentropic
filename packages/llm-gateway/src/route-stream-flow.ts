@@ -255,5 +255,5 @@ export const runRouteStreamFlow = async (
     }
   }
   await settle('failed');
-  throw new GatewayError('no-eligible-account', 'route plan has no candidates');
+  throw new GatewayError('no-route', 'route plan has no candidates');
 };

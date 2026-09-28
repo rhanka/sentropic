@@ -152,11 +152,25 @@ describe('terminal upstream 404 (requested versus actual model)', () => {
     }
   });
 
-  it('keeps a known-model no-route at 503, never 404', async () => {
+  it.each([
+    { path: '/v1/messages', stream: false },
+    { path: '/v1/messages', stream: true },
+    { path: '/v1/chat/completions', stream: false },
+    { path: '/v1/chat/completions', stream: true },
+  ])('freezes the BR-REL-Q7 no-route 503 without enrollment diagnostic ($path stream=$stream)', async ({ path, stream }) => {
     const calls = freshCalls();
     const app = unknownModelRouter({ planner: realMeshPlanner(emptyMeshDirectory()), calls });
-    const res = await sendUnknown(app, '/v1/chat/completions', KNOWN_MODEL, false);
+    const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
     expect(res.status).toBe(503);
+    const message = `No route available for model: "${KNOWN_MODEL}"`;
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'api_error', message } }
+      : { error: { message, type: 'server_error', code: 'no_route' } });
+    expect(JSON.stringify(text)).not.toContain('overloaded');
+    expect(JSON.stringify(text)).not.toContain('rate_limit');
+    expect(res.headers.get('x-should-retry')).toBe('false');
+    expect(res.headers.get('retry-after')).toBeNull();
     expect(res.headers.get('x-sentropic-served')).toBeNull();
     expect(calls.settlements).toHaveLength(1);
   });

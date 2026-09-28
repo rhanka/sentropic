@@ -106,10 +106,14 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 404, type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
     openai: { status: 404, type: 'invalid_request_error', message: 'Unknown model: "no-such-model"', code: 'model_not_found' },
   },
+  'no-route': {
+    anthropic: { status: 503, type: 'api_error', message: 'No route available for model: "no-such-model"' },
+    openai: { status: 503, type: 'server_error', message: 'No route available for model: "no-such-model"', code: 'no_route' },
+  },
 };
 
 /** Model-scoped failure kinds: the golden mapper calls supply the fixture model. */
-const MODEL_SCOPED_KINDS: ReadonlySet<GatewayFailureKind> = new Set(['unknown-model']);
+const MODEL_SCOPED_KINDS: ReadonlySet<GatewayFailureKind> = new Set(['unknown-model', 'no-route']);
 
 /** Fixture unknown model frozen across the Lot 1 contract goldens. */
 const UNKNOWN_MODEL_FIXTURE = 'no-such-model';
@@ -350,6 +354,12 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
     // Lot 1 404 never carries Retry-After or x-should-retry, even with a delay.
     expect(mapGatewayError('anthropic-messages', 'unknown-model', 7, 'no-such-model').headers).toBeUndefined();
     expect(mapGatewayError('openai-chat-completions', 'unknown-model', 7, 'no-such-model').headers).toBeUndefined();
+    // BR-REL-Q7 503 never carries Retry-After (even with a delay) and always
+    // carries x-should-retry:false instead of overloaded/rate-limit wording.
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      expect(mapGatewayError(wire, 'no-route', 7, 'no-such-model').headers)
+        .toEqual({ 'x-should-retry': 'false' });
+    }
   });
 
   it('freezes the two provider-shaped error envelope key-sets (Anthropic vs OpenAI)', () => {
