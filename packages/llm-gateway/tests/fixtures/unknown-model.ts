@@ -55,14 +55,15 @@ export const recordingDispatch = (calls: UnknownRouterCalls['dispatch'], error?:
   async stream() { calls.stream += 1; if (error) throw error; throw new Error('unused'); },
 });
 
-/** Real router + real mesh. `budget` selects the quote path; else plan-only. */
+/** Real router + real mesh. `budget` selects the quote path; else plan-only. `dispatchError` makes the dispatch seam throw (terminal-upstream cases). */
 export const unknownModelRouter = (input: {
-  readonly planner: RoutePlanner; readonly calls: UnknownRouterCalls; readonly budget?: GatewayBudgetOptions;
+  readonly planner: RoutePlanner; readonly calls: UnknownRouterCalls;
+  readonly budget?: GatewayBudgetOptions; readonly dispatchError?: unknown;
 }) => createGatewayRouter({
   config: { ...stubGatewayConfig, callerAuth: unknownCallerAuth },
   routePlanner: input.planner,
   routeMetering: { async settleRoute(value: RouteRequestSettlement) { input.calls.settlements.push(value); } },
-  routeDispatch: recordingDispatch(input.calls.dispatch),
+  routeDispatch: recordingDispatch(input.calls.dispatch, input.dispatchError),
   ...(input.budget ? { budget: input.budget } : {}),
   requestId: () => 'req_unknown',
 });
