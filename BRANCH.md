@@ -68,7 +68,7 @@
 - [x] M8 — Quote as a single Astra candidate
 - [x] M9 — Quote guards and matrix note
 - [x] M10 — Execution rewrite, effort passthrough, negative sweep
-- [ ] M11 — Council pin, spec contract, 0.23.0
+- [x] M11 — Council pin, spec contract, 0.23.0
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and isolation**
@@ -76,16 +76,16 @@
   - [x] Reserve unique environment and three ports (verified free with `ss -ltn`).
   - [x] Astra xhigh design pass and independent Muse 1.3 max review (APPROVE_WITH_CHANGES).
   - [x] Astra xhigh v2 design applying the owner decision and review findings; sent to the conductor before build (Muse v2 review: BUILD_READY_WITH_CHANGES).
-- [ ] **Lot 1 — Opus 5.5 astra route**
-  - [ ] Add the `claude-opus-5-5` route with a single `gpt-6-astra` target in `packages/llm-mesh/src/routing-targets.ts`, plus any provider/catalog entry the v2 design requires.
-  - [ ] Keep `requestedModel` distinct from the served provider/model in plan diagnostics.
-  - [ ] Tests in `packages/llm-mesh/tests/routing-targets.test.ts`, `route-selection.test.ts`, `route-planner.test.ts`: always astra, never an Anthropic candidate, explicit error when astra is unavailable, `/v1/models` visibility rules, served model diagnostics.
-- [ ] **Lot 2 — Unknown-model typed errors**
-  - [ ] Keep `RoutePlanError`/`RouteQuoteError` `unknown-model` typed and structurally identifiable (code plus name) for the gateway 404 mapping of BR-REL-Q3.
-  - [ ] Tests in `packages/llm-mesh/tests/route-planner.test.ts` and `budget-quote.test.ts`: unknown model versus known model without route.
+- [x] **Lot 1 — Opus 5.5 astra route**
+  - [x] Add the `claude-opus-5-5` route with a single `gpt-6-astra` target in `packages/llm-mesh/src/routing-targets.ts`, plus any provider/catalog entry the v2 design requires.
+  - [x] Keep `requestedModel` distinct from the served provider/model in plan diagnostics.
+  - [x] Tests in `packages/llm-mesh/tests/routing-targets.test.ts`, `route-selection.test.ts`, `route-planner.test.ts`: always astra, never an Anthropic candidate, explicit error when astra is unavailable, `/v1/models` visibility rules, served model diagnostics.
+- [x] **Lot 2 — Unknown-model typed errors**
+  - [x] Keep `RoutePlanError`/`RouteQuoteError` `unknown-model` typed and structurally identifiable (code plus name) for the gateway 404 mapping of BR-REL-Q3.
+  - [x] Tests in `packages/llm-mesh/tests/route-planner.test.ts` and `budget-quote.test.ts`: unknown model versus known model without route.
 - [ ] **Lot 3 — Documentation, package gate and final validation**
-  - [ ] Update `packages/llm-mesh/CHANGELOG.md` Unreleased and the routing spec.
-  - [ ] Check the published package version before bumping `packages/llm-mesh/package.json`; do not publish directly.
+  - [x] Update `packages/llm-mesh/CHANGELOG.md` Unreleased and the routing spec.
+  - [x] Check the published package version before bumping `packages/llm-mesh/package.json`; do not publish directly.
   - [ ] Build by Muse 1.3 xhigh, review by Astra high; resolve findings.
   - [ ] `make test-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`.
   - [ ] `make typecheck-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-opus55-route`.
