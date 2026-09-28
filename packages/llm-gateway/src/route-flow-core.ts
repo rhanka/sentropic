@@ -7,6 +7,7 @@ import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonica
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
+import { isRoutePlanError, isRouteQuoteError } from './internal/mesh-routing-error.js';
 import { authenticateCaller } from './internal/caller-auth.js';
 import type { RouteAttemptDispatchPort } from './ports/dispatch.js';
 import type { GatewayBudgetOptions, RouteBudgetOverrun } from './ports/budget.js';
@@ -75,6 +76,27 @@ export const routingSubjectForCost = (cost: CostContext): VerifiedRoutingSubject
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
 
+const isEnrollmentDiagnostic = (error: unknown): boolean => {
+  const diagnostic = asRecord(error)?.diagnostic;
+  const code = asRecord(diagnostic)?.code;
+  return code === 'reenrollment-required' || code === 'reauth-required';
+};
+
+/**
+ * Recognized non-budget planning refusals (Lot 1 404, 400, Q7/enrollment
+ * 503). A rejecting zero-dispatch notification must never replace one of
+ * these: the generic mapper would turn the sink error into overloaded_error.
+ */
+const isRecognizedPlanningRefusal = (error: unknown): boolean => {
+  if (error instanceof GatewayError) {
+    return error.kind === 'unknown-model' || error.kind === 'no-route';
+  }
+  return isEnrollmentDiagnostic(error)
+    || isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')
+    || isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')
+    || isRoutePlanError(error, 'no-route') || isRouteQuoteError(error, 'no-route');
+};
+
 export const prepareRouteFlow = async (
   deps: RouteFlowDeps,
   request: GatewayFlowRequest,
@@ -105,6 +127,19 @@ export const prepareRouteFlow = async (
     });
     return { cost: auth.cost, subject, canonical, plan };
   } catch (error) {
+    if (isRecognizedPlanningRefusal(error)) {
+      try {
+        await deps.metering.settleRoute({
+          cost: auth.cost,
+          wire: request.wire,
+          requestedModel: request.model,
+          outcome: 'failed',
+          usage: { inputTokens: 0, outputTokens: 0, estimated: true },
+          attempts: [],
+        });
+      } catch { /* The original recognized refusal wins. */ }
+      throw error;
+    }
     await deps.metering.settleRoute({
       cost: auth.cost,
       wire: request.wire,
