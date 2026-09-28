@@ -151,19 +151,31 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         const rotated = policy.rotateEquivalentAccounts
           ? candidates.filter((candidate) => candidate.account.accountRef !== affinity.accountRef)
           : [];
+        const exclusiveAlias = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[input.requestedModel];
+        const eligibleSticky = candidates.find((candidate) =>
+          candidate.account.accountRef === affinity.accountRef
+          && this.isAffinityTarget(candidate, affinity));
+        // An exclusive alias builds its sticky target from the current
+        // resolved Astra candidate, so a stored effort override from another
+        // alias never leaks into this request; account stickiness is kept.
         const sticky: RankedRouteCandidate = {
           account,
-          target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
+          target: exclusiveAlias && eligibleSticky
+            ? {
+              requestedModel: input.requestedModel,
+              providerId: eligibleSticky.target.providerId,
+              modelId: eligibleSticky.target.modelId,
+              transportProviderId: eligibleSticky.target.transportProviderId,
+              reason: 'sticky',
+            }
+            : { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
         };
         // An exclusive alias serves a compatible affinity only when its
         // account still resolves an eligible Astra candidate (same account,
         // Astra target, account ready, Astra advertised/allowed): otherwise
         // the plan fails closed with `no-route` (owner Q6) instead of
         // serving the stale sticky candidate, regardless of `explicit`.
-        const exclusiveBlocked = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[input.requestedModel]
-          && !candidates.some((candidate) =>
-            candidate.account.accountRef === affinity.accountRef
-            && this.isAffinityTarget(candidate, affinity));
+        const exclusiveBlocked = Boolean(exclusiveAlias && !eligibleSticky);
         candidates = exclusiveBlocked
           ? []
           : this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
