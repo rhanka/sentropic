@@ -108,8 +108,16 @@ admin/status/debug.
   `{"type":"error","error":{"type","message"}}`; OpenAI `{"error":{"message","type","code"}}`. Mapping:
   401 caller-auth-fail (provider auth-error); 429 over-budget BR-47 (provider rate-limit + `Retry-After`);
   429/503 no-eligible-account (provider overloaded + `Retry-After`); 502/503 pooled-account-unavailable AFTER
-  refresh-fail/exclusion (provider overloaded — NOT the pool detail); 400 bad-request/unsupported-model/malformed-JSON
-  (provider invalid-request). Mid-stream provider failure: provider-native error event in the SSE, then settle.
+  refresh-fail/exclusion (provider overloaded — NOT the pool detail); 400 bad-request/capability-invalid/malformed-JSON
+  (provider invalid-request); 404 unknown-model including terminal upstream unsupported-model (Anthropic
+  `not_found_error` / OpenAI `invalid_request_error` code `model_not_found`, message `Unknown model: "<requested
+  model>"` naming ONLY the validated requested model, no `Retry-After`, no `x-should-retry`); 503 known-model
+  no-route without enrollment diagnostic (BR-REL-Q7: Anthropic `api_error` / OpenAI `server_error` code `no_route`,
+  message `No route available for model: "<requested model>"`, `x-should-retry: false`, no `Retry-After`, never
+  `overloaded_error`/`rate_limit_error` — the enrollment-action branch keeps `authentication_error` +
+  `X-Sentropic-Route-Action`). The table also governs pre-first-byte failures for `stream:true` (a provider-shaped
+  HTTP error, never an empty 200 stream); availability failures are 503, not every pre-stream failure. Mid-stream
+  provider failure: provider-native error event in the SSE, then settle (no HTTP-status rewrite after commitment).
 
 ## 4. Pool + auth-swap
 Pool STATE = gateway-owned: control-plane DB for metadata/leases/reservations/quota/cooldown/audit; KMS/
