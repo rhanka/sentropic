@@ -240,11 +240,12 @@ describe('route JSON flow', () => {
 
   it('maps a terminal upstream 404 to unknown-model without a second candidate', async () => {
     const generate = vi.fn(async () => { throw { status: 404 }; });
+    const recordOutcome = vi.fn();
     const failed = (): PreparedRouteAttempt => ({
       attemptRef: 'attempt-404',
       generate: generate as PreparedRouteAttempt['generate'],
       async stream() { throw new Error('unused'); },
-      async recordOutcome() {}, async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+      recordOutcome, async markCommitted() {}, async complete() {}, async releaseCancelled() {},
     });
     const settlements: RouteRequestSettlement[] = [];
 
@@ -259,6 +260,10 @@ describe('route JSON flow', () => {
     // failure, one aggregate settlement, no second candidate.
     expect((error as { kind?: string }).kind).toBe('unknown-model');
     expect(generate).toHaveBeenCalledTimes(1);
+    expect(recordOutcome).toHaveBeenCalledTimes(1);
+    expect(recordOutcome.mock.calls[0]![0]).toMatchObject({
+      reason: 'unsupported-model', healthScope: 'provider-model',
+    });
     expect(settlements).toHaveLength(1);
     expect(settlements[0]).toMatchObject({
       outcome: 'failed', attempts: [{ outcome: 'unsupported-model' }],
