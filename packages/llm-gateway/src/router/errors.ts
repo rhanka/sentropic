@@ -19,6 +19,7 @@
 
 import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
+import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 
 export interface ProviderShapedError {
   readonly status: number;
@@ -188,6 +189,19 @@ export const toProviderShapedError = (
     return wire === 'anthropic-messages'
       ? anthropicError(503, 'authentication_error', message, headers)
       : openAiError(503, 'authentication_error', message, 'provider_auth_required', headers);
+  }
+  // Structural mesh failures (M2 precedence: GatewayError kind, enrollment
+  // diagnostic, structural plan/quote, generic 503). Unknown-model becomes the
+  // Lot 1 404; capability-invalid and bad ceilings become 400 bad-request;
+  // quote-mismatch and unclassified errors stay on the generic 503 below.
+  if (isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')) {
+    return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
+  }
+  if (
+    isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')
+    || isRouteQuoteError(error, 'invalid-ceiling')
+  ) {
+    return mapGatewayError(wire, 'bad-request');
   }
   // Unknown internal failure — never leak the message; map to a generic
   // provider availability error (NOT the internal detail).

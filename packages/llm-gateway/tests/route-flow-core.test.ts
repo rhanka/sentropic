@@ -111,6 +111,17 @@ describe('route flow core', () => {
     });
   });
 
+  it('treats status-less model_not_found / not_found codes as unsupported-model', () => {
+    for (const code of ['model_not_found', 'not_found_error', 'not_found', 'unsupported_model']) {
+      expect(classifyRouteError({ code })).toEqual({
+        reason: 'unsupported-model', retryable: false, healthScope: 'provider-model',
+      });
+    }
+    expect(classifyRouteError({ status: 404 })).toEqual({
+      reason: 'unsupported-model', retryable: false, healthScope: 'provider-model',
+    });
+  });
+
   it('classifies a pre-content provider invalid failure by code alone', () => {
     // Live-proven: a Codex `response.failed` event carrying
     // `invalid_request_error` arrives with no HTTP status — it must still
