@@ -3,7 +3,8 @@ import { modelSupportsCapability, type ModelEquivalenceCouncil } from './equival
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
 import {
-  createCanonicalTargetCandidatesResolver, resolveTargetCapabilitySource,
+  createCanonicalTargetCandidatesResolver, EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS,
+  resolveTargetCapabilitySource,
 } from './routing-targets.js';
 export interface RankedRouteCandidate {
   readonly account: EligibleAccountDescriptor;
@@ -81,7 +82,12 @@ export const resolveRequestedTargets = (request: RoutePlanInput): RequestedTarge
   const useFaithfulAnthropicTarget = faithfulClaudeTarget
     && modelProfiles.some((profile) => profile.providerId === faithfulClaudeTarget.providerId
       && profile.modelId === faithfulClaudeTarget.model);
-  const override = request.targetCandidatesOverride;
+  // An exclusive launch alias always serves its single target: an
+  // owner-scoped override cannot replace it. Per-request explicit
+  // restrictions still apply later as filters and may yield no route.
+  const override = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[requestedModel]
+    ? undefined
+    : request.targetCandidatesOverride;
   const targets = override && useFaithfulAnthropicTarget
     ? [
       faithfulClaudeTarget,
@@ -132,7 +138,11 @@ export const resolveRouteTargets = (
       : {}),
     reason: resolved.reason,
   }));
-  if (policy.allowEquivalentModels) {
+  // Exclusive aliases never expand through council equivalents.
+  if (
+    policy.allowEquivalentModels
+    && !EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[request.requestedModel]
+  ) {
     const nowMs = now.getTime();
     for (const resolved of resolution.targets) {
       const group = council.groups.find((candidate) =>
