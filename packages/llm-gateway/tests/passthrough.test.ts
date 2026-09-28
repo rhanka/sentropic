@@ -279,27 +279,39 @@ describe('no-retry-after-stream (spec §2)', () => {
     expect(JSON.stringify(body)).not.toContain('lease');
   });
 
-  it.each([
-    { path: '/v1/messages', body: anthropicRequest(true),
-      frozen: { type: 'error', error: { type: 'not_found_error', message: 'Unknown model: "claude-sonnet-4-6"' } } },
-    { path: '/v1/chat/completions', body: openAiRequest(true),
-      frozen: { error: { message: 'Unknown model: "gpt-5.5"',
-        type: 'invalid_request_error', code: 'model_not_found' } } },
-  ])('stream-open 404 maps to the frozen 404, never overloaded ($path)', async ({ path, body, frozen }) => {
-    const transport = new FixtureTransport({ streamOpenError: { status: 404 } });
-    const { app, metering } = buildHarness({ transport });
-    const res = await app.request(path, {
-      method: 'POST', headers: authHeaders('user-a'), body: JSON.stringify(body),
+  it.each(
+    (['/v1/messages', '/v1/chat/completions'] as const).flatMap((path) =>
+      ([
+        { label: 'status:404', openError: { status: 404 } },
+        { label: 'statusCode:404', openError: { statusCode: 404 } },
+        { label: 'code:not_found_error', openError: { code: 'not_found_error' } },
+        { label: 'code:model_not_found', openError: { code: 'model_not_found' } },
+        { label: 'code:unsupported_model', openError: { code: 'unsupported_model' } },
+      ] as const).map(({ label, openError }) => ({ path, label, openError })),
+    ),
+  )('stream-open 404 maps to the frozen 404, never overloaded ($path $label)',
+    async ({ path, openError }) => {
+      const transport = new FixtureTransport({ streamOpenError: { ...openError } });
+      const { app, metering } = buildHarness({ transport });
+      const res = await app.request(path, {
+        method: 'POST', headers: authHeaders('user-a'),
+        body: JSON.stringify(path === '/v1/messages' ? anthropicRequest(true) : openAiRequest(true)),
+      });
+      expect(res.status).toBe(404);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      expect(res.headers.get('X-Sentropic-Served')).toBe(path === '/v1/messages'
+        ? 'provider=anthropic; model=claude-sonnet-4-6; transport=claude-code'
+        : 'provider=openai; model=gpt-5.5; transport=codex');
+      const text = await res.text();
+      expect(text.startsWith('event:')).toBe(false);
+      expect(text.startsWith('data:')).toBe(false);
+      expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+        ? { type: 'error', error: { type: 'not_found_error', message: 'Unknown model: "claude-sonnet-4-6"' } }
+        : { error: { message: 'Unknown model: "gpt-5.5"',
+          type: 'invalid_request_error', code: 'model_not_found' } });
+      expect(text).not.toContain('overloaded');
+      expect(metering.settlements).toHaveLength(1);
     });
-    expect(res.status).toBe(404);
-    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
-    const text = await res.text();
-    expect(text.startsWith('event:')).toBe(false);
-    expect(text.startsWith('data:')).toBe(false);
-    expect(JSON.parse(text)).toEqual(frozen);
-    expect(text).not.toContain('overloaded');
-    expect(metering.settlements).toHaveLength(1);
-  });
 
   it.each([
     { path: '/v1/messages', fault: 'metering' },
