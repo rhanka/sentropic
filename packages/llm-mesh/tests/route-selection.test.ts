@@ -371,6 +371,135 @@ describe('route candidate selection', () => {
     }
   });
 
+  it('serves only Astra for claude-opus-5-5 with every provider ready', () => {
+    const readyAccounts = [
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5-5'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+        targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+        supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'muse-internal', diagnosticAccountRef: 'muse-redacted',
+        targetProviderId: 'muse', transportProviderId: 'muse',
+        supportedModelIds: ['muse-spark-1.3-contributor'],
+        enrollmentCompletedAt: '2026-08-05T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'codex-old', diagnosticAccountRef: 'codex_old',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'codex-new', diagnosticAccountRef: 'codex_new',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+    ];
+    const candidates = candidatesOf(selectRouteCandidates({
+      request: {
+        requestedModel: 'claude-opus-5-5',
+        requiredCapabilities: ['tools', 'streaming'],
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: readyAccounts,
+    }));
+
+    expect(candidates).toHaveLength(2);
+    for (const candidate of candidates) {
+      expect(candidate.target).toMatchObject({
+        requestedModel: 'claude-opus-5-5',
+        providerId: 'openai', modelId: 'gpt-6-astra',
+        transportProviderId: 'codex', reason: 'alias',
+      });
+    }
+    expect(candidates.map((candidate) => candidate.account.diagnosticAccountRef))
+      .toEqual(['codex_new', 'codex_old']);
+  });
+
+  it('ignores a conflicting override for the exclusive alias but honors it elsewhere', () => {
+    const overrideAccounts = [
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+        targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+        supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+    ];
+    const conflicting = [{
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
+    }];
+    const guarded = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-5-5', targetCandidatesOverride: conflicting },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: overrideAccounts,
+    }));
+    expect(guarded.map((candidate) => candidate.target.modelId)).toEqual(['gpt-6-astra']);
+
+    const control = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash', targetCandidatesOverride: conflicting },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [...accounts, overrideAccounts[1]!],
+    }));
+    expect(control.map((candidate) => candidate.target.modelId)).toContain('gemini-3.8-flash');
+  });
+
+  it('never expands the exclusive alias through council equivalents', () => {
+    const council = {
+      ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      groups: [{
+        id: 'astra-fixture', intent: 'general' as const, expiresAt: '2027-01-01T00:00:00Z',
+        evidence: [{
+          suite: 'fixture', artifact: 'fixture.json', measuredAt: '2026-08-01T00:00:00Z',
+          dimensions: { quality: 'equivalent' },
+        }],
+        members: [
+          { providerId: 'openai', modelId: 'gpt-6-astra', rank: 1, requiredCapabilities: [] },
+          { providerId: 'openai', modelId: 'gpt-6-luna', rank: 2, requiredCapabilities: [] },
+        ],
+      }],
+    };
+    const councilAccounts = [
+      {
+        accountRef: 'codex-astra', diagnosticAccountRef: 'astra-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra', 'gpt-6-luna'],
+        enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+    ];
+    const guarded = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-5-5' },
+      policy: DEFAULT_ROUTE_POLICY, council, accounts: councilAccounts,
+    }));
+    expect(guarded.map((candidate) => candidate.target.modelId)).toEqual(['gpt-6-astra']);
+
+    const control = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'gpt-6-astra' },
+      policy: DEFAULT_ROUTE_POLICY, council, accounts: councilAccounts,
+    }));
+    expect(control.map((candidate) => candidate.target.modelId))
+      .toEqual(['gpt-6-astra', 'gpt-6-luna']);
+  });
+
   it('distinguishes unknown ids, unmet capabilities, and no eligible account', () => {
     const selectSignal = (request: Parameters<typeof selectRouteCandidates>[0]['request'], accountsForSignal = accounts) =>
       selectRouteCandidates({
