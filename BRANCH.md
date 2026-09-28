@@ -50,7 +50,7 @@
 
 - [x] BR-REL-EX3: Path `package-lock.json`, `packages/llm-gateway` version entry only. Evidence: the CI train lock-sync gate requires the root lockfile to match every package version bump (same failure seen on PR #625). Impact: one version line, no dependency resolution change. Rollback: revert with the version bump. Decision: conductor, mechanical consequence of the version bump (2026-09-27).
 - [x] BR-REL-Q10: Lot 1 ships as `@sentropic/llm-gateway` 0.19.1 (patch: error-mapping fix) instead of 0.20.0, because `@sentropic/cluster-mesh` accepts only `llm-gateway >=0.19.0 <0.20.0` and the API depends on `^0.19.0`; a 0.20.0 would make product `/gw` unable to load the gateway (Lot 2 spec finding P1). The minor bump and the range widening move to Lot 2. Status: conductor decision, reported to `sentropic-46` (2026-09-27).
-- [x] BR-REL-Q11: Pre-existing personal-passthrough sequential settle skips metering when the pool `recordOutcome` rejects (`packages/llm-gateway/src/flow.ts`, `settle`); wire contract unaffected (refusal preserved). Status: deferred to the BR-47 ledger work (Muse 1.3 max review on `0e214a762`, non-blocking).
+- [x] BR-REL-Q11: Pre-existing personal-passthrough sequential settle skips metering when the pool `recordOutcome` rejects (`packages/llm-gateway/src/flow.ts`, `settle`); wire contract unaffected (refusal preserved). Status: deferred to the BR-47 ledger work by owner decision via conductor `sentropic-46` (2026-09-27), out of this PR (Muse 1.3 max review on `0e214a762`, non-blocking).
 
 ## AI Flaky tests
 - [ ] Only provider/network nondeterminism with a passing rerun on the same commit may be proposed for explicit owner sign-off; no timeout increases.
