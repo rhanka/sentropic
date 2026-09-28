@@ -292,7 +292,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           const terminalCandidate = activePlan.candidates.at(-1) === candidate;
           if (!failure.retryable || terminalCandidate) this.releaseRoundRobin(activePlan);
         },
-        onCommitted: (activePlan, candidate) => this.bind(activePlan, candidate),
+        onCommitted: (activePlan, candidate) => this.bind(activePlan, candidate, true),
         onSuccess: (activePlan, candidate) => {
           this.health.clear(candidate);
           this.bind(activePlan, candidate);
@@ -365,20 +365,23 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     return next;
   }
 
-  private bind(stored: StoredPlan, candidate: RankedRouteCandidate): void {
+  private bind(stored: StoredPlan, candidate: RankedRouteCandidate, isCommit = false): void {
     this.commitRoundRobin(stored);
     if (!stored.affinityRef) return;
     const current = this.affinities.get(stored.affinityRef);
-    // Exclusive-alias migration (owner "follow the /model"): a commit or
-    // success on the exclusive alias overwrites a stale incompatible affinity
-    // with the served Astra account and target through the existing audited
+    // Exclusive-alias migration (owner "follow the /model"): a success on
+    // the exclusive alias overwrites a stale incompatible affinity with the
+    // served Astra account and target through the existing audited
     // rebind/promote path below (`cacheContinuityRisk` on account change).
+    // A commit (first validated frame) must not migrate, so a later stream
+    // failure or cancellation leaves the stale affinity untouched.
     const exclusiveMigration = Boolean(
       EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[candidate.target.requestedModel] && current
         && (current.target.providerId !== candidate.target.providerId
           || current.target.modelId !== candidate.target.modelId
           || current.target.transportProviderId !== candidate.target.transportProviderId),
     );
+    if (isCommit && exclusiveMigration) return;
     if (current && stored.policy.fallbackMode !== 'one-way' && !exclusiveMigration) return;
     if (current?.target.providerId === candidate.target.providerId
       && current.target.modelId === candidate.target.modelId
