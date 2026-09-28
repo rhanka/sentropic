@@ -75,13 +75,13 @@
   - [x] Keep known-model `no-route` distinct from unknown-model and map it (without enrollment diagnostic) to non-retryable 503 Anthropic `api_error` / OpenAI `server_error`, message `No route available for model: "<requested model>"`, `x-should-retry: false`, no `Retry-After` (BR-REL-Q7); `capabilities-unmet` becomes 400 `invalid_request_error`; `quote-mismatch` and unclassified errors stay 503; align the personal-passthrough unknown-model path.
   - [x] Budget-quote refusals keep zero settlement (no admit, plan, prepare, marker or release); admitted-plan ledger failure behavior stays unchanged and is pinned by a test.
   - [x] Tests: update `packages/llm-gateway/tests/errors.test.ts`, `contract-snapshot.test.ts` (frozen error map, fixture model `no-such-model`), `route-flow-core.test.ts`, `route-json-flow.test.ts`, `route-stream-flow.test.ts`, `budget-admission.test.ts`; new `packages/llm-gateway/tests/fixtures/unknown-model.ts` and `unknown-model.test.ts` with real router plus mesh on both wires, JSON and `stream:true`, JSON content type, no provider dispatch, adversarial model strings, terminal-404 served header.
-  - [ ] Update `spec/SPEC_EVOL_LLM_GATEWAY.md` section 3b and the routing spec with the 404 rationale.
+  - [x] Update `spec/SPEC_EVOL_LLM_GATEWAY.md` section 3b and the routing spec with the 404 rationale.
   - [ ] `make test-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`.
 - [ ] **Lot 2 — Native Anthropic feature relay (product `/gw` first; BR-REL-EX1 and BR-REL-EX2 approved)**
   - [ ] Routed-attempt native Messages capability with explicit activation predicate, native model-id allowlist, beta/version header policy, non-budget `max_tokens` refusal, version-skew handling.
   - [ ] Tests listed by the v2 design at the real router, flow, dispatch and transport seam.
-- [ ] **Lot 3 — Documentation and package gate**
-  - [ ] Update `packages/llm-gateway/CHANGELOG.md` Unreleased with the distinct guarantees and limitations.
+- [x] **Lot 3 — Documentation and package gate**
+  - [x] Update `packages/llm-gateway/CHANGELOG.md` Unreleased with the distinct guarantees and limitations.
   - [ ] Check the published package version before changing `packages/llm-gateway/package.json` for PR; do not publish directly.
   - [ ] Build by Muse 1.3 xhigh, review by Astra high; resolve findings.
 - [ ] **Lot 4 — Final validation**
