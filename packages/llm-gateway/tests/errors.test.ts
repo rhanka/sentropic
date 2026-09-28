@@ -86,6 +86,53 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(a.status).toBe(400);
   });
 
+  it('maps unknown-model to the Lot 1 404 with the model-only message', () => {
+    const a = mapGatewayError('anthropic-messages', 'unknown-model', undefined, 'no-such-model');
+    expect(a.status).toBe(404);
+    expect(a.headers).toBeUndefined();
+    expect(a.body).toEqual({
+      type: 'error',
+      error: { type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
+    });
+    const o = mapGatewayError('openai-chat-completions', 'unknown-model', undefined, 'no-such-model');
+    expect(o.status).toBe(404);
+    expect(o.headers).toBeUndefined();
+    expect(o.body).toEqual({
+      error: {
+        message: 'Unknown model: "no-such-model"',
+        type: 'invalid_request_error',
+        code: 'model_not_found',
+      },
+    });
+  });
+
+  it('falls back to a model-free 404 message without request context', () => {
+    const a = mapGatewayError('anthropic-messages', 'unknown-model');
+    expect(a.status).toBe(404);
+    expect(a.body).toEqual({
+      type: 'error',
+      error: { type: 'not_found_error', message: 'Unknown model' },
+    });
+  });
+
+  it('forwards the requested model through the GatewayError branch', () => {
+    const mapped = toProviderShapedError(
+      'anthropic-messages',
+      new GatewayError('unknown-model', 'unknown model'),
+      'no-such-model',
+    );
+    expect(mapped.status).toBe(404);
+    expect(JSON.stringify(mapped.body)).toContain('Unknown model: "no-such-model"');
+    // The internal detail (even a leaking one) NEVER reaches the wire body.
+    const leaked = toProviderShapedError(
+      'openai-chat-completions',
+      new GatewayError('unknown-model', 'internal pool detail acct-alpha'),
+      'no-such-model',
+    );
+    expect(JSON.stringify(leaked.body)).not.toContain('acct-alpha');
+    expect(JSON.stringify(leaked.body)).not.toContain('internal pool detail');
+  });
+
   it('toProviderShapedError maps a thrown GatewayError', () => {
     const mapped = toProviderShapedError(
       'anthropic-messages',
