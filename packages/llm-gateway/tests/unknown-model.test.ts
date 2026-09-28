@@ -1,9 +1,10 @@
 /** Lot 1 unknown-model router matrix (plan path): REAL router + REAL mesh, both wires, JSON and `stream:true`. */
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
+import { createGatewayRouter, stubGatewayConfig } from '../src/index.js';
 import {
   KNOWN_MODEL, UNKNOWN_MODEL, authHeaders, emptyMeshDirectory, meshDirectoryFor,
-  realMeshPlanner, sendUnknown, unknownModelRouter, type UnknownRouterCalls,
+  realMeshPlanner, sendUnknown, unknownCallerAuth, unknownModelRouter, type UnknownRouterCalls,
 } from './fixtures/unknown-model.js';
 import { recordingBudget } from './fixtures/budget.js';
 
@@ -173,5 +174,79 @@ describe('terminal upstream 404 (requested versus actual model)', () => {
     expect(res.headers.get('retry-after')).toBeNull();
     expect(res.headers.get('x-sentropic-served')).toBeNull();
     expect(calls.settlements).toHaveLength(1);
+  });
+});
+
+describe('planning refusal survives a rejecting settlement sink', () => {
+  const rejectingRouter = (planner: RoutePlanner, onSettle: () => void) => createGatewayRouter({
+    config: { ...stubGatewayConfig, callerAuth: unknownCallerAuth },
+    routePlanner: planner,
+    routeMetering: { async settleRoute() {
+      onSettle();
+      throw Object.assign(Error('sink down'), { status: 500 });
+    } },
+    requestId: () => 'req_unknown',
+  });
+  const wires = [
+    { path: '/v1/messages', stream: false },
+    { path: '/v1/messages', stream: true },
+    { path: '/v1/chat/completions', stream: false },
+    { path: '/v1/chat/completions', stream: true },
+  ];
+
+  it.each(wires)('preserves the unknown-model 404 ($path stream=$stream)', async ({ path, stream }) => {
+    let settles = 0;
+    const app = rejectingRouter(realMeshPlanner(meshDirectoryFor([KNOWN_MODEL])), () => { settles += 1; });
+    const res = await sendUnknown(app, path, UNKNOWN_MODEL, stream);
+    expect(res.status).toBe(404);
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    expect(res.headers.get('x-should-retry')).toBeNull();
+    expect(res.headers.get('retry-after')).toBeNull();
+    const text = await res.text();
+    expect(text.startsWith('event:')).toBe(false);
+    expect(text.startsWith('data:')).toBe(false);
+    expect(JSON.parse(text)).toEqual(expectedBody(path));
+    expect(settles).toBe(1);
+  });
+
+  it.each(wires)('preserves the BR-REL-Q7 no-route 503 ($path stream=$stream)', async ({ path, stream }) => {
+    let settles = 0;
+    const app = rejectingRouter(realMeshPlanner(emptyMeshDirectory()), () => { settles += 1; });
+    const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
+    expect(res.status).toBe(503);
+    const message = `No route available for model: "${KNOWN_MODEL}"`;
+    expect(JSON.parse(await res.text())).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'api_error', message } }
+      : { error: { message, type: 'server_error', code: 'no_route' } });
+    expect(res.headers.get('x-should-retry')).toBe('false');
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(settles).toBe(1);
+  });
+
+  it.each(wires)('preserves the enrollment 503 ($path stream=$stream)', async ({ path, stream }) => {
+    let settles = 0;
+    const planner: RoutePlanner = {
+      async plan() {
+        throw {
+          name: 'RoutePlanError', code: 'no-route',
+          diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' },
+        };
+      },
+      async prepareAttempt() { throw new Error('unused'); },
+      describeAffinity() { return null; },
+      promoteAffinity() { throw new Error('unused'); },
+      rebindAffinity() { throw new Error('unused'); },
+      resetAffinity() { return false; },
+    };
+    const app = rejectingRouter(planner, () => { settles += 1; });
+    const res = await sendUnknown(app, path, KNOWN_MODEL, stream);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('x-sentropic-route-action')).toBe('reauthenticate-cloud-code');
+    const body = JSON.parse(await res.text());
+    expect(body).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'authentication_error', message: 'cloud-code reauthenticate required' } }
+      : { error: { message: 'cloud-code reauthenticate required',
+        type: 'authentication_error', code: 'provider_auth_required' } });
+    expect(settles).toBe(1);
   });
 });
