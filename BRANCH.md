@@ -26,8 +26,9 @@
   - `.cursor/rules/**`
   - `packages/llm-mesh/src/routing-targets.ts`, `providers.ts`, `catalog.ts` (Opus 5.5 route belongs to `feat/llm-mesh-opus55-route`)
   - `packages/llm-mesh/src/adapter-auth.ts` (owned by another lane)
-  - `apps/**`, `.github/**`, `package-lock.json`, `PLAN.md`
+  - `apps/**`, `.github/**`, `PLAN.md`
 - **Conditional Paths (require an approved BR-REL-EXn before any change)**:
+  - BR-REL-EX3: `package-lock.json`, `packages/llm-gateway` version entry only, refreshed through `make lock-root`.
   - BR-REL-EX1: `packages/llm-mesh/src/**` routed-attempt native Messages capability and real Anthropic transport, excluding the forbidden files above.
   - BR-REL-EX2: `api/src/services/llm-runtime/**`, `api/src/services/providers/claude-provider.ts`, `api/src/routes/namespaces/gw.ts` for product `/gw` activation.
   - h2a activation is downstream work in the h2a repository and cannot be authorized by an exception here.
@@ -46,6 +47,10 @@
 - [ ] BR-REL-Q8: Lot 2 qualification uses the same authentication mode as production `/gw` on 2 or 3 Anthropic models; the real call needs an owner go-ahead via the conductor at test time and no token is ever displayed (owner decision 2026-09-27). Remaining design item: planner native-capability filter contract. Status: design.
 - [x] BR-REL-EX1: Paths `packages/llm-mesh/src/**` except `routing-targets.ts`, `providers.ts`, `catalog.ts`, `adapter-auth.ts`, plus `packages/llm-mesh/tests/**`, `packages/llm-mesh/CHANGELOG.md` and `packages/llm-mesh/package.json` (extension granted by owner via conductor `sentropic-46`, 2026-09-27). Reason: credentials are bound inside mesh and `PreparedRouteAttempt` exposes only canonical `generate`/`stream`, so a native Messages capability and a real Anthropic transport cannot live in the gateway package. Impact: additive routed-attempt contract and transport; mesh semver bump published before the gateway. Rollback: remove the native capability; the gateway keeps canonical routing and refuses safeguard-dependent requests with an explicit 400. Decision: approved by owner via conductor `sentropic-46` (2026-09-27).
 - [x] BR-REL-EX2: Paths `api/src/services/llm-runtime/**`, `api/src/services/providers/claude-provider.ts`, `api/src/routes/namespaces/gw.ts`, `api/src/services/llm-metering/budget-admission.ts` (extension granted by owner via conductor `sentropic-46`, 2026-09-27) and their tests under `api/tests/**`. Reason: product `/gw` is the only host with a real Anthropic HTTP client, but its `common()` to `callLLM` path drops `providerOptions`, `safeguards` and native tool IDs. Impact: product `/gw` Anthropic traffic gains a native branch behind the explicit activation predicate while identity, partition and ledger wrappers stay unchanged; `make test-api` becomes a required gate. Rollback: disable the native capability so `/gw` returns to the current canonical path. Decision: approved by owner via conductor `sentropic-46` (2026-09-27).
+
+- [x] BR-REL-EX3: Path `package-lock.json`, `packages/llm-gateway` version entry only. Evidence: the CI train lock-sync gate requires the root lockfile to match every package version bump (same failure seen on PR #625). Impact: one version line, no dependency resolution change. Rollback: revert with the version bump. Decision: conductor, mechanical consequence of the version bump (2026-09-27).
+- [x] BR-REL-Q10: Lot 1 ships as `@sentropic/llm-gateway` 0.19.1 (patch: error-mapping fix) instead of 0.20.0, because `@sentropic/cluster-mesh` accepts only `llm-gateway >=0.19.0 <0.20.0` and the API depends on `^0.19.0`; a 0.20.0 would make product `/gw` unable to load the gateway (Lot 2 spec finding P1). The minor bump and the range widening move to Lot 2. Status: conductor decision, reported to `sentropic-46` (2026-09-27).
+- [x] BR-REL-Q11: Pre-existing personal-passthrough sequential settle skips metering when the pool `recordOutcome` rejects (`packages/llm-gateway/src/flow.ts`, `settle`); wire contract unaffected (refusal preserved). Status: deferred to the BR-47 ledger work (Muse 1.3 max review on `0e214a762`, non-blocking).
 
 ## AI Flaky tests
 - [ ] Only provider/network nondeterminism with a passing rerun on the same commit may be proposed for explicit owner sign-off; no timeout increases.
@@ -68,7 +73,7 @@
   - [x] Read project rules and scope boundaries; reserve unique environment and three ports (verified free with `ss -ltn`).
   - [x] Astra xhigh design pass and independent Muse 1.3 max review (APPROVE_WITH_CHANGES, blocking F1-F5).
   - [x] Astra xhigh v2 design applying review findings; sent to the conductor before build (Muse v2 review: Lot 1 BUILD_READY_WITH_CHANGES, Lot 2 APPROVE_WITH_CHANGES).
-- [ ] **Lot 1 — Unknown-model error contract (BR-REL-Q3)**
+- [x] **Lot 1 — Unknown-model error contract (BR-REL-Q3)**
   - [x] Add `unknown-model` to `GatewayFailureKind`; map plan-path and quote-path `unknown-model` (structural `instanceof` or exact name plus exact code) and terminal upstream `unsupported-model` to Anthropic 404 `not_found_error` and OpenAI 404 `invalid_request_error` code `model_not_found`, message `Unknown model: "<validated requested model>"`, no `Retry-After`, no `x-should-retry`.
   - [x] Thread the validated `requestedModel` from the router into `toProviderShapedError` and `mapGatewayError`, including the `GatewayError` branch; internal `GatewayError` detail is the fixed string `unknown model`; never echo `error.message` or the upstream model.
   - [x] Mapper precedence: `GatewayError` kind, then enrollment-action diagnostic, then structural plan/quote errors, then generic 503; the classifier also treats status-less `model_not_found`/`not_found` codes as `unsupported-model`.
@@ -76,17 +81,18 @@
   - [x] Budget-quote refusals keep zero settlement (no admit, plan, prepare, marker or release); admitted-plan ledger/settlement failures preserve the typed/terminal refusal (attempted once, swallowed).
   - [x] Tests: update `packages/llm-gateway/tests/errors.test.ts`, `contract-snapshot.test.ts` (frozen error map, fixture model `no-such-model`), `route-flow-core.test.ts`, `route-json-flow.test.ts`, `route-stream-flow.test.ts`, `budget-admission.test.ts`; new `packages/llm-gateway/tests/fixtures/unknown-model.ts` and `unknown-model.test.ts` with real router plus mesh on both wires, JSON and `stream:true`, JSON content type, no provider dispatch, adversarial model strings, terminal-404 served header.
   - [x] Update `spec/SPEC_EVOL_LLM_GATEWAY.md` section 3b and the routing spec with the 404 rationale.
-  - [ ] `make test-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`.
+  - [x] `make test-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay` (28 files, 389 tests passed on `0e214a762`).
 - [ ] **Lot 2 — Native Anthropic feature relay (product `/gw` first; BR-REL-EX1 and BR-REL-EX2 approved)**
   - [ ] Routed-attempt native Messages capability with explicit activation predicate, native model-id allowlist, beta/version header policy, non-budget `max_tokens` refusal, version-skew handling.
   - [ ] Tests listed by the v2 design at the real router, flow, dispatch and transport seam.
 - [x] **Lot 3 — Documentation and package gate**
   - [x] Update `packages/llm-gateway/CHANGELOG.md` Unreleased with the distinct guarantees and limitations.
-  - [ ] Check the published package version before changing `packages/llm-gateway/package.json` for PR; do not publish directly.
-  - [ ] Build by Muse 1.3 xhigh, review by Astra high; resolve findings.
+  - [x] Check the published package version before changing `packages/llm-gateway/package.json` for PR; do not publish directly (0.19.1 > registry 0.19.0, BR-REL-Q10).
+  - [x] Build by Muse 1.3 xhigh; review by Astra high (REQUEST_CHANGES twice, then APPROVE on `d343f8aa4`), then by Muse 1.3 max after the owner switched reviewers (REQUEST_CHANGES on `6d3b1d0db` and `b4c667275`, APPROVE on `0e214a762`).
 - [ ] **Lot 4 — Final validation**
-  - [ ] `make test-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`.
-  - [ ] `make typecheck-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`.
-  - [ ] `make build-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`.
-  - [ ] `make scope-check API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`.
-  - [ ] `make down API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`; report local checks separately from CI (no push/PR without the conductor).
+  - [x] `make test-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay` (28 files, 389 tests passed with 0.19.1).
+  - [x] `make typecheck-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay` (pass).
+  - [x] `make build-llm-gateway API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay` (pass).
+  - [x] `make scope-check API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay` (pass).
+  - [x] `make down API_PORT=9470 UI_PORT=5670 MAILDEV_UI_PORT=1570 ENV=test-llm-automode-relay`; local checks above, CI reported separately on the PR (no push/PR without the conductor).
+  - [ ] Lot 2 build and its validation, after the owner answers the Lot 2 spec questions via the conductor.
