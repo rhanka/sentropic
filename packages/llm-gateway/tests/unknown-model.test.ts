@@ -1,5 +1,5 @@
 /** Lot 1 unknown-model router matrix (plan path): REAL router + REAL mesh, both wires, JSON and `stream:true`. */
-import type { RoutePlanner } from '@sentropic/llm-mesh';
+import { RoutePlanError, type PreparedRouteAttempt, type RoutePlanner } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import { createGatewayRouter, stubGatewayConfig } from '../src/index.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
@@ -7,7 +7,7 @@ import {
   KNOWN_MODEL, UNKNOWN_MODEL, authHeaders, emptyMeshDirectory, meshDirectoryFor,
   realMeshPlanner, sendUnknown, unknownCallerAuth, unknownModelRouter, type UnknownRouterCalls,
 } from './fixtures/unknown-model.js';
-import { recordingBudget } from './fixtures/budget.js';
+import { MODEL, quotingPlanner, recordingBudget } from './fixtures/budget.js';
 
 const freshCalls = (): UnknownRouterCalls => ({ settlements: [], dispatch: { generate: 0, stream: 0 } });
 
@@ -409,4 +409,113 @@ describe('terminal upstream 404 survives post-dispatch callback failures (non-bu
         outcome: 'failed', requestedModel: KNOWN_MODEL, attempts: [{ outcome: 'unsupported-model' }],
       });
     });
+});
+
+describe('admitted terminal refusal survives ledger/hook failures (router)', () => {
+  const wires = [
+    { path: '/v1/messages', stream: false },
+    { path: '/v1/messages', stream: true },
+    { path: '/v1/chat/completions', stream: false },
+    { path: '/v1/chat/completions', stream: true },
+  ];
+  const failing404 = (recordOutcome: () => Promise<void>): PreparedRouteAttempt => ({
+    attemptRef: 'attempt-404',
+    generate: (async () => { throw { status: 404 }; }) as PreparedRouteAttempt['generate'],
+    async stream() { throw { status: 404 }; },
+    async recordOutcome() { await recordOutcome(); },
+    async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+  });
+  const admittedApp = (attempts: PreparedRouteAttempt[], recorder: ReturnType<typeof recordingBudget>,
+    settle?: (value: RouteRequestSettlement) => Promise<void>) => {
+    const { planner } = quotingPlanner(attempts);
+    let settles = 0;
+    return { planner, settles: () => settles, app: createGatewayRouter({
+      config: { ...stubGatewayConfig, callerAuth: unknownCallerAuth },
+      routePlanner: planner,
+      routeMetering: { async settleRoute(value: RouteRequestSettlement) {
+        settles += 1;
+        if (settle) await settle(value);
+        else { recorder.events.push('settle'); recorder.settlements.push(value); }
+      } },
+      budget: recorder.options, requestId: () => 'req_unknown',
+    }) };
+  };
+  const expected404 = (path: string): unknown => path === '/v1/messages'
+    ? { type: 'error', error: { type: 'not_found_error', message: `Unknown model: "${MODEL}"` } }
+    : { error: { message: `Unknown model: "${MODEL}"`,
+      type: 'invalid_request_error', code: 'model_not_found' } };
+
+  it.each(wires)('admitted 404 + rejecting recordOutcome stays 404 ($path stream=$stream)', async ({ path, stream }) => {
+    const recorder = recordingBudget();
+    const { app, settles } = admittedApp([failing404(async () => { throw Error('hook down'); })], recorder);
+    const res = await sendUnknown(app, path, MODEL, stream);
+    expect(res.status).toBe(404);
+    expect(JSON.parse(await res.text())).toEqual(expected404(path));
+    expect(res.headers.get('x-sentropic-served')).toContain(`model=${MODEL}`);
+    expect(settles()).toBe(1);
+  });
+
+  it.each(wires)('admitted 404 + rejecting ledger stays 404 with served model ($path stream=$stream)', async ({ path, stream }) => {
+    const recorder = recordingBudget();
+    const { app, settles } = admittedApp([failing404(async () => {})], recorder,
+      async () => { recorder.events.push('settle'); throw Error('ledger down'); });
+    const res = await sendUnknown(app, path, MODEL, stream);
+    expect(res.status).toBe(404);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual(expected404(path));
+    expect(text).not.toContain('overloaded');
+    expect(res.headers.get('x-sentropic-served')).toContain(`model=${MODEL}`);
+    expect(settles()).toBe(1);
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+  });
+
+  it.each(wires)('admitted-plan unknown-model + ledger failure stays 404 ($path stream=$stream)', async ({ path, stream }) => {
+    const typed = new RoutePlanError('Unknown requested model', 'unknown-model');
+    const { planner } = quotingPlanner([], { plan: () => { throw typed; } });
+    const recorder = recordingBudget();
+    let settles = 0;
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig, callerAuth: unknownCallerAuth }, routePlanner: planner,
+      routeMetering: { async settleRoute() { settles += 1; recorder.events.push('settle'); throw Error('ledger down'); } },
+      budget: recorder.options, requestId: () => 'req_unknown',
+    });
+    const res = await sendUnknown(app, path, MODEL, stream);
+    expect(res.status).toBe(404);
+    expect(JSON.parse(await res.text())).toEqual(expected404(path));
+    expect(settles).toBe(1);
+  });
+
+  it.each(wires)('admitted empty plan + ledger failure stays Q7 503 ($path stream=$stream)', async ({ path, stream }) => {
+    const { planner } = quotingPlanner([]);
+    const recorder = recordingBudget();
+    let settles = 0;
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig, callerAuth: unknownCallerAuth }, routePlanner: planner,
+      routeMetering: { async settleRoute() { settles += 1; recorder.events.push('settle'); throw Error('ledger down'); } },
+      budget: recorder.options, requestId: () => 'req_unknown',
+    });
+    const res = await sendUnknown(app, path, MODEL, stream);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('x-should-retry')).toBe('false');
+    expect((await res.text())).not.toContain('overloaded');
+    expect(settles).toBe(1);
+  });
+
+  it.each(wires)('admitted enrollment + ledger failure stays enrollment 503 ($path stream=$stream)', async ({ path, stream }) => {
+    const enrollment = { name: 'RoutePlanError', code: 'no-route',
+      diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' } };
+    const { planner } = quotingPlanner([], { plan: () => { throw enrollment; } });
+    const recorder = recordingBudget();
+    let settles = 0;
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig, callerAuth: unknownCallerAuth }, routePlanner: planner,
+      routeMetering: { async settleRoute() { settles += 1; recorder.events.push('settle'); throw Error('ledger down'); } },
+      budget: recorder.options, requestId: () => 'req_unknown',
+    });
+    const res = await sendUnknown(app, path, MODEL, stream);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('x-sentropic-route-action')).toBe('reauthenticate-cloud-code');
+    expect((await res.text())).not.toContain('overloaded');
+    expect(settles).toBe(1);
+  });
 });
