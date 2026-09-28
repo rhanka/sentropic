@@ -17,6 +17,21 @@ describe('model equivalence council', () => {
     )).not.toThrow();
   });
 
+  it('derives the exclusive alias to Astra without a profile or exclusion', () => {
+    expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.aliases.find(
+      (entry) => entry.alias === 'claude-opus-5-5',
+    )).toEqual({
+      alias: 'claude-opus-5-5', providerId: 'openai', modelId: 'gpt-6-astra',
+      transportProviderId: 'codex',
+    });
+    expect(modelProfiles.some((profile) => profile.modelId === 'claude-opus-5-5')).toBe(false);
+    expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map((entry) => entry.modelId))
+      .not.toContain('claude-opus-5-5');
+    expect(() => validateEquivalenceCouncil(
+      DEFAULT_MODEL_EQUIVALENCE_COUNCIL, modelProfiles, now,
+    )).not.toThrow();
+  });
+
   it('classifies Gemini 3.8 Flash, Fable 5.1, and GPT-6 Astra explicitly', () => {
     const excluded = DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map(
       ({ providerId, modelId }) => `${providerId}:${modelId}`,
