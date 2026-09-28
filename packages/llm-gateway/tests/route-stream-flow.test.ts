@@ -136,6 +136,50 @@ describe('route stream flow', () => {
     await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request)).rejects.toThrow();
     expect(settleRoute.mock.calls[0]![0].usage).toEqual({ inputTokens: 7, outputTokens: 0, estimated: false });
   });
+  it('maps a stream-opening 404 refusal to unknown-model without a second candidate', async () => {
+    const hooks: string[] = []; const opened: string[] = []; const settleRoute = vi.fn();
+    const refused = (tag: string, target: string[]) => attempt(async function* (): AsyncGenerator<StreamEvent> {
+      opened.push(tag);
+      throw { status: 404 };
+    }, target);
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([refused('first', hooks), refused('second', [])]),
+      metering: { settleRoute } }, request)).rejects.toMatchObject({ kind: 'unknown-model' });
+    expect(opened).toEqual(['first']);
+    expect(hooks).toEqual(['outcome:unsupported-model']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+    expect(settleRoute.mock.calls[0]![0]).toMatchObject({
+      outcome: 'failed', attempts: [{ outcome: 'unsupported-model' }],
+    });
+  });
+  it('maps a first-event 404 error to unknown-model before commitment', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn();
+    const source = attempt(async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'error', data: { providerId: 'openai', message: 'model not found',
+        code: 'model_not_found', retryable: false } };
+    }, hooks);
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source, source]),
+      metering: { settleRoute } }, request)).rejects.toMatchObject({ kind: 'unknown-model' });
+    expect(hooks).toEqual(['outcome:unsupported-model']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+  });
+  it('keeps a post-commit 404 as a sanitized stream error without rewriting the response', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn();
+    const source = attempt(async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'content_delta', data: { delta: 'hello' } };
+      yield { type: 'error', data: { providerId: 'openai', message: 'model not found',
+        code: 'model_not_found', retryable: false } };
+    }, hooks);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]),
+      metering: { settleRoute } }, request);
+    const wire = await collect(result.stream);
+    // Already committed: the 404 arrives as a sanitized mid-stream error — no
+    // HTTP-status rewrite, no replay, no success terminator.
+    expect(wire).toContain('stream failed after commitment');
+    expect(wire).not.toContain('[DONE]');
+    expect(wire).not.toContain('Unknown model');
+    expect(hooks).toEqual(['committed', 'outcome:unsupported-model']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+  });
   it('releases a stream returned before first consumer iteration exactly once', async () => {
     const hooks: string[] = [];
     const closed = vi.fn(); const settleRoute = vi.fn();
