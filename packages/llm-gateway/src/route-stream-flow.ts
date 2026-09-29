@@ -239,21 +239,38 @@ export const runRouteStreamFlow = async (
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
+      const terminal = () => terminalGatewayError(
+        classification, servedTargetFor(diagnostic), 'all planned streams failed',
+      );
       try {
         if (attempt) {
           if (classification.reason === 'cancelled') await attempt.releaseCancelled();
           else await attempt.recordOutcome(classification, attemptUsage(usage));
         }
-      } catch (hookError) { await settle('failed'); throw hookError; }
+      } catch {
+        // A post-dispatch callback failure must never mask the terminal
+        // refusal (admitted or not). Settle once (guarded), swallow, no retry.
+        try { await settle('failed'); } catch { /* The terminal refusal wins. */ }
+        throw terminal();
+      }
       if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
-      await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
+      try {
+        await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
+      } catch {
+        // Same preservation for the settlement sink: a ledger failure must
+        // never replace the terminal refusal (admitted or not). One attempt,
+        // swallowed, no retry.
+      }
       // Same terminal-class preservation as the JSON flow: a terminal
       // upstream refusal keeps its class, never a pooled 503.
-      throw terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned streams failed',
-      );
+      throw terminal();
     }
   }
-  await settle('failed');
-  throw new GatewayError('no-eligible-account', 'route plan has no candidates');
+  try {
+    await settle('failed');
+  } catch {
+    // A sink failure must never mask the Q7 no-route refusal (same
+    // preservation as the planning-refusal path in route-flow-core).
+  }
+  throw new GatewayError('no-route', 'route plan has no candidates');
 };

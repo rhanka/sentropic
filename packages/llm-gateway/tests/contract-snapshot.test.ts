@@ -21,7 +21,7 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { mapGatewayError, type GatewayFailureKind } from '../src/index.js';
+import { mapGatewayError, toProviderShapedError, type GatewayFailureKind } from '../src/index.js';
 import { FixtureTransport, anthropicFrames, openAiFrames } from './fixtures/transport.js';
 import { buildHarness, authHeaders } from './fixtures/harness.js';
 import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
@@ -102,7 +102,21 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
     openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
+  'unknown-model': {
+    anthropic: { status: 404, type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
+    openai: { status: 404, type: 'invalid_request_error', message: 'Unknown model: "no-such-model"', code: 'model_not_found' },
+  },
+  'no-route': {
+    anthropic: { status: 503, type: 'api_error', message: 'No route available for model: "no-such-model"' },
+    openai: { status: 503, type: 'server_error', message: 'No route available for model: "no-such-model"', code: 'no_route' },
+  },
 };
+
+/** Model-scoped failure kinds: the golden mapper calls supply the fixture model. */
+const MODEL_SCOPED_KINDS: ReadonlySet<GatewayFailureKind> = new Set(['unknown-model', 'no-route']);
+
+/** Fixture unknown model frozen across the Lot 1 contract goldens. */
+const UNKNOWN_MODEL_FIXTURE = 'no-such-model';
 
 /**
  * The actual (method, path) pairs registered on the real Hono router.
@@ -177,6 +191,16 @@ describe('BR-46 v1 wire contract snapshot — route inventory', () => {
           ? { headers: authHeaders('user-a'), body: JSON.stringify({ model: 'x', messages: [] }) }
           : {}),
       });
+      if (route.method === 'POST' && 'wire' in route && res.status === 404) {
+        // The probe model 'x' is unknown, so a mounted POST inference route
+        // answers the frozen unknown-model 404. Only that exact envelope
+        // counts as mounted; any other 404 (including Hono's default
+        // not-found) still fails.
+        const expected = mapGatewayError(route.wire, 'unknown-model', undefined, 'x');
+        expect(expected.status).toBe(404);
+        expect(await res.json()).toEqual(expected.body);
+        continue;
+      }
       // Mounted = anything but a 404. (Behaviour per route is asserted below.)
       expect(res.status).not.toBe(404);
     }
@@ -304,9 +328,10 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
   it('freezes the EXACT per-wire status + body (type, message, code) for every failure class', () => {
     for (const kind of Object.keys(FROZEN_ERROR_MAP) as GatewayFailureKind[]) {
       const golden = FROZEN_ERROR_MAP[kind];
+      const model = MODEL_SCOPED_KINDS.has(kind) ? UNKNOWN_MODEL_FIXTURE : undefined;
 
       // Anthropic: EXACT status + full `{type:'error', error:{type,message}}`.
-      const a = mapGatewayError('anthropic-messages', kind);
+      const a = mapGatewayError('anthropic-messages', kind, undefined, model);
       expect(a.status).toBe(golden.anthropic.status);
       expect(a.body).toEqual({
         type: 'error',
@@ -314,7 +339,7 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
       });
 
       // OpenAI: EXACT status + full `{error:{message,type,code}}`.
-      const o = mapGatewayError('openai-chat-completions', kind);
+      const o = mapGatewayError('openai-chat-completions', kind, undefined, model);
       expect(o.status).toBe(golden.openai.status);
       expect(o.body).toEqual({
         error: {
@@ -336,6 +361,15 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
     // Auth + bad-request never carry Retry-After (no headers at all).
     expect(mapGatewayError('anthropic-messages', 'caller-auth-failed', 7).headers).toBeUndefined();
     expect(mapGatewayError('openai-chat-completions', 'bad-request', 7).headers).toBeUndefined();
+    // Lot 1 404 never carries Retry-After or x-should-retry, even with a delay.
+    expect(mapGatewayError('anthropic-messages', 'unknown-model', 7, 'no-such-model').headers).toBeUndefined();
+    expect(mapGatewayError('openai-chat-completions', 'unknown-model', 7, 'no-such-model').headers).toBeUndefined();
+    // BR-REL-Q7 503 never carries Retry-After (even with a delay) and always
+    // carries x-should-retry:false instead of overloaded/rate-limit wording.
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      expect(mapGatewayError(wire, 'no-route', 7, 'no-such-model').headers)
+        .toEqual({ 'x-should-retry': 'false' });
+    }
   });
 
   it('freezes the two provider-shaped error envelope key-sets (Anthropic vs OpenAI)', () => {
@@ -349,6 +383,38 @@ describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
       'message',
       'type',
     ]);
+  });
+
+  it('freezes the generic fallback 503 bodies (unclassified errors)', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, new Error('boom'));
+      expect(mapped.status).toBe(503);
+      expect(mapped.headers).toBeUndefined();
+      expect(mapped.body).toEqual(wire === 'anthropic-messages'
+        ? { type: 'error', error: { type: 'overloaded_error', message: 'service temporarily unavailable' } }
+        : { error: { message: 'service temporarily unavailable',
+          type: 'rate_limit_error', code: 'overloaded' } });
+    }
+  });
+
+  it('freezes the enrollment-action 503 bodies and route-action headers', () => {
+    const cases = [
+      { diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' },
+        action: 'reauthenticate-cloud-code', message: 'cloud-code reauthenticate required' },
+      { diagnostic: { code: 'reenrollment-required', transportProviderId: 'codex' },
+        action: 're-enroll-codex', message: 'codex re-enroll required' },
+    ];
+    for (const { diagnostic, action, message } of cases) {
+      const error = { name: 'RoutePlanError', code: 'no-route', diagnostic };
+      const a = toProviderShapedError('anthropic-messages', error, 'known-model');
+      expect(a.status).toBe(503);
+      expect(a.headers).toEqual({ 'X-Sentropic-Route-Action': action });
+      expect(a.body).toEqual({ type: 'error', error: { type: 'authentication_error', message } });
+      const o = toProviderShapedError('openai-chat-completions', error, 'known-model');
+      expect(o.status).toBe(503);
+      expect(o.headers).toEqual({ 'X-Sentropic-Route-Action': action });
+      expect(o.body).toEqual({ error: { message, type: 'authentication_error', code: 'provider_auth_required' } });
+    }
   });
 });
 

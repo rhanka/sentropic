@@ -87,7 +87,8 @@ export interface ResolvedTarget {
 /**
  * Resolve provider/model + transport for a model string. v0 personal-passthrough
  * uses a minimal static map; Lot 3+ replaces it with the catalog/pool snapshot.
- * Unknown models throw a `bad-request` GatewayError (mapped to provider 400).
+ * Unknown models throw an `unknown-model` GatewayError (Lot 1 404); the router
+ * supplies the validated requested model for the wire message.
  */
 export type TargetResolver = (model: string) => ResolvedTarget | undefined;
 
@@ -154,7 +155,10 @@ const prepare = async (
   // 2. resolve provider/model from the body `model`.
   const target = deps.resolveTarget(request.model);
   if (!target) {
-    throw new GatewayError('bad-request', `unsupported model: ${request.model}`);
+    // Lot 1 404: fixed internal detail, zero acquisition/dispatch. The legacy
+    // personal settlement type requires a selected target, so no settlement is
+    // attempted here — the router maps this to the model-only 404.
+    throw new GatewayError('unknown-model', 'unknown model');
   }
 
   // 4. pool.select -> coordinator.acquire over the PERSONAL pool.
@@ -369,6 +373,20 @@ export interface GatewayStreamResult {
  * it to a real HTTP error, NEVER an empty 200 stream. A mid-stream failure
  * (after >=1 byte) settles failure WITHOUT throwing (no retry post-stream, §2).
  */
+/**
+ * Classify a stream-open (pre-first-byte) transport error like
+ * `classifyRouteError`: 404 / not_found / model_not_found / unsupported_model
+ * is an unknown model, never pool exhaustion. Other errors stay pooled 503.
+ */
+const isUnknownModelStreamOpenError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const record = error as { status?: unknown; statusCode?: unknown; code?: unknown };
+  if (record.status === 404 || record.statusCode === 404) return true;
+  const code = typeof record.code === 'string' ? record.code.toLowerCase() : '';
+  return code.includes('unsupported_model') || code.includes('model_not_found')
+    || code.includes('not_found');
+};
+
 export const runStreamFlow = async (
   deps: GatewayFlowDeps,
   request: GatewayFlowRequest,
@@ -410,7 +428,17 @@ export const runStreamFlow = async (
           // Re-acquisition failed — surface as provider error.
         }
       }
-      await settle(deps, request, prepared, 'failed', undefined);
+      const unknownModel = isUnknownModelStreamOpenError(error);
+      try {
+        await settle(deps, request, prepared, 'failed', undefined);
+      } catch {
+        // A settle failure must never mask the classification — the generic
+        // mapper would turn the settle error into overloaded_error. One
+        // attempt, swallowed, never exposed; the terminal refusal wins.
+      }
+      if (unknownModel) {
+        throw new GatewayError('unknown-model', 'unknown model', undefined, prepared.target);
+      }
       throw new GatewayError(
         'pooled-account-unavailable', 'stream failed before first byte', undefined, prepared.target,
       );
