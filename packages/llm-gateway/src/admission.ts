@@ -5,13 +5,14 @@
  * no account is prepared and no byte is emitted before `admit` resolves.
  */
 import {
-  RoutePlanError, RouteQuoteError, type GenerateRequest, type QuotedRouteCandidate, type RoutePlanner,
+  RoutePlanError, type GenerateRequest, type QuotedRouteCandidate, type RoutePlanner,
   type RouteQuote, type RouteQuoteInput, type RouteUsageCeiling,
 } from '@sentropic/llm-mesh';
 import type { CanonicalIngressResult } from './canonical-ingress.js';
 import { estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayWire } from './ports/dispatch.js';
 import type { CostContext } from './ports/cost-context.js';
+import { isRouteQuoteError } from './internal/mesh-routing-error.js';
 import {
   BudgetConfigurationError, MAX_BUDGET_RETRY_AFTER_SECONDS,
   type GatewayBudgetOptions, type RouteBudgetOverrun,
@@ -136,7 +137,8 @@ export const admitRoute = async (input: {
       ceiling, now: new Date(clock()),
     });
   } catch (error) {
-    if (error instanceof RouteQuoteError && error.code === 'invalid-ceiling') {
+    // Structural recognition covers duplicated mesh installs like instanceof.
+    if (isRouteQuoteError(error, 'invalid-ceiling')) {
       throw new GatewayError('bad-request', 'usage ceiling refused by the route quote');
     }
     throw error;

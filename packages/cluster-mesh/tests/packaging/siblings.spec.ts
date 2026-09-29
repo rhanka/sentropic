@@ -65,7 +65,7 @@ describe('train sibling resolver', () => {
     expect(readFileSync(archive)).toEqual(bytes);
     expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-mesh', '0.22.2').out.trim()).toBe(`file:${archive}`);
     expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-mesh', '0.21.2').out.trim()).toBe('0.21.2');
-    expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-gateway', '0.19.0').out.trim()).toBe('0.19.0');
+    expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-gateway', '0.19.1').out.trim()).toBe('0.19.1');
   });
 
   it('should hand back a cluster-mesh receipt as the candidate and refuse another version', () => {
@@ -76,7 +76,7 @@ describe('train sibling resolver', () => {
     expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
     expect(run('siblings.mjs', 'candidate', out, '@sentropic/cluster-mesh', '0.13.0').out.trim())
       .toBe(resolve(out, 'sentropic-cluster-mesh-0.13.0.tgz'));
-    expect(run('siblings.mjs', 'candidate', out, '@sentropic/llm-gateway', '0.19.0').out.trim()).toBe('');
+    expect(run('siblings.mjs', 'candidate', out, '@sentropic/llm-gateway', '0.19.1').out.trim()).toBe('');
     const other = run('siblings.mjs', 'candidate', out, '@sentropic/cluster-mesh', '0.13.1');
     expect(other.status).toBe(1);
     expect(other.out).toContain('receipt carries @sentropic/cluster-mesh@0.13.0, the candidate is 0.13.1');
@@ -115,7 +115,7 @@ describe('train sibling resolver', () => {
     expect(run('siblings.mjs', 'verify', unlisted.receiptsPath, unlisted.out).out).toContain('unlisted archive in sibling directory: llm-mesh/extra.tgz');
     rmSync(dir, { recursive: true, force: true });
     const collide = receipts({}, [[MESH, 'a/sentropic-llm-mesh-0.22.2.tgz'],
-      [{ name: '@sentropic/llm-gateway', version: '0.19.0' }, 'b/sentropic-llm-mesh-0.22.2.tgz']]);
+      [{ name: '@sentropic/llm-gateway', version: '0.19.1' }, 'b/sentropic-llm-mesh-0.22.2.tgz']]);
     expect(run('siblings.mjs', 'verify', collide.receiptsPath, collide.out).out).toContain('archive basename sentropic-llm-mesh-0.22.2.tgz collides');
     const noHead = runWith({ CLUSTER_MESH_HEAD_SHA: '' }, 'siblings.mjs', 'verify', collide.receiptsPath, collide.out);
     expect(noHead).toMatchObject({ status: 1 });

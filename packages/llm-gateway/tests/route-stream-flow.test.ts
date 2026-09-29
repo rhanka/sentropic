@@ -1,5 +1,6 @@
-import type { PreparedRouteAttempt, RoutePlanner, StreamEvent } from '@sentropic/llm-mesh';
+import { RoutePlanError, type PreparedRouteAttempt, type RoutePlanner, type StreamEvent } from '@sentropic/llm-mesh';
 import { describe, expect, it, vi } from 'vitest';
+import { createGatewayRouter, toProviderShapedError } from '../src/index.js';
 import { runRouteStreamFlow } from '../src/route-stream-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
@@ -136,6 +137,50 @@ describe('route stream flow', () => {
     await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request)).rejects.toThrow();
     expect(settleRoute.mock.calls[0]![0].usage).toEqual({ inputTokens: 7, outputTokens: 0, estimated: false });
   });
+  it('maps a stream-opening 404 refusal to unknown-model without a second candidate', async () => {
+    const hooks: string[] = []; const opened: string[] = []; const settleRoute = vi.fn();
+    const refused = (tag: string, target: string[]) => attempt(async function* (): AsyncGenerator<StreamEvent> {
+      opened.push(tag);
+      throw { status: 404 };
+    }, target);
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([refused('first', hooks), refused('second', [])]),
+      metering: { settleRoute } }, request)).rejects.toMatchObject({ kind: 'unknown-model' });
+    expect(opened).toEqual(['first']);
+    expect(hooks).toEqual(['outcome:unsupported-model']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+    expect(settleRoute.mock.calls[0]![0]).toMatchObject({
+      outcome: 'failed', attempts: [{ outcome: 'unsupported-model' }],
+    });
+  });
+  it('maps a first-event 404 error to unknown-model before commitment', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn();
+    const source = attempt(async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'error', data: { providerId: 'openai', message: 'model not found',
+        code: 'model_not_found', retryable: false } };
+    }, hooks);
+    await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([source, source]),
+      metering: { settleRoute } }, request)).rejects.toMatchObject({ kind: 'unknown-model' });
+    expect(hooks).toEqual(['outcome:unsupported-model']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+  });
+  it('keeps a post-commit 404 as a sanitized stream error without rewriting the response', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn();
+    const source = attempt(async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'content_delta', data: { delta: 'hello' } };
+      yield { type: 'error', data: { providerId: 'openai', message: 'model not found',
+        code: 'model_not_found', retryable: false } };
+    }, hooks);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]),
+      metering: { settleRoute } }, request);
+    const wire = await collect(result.stream);
+    // Already committed: the 404 arrives as a sanitized mid-stream error — no
+    // HTTP-status rewrite, no replay, no success terminator.
+    expect(wire).toContain('stream failed after commitment');
+    expect(wire).not.toContain('[DONE]');
+    expect(wire).not.toContain('Unknown model');
+    expect(hooks).toEqual(['committed', 'outcome:unsupported-model']);
+    expect(settleRoute).toHaveBeenCalledTimes(1);
+  });
   it('releases a stream returned before first consumer iteration exactly once', async () => {
     const hooks: string[] = [];
     const closed = vi.fn(); const settleRoute = vi.fn();
@@ -205,7 +250,7 @@ describe('route stream flow', () => {
   it('settles empty plans and closes empty streams before commitment', async () => {
     const settleRoute = vi.fn();
     await expect(runRouteStreamFlow({ config, routePlanner: plannerFor([]), metering: { settleRoute } }, request))
-      .rejects.toMatchObject({ kind: 'no-eligible-account' });
+      .rejects.toMatchObject({ kind: 'no-route' });
     expect(settleRoute).toHaveBeenCalledTimes(1);
     const hooks: string[] = [];
     const source = attempt(async function* () {}, hooks);
@@ -476,4 +521,154 @@ describe('route stream flow with budget admission', () => {
     expect(calls.prepare).toEqual([]);
     expect(recorder.settlements).toEqual([]);
   });
+  it('preserves the typed refusal when the admitted-plan ledger fails', async () => {
+    const typed = new RoutePlanError('Unknown requested model', 'unknown-model');
+    const { planner } = quotingPlanner([], { plan: () => { throw typed; } });
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    const error = await runRouteStreamFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect(error).toBe(typed);
+    expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    expect(toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra').status).toBe(404);
+  });
+  it('preserves admitted terminal 404 when recordOutcome rejects', async () => {
+    const source: PreparedRouteAttempt = {
+      attemptRef: 'attempt-404',
+      async generate() { throw new Error('unused'); },
+      async stream(): Promise<AsyncIterable<StreamEvent>> { throw { status: 404 }; },
+      async recordOutcome() { throw Object.assign(Error('hook down'), { status: 500 }); },
+      async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+    };
+    const { planner } = quotingPlanner([source]);
+    const recorder = recordingBudget();
+    const error = await runRouteStreamFlow(deps(planner, recorder), budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect((error as { kind?: string }).kind).toBe('unknown-model');
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+    expect(recorder.settlements).toHaveLength(1);
+    expect(JSON.stringify(toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra').body))
+      .not.toContain('overloaded');
+  });
+  it('preserves admitted terminal 404 when the ledger fails after upstream 404', async () => {
+    const source = streamAttempt(async function* (): AsyncGenerator<StreamEvent> { throw { status: 404 }; });
+    const { planner } = quotingPlanner([source]);
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    const error = await runRouteStreamFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect((error as { kind?: string }).kind).toBe('unknown-model');
+    expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.status).toBe(404);
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
+  });
+  it('preserves admitted Q7 no-route when the empty-plan ledger fails', async () => {
+    const { planner } = quotingPlanner([]);
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    const error = await runRouteStreamFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect((error as { kind?: string }).kind).toBe('no-route');
+    expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.status).toBe(503);
+    expect(shaped.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
+  });
+  it('preserves the admitted enrollment refusal when the ledger fails', async () => {
+    const enrollment = { name: 'RoutePlanError', code: 'no-route',
+      diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' } };
+    const { planner } = quotingPlanner([], { plan: () => { throw enrollment; } });
+    const recorder = recordingBudget();
+    const failingSink = { async settleRoute() { recorder.events.push('settle'); throw Error('ledger down'); } };
+    const error = await runRouteStreamFlow({ ...deps(planner, recorder), metering: failingSink }, budgetRequest).then(
+      () => { throw new Error('expected rejection'); }, (error: unknown) => error);
+    expect(error).toBe(enrollment);
+    expect(recorder.events).toEqual(['admit', 'release:hold-1', 'settle']);
+    const shaped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(shaped.headers).toEqual({ 'X-Sentropic-Route-Action': 'reauthenticate-cloud-code' });
+    expect(JSON.stringify(shaped.body)).not.toContain('overloaded');
+  });
+});
+
+describe('route stream lifecycle through the router', () => {
+  const streamRouterApp = (attempts: PreparedRouteAttempt[], settlements: RouteRequestSettlement[]) =>
+    createGatewayRouter({
+      config, routePlanner: plannerFor(attempts),
+      routeMetering: { settleRoute(value) { settlements.push(value); } },
+      requestId: () => 'req-test',
+    });
+  const postStream = (app: ReturnType<typeof createGatewayRouter>, path: string) => app.request(path, {
+    method: 'POST',
+    headers: { authorization: 'Bearer [REDACTED]', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: request.model, stream: true, messages: [{ role: 'user', content: 'hello' }] }),
+  });
+  const frozen404 = (path: string) => path === '/v1/messages'
+    ? { type: 'error', error: { type: 'not_found_error', message: `Unknown model: "${request.model}"` } }
+    : { error: { message: `Unknown model: "${request.model}"`,
+      type: 'invalid_request_error', code: 'model_not_found' } };
+
+  it.each(['/v1/messages', '/v1/chat/completions'])(
+    'returns JSON 404 before commitment with no SSE bytes (%s)', async (path) => {
+      const opened: string[] = []; const firstHooks: string[] = []; const secondHooks: string[] = [];
+      const closed = vi.fn(); const settlements: RouteRequestSettlement[] = [];
+      const first = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        try {
+          opened.push('first');
+          yield { type: 'error', data: { providerId: 'openai', message: 'model not found',
+            code: 'model_not_found', retryable: false } };
+        } finally { closed(); }
+      }, firstHooks);
+      const second = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        opened.push('second');
+        yield { type: 'content_delta', data: { delta: 'wrong' } };
+      }, secondHooks);
+      const res = await postStream(streamRouterApp([first, second], settlements), path);
+      expect(res.status).toBe(404);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      const text = await res.text();
+      expect(text.startsWith('event:')).toBe(false);
+      expect(text.startsWith('data:')).toBe(false);
+      expect(JSON.parse(text)).toEqual(frozen404(path));
+      expect(opened).toEqual(['first']);
+      expect(firstHooks).toEqual(['outcome:unsupported-model']);
+      expect(secondHooks).toEqual([]);
+      expect(closed).toHaveBeenCalledTimes(1);
+      expect(settlements).toHaveLength(1);
+      expect(settlements[0]).toMatchObject({ outcome: 'failed', attempts: [{ outcome: 'unsupported-model' }] });
+    });
+
+  it.each(['/v1/messages', '/v1/chat/completions'])(
+    'keeps committed status with a sanitized terminal error (%s)', async (path) => {
+      const opened: string[] = []; const firstHooks: string[] = []; const secondHooks: string[] = [];
+      const closed = vi.fn(); const settlements: RouteRequestSettlement[] = [];
+      const first = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        try {
+          opened.push('first');
+          yield { type: 'content_delta', data: { delta: 'hello' } };
+          yield { type: 'error', data: { providerId: 'openai', message: 'model not found SECRET',
+            code: 'model_not_found', retryable: false } };
+        } finally { closed(); }
+      }, firstHooks);
+      const second = attempt(async function* (): AsyncGenerator<StreamEvent> {
+        opened.push('second');
+        yield { type: 'content_delta', data: { delta: 'wrong' } };
+      }, secondHooks);
+      const res = await postStream(streamRouterApp([first, second], settlements), path);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/event-stream');
+      const text = await res.text();
+      expect(text).toContain('stream failed after commitment');
+      expect(text).not.toContain('Unknown model');
+      expect(text).not.toContain('SECRET');
+      if (path === '/v1/chat/completions') expect(text).not.toContain('[DONE]');
+      else expect(text).not.toContain('message_stop');
+      expect(opened).toEqual(['first']);
+      expect(firstHooks).toEqual(['committed', 'outcome:unsupported-model']);
+      expect(secondHooks).toEqual([]);
+      expect(closed).toHaveBeenCalledTimes(1);
+      expect(settlements).toHaveLength(1);
+      expect(settlements[0]?.outcome).toBe('failed');
+    });
 });

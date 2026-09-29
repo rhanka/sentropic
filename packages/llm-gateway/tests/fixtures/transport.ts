@@ -41,6 +41,8 @@ export interface FixtureTransportOptions {
   readonly failAfterFrames?: number;
   /** Throw from `sendStream` BEFORE yielding any frame (pre-first-byte failure, #6). */
   readonly failBeforeFirstFrame?: boolean;
+  /** Error to throw at SSE open instead of the generic pre-first-byte error (F2 404 classification). */
+  readonly streamOpenError?: unknown;
 }
 
 export class FixtureTransport implements ProviderTransport {
@@ -73,6 +75,9 @@ export class FixtureTransport implements ProviderTransport {
     this.seenBodies.push(request.body);
     const options = this.options;
     const frames = (async function* (): AsyncGenerator<GatewayDispatchStreamEvent> {
+      if (options.streamOpenError !== undefined) {
+        throw options.streamOpenError;
+      }
       if (options.failBeforeFirstFrame) {
         // Pre-first-byte provider failure (#6): no frame ever streams.
         throw new Error('fixture: simulated pre-first-byte provider failure');

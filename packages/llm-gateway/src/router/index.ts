@@ -249,7 +249,7 @@ export const createGatewayRouter = (
     try {
       authContext = authContextFor(c.req.raw, id);
     } catch (error) {
-      return sendError(c, toProviderShapedError(wire, error), id);
+      return sendError(c, toProviderShapedError(wire, error, model), id);
     }
     const flowRequest = {
       wire, headers, body, model, stream, authContext,
@@ -266,7 +266,7 @@ export const createGatewayRouter = (
         c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
-        return sendError(c, toProviderShapedError(wire, error), id, servedTargetForError(error));
+        return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
       }
     }
 
@@ -286,7 +286,7 @@ export const createGatewayRouter = (
         : await runStreamFlow(flowDeps!, flowRequest);
     } catch (error) {
       c.req.raw.signal.removeEventListener('abort', abort);
-      return sendError(c, toProviderShapedError(wire, error), id, servedTargetForError(error));
+      return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
     }
 
     forwardProviderHeaders(c, streamResult.headers); // #4 allowlisted provider headers
