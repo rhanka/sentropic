@@ -12,17 +12,17 @@ const run = (...args: string[]) => {
   const result = spawnSync(process.execPath, [join(HERE, 'check-lock-integrity.mjs'), ...args], { encoding: 'utf8' });
   return { status: result.status, out: result.stdout + result.stderr };
 };
-const MESH_URL = 'https://registry.npmjs.org/@sentropic/llm-mesh/-/llm-mesh-0.22.1.tgz';
+const MESH_URL = 'https://registry.npmjs.org/@sentropic/llm-mesh/-/llm-mesh-0.22.2.tgz';
 const INTEGRITY = `sha512-${createHash('sha512').update('mesh bytes').digest('base64')}`;
 
 let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'cluster-lock-'));
   writeFileSync(join(dir, 'index.json'), JSON.stringify([
-    { name: '@sentropic/llm-mesh', version: '0.22.1', file: '/x/mesh.tgz', integrity: INTEGRITY },
+    { name: '@sentropic/llm-mesh', version: '0.22.2', file: '/x/mesh.tgz', integrity: INTEGRITY },
     { name: '@sentropic/cluster-mesh', version: '0.13.0', file: '/x/cluster.tgz', integrity: 'sha512-candidate' },
   ]));
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { '@sentropic/llm-mesh': '0.22.1' } }));
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { '@sentropic/llm-mesh': '0.22.2' } }));
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -37,20 +37,20 @@ function lock(file: string, mesh: Record<string, string>): string {
 
 describe('train lock integrity', () => {
   it('should assert the committed lock version, resolved URL and integrity against the sibling bytes', () => {
-    expect(run('siblings', lock('ok.json', { version: '0.22.1', resolved: MESH_URL, integrity: INTEGRITY }), dir).status).toBe(0);
-    const stale = run('siblings', lock('stale.json', { version: '0.22.1', resolved: MESH_URL, integrity: 'sha512-stale' }), dir);
+    expect(run('siblings', lock('ok.json', { version: '0.22.2', resolved: MESH_URL, integrity: INTEGRITY }), dir).status).toBe(0);
+    const stale = run('siblings', lock('stale.json', { version: '0.22.2', resolved: MESH_URL, integrity: 'sha512-stale' }), dir);
     expect(stale.status).toBe(1);
-    expect(stale.out).toContain('::error title=Train lock integrity::@sentropic/llm-mesh@0.22.1: lock integrity sha512-stale');
-    const url = run('siblings', lock('url.json', { version: '0.22.1', resolved: 'file:/x/mesh.tgz', integrity: INTEGRITY }), dir);
+    expect(stale.out).toContain('::error title=Train lock integrity::@sentropic/llm-mesh@0.22.2: lock integrity sha512-stale');
+    const url = run('siblings', lock('url.json', { version: '0.22.2', resolved: 'file:/x/mesh.tgz', integrity: INTEGRITY }), dir);
     expect(url.out).toContain('lock resolved file:/x/mesh.tgz is not the registry URL');
   });
 
   it('should refresh sibling entries to the registry URL and sibling integrity, never the candidate', () => {
-    const working = lock('working.json', { version: '0.22.1', resolved: 'file:x/mesh.tgz', integrity: 'sha512-provisional' });
+    const working = lock('working.json', { version: '0.22.2', resolved: 'file:x/mesh.tgz', integrity: 'sha512-provisional' });
     const committed = join(dir, 'committed.json');
     expect(run('refresh', working, committed, join(dir, 'package.json'), dir).status).toBe(0);
     const packages = JSON.parse(readFileSync(committed, 'utf8')).packages;
-    expect(packages['node_modules/@sentropic/llm-mesh']).toEqual({ version: '0.22.1', resolved: MESH_URL, integrity: INTEGRITY });
+    expect(packages['node_modules/@sentropic/llm-mesh']).toEqual({ version: '0.22.2', resolved: MESH_URL, integrity: INTEGRITY });
     expect(packages['node_modules/@sentropic/cluster-mesh']).toEqual({ version: '0.13.0' });
   });
 
@@ -59,7 +59,7 @@ describe('train lock integrity', () => {
     const committed = join(dir, 'committed.json');
     const result = run('refresh', working, committed, join(dir, 'package.json'), dir);
     expect(result.status).toBe(1);
-    expect(result.out).toContain('@sentropic/llm-mesh@0.22.1 is a sibling but the working lock pins 0.21.2');
+    expect(result.out).toContain('@sentropic/llm-mesh@0.22.2 is a sibling but the working lock pins 0.21.2');
     expect(existsSync(committed)).toBe(false);
   });
 });

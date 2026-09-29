@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.22.2
+
+- Add the exclusive `claude-opus-5-5` launch alias: every request routes to
+  `openai / gpt-6-astra / codex` with no effort override and no Anthropic,
+  Gemini or Muse candidate. Owner-scoped target overrides and council
+  equivalents cannot replace it; per-request explicit restrictions still
+  apply and may yield `no-route`.
+- A stored non-Astra affinity follows an explicit `/model` switch to the
+  alias: plan time treats it as absent and serves fresh Astra, a success
+  rebinds it through the audited path, a failure or cancellation leaves it
+  untouched. A compatible Astra affinity violating a per-request explicit
+  restriction still yields `no-route`.
+- The alias stays hidden from model inventory; `gpt-6-astra` remains listed
+  when a ready account advertises it.
+
 ## 0.22.1
 
 - Add GPT-6 Sol and Luna profiles, provider registrations and Codex routes;
