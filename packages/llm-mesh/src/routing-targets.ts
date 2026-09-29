@@ -272,14 +272,39 @@ const launchAliasTargetsFor = (
   ];
 };
 
+/**
+ * Exclusive launch aliases: the requested id always serves its single target.
+ * `claude-opus-5-5` routes every request to `openai / gpt-6-astra / codex`
+ * with no effort override and no Anthropic, Gemini or Muse candidate.
+ * Exclusive aliases stay outside STANDARD_ROUTE_DEFINITIONS (whose schema
+ * requires a Cloud candidate) and merge into every per-position rebuild, so
+ * no musePosition variant can drop them. Selection guards in
+ * route-selection keep overrides and council equivalents from replacing the
+ * single target; the planner migrates incompatible sticky affinity to it.
+ */
+export const EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS = defineLaunchAliases([
+  {
+    alias: 'claude-opus-5-5',
+    providerId: 'openai',
+    transportProviderId: 'codex',
+    model: 'gpt-6-astra',
+  },
+]);
+
 const buildLaunchAliasRouteMappings = (
   musePosition: MusePosition = DEFAULT_MUSE_POSITION,
-): Readonly<Record<string, readonly TargetMapping[]>> => Object.fromEntries(
-  STANDARD_ROUTE_DEFINITIONS.map((definition) => [
-    definition.requestedId,
-    launchAliasTargetsFor(definition, musePosition),
-  ]),
-);
+): Readonly<Record<string, readonly TargetMapping[]>> => ({
+  ...Object.fromEntries(
+    STANDARD_ROUTE_DEFINITIONS.map((definition) => [
+      definition.requestedId,
+      launchAliasTargetsFor(definition, musePosition),
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS)
+      .map(([alias, target]) => [alias, [target]]),
+  ),
+});
 
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>

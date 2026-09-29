@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { AccountTransportAcquireError } from '../../src/account-transports.js';
 import type { EnrollmentProvider, PreparedCredential } from '../../src/enrollment/contracts.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
+import { InMemoryRoutePlanner } from '../../src/route-planner.js';
+import { EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS } from '../../src/routing-targets.js';
 import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
@@ -776,5 +778,210 @@ describe('LocalAccountTransportService', () => {
     await expect(pendingEnrollment).rejects.toThrow("Account 'acct_index_race' has been removed");
     await expect(store.getSecret(indexKey))
       .resolves.toBe(JSON.stringify(['acct_index_race']));
+  });
+
+  it('serves the exclusive alias through Astra without forcing effort', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'astra-account', targetProviderId: 'openai', transportProviderId: 'codex',
+      accessToken: 'astra-token', status: 'active', modelIds: ['gpt-6-astra'],
+      enrollmentCompletedAt: '2026-08-08T00:00:00Z',
+      ownerScopeRef: 'tenant-1:user-1',
+    });
+    const seen: unknown[] = [];
+    const runtimeRequest = async (request: unknown) => {
+      seen.push(request);
+      return {
+        id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-6-astra' as const,
+        message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+        finishReason: 'stop' as const, providerMetadata: {},
+      };
+    };
+    const generate = vi.fn(runtimeRequest);
+    const stream = vi.fn(async (request: unknown) => {
+      seen.push(request);
+      return { async *[Symbol.asyncIterator]() {} };
+    });
+    const directory = service.createRouteDirectory({ generate, stream });
+    const subject = { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' };
+
+    // Served allowlists carry Astra, never the alias.
+    const accounts = await directory.listEligible(subject);
+    expect(accounts.map((account) => account.supportedModelIds)).toEqual([['gpt-6-astra']]);
+
+    const attempt = await directory.prepareAttempt({
+      subject,
+      accountRef: accounts[0]!.accountRef,
+      target: {
+        requestedModel: 'claude-opus-5-5', providerId: 'openai',
+        modelId: 'gpt-6-astra', transportProviderId: 'codex', reason: 'alias',
+      },
+      requestId: 'request-1', attemptIndex: 0,
+    });
+    await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
+    await attempt.stream({ messages: [{ role: 'user', content: 'hello' }] });
+    // Alias retention in route diagnostics is pinned at plan level (M6).
+    expect(seen).toHaveLength(2);
+    for (const request of seen) {
+      expect(request).toMatchObject({ providerId: 'openai', modelId: 'gpt-6-astra' });
+      // The alias target carries no effort: no reasoning is forced.
+      expect(request).not.toHaveProperty('reasoning');
+    }
+  });
+
+  it('passes a non-default request effort through the exclusive alias target', async () => {
+    expect(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS['claude-opus-5-5'])
+      .toEqual({ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra' });
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'astra-account', targetProviderId: 'openai', transportProviderId: 'codex',
+      accessToken: 'astra-token', status: 'active', modelIds: ['gpt-6-astra'],
+      enrollmentCompletedAt: '2026-08-08T00:00:00Z',
+      ownerScopeRef: 'tenant-1:user-1',
+    });
+    const generate = vi.fn(async () => ({
+      id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-6-astra' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+      finishReason: 'stop' as const, providerMetadata: {},
+    }));
+    const directory = service.createRouteDirectory({
+      generate,
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' };
+    const accounts = await directory.listEligible(subject);
+    const attempt = await directory.prepareAttempt({
+      subject,
+      accountRef: accounts[0]!.accountRef,
+      target: {
+        requestedModel: 'claude-opus-5-5', providerId: 'openai',
+        modelId: 'gpt-6-astra', transportProviderId: 'codex', reason: 'alias',
+      },
+      requestId: 'request-1', attemptIndex: 0,
+    });
+
+    await attempt.generate({
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'xhigh' },
+    });
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      providerId: 'openai', modelId: 'gpt-6-astra', reasoning: { effort: 'xhigh' },
+    }));
+  });
+
+  it.each([false, true])(
+    'drops a stored effort override when switching to the exclusive alias (quoted: %s)',
+    async (quoted) => {
+      const service = new LocalAccountTransportService(
+        new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+      );
+      service.registerAccount({
+        accountId: 'astra-account', targetProviderId: 'openai', transportProviderId: 'codex',
+        accessToken: 'astra-token', status: 'active', modelIds: ['gpt-6-astra'],
+        enrollmentCompletedAt: '2026-08-08T00:00:00Z',
+        ownerScopeRef: 'tenant-1:user-1',
+      });
+      const generate = vi.fn(async () => ({
+        id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-6-astra' as const,
+        message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+        finishReason: 'stop' as const, providerMetadata: {},
+      }));
+      const directory = service.createRouteDirectory({
+        generate,
+        async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+      });
+      const planner = new InMemoryRoutePlanner({ directory });
+      const subject = { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' };
+      const affinityKey = quoted ? 'effort-drop-quoted' : 'effort-drop';
+
+      // Bind the affinity through the effort-bearing Astra alias.
+      const first = await planner.plan(subject, {
+        requestedModel: 'claude-opus-5-high', affinityKey,
+      });
+      await (await planner.prepareAttempt(
+        subject, first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+      )).complete();
+      expect(planner.describeAffinity(subject, affinityKey)?.target).toMatchObject({
+        modelId: 'gpt-6-astra', effort: 'medium',
+      });
+
+      const quote = quoted ? planner.quote({
+        requestedModel: 'claude-opus-5-5',
+        ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
+        now: new Date(),
+      }) : undefined;
+      const plan = await planner.plan(subject, {
+        requestedModel: 'claude-opus-5-5', affinityKey, ...(quote ? { quote } : {}),
+      });
+      const attempt = await planner.prepareAttempt(
+        subject, plan.planRef, plan.candidateRefs[0]!, 'req-2', 0,
+      );
+
+      // No stored effort: the runtime forces no reasoning of its own ...
+      await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
+      expect(generate).toHaveBeenCalledWith(
+        expect.not.objectContaining({ reasoning: expect.anything() }),
+      );
+      // ... and the request's own effort passes through untouched.
+      await attempt.generate({
+        messages: [{ role: 'user', content: 'hello' }],
+        reasoning: { effort: 'xhigh' },
+      });
+      expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+        providerId: 'openai', modelId: 'gpt-6-astra', reasoning: { effort: 'xhigh' },
+      }));
+    },
+  );
+
+  it('never serves anthropic, gemini or muse for the exclusive alias', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    for (const account of [
+      {
+        accountId: 'claude-account', targetProviderId: 'anthropic',
+        transportProviderId: 'claude-code', modelIds: ['claude-opus-5'],
+      },
+      {
+        accountId: 'cloud-account', targetProviderId: 'gemini',
+        transportProviderId: 'cloud-code', modelIds: ['gemini-3.8-flash'],
+      },
+      {
+        accountId: 'muse-account', targetProviderId: 'muse',
+        transportProviderId: 'muse', modelIds: ['muse-spark-1.3-contributor'],
+      },
+      {
+        accountId: 'astra-account', targetProviderId: 'openai',
+        transportProviderId: 'codex', modelIds: ['gpt-6-astra'],
+      },
+    ]) {
+      service.registerAccount({
+        ...account,
+        accessToken: `${account.accountId}-token`, status: 'active',
+        enrollmentCompletedAt: '2026-08-08T00:00:00Z',
+        ownerScopeRef: 'tenant-1:user-1',
+      });
+    }
+    const planner = new InMemoryRoutePlanner({
+      directory: service.createRouteDirectory({
+        async generate() { throw new Error('unused'); },
+        async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+      }),
+    });
+    const plan = await planner.plan(
+      { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' },
+      { requestedModel: 'claude-opus-5-5' },
+    );
+
+    expect(plan.diagnostics.length).toBeGreaterThan(0);
+    for (const diagnostic of plan.diagnostics) {
+      expect(diagnostic.actualProviderId).toBe('openai');
+      expect(diagnostic.actualModelId).toBe('gpt-6-astra');
+      expect(diagnostic.actualTransportProviderId).toBe('codex');
+    }
   });
 });

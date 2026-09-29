@@ -131,6 +131,545 @@ describe('opaque route planner', () => {
     }));
   });
 
+  it('plans fresh Astra for the exclusive alias despite a stale incompatible affinity', async () => {
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5', affinityKey: 'switch',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'switch');
+    expect(before?.target.providerId).toBe('anthropic');
+
+    const fresh = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'switch',
+    });
+    expect(fresh.diagnostics).toHaveLength(1);
+    expect(fresh.diagnostics[0]).toMatchObject({
+      requestedModel: 'claude-opus-5-5',
+      actualProviderId: 'openai', actualModelId: 'gpt-6-astra',
+      actualTransportProviderId: 'codex', reason: 'alias',
+      cacheContinuityRisk: true,
+    });
+    // Plan time never mutates stored state.
+    expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
+
+    // The quoted path behaves the same.
+    const quote = planner.quote({
+      requestedModel: 'claude-opus-5-5',
+      ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
+      now: new Date(),
+    });
+    const pinned = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'switch', quote,
+    });
+    expect(pinned.diagnostics[0]).toMatchObject({
+      actualProviderId: 'openai', actualModelId: 'gpt-6-astra', reason: 'alias',
+    });
+    expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
+  });
+
+  it('keeps a compatible Astra affinity closed under a violating explicit restriction', async () => {
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'codex-a', diagnosticAccountRef: 'acct_a',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-b', diagnosticAccountRef: 'acct_b',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'pinned',
+      explicit: { diagnosticAccountRef: 'acct_a' },
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'pinned');
+
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'pinned',
+      explicit: { diagnosticAccountRef: 'acct_b' },
+    })).rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'pinned')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
+  });
+
+  it('fails closed when a compatible Astra affinity loses its advertised model', async () => {
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'astra-eligibility');
+
+    // The account stays ready but no longer advertises Astra.
+    directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
+
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility',
+    })).rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'astra-eligibility')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
+  });
+
+  it('fails closed with a quote when a compatible Astra affinity loses its advertised model', async () => {
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility-quoted',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'astra-eligibility-quoted');
+    const quote = planner.quote({
+      requestedModel: 'claude-opus-5-5',
+      ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
+      now: new Date(),
+    });
+
+    // The account stays ready but no longer advertises Astra.
+    directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
+
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility-quoted', quote,
+    })).rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'astra-eligibility-quoted')).toEqual(before);
+    expect(directory.prepared).toHaveLength(1);
+  });
+
+  it('rebinds a stale affinity to Astra on exclusive alias success', async () => {
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5', affinityKey: 'migrate',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const fresh = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
+    )).complete();
+
+    const migrated = planner.describeAffinity(routingSubject(), 'migrate');
+    expect(migrated).toMatchObject({
+      revision: 2, diagnosticAccountRef: 'codex-redacted', promoted: false,
+    });
+    expect(migrated?.target).toMatchObject({
+      requestedModel: 'claude-opus-5-5',
+      providerId: 'openai', modelId: 'gpt-6-astra', transportProviderId: 'codex',
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      operation: 'rebind', cacheContinuityRisk: true,
+    }));
+    const sticky = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
+    });
+    expect(sticky.diagnostics[0]).toMatchObject({
+      reason: 'sticky', actualModelId: 'gpt-6-astra',
+    });
+  });
+
+  it('leaves a stale affinity untouched when the exclusive alias plan fails', async () => {
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5', affinityKey: 'stale',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const before = planner.describeAffinity(routingSubject(), 'stale');
+
+    const fresh = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'stale',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+    expect(planner.describeAffinity(routingSubject(), 'stale')).toEqual(before);
+  });
+
+  it('leaves a stale affinity untouched on commit-then-failure or commit-then-cancellation', async () => {
+    const makeIsolatedPlanner = () => {
+      const events: Array<{ operation: string }> = [];
+      const directory = new FakeRouteDirectory([
+        {
+          accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+          targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+          supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+          targetProviderId: 'openai', transportProviderId: 'codex',
+          supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+      ]);
+      const planner = new InMemoryRoutePlanner({
+        directory,
+        affinityAudit: (event) => events.push(event),
+      });
+      return { directory, events, planner };
+    };
+
+    {
+      const { planner, events } = makeIsolatedPlanner();
+      const first = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-fail',
+      });
+      await (await planner.prepareAttempt(
+        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+      )).complete();
+      const beforeFail = planner.describeAffinity(routingSubject(), 'stale-commit-fail');
+
+      const failed = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-fail',
+      });
+      const failedAttempt = await planner.prepareAttempt(
+        routingSubject(), failed.planRef, failed.candidateRefs[0]!, 'req-2', 0,
+      );
+      await failedAttempt.markCommitted();
+      await failedAttempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+      expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
+
+      // The route-scoped failure suppresses the sole Astra route, so a new
+      // alias plan on the same planner fails closed while the stale affinity
+      // stays untouched.
+      await expect(planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-fail',
+      })).rejects.toMatchObject({ code: 'no-route' });
+      expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
+
+      expect(events).toEqual([]);
+    }
+
+    {
+      const { planner, events } = makeIsolatedPlanner();
+      const first = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-cancel',
+      });
+      await (await planner.prepareAttempt(
+        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+      )).complete();
+      const beforeCancel = planner.describeAffinity(routingSubject(), 'stale-commit-cancel');
+
+      const cancelled = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-cancel',
+      });
+      const cancelledAttempt = await planner.prepareAttempt(
+        routingSubject(), cancelled.planRef, cancelled.candidateRefs[0]!, 'req-2', 0,
+      );
+      await cancelledAttempt.markCommitted();
+      await cancelledAttempt.releaseCancelled();
+      expect(planner.describeAffinity(routingSubject(), 'stale-commit-cancel')).toEqual(beforeCancel);
+
+      expect(events).toEqual([]);
+    }
+  });
+
+  it('migrates a stale affinity on commit-then-success', async () => {
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-success',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const fresh = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-success',
+    });
+    const attempt = await planner.prepareAttempt(
+      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
+    );
+    await attempt.markCommitted();
+    // The first validated frame must not migrate the stale affinity.
+    expect(planner.describeAffinity(routingSubject(), 'stale-commit-success')?.target.providerId)
+      .toBe('anthropic');
+    await attempt.complete();
+
+    const migrated = planner.describeAffinity(routingSubject(), 'stale-commit-success');
+    expect(migrated).toMatchObject({
+      revision: 2, diagnosticAccountRef: 'codex-redacted', promoted: false,
+    });
+    expect(migrated?.target).toMatchObject({
+      requestedModel: 'claude-opus-5-5',
+      providerId: 'openai', modelId: 'gpt-6-astra', transportProviderId: 'codex',
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      operation: 'rebind', cacheContinuityRisk: true,
+    }));
+  });
+
+  it('promotes a same-account model switch without account-scoped cache risk', async () => {
+    // Limitation: `cacheContinuityRisk` is account-scoped, so a same-account
+    // model switch to Astra reports no risk.
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-sol', 'gpt-6-astra'],
+      enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'gpt-6-sol', affinityKey: 'same-account',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const fresh = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'same-account',
+    });
+    expect(fresh.diagnostics[0]).toMatchObject({
+      actualModelId: 'gpt-6-astra', reason: 'alias',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
+    )).complete();
+
+    expect(planner.describeAffinity(routingSubject(), 'same-account')).toMatchObject({
+      revision: 2, diagnosticAccountRef: 'codex-redacted', promoted: true,
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      operation: 'promote', cacheContinuityRisk: false,
+    }));
+  });
+
+  it.each(['route', 'account', 'transport', 'provider-model'] as const)(
+    'returns no-route when the sole Astra is suppressed at %s scope',
+    async (healthScope) => {
+      const directory = new FakeRouteDirectory([
+        {
+          accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+          targetProviderId: 'openai', transportProviderId: 'codex',
+          supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+          targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+          supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+      ]);
+      const planner = new InMemoryRoutePlanner({ directory });
+      const first = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5',
+      });
+      await (await planner.prepareAttempt(
+        routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+      )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope });
+
+      // Another provider is never chosen for the exclusive alias.
+      await expect(planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5',
+      })).rejects.toMatchObject({ code: 'no-route' });
+    },
+  );
+
+  it('serves Astra again after the suppression TTL expires', async () => {
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      clock: { now: () => new Date(now) },
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    })).rejects.toMatchObject({ code: 'no-route' });
+
+    now += 300_000;
+    const retried = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+    expect(retried.diagnostics[0]).toMatchObject({
+      actualProviderId: 'openai', actualModelId: 'gpt-6-astra', reason: 'alias',
+    });
+  });
+
+  it('keeps a compatible sticky Astra without rotating to a second account', async () => {
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'sticky-astra',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const second = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'sticky-astra',
+    });
+    expect(second.diagnostics).toHaveLength(1);
+    expect(second.diagnostics[0]).toMatchObject({
+      diagnosticAccountRef: 'acct_new', actualProviderId: 'openai', reason: 'sticky',
+    });
+  });
+
+  it('serves only Astra on permitted rotation without rebinding the affinity', async () => {
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const directory = new FakeRouteDirectory([
+      {
+        accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+    ]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'rotate-astra',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const fallback = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', affinityKey: 'rotate-astra',
+      policyOverride: { fallbackMode: 'one-way', rotateEquivalentAccounts: true },
+    });
+    expect(fallback.diagnostics.map((entry) =>
+      [entry.diagnosticAccountRef, entry.actualProviderId, entry.reason]))
+      .toEqual([['acct_new', 'openai', 'sticky'], ['acct_old', 'openai', 'alias']]);
+    await (await planner.prepareAttempt(
+      routingSubject(), fallback.planRef, fallback.candidateRefs[1]!, 'req-2', 1,
+    )).complete();
+    // Same-triple rotation keeps the established affinity without an audit event.
+    expect(planner.describeAffinity(routingSubject(), 'rotate-astra')).toMatchObject({
+      diagnosticAccountRef: 'acct_new', revision: 1,
+    });
+    expect(events).toEqual([]);
+  });
+
   it('suppresses a failed preferred route until the injected clock reaches TTL', async () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const directory = new FakeRouteDirectory();
@@ -409,6 +948,120 @@ describe('opaque route planner', () => {
     );
     expect((error as { code?: string }).code).toBe('no-route');
     expect(String((error as Error).message)).toContain('muse reauthenticate required');
+  });
+
+  it('identifies unknown models and unavailable Astra with distinct names and codes', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory() });
+    const directory = new FakeRouteDirectory([]);
+    const empty = new InMemoryRoutePlanner({ directory });
+    const rejectOf = (promise: Promise<unknown>) => promise.then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+
+    const unknown = await rejectOf(planner.plan(routingSubject(), {
+      requestedModel: 'unknown-contract-model',
+    }));
+    expect(unknown).toBeInstanceOf(RoutePlanError);
+    expect(unknown).toMatchObject({ name: 'RoutePlanError', code: 'unknown-model' });
+
+    const unavailable = await rejectOf(empty.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    }));
+    expect(unavailable).toBeInstanceOf(RoutePlanError);
+    expect(unavailable).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
+    expect(String((unavailable as Error).message)).toBe('No eligible route');
+    // A failed plan prepares zero attempts.
+    expect(directory.prepared).toHaveLength(0);
+  });
+
+  it('keeps the requested alias and Astra triple in success diagnostics', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([{
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      }]),
+    });
+    const plan = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+
+    expect(plan.diagnostics).toEqual([{
+      candidateRef: expect.any(String),
+      diagnosticAccountRef: 'codex-redacted',
+      requestedModel: 'claude-opus-5-5',
+      actualProviderId: 'openai',
+      actualModelId: 'gpt-6-astra',
+      actualTransportProviderId: 'codex',
+      reason: 'alias',
+      cacheContinuityRisk: false,
+    }]);
+  });
+
+  it('binds the alias no-route diagnostic to the codex transport', async () => {
+    const codexReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'codex',
+      message: 'codex reauthenticate required',
+    };
+    const codexDirectory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly typeof codexReauth[]>;
+    };
+    codexDirectory.listDiagnostics = async () => [codexReauth];
+    const codexError = await new InMemoryRoutePlanner({ directory: codexDirectory })
+      .plan(routingSubject(), { requestedModel: 'claude-opus-5-5' }).then(
+        () => { throw new Error('expected rejection'); },
+        (error: unknown) => error,
+      );
+    expect((codexError as { code?: string }).code).toBe('no-route');
+    expect(String((codexError as Error).message)).toContain('codex reauthenticate required');
+
+    // An unrelated muse diagnostic is never surfaced for the alias.
+    const museReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'muse',
+      message: 'muse reauthenticate required',
+    };
+    const museDirectory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly typeof museReauth[]>;
+    };
+    museDirectory.listDiagnostics = async () => [museReauth];
+    const museError = await new InMemoryRoutePlanner({ directory: museDirectory })
+      .plan(routingSubject(), { requestedModel: 'claude-opus-5-5' }).then(
+        () => { throw new Error('expected rejection'); },
+        (error: unknown) => error,
+      );
+    expect((museError as { code?: string }).code).toBe('no-route');
+    expect(String((museError as Error).message)).toBe('No eligible route');
+  });
+
+  it('lists ready Astra inventory without the exclusive alias', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([
+        {
+          accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+          targetProviderId: 'openai', transportProviderId: 'codex',
+          // An explicit inventory advertising the alias never leaks it.
+          supportedModelIds: ['gpt-6-astra', 'claude-opus-5-5'],
+          enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+          targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+          supportedModelIds: ['gemini-3.8-flash'],
+          enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+      ]),
+    });
+
+    expect(await planner.listModels(routingSubject())).toEqual([
+      { modelId: 'gemini-3.8-flash', providerId: 'gemini' },
+      { modelId: 'gpt-6-astra', providerId: 'openai' },
+    ]);
+    const empty = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory([]) });
+    expect(await empty.listModels(routingSubject())).toEqual([]);
   });
 
   it('rejects a plan after its named policy revision changes', async () => {

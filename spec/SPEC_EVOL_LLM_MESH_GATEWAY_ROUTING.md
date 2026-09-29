@@ -282,6 +282,14 @@ equivalence fallback is enabled for a group, its evidence must be fresh and its
 required capabilities must be satisfied. Stale evidence fails closed for
 automatic substitution while exact requested routes remain usable.
 
+Exclusive launch alias `claude-opus-5-5` is an exception to the
+provider-faithful rule above: it always serves `openai / gpt-6-astra / codex`
+with no effort override and no Anthropic, Gemini or Muse candidate. It takes
+precedence over `targetCandidatesOverride`, never expands through council
+equivalents, and stays hidden from model inventory. Per-request explicit
+restrictions still apply as restrictions and may yield `no-route` when Astra
+is unavailable or excluded.
+
 The first implementation ships a conservative coding council using only
 existing ratified aliases plus benchmark evidence available in the repository.
 Adding broad cross-family groups without evidence is out of scope.
@@ -480,6 +488,18 @@ that account; `one-way` may promote only an equivalent model/transport on that
 account by default. Cross-account rebind requires `rotateEquivalentAccounts`
 or an explicit audited reset/rebind. `auth_failed` invalidates the account and
 does not trigger another model on the same invalid credential.
+
+Exception for the exclusive alias: an established affinity follows an
+explicit switch to `claude-opus-5-5` (owner "follow the /model"). At plan
+time a provider/model/transport-incompatible stored affinity is treated as
+absent — the plan serves fresh Astra and never emits the stale sticky
+candidate, quoted and unquoted alike, without mutating stored state. A later
+success overwrites the stale entry with the served Astra account
+and target through the audited rebind/promote path (`cacheContinuityRisk` on
+account change); a failure or cancellation leaves the stale affinity untouched. A compatible
+Astra affinity that violates a per-request explicit restriction still yields
+`no-route` with the affinity untouched. `cacheContinuityRisk` stays
+account-scoped: a same-account model switch reports no risk.
 
 ### 4.9 Health and negative cache
 
