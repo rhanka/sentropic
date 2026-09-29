@@ -96,7 +96,7 @@ describe('budget release and marker failures', () => {
     const recorder = recordingBudget();
     recorder.port.release = async () => { recorder.events.push('release-failed'); throw Error('store down'); };
     await expect(runRouteJsonFlow(deps(planner, recorder), flowRequest(false)))
-      .rejects.toMatchObject({ kind: 'no-eligible-account' });
+      .rejects.toMatchObject({ kind: 'no-route' });
     expect(recorder.events).toEqual(['admit', 'release-failed', 'settle']);
     expect(recorder.settlements).toHaveLength(1);
   });

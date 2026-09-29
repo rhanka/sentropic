@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
 import {
   GatewayError,
   mapGatewayError,
@@ -86,6 +87,55 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(a.status).toBe(400);
   });
 
+  it('maps unknown-model to the Lot 1 404 with the model-only message', () => {
+    const a = mapGatewayError('anthropic-messages', 'unknown-model', undefined, 'no-such-model');
+    expect(a.status).toBe(404);
+    expect(a.headers).toBeUndefined();
+    expect(a.body).toEqual({
+      type: 'error',
+      error: { type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
+    });
+    const o = mapGatewayError('openai-chat-completions', 'unknown-model', undefined, 'no-such-model');
+    expect(o.status).toBe(404);
+    expect(o.headers).toBeUndefined();
+    expect(o.body).toEqual({
+      error: {
+        message: 'Unknown model: "no-such-model"',
+        type: 'invalid_request_error',
+        code: 'model_not_found',
+      },
+    });
+  });
+
+  it('falls back to a model-free 404 message without request context', () => {
+    const a = mapGatewayError('anthropic-messages', 'unknown-model');
+    expect(a.status).toBe(404);
+    expect(a.body).toEqual({
+      type: 'error',
+      error: { type: 'not_found_error', message: 'Unknown model' },
+    });
+  });
+
+  it('forwards the requested model through the GatewayError branch', () => {
+    const mapped = toProviderShapedError(
+      'anthropic-messages',
+      new GatewayError('unknown-model', 'unknown model'),
+      'no-such-model',
+    );
+    expect(mapped.status).toBe(404);
+    expect((mapped.body as { error: { message: string } }).error.message).toBe(
+      'Unknown model: "no-such-model"',
+    );
+    // The internal detail (even a leaking one) NEVER reaches the wire body.
+    const leaked = toProviderShapedError(
+      'openai-chat-completions',
+      new GatewayError('unknown-model', 'internal pool detail acct-alpha'),
+      'no-such-model',
+    );
+    expect(JSON.stringify(leaked.body)).not.toContain('acct-alpha');
+    expect(JSON.stringify(leaked.body)).not.toContain('internal pool detail');
+  });
+
   it('toProviderShapedError maps a thrown GatewayError', () => {
     const mapped = toProviderShapedError(
       'anthropic-messages',
@@ -98,7 +148,109 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(JSON.stringify(mapped.body)).not.toContain('budget cap');
   });
 
-  it('maps an UNKNOWN internal error to a generic 503 (no leak)', () => {
+  it('maps real and structural plan/quote unknown-model to the Lot 1 404', () => {
+    const failures: unknown[] = [
+      new RoutePlanError('Unknown requested model', 'unknown-model'),
+      new RouteQuoteError('Unknown requested model', 'unknown-model'),
+      Object.assign(new Error('Unknown requested model'), { name: 'RoutePlanError', code: 'unknown-model' }),
+      Object.assign(new Error('Unknown requested model'), { name: 'RouteQuoteError', code: 'unknown-model' }),
+    ];
+    for (const error of failures) {
+      for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+        const mapped = toProviderShapedError(wire, error, 'no-such-model');
+        expect(mapped.status).toBe(404);
+        expect(mapped.headers).toBeUndefined();
+        expect((mapped.body as { error: { message: string } }).error.message).toBe(
+          'Unknown model: "no-such-model"',
+        );
+        expect(JSON.stringify(mapped.body)).not.toContain('Unknown requested model');
+      }
+    }
+  });
+
+  it('rejects code-only, message-only and wrong-name model errors (generic 503)', () => {
+    const negatives: unknown[] = [
+      Object.assign(new Error('x'), { code: 'unknown-model' }),
+      new Error('unknown model: no-such-model'),
+      Object.assign(new Error('x'), { name: 'SomethingElse', code: 'unknown-model' }),
+      new RoutePlanError('Route quote does not match this plan', 'quote-mismatch'),
+    ];
+    for (const error of negatives) {
+      const mapped = toProviderShapedError('anthropic-messages', error, 'no-such-model');
+      expect(mapped.status).toBe(503);
+      expect(JSON.stringify(mapped.body)).not.toContain('no-such-model');
+    }
+  });
+
+  it('maps known-model no-route to the BR-REL-Q7 non-retryable 503', () => {
+    const a = mapGatewayError('anthropic-messages', 'no-route', undefined, 'known-model');
+    expect(a.status).toBe(503);
+    expect(a.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(a.body).toEqual({
+      type: 'error',
+      error: { type: 'api_error', message: 'No route available for model: "known-model"' },
+    });
+    // A supplied retry delay never becomes Retry-After on this branch.
+    const o = mapGatewayError('openai-chat-completions', 'no-route', 30, 'known-model');
+    expect(o.status).toBe(503);
+    expect(o.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(o.body).toEqual({
+      error: {
+        message: 'No route available for model: "known-model"',
+        type: 'server_error', code: 'no_route',
+      },
+    });
+    expect(JSON.stringify([a.body, o.body])).not.toContain('overloaded');
+    expect(JSON.stringify([a.body, o.body])).not.toContain('rate_limit');
+  });
+
+  it('maps structural no-route to the Q7 503 with the requested model', () => {
+    const failures: unknown[] = [
+      new RoutePlanError('No eligible route', 'no-route'),
+      Object.assign(new Error('No eligible route'), { name: 'RoutePlanError', code: 'no-route' }),
+    ];
+    for (const error of failures) {
+      for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+        const mapped = toProviderShapedError(wire, error, 'known-model');
+        expect(mapped.status).toBe(503);
+        expect(mapped.headers).toEqual({ 'x-should-retry': 'false' });
+        expect((mapped.body as { error: { message: string } }).error.message).toBe(
+          'No route available for model: "known-model"',
+        );
+      }
+    }
+  });
+
+  it('maps capability-invalid plan/quote and structural bad ceilings to 400', () => {
+    const failures: unknown[] = [
+      new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet'),
+      new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet'),
+      Object.assign(new Error('ceiling'), { name: 'RouteQuoteError', code: 'invalid-ceiling' }),
+    ];
+    for (const error of failures) {
+      for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+        const mapped = toProviderShapedError(wire, error, 'known-model');
+        expect(mapped.status).toBe(400);
+        expect(mapped.headers).toBeUndefined();
+        expect(JSON.stringify(mapped.body)).toContain('invalid_request_error');
+      }
+    }
+  });
+
+  it('keeps the enrollment-action branch ahead of structural recognition', () => {
+    const error = {
+      name: 'RoutePlanError', code: 'no-route',
+      diagnostic: { code: 'reauth-required', transportProviderId: 'cloud-code' },
+    };
+    const mapped = toProviderShapedError('anthropic-messages', error, 'known-model');
+    expect(mapped).toMatchObject({
+      status: 503,
+      headers: { 'X-Sentropic-Route-Action': 'reauthenticate-cloud-code' },
+      body: { error: { type: 'authentication_error', message: 'cloud-code reauthenticate required' } },
+    });
+  });
+
+  it('maps an unclassified internal error to a generic 503 (no leak)', () => {
     const mapped = toProviderShapedError(
       'openai-chat-completions',
       new Error('Postgres connection to pool DB refused at 10.0.0.5'),
@@ -167,16 +319,42 @@ describe('error mapping through the router (integration)', () => {
     expect(transport.seenMaterials).toHaveLength(0);
   });
 
-  it('returns 400 for an unsupported model', async () => {
+  it.each([
+    ['/v1/messages', false],
+    ['/v1/messages', true],
+    ['/v1/chat/completions', false],
+    ['/v1/chat/completions', true],
+  ])('returns the Lot 1 404 for an unknown personal model (%s stream=%s)', async (path, stream) => {
     const transport = new FixtureTransport();
-    const { app } = buildHarness({ transport });
-    const res = await app.request('/v1/chat/completions', {
+    const { app, metering } = buildHarness({ transport });
+    const res = await app.request(path, {
       method: 'POST',
       headers: authHeaders('user-a'),
-      body: JSON.stringify({ model: 'no-such-model', messages: [] }),
+      body: JSON.stringify({ model: 'no-such-model', messages: [], stream }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(res.headers.get('x-should-retry')).toBeNull();
+    expect(res.headers.get('x-sentropic-request-id')).toBe('req_fixture_id');
+    expect(res.headers.get('x-sentropic-served')).toBeNull();
+    const body = await res.json();
+    if (path === '/v1/messages') {
+      expect(body).toEqual({
+        type: 'error',
+        error: { type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
+      });
+    } else {
+      expect(body).toEqual({
+        error: {
+          message: 'Unknown model: "no-such-model"',
+          type: 'invalid_request_error',
+          code: 'model_not_found',
+        },
+      });
+    }
     expect(transport.seenMaterials).toHaveLength(0);
+    expect(metering.settlements).toHaveLength(0);
   });
 
   it('returns EXACTLY 400 for a malformed JSON body (§3b bad-request)', async () => {

@@ -7,6 +7,7 @@ import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonica
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
+import { isRoutePlanError, isRouteQuoteError } from './internal/mesh-routing-error.js';
 import { authenticateCaller } from './internal/caller-auth.js';
 import type { RouteAttemptDispatchPort } from './ports/dispatch.js';
 import type { GatewayBudgetOptions, RouteBudgetOverrun } from './ports/budget.js';
@@ -75,6 +76,27 @@ export const routingSubjectForCost = (cost: CostContext): VerifiedRoutingSubject
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
 
+const isEnrollmentDiagnostic = (error: unknown): boolean => {
+  const diagnostic = asRecord(error)?.diagnostic;
+  const code = asRecord(diagnostic)?.code;
+  return code === 'reenrollment-required' || code === 'reauth-required';
+};
+
+/**
+ * Recognized non-budget planning refusals (Lot 1 404, 400, Q7/enrollment
+ * 503). A rejecting zero-dispatch notification must never replace one of
+ * these: the generic mapper would turn the sink error into overloaded_error.
+ */
+const isRecognizedPlanningRefusal = (error: unknown): boolean => {
+  if (error instanceof GatewayError) {
+    return error.kind === 'unknown-model' || error.kind === 'no-route';
+  }
+  return isEnrollmentDiagnostic(error)
+    || isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')
+    || isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')
+    || isRoutePlanError(error, 'no-route') || isRouteQuoteError(error, 'no-route');
+};
+
 export const prepareRouteFlow = async (
   deps: RouteFlowDeps,
   request: GatewayFlowRequest,
@@ -105,6 +127,19 @@ export const prepareRouteFlow = async (
     });
     return { cost: auth.cost, subject, canonical, plan };
   } catch (error) {
+    if (isRecognizedPlanningRefusal(error)) {
+      try {
+        await deps.metering.settleRoute({
+          cost: auth.cost,
+          wire: request.wire,
+          requestedModel: request.model,
+          outcome: 'failed',
+          usage: { inputTokens: 0, outputTokens: 0, estimated: true },
+          attempts: [],
+        });
+      } catch { /* The original recognized refusal wins. */ }
+      throw error;
+    }
     await deps.metering.settleRoute({
       cost: auth.cost,
       wire: request.wire,
@@ -149,8 +184,13 @@ const prepareAdmittedRouteFlow = async (
     });
     return { cost, subject, canonical, plan, admission };
   } catch (error) {
-    // The admitted request's one zero-usage settlement, with hold release.
-    await settleRouteRequest(deps, { cost, admission }, request, 'failed', []);
+    // The admitted request's one zero-usage settlement, with hold release
+    // (release-before-metering inside settleRouteRequest). A ledger failure
+    // must never replace the typed refusal: attempt once, swallow, throw the
+    // original. The host already observes its own ledger rejection.
+    try {
+      await settleRouteRequest(deps, { cost, admission }, request, 'failed', []);
+    } catch { /* The typed refusal wins. */ }
     throw error;
   }
 };
@@ -226,7 +266,11 @@ export const classifyRouteError = (
   if (code.includes('invalid_request') || code === 'invalid-request' || code === 'bad_request') {
     return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
   }
-  if (status === 404 || code.includes('unsupported_model')) {
+  // Mesh normalizes Anthropic `not_found_error` and OpenAI `model_not_found`
+  // into `code`, so a status-less transport error with those codes is still an
+  // unsupported model — never a provider-5xx.
+  if (status === 404 || code.includes('unsupported_model')
+    || code.includes('model_not_found') || code.includes('not_found')) {
     return { reason: 'unsupported-model', retryable: false, healthScope: 'provider-model' };
   }
   if ((status !== undefined && status >= 500) || code.includes('overload')) {
@@ -241,10 +285,13 @@ export const classifyRouteError = (
 /**
  * Map a terminal (no more candidates) route classification to the public
  * GatewayError. A terminal upstream invalid refusal is the caller's request,
- * not pool exhaustion: it surfaces as bad-request (400). Terminal upstream
- * auth/quota refusals keep their class (401/429 + Retry-After) instead of
- * collapsing into pooled-account-unavailable (503). Only genuine
- * unavailability falls back to the pooled 503.
+ * not pool exhaustion: it surfaces as bad-request (400). A terminal upstream
+ * unsupported-model becomes the Lot 1 unknown-model 404 with the fixed
+ * internal detail; the served target is preserved so the router keeps the
+ * `X-Sentropic-Served` actual-model header. Terminal upstream auth/quota
+ * refusals keep their class (401/429 + Retry-After) instead of collapsing
+ * into pooled-account-unavailable (503). Only genuine unavailability falls
+ * back to the pooled 503.
  */
 export const terminalGatewayError = (
   classification: RouteFailureClassification,
@@ -255,6 +302,9 @@ export const terminalGatewayError = (
     return new GatewayError(
       'bad-request', 'upstream refused the request as invalid', undefined, target,
     );
+  }
+  if (classification.reason === 'unsupported-model') {
+    return new GatewayError('unknown-model', 'unknown model', undefined, target);
   }
   if (classification.reason === 'auth-failed') {
     return new GatewayError(

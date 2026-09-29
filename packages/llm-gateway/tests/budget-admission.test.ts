@@ -1,5 +1,6 @@
 import {
-  InMemoryRoutePlanner, type AccountDirectoryPort, type PreparedRouteAttempt, type RoutePlanner,
+  InMemoryRoutePlanner, RoutePlanError, RouteQuoteError,
+  type AccountDirectoryPort, type PreparedRouteAttempt, type RoutePlanner,
 } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import {
@@ -100,11 +101,47 @@ describe('budget admission quote and ceiling', () => {
     expect(routeUsageCeiling(canonical, { ...recordingBudget().options, defaultOutputTokens: 512 }))
       .toMatchObject({ outputTokens: 512 });
   });
+  it.each([
+    { code: 'unknown-model' as const, status: 404 },
+    { code: 'capabilities-unmet' as const, status: 400 },
+  ])('quote $code settles nothing and refuses without admit/plan/prepare ($status)', async ({ code, status }) => {
+    for (const { path } of WIRES) {
+      for (const stream of [false, true]) {
+        const message = code === 'unknown-model' ? 'Unknown requested model' : 'Required capabilities are unavailable';
+        const { planner, calls } = quotingPlanner([], { quote: () => { throw new RouteQuoteError(message, code); } });
+        const recorder = recordingBudget();
+        const response = await send(budgetRouter({ planner, recorder }), path, stream);
+        expect(response.status).toBe(status);
+        // Literal frozen bodies (never built with the mapper under test).
+        const expectedBody = code === 'unknown-model'
+          ? path === '/v1/messages'
+            ? { type: 'error', error: { type: 'not_found_error', message: `Unknown model: "${MODEL}"` } }
+            : { error: { message: `Unknown model: "${MODEL}"`,
+              type: 'invalid_request_error', code: 'model_not_found' } }
+          : path === '/v1/messages'
+            ? { type: 'error', error: { type: 'invalid_request_error', message: 'invalid request' } }
+            : { error: { message: 'invalid request',
+              type: 'invalid_request_error', code: 'invalid_request' } };
+        expect(await response.json()).toEqual(expectedBody);
+        expect(response.headers.get('content-type')).toMatch(/^application\/json/);
+        expect(response.headers.get('x-sentropic-served')).toBeNull();
+        expect(calls.quote).toHaveLength(1);
+        expect(calls.plan).toEqual([]);
+        expect(calls.prepare).toEqual([]);
+        expect(recorder.admitted).toEqual([]);
+        expect(recorder.settlements).toEqual([]);
+        expect(recorder.events).toEqual([]);
+      }
+    }
+  });
   it('reserves nothing for an empty quote and answers like an empty route', async () => {
     const { planner, calls } = quotingPlanner([], { quote: () => fixtureQuote({ candidates: [] }) });
     const recorder = recordingBudget();
     const response = await send(budgetRouter({ planner, recorder }), '/v1/chat/completions', false);
     expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: {
+      message: `No route available for model: "${MODEL}"`, type: 'server_error', code: 'no_route' } });
+    expect(response.headers.get('x-should-retry')).toBe('false');
     expect(recorder.events).toEqual([]);
     expect(calls.plan).toEqual([]);
   });

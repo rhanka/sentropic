@@ -278,6 +278,91 @@ describe('no-retry-after-stream (spec §2)', () => {
     expect(metering.last?.outcome).toBe('failed');
     expect(JSON.stringify(body)).not.toContain('lease');
   });
+
+  it.each(
+    (['/v1/messages', '/v1/chat/completions'] as const).flatMap((path) =>
+      ([
+        { label: 'status:404', openError: { status: 404 } },
+        { label: 'statusCode:404', openError: { statusCode: 404 } },
+        { label: 'code:not_found_error', openError: { code: 'not_found_error' } },
+        { label: 'code:model_not_found', openError: { code: 'model_not_found' } },
+        { label: 'code:unsupported_model', openError: { code: 'unsupported_model' } },
+      ] as const).map(({ label, openError }) => ({ path, label, openError })),
+    ),
+  )('stream-open 404 maps to the frozen 404, never overloaded ($path $label)',
+    async ({ path, openError }) => {
+      const transport = new FixtureTransport({ streamOpenError: { ...openError } });
+      const { app, metering } = buildHarness({ transport });
+      const res = await app.request(path, {
+        method: 'POST', headers: authHeaders('user-a'),
+        body: JSON.stringify(path === '/v1/messages' ? anthropicRequest(true) : openAiRequest(true)),
+      });
+      expect(res.status).toBe(404);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      expect(res.headers.get('X-Sentropic-Served')).toBe(path === '/v1/messages'
+        ? 'provider=anthropic; model=claude-sonnet-4-6; transport=claude-code'
+        : 'provider=openai; model=gpt-5.5; transport=codex');
+      const text = await res.text();
+      expect(text.startsWith('event:')).toBe(false);
+      expect(text.startsWith('data:')).toBe(false);
+      expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+        ? { type: 'error', error: { type: 'not_found_error', message: 'Unknown model: "claude-sonnet-4-6"' } }
+        : { error: { message: 'Unknown model: "gpt-5.5"',
+          type: 'invalid_request_error', code: 'model_not_found' } });
+      expect(text).not.toContain('overloaded');
+      expect(metering.settlements).toHaveLength(1);
+    });
+
+  it.each([
+    { path: '/v1/messages', fault: 'metering' },
+    { path: '/v1/chat/completions', fault: 'metering' },
+    { path: '/v1/messages', fault: 'recordOutcome' },
+    { path: '/v1/chat/completions', fault: 'recordOutcome' },
+  ])('stream-open 404 survives a rejecting $fault settle ($path)', async ({ path, fault }) => {
+    const transport = new FixtureTransport({ streamOpenError: { status: 404 } });
+    const { app, metering, pool } = buildHarness({ transport });
+    // Count every settle seam call: the pool outcome first, then the hook.
+    let recordOutcomeAttempts = 0;
+    let meteringAttempts = 0;
+    const select = pool.select.bind(pool);
+    pool.select = async (request) => {
+      const selection = await select(request);
+      const recordOutcome = selection.acquisition.recordOutcome.bind(selection.acquisition);
+      selection.acquisition.recordOutcome = async (outcome) => {
+        recordOutcomeAttempts += 1;
+        if (fault === 'recordOutcome') throw new Error('fixture: recordOutcome down');
+        return recordOutcome(outcome);
+      };
+      return selection;
+    };
+    const settle = metering.settle.bind(metering);
+    metering.settle = (context) => {
+      meteringAttempts += 1;
+      if (fault === 'metering') throw new Error('fixture: metering down');
+      settle(context);
+    };
+    const res = await app.request(path, {
+      method: 'POST', headers: authHeaders('user-a'),
+      body: JSON.stringify(path === '/v1/messages' ? anthropicRequest(true) : openAiRequest(true)),
+    });
+    expect(res.status).toBe(404);
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    expect(res.headers.get('X-Sentropic-Served')).toBe(path === '/v1/messages'
+      ? 'provider=anthropic; model=claude-sonnet-4-6; transport=claude-code'
+      : 'provider=openai; model=gpt-5.5; transport=codex');
+    const text = await res.text();
+    expect(text.startsWith('event:')).toBe(false);
+    expect(text.startsWith('data:')).toBe(false);
+    expect(JSON.parse(text)).toEqual(path === '/v1/messages'
+      ? { type: 'error', error: { type: 'not_found_error', message: 'Unknown model: "claude-sonnet-4-6"' } }
+      : { error: { message: 'Unknown model: "gpt-5.5"',
+        type: 'invalid_request_error', code: 'model_not_found' } });
+    expect(text).not.toContain('overloaded');
+    // Exactly one guarded settle attempt: rejection swallowed, never retried.
+    expect(recordOutcomeAttempts).toBe(1);
+    expect(meteringAttempts).toBe(fault === 'metering' ? 1 : 0);
+    expect(metering.settlements).toHaveLength(0);
+  });
 });
 
 describe('#4 provider response header passthrough', () => {

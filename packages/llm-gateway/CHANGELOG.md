@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- Unknown-model 404 (BR-REL-Q3): plan-path, quote-path and terminal upstream
+  `unsupported-model` failures map to Anthropic 404 `not_found_error` / OpenAI 404
+  `invalid_request_error` (`model_not_found`) with the requested-model-only message
+  `Unknown model: "<model>"`; no `Retry-After`, no `x-should-retry`. The terminal 404
+  keeps `X-Sentropic-Served` with the actual model; plan/quote refusals carry none.
+  Budget-quote refusals settle nothing; admitted-plan ledger failures preserve
+  the typed refusal (attempted once, swallowed, original thrown).
+- Known-model `no-route` without enrollment diagnostic is a non-retryable HTTP 503
+  (BR-REL-Q7): Anthropic `api_error` / OpenAI `server_error` (`no_route`),
+  `No route available for model: "<model>"`, `x-should-retry: false`, no `Retry-After`.
+- `capabilities-unmet` plan/quote failures map to 400 `invalid_request_error`;
+  `quote-mismatch` and unclassified errors stay on the sanitized 503.
+- Terminal upstream refusals survive post-dispatch callback failures on both
+  paths: a rejecting metering sink or `recordOutcome` hook no longer
+  replaces the terminal `unknown-model` 404 (or any other terminal refusal)
+  with a sanitized 503 `overloaded_error`. Settlement is attempted once and the
+  terminal error wins, including admitted-ledger failures.
+
 ## 0.19.0
 
 - Add opt-in budget admission: `BudgetAdmissionPort` (`admit`, `markDispatched`,
