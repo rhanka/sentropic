@@ -23,6 +23,13 @@ describe('canonical model targets', () => {
     expect(resolveCandidates(model)).toEqual([target]);
   });
 
+  it('should inherit the GPT-6 Sol profile for GPT-6.1 Sol', () => {
+    const base = modelProfiles.find((profile) => profile.modelId === 'gpt-6-sol');
+    const added = modelProfiles.find((profile) => profile.modelId === 'gpt-6.1-sol');
+    expect(base).toBeDefined();
+    expect(added).toEqual({ ...base, modelId: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' });
+  });
+
   it('keeps Terra on 5.6 and excludes unverified GPT-6 Terra from all targets', () => {
     expect(resolve('gpt-6-terra')).toBeUndefined();
     expect(resolveCandidates('gpt-6-terra')).toEqual([]);

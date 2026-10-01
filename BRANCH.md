@@ -27,7 +27,7 @@
   - [x] `scripts/llm-model-equivalences/council.source.json`
   - [x] `api/tests/api/models.test.ts`
   - [x] `api/tests/unit/llm-runtime-stream.test.ts`
-  - [x] `package-lock.json` (BR61-EX1)
+  - [x] `package-lock.json` (BR61-EX1, BR61-EX4)
   - [x] `apps/auth-idp/web/package-lock.json` (BR61-EX4, blocking dependency security fixes only)
   - [x] `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR61-EX2)
   - [x] `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (BR61-EX2)
@@ -46,6 +46,8 @@
 - [x] BR61-EX3 acknowledge: owner authorizes cluster release-train tests and fixture lock following PR #625 and 8dadb1614. Impact: mesh 0.22.3 test data and archive integrity only. Rollback: revert with manifest bump.
 - [x] BR61-EX4 acknowledge: owner authorizes fixing branch CI failures. CI run 36938864734 fails API/IdP and UI image audits on vulnerable devalue, plus root API SCA on brace-expansion. Scope: targeted compatible transitive lock updates only in root and IdP web locks; no manifest, source or scanner-policy changes. Impact: patched dependencies in the required image builds. Rollback: revert this security-only commit. Acceptance: image builds and SCA gates pass.
 - [x] BR61-Q3 resolved: targeted lock updates selected devalue 5.9.4 and brace-expansion 5.0.12 within existing ranges. API and UI SCA pass with no findings; IdP production audit reports zero vulnerabilities. Required image-build verification follows in CI and local API bringup.
+- [x] BR61-R1 acknowledge: conductor review APPROVE_WITH_CHANGES on PR #628; blocking version-fixture and audit findings resolved by feb597e4b and 29fc0be0b, pending green CI. Apply explicit unverified Codex availability notes, profile-inheritance test and lock-scope correction; regenerate packed integrity and rerun gates.
+- [x] BR61-R2 deferred: residual vulnerable copies in standalone UI/API/IdP locks are a conductor-requested PR follow-up only; no additional dependency changes in this branch. On any rebase, recheck registry version before preserving the candidate bump.
 - [x] Owner questions and final evidence belong in local `.h2a-report.md`; stop at the open PR, never merge or publish.
 - [x] BR61-Q1 resolved: fixture refresh prerequisite failed removing the generated Vitest cache (EACCES); ownership inspection confirmed the mismatch. Worktree-only `make clean-node-modules` cleared generated dependencies before retry; no source change.
 - [x] BR61-Q2 resolved: cluster train bump collided with two deliberately mismatched 0.22.3 negative fixtures; move their wrong version to 0.22.4 to preserve version-rejection coverage. Focused and full reruns follow.
@@ -68,7 +70,8 @@
   - [x] Registry latest is 0.22.2; bumped manifest/changelog to 0.22.3, refreshed root lock via Make and aligned consumer test pins; fixture integrity regeneration follows the candidate pack.
   - [x] Packed mesh candidate SHA-256 `15af5a07015278a76a4e3c911e9a8c550b435f5406bb81d642fa2da71a5f01f2`; `refresh-lazy-package-lock` passed with guarded sibling receipts and regenerated the fixture lock.
 - [ ] Lot 4: run `test-llm-mesh`, `typecheck-llm-mesh`, `build-llm-mesh`, council freshness and `scope-check`; scoped API catalog/runtime tests and cluster validations.
-  - [x] Mesh: 32 files, 316 tests passed; typecheck, build, lint and council freshness passed. Scoped routing tests: 25 passed.
+  - [x] Review rerun: mesh 32 files, 317 tests passed; typecheck, build, lint, council freshness and scope passed. Scoped routing/profile tests: 26 passed.
   - [x] Cluster: lint/typecheck/build passed; full suite passed 394 tests, 34 packaging tests skipped until dedicated packed qualification; corrected negative-version fixtures covered by the full rerun.
 - [ ] Lot 5: push branch; create PR to main using this plan as body; post 3-step implementation/validation/review plan; wait for CI and fix failures.
 - [ ] Lot 6: write PR number and head SHA to `.h2a-report.md`; wait for the conductor's review comment; resolve blocking findings, rerun affected gates, push and record verdict; write final report and stop.
+  - [x] Received conductor review; availability notes, inherited-profile test and lock exception reference updated; residual standalone lock risk posted as a follow-up in PR comment 5942524842.
