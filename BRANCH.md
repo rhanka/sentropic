@@ -55,7 +55,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, template and precedents; verify branch, base, clean worktree and free ports; declare scope exceptions.
-- [ ] Lot 1: scaffold with dry run then apply; verify label, inherited capabilities and faithful Codex route; add council exclusion and regenerate via Make.
+- [x] Lot 1: scaffold with dry run then apply; verify label, inherited capabilities and faithful Codex route; add council exclusion and regenerate via Make.
 - [ ] Lot 2: extend routing/scaffolder/quote tests, API catalog list/count and runtime stream fixture; preserve existing aliases.
 - [ ] Lot 3: verify registry version, bump mesh to 0.22.3 and changelog; refresh root lock; align cluster integration and packaging test versions and regenerate fixture lock.
 - [ ] Lot 4: run `test-llm-mesh`, `typecheck-llm-mesh`, `build-llm-mesh`, council freshness and `scope-check`; scoped API catalog/runtime tests and cluster validations.
