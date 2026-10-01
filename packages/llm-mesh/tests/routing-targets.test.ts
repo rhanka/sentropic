@@ -17,7 +17,7 @@ describe('canonical model targets', () => {
   const resolve = createCanonicalTargetResolver();
   const resolveCandidates = createCanonicalTargetCandidatesResolver();
 
-  it.each(['gpt-6-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
+  it.each(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
     const target = { providerId: 'openai', transportProviderId: 'codex', model };
     expect(resolve(model)).toEqual(target);
     expect(resolveCandidates(model)).toEqual([target]);
