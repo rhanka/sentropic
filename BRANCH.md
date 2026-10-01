@@ -14,6 +14,7 @@
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
   - [x] `BRANCH.md`
+  - [x] `.h2a-report.md` (local conductor handoff only; never staged)
   - [x] `packages/llm-mesh/src/providers.ts`
   - [x] `packages/llm-mesh/src/catalog.ts`
   - [x] `packages/llm-mesh/src/routing-targets.ts`
@@ -42,6 +43,7 @@
 - [x] BR61-EX2 acknowledge: owner authorizes cluster installed-version test pins following PR #625 and b1b631a76. Impact: two test literals only. Rollback: revert with manifest bump.
 - [x] BR61-EX3 acknowledge: owner authorizes cluster release-train tests and fixture lock following PR #625 and 8dadb1614. Impact: mesh 0.22.3 test data and archive integrity only. Rollback: revert with manifest bump.
 - [x] Owner questions and final evidence belong in local `.h2a-report.md`; stop at the open PR, never merge or publish.
+- [x] BR61-Q1 resolved: fixture refresh prerequisite failed removing the generated Vitest cache (EACCES); ownership inspection confirmed the mismatch. Worktree-only `make clean-node-modules` cleared generated dependencies before retry; no source change.
 
 ## AI Flaky tests
 - [x] No live provider testing; for CI `api/tests/ai/**` nondeterminism, rerun once on the same commit and record exact signature in a PR comment.
@@ -57,8 +59,10 @@
 - [x] Lot 0: read rules, template and precedents; verify branch, base, clean worktree and free ports; declare scope exceptions.
 - [x] Lot 1: scaffold with dry run then apply; verify label, inherited capabilities and faithful Codex route; add council exclusion and regenerate via Make.
 - [x] Lot 2: extend routing/scaffolder/quote tests, API catalog list/count and runtime stream fixture; preserve existing aliases.
-- [ ] Lot 3: verify registry version, bump mesh to 0.22.3 and changelog; refresh root lock; align cluster integration and packaging test versions and regenerate fixture lock.
+- [x] Lot 3: verify registry version, bump mesh to 0.22.3 and changelog; refresh root lock; align cluster integration and packaging test versions and regenerate fixture lock.
   - [x] Registry latest is 0.22.2; bumped manifest/changelog to 0.22.3, refreshed root lock via Make and aligned consumer test pins; fixture integrity regeneration follows the candidate pack.
+  - [x] Packed mesh candidate SHA-256 `15af5a07015278a76a4e3c911e9a8c550b435f5406bb81d642fa2da71a5f01f2`; `refresh-lazy-package-lock` passed with guarded sibling receipts and regenerated the fixture lock.
 - [ ] Lot 4: run `test-llm-mesh`, `typecheck-llm-mesh`, `build-llm-mesh`, council freshness and `scope-check`; scoped API catalog/runtime tests and cluster validations.
+  - [x] Mesh: 32 files, 316 tests passed; typecheck, build, lint and council freshness passed. Scoped routing tests: 25 passed.
 - [ ] Lot 5: push branch; create PR to main using this plan as body; post 3-step implementation/validation/review plan; wait for CI and fix failures.
 - [ ] Lot 6: write PR number and head SHA to `.h2a-report.md`; wait for the conductor's review comment; resolve blocking findings, rerun affected gates, push and record verdict; write final report and stop.
