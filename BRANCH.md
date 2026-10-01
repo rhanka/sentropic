@@ -1,7 +1,7 @@
 # Feature: Add GPT-6.1 Sol to llm-mesh
 
 ## Objective
-- [ ] Add `gpt-6.1-sol` to @sentropic/llm-mesh 0.22.3 and hand off an open PR with green CI and independent review.
+- [x] Add `gpt-6.1-sol` to @sentropic/llm-mesh 0.22.3 and hand off an open PR with green CI and independent review.
 
 ## Scope / Guardrails
 - [x] Work only in `tmp/llm-mesh-gpt-6-1-sol`, branch `feat/llm-mesh-gpt-6-1-sol`, base `b79ed90b161787fe9d7d4301ec44748616a73820`; mechanical harness branch check passed.
@@ -49,7 +49,7 @@
 - [x] BR61-EX4 acknowledge: owner authorizes fixing branch CI failures. CI run 36938864734 fails API/IdP and UI image audits on vulnerable devalue, plus root API SCA on brace-expansion. Scope: targeted compatible transitive lock updates only in root and IdP web locks; no manifest, source or scanner-policy changes. Impact: patched dependencies in the required image builds. Rollback: revert this security-only commit. Acceptance: image builds and SCA gates pass.
 - [x] BR61-EX5 acknowledge: owner authorizes fixing branch CI failures. Run 36939427718 container gate rejects npm-bundled brace-expansion 5.0.6 (CVE-2026-102276/102278) and undici 6.26.0 (CVE-2026-19534). Patch only these embedded copies to 5.0.12 and 6.28.1 using the existing Dockerfile archive-replacement pattern; existing Node/npm versions and scanner policy stay fixed. Impact: patched npm internals in the API image; distinct from the deferred standalone-lock follow-up. Rollback: remove the two replacement blocks. Acceptance: API production image builds and its container scan passes.
 - [x] BR61-Q3 resolved: targeted lock updates selected devalue 5.9.4 and brace-expansion 5.0.12 within existing ranges. API and UI SCA pass with no findings; IdP production audit reports zero vulnerabilities. Required image-build verification follows in CI and local API bringup.
-- [x] BR61-R1 acknowledge: conductor review APPROVE_WITH_CHANGES on PR #628; blocking version-fixture and audit findings resolved by feb597e4b and 29fc0be0b, pending green CI. Apply explicit unverified Codex availability notes, profile-inheritance test and lock-scope correction; regenerate packed integrity and rerun gates.
+- [x] BR61-R1 resolved: conductor review APPROVE_WITH_CHANGES on PR #628; blocking version-fixture and audit findings resolved by feb597e4b and 29fc0be0b. Requested Codex availability notes, profile-inheritance test and lock-scope correction applied; packed integrity regenerated and all local gates passed. CI run 36940574886 passed all 53 executed checks at 8d0d66941.
 - [x] BR61-R2 deferred: residual vulnerable copies in standalone UI/API/IdP locks are a conductor-requested PR follow-up only; no additional dependency changes in this branch. On any rebase, recheck registry version before preserving the candidate bump.
 - [x] Owner questions and final evidence belong in local `.h2a-report.md`; stop at the open PR, never merge or publish.
 - [x] BR61-Q1 resolved: fixture refresh prerequisite failed removing the generated Vitest cache (EACCES); ownership inspection confirmed the mismatch. Worktree-only `make clean-node-modules` cleared generated dependencies before retry; no source change.
@@ -72,9 +72,14 @@
 - [x] Lot 3: verify registry version, bump mesh to 0.22.3 and changelog; refresh root lock; align cluster integration and packaging test versions and regenerate fixture lock.
   - [x] Registry latest is 0.22.2; bumped manifest/changelog to 0.22.3, refreshed root lock via Make and aligned consumer test pins; fixture integrity regeneration follows the candidate pack.
   - [x] Review candidate SHA-256 `05df1f5eac3f10431a7aad2b901e4c8b6ca97db957c4f99a1dd371971dc8b4c5`; repacked after availability notes and regenerated the fixture lock via `refresh-lazy-package-lock` with guarded sibling receipts.
-- [ ] Lot 4: run `test-llm-mesh`, `typecheck-llm-mesh`, `build-llm-mesh`, council freshness and `scope-check`; scoped API catalog/runtime tests and cluster validations.
+- [x] Lot 4: run `test-llm-mesh`, `typecheck-llm-mesh`, `build-llm-mesh`, council freshness and `scope-check`; scoped API catalog/runtime tests and cluster validations.
   - [x] Review rerun: mesh 32 files, 317 tests passed; typecheck, build, lint, council freshness and scope passed. Scoped routing/profile tests: 26 passed.
   - [x] Cluster: lint/typecheck/build passed; full suite passed 394 tests, 34 packaging tests skipped until dedicated packed qualification; corrected negative-version fixtures covered by the full rerun.
-- [ ] Lot 5: push branch; create PR to main using this plan as body; post 3-step implementation/validation/review plan; wait for CI and fix failures.
-- [ ] Lot 6: write PR number and head SHA to `.h2a-report.md`; wait for the conductor's review comment; resolve blocking findings, rerun affected gates, push and record verdict; write final report and stop.
+  - [x] Packed qualification: 63 tests passed across 10 files with guarded candidate receipts and refreshed fixture integrity.
+  - [x] API catalog: 4 tests passed; mocked runtime stream: 127 passed, 1 skipped. Startup logs have no runtime errors; test stack stopped and empty service list verified.
+  - [x] API production image built and actual container compliance scan passed; 3 branch-blocking bundled npm findings removed, 2 existing accepted findings remain. Full-PR mechanical scope check passed.
+- [x] Lot 5: push branch; create PR to main using this plan as body; post 3-step implementation/validation/review plan; wait for CI and fix failures.
+  - [x] PR #628 remains open against main; CI run 36940574886 passed all 53 executed checks at 8d0d66941. No flaky test rerun was needed. Refresh this exact plan as the PR body after the final documentation push; final-head CI evidence belongs in the handoff report.
+- [x] Lot 6: write PR number and head SHA to `.h2a-report.md`; wait for the conductor's review comment; resolve blocking findings, rerun affected gates, push and record verdict; write final report and stop.
   - [x] Received conductor review; availability notes, inherited-profile test and lock exception reference updated; residual standalone lock risk posted as a follow-up in PR comment 5942524842.
+  - [x] Review verdict recorded in PR comment 5942504260; all requested findings resolved or explicitly deferred. Local handoff records test counts, final head and CI; no owner questions, merge or publication.
