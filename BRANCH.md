@@ -71,7 +71,7 @@
 - [x] Lot 2: extend routing/scaffolder/quote tests, API catalog list/count and runtime stream fixture; preserve existing aliases.
 - [x] Lot 3: verify registry version, bump mesh to 0.22.3 and changelog; refresh root lock; align cluster integration and packaging test versions and regenerate fixture lock.
   - [x] Registry latest is 0.22.2; bumped manifest/changelog to 0.22.3, refreshed root lock via Make and aligned consumer test pins; fixture integrity regeneration follows the candidate pack.
-  - [x] Packed mesh candidate SHA-256 `15af5a07015278a76a4e3c911e9a8c550b435f5406bb81d642fa2da71a5f01f2`; `refresh-lazy-package-lock` passed with guarded sibling receipts and regenerated the fixture lock.
+  - [x] Review candidate SHA-256 `05df1f5eac3f10431a7aad2b901e4c8b6ca97db957c4f99a1dd371971dc8b4c5`; repacked after availability notes and regenerated the fixture lock via `refresh-lazy-package-lock` with guarded sibling receipts.
 - [ ] Lot 4: run `test-llm-mesh`, `typecheck-llm-mesh`, `build-llm-mesh`, council freshness and `scope-check`; scoped API catalog/runtime tests and cluster validations.
   - [x] Review rerun: mesh 32 files, 317 tests passed; typecheck, build, lint, council freshness and scope passed. Scoped routing/profile tests: 26 passed.
   - [x] Cluster: lint/typecheck/build passed; full suite passed 394 tests, 34 packaging tests skipped until dedicated packed qualification; corrected negative-version fixtures covered by the full rerun.
