@@ -63,6 +63,9 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gpt-6-sol': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-sol',
   },
+  'gpt-6.1-sol': {
+    providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol',
+  },
   'gpt-6-astra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
   },
