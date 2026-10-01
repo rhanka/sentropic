@@ -29,6 +29,7 @@
   - [x] `api/tests/unit/llm-runtime-stream.test.ts`
   - [x] `package-lock.json` (BR61-EX1, BR61-EX4)
   - [x] `apps/auth-idp/web/package-lock.json` (BR61-EX4, blocking dependency security fixes only)
+  - [x] `api/Dockerfile` (BR61-EX5, bundled npm dependency patches only)
   - [x] `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR61-EX2)
   - [x] `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (BR61-EX2)
   - [x] `packages/cluster-mesh/tests/packaging/**` (BR61-EX3, version pins and regenerated fixture lock only)
@@ -38,6 +39,7 @@
 - [x] **Conditional Paths (allowed only with explicit exception)**:
   - [x] `package-lock.json` (BR61-EX1), cluster integration pins (BR61-EX2), cluster packaging test data (BR61-EX3); approved paths repeated in Allowed Paths.
   - [x] Root dependency lock updates and `apps/auth-idp/web/package-lock.json` (BR61-EX4) only for reproduced CI security blockers.
+  - [x] `api/Dockerfile` (BR61-EX5) only for reproduced container security blockers in bundled npm dependencies.
 - [x] **Exception process**: record reason, impact, rollback and authorization before editing.
 
 ## Feedback Loop
@@ -45,6 +47,7 @@
 - [x] BR61-EX2 acknowledge: owner authorizes cluster installed-version test pins following PR #625 and b1b631a76. Impact: two test literals only. Rollback: revert with manifest bump.
 - [x] BR61-EX3 acknowledge: owner authorizes cluster release-train tests and fixture lock following PR #625 and 8dadb1614. Impact: mesh 0.22.3 test data and archive integrity only. Rollback: revert with manifest bump.
 - [x] BR61-EX4 acknowledge: owner authorizes fixing branch CI failures. CI run 36938864734 fails API/IdP and UI image audits on vulnerable devalue, plus root API SCA on brace-expansion. Scope: targeted compatible transitive lock updates only in root and IdP web locks; no manifest, source or scanner-policy changes. Impact: patched dependencies in the required image builds. Rollback: revert this security-only commit. Acceptance: image builds and SCA gates pass.
+- [x] BR61-EX5 acknowledge: owner authorizes fixing branch CI failures. Run 36939427718 container gate rejects npm-bundled brace-expansion 5.0.6 (CVE-2026-102276/102278) and undici 6.26.0 (CVE-2026-19534). Patch only these embedded copies to 5.0.12 and 6.28.1 using the existing Dockerfile archive-replacement pattern; existing Node/npm versions and scanner policy stay fixed. Impact: patched npm internals in the API image; distinct from the deferred standalone-lock follow-up. Rollback: remove the two replacement blocks. Acceptance: API production image builds and its container scan passes.
 - [x] BR61-Q3 resolved: targeted lock updates selected devalue 5.9.4 and brace-expansion 5.0.12 within existing ranges. API and UI SCA pass with no findings; IdP production audit reports zero vulnerabilities. Required image-build verification follows in CI and local API bringup.
 - [x] BR61-R1 acknowledge: conductor review APPROVE_WITH_CHANGES on PR #628; blocking version-fixture and audit findings resolved by feb597e4b and 29fc0be0b, pending green CI. Apply explicit unverified Codex availability notes, profile-inheritance test and lock-scope correction; regenerate packed integrity and rerun gates.
 - [x] BR61-R2 deferred: residual vulnerable copies in standalone UI/API/IdP locks are a conductor-requested PR follow-up only; no additional dependency changes in this branch. On any rebase, recheck registry version before preserving the candidate bump.
