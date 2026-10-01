@@ -38,10 +38,10 @@ let dir: string;
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 type Manifest = { name: string; version: string } & Record<string, unknown>;
-const MESH: Manifest = { name: '@sentropic/llm-mesh', version: '0.22.2' };
+const MESH: Manifest = { name: '@sentropic/llm-mesh', version: '0.22.3' };
 
 /** Write `in/<file>` for each manifest and `in/receipts.json` (or raw text) listing them. */
-function receipts(overrides: Record<string, unknown> = {}, manifests: [Manifest, string][] = [[MESH, 'llm-mesh/sentropic-llm-mesh-0.22.2.tgz']],
+function receipts(overrides: Record<string, unknown> = {}, manifests: [Manifest, string][] = [[MESH, 'llm-mesh/sentropic-llm-mesh-0.22.3.tgz']],
   raw?: string) {
   dir = mkdtempSync(join(tmpdir(), 'cluster-siblings-'));
   const list = manifests.map(([manifest, file], index) => {
@@ -61,16 +61,16 @@ describe('train sibling resolver', () => {
   it('should resolve exactly the verified name@version to its archive and everything else to the registry', () => {
     const { bytes, receiptsPath, out } = receipts();
     expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
-    const archive = resolve(out, 'sentropic-llm-mesh-0.22.2.tgz');
+    const archive = resolve(out, 'sentropic-llm-mesh-0.22.3.tgz');
     expect(readFileSync(archive)).toEqual(bytes);
-    expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-mesh', '0.22.2').out.trim()).toBe(`file:${archive}`);
+    expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-mesh', '0.22.3').out.trim()).toBe(`file:${archive}`);
     expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-mesh', '0.21.2').out.trim()).toBe('0.21.2');
     expect(run('siblings.mjs', 'spec', out, '@sentropic/llm-gateway', '0.19.1').out.trim()).toBe('0.19.1');
   });
 
   it('should hand back a cluster-mesh receipt as the candidate and refuse another version', () => {
     const { receiptsPath, out } = receipts({}, [
-      [MESH, 'llm-mesh/sentropic-llm-mesh-0.22.2.tgz'],
+      [MESH, 'llm-mesh/sentropic-llm-mesh-0.22.3.tgz'],
       [{ name: '@sentropic/cluster-mesh', version: '0.13.0' }, 'cluster-mesh/sentropic-cluster-mesh-0.13.0.tgz'],
     ]);
     expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
@@ -107,16 +107,16 @@ describe('train sibling resolver', () => {
   });
 
   it('should refuse a packed manifest failing the guard, an unlisted archive, colliding basenames and no head sha', () => {
-    const guard = receipts({}, [[{ ...MESH, dependencies: { x: 'file:../x' } }, 'llm-mesh/sentropic-llm-mesh-0.22.2.tgz']]);
+    const guard = receipts({}, [[{ ...MESH, dependencies: { x: 'file:../x' } }, 'llm-mesh/sentropic-llm-mesh-0.22.3.tgz']]);
     expect(run('siblings.mjs', 'verify', guard.receiptsPath, guard.out).out).toContain('fails the packed-manifest guard');
     rmSync(dir, { recursive: true, force: true });
     const unlisted = receipts();
     writeFileSync(join(dir, 'in/llm-mesh/extra.tgz'), 'x');
     expect(run('siblings.mjs', 'verify', unlisted.receiptsPath, unlisted.out).out).toContain('unlisted archive in sibling directory: llm-mesh/extra.tgz');
     rmSync(dir, { recursive: true, force: true });
-    const collide = receipts({}, [[MESH, 'a/sentropic-llm-mesh-0.22.2.tgz'],
-      [{ name: '@sentropic/llm-gateway', version: '0.19.1' }, 'b/sentropic-llm-mesh-0.22.2.tgz']]);
-    expect(run('siblings.mjs', 'verify', collide.receiptsPath, collide.out).out).toContain('archive basename sentropic-llm-mesh-0.22.2.tgz collides');
+    const collide = receipts({}, [[MESH, 'a/sentropic-llm-mesh-0.22.3.tgz'],
+      [{ name: '@sentropic/llm-gateway', version: '0.19.1' }, 'b/sentropic-llm-mesh-0.22.3.tgz']]);
+    expect(run('siblings.mjs', 'verify', collide.receiptsPath, collide.out).out).toContain('archive basename sentropic-llm-mesh-0.22.3.tgz collides');
     const noHead = runWith({ CLUSTER_MESH_HEAD_SHA: '' }, 'siblings.mjs', 'verify', collide.receiptsPath, collide.out);
     expect(noHead).toMatchObject({ status: 1 });
     expect(noHead.out).toContain('CLUSTER_MESH_HEAD_SHA is required');
