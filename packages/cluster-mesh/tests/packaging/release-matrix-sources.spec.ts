@@ -45,6 +45,6 @@ describe('packed release matrix expected sources', () => {
   });
 
   it('should expect the registry for a sibling at another version than the pinned one', () => {
-    expect(sources([{ ...MESH, version: '0.22.3' }, GATEWAY])).toEqual(['registry', 'sibling']);
+    expect(sources([{ ...MESH, version: '0.22.4' }, GATEWAY])).toEqual(['registry', 'sibling']);
   });
 });

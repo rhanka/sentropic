@@ -87,7 +87,7 @@ describe('train sibling resolver', () => {
     ['a failed guard', { guard: 'fail' }, 'not a passing BLOCK release-candidate'],
     ['an escaping path', { file: '../x.tgz' }, 'invalid sibling archive path ../x.tgz'],
     ['an absolute path', { file: '/etc/passwd' }, 'invalid sibling archive path /etc/passwd'],
-    ['an identity mismatch', { version: '0.22.3' }, 'sibling identity mismatch'],
+    ['an identity mismatch', { version: '0.22.4' }, 'sibling identity mismatch'],
     ['another head commit', { head_sha: 'def' }, 'was packed from def, not head abc'],
   ])('should refuse %s', (_label, overrides, message) => {
     const { receiptsPath, out } = receipts(overrides);
