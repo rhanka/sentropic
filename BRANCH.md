@@ -47,8 +47,8 @@
 - [x] No live provider testing; for CI `api/tests/ai/**` nondeterminism, rerun once on the same commit and record exact signature in a PR comment.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; one implementation owner and the explicitly requested separate read-only Codex review.
-- [x] Review uses requested model `gpt-5.5`, effort `xhigh`; no Astra sessions.
+- [x] Mono-branch; one implementation owner and a conductor-provided independent review.
+- [x] The conductor launches the reviewer; this branch launches no review session and uses no Astra sessions.
 
 ## UAT Management (in orchestration context)
 - [x] Package-only change; model catalog and mocked runtime coverage qualify the user-visible behavior; no web/Chrome/VSCode UI changes.
@@ -58,6 +58,7 @@
 - [x] Lot 1: scaffold with dry run then apply; verify label, inherited capabilities and faithful Codex route; add council exclusion and regenerate via Make.
 - [x] Lot 2: extend routing/scaffolder/quote tests, API catalog list/count and runtime stream fixture; preserve existing aliases.
 - [ ] Lot 3: verify registry version, bump mesh to 0.22.3 and changelog; refresh root lock; align cluster integration and packaging test versions and regenerate fixture lock.
+  - [x] Registry latest is 0.22.2; bumped manifest/changelog to 0.22.3, refreshed root lock via Make and aligned consumer test pins; fixture integrity regeneration follows the candidate pack.
 - [ ] Lot 4: run `test-llm-mesh`, `typecheck-llm-mesh`, `build-llm-mesh`, council freshness and `scope-check`; scoped API catalog/runtime tests and cluster validations.
 - [ ] Lot 5: push branch; create PR to main using this plan as body; post 3-step implementation/validation/review plan; wait for CI and fix failures.
-- [ ] Lot 6: separate read-only `gpt-5.5` xhigh PR-diff review; resolve blocking findings, rerun affected gates, push and post verdict; write report and stop.
+- [ ] Lot 6: write PR number and head SHA to `.h2a-report.md`; wait for the conductor's review comment; resolve blocking findings, rerun affected gates, push and record verdict; write final report and stop.
