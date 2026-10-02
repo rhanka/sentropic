@@ -300,6 +300,17 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
   },
+  // Codex availability unverified; capabilities and task hints inherited
+  // from gpt-6-sol (unverified);
+  // no context window / max output declared (unknown).
+  {
+    providerId: 'openai',
+    modelId: 'gpt-6.1-sol',
+    label: 'GPT-6.1 Sol',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
   {
     providerId: 'openai',
     modelId: 'gpt-6-astra',
