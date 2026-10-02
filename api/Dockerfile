@@ -2,6 +2,24 @@
 FROM node:24-alpine3.23 AS base
 # Security: Pin npm to a known-good version (reproducible build) to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@11.16.0
+# Security: Patch npm's bundled brace-expansion for CVE-2026-102276 / CVE-2026-102278
+RUN mkdir -p /tmp/brace-expansion-update && \
+    cd /tmp/brace-expansion-update && \
+    npm pack brace-expansion@5.0.12 && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    rm -rf brace-expansion && \
+    tar -xzf /tmp/brace-expansion-update/brace-expansion-5.0.12.tgz && \
+    mv package brace-expansion && \
+    rm -rf /tmp/brace-expansion-update
+# Security: Patch npm's bundled undici for CVE-2026-19534
+RUN mkdir -p /tmp/undici-update && \
+    cd /tmp/undici-update && \
+    npm pack undici@6.28.1 && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    rm -rf undici && \
+    tar -xzf /tmp/undici-update/undici-6.28.1.tgz && \
+    mv package undici && \
+    rm -rf /tmp/undici-update
 # Security: Force update glob in npm itself to fix CVE-2025-64756
 # Download glob 11.1.0 first, then replace npm's glob directory
 RUN mkdir -p /tmp/glob-update && \
