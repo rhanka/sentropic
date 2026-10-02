@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.3
+
+- Add `gpt-6.1-sol` to the OpenAI catalog and provider registrations with a
+  faithful Codex route. Existing GPT-6 Sol and Claude alias targets are preserved.
+- Inherit GPT-6 Sol capabilities and task hints as unverified; no context window
+  or output limit is claimed. Codex availability is unverified. Exclude the new
+  model from benchmark equivalence.
+- Patch release preserves the gateway and cluster-mesh 0.22.x dependency ranges.
+
 ## 0.22.2
 
 - Add the exclusive `claude-opus-5-5` launch alias: every request routes to

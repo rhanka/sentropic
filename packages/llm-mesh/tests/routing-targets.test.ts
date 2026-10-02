@@ -17,10 +17,17 @@ describe('canonical model targets', () => {
   const resolve = createCanonicalTargetResolver();
   const resolveCandidates = createCanonicalTargetCandidatesResolver();
 
-  it.each(['gpt-6-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
+  it.each(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
     const target = { providerId: 'openai', transportProviderId: 'codex', model };
     expect(resolve(model)).toEqual(target);
     expect(resolveCandidates(model)).toEqual([target]);
+  });
+
+  it('should inherit the GPT-6 Sol profile for GPT-6.1 Sol', () => {
+    const base = modelProfiles.find((profile) => profile.modelId === 'gpt-6-sol');
+    const added = modelProfiles.find((profile) => profile.modelId === 'gpt-6.1-sol');
+    expect(base).toBeDefined();
+    expect(added).toEqual({ ...base, modelId: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' });
   });
 
   it('keeps Terra on 5.6 and excludes unverified GPT-6 Terra from all targets', () => {

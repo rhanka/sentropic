@@ -113,6 +113,7 @@ describe('add-model scaffold', () => {
       ['claude-fable-5-1', 'claude-fable-5'],
       ['gpt-6-astra', 'gpt-5.6-sol'],
       ['gpt-6-sol', 'gpt-5.6-sol'],
+      ['gpt-6.1-sol', 'gpt-6-sol'],
       ['gpt-6-luna', 'gpt-5.6-luna'],
       ['gemini-3.8-flash', 'gemini-3.7-flash'],
     ]) {
