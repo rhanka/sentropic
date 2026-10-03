@@ -22,6 +22,7 @@
   - `api/tests/unit/reservation-reaper-schedule.test.ts`
   - `apps/llm-gateway/tests/lifecycle-reaper.test.ts`
   - `apps/llm-gateway/tests/autonomy.test.ts` (BRRS-EX1 only)
+  - `api/Dockerfile` (BRRS-EX2 only)
   - `api/tests/api/llm-budget-ledger.test.ts`
   - `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`
   - `BRANCH.md`
@@ -32,7 +33,7 @@
   - `api/drizzle/**`
   - `.github/workflows/**`
   - All paths not explicitly allowed above.
-- [x] **Conditional Paths (allowed only with explicit exception)**: `apps/llm-gateway/tests/autonomy.test.ts` under BRRS-EX1 only.
+- [x] **Conditional Paths (allowed only with explicit exception)**: `apps/llm-gateway/tests/autonomy.test.ts` under BRRS-EX1 only; `api/Dockerfile` under BRRS-EX2 only.
 - [x] **Exception process**: record scope blockers before editing any additional path.
 
 ## Feedback Loop
@@ -41,6 +42,7 @@
 - [x] BRRS-A2 | attention | Owner: implementation | Released never-dispatched holds create no cost row under the existing contract; assert zero rows for released requests and exactly one row for reconciled requests.
 - [x] BRRS-A3 | attention | Owner: implementation | Preserve the API's default signal termination; synchronous exit cleanup fences the scheduler. The host uses its existing bounded SIGTERM drain and awaits an active sweep there.
 - [x] BRRS-B2 | resolved | Owner: conductor | Host tests: 76 passed, 1 failed at `apps/llm-gateway/tests/autonomy.test.ts:103`; its explicit product-adapter allowlist rejects the newly authorized reservation-reaper import. Required scope extension: this test file only, adding `llm-metering/reservation-reaper` to `allowed` and `reservation-reaper` to the adapter value-import checks. This retains and extends the no-product-globals boundary assertion; no runtime change. Acceptance: all 77 host tests pass. Rollback: revert both test-list additions. Owner granted via conductor on 2026-10-02 as BRRS-EX1: rationale is the extended product-adapter boundary for the authorized reaper import; impact is test-only, no runtime change; rollback is reverting both test-list additions.
+- [x] BRRS-EX2 | resolved | Owner: conductor | CI `security-container` fails on CVE-2026-93748 (GHSA-ch52-4w7c-c8xp) in npm-bundled `http-cache-semantics` 4.2.0; no upstream fix exists. Rationale: remove the npm CLI from the `production` stage after prune and audit gate; runtime only runs `node`. Impact: production image only, scanner policy unchanged. Rollback: remove the `rm -rf` line in `api/Dockerfile`.
 - [x] Blocked handoff checks: `make scope-check API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed C2; `make down API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule` passed. No runtime tests run; implementation stopped at the explicit scope boundary.
 
 ## AI Flaky tests
@@ -87,3 +89,4 @@
 - [x] PASS (healthy responses in inspected tail): `make logs-api TAIL=30 REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
 - [x] PASS: `make down REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
 - [x] PASS (empty): `make ps REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
+- [x] PASS after BRRS-EX2 (0 findings, compliance passed): `make build-api-image test-api-security-container REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
