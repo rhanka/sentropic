@@ -100,6 +100,29 @@ export const sanitizeNativeErrorMessage = (message: string): string => {
   return result || 'invalid request';
 };
 
+const processedValidationDetails = new WeakSet<object>();
+export const NATIVE_VALIDATION_PROCESSED = Symbol.for('@sentropic/llm-gateway/native-validation-processed');
+
+export const markNativeValidationProcessed = <T extends object>(detail: T): T => {
+  processedValidationDetails.add(detail);
+  try {
+    Object.defineProperty(detail, NATIVE_VALIDATION_PROCESSED, {
+      value: true,
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
+  } catch {
+    // Ignore if frozen or sealed
+  }
+  return detail;
+};
+
+export const isProcessedNativeValidationDetail = (detail: unknown): boolean => {
+  if (!detail || typeof detail !== 'object') return false;
+  return processedValidationDetails.has(detail) || (detail as Record<symbol, unknown>)[NATIVE_VALIDATION_PROCESSED] === true;
+};
+
 export const parseNativeErrorDetail = (
   rawBody: string | Uint8Array, status: number,
   options?: { readonly requestSafeguards?: boolean; readonly sentBetas?: readonly string[] },
@@ -117,7 +140,7 @@ export const parseNativeErrorDetail = (
     ? (errorObj as { message: string }).message
     : undefined;
   if (status === 400 && rawMessage !== undefined && detectNativeBillingError(rawMessage)) {
-    return { type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE };
+    return markNativeValidationProcessed({ type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE });
   }
 
   if (!errorObj || typeof errorObj !== 'object' || typeof errorObj.type !== 'string' || typeof errorObj.message !== 'string') {
@@ -132,9 +155,9 @@ export const parseNativeErrorDetail = (
     );
     const hasClassifierReject = CLASSIFIER_EXACT_TOKEN_REGEX.test(errorObj.message) && CLASSIFIER_REWRITE_PATTERN.test(errorObj.message);
     if (sentClassifier && !hasNestedOrDangerous && hasClassifierReject) {
-      return { type: 'invalid_request_error', message: SAFEGUARDS_NOT_SUPPORTED_MESSAGE };
+      return markNativeValidationProcessed({ type: 'invalid_request_error', message: SAFEGUARDS_NOT_SUPPORTED_MESSAGE });
     }
-    return { type: 'invalid_request_error', message: sanitizeNativeErrorMessage(errorObj.message) };
+    return markNativeValidationProcessed({ type: 'invalid_request_error', message: sanitizeNativeErrorMessage(errorObj.message) });
   }
   throw new GatewayError('bad-request', 'non-validation native error status or type');
 };

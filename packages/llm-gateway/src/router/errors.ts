@@ -25,6 +25,7 @@ import type { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 import {
   detectNativeBillingError,
+  isProcessedNativeValidationDetail,
   NATIVE_BILLING_MASKED_MESSAGE,
   sanitizeNativeErrorMessage,
 } from '../native-errors.js';
@@ -135,7 +136,9 @@ const extractNativeValidationDetail = (error: NativeMessagesUpstreamError): Nati
   const detail = error.validation;
   if (!detail || typeof detail !== 'object' || typeof detail.message !== 'string') return undefined;
   const rawMessage = detail.message;
-  if (rawMessage === NATIVE_BILLING_MASKED_MESSAGE || detectNativeBillingError(rawMessage)) {
+  const isBilling = rawMessage === NATIVE_BILLING_MASKED_MESSAGE ||
+    (!isProcessedNativeValidationDetail(detail) && detectNativeBillingError(rawMessage));
+  if (isBilling) {
     return { type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE };
   }
   if (error.type !== 'invalid_request_error' || detail.type !== 'invalid_request_error') return undefined;
