@@ -1,4 +1,6 @@
 import type { RouteAttemptUsage } from './routing-contracts.js';
+import { modelProfiles } from './catalog.js';
+import { EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS } from './routing-targets.js';
 
 export type NativeInputUsageSource = 'json' | 'message_start' | 'message_delta';
 export type NativeUsageUncertainty =
@@ -96,6 +98,55 @@ export type NativeMessagesResult =
   | { readonly kind: 'stream'; readonly status: 200;
       readonly body: AsyncIterable<Uint8Array>;
       readonly headers: Readonly<Record<string, string>> };
+
+/** Empty until real qualification; trusted hosts may supply a code-only override. */
+export const NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS: readonly string[] = Object.freeze([]);
+
+export const validateNativeModelAllowlist = (
+  modelIds: readonly string[],
+): readonly string[] => {
+  for (const modelId of modelIds) {
+    if (Object.hasOwn(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS, modelId)
+      || !modelProfiles.some((profile) =>
+        profile.providerId === 'anthropic' && profile.modelId === modelId)) {
+      throw new Error('Native Messages allowlist requires exact non-exclusive Anthropic model IDs');
+    }
+  }
+  return Object.freeze([...modelIds]);
+};
+
+/** Pure provider/model identity check; account advertisement is a separate gate. */
+export const isNativeMessagesTarget = (
+  target: { readonly providerId: string; readonly modelId: string },
+  modelIds: readonly string[] = NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS,
+): boolean => target.providerId === 'anthropic' && modelIds.includes(target.modelId);
+
+const isNonemptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+export const isPreparedNativeMessages = (value: unknown): value is PreparedNativeMessages => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const capability = value as Record<string, unknown>;
+  return capability.contractVersion === 1
+    && capability.protocol === 'anthropic-messages'
+    && isNonemptyString(capability.modelId)
+    && Array.isArray(capability.apiVersions) && capability.apiVersions.length > 0
+    && [...capability.apiVersions].every(isNonemptyString)
+    && Array.isArray(capability.requiredBetas)
+    && [...capability.requiredBetas].every((beta) => typeof beta === 'string')
+    && typeof capability.execute === 'function'
+    && (capability.finalize === undefined || typeof capability.finalize === 'function');
+};
+
+/** Lot 2 required betas are empty: preserve the caller's parser-retained value exactly. */
+export const composeAnthropicBeta = (
+  callerValue: string | undefined,
+  requiredBetas: readonly string[] = [],
+): string | undefined => {
+  if (requiredBetas.length === 0) return callerValue;
+  const required = requiredBetas.join(',');
+  return callerValue === undefined ? required : `${callerValue},${required}`;
+};
 
 export type NativeMessagesProviderErrorType =
   | 'invalid_request_error' | 'authentication_error' | 'permission_error'
