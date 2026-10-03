@@ -12,6 +12,8 @@ import {
   GatewayError,
   mapGatewayError,
   NATIVE_BILLING_MASKED_MESSAGE,
+  parseNativeErrorDetail,
+  sanitizeNativeErrorMessage,
   toProviderShapedError,
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
@@ -489,6 +491,29 @@ describe('error mapping through the router (integration)', () => {
       expect(toProviderShapedError(wire, upstream500).status).toBe(503);
       expect(toProviderShapedError(wire, authError).status).toBe(401);
       expect(toProviderShapedError(wire, upstream401).status).toBe(401);
+    }
+  });
+
+  it('preserves non-billing dated feature error through parser, native error, and wire mappers after truncation', () => {
+    const message = 'billing-' + 'a'.repeat(4200) + '-2026-06-01: invalid value';
+    const validation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message } }), 400);
+    const upstreamError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation });
+    const expected = sanitizeNativeErrorMessage(message);
+
+    const billingMessage = 'billing-' + 'a'.repeat(4200) + '-2026-06-01: invalid value. Your credit balance is too low.';
+    const billingValidation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message: billingMessage } }), 400);
+    const billingError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: billingValidation });
+
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, upstreamError);
+      expect(mapped.status).toBe(400);
+      const publicMsg = (mapped.body as { error: { message: string } }).error.message;
+      expect(publicMsg).toBe(expected);
+      expect(publicMsg).not.toBe(NATIVE_BILLING_MASKED_MESSAGE);
+
+      const billMapped = toProviderShapedError(wire, billingError);
+      expect(billMapped.status).toBe(400);
+      expect((billMapped.body as { error: { message: string } }).error.message).toBe(NATIVE_BILLING_MASKED_MESSAGE);
     }
   });
 });
