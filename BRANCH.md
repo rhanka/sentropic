@@ -81,17 +81,17 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
   - [x] Lot gate:
     - [x] `make test-idp-sync-sql ENV=test-idp-sync`: fixtures reproduce the measured state (8/8 users, 1 collision with 8 creds + 9 sessions, 7 shared creds, 1 missing prod cred, 1 kept preprod-only user, product rows on the duplicate) → dry run rolls back with expected audit; commit run yields users 9 / webauthn 22 / collisions 0; second commit run is a no-op; unknown re-key pair fails closed; DV5 tamper fails closed.
 
-- [ ] **Lot 2 — Kubernetes objects (kustomize, deployed by CD)**
+- [x] **Lot 2 — Kubernetes objects (kustomize, deployed by CD)**
   - [x] Add prod kustomization, hardened dormant export CronJob, reader SQL ConfigMaps and narrow trigger RBAC.
   - [x] Add preprod kustomization, hardened dormant import CronJob and dump/upload/fetch init containers (import wrapper follows).
   - [x] Wire both overlays and add checksum/freshness validation with counts/IDs-only JSON termination audit.
   - [x] Add rendered-bundle assertions for dormant scheduling, hardening, narrow RBAC and strict credential separation.
-  - [ ] `overlays/prod/idp-identity-sync/`: kustomization (ns `sentropic`, `configMapGenerator` with `disableNameSuffixHash`), SA `sentropic-idp-export` (no token), NetworkPolicy `allow-idp-export-to-postgres`, CronJob `sentropic-idp-identity-export` (`*/5`, `suspend: true`, Forbid, export + `SHA256SUMS` + s5cmd put with `sentropic-idp-relay-writer`), trigger SA/Role/RoleBinding `sentropic-ci-trigger-idp-export` (cronjobs get/patch by resourceName, jobs get/list/watch, pods/log get).
-  - [ ] `overlays/preprod/idp-identity-sync/`: kustomization (ns `sentropic-preprod`), SA `sentropic-idp-sync` (no token), NetworkPolicy `allow-idp-sync-to-postgres`, CronJob `sentropic-idp-identity-sync` (`*/5`, `suspend: true`, frozen `DRY_RUN=1`, `ALLOWED_REKEY=""`, `MAX_SNAPSHOT_AGE_S`) with pre-sync rollback dump (s5cmd `run` command file, `sentropic-pgbackup`), relay fetch (`sentropic-idp-relay-reader`), `sha256sum -c`, import.
-  - [ ] Include `idp-identity-sync` in `overlays/prod/kustomization.yaml` and `overlays/preprod/kustomization.yaml`.
-  - [ ] Hardened pods (runAsNonRoot, seccomp RuntimeDefault, drop ALL, no SA token, `enableServiceLinks: false`, memory emptyDirs with sizeLimit, requests/limits, TTL).
-  - [ ] Lot gate:
-    - [ ] `make test-idp-sync-selftest ENV=test-idp-sync`: kustomize build of both sub-dirs; invariants (suspend true, digests pinned, no aws-cli/python image, no `sentropic-idp-relay-writer`/`sentropic-idp-identity-reader` referenced in preprod, no reader referenced in prod, frozen DRY_RUN=1).
+  - [x] `overlays/prod/idp-identity-sync/`: kustomization (ns `sentropic`, `configMapGenerator` with `disableNameSuffixHash`), SA `sentropic-idp-export` (no token), NetworkPolicy `allow-idp-export-to-postgres`, CronJob `sentropic-idp-identity-export` (`*/5`, `suspend: true`, Forbid, export + `SHA256SUMS` + s5cmd put with `sentropic-idp-relay-writer`), trigger SA/Role/RoleBinding `sentropic-ci-trigger-idp-export` (cronjobs get/patch by resourceName, jobs get/list/watch, pods/log get).
+  - [x] `overlays/preprod/idp-identity-sync/`: kustomization (ns `sentropic-preprod`), SA `sentropic-idp-sync` (no token), NetworkPolicy `allow-idp-sync-to-postgres`, CronJob `sentropic-idp-identity-sync` (`*/5`, `suspend: true`, frozen `DRY_RUN=1`, `ALLOWED_REKEY=""`, `MAX_SNAPSHOT_AGE_S`) with pre-sync rollback dump (s5cmd `run` command file, `sentropic-pgbackup`), relay fetch (`sentropic-idp-relay-reader`), `sha256sum -c`, import.
+  - [x] Include `idp-identity-sync` in `overlays/prod/kustomization.yaml` and `overlays/preprod/kustomization.yaml`.
+  - [x] Hardened pods (runAsNonRoot, seccomp RuntimeDefault, drop ALL, no SA token, `enableServiceLinks: false`, memory emptyDirs with sizeLimit, requests/limits, TTL).
+  - [x] Lot gate:
+    - [x] `make test-idp-sync-selftest ENV=test-idp-sync`: kustomize build of both sub-dirs; invariants (suspend true, digests pinned, no aws-cli/python image, no `sentropic-idp-relay-writer`/`sentropic-idp-identity-reader` referenced in preprod, no reader referenced in prod, frozen DRY_RUN=1).
 
 - [ ] **Lot 3 — CD and run workflow**
   - [ ] `deploy/ci/idp-identity-sync/reader-role-provision-job.tmpl.yaml` (prod Job, `\getenv`, backoffLimit 0, deadline 300 s) and `import-job.tmpl.yaml` (preprod Job, `${DRY_RUN}`, `${ALLOWED_REKEY}`, `${MAX_SNAPSHOT_AGE_S}`).
