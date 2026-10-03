@@ -984,4 +984,31 @@ describe('LocalAccountTransportService', () => {
       expect(diagnostic.actualTransportProviderId).toBe('codex');
     }
   });
+
+  it('advertises no native capability or attempt in h2a account transport', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'claude-account', targetProviderId: 'anthropic',
+      transportProviderId: 'claude-code', modelIds: ['claude-sonnet-5'],
+      accessToken: 'token', status: 'active',
+      enrollmentCompletedAt: '2026-08-08T00:00:00Z',
+      ownerScopeRef: 'tenant-1:user-1',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' };
+    const accounts = await directory.listEligible(subject);
+    expect(accounts[0]?.nativeMessages).toBeUndefined();
+
+    const attempt = await directory.prepareAttempt({
+      subject, accountRef: accounts[0]!.accountRef,
+      target: { requestedModel: 'claude-sonnet-5', providerId: 'anthropic', modelId: 'claude-sonnet-5', transportProviderId: 'claude-code', reason: 'exact' },
+      requestId: 'r1', attemptIndex: 0,
+    });
+    expect(attempt.nativeMessages).toBeUndefined();
+  });
 });

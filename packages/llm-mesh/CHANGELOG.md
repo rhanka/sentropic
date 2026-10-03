@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.0
+
+- Add native Anthropic Messages contracts, usage snapshot, and capability exports (`PreparedNativeMessages`, `NativeUsageSnapshot`).
+- Add required `nativeMessages` route quote feasibility, filtering, and hash binding.
+- Add planner native eligibility (P0/P1 checks, allowlist validation, and sticky resolution).
+- Forward prepared native capability on eligible fresh descriptors without mutating h2a transport.
+
 ## 0.22.3
 
 - Add `gpt-6.1-sol` to the OpenAI catalog and provider registrations with a
