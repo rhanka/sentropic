@@ -3,6 +3,7 @@ import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js
 import { InMemoryRoutePlanner } from '../src/route-planner.js';
 import { RoutePlanError } from '../src/route-planner-state.js';
 import type { EligibleAccountDescriptor } from '../src/routing-contracts.js';
+import type { PreparedNativeMessages } from '../src/native-messages.js';
 import { DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles } from '../src/routing-policy.js';
 import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
 
@@ -1157,5 +1158,62 @@ describe('opaque route planner', () => {
       requestedModel: 'claude-sonnet-5', affinityKey: 'k1',
     });
     expect(nextCanonical.diagnostics[0]?.diagnosticAccountRef).toBe(canonicalPlan.diagnostics[0]?.diagnosticAccountRef);
+  });
+
+  it('forwards native capability only with fresh descriptor, eligible target, and matching model', async () => {
+    const validCapability: PreparedNativeMessages = {
+      contractVersion: 1, protocol: 'anthropic-messages', modelId: 'claude-sonnet-5',
+      apiVersions: ['2023-06-01'], requiredBetas: [],
+      execute: async () => ({ kind: 'json', status: 200, body: {}, headers: {} }),
+    };
+
+    class NativeDir extends FakeRouteDirectory {
+      constructor(accounts: EligibleAccountDescriptor[], private capability?: PreparedNativeMessages) {
+        super(accounts);
+      }
+      override async prepareAttempt(input: any) {
+        const base = await super.prepareAttempt(input);
+        return { ...base, nativeMessages: this.capability };
+      }
+    }
+
+    const accounts: EligibleAccountDescriptor[] = [
+      {
+        accountRef: 'internal-native', diagnosticAccountRef: 'acct_native',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+        nativeMessages: { contractVersion: 1, protocol: 'anthropic-messages' },
+      },
+    ];
+
+    const dir = new NativeDir(accounts, validCapability);
+    const planner = new InMemoryRoutePlanner({ directory: dir, nativeMessagesModelIds: ['claude-sonnet-5'] });
+    const plan = await planner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5' });
+    const attempt = await planner.prepareAttempt(routingSubject(), plan.planRef, plan.candidateRefs[0]!, 'r1', 0);
+    expect(attempt.nativeMessages).toBe(validCapability);
+
+    await attempt.complete();
+    await attempt.complete();
+    expect(dir.prepared[0]?.completed).toBe(1);
+
+    const mismatchDir = new NativeDir(accounts, { ...validCapability, modelId: 'claude-opus-5' });
+    const mismatchPlanner = new InMemoryRoutePlanner({ directory: mismatchDir, nativeMessagesModelIds: ['claude-sonnet-5'] });
+    const mismatchPlan = await mismatchPlanner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5' });
+    const mismatchAttempt = await mismatchPlanner.prepareAttempt(routingSubject(), mismatchPlan.planRef, mismatchPlan.candidateRefs[0]!, 'r2', 0);
+    expect(mismatchAttempt.nativeMessages).toBeUndefined();
+
+    class StaleDir extends NativeDir {
+      private polled = false;
+      override async listEligible(sub: any) {
+        if (!this.polled) { this.polled = true; return accounts; }
+        return [{ ...accounts[0]!, nativeMessages: undefined }];
+      }
+    }
+    const staleDir = new StaleDir(accounts, validCapability);
+    const stalePlanner = new InMemoryRoutePlanner({ directory: staleDir, nativeMessagesModelIds: ['claude-sonnet-5'] });
+    const stalePlan = await stalePlanner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5' });
+    const staleAttempt = await stalePlanner.prepareAttempt(routingSubject(), stalePlan.planRef, stalePlan.candidateRefs[0]!, 'r3', 0);
+    expect(staleAttempt.nativeMessages).toBeUndefined();
   });
 });

@@ -347,6 +347,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       return await prepareStoredRouteAttempt({
         stored, subject, planRef, candidateRef, requestId, attemptIndex,
         directory: this.options.directory, clock: this.clock,
+        isNativeTarget: (target) => isNativeMessagesTarget(target, this.nativeMessagesModelIds),
         onOutcome: (activePlan, candidate, failure) => {
           this.health.record(candidate, failure, activePlan.policy);
           const terminalCandidate = activePlan.candidates.at(-1) === candidate;
