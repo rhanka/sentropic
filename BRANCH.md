@@ -72,14 +72,14 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
   - [x] Confirm measured state 2026-10-03 (owner re-key `9f11d240-fc75-4d55-80be-1bafcd79eadb` → `1b9b9e15-2956-4df4-9ee1-a42273f0d096`; Farid unchanged; DV5 oauth_clients 2, signing keys 1/1).
   - [x] Declare `BR45-EX1`, `BR45-EX2`.
 
-- [ ] **Lot 1 — SQL (versioned, idempotent)**
+- [x] **Lot 1 — SQL (versioned, idempotent)**
   - [x] Version the reviewed import transaction through catalog-driven FK repointing (post-conditions follow in the next atomic commit).
   - [x] Add synthetic prod/preprod fixtures and state/DV5 assertions under `deploy/ci/idp-identity-sync/fixtures/`.
   - [x] `deploy/k8s/overlays/prod/idp-identity-sync/reader-role.sql`: idempotent `idp_identity_reader` (password via psql `\getenv` from Secret, refuse empty, column-level SELECT on `users` 13 cols + `webauthn_credentials` 10 cols, read-only, `CONNECTION LIMIT 2`, `statement_timeout 60s`); regularizes the hand-created role.
   - [x] `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`: one `REPEATABLE READ READ ONLY` snapshot → `users.csv`, `webauthn.csv`, `snapshot.csv`.
   - [x] `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`: single transaction, advisory lock, count guard, collision free-email, upsert by prod id, `ALLOWED_REKEY` guard, catalog-driven FK repoint, webauthn authoritative by `credential_id` with `GREATEST` counter, in-txn post-conditions incl. DV5 fingerprint, audit lines (IDs/counts), `dry_run` rollback.
-  - [ ] Lot gate:
-    - [ ] `make test-idp-sync-sql ENV=test-idp-sync`: fixtures reproduce the measured state (8/8 users, 1 collision with 8 creds + 9 sessions, 7 shared creds, 1 missing prod cred, 1 kept preprod-only user, product rows on the duplicate) → dry run rolls back with expected audit; commit run yields users 9 / webauthn 22 / collisions 0; second commit run is a no-op; unknown re-key pair fails closed; DV5 tamper fails closed.
+  - [x] Lot gate:
+    - [x] `make test-idp-sync-sql ENV=test-idp-sync`: fixtures reproduce the measured state (8/8 users, 1 collision with 8 creds + 9 sessions, 7 shared creds, 1 missing prod cred, 1 kept preprod-only user, product rows on the duplicate) → dry run rolls back with expected audit; commit run yields users 9 / webauthn 22 / collisions 0; second commit run is a no-op; unknown re-key pair fails closed; DV5 tamper fails closed.
 
 - [ ] **Lot 2 — Kubernetes objects (kustomize, deployed by CD)**
   - [ ] `overlays/prod/idp-identity-sync/`: kustomization (ns `sentropic`, `configMapGenerator` with `disableNameSuffixHash`), SA `sentropic-idp-export` (no token), NetworkPolicy `allow-idp-export-to-postgres`, CronJob `sentropic-idp-identity-export` (`*/5`, `suspend: true`, Forbid, export + `SHA256SUMS` + s5cmd put with `sentropic-idp-relay-writer`), trigger SA/Role/RoleBinding `sentropic-ci-trigger-idp-export` (cronjobs get/patch by resourceName, jobs get/list/watch, pods/log get).

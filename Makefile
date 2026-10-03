@@ -1442,6 +1442,15 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 		-w /workspace/packages/harness \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,harness,--access public)'
 
+.PHONY: test-idp-sync-sql
+test-idp-sync-sql: ## Test the IdP relay SQL on a disposable, isolated Postgres database (BR45-EX1)
+	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
+	@docker run --rm --network none --tmpfs /tmp:rw,exec \
+		-v "$(CURDIR)/api/drizzle:/workspace/api/drizzle:ro" \
+		-v "$(CURDIR)/deploy:/workspace/deploy:ro" \
+		--entrypoint sh postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
+		/workspace/deploy/ci/idp-identity-sync/sql-test.sh
+
 .PHONY: scope-check
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
