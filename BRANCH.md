@@ -74,6 +74,7 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
 
 - [ ] **Lot 1 — SQL (versioned, idempotent)**
   - [x] Version the reviewed import transaction through catalog-driven FK repointing (post-conditions follow in the next atomic commit).
+  - [x] Add synthetic prod/preprod fixtures and state/DV5 assertions under `deploy/ci/idp-identity-sync/fixtures/`.
   - [x] `deploy/k8s/overlays/prod/idp-identity-sync/reader-role.sql`: idempotent `idp_identity_reader` (password via psql `\getenv` from Secret, refuse empty, column-level SELECT on `users` 13 cols + `webauthn_credentials` 10 cols, read-only, `CONNECTION LIMIT 2`, `statement_timeout 60s`); regularizes the hand-created role.
   - [x] `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`: one `REPEATABLE READ READ ONLY` snapshot → `users.csv`, `webauthn.csv`, `snapshot.csv`.
   - [x] `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`: single transaction, advisory lock, count guard, collision free-email, upsert by prod id, `ALLOWED_REKEY` guard, catalog-driven FK repoint, webauthn authoritative by `credential_id` with `GREATEST` counter, in-txn post-conditions incl. DV5 fingerprint, audit lines (IDs/counts), `dry_run` rollback.
