@@ -607,6 +607,48 @@ describe('pure route quote', () => {
     });
     expect(plan.candidateRefs.length).toBeGreaterThan(0);
   });
+
+  it('filters candidates for required native Messages requests', () => {
+    const quote = quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: true }), {
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    expect(quote.candidates.length).toBe(1);
+    expect(quote.candidates[0]).toMatchObject({
+      providerId: 'anthropic',
+      modelId: 'claude-sonnet-5',
+    });
+  });
+
+  it('rejects unqualified, non-Anthropic, and exclusive alias models with native-unavailable', () => {
+    const opts = { nativeMessagesModelIds: ['claude-sonnet-5'] };
+    expect(() => quoteRoute(quoteInput('gpt-6-astra', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'native-unavailable' }));
+    expect(() => quoteRoute(quoteInput('claude-opus-5-5', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'native-unavailable' }));
+    expect(() => quoteRoute(quoteInput('claude-opus-5', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'native-unavailable' }));
+    expect(() => quoteRoute(quoteInput('unknown-model-xyz', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'unknown-model' }));
+  });
+
+  it('binds nativeMessages to quoteRef and preserves stable canonical references', () => {
+    const canonicalQuote = quoteRoute(quoteInput('claude-sonnet-5'));
+    const nativeQuote = quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: true }), {
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    expect(nativeQuote.quoteRef).not.toBe(canonicalQuote.quoteRef);
+    expect(canonicalQuote.quoteRef)
+      .toBe(quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: undefined })).quoteRef);
+  });
+
+  it('validates quote-plan agreement with nativeMessages flag', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory(broadAccounts()), clock: fixedClock });
+    const quote = quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: true }), {
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5', quote }))
+      .rejects.toMatchObject({ code: 'quote-mismatch' });
+  });
 });
 
 // Codex-pinned alias targets plus unpinned OpenAI profiles (codex is OpenAI's only account transport).
