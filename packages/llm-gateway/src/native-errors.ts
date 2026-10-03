@@ -10,6 +10,8 @@ export const SAFEGUARDS_NOT_SUPPORTED_MESSAGE =
   'safeguards is not supported by this gateway route; retry without safeguards.';
 const CLASSIFIER_REWRITE_PATTERN =
   /\b(?:unsupported|not supported|unrecognized|unknown beta|invalid beta)\b|unexpected value/i;
+const CLASSIFIER_EXACT_TOKEN_REGEX =
+  /(?<![a-zA-Z0-9_-])auto-mode-classifier-2026-07-16(?![a-zA-Z0-9_-])/i;
 const NEUTRALIZED_PLACEHOLDER = 'neutralized-identifier';
 
 const BILLING_PATTERNS: readonly RegExp[] = [
@@ -110,20 +112,25 @@ export const parseNativeErrorDetail = (
   try { parsed = JSON.parse(text); } catch { throw new GatewayError('bad-request', 'invalid native error JSON'); }
   const errorObj = parsed && typeof parsed === 'object' && 'error' in parsed
     ? (parsed as { error?: { type?: unknown; message?: unknown } }).error : undefined;
-  if (!errorObj || typeof errorObj.type !== 'string' || typeof errorObj.message !== 'string') {
+
+  const rawMessage = errorObj && typeof errorObj === 'object' && typeof (errorObj as { message?: unknown }).message === 'string'
+    ? (errorObj as { message: string }).message
+    : undefined;
+  if (status === 400 && rawMessage !== undefined && detectNativeBillingError(rawMessage)) {
+    return { type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE };
+  }
+
+  if (!errorObj || typeof errorObj !== 'object' || typeof errorObj.type !== 'string' || typeof errorObj.message !== 'string') {
     throw new GatewayError('bad-request', 'invalid native error structure');
   }
   if (status === 400 && errorObj.type === 'invalid_request_error') {
-    if (detectNativeBillingError(errorObj.message)) {
-      return { type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE };
-    }
     const lowerMsg = errorObj.message.toLowerCase();
     const hasNestedOrDangerous = lowerMsg.includes(DANGEROUS_TOOL_BETA) || lowerMsg.includes('safeguards');
     const sentClassifier = Boolean(
       options?.requestSafeguards &&
       options?.sentBetas?.some((b) => b.split(',').map((x) => x.trim()).includes(CLASSIFIER_BETA)),
     );
-    const hasClassifierReject = lowerMsg.includes(CLASSIFIER_BETA) && CLASSIFIER_REWRITE_PATTERN.test(errorObj.message);
+    const hasClassifierReject = CLASSIFIER_EXACT_TOKEN_REGEX.test(errorObj.message) && CLASSIFIER_REWRITE_PATTERN.test(errorObj.message);
     if (sentClassifier && !hasNestedOrDangerous && hasClassifierReject) {
       return { type: 'invalid_request_error', message: SAFEGUARDS_NOT_SUPPORTED_MESSAGE };
     }
