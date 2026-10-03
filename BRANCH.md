@@ -100,8 +100,25 @@
 
 ## Plan / Todo (lot-based)
 - [x] Row 0a — Minimal template skeleton, scope/exceptions, ports and stage index.
-- [ ] Row 0b — Mesh-stage checklist and file-level gates before row 1.
+- [x] Row 0b — Mesh-stage checklist and file-level gates before row 1.
 - [ ] Stage 1 — Mesh: rows 1–9 (pass 01 ends at row 3).
+  - [ ] Row 1 — `src/native-messages.ts`: credential-free Messages request/result/prepared contracts; `src/index.ts`: public exports.
+  - [ ] Row 1a — Immutable closed `NativeUsageSnapshot`, safe raw categories/fixed metadata, optional trusted capability/request finalize channel; gateway owns invocation.
+  - [ ] Row 2 — Structural capability guard (including callable optional hook), empty default allowlist, Anthropic catalog/exclusive validation, pure exact target identity and raw beta composition.
+  - [ ] Row 3 — `tests/native-messages.test.ts`: helper behavior and additive `src/routing-contracts.ts` pricing/proof/served-ID/source/uncertainty/inference fields on physical attempt usage.
+  - [ ] Row 4 — `src/routing-contracts.ts`, `src/route-quote.ts`: advertisement, required flag/Pick/error/prepared seams, native feasibility/filtering/hash.
+  - [ ] Row 5 — `tests/budget-quote.test.ts`: required filtering, exact identity/exclusive refusal, quote-plan agreement, flag hash and stable canonical references.
+  - [ ] Row 6 — `src/route-planner.ts`, `src/route-planner-state.ts`: validated allowlist, P0/P1 before sticky/health/truncation, ineligible affinity ignored without mutation.
+  - [ ] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines.
+  - [ ] Row 8 — `src/route-attempt.ts` and `tests/route-planner.test.ts`: fresh descriptor/target/capability exact-model checks, optional native forwarding and existing terminal guards.
+  - [ ] Row 9 — `tests/service/local-account-transport-service.test.ts`: no h2a native advertisement/capability; `CHANGELOG.md`: additive mesh native contract/planner release entry.
+  - [ ] File gate — `tests/native-messages.test.ts`: malformed discriminators/model/versions/betas/execute/finalize rejected; raw arbitrary header map, resolved version, empty-required-beta identity, unknown token/spacing preservation, exact catalog allowlist and exclusive rejection.
+  - [ ] File gate — `tests/native-messages.test.ts`: closed snapshot and additive usage contracts preserve physical counts, separate raw reported TTL from inferred allocation, fixed reasons/provenance; caller body cannot supply trusted pricing fields.
+  - [ ] Deferred M6 file gate — `tests/native-error-metadata.test.ts` (new), `src/errors.ts`, `src/native-messages.ts`: typed numeric size details survive normalization/cause wrapping without raw-message leakage, rows 40–42.
+  - [ ] After EVERY code row/split: `make typecheck-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`.
+  - [ ] After EVERY code row/split: `make test-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`; record per-row counts below.
+  - [ ] Before EVERY commit: `make scope-check API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`; stage explicit files plus this checklist, commit through Make.
+  - [ ] Mesh stage handoff: conductor cross-review, full scoped gates, no live qualification; package bump stays in atomic T1 row 58 after registry checks.
 - [ ] Stage 2 — Gateway selection/headers/body/errors/SSE/usage/count: rows 10–52a, with addendum insertions.
 - [ ] Stage 3 — Contract documentation and atomic release train: rows 53–61 (T1 activates reserved EX4).
 - [ ] Stage 4 — API execution/pricing/route plane/ledger: rows 62–81e2, with addendum insertions.
