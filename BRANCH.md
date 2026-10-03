@@ -44,9 +44,10 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
 
 ## Feedback Loop
 - `L1-F1/F2/F3` resolved per conductor cross-review: drop duplicate OAuth codes/tokens/consents, preserve revocations, catalog FK classification, whole-row DV5 fingerprints and trimmed allowlist elements; F4 unchanged. `L2-F1` resolved: trigger has no pods/log, export writes counts-only termination JSON.
-- `BR45-EX1` Makefile — reason: add `test-idp-sync-selftest` (Node in Docker, `$(LLM_MESH_NODE_IMAGE)`) and `test-idp-sync-sql` (one-off `postgres:17-alpine` with drizzle migrations + fixtures, runs `import-preprod.sql` in dry-run and commit modes); impact: two new targets only, no change to existing targets; rollback: revert the commit.
+- `BR45-EX1` Makefile — reason: add `test-idp-sync-selftest` (Node in Docker, `$(LLM_MESH_NODE_IMAGE)`) and `test-idp-sync-sql` (one-off `postgres:17-alpine` with drizzle migrations + fixtures, runs `import-preprod.sql` in dry-run and commit modes), and migrate `k8s-pgbackup-restore` to pinned s5cmd as authorized by the Lot 5 build brief; impact: two new targets plus the restore target and its comment block, preserving its interface and scratch-DB behavior; rollback: revert the commit.
 - `BR45-EX2` `.github/workflows/idp-identity-sync.yml` (new) + `ci.yml` (selftest + SQL test jobs on PR/push) — reason: CD bundle for prod objects (prod has no CD today) and the sync run workflow (schedule + dispatch, DRY_RUN default true); impact: new workflow armed by repo var `IDP_SYNC_CD_ENABLED`, prod jobs behind GitHub Environments with owner approval; rollback: unset the arming var, revert the commit.
 - `attention` bootstrap actions outside CD (applied once, documented in `deploy/ci/idp-identity-sync/README.md`): tenant admin applies `rbac-ci-idp-bundle-prod.yaml` and mints TokenRequest kubeconfigs (≤ 90 d) for `sentropic-ci-idp-bundle-prod` and `sentropic-ci-trigger-idp-export`; GitHub Environments + secrets from `.env`; k8s lane applies the VAP `sentropic-ci-trigger-suspend-only`.
+- `BR45-L5-VALIDATION` attention — owner: auth conductor; this Lot 5 worktree has no `test-idp-sync-selftest` target or dedicated offline YAML parsing target. The build-brief grep gate and offline restore invocation pass; run YAML parsing and the integrated selftest after Lots 1-4 supply the validation target. No cluster execution is authorized for this lot.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -117,9 +118,14 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
   - [x] Lot gate: reconcile docs against workflow/RBAC/templates and the authoritative relay register; check relative links and whitespace; scope-check passes. No credential or cluster action performed.
   - [x] `deploy/k8s/README.md`: pointer section.
 
-- [ ] **Lot 5 — pgbackup upload to s5cmd (zero Python)**
-  - [ ] `deploy/k8s/base/70-pgbackup-cronjob.yaml`: replace `amazon/aws-cli` with pinned `peakcom/s5cmd`, key from the dump container via an s5cmd `run` command file; same bucket/prefix/secret.
-  - [ ] Lot gate:
+- [x] **Lot 5 — pgbackup upload to s5cmd (zero Python)**
+  - [x] `deploy/k8s/base/70-pgbackup-cronjob.yaml`: replace `amazon/aws-cli` with pinned `peakcom/s5cmd`, key from the dump container via an s5cmd `run` command file; same bucket/prefix/secret; pin the PostgreSQL image; preserve schedule and resources.
+  - [x] `Makefile` under `BR45-EX1`: restore with a pinned s5cmd download initContainer and shared volume, preserving `PG_BACKUP_KEY` and scratch-DB verification.
+  - [x] Build-brief local gates:
+    - [x] `grep -rn "aws-cli" deploy/k8s Makefile`: no matches.
+    - [x] Offline `make k8s-pgbackup-restore` with a temporary kubectl stub: valid overrides JSON, pinned images, preserved Kubernetes env expansion, Secret references and shared volume; missing `PG_BACKUP_KEY` rejected.
+  - [ ] Integration gates — auth conductor (`BR45-L5-VALIDATION`):
+    - [ ] YAML parsing after an offline validation target is available.
     - [ ] `make test-idp-sync-selftest ENV=test-idp-sync` asserts no `amazon/aws-cli` left under `deploy/k8s/`.
 
 - [ ] **Lot 6 — Final validation**
