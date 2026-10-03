@@ -21,6 +21,7 @@
   - `Makefile`
   - `.github/workflows/ci.yml`
   - `docker-compose.ci.yml`
+  - `docker-compose.yml`
   - `api/tests/smoke/**`
   - `apps/auth-idp/screen-smoke.ts`
   - `BRANCH.md`
@@ -42,6 +43,7 @@
 - [x] BRCI-EX3 acknowledge: owner authorizes `.github/workflows/ci.yml` edits. Rationale: build/pull/cache the tool image once per content hash, run the 15-job matrix inside the tool image, and execute smokes against the production image SUT. Impact: CI pipeline uses cached tool image and tests prod image. Rollback: revert workflow edits. Acceptance: CI pipeline runs successfully with tool image caching.
 - [x] BRCI-EX4 conditional: build brief permits `docker-compose*.yml` edits only if strictly needed. Rationale: define tool image service or test execution override for running tests against prod SUT. Impact: compose service configurations for testing. Rollback: revert compose edits. Acceptance: compose stacks up/down cleanly without orphaned containers; no tracked compose change in Lot 1.
 - [x] BRCI-EX4 activation: `docker-compose.ci.yml` separates the immutable tool runner from API/IdP production services, with no source mounts. Impact: CI-only service definitions; rollback: remove the overlay and revert its Make routing.
+- [x] BRCI-EX4 identity: permit the API image reference in `docker-compose.yml` to consume the recorded build artifact identity. Impact: tests can pin the loaded image; unset reference retains the regular tag. Rollback: revert the image-reference substitution.
 - [x] BRCI-EX5 acknowledge: permit `apps/auth-idp/screen-smoke.ts` to select the toolbox's system Chromium executable. Rationale: Playwright browser bundles do not support Alpine. Impact: optional runner configuration only; rollback: remove the executable override.
 
 ## AI Flaky tests
@@ -97,6 +99,7 @@
 
 - [ ] **Lot 3 — CI cache wiring, verification & docs**
   - [x] Wire `.github/workflows/ci.yml` with exact content-tag archive caching; a cache hit loads the toolbox without any build.
+  - [x] Record and verify the production artifact image ID during save/load; use it for runtime and scans.
   - [ ] Validate cache reuse on unchanged inputs.
   - [ ] Pin image digest where cheap according to G-PROD v4.1.
   - [ ] Document architecture in docs and finalize reports.
