@@ -11,6 +11,7 @@ import { NativeMessagesUpstreamError, RoutePlanError, RouteQuoteError } from '@s
 import {
   GatewayError,
   mapGatewayError,
+  NATIVE_BILLING_MASKED_MESSAGE,
   toProviderShapedError,
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
@@ -428,46 +429,66 @@ describe('error mapping through the router (integration)', () => {
 
   it('maps typed native validation public detail without leaking internal error message', () => {
     const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
-    const gwError = new GatewayError('bad-request', 'secret internal log message', undefined, undefined, detail);
-    const upstreamError = new NativeMessagesUpstreamError({ status: 400, validation: detail });
+    const upstreamError = new NativeMessagesUpstreamError({
+      status: 400,
+      type: 'invalid_request_error',
+      validation: detail,
+    });
 
-    for (const error of [gwError, upstreamError]) {
-      const a = toProviderShapedError('anthropic-messages', error);
-      expect(a.status).toBe(400);
-      expect(a.body).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'provider validation failure' } });
-      expect(JSON.stringify(a)).not.toContain('secret internal log message');
+    const a = toProviderShapedError('anthropic-messages', upstreamError);
+    expect(a.status).toBe(400);
+    expect(a.body).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'provider validation failure' } });
 
-      const o = toProviderShapedError('openai-chat-completions', error);
-      expect(o.status).toBe(400);
-      expect(o.body).toEqual({ error: { type: 'invalid_request_error', message: 'provider validation failure', code: 'invalid_request' } });
-      expect(JSON.stringify(o)).not.toContain('secret internal log message');
-    }
+    const o = toProviderShapedError('openai-chat-completions', upstreamError);
+    expect(o.status).toBe(400);
+    expect(o.body).toEqual({ error: { type: 'invalid_request_error', message: 'provider validation failure', code: 'invalid_request' } });
   });
 
   it('restricts public validation relay to trusted native-validation 400 errors and retains fixed mappings', () => {
     const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
+    const forged = { name: 'NativeMessagesUpstreamError', status: 400, type: 'invalid_request_error', validation: detail };
+    const genericBadRequest = new GatewayError('bad-request', 'secret log', undefined, undefined, detail);
+    const absentType = new NativeMessagesUpstreamError({ status: 400, validation: detail });
+    const longEmoji = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: '😀'.repeat(2048) } });
+    const controlError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: 'invalid\u0000 value' } });
+    const malformedBilling = new NativeMessagesUpstreamError({ status: 400, validation: { type: 'invalid_request_error', message: 'Your credit balance is too low.' } });
+    const upstream500 = new NativeMessagesUpstreamError({ status: 500, type: 'api_error', validation: detail });
+    const authError = new GatewayError('caller-auth-failed', 'internal auth failure', undefined, undefined, detail);
+    const upstream401 = new NativeMessagesUpstreamError({ status: 401, type: 'authentication_error', validation: detail });
 
     for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
-      const arbitrary = { status: 400, validation: detail, message: 'account prose' };
-      const arbMapped = toProviderShapedError(wire, arbitrary);
+      const arbMapped = toProviderShapedError(wire, forged);
       expect(arbMapped.status).toBe(503);
-      expect(JSON.stringify(arbMapped)).not.toContain('account prose');
       expect(JSON.stringify(arbMapped)).not.toContain('provider validation failure');
 
-      const upstream500 = new NativeMessagesUpstreamError({ status: 500, type: 'api_error', validation: detail });
-      const up500Mapped = toProviderShapedError(wire, upstream500);
-      expect(up500Mapped.status).toBe(503);
-      expect(JSON.stringify(up500Mapped)).not.toContain('provider validation failure');
+      const gwMapped = toProviderShapedError(wire, genericBadRequest);
+      expect(gwMapped.status).toBe(400);
+      expect(JSON.stringify(gwMapped)).not.toContain('provider validation failure');
+      expect(JSON.stringify(gwMapped)).toContain('invalid request');
 
-      const authError = new GatewayError('caller-auth-failed', 'internal auth failure', undefined, undefined, detail);
-      const authMapped = toProviderShapedError(wire, authError);
-      expect(authMapped.status).toBe(401);
-      expect(JSON.stringify(authMapped)).not.toContain('provider validation failure');
+      const absentMapped = toProviderShapedError(wire, absentType);
+      expect(absentMapped.status).toBe(400);
+      expect(JSON.stringify(absentMapped)).not.toContain('provider validation failure');
+      expect(JSON.stringify(absentMapped)).toContain('invalid request');
 
-      const upstream401 = new NativeMessagesUpstreamError({ status: 401, type: 'authentication_error', validation: detail });
-      const up401Mapped = toProviderShapedError(wire, upstream401);
-      expect(up401Mapped.status).toBe(401);
-      expect(JSON.stringify(up401Mapped)).not.toContain('provider validation failure');
+      const emojiMapped = toProviderShapedError(wire, longEmoji);
+      expect(emojiMapped.status).toBe(400);
+      const emojiMsg = (emojiMapped.body as { error: { message: string } }).error.message;
+      expect(new TextEncoder().encode(emojiMsg).length).toBeLessThanOrEqual(4096);
+
+      const ctrlMapped = toProviderShapedError(wire, controlError);
+      expect(ctrlMapped.status).toBe(400);
+      const ctrlMsg = (ctrlMapped.body as { error: { message: string } }).error.message;
+      expect(ctrlMsg).toBe('invalid value');
+      expect(ctrlMsg).not.toContain('\u0000');
+
+      const billMapped = toProviderShapedError(wire, malformedBilling);
+      expect(billMapped.status).toBe(400);
+      expect(JSON.stringify(billMapped)).toContain(NATIVE_BILLING_MASKED_MESSAGE);
+
+      expect(toProviderShapedError(wire, upstream500).status).toBe(503);
+      expect(toProviderShapedError(wire, authError).status).toBe(401);
+      expect(toProviderShapedError(wire, upstream401).status).toBe(401);
     }
   });
 });
