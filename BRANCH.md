@@ -141,7 +141,7 @@
   - [x] Row 12 — `src/native-headers.ts`: open Anthropic/closed other caller forwarding, credentials/hop-by-hop/Connection exclusions; classifier carries filtered headers. Typecheck PASS; tests 419 passed / 0 failed (29 files).
   - [x] Row 13 — `tests/native-headers.test.ts`: every credential/Connection/internal/IP/user-agent exclusion and synthetic feature fidelity. Typecheck PASS; tests 522 passed / 0 failed (30 files; 103 new cases).
   - [x] Row 14 — `src/route-native.ts`, `src/canonical-ingress.ts`: shallow native body, valid supplied ceiling capped without increase, default only when omitted, wire-specific max-token precedence. Typecheck PASS; tests 522 passed / 0 failed (30 files).
-  - [ ] Row 15 — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: nested-reference fidelity, no mutation/deep clone, malformed/default/reserved ceilings.
+  - [x] Row 15 — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: nested-reference fidelity, no mutation/deep clone, malformed/default/reserved ceilings and both wire projections. Typecheck PASS; tests 554 passed / 0 failed (31 files; 32 new cases).
   - [ ] Row 16 — `src/route-flow-core.ts`, `src/admission.ts`, `tests/route-flow-core.test.ts`: required quote/plan flag and host routeInput injection guard.
   - [ ] Row 17 — Native-only typed validation/error contract in gateway and EX1 mesh native error seam.
   - [ ] Row 18 — `src/native-errors.ts`: billing classifier, linear maximal-run identifier neutralization and bounded 400 detail.
@@ -202,7 +202,7 @@
   - [ ] Row 44 — `tests/request-body-limit.test.ts`, router integration: pre-parse cap and byte boundaries.
   - [ ] Row 44a — Same file: cross-endpoint/router pool exhaustion, exact 503/Retry-After and zero parse/hold/dispatch.
   - [ ] Row 44b1 — Same file: host detach/native shrink versus canonical N, races/unconsumed stream/independent finalize.
-  - [ ] Row 44b2 — Same file: N2 generation refusal matrix including auth/partition/OFF/native/ceiling/model/quote/route/admission/prepared/mark.
+  - [ ] Row 44b2 — Same file: N2 generation refusal matrix including auth/partition/OFF/native/ceiling/model/quote/route/admission/prepared/mark; `count_off`, `count_denied`, `count_rate`, `count_concurrency` are explicitly deferred to row 49a.
   - [ ] Row 44c — Same file: 64x4 KiB overlap/committed streams, switch states and both middleware orders.
   - [ ] Row 44d1 — Same file: absent/forged CL, actual EOF bytes, cap precedence and reader cancellation.
   - [ ] Row 44d2 — Same file: N3 backing-allocation counters, forged-large-CL slow uploads, failed extension allocates nothing.
