@@ -136,7 +136,7 @@
   - [ ] Mesh stage handoff: conductor cross-review, full scoped gates, no live qualification; package bump stays in atomic T1 row 58 after registry checks.
 - [ ] Stage 2 — Gateway selection/headers/body/errors/SSE/usage/count: rows 10–52a, with addendum insertions.
   - [x] Gateway plan-only commit before row 10: full stage checklist/file gates; pass 03 uses the existing allocated ports.
-  - [ ] Row 10 — `src/native-features.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`: classifier, single invocation, trusted switch and selection seam.
+  - [x] Row 10 — `src/native-features.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`: classifier, single invocation, trusted switch and selection seam; required exhaustive `tests/contract-snapshot.test.ts` additions. Typecheck PASS after snapshot update; tests 389 passed / 0 failed (28 files).
   - [ ] Row 11 — `tests/native-features.test.ts`: ten-row matrix, OFF precedence, budget default, empty beta, canonical version-only and standalone refusal.
   - [ ] Row 12 — `src/native-headers.ts`: open Anthropic/closed other caller forwarding, credentials/hop-by-hop/Connection exclusions.
   - [ ] Row 13 — `tests/native-headers.test.ts`: every credential/Connection/internal/IP/user-agent exclusion and synthetic feature fidelity.

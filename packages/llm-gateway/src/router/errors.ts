@@ -43,6 +43,8 @@ export type GatewayFailureKind =
   | 'upstream-auth-failed'
   | 'upstream-rate-limited'
   | 'bad-request'
+  | 'native-required'
+  | 'native-max-tokens-required'
   | 'unknown-model'
   | 'no-route'
   | 'cross-user-disabled';
@@ -124,6 +126,18 @@ export const mapGatewayError = (
   const retry = retryAfterHeader(retryAfterSeconds);
 
   switch (kind) {
+    case 'native-required': {
+      const message = anthropic
+        ? 'safeguards is not supported by this gateway route; retry without safeguards.'
+        : 'safeguards requires the Anthropic Messages endpoint.';
+      return anthropic ? anthropicError(400, 'invalid_request_error', message)
+        : openAiError(400, 'invalid_request_error', message, 'invalid_request');
+    }
+    case 'native-max-tokens-required': {
+      const message = 'safeguards requires a positive integer max_tokens.';
+      return anthropic ? anthropicError(400, 'invalid_request_error', message)
+        : openAiError(400, 'invalid_request_error', message, 'invalid_request');
+    }
     case 'caller-auth-failed':
       return anthropic
         ? anthropicError(401, 'authentication_error', 'authentication failed')
