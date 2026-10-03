@@ -2231,18 +2231,41 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
-up-api-test-ci: ## Start source API from the cached toolbox; no install, workspace build or mount
+up-api-test-ci: ci-test-env ## Start source API from the cached toolbox; no install, workspace build or mount
 	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
 	DISABLE_RATE_LIMIT=true $(CI_COMPOSE) up --no-build -d --wait api
 
 .PHONY: up-api-sut down-api-ci logs-api-ci
-up-api-sut: ## Start the shipped API as-is; boot owns migrations
+up-api-sut: ci-test-env ## Start the shipped API as-is; boot owns migrations
 	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
 	$(CI_COMPOSE) up --no-build -d --wait api-sut
 down-api-ci: ## Stop the isolated CI source/SUT stack
 	$(CI_COMPOSE) down
 logs-api-ci: ## Print source and production SUT logs
 	$(CI_COMPOSE) logs --no-color api api-sut auth-idp
+
+.PHONY: ci-test-env restore-api-sut verify-api-sut-restart
+ci-test-env:
+	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
+
+CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM initiatives
+CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
+restore-api-sut: ci-test-env ## Restore a dump before the first production boot; verify business data survives
+	@test -n "$(BACKUP_FILE)" && test -f "data/backup/$(BACKUP_FILE)"
+	$(CI_COMPOSE) stop api api-sut auth-idp
+	$(CI_COMPOSE) up -d --wait postgres
+	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
+	@set -eu; before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
+	$(MAKE) up-api-sut ENV=$(ENV); \
+	after="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
+	test "$$before" = "$$after"; echo "Restored business data preserved across production boot: $$after"
+
+verify-api-sut-restart: ci-test-env ## Verify restart does not replay migrations or alter restored business data
+	@set -eu; before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_MIGRATION_SNAPSHOT); $(CI_DATA_SNAPSHOT)" )"; \
+	$(CI_COMPOSE) restart api-sut; \
+	$(CI_COMPOSE) up --no-build -d --wait api-sut; \
+	after="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_MIGRATION_SNAPSHOT); $(CI_DATA_SNAPSHOT)" )"; \
+	test "$$before" = "$$after"; echo "Production restart preserves migration journals and business data: $$after"
 
 .PHONY: up-idp-sut smoke-idp-screens-ci
 up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrated database
@@ -2920,7 +2943,7 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 
 .PHONY: test-api-smoke-restore
 test-api-smoke-restore: ## Run smoke tests in production mode (for restore validation)
-	@$(DOCKER_COMPOSE) exec -T api sh -lc 'npm run test:smoke:restore'
+	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) api sh -lc 'npm run test:smoke:restore'
 
 # -----------------------------------------------------------------------------
 # Queue Management
