@@ -83,6 +83,7 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
 
 - [ ] **Lot 2 — Kubernetes objects (kustomize, deployed by CD)**
   - [x] Add prod kustomization, hardened dormant export CronJob, reader SQL ConfigMaps and narrow trigger RBAC.
+  - [x] Add preprod kustomization, hardened dormant import CronJob and dump/upload/fetch init containers (import wrapper follows).
   - [ ] `overlays/prod/idp-identity-sync/`: kustomization (ns `sentropic`, `configMapGenerator` with `disableNameSuffixHash`), SA `sentropic-idp-export` (no token), NetworkPolicy `allow-idp-export-to-postgres`, CronJob `sentropic-idp-identity-export` (`*/5`, `suspend: true`, Forbid, export + `SHA256SUMS` + s5cmd put with `sentropic-idp-relay-writer`), trigger SA/Role/RoleBinding `sentropic-ci-trigger-idp-export` (cronjobs get/patch by resourceName, jobs get/list/watch, pods/log get).
   - [ ] `overlays/preprod/idp-identity-sync/`: kustomization (ns `sentropic-preprod`), SA `sentropic-idp-sync` (no token), NetworkPolicy `allow-idp-sync-to-postgres`, CronJob `sentropic-idp-identity-sync` (`*/5`, `suspend: true`, frozen `DRY_RUN=1`, `ALLOWED_REKEY=""`, `MAX_SNAPSHOT_AGE_S`) with pre-sync rollback dump (s5cmd `run` command file, `sentropic-pgbackup`), relay fetch (`sentropic-idp-relay-reader`), `sha256sum -c`, import.
   - [ ] Include `idp-identity-sync` in `overlays/prod/kustomization.yaml` and `overlays/preprod/kustomization.yaml`.
