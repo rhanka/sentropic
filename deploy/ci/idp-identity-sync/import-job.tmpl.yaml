@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "${JOB_NAME}"
+  namespace: sentropic-preprod
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: sentropic, app.kubernetes.io/component: idp-identity-sync }
+    spec:
+      serviceAccountName: sentropic-idp-sync
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext: { runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, fsGroup: 70, seccompProfile: { type: RuntimeDefault } }
+      volumes:
+        - { name: work, emptyDir: { medium: Memory, sizeLimit: 64Mi } }
+        - { name: sql, configMap: { name: sentropic-idp-identity-sync-sql } }
+      initContainers:
+        - name: pre-sync-dump
+          image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+          command: ["sh", "-ec"]
+          args:
+            - |
+              mkdir -p /work/rb /work/in
+              pg_dump -Fc --no-owner --no-privileges -f /work/rb/pre-sync.dump 2>/work/dump.log || { echo 'pre-sync dump failed'; exit 1; }
+              printf 'cp /work/rb/pre-sync.dump s3://%s/pre-idp-sync/%s.dump\n' "$S3_BUCKET" "$JOB_NAME" > /work/rb/upload.s5cmd
+          env:
+            - { name: PGHOST, value: postgres }
+            - { name: PGDATABASE, value: app }
+            - { name: PGUSER, value: app }
+            - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
+            - { name: S3_BUCKET, valueFrom: { secretKeyRef: { name: sentropic-pgbackup, key: S3_BUCKET } } }
+            - { name: JOB_NAME, value: "${JOB_NAME}" }
+          volumeMounts: [{ name: work, mountPath: /work }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+        - name: pre-sync-upload
+          image: peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a
+          args: ["--log", "error", "--endpoint-url", "$(S3_ENDPOINT)", "run", "/work/rb/upload.s5cmd"]
+          env:
+            - { name: AWS_ACCESS_KEY_ID, valueFrom: { secretKeyRef: { name: sentropic-pgbackup, key: S3_ACCESS_KEY } } }
+            - { name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: sentropic-pgbackup, key: S3_SECRET_KEY } } }
+            - { name: AWS_REGION, valueFrom: { secretKeyRef: { name: sentropic-pgbackup, key: S3_REGION } } }
+            - { name: S3_ENDPOINT, valueFrom: { secretKeyRef: { name: sentropic-pgbackup, key: S3_ENDPOINT } } }
+          volumeMounts: [{ name: work, mountPath: /work, readOnly: true }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+        - name: fetch-relay
+          image: peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a
+          args: ["--log", "error", "--endpoint-url", "$(S3_ENDPOINT)", "cp", "s3://$(S3_BUCKET)/idp-identity/latest/*", "/work/in/"]
+          env:
+            - { name: AWS_ACCESS_KEY_ID, valueFrom: { secretKeyRef: { name: sentropic-idp-relay-reader, key: S3_ACCESS_KEY } } }
+            - { name: AWS_SECRET_ACCESS_KEY, valueFrom: { secretKeyRef: { name: sentropic-idp-relay-reader, key: S3_SECRET_KEY } } }
+            - { name: AWS_REGION, valueFrom: { secretKeyRef: { name: sentropic-idp-relay-reader, key: S3_REGION } } }
+            - { name: S3_ENDPOINT, valueFrom: { secretKeyRef: { name: sentropic-idp-relay-reader, key: S3_ENDPOINT } } }
+            - { name: S3_BUCKET, valueFrom: { secretKeyRef: { name: sentropic-idp-relay-reader, key: S3_BUCKET } } }
+          volumeMounts: [{ name: work, mountPath: /work }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+      containers:
+        - name: import-preprod
+          image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+          workingDir: /work/in
+          command: ["sh", "/sql/import-preprod.sh"]
+          env:
+            - { name: PGHOST, value: postgres }
+            - { name: PGDATABASE, value: app }
+            - { name: PGUSER, value: app }
+            - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
+            - { name: DRY_RUN, value: "${DRY_RUN}" }
+            - { name: ALLOWED_REKEY, value: "${ALLOWED_REKEY}" }
+            - { name: MAX_SNAPSHOT_AGE_S, value: "${MAX_SNAPSHOT_AGE_S}" }
+          volumeMounts: [{ name: work, mountPath: /work }, { name: sql, mountPath: /sql, readOnly: true }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          resources: { requests: { cpu: 20m, memory: 64Mi }, limits: { cpu: 200m, memory: 128Mi } }

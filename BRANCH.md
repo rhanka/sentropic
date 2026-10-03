@@ -96,6 +96,7 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
 
 - [ ] **Lot 3 — CD and run workflow**
   - [x] Add idempotent reader-role Job and tenant-admin bootstrap bundle RBAC with no admission-policy rights.
+  - [x] Add preprod import Job template and k8s-owned suspend-only VAP reference.
   - [ ] `deploy/ci/idp-identity-sync/reader-role-provision-job.tmpl.yaml` (prod Job, `\getenv`, backoffLimit 0, deadline 300 s) and `import-job.tmpl.yaml` (preprod Job, `${DRY_RUN}`, `${ALLOWED_REKEY}`, `${MAX_SNAPSHOT_AGE_S}`).
   - [ ] `deploy/ci/idp-identity-sync/run.mjs`: render `${VAR}` (fail on leftover), delete+apply Job, poll `.status`, flip/restore `spec.suspend`, collect audit (Job logs + termination message), write step summary; Node only.
   - [ ] `.github/workflows/idp-identity-sync.yml`: `selftest`; `bundle-prod` (push to main path-scoped + dispatch, var `IDP_SYNC_CD_ENABLED`, env `sentropic-idp-prod` with owner approval, prod apiserver preflight, Secret `replace --dry-run=server` then `replace` from env secrets, `apply -k overlays/prod/idp-identity-sync`, reader-role Job, anti-RCE gate `--as` trigger SA: jobTemplate patch DENIED + suspend flip ALLOWED else empty the Role and fail); `run` (schedule daily + dispatch, `DRY_RUN` default true, `ALLOWED_REKEY` default empty, `CONFIRM` date guard for real runs, env `sentropic-idp-run` main-only: flip prod export → wait Job → always re-suspend → preprod import Job → audit).
