@@ -125,6 +125,10 @@ FROM base AS development
 WORKDIR /workspace/api
 CMD ["npm", "run", "dev"]
 
+# CI runners retain npm, devDependencies, test sources and built workspaces.
+# This target is a toolbox only; the production target is the shipped SUT.
+FROM development AS ci-tools
+
 # BR-39 deploy (D4-a) — IdP screens build stage. Self-contained, mirrors
 # apps/auth-idp/web/Dockerfile (NOT a root workspace member; pulls @sentropic/auth-ui
 # via the relative `file:` dependency). Output: apps/auth-idp/web/build, COPYed into
@@ -168,6 +172,9 @@ ENV NODE_ENV=production
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 # Exception-aware gate (inherits .security/ from the base stage's COPY . .).
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
+# Runtime entrypoints and boot migrations use Node directly, never npm/npx.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && \
+    ! command -v npm && ! command -v npx
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);
