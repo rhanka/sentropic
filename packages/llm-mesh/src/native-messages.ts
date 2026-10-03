@@ -156,6 +156,11 @@ export type NativeMessagesProviderErrorType =
 export type NativeMessagesTransportCode =
   | 'timeout' | 'account_unavailable' | 'native_protocol_error';
 
+export interface NativeValidationPublicDetail {
+  readonly type: string;
+  readonly message: string;
+}
+
 export interface NativeMessagesUpstreamErrorOptions {
   readonly status: number;
   readonly type?: NativeMessagesProviderErrorType;
@@ -163,6 +168,7 @@ export interface NativeMessagesUpstreamErrorOptions {
   readonly retryAfterMs?: number;
   /** Operational evidence; dispatched pre-fetch zeros do not exempt billing. */
   readonly usage?: RouteAttemptUsage;
+  readonly validation?: NativeValidationPublicDetail;
 }
 
 /** Never place upstream validation prose, payloads or credentials in this error. */
@@ -172,6 +178,7 @@ export class NativeMessagesUpstreamError extends Error {
   readonly code?: NativeMessagesTransportCode;
   readonly retryAfterMs?: number;
   readonly usage?: RouteAttemptUsage;
+  readonly validation?: NativeValidationPublicDetail;
 
   constructor(options: NativeMessagesUpstreamErrorOptions) {
     super('Native Anthropic Messages request failed');
@@ -181,5 +188,6 @@ export class NativeMessagesUpstreamError extends Error {
     this.code = options.code;
     this.retryAfterMs = options.retryAfterMs;
     this.usage = options.usage;
+    this.validation = options.validation;
   }
 }
