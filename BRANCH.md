@@ -17,6 +17,10 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `packages/llm-mesh/src/native-messages.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/src/index.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/src/routing-contracts.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/tests/native-messages.test.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-gateway/src/**`
   - `packages/llm-gateway/tests/**`
   - `packages/llm-gateway/package.json`
@@ -82,6 +86,7 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
+- [x] Scope gate clarification: harness exception grammar accepts numeric branch IDs only; approved pass 01 EX1 paths are mirrored explicitly in Allowed Paths so C2 verifies the granted scope without changing harness or inventing an exception ID.
 - [x] BR-REL-EX1 approved by frozen §2: rationale: mesh capability/planner/quote/attempt/error seams; impact: additive contracts, tests, exports, version and CHANGELOG only; rollback: revert mesh feature commits and tuple before release.
 - [x] BR-REL-EX2 approved by frozen §2: rationale: product native execution/count/classification/body-cap/M6 and trusted metering; impact: listed API paths only, no general metering refactor; rollback: disable switch and restart/redeploy, then revert API feature commits.
 - [x] BR-REL-EX3 approved under Q-A: rationale: coordinated §6.2 release train; impact: listed cluster/root files only, tuple/range literals, expectations, release docs and generated integrity; rollback: restore prior tuple/ranges and regenerate affected locks/archives before release.
@@ -102,7 +107,7 @@
 - [x] Row 0a — Minimal template skeleton, scope/exceptions, ports and stage index.
 - [x] Row 0b — Mesh-stage checklist and file-level gates before row 1.
 - [ ] Stage 1 — Mesh: rows 1–9 (pass 01 ends at row 3).
-  - [ ] Row 1 — `src/native-messages.ts`: credential-free Messages request/result/prepared contracts; `src/index.ts`: public exports.
+  - [x] Row 1 — `src/native-messages.ts`: credential-free Messages request/result/prepared contracts and fixed-message upstream error; `src/index.ts`: public exports. Typecheck PASS; tests 317 passed, 0 failed (32 files).
   - [ ] Row 1a — Immutable closed `NativeUsageSnapshot`, safe raw categories/fixed metadata, optional trusted capability/request finalize channel; gateway owns invocation.
   - [ ] Row 2 — Structural capability guard (including callable optional hook), empty default allowlist, Anthropic catalog/exclusive validation, pure exact target identity and raw beta composition.
   - [ ] Row 3 — `tests/native-messages.test.ts`: helper behavior and additive `src/routing-contracts.ts` pricing/proof/served-ID/source/uncertainty/inference fields on physical attempt usage.
