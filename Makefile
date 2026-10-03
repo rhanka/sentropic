@@ -44,7 +44,7 @@ export API_TOOL_IMAGE_NAME ?= sentropic-api-tools
 # Include source inputs: the toolbox contains test sources and built workspaces.
 # Hash paths as well as bytes, so additions, deletions and renames invalidate it.
 ifndef API_TOOL_VERSION
-API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts .security package.json package-lock.json .dockerignore | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 endif
 export API_TOOL_VERSION
 API_TOOL_IMAGE = $(REGISTRY)/$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
@@ -2232,15 +2232,31 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
 up-api-test-ci: ## Start source API from the cached toolbox; no install, workspace build or mount
+	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
 	DISABLE_RATE_LIMIT=true $(CI_COMPOSE) up --no-build -d --wait api
 
 .PHONY: up-api-sut down-api-ci logs-api-ci
 up-api-sut: ## Start the shipped API as-is; boot owns migrations
+	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
 	$(CI_COMPOSE) up --no-build -d --wait api-sut
 down-api-ci: ## Stop the isolated CI source/SUT stack
 	$(CI_COMPOSE) down
 logs-api-ci: ## Print source and production SUT logs
 	$(CI_COMPOSE) logs --no-color api api-sut auth-idp
+
+.PHONY: up-idp-sut smoke-idp-screens-ci
+up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrated database
+	$(CI_COMPOSE) run --rm --no-deps api npm run oauth:seed-clients
+	$(CI_COMPOSE) up --no-build -d --wait auth-idp
+smoke-idp-screens-ci: ## Run the existing screen smoke from the cached toolbox against compiled IdP
+	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
+	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
+	test -n "$$user_id"; test -n "$$session_token"; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace/e2e \
+		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
+		-e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
+		api sh -ec 'cp ../apps/auth-idp/screen-smoke.ts ./idp-screen-smoke.ts; node ./idp-screen-smoke.ts'
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
