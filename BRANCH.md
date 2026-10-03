@@ -135,6 +135,103 @@
   - [ ] Before EVERY commit: `make scope-check API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`; stage explicit files plus this checklist, commit through Make.
   - [ ] Mesh stage handoff: conductor cross-review, full scoped gates, no live qualification; package bump stays in atomic T1 row 58 after registry checks.
 - [ ] Stage 2 — Gateway selection/headers/body/errors/SSE/usage/count: rows 10–52a, with addendum insertions.
+  - [x] Gateway plan-only commit before row 10: full stage checklist/file gates; pass 03 uses the existing allocated ports.
+  - [ ] Row 10 — `src/native-features.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`: classifier, single invocation, trusted switch and selection seam.
+  - [ ] Row 11 — `tests/native-features.test.ts`: ten-row matrix, OFF precedence, budget default, empty beta, canonical version-only and standalone refusal.
+  - [ ] Row 12 — `src/native-headers.ts`: open Anthropic/closed other caller forwarding, credentials/hop-by-hop/Connection exclusions.
+  - [ ] Row 13 — `tests/native-headers.test.ts`: every credential/Connection/internal/IP/user-agent exclusion and synthetic feature fidelity.
+  - [ ] Row 14 — `src/route-native.ts`, `src/canonical-ingress.ts`: shallow native body and wire-specific max-token precedence.
+  - [ ] Row 15 — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: nested-reference fidelity, no mutation/deep clone, malformed/default/reserved ceilings.
+  - [ ] Row 16 — `src/route-flow-core.ts`, `src/admission.ts`, `tests/route-flow-core.test.ts`: required quote/plan flag and host routeInput injection guard.
+  - [ ] Row 17 — Native-only typed validation/error contract in gateway and EX1 mesh native error seam.
+  - [ ] Row 18 — `src/native-errors.ts`: billing classifier, linear maximal-run identifier neutralization and bounded 400 detail.
+  - [ ] Row 19 — `tests/native-errors.test.ts`: billing families, late indicators, controls and UTF-8 bounds.
+  - [ ] Row 19a — `tests/native-errors.test.ts`: four negative identifiers and identifier-plus-billing positives.
+  - [ ] Row 19b — `tests/native-errors.test.ts`: 64 KiB adversarial runs, deterministic linear-work bound and underscore boundaries.
+  - [ ] Row 20 — `src/native-errors.ts`, `tests/native-errors.test.ts`: narrow sent-classifier-beta rewrite and official V-2 positives/negatives.
+  - [ ] Row 21 — `src/ports/dispatch.ts`, `src/route-attempt-dispatch.ts`, `src/route-native.ts`: optional native dispatch and exact prepared model/version eligibility.
+  - [ ] Row 22 — `src/route-flow-core.ts`, JSON/stream flows: guarded native refusal, release/settlement independently protected.
+  - [ ] Row 23 — `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`, flow tests: dispatch/type/skew lifecycle.
+  - [ ] Row 24 — `src/native-sse.ts`: bounded byte SSE framer.
+  - [ ] Row 25 — `tests/native-sse.test.ts`: CR/LF/CRLF, split UTF-8, chunk boundaries and overflow.
+  - [ ] Row 25a — `src/native-usage.ts`: L2 nullable cumulative contract, reported/inferred TTL split; N5 permanently revokes malformed proof before row 26.
+  - [ ] Row 26 — `src/native-usage.ts`: cumulative usage fold, final output provenance and unsuccessful termination.
+  - [ ] Row 26a — `src/native-usage.ts`: served-model/mismatch/fallback/iterations latch; null/[] absent.
+  - [ ] Row 26b — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: JSON/SSE identities and no cross-iteration fold.
+  - [ ] Row 27 — `src/native-usage.ts`: sourced model cache multipliers and integer-rational units40.
+  - [ ] Row 27a — `src/native-usage.ts`: start proof, nullable inheritance, equal aggregate, monotonic updates and N5 atomic validity.
+  - [ ] Row 27b — `src/native-usage.ts`: default TTL growth versus 2x growth-only bounds; inference provenance.
+  - [ ] Row 28 — `tests/native-usage.test.ts`: usage/cache/TTL/uncertainty.
+  - [ ] Row 28a — `tests/native-usage.test.ts`: proof validity/revocation/output provenance.
+  - [ ] Row 28b — `tests/native-usage.test.ts`: model/policy/units40 lower-upper bounds and safe arithmetic.
+  - [ ] Row 28c — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: U/R growth/equality/decrease/null and official V-1 fixtures.
+  - [ ] Row 28d — `tests/native-usage.test.ts`: realistic output allowance and iterations latch fixtures.
+  - [ ] Row 28e — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: one-hour no-split/equal/growth pinned amounts.
+  - [ ] Row 28f1 — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: split conflicts/decreases/later explicit resolution.
+  - [ ] Row 28f2 — Same files: N5 malformed permanent revocation and latched nullable physical-bound fixtures.
+  - [ ] Row 29 — `src/admission.ts`, settlement seams: native input proof/pricing fields and validated output-only floor.
+  - [ ] Row 29a — `tests/budget-admission.test.ts`, `tests/budget-hardening.test.ts`: missing/invalid/mismatch fallback; N5 full-rate allowance charge.
+  - [ ] Row 30 — `src/route-json-flow.ts`, native helper: JSON native flow and bounded result.
+  - [ ] Row 30a — Gateway lifecycle: shared pre-floor snapshot, exactly-once finalize, independent 1000-ms timeout/fallback.
+  - [ ] Row 31 — `tests/route-json-flow.test.ts`: JSON fidelity, optional fallback before invocation, errors and cleanup.
+  - [ ] Row 32 — `src/route-stream-flow.ts`: first-frame native readiness/commitment.
+  - [ ] Row 32a — Stream lifecycle: shared snapshot and bounded observation task independent of settlement/reader cleanup.
+  - [ ] Row 33 — `src/router/index.ts`, result types: native byte stream and downstream cancellation.
+  - [ ] Row 34 — `tests/route-stream-flow.test.ts`: commitment/cancel/final output lifecycle.
+  - [ ] Row 34a — Same file: L2 U/R growth/equality/decrease/null and V-1 clean/interrupted amounts.
+  - [ ] Row 34b — Same file: late mismatch/iterations and realistic output flooring.
+  - [ ] Row 34c — Same file: once-only finalize/rejecting/never-settling hook and independent cleanup.
+  - [ ] Row 34d — Same file: one-hour no-split/equal/growth clean/interrupted amounts.
+  - [ ] Row 34e — Same file: fake-timer finalize timeout and ignored late resolution/rejection.
+  - [ ] Row 34f — Same file: N5 malformed one-hour delta charges 74300, clean stop/interruption, later growth.
+  - [ ] Row 35 — `tests/native-sse.test.ts`, stream tests: exact safeguards bytes, errors/EOF/overflow and estimated settlement.
+  - [ ] Row 36 — Native response header policy/router: open Anthropic, organization exposure, relay marker and served-model policy.
+  - [ ] Row 37 — `tests/router.test.ts`: response credentials/cookies/internal spoof, native byte and JSON/SSE served headers.
+  - [ ] Row 38 — `tests/fixtures/anthropic-native-http.ts`: fake upstream HTTP fixture.
+  - [ ] Row 39 — `tests/anthropic-native-relay.integration.test.ts`: exact body/header/IP/error/count/cancel/backpressure fidelity.
+  - [ ] Row 40 — EX1 `src/native-messages.ts`, `src/errors.ts`: M6 typed size detail survives normalization/causes.
+  - [ ] Row 41 — Gateway error/classification seams: terminal 413 preserved on both wires.
+  - [ ] Row 42 — `tests/request-too-large.test.ts`, EX1 `tests/native-error-metadata.test.ts`: numeric exact/lower-bound/unknown-limit envelopes.
+  - [ ] Row 43 — `src/request-body-limit.ts`: streaming cap/cache; N3 incremental storage only after granted chunk bytes, never allocate from Content-Length.
+  - [ ] Row 43p1 — N1 contract: native host upload completes/cancels and detaches before result; canonical streams retain full N until terminal cleanup.
+  - [ ] Row 43p2 — N2 contract: detach/release once on every pre-dispatch refusal, preserving original financial/observation behavior.
+  - [ ] Row 43p3 — N3 contract: raw backing capacity <= granted bytes, no geometric slack/duplicate consolidation allocation.
+  - [ ] Row 43a — Shared default byte pool: reserve actual chunks before retention; typed capacity refusal.
+  - [ ] Row 43b — Lease ownership and once-only cleanup; gateway retry/cache/body references detached before shrink.
+  - [ ] Row 43c — Retained retry/upload references and terminal lease transfer; native/canonical lifetime distinction.
+  - [ ] Row 44 — `tests/request-body-limit.test.ts`, router integration: pre-parse cap and byte boundaries.
+  - [ ] Row 44a — Same file: cross-endpoint/router pool exhaustion, exact 503/Retry-After and zero parse/hold/dispatch.
+  - [ ] Row 44b1 — Same file: host detach/native shrink versus canonical N, races/unconsumed stream/independent finalize.
+  - [ ] Row 44b2 — Same file: N2 generation refusal matrix including auth/partition/OFF/native/ceiling/model/quote/route/admission/prepared/mark.
+  - [ ] Row 44c — Same file: 64x4 KiB overlap/committed streams, switch states and both middleware orders.
+  - [ ] Row 44d1 — Same file: absent/forged CL, actual EOF bytes, cap precedence and reader cancellation.
+  - [ ] Row 44d2 — Same file: N3 backing-allocation counters, forged-large-CL slow uploads, failed extension allocates nothing.
+  - [ ] Row 45 — Count port/handler: JSON-only, switch and exact model/version validation.
+  - [ ] Row 46 — Count per-principal rate/concurrency/expiry/map bounds.
+  - [ ] Row 47 — Router count endpoint: shared caller authentication/header/body/error reuse.
+  - [ ] Row 48 — `tests/native-count-tokens.test.ts`: OFF/ON/fidelity/shallow copy/errors; no stream/ceiling/beta insertion.
+  - [ ] Row 49 — Same file: rate/concurrency/expiry/map bounds; no hold/settlement/usage/finalize.
+  - [ ] Row 49a — `tests/request-body-limit.test.ts`: deferred N2 count_off/count_denied/count_rate/count_concurrency refusal matrix.
+  - [ ] Row 50 — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, canonical ingress/egress/stream tests: ownership inert and canonical regressions.
+  - [ ] Row 51 — `CHANGELOG.md`: native 400/header/standalone/count and JSON/SSE served-header contracts.
+  - [ ] Row 52 — `CHANGELOG.md`: concurrent byte pool/retention, 413/503 and cache delta/mismatch/iterations policy.
+  - [ ] Row 52a — `README.md`: shared pool/retention and native/count/cache/served-header behavior.
+  - [ ] File gate — `tests/native-features.test.ts`: all ten selection rows, single invocation after auth/before admission, no settlement on classifier refusal; prepared eligibility/fallback due rows 21–23/31.
+  - [ ] File gate — `tests/native-headers.test.ts`: complete §4.3 request policy; server auth/transport recomputation stays host-owned in stage 4.
+  - [ ] File gate — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: shallow nested identity, top-level only overrides, inert ownership, no malformed ceiling replacement.
+  - [ ] File gate — `tests/native-errors.test.ts`, `tests/errors.test.ts`, `tests/contract-snapshot.test.ts`, `tests/unknown-model.test.ts`: bounded native 400, billing/rewrite fidelity, exact envelopes/403/404/413.
+  - [ ] File gate — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: complete L2/units40/served/latch fixtures; N5 malformed proof never recovers and physical lower bounds remain atomic.
+  - [ ] File gate — `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`: exact native relay, no post-invocation canonical fallback, once-only settlement/finalize and independent cleanup.
+  - [ ] File gate — `tests/router.test.ts`, `tests/anthropic-native-relay.integration.test.ts`: byte/header/body/error/IP fidelity, safe organization exposure, response served-ID contract.
+  - [ ] File gate — `tests/request-too-large.test.ts`: both wires/JSON/pre-commit streams, typed/status/code 413, terminal no-retry and numeric limit wording.
+  - [ ] File gate — `tests/request-body-limit.test.ts`: N1 reference probes/lifetimes, N2 all refusals and abort/rejecting-cleanup races, N3 actual backing capacity <= leases, restored capacity.
+  - [ ] File gate — `tests/native-count-tokens.test.ts`: same auth/switch/native error policy, exact shallow body, rate bounds and zero financial/observation events.
+  - [ ] File gate — `tests/budget-admission.test.ts`, `tests/budget-hardening.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`: ceiling/flags/hash/guards/pricing invariants.
+  - [ ] File gate — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, `tests/canonical-egress.test.ts`, `tests/canonical-stream.test.ts`: credential/owner integrity and canonical/compaction preservation.
+  - [ ] File gate — After EVERY code row/split: gateway typecheck and full gateway tests with all three ports and `ENV=test-llm-native-relay` last; mesh gates additionally when mesh files change.
+  - [ ] File gate — Before EVERY commit: scope-check, <=149 changed lines including this file, explicit staging; commit through Make with all three ports and ENV last.
+  - [ ] File gate — Gateway handoff: build/typecheck/tests plus existing standalone process typecheck/tests; forbidden apps paths remain untouched.
+  - [ ] File gate — Pass 03 boundary: implement rows 10–15 only, report commits/counts/gates/status; later rows stay unchecked for conductor-owned passes.
 - [ ] Stage 3 — Contract documentation and atomic release train: rows 53–61 (T1 activates reserved EX4).
 - [ ] Stage 4 — API execution/pricing/route plane/ledger: rows 62–81e2, with addendum insertions.
 - [ ] Stage 5 — Operator setup, HTTP-only qualification and OFF/ON client gates: rows 82a–83b plus 82c.
