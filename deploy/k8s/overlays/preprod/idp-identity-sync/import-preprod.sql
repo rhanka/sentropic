@@ -117,3 +117,57 @@ BEGIN
   END LOOP;
 END $$;
 DELETE FROM users WHERE id IN (SELECT old_id FROM rekey);
+
+-- 4. WebAuthn public keys: prod is authoritative per credential_id.
+--    A preprod row holding a prod credential_id under another row id is replaced.
+DELETE FROM webauthn_credentials w
+USING src_webauthn s
+WHERE w.credential_id = s.credential_id AND w.id <> s.id;
+
+INSERT INTO webauthn_credentials (id, credential_id, public_key_cose, counter, user_id, device_name,
+                                  transports_json, uv, created_at, last_used_at)
+SELECT id, credential_id, public_key_cose, counter, user_id, device_name, transports_json, uv, created_at, last_used_at
+FROM src_webauthn
+ON CONFLICT (id) DO UPDATE SET
+  credential_id = EXCLUDED.credential_id, public_key_cose = EXCLUDED.public_key_cose,
+  -- signature counter must never go backwards (clone detection): keep the max of both tiers.
+  counter = GREATEST(webauthn_credentials.counter, EXCLUDED.counter),
+  user_id = EXCLUDED.user_id, device_name = EXCLUDED.device_name,
+  transports_json = EXCLUDED.transports_json, uv = EXCLUDED.uv,
+  last_used_at = GREATEST(webauthn_credentials.last_used_at, EXCLUDED.last_used_at);
+
+-- 5. Post-conditions (inside the transaction: any failure rolls everything back).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM src_users s LEFT JOIN users u ON u.id = s.id WHERE u.id IS NULL)
+    THEN RAISE EXCEPTION 'post: a prod user id is missing'; END IF;
+  IF EXISTS (SELECT 1 FROM src_users s JOIN users u ON u.id = s.id WHERE u.email IS DISTINCT FROM s.email)
+    THEN RAISE EXCEPTION 'post: a prod email is not bound to its prod id'; END IF;
+  IF EXISTS (SELECT 1 FROM src_webauthn s LEFT JOIN webauthn_credentials w ON w.credential_id = s.credential_id AND w.user_id = s.user_id WHERE w.id IS NULL)
+    THEN RAISE EXCEPTION 'post: a prod credential is missing or bound to another user'; END IF;
+  IF (SELECT row(clients, clients_fp, signing_keys) FROM inv_before) IS DISTINCT FROM
+     (SELECT row((SELECT count(*) FROM oauth_clients),
+                 (SELECT md5(string_agg(client_id || ':' || coalesce(client_secret_hash,'') || ':' || array_to_string(redirect_uris, ','), '|' ORDER BY client_id)) FROM oauth_clients),
+                 (SELECT count(*) FROM id_token_signing_keys)))
+    THEN RAISE EXCEPTION 'post: DV5 invariant changed (oauth_clients / signing keys)'; END IF;
+END $$;
+
+-- Audit (IDs and counts only).
+SELECT 'synced_users', count(*) FROM src_users
+UNION ALL SELECT 'synced_webauthn', count(*) FROM src_webauthn
+UNION ALL SELECT 'rekeyed', count(*) FROM rekey
+UNION ALL SELECT 'preprod_only_kept', count(*) FROM users WHERE id NOT IN (SELECT id FROM src_users);
+SELECT 'rekey ' || old_id || ' -> ' || new_id FROM rekey;
+SELECT 'inserted_prod_id ' || id FROM audit_new_ids ORDER BY id;
+SELECT 'preprod_only_before ' || a.id || CASE WHEN a.id IN (SELECT old_id FROM rekey) THEN ' (rekeyed+deleted)' ELSE ' (kept)' END
+FROM audit_preprod_only a ORDER BY a.id;
+SELECT 'post_users', count(*) FROM users
+UNION ALL SELECT 'post_webauthn', count(*) FROM webauthn_credentials;
+
+\if :dry_run
+  ROLLBACK;
+  \echo 'DRY RUN: rolled back'
+\else
+  COMMIT;
+  \echo 'COMMITTED'
+\endif
