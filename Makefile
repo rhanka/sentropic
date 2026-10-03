@@ -3251,6 +3251,7 @@ k8s-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verificati
 	    '"volumes":[{"name":"work","emptyDir":{}}],' \
 	    '"initContainers":[{"name":"download",' \
 	      '"image":"peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a",' \
+	      '"resources":{"requests":{"cpu":"20m","memory":"32Mi"},"limits":{"cpu":"200m","memory":"128Mi"}},' \
 	      '"args":["--endpoint-url","$$(S3_ENDPOINT)","cp","s3://$$(S3_BUCKET)/$(PG_BACKUP_KEY)","/work/d.sql.gz"],' \
 	      '"env":[' \
 	        '{"name":"AWS_ACCESS_KEY_ID","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_ACCESS_KEY"}}},' \
