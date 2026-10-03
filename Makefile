@@ -2245,6 +2245,8 @@ logs-api-ci: ## Print source and production SUT logs
 	$(CI_COMPOSE) logs --no-color api api-sut auth-idp
 
 .PHONY: ci-test-env restore-api-sut verify-api-sut-restart
+latest-prod-backup: ## Print the latest production dump basename for the restore job
+	@find data/backup -maxdepth 1 -name 'prod-*.dump' -printf '%T@ %f\n' | sort -nr | head -n 1 | cut -d' ' -f2-
 ci-test-env:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
 

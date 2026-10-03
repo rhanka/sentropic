@@ -1193,9 +1193,6 @@ jobs:
         with:
           name: api-image
           path: .
-      - name: Load UI image from artifact
-        if: steps.check-ui-image.outcome == 'failure'
-        run: make load-ui
       - name: Pull if UI image is up to date
         id: check-ui-image
         run: make pull-ui-image
@@ -1209,6 +1206,9 @@ jobs:
       - name: Load API image from artifact
         if: steps.check-api-image.outcome == 'failure'
         run: make load-api
+      - name: Load UI image from artifact
+        if: steps.check-ui-image.outcome == 'failure'
+        run: make load-ui
       - name: Pull e2e image artifact
         run: make pull-e2e-image
       - name: Test e2e API & UI (${{ matrix.group }})
@@ -1483,7 +1483,9 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        run: make restore-api-sut verify-api-sut-restart test-api-smoke-restore BACKUP_FILE=$(ls -t data/backup/prod-*.dump | head -1 | xargs basename) ENV=test-ci-restore
+        run: |
+          backup="$(make -s latest-prod-backup ENV=test-ci-restore)"
+          make restore-api-sut verify-api-sut-restart test-api-smoke-restore BACKUP_FILE="$backup" ENV=test-ci-restore
       - name: Show restore SUT logs on failure
         if: failure()
         run: make logs-api-ci ENV=test-ci-restore

@@ -88,6 +88,7 @@
   - [x] Add CI-only tool runner and production API/IdP services without workspace mounts.
   - [x] Add cached Chromium/Playwright tooling and compiled-IdP smoke routing; preserve the existing screen assertions.
   - [x] Restore before production boot; verify data preservation, settings/control schema and migration-journal stability on restart.
+  - [x] Source unit suite passes (113 files, 1011 passed, 2 skipped); queue, security, artifact-store, object-registry and outbox suites pass in the tool runner.
   - [ ] Update `docker-compose*.yml` and Makefile test targets for tool image usage.
   - [x] Wire 15-job matrix: source suites run in the cached tool image; smoke and limit run once against production SUT.
   - [x] Wire smoke IdP, smoke restore, smoke, and limit to run against the production container as external HTTP runner.
