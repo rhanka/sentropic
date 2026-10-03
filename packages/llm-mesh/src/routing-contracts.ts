@@ -1,5 +1,6 @@
 import type { CapabilityRequirement } from './equivalence-council.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
+import type { NativeUsagePricing } from './native-messages.js';
 import type { RoutePolicy, RouteSelector } from './routing-policy.js';
 import type { TargetMapping } from './routing-targets.js';
 
@@ -147,7 +148,8 @@ export interface RouteFailureClassification {
   readonly healthScope: 'route' | 'account' | 'transport' | 'provider-model';
 }
 
-export interface RouteAttemptUsage {
+/** Physical attempt counts; optional native pricing evidence is trusted observer data. */
+export interface RouteAttemptUsage extends NativeUsagePricing {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly estimated: boolean;
