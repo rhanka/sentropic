@@ -140,7 +140,7 @@
   - [x] Row 11 — `tests/native-features.test.ts`: classification matrix, OFF precedence, budget default, empty beta, canonical version-only and standalone OFF refusal; prepared capability/version fallback remains rows 21–23/31. Typecheck PASS after fixture typing; tests 419 passed / 0 failed (29 files; 30 new cases).
   - [x] Row 12 — `src/native-headers.ts`: open Anthropic/closed other caller forwarding, credentials/hop-by-hop/Connection exclusions; classifier carries filtered headers. Typecheck PASS; tests 419 passed / 0 failed (29 files).
   - [x] Row 13 — `tests/native-headers.test.ts`: every credential/Connection/internal/IP/user-agent exclusion and synthetic feature fidelity. Typecheck PASS; tests 522 passed / 0 failed (30 files; 103 new cases).
-  - [ ] Row 14 — `src/route-native.ts`, `src/canonical-ingress.ts`: shallow native body and wire-specific max-token precedence.
+  - [x] Row 14 — `src/route-native.ts`, `src/canonical-ingress.ts`: shallow native body, valid supplied ceiling capped without increase, default only when omitted, wire-specific max-token precedence. Typecheck PASS; tests 522 passed / 0 failed (30 files).
   - [ ] Row 15 — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: nested-reference fidelity, no mutation/deep clone, malformed/default/reserved ceilings.
   - [ ] Row 16 — `src/route-flow-core.ts`, `src/admission.ts`, `tests/route-flow-core.test.ts`: required quote/plan flag and host routeInput injection guard.
   - [ ] Row 17 — Native-only typed validation/error contract in gateway and EX1 mesh native error seam.
