@@ -1,0 +1,60 @@
+# CI-only overlay: source tests live in the toolbox; shipped code is the SUT.
+services:
+  api:
+    image: ${REGISTRY}/${API_TOOL_IMAGE_NAME:-sentropic-api-tools}:${API_TOOL_VERSION}
+    build:
+      target: ci-tools
+    command: sh -c "npm run db:migrate && npm run dev"
+    environment:
+      - NODE_ENV=development
+      - JWT_SECRET=dev-secret-key-change-in-production-please
+      - OAUTH_SIGNING_KEK=ci-disposable-signing-kek-never-production
+
+  api-sut:
+    extends:
+      file: docker-compose.yml
+      service: api
+    image: ${API_IMAGE_REF:-${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION}}
+    build:
+      target: production
+    command: [node, dist/index.js]
+    environment:
+      - NODE_ENV=production
+      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT:-true}
+      - JWT_SECRET=dev-secret-key-change-in-production-please
+      - OAUTH_SIGNING_KEK=ci-disposable-signing-kek-never-production
+      - OUTBOX_DISPATCHER_AUTOSTART=false
+      - ADMIN_EMAIL=e2e-admin@example.com
+      - WEBAUTHN_RP_ID=localhost
+      - WEBAUTHN_ORIGIN=http://localhost:${UI_PORT:-5173}
+      - DOC_STORAGE_ENDPOINT=http://minio:9000
+      - DOC_STORAGE_REGION=fr-par-1
+      - DOC_STORAGE_BUCKET=sentropic-docs-test
+      - DOC_STORAGE_ACCESS_KEY=minioadmin
+      - DOC_STORAGE_SECRET_KEY=minioadmin
+
+  auth-idp:
+    image: ${API_IMAGE_REF:-${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION}}
+    working_dir: /workspace
+    command: [node, apps/auth-idp/dist/index.js]
+    environment:
+      - NODE_ENV=production
+      - IDP_PORT=8787
+      - IDP_WEB_BUILD_DIR=apps/auth-idp/web/build
+      - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
+      - JWT_SECRET=dev-secret-key-change-in-production-please
+      - OAUTH_SIGNING_KEK=ci-disposable-signing-kek-never-production
+      - OAUTH_ISSUER_URL=http://auth-idp:8787
+      - AUTH_CALLBACK_BASE_URL=http://auth-idp:8787
+      - UI_BASE_URL=http://auth-idp:8787
+      - DISABLE_RATE_LIMIT=true
+      - SCW_TEM_SECRET_KEY=ci-inert-email-key
+      - SCW_TEM_API_BASE_URL=http://127.0.0.1:7700
+    depends_on:
+      api-sut:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'wget -qO- http://localhost:8787/.well-known/openid-configuration >/dev/null']
+      interval: 5s
+      timeout: 5s
+      retries: 10

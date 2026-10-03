@@ -20,6 +20,7 @@
   - `api/Dockerfile`
   - `Makefile`
   - `.github/workflows/ci.yml`
+  - `docker-compose.ci.yml`
   - `api/tests/smoke/**`
   - `BRANCH.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -39,6 +40,7 @@
 - [x] BRCI-EX2 acknowledge: owner authorizes `Makefile` edits. Rationale: define `API_TOOL_IMAGE_NAME`, `API_TOOL_VERSION` content hash, tool image lifecycle targets (`build-api-tool-image`, `check-api-tool-image`, `pull-api-tool-image`, `save-api-tool`, `load-api-tool`, `publish-api-tool-image`), and wire test matrix/smoke targets. Impact: Make orchestrates tool image builds and CI test runs. Rollback: revert Makefile targets. Acceptance: tool image builds, saves, and executes tests.
 - [x] BRCI-EX3 acknowledge: owner authorizes `.github/workflows/ci.yml` edits. Rationale: build/pull/cache the tool image once per content hash, run the 15-job matrix inside the tool image, and execute smokes against the production image SUT. Impact: CI pipeline uses cached tool image and tests prod image. Rollback: revert workflow edits. Acceptance: CI pipeline runs successfully with tool image caching.
 - [x] BRCI-EX4 conditional: build brief permits `docker-compose*.yml` edits only if strictly needed. Rationale: define tool image service or test execution override for running tests against prod SUT. Impact: compose service configurations for testing. Rollback: revert compose edits. Acceptance: compose stacks up/down cleanly without orphaned containers; no tracked compose change in Lot 1.
+- [x] BRCI-EX4 activation: `docker-compose.ci.yml` separates the immutable tool runner from API/IdP production services, with no source mounts. Impact: CI-only service definitions; rollback: remove the overlay and revert its Make routing.
 
 ## AI Flaky tests
 - [x] Acceptance rule:
@@ -81,6 +83,7 @@
   - [x] Write `.h2a/build/lot1_report.md` for reviewer.
 
 - [ ] **Lot 2 — Matrix on tool image & smokes/limit as external runner against prod SUT**
+  - [x] Add CI-only tool runner and production API/IdP services without workspace mounts.
   - [ ] Update `docker-compose*.yml` and Makefile test targets for tool image usage.
   - [ ] Wire 15-job matrix execution in tool image on source.
   - [ ] Wire smoke IdP, smoke restore, smoke, and limit to run against the production container as external HTTP runner.

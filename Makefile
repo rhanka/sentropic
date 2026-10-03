@@ -7,6 +7,11 @@ export COMPOSE_PROJECT_NAME ?= $(ENV)
 DOCKER_COMPOSE  ?= docker compose
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
+CI_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml
+API_TEST_CI ?= 0
+API_TEST_SUT ?= 0
+API_TEST_RUN = $(if $(filter 1,$(API_TEST_CI)),$(CI_COMPOSE) run --rm --no-deps,$(DOCKER_COMPOSE) exec -T)
+API_TEST_URL = $(if $(filter 1,$(API_TEST_SUT)),http://api-sut:8787,http://api:8787)
 
 export API_PORT ?= 8787
 export UI_PORT ?= 5173
@@ -2252,10 +2257,16 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
-up-api-test-ci: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
+up-api-test-ci: ## Start source API from the cached toolbox; no install, workspace build or mount
+	DISABLE_RATE_LIMIT=true $(CI_COMPOSE) up --no-build -d --wait api
+
+.PHONY: up-api-sut down-api-ci logs-api-ci
+up-api-sut: ## Start the shipped API as-is; boot owns migrations
+	$(CI_COMPOSE) up --no-build -d --wait api-sut
+down-api-ci: ## Stop the isolated CI source/SUT stack
+	$(CI_COMPOSE) down
+logs-api-ci: ## Print source and production SUT logs
+	$(CI_COMPOSE) logs --no-color api api-sut auth-idp
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
@@ -2887,7 +2898,7 @@ API_TEST_ARGS ?=
 .PHONY: test-api-%
 
 test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
-	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
+	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
 	  TEST_TYPE="$*"; \
 	  requested_workers="$${VITEST_MAX_WORKERS:-4}"; \
 	  extra_args="$${API_TEST_ARGS:-}"; \
