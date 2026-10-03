@@ -159,9 +159,6 @@ ENV NODE_ENV=production
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 # Exception-aware gate (inherits .security/ from the base stage's COPY . .).
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
-# Security: the runtime only invokes `node`; drop the npm CLI and its bundled
-# dependencies (CVE-2026-93748 in http-cache-semantics has no upstream fix).
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);
