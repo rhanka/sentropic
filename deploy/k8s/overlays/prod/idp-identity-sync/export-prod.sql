@@ -1,4 +1,4 @@
--- Prod-side identity export (runs in ns `sentropic` as role idp_identity_exporter, READ ONLY).
+-- Prod-side identity export (runs in ns `sentropic` as role idp_identity_reader, READ ONLY).
 -- Exports ONLY identity rows: users + webauthn public keys. No sessions, tokens, codes,
 -- magic-links, oauth_clients or signing keys (DV5).
 -- Invoked: psql -XAtq -v ON_ERROR_STOP=1 -f export-prod.sql   (cwd = /work)
