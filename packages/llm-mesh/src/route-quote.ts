@@ -2,6 +2,10 @@ import { modelProfiles, providerProfiles } from './catalog.js';
 import {
   DEFAULT_MODEL_EQUIVALENCE_COUNCIL, type ModelEquivalenceCouncil,
 } from './equivalence-council.js';
+import {
+  isNativeMessagesTarget, NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS,
+  validateNativeModelAllowlist,
+} from './native-messages.js';
 import { mergeRoutePolicy, RoutePlanError } from './route-planner-state.js';
 import { resolveRouteTargets } from './route-selection.js';
 import type {
@@ -29,10 +33,11 @@ export class RouteQuoteError extends Error {
 export interface RouteQuoteOptions {
   readonly council?: ModelEquivalenceCouncil;
   readonly profiles?: InMemoryRoutePolicyProfiles;
+  readonly nativeMessagesModelIds?: readonly string[];
 }
 
 type QuoteRouteFields = Pick<RoutePlanInput, 'targetCandidatesOverride' | 'intent'
-  | 'requiredCapabilities' | 'policyProfile' | 'policyOverride' | 'explicit'>;
+  | 'requiredCapabilities' | 'policyProfile' | 'policyOverride' | 'explicit' | 'nativeMessages'>;
 type QuoteBody = Omit<RouteQuote, 'quoteRef'>;
 
 interface QuoteTarget {
@@ -112,6 +117,7 @@ export const computeRouteQuoteRef = (
     policyProfile: input.policyProfile,
     policyOverride: input.policyOverride,
     explicit: input.explicit,
+    nativeMessages: input.nativeMessages,
   },
   policyProfileName: policyProfileName ?? null,
   requestedModel: body.requestedModel,
@@ -209,14 +215,34 @@ export const quoteRoute = (input: RouteQuoteInput, options: RouteQuoteOptions = 
     input, options.profiles ?? new InMemoryRoutePolicyProfiles(),
   );
   const targets = resolveQuoteTargets(input, policy, council);
-  if (targets.length > MAX_ROUTE_QUOTE_CANDIDATES) {
+  const nativeModelIds = options.nativeMessagesModelIds !== undefined
+    ? validateNativeModelAllowlist(options.nativeMessagesModelIds)
+    : NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS;
+  let candidateTargets = targets;
+  if (input.nativeMessages === true) {
+    if (!isNativeMessagesTarget({ providerId: 'anthropic', modelId: input.requestedModel }, nativeModelIds)) {
+      throw new RouteQuoteError(
+        'Native Anthropic Messages execution is unavailable for this request',
+        'native-unavailable',
+      );
+    }
+    candidateTargets = targets.filter((target) =>
+      isNativeMessagesTarget(target, nativeModelIds) && target.modelId === input.requestedModel);
+    if (candidateTargets.length === 0) {
+      throw new RouteQuoteError(
+        'Native Anthropic Messages execution is unavailable for this request',
+        'native-unavailable',
+      );
+    }
+  }
+  if (candidateTargets.length > MAX_ROUTE_QUOTE_CANDIDATES) {
     throw new RouteQuoteError(
-      `Route has ${targets.length} candidates; the quote limit is ${MAX_ROUTE_QUOTE_CANDIDATES}`,
+      `Route has ${candidateTargets.length} candidates; the quote limit is ${MAX_ROUTE_QUOTE_CANDIDATES}`,
       'too-many-candidates',
     );
   }
   const { ceiling } = input;
-  const candidates = targets.map((target): QuotedRouteCandidate => {
+  const candidates = candidateTargets.map((target): QuotedRouteCandidate => {
     const modelCapabilities = profileFor(target)?.capabilities;
     const contextWindow = modelCapabilities?.contextWindowTokens;
     if (contextWindow !== undefined && ceiling.inputTokens > contextWindow) {
