@@ -1397,7 +1397,7 @@ jobs:
   # Security: Container scans (Docker images)
   security-container:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-ui]
+    needs: [changes, build-api-image, build-api-tool-image, build-ui]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
     env:
       REGISTRY: ${{ secrets.REGISTRY }}
@@ -1426,6 +1426,16 @@ jobs:
       - name: Run container scan on API
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-api-security-container
+        continue-on-error: false
+      - name: Download API toolbox artifact
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Scan API toolbox with the existing container gate
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make load-api-tool test-api-tool-security-container
         continue-on-error: false
       - name: Run container scan on UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'

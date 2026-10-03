@@ -2885,6 +2885,10 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
+	elif [ "$*" = "api-tool" ]; then \
+		IMAGE_NAME="$(API_TOOL_IMAGE)"; \
+		echo "  Scanning image: $$IMAGE_NAME"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	else \
 		IMAGE_NAME="sentropic-$*:latest"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
