@@ -95,6 +95,7 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
     - [x] `make test-idp-sync-selftest ENV=test-idp-sync`: kustomize build of both sub-dirs; invariants (suspend true, digests pinned, no aws-cli/python image, no `sentropic-idp-relay-writer`/`sentropic-idp-identity-reader` referenced in preprod, no reader referenced in prod, frozen DRY_RUN=1).
 
 - [ ] **Lot 3 — CD and run workflow**
+  - [x] Add offline run-control tests for rendering, validation, admission failures, secret preflights, export re-suspension and filtered audits.
   - [x] Add idempotent reader-role Job and tenant-admin bootstrap bundle RBAC with no admission-policy rights.
   - [x] Add preprod import Job template and k8s-owned suspend-only VAP reference.
   - [x] Add fail-closed run validation, safe template rendering, Job polling and export trigger with finally re-suspend and termination-message verdict.
