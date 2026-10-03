@@ -156,7 +156,7 @@
   - [x] Row 22 — Guarded required-mode native refusal in `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`; release and settlement independently protected. Typecheck PASS; tests 625 passed / 0 failed.
   - [x] Row 23 — `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`: dispatch, delegator, capability validity, refusal and lifecycle tests. Typecheck PASS; tests 628 passed / 0 failed.
   - [x] Row 24 — `src/native-sse.ts`: bounded byte SSE framer with 1 MiB frame ceiling and stream generator. Typecheck PASS; tests 628 passed / 0 failed.
-  - [ ] Row 25 — `tests/native-sse.test.ts`: CR/LF/CRLF, split UTF-8, chunk boundaries and overflow.
+  - [x] Row 25 — `tests/native-sse.test.ts`: CR/LF/CRLF, split UTF-8, chunk boundaries, comment parsing and 1 MiB frame overflow. Typecheck PASS; tests 634 passed / 0 failed.
   - [ ] Row 25a — `src/native-usage.ts`: L2 nullable cumulative contract, reported/inferred TTL split; N5 permanently revokes malformed proof before row 26.
   - [ ] Row 26 — `src/native-usage.ts`: cumulative usage fold, final output provenance and unsuccessful termination.
   - [ ] Row 26a — `src/native-usage.ts`: served-model/mismatch/fallback/iterations latch; null/[] absent.
