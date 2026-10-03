@@ -128,6 +128,8 @@ CMD ["npm", "run", "dev"]
 # CI runners retain npm, devDependencies, test sources and built workspaces.
 # This target is a toolbox only; the production target is the shipped SUT.
 FROM development AS ci-tools
+RUN apk add --no-cache chromium && \
+    npm --prefix /workspace/e2e ci --ignore-scripts
 
 # BR-39 deploy (D4-a) — IdP screens build stage. Self-contained, mirrors
 # apps/auth-idp/web/Dockerfile (NOT a root workspace member; pulls @sentropic/auth-ui
