@@ -20,7 +20,6 @@
   - `api/Dockerfile`
   - `Makefile`
   - `.github/workflows/ci.yml`
-  - `docker-compose*.yml`
   - `api/tests/smoke/**`
   - `BRANCH.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -31,6 +30,7 @@
   - `rules/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql`
+  - `docker-compose*.yml` (only when strictly needed for the tool runner or production SUT)
 - [x] **Exception process**:
   - Declare exception ID `BRCI-EXn` in `## Feedback Loop` with reason, impact, and rollback strategy.
 
@@ -38,7 +38,7 @@
 - [x] BRCI-EX1 acknowledge: owner authorizes `api/Dockerfile` edits. Rationale: introduce `ci-tools` target stage carrying npm, devDependencies, and test runners, and drop npm/npx from `production` runtime stage to remediate CVE-2026-93748. Impact: production container has no npm CLI; tool image carries npm and test dependencies. Rollback: revert Dockerfile changes. Acceptance: prod image fails `command -v npm`, prod container boots and migrates DB at startup.
 - [x] BRCI-EX2 acknowledge: owner authorizes `Makefile` edits. Rationale: define `API_TOOL_IMAGE_NAME`, `API_TOOL_VERSION` content hash, tool image lifecycle targets (`build-api-tool-image`, `check-api-tool-image`, `pull-api-tool-image`, `save-api-tool`, `load-api-tool`, `publish-api-tool-image`), and wire test matrix/smoke targets. Impact: Make orchestrates tool image builds and CI test runs. Rollback: revert Makefile targets. Acceptance: tool image builds, saves, and executes tests.
 - [x] BRCI-EX3 acknowledge: owner authorizes `.github/workflows/ci.yml` edits. Rationale: build/pull/cache the tool image once per content hash, run the 15-job matrix inside the tool image, and execute smokes against the production image SUT. Impact: CI pipeline uses cached tool image and tests prod image. Rollback: revert workflow edits. Acceptance: CI pipeline runs successfully with tool image caching.
-- [x] BRCI-EX4 acknowledge: owner authorizes `docker-compose*.yml` edits if needed. Rationale: define tool image service or test execution override for running tests against prod SUT. Impact: compose service configurations for testing. Rollback: revert compose edits. Acceptance: compose stacks up/down cleanly without orphaned containers.
+- [x] BRCI-EX4 conditional: build brief permits `docker-compose*.yml` edits only if strictly needed. Rationale: define tool image service or test execution override for running tests against prod SUT. Impact: compose service configurations for testing. Rollback: revert compose edits. Acceptance: compose stacks up/down cleanly without orphaned containers; no tracked compose change in Lot 1.
 
 ## AI Flaky tests
 - [x] Acceptance rule:
@@ -66,13 +66,16 @@
   - [x] Define scope boundaries and declare `BRCI-EX1` through `BRCI-EX4`.
 
 - [ ] **Lot 1 — Tool image target & prod runtime without npm**
-  - [ ] Add `ci-tools` target stage in `api/Dockerfile`.
-  - [ ] Drop npm/npx and `/usr/local/lib/node_modules/npm` from `production` stage in `api/Dockerfile`.
-  - [ ] Define `API_TOOL_IMAGE_NAME` and `API_TOOL_VERSION` content hash in `Makefile`.
-  - [ ] Add `build-api-tool-image`, `check-api-tool-image`, `pull-api-tool-image`, `save-api-tool`, `load-api-tool`, `publish-api-tool-image` targets in `Makefile`.
+  - [x] Add `ci-tools` target stage in `api/Dockerfile`.
+  - [x] Drop npm/npx and `/usr/local/lib/node_modules/npm` from `production` stage in `api/Dockerfile`.
+  - [x] Define `API_TOOL_IMAGE_NAME` and `API_TOOL_VERSION` content hash in `Makefile`.
+  - [x] Add `build-api-tool-image`, `check-api-tool-image`, `pull-api-tool-image`, `save-api-tool`, `load-api-tool`, `publish-api-tool-image` targets in `Makefile`.
   - [ ] Local proof: build production image and verify `docker run <prod> sh -c 'command -v npm'` fails.
   - [ ] Local proof: verify production container boots and database migrations run successfully at startup.
-  - [ ] Local proof: build tool image and verify `docker run <tool> sh -c 'command -v npm && npx vitest --version'` succeeds.
+  - [x] Local proof: build tool image and verify `docker run <tool> sh -c 'command -v npm && npx vitest --version'` succeeds.
+  - [x] Tool runner check: `api/tests/unit/client-ip.test.ts` passes in the image without mounts or dependency installation (18 tests).
+  - [x] Cache check: unchanged build reuses the local image; input addition, modification and rename change the tag; deletion restores it.
+  - [x] Artifact check: `make save-api-tool load-api-tool` succeeds.
   - [ ] Write `.h2a/build/lot1_report.md` for reviewer.
 
 - [ ] **Lot 2 — Matrix on tool image & smokes/limit as external runner against prod SUT**
