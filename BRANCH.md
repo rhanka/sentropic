@@ -8,7 +8,7 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
 - No migration in `api/drizzle/*.sql`.
 - Make-only workflow, no direct Docker commands; ZERO Python (no `amazon/aws-cli`); images pinned by digest (`postgres:17-alpine@sha256:b0f9560a…`, `peakcom/s5cmd:v2.2.2@sha256:6e551552…`).
 - No prod credential ever referenced from `sentropic-preprod` objects (prod exports to the relay with the writer; preprod reads with the reader).
-- Never touched by the import: `oauth_clients` (incl. `radar-immobilier-preprod`), `id_token_signing_keys`, OAuth codes/tokens/consents, sessions of non-rekeyed users (DV5).
+- Never touched by the import: `oauth_clients` (incl. `radar-immobilier-preprod`), `id_token_signing_keys`, OAuth codes/tokens/consents and sessions of non-rekeyed users (DV5). Rekeyed users lose ephemeral auth; revoked tokens remain durable.
 - Logs and Job termination messages carry IDs and counts only, never emails or secrets.
 - Root workspace `~/src/sentropic` is reserved for user dev/UAT and must remain stable.
 - Branch development happens in isolated worktree `tmp/idp-identity-sync`.
@@ -87,28 +87,29 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
   - [x] Add preprod kustomization, hardened dormant import CronJob and dump/upload/fetch init containers (import wrapper follows).
   - [x] Wire both overlays and add checksum/freshness validation with counts/IDs-only JSON termination audit.
   - [x] Add rendered-bundle assertions for dormant scheduling, hardening, narrow RBAC and strict credential separation.
-  - [x] `overlays/prod/idp-identity-sync/`: kustomization (ns `sentropic`, `configMapGenerator` with `disableNameSuffixHash`), SA `sentropic-idp-export` (no token), NetworkPolicy `allow-idp-export-to-postgres`, CronJob `sentropic-idp-identity-export` (`*/5`, `suspend: true`, Forbid, export + `SHA256SUMS` + s5cmd put with `sentropic-idp-relay-writer`), trigger SA/Role/RoleBinding `sentropic-ci-trigger-idp-export` (cronjobs get/patch by resourceName, jobs get/list/watch, pods/log get).
+  - [x] `overlays/prod/idp-identity-sync/`: kustomization (ns `sentropic`, `configMapGenerator` with `disableNameSuffixHash`), SA `sentropic-idp-export` (no token), NetworkPolicy `allow-idp-export-to-postgres`, CronJob `sentropic-idp-identity-export` (`*/5`, `suspend: true`, Forbid, export + `SHA256SUMS` + s5cmd put with `sentropic-idp-relay-writer`), trigger SA/Role/RoleBinding `sentropic-ci-trigger-idp-export` (cronjobs get/patch by resourceName, jobs get/list/watch, pods get/list; no pods/log).
   - [x] `overlays/preprod/idp-identity-sync/`: kustomization (ns `sentropic-preprod`), SA `sentropic-idp-sync` (no token), NetworkPolicy `allow-idp-sync-to-postgres`, CronJob `sentropic-idp-identity-sync` (`*/5`, `suspend: true`, frozen `DRY_RUN=1`, `ALLOWED_REKEY=""`, `MAX_SNAPSHOT_AGE_S`) with pre-sync rollback dump (s5cmd `run` command file, `sentropic-pgbackup`), relay fetch (`sentropic-idp-relay-reader`), `sha256sum -c`, import.
   - [x] Include `idp-identity-sync` in `overlays/prod/kustomization.yaml` and `overlays/preprod/kustomization.yaml`.
   - [x] Hardened pods (runAsNonRoot, seccomp RuntimeDefault, drop ALL, no SA token, `enableServiceLinks: false`, memory emptyDirs with sizeLimit, requests/limits, TTL).
   - [x] Lot gate:
     - [x] `make test-idp-sync-selftest ENV=test-idp-sync`: kustomize build of both sub-dirs; invariants (suspend true, digests pinned, no aws-cli/python image, no `sentropic-idp-relay-writer`/`sentropic-idp-identity-reader` referenced in preprod, no reader referenced in prod, frozen DRY_RUN=1).
 
-- [ ] **Lot 3 — CD and run workflow**
+- [x] **Lot 3 — CD and run workflow**
   - [x] Add offline run-control tests for rendering, validation, admission failures, secret preflights, export re-suspension and filtered audits.
+  - [x] Add workflow and bootstrap assertions, including mutation rejection for unsafe defaults, missing re-suspension and shell expression injection.
   - [x] Add idempotent reader-role Job and tenant-admin bootstrap bundle RBAC with no admission-policy rights.
   - [x] Add preprod import Job template and k8s-owned suspend-only VAP reference.
   - [x] Add fail-closed run validation, safe template rendering, Job polling and export trigger with finally re-suspend and termination-message verdict.
   - [x] Add run.mjs CLI, file-backed Secret replacement, anti-RCE fail closure and filtered preprod audit collection.
   - [x] Add path-scoped, main-only armed bundle-prod workflow job and selftest prerequisite.
   - [x] Add main-only dispatch/scheduled run workflow and path-filtered PR/push SQL/selftest CI gates.
-  - [ ] `deploy/ci/idp-identity-sync/reader-role-provision-job.tmpl.yaml` (prod Job, `\getenv`, backoffLimit 0, deadline 300 s) and `import-job.tmpl.yaml` (preprod Job, `${DRY_RUN}`, `${ALLOWED_REKEY}`, `${MAX_SNAPSHOT_AGE_S}`).
-  - [ ] `deploy/ci/idp-identity-sync/run.mjs`: render `${VAR}` (fail on leftover), delete+apply Job, poll `.status`, flip/restore `spec.suspend`, collect audit (Job logs + termination message), write step summary; Node only.
-  - [ ] `.github/workflows/idp-identity-sync.yml`: `selftest`; `bundle-prod` (push to main path-scoped + dispatch, var `IDP_SYNC_CD_ENABLED`, env `sentropic-idp-prod` with owner approval, prod apiserver preflight, Secret `replace --dry-run=server` then `replace` from env secrets, `apply -k overlays/prod/idp-identity-sync`, reader-role Job, anti-RCE gate `--as` trigger SA: jobTemplate patch DENIED + suspend flip ALLOWED else empty the Role and fail); `run` (schedule daily + dispatch, `DRY_RUN` default true, `ALLOWED_REKEY` default empty, `CONFIRM` date guard for real runs, env `sentropic-idp-run` main-only: flip prod export → wait Job → always re-suspend → preprod import Job → audit).
-  - [ ] `ci.yml`: run `test-idp-sync-selftest` and `test-idp-sync-sql` on PR/push when `deploy/**` changes.
-  - [ ] `deploy/ci/idp-identity-sync/rbac-ci-idp-bundle-prod.yaml` (bootstrap, applied once by tenant admin) and `vap-ci-trigger-suspend-only.yaml` (for the k8s lane).
-  - [ ] Lot gate:
-    - [ ] `make test-idp-sync-selftest ENV=test-idp-sync` covers render, status classification, workflow wiring (no `${{ }}` inside `run:`, DRY_RUN default true, prod trigger kubeconfig only in `run`).
+  - [x] `deploy/ci/idp-identity-sync/reader-role-provision-job.tmpl.yaml` (prod Job, `\getenv`, backoffLimit 0, deadline 300 s) and `import-job.tmpl.yaml` (preprod Job, `${DRY_RUN}`, `${ALLOWED_REKEY}`, `${MAX_SNAPSHOT_AGE_S}`).
+  - [x] `deploy/ci/idp-identity-sync/run.mjs`: render `${VAR}` (fail on leftover), delete+apply Job, poll `.status`, flip/restore `spec.suspend`, collect audit (Job logs + termination message), write step summary; Node only.
+  - [x] `.github/workflows/idp-identity-sync.yml`: `selftest`; `bundle-prod` (push to main path-scoped + dispatch, var `IDP_SYNC_CD_ENABLED`, env `sentropic-idp-prod` with owner approval, prod apiserver preflight, Secret `replace --dry-run=server` then `replace` from env secrets, `apply -k overlays/prod/idp-identity-sync`, reader-role Job, anti-RCE gate `--as` trigger SA: jobTemplate patch DENIED + suspend flip ALLOWED else empty the Role and fail); `run` (schedule daily + dispatch, `DRY_RUN` default true, `ALLOWED_REKEY` default empty, `CONFIRM` date guard for real runs, env `sentropic-idp-run` main-only: flip prod export → wait Job → always re-suspend → preprod import Job → audit).
+  - [x] `ci.yml`: run `test-idp-sync-selftest` and `test-idp-sync-sql` on PR/push when `deploy/**` changes.
+  - [x] `deploy/ci/idp-identity-sync/rbac-ci-idp-bundle-prod.yaml` (bootstrap, applied once by tenant admin) and `vap-ci-trigger-suspend-only.yaml` (for the k8s lane).
+  - [x] Lot gate:
+    - [x] `make test-idp-sync-selftest ENV=test-idp-sync`: 31 PASS; covers render, status classification, anti-RCE, file permissions, secret preflight failures, export cleanup and workflow wiring (no `${{ }}` inside `run:`, DRY_RUN default true, prod trigger kubeconfig only in `run`).
 
 - [ ] **Lot 4 — Docs and credential cycle**
   - [ ] `deploy/ci/idp-identity-sync/README.md`: flow, bootstrap, dry-run → real run procedure, rollback (`pre-idp-sync/<job>.dump`), audit acceptance lines.
