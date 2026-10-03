@@ -35,6 +35,14 @@ export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/c
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
+export API_TOOL_IMAGE_NAME ?= sentropic-api-tools
+# Include source inputs: the toolbox contains test sources and built workspaces.
+# Hash paths as well as bytes, so additions, deletions and renames invalidate it.
+ifndef API_TOOL_VERSION
+API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts .security package.json package-lock.json .dockerignore | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+endif
+export API_TOOL_VERSION
+API_TOOL_IMAGE = $(REGISTRY)/$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
 export UI_IMAGE_NAME  ?= sentropic-ui
 export E2E_IMAGE_NAME ?= sentropic-e2e
 export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
@@ -468,6 +476,34 @@ save-api: ## Save API Docker image as tar artifact
 load-api:
 	@echo "📥 Loading API image from artifact..."
 	@docker load -i api-image.tar
+
+.PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
+api-tool-version: ## Print the content-addressed CI toolbox tag
+	@echo $(API_TOOL_VERSION)
+
+build-api-tool-image: ## Reuse the toolbox locally or from the registry; build only on a cache miss
+	@if docker image inspect $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
+		echo "Reusing local toolbox $(API_TOOL_IMAGE)"; \
+	elif docker pull $(API_TOOL_IMAGE); then \
+		echo "Reusing registry toolbox $(API_TOOL_IMAGE)"; \
+	else \
+		docker build --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .; \
+	fi
+
+check-api-tool-image: ## Check the toolbox tag in the registry (uses existing Docker credentials)
+	@docker manifest inspect $(API_TOOL_IMAGE) >/dev/null
+
+pull-api-tool-image: ## Pull the toolbox by its input hash
+	@docker pull $(API_TOOL_IMAGE)
+
+save-api-tool: ## Save the toolbox for CI artifact transport
+	@docker save $(API_TOOL_IMAGE) -o api-tool-image.tar
+
+load-api-tool: ## Load the toolbox from a CI artifact
+	@docker load -i api-tool-image.tar
+
+publish-api-tool-image: docker-login ## Publish the non-shipping toolbox for reuse across CI runs
+	@docker push $(API_TOOL_IMAGE)
 
 # -----------------------------------------------------------------------------
 # Docker helpers
