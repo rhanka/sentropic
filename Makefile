@@ -543,7 +543,16 @@ pull-api-image: docker-login
 
 publish-api-image: docker-login
 	@echo "▶ Pushing api image to registry"
+	@$(MAKE) verify-api-image ENV=$(ENV)
+	@if docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/ci-prod-image/existing-manifest.json 2>/dev/null; then \
+		docker run --rm -i $(LLM_MESH_NODE_IMAGE) node -e 'let s=""; for await (const c of process.stdin) s+=c; const m=JSON.parse(s); if (m.config?.digest !== process.argv[1]) { console.error("Production tag collision: recorded artifact differs from registry"); process.exit(1); }' "$(API_IMAGE_REF)" < .tmp/ci-prod-image/existing-manifest.json; \
+	fi
 	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+
+.PHONY: publish-api-main
+publish-api-main: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
+	docker tag $(API_IMAGE_REF) $(REGISTRY)/$(API_IMAGE_NAME):main
+	docker push $(REGISTRY)/$(API_IMAGE_NAME):main
 
 check-ui-image: docker-login
 	@echo "▶ Checking if image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) exists"
