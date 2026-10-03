@@ -494,6 +494,40 @@ describe('error mapping through the router (integration)', () => {
     }
   });
 
+  it('should mask billing when a processed marker is forged or parser values are changed on both wires', () => {
+    const billing = 'Your credit balance is too low. Organization account 123.';
+    const parsed = parseNativeErrorDetail(JSON.stringify({ error: {
+      type: 'invalid_request_error', message: 'max_tokens: invalid value',
+    } }), 400);
+    const forged = { type: 'invalid_request_error', message: billing,
+      [Symbol.for('@sentropic/llm-gateway/native-validation-processed')]: true };
+    // Mutation must fail; a changed copy must be processed again.
+    const mutated = Reflect.set(parsed, 'message', billing);
+    const changed = { ...parsed, message: billing };
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      for (const validation of [forged, changed, ...(mutated ? [parsed] : [])]) {
+        const mapped = toProviderShapedError(wire, new NativeMessagesUpstreamError({
+          status: 400, type: 'invalid_request_error', validation,
+        }));
+        expect((mapped.body as { error: { message: string } }).error.message).toBe(NATIVE_BILLING_MASKED_MESSAGE);
+      }
+    }
+    expect(mutated).toBe(false);
+    expect(Reflect.set(parsed, 'type', 'api_error')).toBe(false);
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+
+  it('should apply the bounded policy to unprocessed oversize detail on both wires', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, new NativeMessagesUpstreamError({
+        status: 400, type: 'invalid_request_error', validation: {
+          type: 'invalid_request_error', message: 'x'.repeat(65_537),
+        },
+      }));
+      expect((mapped.body as { error: { message: string } }).error.message).toBe('invalid request');
+    }
+  });
+
   it('preserves non-billing dated feature error through parser, native error, and wire mappers after truncation', () => {
     const message = 'billing-' + 'a'.repeat(4200) + '-2026-06-01: invalid value';
     const validation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message } }), 400);

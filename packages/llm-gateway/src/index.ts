@@ -17,4 +17,9 @@ export * from './route-flow-core.js';
 export * from './route-attempt-dispatch.js';
 export * from './route-json-flow.js';
 export * from './route-stream-flow.js';
-export * from './native-errors.js';
+export {
+  NATIVE_BILLING_MASK_RULE, NATIVE_BILLING_MASKED_MESSAGE, NATIVE_MAX_ERROR_BODY_BYTES,
+  NATIVE_MAX_PUBLIC_MESSAGE_BYTES, CLASSIFIER_BETA, DANGEROUS_TOOL_BETA,
+  SAFEGUARDS_NOT_SUPPORTED_MESSAGE, neutralizeFeatureIdentifiers, detectNativeBillingError,
+  sanitizeNativeErrorMessage, parseNativeErrorDetail, type IdentifierScanStats,
+} from './native-errors.js';
