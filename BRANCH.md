@@ -96,7 +96,7 @@
   - [ ] Write `.h2a/build/lot2_report.md` for reviewer.
 
 - [ ] **Lot 3 — CI cache wiring, verification & docs**
-  - [ ] Wire `.github/workflows/ci.yml` tool image build/pull/cache logic with content hash.
+  - [x] Wire `.github/workflows/ci.yml` with exact content-tag archive caching; a cache hit loads the toolbox without any build.
   - [ ] Validate cache reuse on unchanged inputs.
   - [ ] Pin image digest where cheap according to G-PROD v4.1.
   - [ ] Document architecture in docs and finalize reports.
