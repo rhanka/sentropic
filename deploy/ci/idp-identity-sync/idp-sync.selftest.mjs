@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { checkBundle } from './bundle-checks.mjs';
 import { runTests } from './run.selftest.mjs';
+import { workflowTests } from './workflow.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/idp-tools/package.json')('yaml');
 const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => { assert.deepEqual(doc.errors, []); return doc.toJS(); }).filter(Boolean);
 let passed = 0;
@@ -26,4 +27,5 @@ check('reject arbitrary-job delegation', () => mutated('prod', o => { o.find(x =
 check('reject prod trigger namespace-wide pod logs', () => mutated('prod', o => { o.find(x => x.kind === 'Role').rules[2].resources.push('pods/log'); }));
 check('reject s5cmd shell assumption', () => mutated('preprod', o => { cron(o).spec.jobTemplate.spec.template.spec.initContainers[1].command = ['sh', '-c']; }));
 passed += await runTests(load, bundles);
+workflowTests(check, load);
 console.log(`${passed} PASS, 0 failures`);
