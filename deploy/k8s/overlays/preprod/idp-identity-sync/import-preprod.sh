@@ -8,7 +8,7 @@ awk 'NF != 2 || $1 !~ /^[a-f0-9]+$/ || length($1) != 64 || ($2 != "users.csv" &&
 sha256sum -c SHA256SUMS > /work/check.log 2>&1 || fail 'relay integrity check failed'
 IFS=, read -r snap_ts nu nw < snapshot.csv
 case "$nu:$nw" in *[!0-9:]*|:*|*:) fail 'invalid snapshot counts' ;; esac
-snapshot_epoch=$(date -u -d "${snap_ts%%.*}" +%s) || fail 'invalid snapshot timestamp'
+snapshot_epoch=$(date -u -d "${snap_ts%%.*}" +%s 2>/work/date.log) || fail 'invalid snapshot timestamp'
 age=$(( $(date -u +%s) - snapshot_epoch ))
 [ "$age" -ge 0 ] && [ "$age" -le "$MAX_SNAPSHOT_AGE_S" ] || fail 'snapshot outside freshness window'
 echo "users=$nu webauthn=$nw age_s=$age"

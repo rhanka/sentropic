@@ -65,6 +65,33 @@ unchanged
 sync -v dry_run=1 -v allowed_rekey="$pair"
 unchanged
 echo 'PASS: default and explicit dry-run rolled back; audit users=9 credentials=22 rekeyed=1 dropped_sessions=9'
+stage=pod-import-wrapper
+mkdir -p /work /sql
+ln -s "$import" /sql/import-preprod.sql
+sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+wrapper() { PGDATABASE=preprod DRY_RUN=1 ALLOWED_REKEY="$pair" MAX_SNAPSHOT_AGE_S=7200 sh /workspace/deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh > /tmp/wrapper.log 2>&1; }
+wrapper
+grep -Fq '"outcome":"rolled_back"' /dev/termination-log
+grep -Fq '"post_users":9' /dev/termination-log
+grep -Fq '"post_webauthn":22' /dev/termination-log
+grep -Fq '"old_id":"9f11d240-fc75-4d55-80be-1bafcd79eadb"' /dev/termination-log
+unchanged
+echo 'PASS: actual pod import wrapper emits safe rolled-back JSON audit'
+cp users.csv users.original
+printf 'tampered\n' >> users.csv
+if wrapper; then exit 1; fi
+grep -Fq 'relay integrity check failed' /tmp/wrapper.log
+mv users.original users.csv
+echo 'PASS: pod wrapper rejects checksum tampering'
+cp snapshot.csv snapshot.original
+printf '2000-01-01 00:00:00,8,18\n' > snapshot.csv
+sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+if wrapper; then exit 1; fi
+grep -Fq 'snapshot outside freshness window' /tmp/wrapper.log
+mv snapshot.original snapshot.csv
+sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+unchanged
+echo 'PASS: pod wrapper rejects stale snapshot'
 reject 'empty rekey allowlist fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v expected_users=8 -v expected_webauthn=18 -f "$import"
 unchanged
 reject 'unknown rekey pair fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v allowed_rekey='unknown>unknown' -v expected_users=8 -v expected_webauthn=18 -f "$import"
