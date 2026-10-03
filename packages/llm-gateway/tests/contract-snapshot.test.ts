@@ -102,6 +102,18 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
     openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
+  'native-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires the Anthropic Messages endpoint.' },
+  },
+  'native-max-tokens-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards requires a positive integer max_tokens.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires a positive integer max_tokens.' },
+  },
   'unknown-model': {
     anthropic: { status: 404, type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
     openai: { status: 404, type: 'invalid_request_error', message: 'Unknown model: "no-such-model"', code: 'model_not_found' },
