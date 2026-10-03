@@ -1309,41 +1309,43 @@ jobs:
   # API/unit suite never exercised the served consent screen end-to-end.
   smoke-idp-screens:
     runs-on: ubuntu-latest
-    needs: [changes, typecheck-lint-api, build-api-image, build-e2e, security-sast-sca]
+    needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
       DISABLE_RATE_LIMIT: 'true'
+      API_PORT: '9491'
+      UI_PORT: '5691'
+      MAILDEV_UI_PORT: '1591'
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Pull if API image is up to date
-        id: check-api-image-idp
-        run: make pull-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.check-api-image-idp.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
       - name: Load API image from artifact
-        if: steps.check-api-image-idp.outcome == 'failure'
-        run: make load-api
-      - name: Pull e2e image artifact
-        run: make pull-e2e-image
+        run: make load-api ENV=test-ci-idp
+      - name: Download CI toolbox
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load CI toolbox
+        run: make load-api-tool ENV=test-ci-idp
       - name: Start standalone IdP (screens + API on shared DB)
-        run: make dev-idp
+        run: make up-idp-sut ENV=test-ci-idp
       - name: Screen-driven SSO smoke (served login + consent screens)
-        run: make smoke-idp-screens
+        run: make smoke-idp-screens-ci ENV=test-ci-idp
       - name: IdP logs on failure
         if: failure()
-        run: make logs-idp-once
+        run: make logs-api-ci ENV=test-ci-idp
       - name: Tear down IdP overlay
         if: always()
-        run: make down-idp
+        run: make down-api-ci ENV=test-ci-idp
 
   # Security: SAST and SCA scans (code and dependencies)
   security-sast-sca:
@@ -1453,12 +1455,32 @@ jobs:
 
   test-smoke-restore:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-ui, build-e2e, security-sast-sca]
+    needs: [changes, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    env:
+      API_TEST_CI: '1'
+      API_TEST_SUT: '1'
+      API_PORT: '9491'
+      UI_PORT: '5691'
+      MAILDEV_UI_PORT: '1591'
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Download API image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: api-image
+          path: .
+      - name: Load API image
+        run: make load-api ENV=test-ci-restore
+      - name: Download CI toolbox
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load CI toolbox
+        run: make load-api-tool ENV=test-ci-restore
       - name: Backup production database (k8s in-cluster postgres)
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
@@ -1470,7 +1492,7 @@ jobs:
           fi
           printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
           chmod 600 kubeconfig.yaml
-          make db-backup-prod KUBECONFIG="$PWD/kubeconfig.yaml"
+          make db-backup-prod KUBECONFIG="$PWD/kubeconfig.yaml" ENV=test-ci-restore
       - name: Test restore and smoke tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1479,7 +1501,13 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        run: make db-restore up-api-test test-api-smoke-restore BACKUP_FILE=$(ls -t data/backup/prod-*.dump | head -1 | xargs basename) SKIP_CONFIRM=true
+        run: make restore-api-sut verify-api-sut-restart test-api-smoke-restore BACKUP_FILE=$(ls -t data/backup/prod-*.dump | head -1 | xargs basename) ENV=test-ci-restore
+      - name: Show restore SUT logs on failure
+        if: failure()
+        run: make logs-api-ci ENV=test-ci-restore
+      - name: Tear down restore SUT
+        if: always()
+        run: make down-api-ci ENV=test-ci-restore
 
   publish-ui-image:
     runs-on: ubuntu-latest

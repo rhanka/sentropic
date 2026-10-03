@@ -90,7 +90,7 @@
   - [x] Restore before production boot; verify data preservation, settings/control schema and migration-journal stability on restart.
   - [ ] Update `docker-compose*.yml` and Makefile test targets for tool image usage.
   - [x] Wire 15-job matrix: source suites run in the cached tool image; smoke and limit run once against production SUT.
-  - [ ] Wire smoke IdP, smoke restore, smoke, and limit to run against the production container as external HTTP runner.
+  - [x] Wire smoke IdP, smoke restore, smoke, and limit to run against the production container as external HTTP runner.
   - [ ] Run test suites and verify no suite runs twice.
   - [ ] Write `.h2a/build/lot2_report.md` for reviewer.
 
