@@ -49,7 +49,7 @@ export function checkBundle(objects, tier) {
     assert.deepEqual(role.rules, [
       { apiGroups: ['batch'], resources: ['cronjobs'], verbs: ['get', 'patch'], resourceNames: ['sentropic-idp-identity-export'] },
       { apiGroups: ['batch'], resources: ['jobs'], verbs: ['get', 'list', 'watch'] },
-      { apiGroups: [''], resources: ['pods', 'pods/log'], verbs: ['get', 'list'] },
+      { apiGroups: [''], resources: ['pods'], verbs: ['get', 'list'] },
     ]);
     const binding = get('RoleBinding', role.metadata.name);
     assert.deepEqual(binding.roleRef, { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: role.metadata.name });

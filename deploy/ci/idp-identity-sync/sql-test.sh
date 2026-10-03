@@ -62,7 +62,7 @@ grep -Fxq 'rekey_moved_webauthn|8' /tmp/sql.log
 grep -Fxq 'post_users|9' /tmp/sql.log
 grep -Fxq 'post_webauthn|22' /tmp/sql.log
 unchanged
-sync -v dry_run=1 -v allowed_rekey="$pair"
+sync -v dry_run=1 -v allowed_rekey="unknown>unknown, $pair "
 unchanged
 echo 'PASS: default and explicit dry-run rolled back; audit users=9 credentials=22 rekeyed=1 dropped_sessions=9'
 stage=pod-import-wrapper
@@ -104,6 +104,12 @@ sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsq
 reject 'DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -f "$import"
 unchanged
 sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
+for mutation in "UPDATE oauth_clients SET name = 'synthetic-tamper'" "UPDATE id_token_signing_keys SET public_jwk = '{}'::jsonb"; do
+  sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN $mutation; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON users FOR EACH ROW EXECUTE FUNCTION test_tamper();"
+  reject 'whole-row DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -f "$import"
+  unchanged
+  sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
+done
 stage=commit
 sync -v dry_run=0 -v allowed_rekey="$pair"
 grep -Fxq COMMITTED /tmp/sql.log

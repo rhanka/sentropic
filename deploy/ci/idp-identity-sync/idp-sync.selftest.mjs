@@ -22,5 +22,6 @@ check('reject unpinned image', () => mutated('prod', o => { cron(o).spec.jobTemp
 check('reject preprod prod-credential reference', () => mutated('preprod', o => { cron(o).spec.jobTemplate.spec.template.spec.containers[0].env.find(e => e.name === 'PGPASSWORD').valueFrom.secretKeyRef.name = 'sentropic-idp-identity-reader'; }));
 check('reject preprod real-run default', () => mutated('preprod', o => { cron(o).spec.jobTemplate.spec.template.spec.containers[0].env.find(e => e.name === 'DRY_RUN').value = '0'; }));
 check('reject arbitrary-job delegation', () => mutated('prod', o => { o.find(x => x.kind === 'Role').rules[1].verbs.push('create'); }));
+check('reject prod trigger namespace-wide pod logs', () => mutated('prod', o => { o.find(x => x.kind === 'Role').rules[2].resources.push('pods/log'); }));
 check('reject s5cmd shell assumption', () => mutated('preprod', o => { cron(o).spec.jobTemplate.spec.template.spec.initContainers[1].command = ['sh', '-c']; }));
 console.log(`${passed} PASS, 0 failures`);
