@@ -100,6 +100,7 @@
 - [ ] **Lot 3 — CI cache wiring, verification & docs**
   - [x] Wire `.github/workflows/ci.yml` with exact content-tag archive caching; a cache hit loads the toolbox without any build.
   - [x] Record and verify the production artifact image ID during save/load; use it for runtime and scans.
+  - [x] E2E, VSCode and publication load the current run artifact; reject canonical tag collisions and promote the verified image without re-pulling.
   - [ ] Validate cache reuse on unchanged inputs.
   - [ ] Pin image digest where cheap according to G-PROD v4.1.
   - [ ] Document architecture in docs and finalize reports.

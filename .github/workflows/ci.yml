@@ -1006,7 +1006,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: api-image
-          path: api-image.tar
+          path: |
+            api-image.tar
+            .tmp/ci-prod-image/api-image-id
+          include-hidden-files: true
+          compression-level: 0
 
   build-api-tool-image:
     runs-on: ubuntu-latest
@@ -1215,12 +1219,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Pull if API image is up to date
-        id: check-api-image
-        run: make pull-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.check-api-image.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
@@ -1236,7 +1235,6 @@ jobs:
           name: ui-image
           path: .
       - name: Load API image from artifact
-        if: steps.check-api-image.outcome == 'failure'
         run: make load-api
       - name: Load UI image from artifact
         if: steps.check-ui-image.outcome == 'failure'
@@ -1270,18 +1268,12 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Pull if API image is up to date
-        id: check-api-image-vscode
-        run: make pull-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.check-api-image-vscode.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
       - name: Load API image from artifact
-        if: steps.check-api-image-vscode.outcome == 'failure'
         run: make load-api
       - name: Pull if UI image is up to date
         id: check-ui-image-vscode
@@ -1571,31 +1563,17 @@ jobs:
       API_IMAGE_NAME: sentropic-api
     steps:
       - uses: actions/checkout@v6
-      - name: Check if API image is up to date
-        id: image-check
-        run: make check-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.image-check.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
       - name: Load API image from artifact
-        if: steps.image-check.outcome == 'failure'
         run: make load-api
       - name: Publish API image
-        if: steps.image-check.outcome == 'failure'
         run: make publish-api-image
       - name: Push main alias tag (API)
-        run: |
-          set -eu
-          ALIAS="main"
-          API_VERSION="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
-          # Ensure canonical tag is present locally (it may not be if image-check passed)
-          docker pull "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
-          docker tag  "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}" "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
-          docker push "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
+        run: make publish-api-main
 
   # Release train (BRDP-EX10): llm-mesh -> llm-gateway -> cluster-mesh publish in a strict chain,
   # never before the three train validations pass (a validation counts as skipped only when its
