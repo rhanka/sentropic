@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sentropic-idp-reader-role-provision
+  namespace: sentropic
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: sentropic, app.kubernetes.io/component: idp-identity-export }
+    spec:
+      serviceAccountName: sentropic-idp-export
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext: { runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, fsGroup: 70, seccompProfile: { type: RuntimeDefault } }
+      volumes:
+        - { name: sql, configMap: { name: sentropic-idp-reader-role-sql } }
+        - { name: work, emptyDir: { medium: Memory, sizeLimit: 16Mi } }
+      containers:
+        - name: provision
+          image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+          command: ["sh", "-ec"]
+          args: ["psql -XAtq -v ON_ERROR_STOP=1 -f /sql/reader-role.sql > /work/provision.log 2>&1 || { echo 'reader role provisioning failed'; exit 1; }; echo 'reader role provisioned'"]
+          env:
+            - { name: PGHOST, value: postgres }
+            - { name: PGDATABASE, value: app }
+            - { name: PGUSER, value: app }
+            - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
+            - { name: RO_PASSWORD, valueFrom: { secretKeyRef: { name: sentropic-idp-identity-reader, key: PGPASSWORD } } }
+          volumeMounts: [{ name: sql, mountPath: /sql, readOnly: true }, { name: work, mountPath: /work }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
