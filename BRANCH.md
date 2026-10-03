@@ -102,7 +102,7 @@
 - [ ] BR-REL-EX4 RESERVED under conductor Q11: rationale: `api/package.json` gateway range must resolve the new exports; impact: only `@sentropic/llm-gateway` to `^0.20.0`; rollback: restore prior range with gateway tuple. Activate and declare its conditional path in the SAME commit as the gateway version bump; no API manifest write in pass 01.
 - [x] No open implementation blocker; stop for uncovered design, scope exception, unfixable row failure or real-call requirement.
 - [x] Pass 02 review remediation: M1 sticky affinity binding assertion and M2 native filter-order coverage (maxAttempts=1 and health suppression) verified in route-planner.test.ts.
-- [x] Pass 04 review remediation: M1 native-validation channel restricted to status 400 and invalid_request_error; non-validation and auth errors retain fixed mappings; m4 row 19b restored.
+- [x] Pass 04 review remediation: M1 native-validation channel restricted to status 400 and invalid_request_error; non-validation and auth errors retain fixed mappings; m1 non-control whitespace preserved; m2 12-char identifier minimum; m3 linear work instrumented and bounded; m4 row 19b restored.
 
 ## AI Flaky tests
 - [x] No live AI tests authorized in this pass; never weaken tests or increase timeouts; any later accepted flake requires same-commit success and owner sign-off.

@@ -25,16 +25,34 @@ const DATE_SUFFIX = /^-\d{4}-\d{2}-\d{2}$/;
 const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
 const ASCII_WORD = /[a-zA-Z0-9_]/;
 
-const isFeatureIdentifier = (run: string): boolean => {
-  if (run.startsWith('anthropic-') && run.length > 10) return true;
-  if (run.length >= 13 && run.charCodeAt(0) >= 97 && run.charCodeAt(0) <= 122 && DATE_SUFFIX.test(run.slice(-11))) {
-    const prefix = run.slice(0, -11);
-    return !prefix.includes('--') && !prefix.endsWith('-');
+const isFeatureIdentifier = (run: string, stats?: IdentifierScanStats): boolean => {
+  if (run.startsWith('anthropic-') && run.length > 10) {
+    if (stats) stats.work += 10;
+    return true;
+  }
+  if (run.length >= 12 && run.charCodeAt(0) >= 97 && run.charCodeAt(0) <= 122) {
+    if (stats) stats.work += 12;
+    if (DATE_SUFFIX.test(run.slice(-11))) {
+      const prefix = run.slice(0, -11);
+      for (let i = 0; i < prefix.length; i++) {
+        if (stats) stats.work++;
+        const c = prefix.charCodeAt(i);
+        const isAlphanumeric = (c >= 97 && c <= 122) || (c >= 48 && c <= 57);
+        if (c === 45 /* '-' */) {
+          if (i === 0 || i === prefix.length - 1 || prefix.charCodeAt(i + 1) === 45) {
+            return false;
+          }
+        } else if (!isAlphanumeric) {
+          return false;
+        }
+      }
+      return true;
+    }
   }
   return false;
 };
 
-export interface IdentifierScanStats { runs: number; checks: number; }
+export interface IdentifierScanStats { runs: number; checks: number; work: number; }
 
 export const neutralizeFeatureIdentifiers = (text: string, stats?: IdentifierScanStats): string => {
   const parts: string[] = []; let lastIndex = 0;
@@ -45,7 +63,7 @@ export const neutralizeFeatureIdentifiers = (text: string, stats?: IdentifierSca
     const prevChar = start > 0 ? text[start - 1] : ''; const nextChar = end < text.length ? text[end] : '';
     if ((!prevChar || !ASCII_WORD.test(prevChar)) && (!nextChar || !ASCII_WORD.test(nextChar))) {
       if (stats) stats.checks++;
-      if (isFeatureIdentifier(match[0])) {
+      if (isFeatureIdentifier(match[0], stats)) {
         parts.push(text.slice(lastIndex, start), NEUTRALIZED_PLACEHOLDER);
         lastIndex = end;
       }
@@ -68,15 +86,16 @@ export const detectNativeBillingError = (message: string, stats?: IdentifierScan
 
 export const sanitizeNativeErrorMessage = (message: string): string => {
   const stripped = message.replace(CONTROL_CHARS, '');
+  if (stripped.length === 0) return 'invalid request';
   const encoder = new TextEncoder();
-  if (encoder.encode(stripped).length <= NATIVE_MAX_PUBLIC_MESSAGE_BYTES) return stripped.trim() || 'invalid request';
+  if (encoder.encode(stripped).length <= NATIVE_MAX_PUBLIC_MESSAGE_BYTES) return stripped;
   let byteCount = 0; let result = '';
   for (const char of stripped) {
     const charBytes = encoder.encode(char).length;
     if (byteCount + charBytes > NATIVE_MAX_PUBLIC_MESSAGE_BYTES) break;
     byteCount += charBytes; result += char;
   }
-  return result.trim() || 'invalid request';
+  return result || 'invalid request';
 };
 
 export const parseNativeErrorDetail = (
