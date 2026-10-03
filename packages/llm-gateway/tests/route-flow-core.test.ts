@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { classifyRouteError, prepareRouteFlow, terminalGatewayError } from '../src/route-flow-core.js';
 import { toProviderShapedError } from '../src/index.js';
 import { stubGatewayConfig } from '../src/stubs.js';
+import { recordingBudget } from './fixtures/budget.js';
 
 describe('route flow core', () => {
   it('derives routing ownership only from verified caller state', async () => {
@@ -152,5 +153,66 @@ describe('route flow core', () => {
     expect(classifyRouteError({ code: 'invalid_api_key' })).toEqual({
       reason: 'provider-5xx', retryable: false, healthScope: 'route',
     });
+  });
+
+  it('threads nativeMessages into plan and quote for required native and guards against host injection', async () => {
+    let capturedPlan: RoutePlanInput | undefined;
+    let capturedQuote: unknown;
+    const routePlanner = {
+      quote(input: unknown) {
+        capturedQuote = input;
+        return { quoteRef: 'q-1', issuedAt: '2026-08-08T12:00:00Z', expiresAt: '2026-08-08T12:05:00Z', candidates: ['c-1'] };
+      },
+      async plan(_subject: VerifiedRoutingSubject, input: RoutePlanInput) {
+        capturedPlan = input;
+        return {
+          planRef: 'plan-1', expiresAt: '2026-08-08T12:01:00Z', candidateRefs: [],
+          policy: {
+            strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+            negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+            stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+          },
+          councilRevision: 'fixture', diagnostics: [],
+        };
+      },
+    } as unknown as RoutePlanner;
+    const config = {
+      ...stubGatewayConfig,
+      callerAuth: { async verify() {
+        return {
+          ok: true as const,
+          cost: { tenantId: 't-1', workspaceId: 'w-1', principalId: 'u-1', ownerScopeRef: 'scope', source: 'test', correlationId: 'c-1' },
+        };
+      } },
+    };
+
+    await prepareRouteFlow({ config, routePlanner, metering: { settleRoute() {} } }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-1' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64, safeguards: null },
+    });
+    expect(capturedPlan?.nativeMessages).toBe(true);
+
+    await prepareRouteFlow({
+      config, routePlanner, metering: { settleRoute() {} },
+      routeInput: () => ({ nativeMessages: true } as unknown as Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities' | 'nativeMessages'>),
+    }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-2' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64 },
+    });
+    expect(capturedPlan?.nativeMessages).toBeUndefined();
+
+    const recorder = recordingBudget();
+    await prepareRouteFlow({ config, routePlanner, metering: recorder.metering, budget: recorder.options }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-3' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64, safeguards: null },
+    });
+    expect(capturedPlan?.nativeMessages).toBe(true);
+    expect((capturedQuote as { nativeMessages?: boolean })?.nativeMessages).toBe(true);
   });
 });
