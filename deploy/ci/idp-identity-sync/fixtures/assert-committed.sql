@@ -19,3 +19,7 @@ SELECT test_assert((SELECT count(*) FROM webauthn_credentials WHERE public_key_c
 SELECT test_assert((SELECT counter FROM webauthn_credentials WHERE id = 'prod-cred-9') = 50, 'counter never decreases on upsert');
 SELECT test_assert((SELECT last_used_at FROM webauthn_credentials WHERE id = 'prod-cred-9') = '2026-10-02', 'last-used never decreases on upsert');
 SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), 'full DV5 fingerprints unchanged');
+SELECT test_assert(NOT EXISTS (SELECT FROM authorization_codes WHERE code = 'duplicate-code'), 'duplicate authorization code dropped');
+SELECT test_assert(NOT EXISTS (SELECT FROM oauth_tokens WHERE jti = 'duplicate-token'), 'duplicate OAuth token dropped');
+SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096'), 'duplicate consent dropped rather than moved');
+SELECT test_assert((SELECT user_id FROM revoked_tokens WHERE jti = 'duplicate-revocation') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'revocation survives and is repointed');

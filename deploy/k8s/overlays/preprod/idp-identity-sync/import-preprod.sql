@@ -26,8 +26,9 @@ SET LOCAL statement_timeout = '120s';
 -- Invariant snapshot (asserted unchanged at the end).
 CREATE TEMP TABLE inv_before ON COMMIT DROP AS
 SELECT (SELECT count(*) FROM oauth_clients) AS clients,
-       (SELECT md5(string_agg(client_id || ':' || coalesce(client_secret_hash,'') || ':' || array_to_string(redirect_uris, ','), '|' ORDER BY client_id)) FROM oauth_clients) AS clients_fp,
-       (SELECT count(*) FROM id_token_signing_keys) AS signing_keys;
+       (SELECT md5(string_agg(t::text, '|' ORDER BY t.id)) FROM oauth_clients t) AS clients_fp,
+       (SELECT count(*) FROM id_token_signing_keys) AS signing_keys,
+       (SELECT md5(string_agg(t::text, '|' ORDER BY t.kid)) FROM id_token_signing_keys t) AS signing_keys_fp;
 
 CREATE TEMP TABLE src_users (LIKE users INCLUDING DEFAULTS) ON COMMIT DROP;
 CREATE TEMP TABLE src_webauthn (LIKE webauthn_credentials INCLUDING DEFAULTS) ON COMMIT DROP;
@@ -87,7 +88,7 @@ SELECT set_config('sync.allowed_rekey', :'allowed_rekey', true) \gset sync_
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM rekey
-             WHERE (old_id || '>' || new_id) <> ALL (string_to_array(current_setting('sync.allowed_rekey'), ',')))
+             WHERE (old_id || '>' || new_id) <> ALL (SELECT trim(x) FROM unnest(string_to_array(current_setting('sync.allowed_rekey'), ',')) x))
   THEN RAISE EXCEPTION 're-key not covered by allowed_rekey: %',
          (SELECT string_agg(old_id || '>' || new_id, ',') FROM rekey); END IF;
 END $$;
@@ -98,6 +99,17 @@ SELECT 'rekey_moved_webauthn', count(*) FROM webauthn_credentials WHERE user_id 
 DELETE FROM user_sessions       WHERE user_id IN (SELECT old_id FROM rekey);
 DELETE FROM webauthn_challenges WHERE user_id IN (SELECT old_id FROM rekey);
 DELETE FROM magic_links         WHERE user_id IN (SELECT old_id FROM rekey);
+DELETE FROM authorization_codes WHERE user_id IN (SELECT old_id FROM rekey);
+DELETE FROM oauth_tokens        WHERE user_id IN (SELECT old_id FROM rekey);
+DELETE FROM oauth_consents      WHERE user_id IN (SELECT old_id FROM rekey);
+-- Catalog FK classification: ephemeral-auth = the six tables deleted in 3a.
+-- Durable (repoint): users, webauthn_credentials, revoked_tokens (revocations survive),
+-- oauth_clients (DV5 aborts any mutation), identities, auth_invite_tokens (consumption audit),
+-- document_connector_accounts, chat_generation_traces, chat_sessions, settings, plans,
+-- todos, tasks, agent_definitions, workflow_definitions, guardrails, execution_runs,
+-- llm_provider_accounts, llm_account_leases, comments, chat_message_feedback,
+-- extension_tool_permissions, tenant_memberships, workspace_memberships, object_locks.
+-- Future catalog FK tables default to durable; review new auth tables before deployment.
 -- 3b. Every other single-column FK to users.id is repointed (discovered from the catalog, so
 --     schema drift is covered). A unique violation here aborts the whole sync (fail-closed).
 DO $$
@@ -105,11 +117,14 @@ DECLARE fk record; m record; n bigint;
 BEGIN
   FOR m IN SELECT old_id, new_id FROM rekey LOOP
     FOR fk IN
-      SELECT c.conrelid::regclass AS tbl, a.attname AS col
+      SELECT c.conrelid::regclass AS tbl, a.attname AS col,
+             CASE WHEN c.conrelid = ANY (ARRAY['user_sessions', 'webauthn_challenges', 'magic_links', 'authorization_codes', 'oauth_tokens', 'oauth_consents']::regclass[])
+                  THEN 'ephemeral-auth' ELSE 'durable' END AS category
       FROM pg_constraint c
       JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
       WHERE c.contype = 'f' AND c.confrelid = 'public.users'::regclass AND cardinality(c.conkey) = 1
     LOOP
+      IF fk.category = 'ephemeral-auth' THEN CONTINUE; END IF;
       EXECUTE format('UPDATE %s SET %I = $1 WHERE %I = $2', fk.tbl, fk.col, fk.col) USING m.new_id, m.old_id;
       GET DIAGNOSTICS n = ROW_COUNT;
       IF n > 0 THEN RAISE NOTICE 'rekey % -> %: %.% rows=%', m.old_id, m.new_id, fk.tbl, fk.col, n; END IF;
@@ -145,10 +160,11 @@ BEGIN
     THEN RAISE EXCEPTION 'post: a prod email is not bound to its prod id'; END IF;
   IF EXISTS (SELECT 1 FROM src_webauthn s LEFT JOIN webauthn_credentials w ON w.credential_id = s.credential_id AND w.user_id = s.user_id WHERE w.id IS NULL)
     THEN RAISE EXCEPTION 'post: a prod credential is missing or bound to another user'; END IF;
-  IF (SELECT row(clients, clients_fp, signing_keys) FROM inv_before) IS DISTINCT FROM
+  IF (SELECT row(clients, clients_fp, signing_keys, signing_keys_fp) FROM inv_before) IS DISTINCT FROM
      (SELECT row((SELECT count(*) FROM oauth_clients),
-                 (SELECT md5(string_agg(client_id || ':' || coalesce(client_secret_hash,'') || ':' || array_to_string(redirect_uris, ','), '|' ORDER BY client_id)) FROM oauth_clients),
-                 (SELECT count(*) FROM id_token_signing_keys)))
+                 (SELECT md5(string_agg(t::text, '|' ORDER BY t.id)) FROM oauth_clients t),
+                 (SELECT count(*) FROM id_token_signing_keys),
+                 (SELECT md5(string_agg(t::text, '|' ORDER BY t.kid)) FROM id_token_signing_keys t)))
     THEN RAISE EXCEPTION 'post: DV5 invariant changed (oauth_clients / signing keys)'; END IF;
 END $$;
 

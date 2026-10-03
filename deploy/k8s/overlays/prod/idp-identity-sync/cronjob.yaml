@@ -37,6 +37,7 @@ spec:
                   sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
                   IFS=, read -r snapshot users credentials < snapshot.csv
                   echo "users=$users webauthn=$credentials"
+                  printf '{"users":%s,"webauthn":%s}\n' "$users" "$credentials" > /dev/termination-log
               env:
                 - { name: PGHOST, value: postgres }
                 - { name: PGDATABASE, value: app }
