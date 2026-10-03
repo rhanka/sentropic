@@ -21,6 +21,8 @@
   - `packages/llm-mesh/src/index.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-mesh/src/routing-contracts.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-mesh/src/route-quote.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/src/route-planner.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/src/route-planner-state.ts` (BR-REL-EX1 approved, pass 02)
   - `packages/llm-mesh/tests/native-messages.test.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-mesh/tests/budget-quote.test.ts` (BR-REL-EX1 approved, pass 02)
   - `packages/llm-gateway/src/**`
@@ -115,7 +117,7 @@
   - [x] Row 3 — `tests/native-messages.test.ts`: helper behavior and additive `src/routing-contracts.ts` pricing/proof/served-ID/source/uncertainty/inference fields on physical attempt usage. Typecheck PASS; tests 360 passed, 0 failed (33 files; 43 new cases); no split needed.
   - [x] Row 4 — `src/routing-contracts.ts`, `src/route-quote.ts`: advertisement, required flag/Pick/error/prepared seams, native feasibility/filtering/hash. Typecheck PASS; tests 360 passed, 0 failed (33 files).
   - [x] Row 5 — `tests/budget-quote.test.ts`: required filtering, exact identity/exclusive refusal, quote-plan agreement, flag hash and stable canonical references. Typecheck PASS; tests 364 passed, 0 failed (33 files; 4 new cases).
-  - [ ] Row 6 — `src/route-planner.ts`, `src/route-planner-state.ts`: validated allowlist, P0/P1 before sticky/health/truncation, ineligible affinity ignored without mutation.
+  - [x] Row 6 — `src/route-planner.ts`, `src/route-planner-state.ts`: validated allowlist, P0/P1 before sticky/health/truncation, ineligible affinity ignored without mutation. Typecheck PASS; tests 364 passed, 0 failed (33 files).
   - [ ] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines.
   - [ ] Row 8 — `src/route-attempt.ts` and `tests/route-planner.test.ts`: fresh descriptor/target/capability exact-model checks, optional native forwarding and existing terminal guards.
   - [ ] Row 9 — `tests/service/local-account-transport-service.test.ts`: no h2a native advertisement/capability; `CHANGELOG.md`: additive mesh native contract/planner release entry.

@@ -34,8 +34,8 @@ export interface StoredAffinity extends AffinityDescription {
 export class RoutePlanError extends Error {
   constructor(
     message: string,
-    readonly code: 'no-route' | 'unknown-model' | 'capabilities-unmet' | 'invalid-plan' | 'expired-plan' | 'stale-candidate' | 'conflict'
-      | 'quote-mismatch',
+    readonly code: 'no-route' | 'unknown-model' | 'capabilities-unmet' | 'native-unavailable'
+      | 'invalid-plan' | 'expired-plan' | 'stale-candidate' | 'conflict' | 'quote-mismatch',
     readonly diagnostic?: RouteAvailabilityDiagnostic,
   ) {
     super(message);
