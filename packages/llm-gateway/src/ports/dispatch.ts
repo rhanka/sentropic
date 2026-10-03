@@ -13,6 +13,12 @@
 
 import type { SecretAuthMaterial } from '@sentropic/llm-mesh';
 import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult } from '@sentropic/llm-mesh';
+import type { NativeMessagesRequest, NativeMessagesResult, PreparedNativeMessages } from '@sentropic/llm-mesh';
+
+export interface NativeAttemptDispatchRequest {
+  readonly capability: PreparedNativeMessages;
+  readonly request: NativeMessagesRequest;
+}
 
 export interface RouteAttemptDispatchRequest {
   readonly attempt: Pick<PreparedRouteAttempt, 'generate' | 'stream'>;
@@ -21,6 +27,7 @@ export interface RouteAttemptDispatchRequest {
 export interface RouteAttemptDispatchPort {
   generate(input: RouteAttemptDispatchRequest): Promise<GenerateResponse>;
   stream(input: RouteAttemptDispatchRequest): Promise<StreamResult>;
+  nativeMessages?(input: NativeAttemptDispatchRequest): Promise<NativeMessagesResult>;
 }
 
 export type GatewayWire = 'anthropic-messages' | 'openai-chat-completions';

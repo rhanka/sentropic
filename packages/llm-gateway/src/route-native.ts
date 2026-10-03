@@ -1,4 +1,26 @@
 import { GatewayError } from './router/errors.js';
+import { isPreparedNativeMessages, type PreparedRouteAttempt } from '@sentropic/llm-mesh';
+import type { NativeFeatureSelection } from './native-features.js';
+import type { ResolvedTarget } from './flow.js';
+
+export class NativeAttemptRefusal extends Error {
+  constructor() { super('Prepared native Messages capability unavailable'); }
+}
+
+/** Resolve the execute-time version and exact target before marking dispatch. */
+export const prepareNativeMessages = (
+  selection: NativeFeatureSelection, attempt: PreparedRouteAttempt, target: ResolvedTarget,
+) => {
+  if (selection.kind === 'none') return undefined;
+  const capability = attempt.nativeMessages;
+  if (target.providerId === 'anthropic' && isPreparedNativeMessages(capability)
+    && capability.modelId === target.model) {
+    const anthropicVersion = selection.anthropicVersion ?? capability.apiVersions[0]!;
+    if (capability.apiVersions.includes(anthropicVersion)) return { capability, anthropicVersion };
+  }
+  if (selection.kind === 'required') throw new NativeAttemptRefusal();
+  return undefined;
+};
 
 const positiveCeiling = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
