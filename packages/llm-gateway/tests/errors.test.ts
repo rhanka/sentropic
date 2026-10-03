@@ -443,4 +443,31 @@ describe('error mapping through the router (integration)', () => {
       expect(JSON.stringify(o)).not.toContain('secret internal log message');
     }
   });
+
+  it('restricts public validation relay to trusted native-validation 400 errors and retains fixed mappings', () => {
+    const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
+
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const arbitrary = { status: 400, validation: detail, message: 'account prose' };
+      const arbMapped = toProviderShapedError(wire, arbitrary);
+      expect(arbMapped.status).toBe(503);
+      expect(JSON.stringify(arbMapped)).not.toContain('account prose');
+      expect(JSON.stringify(arbMapped)).not.toContain('provider validation failure');
+
+      const upstream500 = new NativeMessagesUpstreamError({ status: 500, type: 'api_error', validation: detail });
+      const up500Mapped = toProviderShapedError(wire, upstream500);
+      expect(up500Mapped.status).toBe(503);
+      expect(JSON.stringify(up500Mapped)).not.toContain('provider validation failure');
+
+      const authError = new GatewayError('caller-auth-failed', 'internal auth failure', undefined, undefined, detail);
+      const authMapped = toProviderShapedError(wire, authError);
+      expect(authMapped.status).toBe(401);
+      expect(JSON.stringify(authMapped)).not.toContain('provider validation failure');
+
+      const upstream401 = new NativeMessagesUpstreamError({ status: 401, type: 'authentication_error', validation: detail });
+      const up401Mapped = toProviderShapedError(wire, upstream401);
+      expect(up401Mapped.status).toBe(401);
+      expect(JSON.stringify(up401Mapped)).not.toContain('provider validation failure');
+    }
+  });
 });
