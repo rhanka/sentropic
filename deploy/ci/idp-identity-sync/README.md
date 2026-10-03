@@ -1,0 +1,139 @@
+# IdP identity sync prod → preprod
+
+This CD flow preserves prod `users.id` as the IdP subject in preprod. It copies only
+the reviewed users/WebAuthn columns; preprod OAuth clients, signing keys and the
+authentication state of users whose IDs do not change remain intact.
+
+## Flow and ownership
+
+1. `bundle-prod` applies the prod sync subdirectory, provisions the read-only
+   `idp_identity_reader` role, and proves the trigger's admission restriction.
+2. `run` temporarily unsuspends `sentropic/sentropic-idp-identity-export`.
+   A single repeatable-read snapshot produces CSVs, counts and SHA256SUMS; s5cmd
+   uploads them to `sentropic-idp-identity-relay/idp-identity/latest/` in BHS.
+3. CI waits for the new Job, reads counts from the export init container's
+   termination message through pod status, then always re-suspends the CronJob.
+   The prod trigger cannot create Jobs or read pod logs.
+4. CI switches to the preprod kubeconfig and creates a uniquely named import Job.
+   Before downloading the relay, its init containers dump the complete preprod
+   database in custom format and upload `pre-idp-sync/<job-name>.dump` using the
+   **preprod** `sentropic-pgbackup` Secret's bucket and identity.
+5. The importer checks the file manifest, checksums, snapshot age (default 7200 s),
+   counts and the authorized rekey pairs before completing one SQL transaction.
+   CI reads the import logs and termination JSON, prints only the whitelisted
+   counts/IDs and adds that JSON to the GitHub step summary.
+
+Prod writes with the relay writer; preprod reads with a separate read-only relay
+identity. Neither prod database credentials nor the writer enter preprod.
+Both CronJobs are dormant (`*/5`, `suspend: true`, Forbid); the preprod CronJob is
+a future trigger target with frozen `DRY_RUN=1` and empty `ALLOWED_REKEY`.
+This version uses the rendered import Job instead of a preprod trigger SA.
+
+The relay contains personal data. It is dedicated to this tenant, uses TLS and
+AES256 at rest, has no versioning or object lock, and expires `idp-identity/`
+objects after two days. It is a transfer location, not a rollback archive.
+
+## Bootstrap before arming (tenant admin + k8s lane)
+
+These actions are prerequisites for authorized operators; local development tests
+never contact a cluster and do not change GitHub settings.
+
+- The tenant admin applies [rbac-ci-idp-bundle-prod.yaml](rbac-ci-idp-bundle-prod.yaml).
+  This identity can update only the two existing prod Secrets by name, apply the
+  bundle resources, provision the reader Job and impersonate the narrow trigger.
+  Kubernetes `create` rights cannot be name-scoped; keep this kubeconfig confined
+  to the protected bundle environment. It has no admission-policy permissions.
+- Pre-create Opaque prod Secrets `sentropic-idp-relay-writer` and
+  `sentropic-idp-identity-reader`. CD uses `get`/`replace`, never Secret creation.
+  Ensure `sentropic-postgres/POSTGRES_PASSWORD` is the live app-role password.
+- The tenant admin deposits `sentropic-idp-relay-reader` in `sentropic-preprod`,
+  with `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`.
+  Confirm the existing preprod CI identity can apply Jobs and read their status,
+  pods and logs; its PostgreSQL and pgbackup Secrets must be preprod identities.
+  Confirm the backup identity accepts `pre-idp-sync/<job-name>.dump` and that an
+  authorized recovery identity can read those dumps.
+- The k8s lane applies [vap-ci-trigger-suspend-only.yaml](vap-ci-trigger-suspend-only.yaml)
+  and its Deny binding. Tenant CD does **not** apply admission resources.
+  If the impersonated jobTemplate change is admitted, denied only by RBAC, or the
+  suspend flip is denied, bundle CD empties the trigger Role and fails closed.
+- Mint bounded TokenRequest kubeconfigs (maximum 90 days) for bundle and trigger
+  SAs. The trigger SA is created by the dormant bundle; provision its kubeconfig
+  after that SA exists. Record actual expiry, keep material outside git at 0600,
+  and verify the prod apiserver hostname before depositing it in GitHub.
+- Configure environments `sentropic-idp-prod` and `sentropic-idp-run`: required
+  owner reviewers, main-only deployment restrictions and no bypass. Both workflow
+  jobs also enforce `refs/heads/main`. See [CRED_CYCLE.md](CRED_CYCLE.md).
+
+`sentropic-idp-prod` environment secrets:
+`KUBE_CONFIG_DATA_IDP_BUNDLE_PROD`, `SENTROPIC_IDP_RELAY_WRITER_S3_ACCESS_KEY`,
+`SENTROPIC_IDP_RELAY_WRITER_S3_SECRET_KEY`, `SENTROPIC_IDP_IDENTITY_READER_PG_PASSWORD`.
+Its variables: `EXPECTED_KUBE_APISERVER_HOST_PROD`,
+`SENTROPIC_IDP_RELAY_S3_BUCKET=sentropic-idp-identity-relay`,
+`SENTROPIC_IDP_RELAY_S3_ENDPOINT=https://s3.bhs.io.cloud.ovh.net`,
+`SENTROPIC_IDP_RELAY_S3_REGION=bhs`.
+
+`sentropic-idp-run` environment secrets: `KUBE_CONFIG_DATA_IDP_TRIGGER_PROD` and
+`KUBE_CONFIG_DATA_PREPROD`. Its variable: `EXPECTED_KUBE_APISERVER_HOST_PROD`.
+Kubeconfigs may be raw YAML or base64. Each job removes its private files in an
+`always()` cleanup step. Never put expressions inside shell `run:` commands.
+
+## Dry-run, real run and acceptance
+
+1. Leave repository variables `IDP_SYNC_CD_ENABLED` and
+   `IDP_SYNC_SCHEDULE_ENABLED` unset until bootstrap is ready. Arm bundle CD with
+   `IDP_SYNC_CD_ENABLED=true`; its main push paths cover the prod subdirectory,
+   this CI directory and the sync workflow. Confirm reader provisioning and the
+   anti-RCE gate pass. Dispatch also runs the armed bundle before the import.
+2. Dispatch `IdP identity sync` on **main** with `DRY_RUN=true` (default),
+   `ALLOWED_REKEY` empty unless a reviewed collision requires explicit approval.
+   A dry-run still exports, uploads the rollback dump and runs the full SQL
+   transaction, then rolls it back. It must finish with `outcome=rolled_back`.
+3. Inspect the counts and every `rekey_pairs` entry. For the reviewed initial
+   owner collision, the explicit pair is
+   `9f11d240-fc75-4d55-80be-1bafcd79eadb>1b9b9e15-2956-4df4-9ee1-a42273f0d096`.
+   Any pair outside `ALLOWED_REKEY` aborts; an empty allowlist forbids rekeying.
+   Comma-separated elements may have surrounding whitespace.
+4. After owner approval, dispatch `DRY_RUN=false`, the same reviewed allowlist,
+   and `CONFIRM=idp-sync-YYYY-MM-DD` using today's **UTC** date. Successful audit
+   must show `outcome=committed`, expected counts, and exactly the approved pairs.
+   Rekeying drops sessions, challenges, magic links, authorization codes, OAuth
+   tokens and consents of the old ID. Product FKs, WebAuthn and revoked tokens
+   repoint to the prod ID; revocations survive. Re-login is expected.
+5. Confirm preprod identity access and product continuity. The synthetic fixture
+   gate expects users 9 / WebAuthn 22 / collisions 0; these are test baselines,
+   not a substitute for checking live snapshot counts. A repeat import is a no-op.
+6. Only then arm `IDP_SYNC_SCHEDULE_ENABLED=true`. Daily schedule `40 4 * * *`
+   uses real import and **always an empty allowlist**, with no manual CONFIRM.
+   Any new collision therefore stops the scheduled import for manual review.
+
+The JSON includes `synced_users`, `synced_webauthn`, `rekeyed`,
+`preprod_only_kept`, `post_users`, `post_webauthn`, `rekey_dropped_sessions`,
+`rekey_moved_webauthn`, `rekey_pairs`, and `outcome`. Job completion alone is not
+acceptance: the expected termination audit must also be available and valid.
+
+## Failure and rollback
+
+On import SQL/integrity/freshness failure, no transaction commits. Inspect the
+generic Job verdict and IDs/counts; never publish raw diagnostic files or CSVs.
+Export failure re-suspends prod; the workflow skips the dependent import.
+
+To reverse a **committed** import, first disable scheduled runs and stop preprod
+writes through the existing tenant maintenance process. Record the import Job
+name and recover `s3://<preprod-pgbackup-bucket>/pre-idp-sync/<job-name>.dump`
+with an authorized preprod recovery identity. Verify a scratch restore using
+the existing database restore procedure before restoring the preprod database.
+The dump is a full database rollback and discards writes since capture; it is
+not a selective IdP undo. This workflow does not automate restoration. Keep
+prod credentials out of recovery, then validate identities/product rows and
+re-enable writes only after operator acceptance. Confirm actual backup retention
+before every real run; relay two-day retention does not cover these dumps.
+
+## Local gates
+
+```sh
+make test-idp-sync-selftest ENV=test-idp-sync
+make test-idp-sync-sql ENV=test-idp-sync
+```
+
+Pinned containers perform kustomize rendering, mocked CI controls and isolated
+Postgres tests. No Python or cluster access is used.
