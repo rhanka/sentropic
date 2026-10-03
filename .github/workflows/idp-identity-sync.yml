@@ -66,3 +66,44 @@ jobs:
       - name: Remove kubeconfig and Secret material files
         if: always()
         run: node deploy/ci/idp-identity-sync/run.mjs cleanup
+  run:
+    needs: [selftest, bundle-prod]
+    if: always() && needs.selftest.result == 'success' && (needs.bundle-prod.result == 'success' || needs.bundle-prod.result == 'skipped') && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.IDP_SYNC_SCHEDULE_ENABLED == 'true'))
+    environment: sentropic-idp-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      DRY_RUN: ${{ github.event_name == 'schedule' && '0' || (inputs.DRY_RUN && '1' || '0') }}
+      ALLOWED_REKEY: ${{ github.event_name == 'schedule' && '' || inputs.ALLOWED_REKEY || '' }}
+      CONFIRM: ${{ inputs.CONFIRM }}
+      EXPECTED_KUBE_APISERVER_HOST_PROD: ${{ vars.EXPECTED_KUBE_APISERVER_HOST_PROD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.35.0'
+      - name: Validate run inputs before accessing any cluster
+        run: node deploy/ci/idp-identity-sync/run.mjs validate
+      - name: Configure narrow prod trigger
+        id: prod-config
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_IDP_TRIGGER_PROD }}
+        run: node deploy/ci/idp-identity-sync/run.mjs configure prod
+      - name: Trigger prod export and wait for its termination verdict
+        id: export
+        run: node deploy/ci/idp-identity-sync/run.mjs export
+      - name: Always re-suspend prod export before switching identities
+        if: always() && steps.prod-config.outcome == 'success'
+        run: node deploy/ci/idp-identity-sync/run.mjs resuspend
+      - name: Configure preprod import identity
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_PREPROD }}
+        run: node deploy/ci/idp-identity-sync/run.mjs configure preprod
+      - name: Apply import Job, wait, collect counts-only logs and termination audit
+        run: node deploy/ci/idp-identity-sync/run.mjs import
+      - name: Remove kubeconfig and temporary files
+        if: always()
+        run: node deploy/ci/idp-identity-sync/run.mjs cleanup
