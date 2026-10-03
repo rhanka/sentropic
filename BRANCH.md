@@ -111,9 +111,10 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
   - [x] Lot gate:
     - [x] `make test-idp-sync-selftest ENV=test-idp-sync`: 31 PASS; covers render, status classification, anti-RCE, file permissions, secret preflight failures, export cleanup and workflow wiring (no `${{ }}` inside `run:`, DRY_RUN default true, prod trigger kubeconfig only in `run`).
 
-- [ ] **Lot 4 — Docs and credential cycle**
+- [x] **Lot 4 — Docs and credential cycle**
   - [x] `deploy/ci/idp-identity-sync/README.md`: flow, bootstrap, dry-run → real run procedure, rollback (`pre-idp-sync/<job>.dump`), audit acceptance lines.
-  - [ ] `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: delegations table (SA, ns, verbs, secret, expiry) + 4-locations table (identity | OVH id | GH env secret | k8s Secret | rewritten by | rotation due).
+  - [x] `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: delegations table (SA, ns, verbs, secret, expiry) + 4-locations table (identity | OVH id | GH env secret | k8s Secret | rewritten by | rotation due).
+  - [x] Lot gate: reconcile docs against workflow/RBAC/templates and the authoritative relay register; check relative links and whitespace; scope-check passes. No credential or cluster action performed.
   - [x] `deploy/k8s/README.md`: pointer section.
 
 - [ ] **Lot 5 — pgbackup upload to s5cmd (zero Python)**
