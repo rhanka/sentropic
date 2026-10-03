@@ -47,7 +47,8 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
 - `BR45-EX1` Makefile — reason: add `test-idp-sync-selftest` (Node in Docker, `$(LLM_MESH_NODE_IMAGE)`) and `test-idp-sync-sql` (one-off `postgres:17-alpine` with drizzle migrations + fixtures, runs `import-preprod.sql` in dry-run and commit modes), and migrate `k8s-pgbackup-restore` to pinned s5cmd as authorized by the Lot 5 build brief; impact: two new targets plus the restore target and its comment block, preserving its interface and scratch-DB behavior; rollback: revert the commit.
 - `BR45-EX2` `.github/workflows/idp-identity-sync.yml` (new) + `ci.yml` (selftest + SQL test jobs on PR/push) — reason: CD bundle for prod objects (prod has no CD today) and the sync run workflow (schedule + dispatch, DRY_RUN default true); impact: new workflow armed by repo var `IDP_SYNC_CD_ENABLED`, prod jobs behind GitHub Environments with owner approval; rollback: unset the arming var, revert the commit.
 - `attention` bootstrap actions outside CD (applied once, documented in `deploy/ci/idp-identity-sync/README.md`): tenant admin applies `rbac-ci-idp-bundle-prod.yaml` and mints TokenRequest kubeconfigs (≤ 90 d) for `sentropic-ci-idp-bundle-prod` and `sentropic-ci-trigger-idp-export`; GitHub Environments + secrets from `.env`; k8s lane applies the VAP `sentropic-ci-trigger-suspend-only`.
-- `BR45-L5-VALIDATION` attention — owner: auth conductor; this Lot 5 worktree has no `test-idp-sync-selftest` target or dedicated offline YAML parsing target. The build-brief grep gate and offline restore invocation pass; run YAML parsing and the integrated selftest after Lots 1-4 supply the validation target. No cluster execution is authorized for this lot.
+- [x] `BR45-L5-VALIDATION` resolved — Lot 5 cherry-picks `ef60c7405`, `2e022fa1e` integrated; offline parent-overlay YAML parsing verifies both pinned pgbackup images. Selftest scans deploy/k8s and Makefile for legacy AWS CLI images/installations: 34 PASS, exit 0; SQL gate: 18 PASS, exit 0. No cluster execution.
+- Lots 3/4 approved by auth conductor; gemini Lot 3 cross-review accepted with F1-F3 verified fixed.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -124,11 +125,12 @@ Keep the preprod IdP on the SAME user IDs as prod (`sub = users.id`), synced by 
   - [x] Build-brief local gates:
     - [x] `grep -rn "aws-cli" deploy/k8s Makefile`: no matches.
     - [x] Offline `make k8s-pgbackup-restore` with a temporary kubectl stub: valid overrides JSON, pinned images, preserved Kubernetes env expansion, Secret references and shared volume; missing `PG_BACKUP_KEY` rejected.
-  - [ ] Integration gates — auth conductor (`BR45-L5-VALIDATION`):
-    - [ ] YAML parsing after an offline validation target is available.
-    - [ ] `make test-idp-sync-selftest ENV=test-idp-sync` asserts no `amazon/aws-cli` left under `deploy/k8s/`.
+  - [x] Integration gates — auth conductor (`BR45-L5-VALIDATION`):
+    - [x] Offline kustomize parent-overlay YAML parsing verifies pinned s5cmd and postgres images for pgbackup in prod and preprod.
+    - [x] `make test-idp-sync-selftest ENV=test-idp-sync`: 34 PASS, exit 0; no `amazon/aws-cli` image or `apk add aws-cli` installation under `deploy/k8s/` or in Makefile.
 
 - [ ] **Lot 6 — Final validation**
+  - [x] Integrated local gates: selftest 34 PASS, SQL 18 PASS, both exit 0; final report written; no push or cluster access.
   - [ ] Cross-reviews recorded (sol ↔ gemini) and conductor review.
   - [ ] CI green on the PR.
   - [ ] Remove `BRANCH.md` before merge.

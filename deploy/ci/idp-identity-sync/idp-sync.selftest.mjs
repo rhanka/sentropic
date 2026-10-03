@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { checkBundle } from './bundle-checks.mjs';
+import { checkBundle, postgresImage, s5cmdImage } from './bundle-checks.mjs';
 import { runTests } from './run.selftest.mjs';
 import { workflowTests } from './workflow.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/idp-tools/package.json')('yaml');
@@ -9,12 +10,28 @@ const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => { 
 let passed = 0;
 const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
 const bundles = {};
+const filesUnder = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+  const path = join(directory, entry.name);
+  return entry.isDirectory() ? filesUnder(path) : [path];
+});
+check('no legacy AWS CLI image or apk installation in Kubernetes sources and Makefile', () => {
+  for (const file of [...filesUnder('deploy/k8s'), 'Makefile']) {
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /amazon\/aws-cli|\bapk\s+add\b[^;&|]*\baws-cli\b/, file);
+  }
+});
 for (const tier of ['prod', 'preprod']) {
   bundles[tier] = load(`/rendered/${tier}.yaml`);
   check(`${tier} kustomize bundle safety`, () => checkBundle(bundles[tier], tier));
   check(`${tier} parent overlay includes identical sync objects`, () => {
     const parent = load(`/rendered/${tier}-parent.yaml`);
     for (const child of bundles[tier]) assert.deepEqual(parent.find(o => o.kind === child.kind && o.metadata.name === child.metadata.name), child);
+  });
+  check(`${tier} parent overlay pgbackup uses approved pinned Postgres and s5cmd images`, () => {
+    const backups = load(`/rendered/${tier}-parent.yaml`).filter(o => o.kind === 'CronJob' && o.metadata.name === 'pgbackup');
+    assert.equal(backups.length, 1);
+    const pod = backups[0].spec.jobTemplate.spec.template.spec;
+    assert.deepEqual(pod.initContainers.map(c => [c.name, c.image]), [['dump', postgresImage]]);
+    assert.deepEqual(pod.containers.map(c => [c.name, c.image]), [['upload', s5cmdImage]]);
   });
 }
 const mutated = (tier, mutation) => { const copy = structuredClone(bundles[tier]); mutation(copy); assert.throws(() => checkBundle(copy, tier)); };

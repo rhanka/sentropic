@@ -1454,7 +1454,8 @@ test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without 
 			$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/deploy/k8s/overlays/$$tier > "$$rendered/$$tier-parent.yaml"; \
 	done; \
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
-		-v "$(CURDIR)/deploy:/workspace/deploy:ro" -v "$(CURDIR)/.github:/workspace/.github:ro" -v "$$rendered:/rendered:ro" -w /workspace \
+		-v "$(CURDIR)/deploy:/workspace/deploy:ro" -v "$(CURDIR)/.github:/workspace/.github:ro" \
+		-v "$(CURDIR)/Makefile:/workspace/Makefile:ro" -v "$$rendered:/rendered:ro" -w /workspace \
 		$(LLM_MESH_NODE_IMAGE)@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 \
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund yaml@2.8.1 >/dev/null; node deploy/ci/idp-identity-sync/idp-sync.selftest.mjs'
 
