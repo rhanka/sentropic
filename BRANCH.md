@@ -87,6 +87,7 @@
 - [ ] **Lot 2 — Matrix on tool image & smokes/limit as external runner against prod SUT**
   - [x] Add CI-only tool runner and production API/IdP services without workspace mounts.
   - [x] Add cached Chromium/Playwright tooling and compiled-IdP smoke routing; preserve the existing screen assertions.
+  - [x] Restore before production boot; verify data preservation, settings/control schema and migration-journal stability on restart.
   - [ ] Update `docker-compose*.yml` and Makefile test targets for tool image usage.
   - [ ] Wire 15-job matrix execution in tool image on source.
   - [ ] Wire smoke IdP, smoke restore, smoke, and limit to run against the production container as external HTTP runner.
