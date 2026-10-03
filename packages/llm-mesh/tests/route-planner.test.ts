@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
 import { InMemoryRoutePlanner } from '../src/route-planner.js';
 import { RoutePlanError } from '../src/route-planner-state.js';
+import type { EligibleAccountDescriptor } from '../src/routing-contracts.js';
 import { DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles } from '../src/routing-policy.js';
 import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
 
@@ -1078,5 +1079,83 @@ describe('opaque route planner', () => {
     await expect(planner.prepareAttempt(
       routingSubject(), plan.planRef, plan.candidateRefs[0]!, 'req-1', 0,
     )).rejects.toMatchObject({ code: 'invalid-plan' });
+  });
+
+  it('rejects unqualified requested models and exclusive aliases at P0 with native-unavailable', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([
+        {
+          accountRef: 'internal-anthropic-native', diagnosticAccountRef: 'acct_native',
+          targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+          supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+          nativeMessages: { contractVersion: 1, protocol: 'anthropic-messages' },
+        },
+      ]),
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', nativeMessages: true }))
+      .rejects.toMatchObject({ code: 'native-unavailable' });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'gemini-3.5-flash', nativeMessages: true }))
+      .rejects.toMatchObject({ code: 'native-unavailable' });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'unknown-contract-model', nativeMessages: true }))
+      .rejects.toMatchObject({ code: 'unknown-model' });
+  });
+
+  it('distinguishes empty from filtered-empty pools under nativeMessages requirement', async () => {
+    const emptyPlanner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([]),
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    await expect(emptyPlanner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5', nativeMessages: true }))
+      .rejects.toMatchObject({ code: 'no-route' });
+
+    const canonicalOnlyPlanner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([{
+        accountRef: 'internal-anthropic-canonical', diagnosticAccountRef: 'acct_canonical',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      }]),
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    await expect(canonicalOnlyPlanner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5', nativeMessages: true }))
+      .rejects.toMatchObject({ code: 'native-unavailable' });
+  });
+
+  it('ignores ineligible sticky affinity without mutating stored affinity', async () => {
+    const accounts: EligibleAccountDescriptor[] = [
+      {
+        accountRef: 'internal-canonical', diagnosticAccountRef: 'acct_canonical',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      },
+      {
+        accountRef: 'internal-native', diagnosticAccountRef: 'acct_native',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+        nativeMessages: { contractVersion: 1, protocol: 'anthropic-messages' },
+      },
+    ];
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(accounts),
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    const canonicalPlan = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-sonnet-5', affinityKey: 'k1',
+    });
+    await planner.prepareAttempt(routingSubject(), canonicalPlan.planRef, canonicalPlan.candidateRefs[0]!, 'req-1', 0);
+
+    const nativePlan = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-sonnet-5', affinityKey: 'k1', nativeMessages: true,
+    });
+    expect(nativePlan.diagnostics[0]?.diagnosticAccountRef).toBe('acct_native');
+
+    const nextCanonical = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-sonnet-5', affinityKey: 'k1',
+    });
+    expect(nextCanonical.diagnostics[0]?.diagnosticAccountRef).toBe(canonicalPlan.diagnostics[0]?.diagnosticAccountRef);
   });
 });

@@ -610,4 +610,20 @@ describe('route candidate selection', () => {
       kind: 'no-eligible-account',
     });
   });
+
+  it('preserves canonical candidate selection baseline with nativeMessages input', () => {
+    const canonical = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash' },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts,
+    });
+    const withNative = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash', nativeMessages: true },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts,
+    });
+    expect(withNative).toEqual(canonical);
+  });
 });

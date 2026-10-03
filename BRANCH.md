@@ -25,6 +25,8 @@
   - `packages/llm-mesh/src/route-planner-state.ts` (BR-REL-EX1 approved, pass 02)
   - `packages/llm-mesh/tests/native-messages.test.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-mesh/tests/budget-quote.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/tests/route-planner.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/tests/route-selection.test.ts` (BR-REL-EX1 approved, pass 02)
   - `packages/llm-gateway/src/**`
   - `packages/llm-gateway/tests/**`
   - `packages/llm-gateway/package.json`
@@ -118,7 +120,7 @@
   - [x] Row 4 — `src/routing-contracts.ts`, `src/route-quote.ts`: advertisement, required flag/Pick/error/prepared seams, native feasibility/filtering/hash. Typecheck PASS; tests 360 passed, 0 failed (33 files).
   - [x] Row 5 — `tests/budget-quote.test.ts`: required filtering, exact identity/exclusive refusal, quote-plan agreement, flag hash and stable canonical references. Typecheck PASS; tests 364 passed, 0 failed (33 files; 4 new cases).
   - [x] Row 6 — `src/route-planner.ts`, `src/route-planner-state.ts`: validated allowlist, P0/P1 before sticky/health/truncation, ineligible affinity ignored without mutation. Typecheck PASS; tests 364 passed, 0 failed (33 files).
-  - [ ] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines.
+  - [x] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines. Typecheck PASS; tests 368 passed, 0 failed (33 files; 4 new cases).
   - [ ] Row 8 — `src/route-attempt.ts` and `tests/route-planner.test.ts`: fresh descriptor/target/capability exact-model checks, optional native forwarding and existing terminal guards.
   - [ ] Row 9 — `tests/service/local-account-transport-service.test.ts`: no h2a native advertisement/capability; `CHANGELOG.md`: additive mesh native contract/planner release entry.
   - [ ] File gate — `tests/native-messages.test.ts`: malformed discriminators/model/versions/betas/execute/finalize rejected; raw arbitrary header map, resolved version, empty-required-beta identity, unknown token/spacing preservation, exact catalog allowlist and exclusive rejection.
