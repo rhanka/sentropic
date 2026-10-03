@@ -250,6 +250,19 @@ export const refuseUnmarkedDispatch = async (
   return new GatewayError('budget-unavailable', 'budget dispatch marker unavailable');
 };
 
+/**
+ * Required native capability unavailable: release attempt without health penalty,
+ * settle once with failed outcome, return native-required refusal.
+ */
+export const refuseNativeAttempt = async (
+  attempt: PreparedRouteAttempt | undefined,
+  settle: () => Promise<void>,
+): Promise<GatewayError> => {
+  try { await attempt?.releaseCancelled(); } catch { /* The refusal wins. */ }
+  try { await settle(); } catch { /* Rejected settlement never replaces the refusal. */ }
+  return new GatewayError('native-required', 'native capability unavailable for required request');
+};
+
 export const classifyRouteError = (
   error: unknown,
   aborted = false,

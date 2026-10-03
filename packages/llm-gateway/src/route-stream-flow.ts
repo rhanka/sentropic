@@ -2,7 +2,7 @@ import type { PreparedRouteAttempt, StreamEvent, RouteFailureClassification } fr
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, routeUsage,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, routeUsage,
   settleRouteRequest, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
@@ -10,6 +10,7 @@ import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 import type { GatewayDispatchStreamEvent } from './ports/dispatch.js';
+import { NativeAttemptRefusal, prepareNativeMessages } from './route-native.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown): SettleUsage | undefined => {
@@ -176,6 +177,8 @@ export const runRouteStreamFlow = async (
       );
       const preparedAttempt = attempt;
       signal?.throwIfAborted();
+      prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
+      signal?.throwIfAborted();
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       const source = await (deps.dispatch ?? defaultDispatch).stream({ attempt: preparedAttempt, request: {
@@ -226,6 +229,9 @@ export const runRouteStreamFlow = async (
       }
       if (error instanceof BudgetDispatchMarkError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
+      }
+      if (error instanceof NativeAttemptRefusal) {
+        throw await refuseNativeAttempt(attempt, () => settle('failed'));
       }
       try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
       const classification = classifyRouteError(error, signal?.aborted);
