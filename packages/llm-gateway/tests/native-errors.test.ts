@@ -60,4 +60,33 @@ describe('native error billing classifier and bounding', () => {
     expect(() => parseNativeErrorDetail('{}', 400)).toThrow();
     expect(() => parseNativeErrorDetail(JSON.stringify({ error: { type: 'api_error', message: 'fail' } }), 500)).toThrow();
   });
+
+  it.each([
+    'Your organization does not have access to fallback-credit-2026-06-01',
+    'fallback-credit-2026-06-01 is unavailable for this model',
+    'anthropic-billing-header: invalid value',
+    'fallback_credit_token: invalid value',
+    'max_tokens: 100000 exceeds model limit 8192',
+  ])('relays negative identifier fixture without masking: %s', (message) => {
+    expect(detectNativeBillingError(message)).toBe(false);
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400);
+    expect(detail).toEqual({ type: 'invalid_request_error', message });
+  });
+
+  it.each([
+    'Your organization does not have access to fallback-credit-2026-06-01. Your credit balance is too low.',
+    'fallback-credit-2026-06-01 is unavailable for this model. Please recharge credits.',
+    'anthropic-billing-header: invalid value. Monthly spending cap reached.',
+    'fallback_credit_token: invalid value; account funds depleted.',
+    'Your credit balance is too low; purchase credits',
+    'low credit: please buy credits to continue',
+  ])('masks mixed identifier and real billing indicator: %s', (message) => {
+    expect(detectNativeBillingError(message)).toBe(true);
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400);
+    expect(detail).toEqual({ type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE });
+  });
 });

@@ -146,7 +146,7 @@
   - [x] Row 17 — Native-only typed validation/error contract in gateway and EX1 mesh native error seam. Typecheck PASS; tests 557 passed / 0 failed (31 files; 2 new cases); mesh 373 passed.
   - [x] Row 18 — `src/native-errors.ts`: billing classifier, linear maximal-run identifier neutralization and bounded 400 detail. Typecheck PASS; tests 557 passed / 0 failed (31 files).
   - [x] Row 19 — `tests/native-errors.test.ts`: billing families, late indicators, controls and UTF-8 bounds. Typecheck PASS; tests 582 passed / 0 failed (32 files; 25 new cases).
-  - [ ] Row 19a — `tests/native-errors.test.ts`: four negative identifiers and identifier-plus-billing positives.
+  - [x] Row 19a — `tests/native-errors.test.ts`: four negative identifiers and identifier-plus-billing positives. Typecheck PASS; tests 593 passed / 0 failed (32 files; 11 new cases).
   - [ ] Row 19b — `tests/native-errors.test.ts`: 64 KiB adversarial runs, deterministic linear-work bound and underscore boundaries.
   - [ ] Row 20 — `src/native-errors.ts`, `tests/native-errors.test.ts`: narrow sent-classifier-beta rewrite and official V-2 positives/negatives.
   - [ ] Row 21 — `src/ports/dispatch.ts`, `src/route-attempt-dispatch.ts`, `src/route-native.ts`: optional native dispatch and exact prepared model/version eligibility.
