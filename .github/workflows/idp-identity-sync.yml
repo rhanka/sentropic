@@ -1,0 +1,109 @@
+name: IdP identity sync
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/k8s/overlays/prod/idp-identity-sync/**'
+      - 'deploy/ci/idp-identity-sync/**'
+      - '.github/workflows/idp-identity-sync.yml'
+  schedule:
+    - cron: '40 4 * * *'
+  workflow_dispatch:
+    inputs:
+      DRY_RUN:
+        description: 'Roll back the import (safe default)'
+        type: boolean
+        default: true
+      ALLOWED_REKEY:
+        description: 'Authorized old>new UUID pairs, comma-separated'
+        type: string
+        default: ''
+      CONFIRM:
+        description: 'Required for a real manual import: idp-sync-YYYY-MM-DD (UTC)'
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: idp-identity-sync
+  cancel-in-progress: false
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - run: make test-idp-sync-selftest ENV=test-idp-sync
+  bundle-prod:
+    needs: [selftest]
+    if: vars.IDP_SYNC_CD_ENABLED == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment: sentropic-idp-prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPECTED_KUBE_APISERVER_HOST_PROD: ${{ vars.EXPECTED_KUBE_APISERVER_HOST_PROD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.35.0'
+      - name: Configure prod bundle identity and assert apiserver host
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_IDP_BUNDLE_PROD }}
+        run: node deploy/ci/idp-identity-sync/run.mjs configure prod
+      - name: Replace pre-created Secrets, apply dormant bundle, provision reader and verify anti-RCE
+        env:
+          SENTROPIC_IDP_RELAY_WRITER_S3_ACCESS_KEY: ${{ secrets.SENTROPIC_IDP_RELAY_WRITER_S3_ACCESS_KEY }}
+          SENTROPIC_IDP_RELAY_WRITER_S3_SECRET_KEY: ${{ secrets.SENTROPIC_IDP_RELAY_WRITER_S3_SECRET_KEY }}
+          SENTROPIC_IDP_IDENTITY_READER_PG_PASSWORD: ${{ secrets.SENTROPIC_IDP_IDENTITY_READER_PG_PASSWORD }}
+          SENTROPIC_IDP_RELAY_S3_BUCKET: ${{ vars.SENTROPIC_IDP_RELAY_S3_BUCKET }}
+          SENTROPIC_IDP_RELAY_S3_ENDPOINT: ${{ vars.SENTROPIC_IDP_RELAY_S3_ENDPOINT }}
+          SENTROPIC_IDP_RELAY_S3_REGION: ${{ vars.SENTROPIC_IDP_RELAY_S3_REGION }}
+        run: node deploy/ci/idp-identity-sync/run.mjs bundle
+      - name: Remove kubeconfig and Secret material files
+        if: always()
+        run: node deploy/ci/idp-identity-sync/run.mjs cleanup
+  run:
+    needs: [selftest, bundle-prod]
+    if: always() && needs.selftest.result == 'success' && (needs.bundle-prod.result == 'success' || needs.bundle-prod.result == 'skipped') && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.IDP_SYNC_SCHEDULE_ENABLED == 'true'))
+    environment: sentropic-idp-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      DRY_RUN: ${{ github.event_name == 'schedule' && '0' || (inputs.DRY_RUN && '1' || '0') }}
+      ALLOWED_REKEY: ${{ github.event_name == 'schedule' && '' || inputs.ALLOWED_REKEY || '' }}
+      CONFIRM: ${{ inputs.CONFIRM }}
+      EXPECTED_KUBE_APISERVER_HOST_PROD: ${{ vars.EXPECTED_KUBE_APISERVER_HOST_PROD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.35.0'
+      - name: Validate run inputs before accessing any cluster
+        run: node deploy/ci/idp-identity-sync/run.mjs validate
+      - name: Configure narrow prod trigger
+        id: prod-config
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_IDP_TRIGGER_PROD }}
+        run: node deploy/ci/idp-identity-sync/run.mjs configure prod
+      - name: Trigger prod export and wait for its termination verdict
+        id: export
+        run: node deploy/ci/idp-identity-sync/run.mjs export
+      - name: Always re-suspend prod export before switching identities
+        if: always() && steps.prod-config.outcome == 'success'
+        run: node deploy/ci/idp-identity-sync/run.mjs resuspend
+      - name: Configure preprod import identity
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_PREPROD }}
+        run: node deploy/ci/idp-identity-sync/run.mjs configure preprod
+      - name: Apply import Job, wait, collect counts-only logs and termination audit
+        run: node deploy/ci/idp-identity-sync/run.mjs import
+      - name: Remove kubeconfig and temporary files
+        if: always()
+        run: node deploy/ci/idp-identity-sync/run.mjs cleanup

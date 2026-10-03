@@ -1,0 +1,63 @@
+# Bootstrap once by the tenant admin. No VAP permissions: admission belongs to k8s.
+# Create verbs cannot be name-scoped; mutable existing objects are bounded below.
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: sentropic-ci-idp-bundle-prod, namespace: sentropic }
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: sentropic-ci-idp-bundle-prod, namespace: sentropic }
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "update"]
+    resourceNames: ["sentropic-idp-relay-writer", "sentropic-idp-identity-reader"]
+  - apiGroups: [""]
+    resources: ["configmaps", "serviceaccounts"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "patch", "update"]
+    resourceNames: ["sentropic-idp-identity-export-sql", "sentropic-idp-reader-role-sql"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "patch", "update"]
+    resourceNames: ["sentropic-idp-export", "sentropic-ci-trigger-idp-export"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["impersonate"]
+    resourceNames: ["sentropic-ci-trigger-idp-export"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["create"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "patch", "update"]
+    resourceNames: ["sentropic-ci-trigger-idp-export"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "patch", "update"]
+    resourceNames: ["allow-idp-export-to-postgres"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["create"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "patch", "update"]
+    resourceNames: ["sentropic-idp-identity-export"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: sentropic-ci-idp-bundle-prod, namespace: sentropic }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: sentropic-ci-idp-bundle-prod }
+subjects: [{ kind: ServiceAccount, name: sentropic-ci-idp-bundle-prod, namespace: sentropic }]
