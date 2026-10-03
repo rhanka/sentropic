@@ -28,6 +28,8 @@
   - `packages/llm-mesh/tests/budget-quote.test.ts` (BR-REL-EX1 approved, pass 02)
   - `packages/llm-mesh/tests/route-planner.test.ts` (BR-REL-EX1 approved, pass 02)
   - `packages/llm-mesh/tests/route-selection.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/tests/service/local-account-transport-service.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/CHANGELOG.md` (BR-REL-EX1 approved, pass 02)
   - `packages/llm-gateway/src/**`
   - `packages/llm-gateway/tests/**`
   - `packages/llm-gateway/package.json`
@@ -113,7 +115,7 @@
 ## Plan / Todo (lot-based)
 - [x] Row 0a — Minimal template skeleton, scope/exceptions, ports and stage index.
 - [x] Row 0b — Mesh-stage checklist and file-level gates before row 1.
-- [ ] Stage 1 — Mesh: rows 1–9 (pass 01 ends at row 3).
+- [x] Stage 1 — Mesh: rows 1–9 (pass 01 ends at row 3; pass 02 rows 4–9 complete).
   - [x] Row 1 — `src/native-messages.ts`: credential-free Messages request/result/prepared contracts and fixed-message upstream error; `src/index.ts`: public exports. Typecheck PASS; tests 317 passed, 0 failed (32 files).
   - [x] Row 1a — Immutable closed `NativeUsageSnapshot`, safe raw categories/fixed metadata, optional trusted capability/request finalize channel; gateway owns invocation. Typecheck PASS; tests 317 passed, 0 failed (32 files).
   - [x] Row 2 — Structural capability guard (including callable optional hook), empty default allowlist, Anthropic catalog/exclusive validation, pure exact target identity and raw beta composition. Typecheck PASS; tests 317 passed, 0 failed (32 files).
@@ -123,9 +125,9 @@
   - [x] Row 6 — `src/route-planner.ts`, `src/route-planner-state.ts`: validated allowlist, P0/P1 before sticky/health/truncation, ineligible affinity ignored without mutation. Typecheck PASS; tests 364 passed, 0 failed (33 files).
   - [x] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines. Typecheck PASS; tests 368 passed, 0 failed (33 files; 4 new cases).
   - [x] Row 8 — `src/route-attempt.ts` and `tests/route-planner.test.ts`: fresh descriptor/target/capability exact-model checks, optional native forwarding and existing terminal guards. Typecheck PASS; tests 369 passed, 0 failed (33 files; 1 new case).
-  - [ ] Row 9 — `tests/service/local-account-transport-service.test.ts`: no h2a native advertisement/capability; `CHANGELOG.md`: additive mesh native contract/planner release entry.
-  - [ ] File gate — `tests/native-messages.test.ts`: malformed discriminators/model/versions/betas/execute/finalize rejected; raw arbitrary header map, resolved version, empty-required-beta identity, unknown token/spacing preservation, exact catalog allowlist and exclusive rejection.
-  - [ ] File gate — `tests/native-messages.test.ts`: closed snapshot and additive usage contracts preserve physical counts, separate raw reported TTL from inferred allocation, fixed reasons/provenance; caller body cannot supply trusted pricing fields.
+  - [x] Row 9 — `tests/service/local-account-transport-service.test.ts`: no h2a native advertisement/capability; `CHANGELOG.md`: additive mesh native contract/planner release entry. Typecheck PASS; tests 370 passed, 0 failed (33 files; 1 new case).
+  - [x] File gate — `tests/native-messages.test.ts`: malformed discriminators/model/versions/betas/execute/finalize rejected; raw arbitrary header map, resolved version, empty-required-beta identity, unknown token/spacing preservation, exact catalog allowlist and exclusive rejection.
+  - [x] File gate — `tests/native-messages.test.ts`: closed snapshot and additive usage contracts preserve physical counts, separate raw reported TTL from inferred allocation, fixed reasons/provenance; caller body cannot supply trusted pricing fields.
   - [ ] Deferred M6 file gate — `tests/native-error-metadata.test.ts` (new), `src/errors.ts`, `src/native-messages.ts`: typed numeric size details survive normalization/cause wrapping without raw-message leakage, rows 40–42.
   - [ ] After EVERY code row/split: `make typecheck-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`.
   - [ ] After EVERY code row/split: `make test-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`; record per-row counts below.
