@@ -11,11 +11,14 @@ BEGIN
   RETURN md5(array_to_string(fingerprints, '|'));
 END $$;
 CREATE FUNCTION test_dv5() RETURNS text LANGUAGE sql AS $$
-  SELECT test_fingerprint(ARRAY['oauth_clients', 'id_token_signing_keys', 'authorization_codes', 'oauth_tokens', 'oauth_consents'])
+  SELECT test_fingerprint(ARRAY['oauth_clients', 'id_token_signing_keys'])
+    || (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY code), '')) FROM authorization_codes t WHERE user_id <> '9f11d240-fc75-4d55-80be-1bafcd79eadb')
+    || (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY jti), '')) FROM oauth_tokens t WHERE user_id <> '9f11d240-fc75-4d55-80be-1bafcd79eadb')
+    || (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY user_id, client_id, tenant_id), '')) FROM oauth_consents t WHERE user_id <> '9f11d240-fc75-4d55-80be-1bafcd79eadb')
     || (SELECT md5(to_jsonb(s)::text) FROM user_sessions s WHERE id = 'kept-session');
 $$;
 CREATE FUNCTION test_state() RETURNS text LANGUAGE sql AS $$
-  SELECT test_fingerprint(ARRAY['users', 'webauthn_credentials', 'user_sessions', 'webauthn_challenges', 'magic_links', 'chat_sessions', 'comments']) || test_dv5();
+  SELECT test_fingerprint(ARRAY['users', 'webauthn_credentials', 'user_sessions', 'webauthn_challenges', 'magic_links', 'chat_sessions', 'comments', 'authorization_codes', 'oauth_tokens', 'oauth_consents', 'revoked_tokens']) || test_dv5();
 $$;
 CREATE TABLE test_before AS SELECT test_state() AS state, test_dv5() AS dv5;
 SELECT test_assert((SELECT count(*) FROM users) = 8, 'baseline users 8');
