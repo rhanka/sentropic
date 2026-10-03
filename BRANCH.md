@@ -108,7 +108,7 @@
 - [x] Row 0b — Mesh-stage checklist and file-level gates before row 1.
 - [ ] Stage 1 — Mesh: rows 1–9 (pass 01 ends at row 3).
   - [x] Row 1 — `src/native-messages.ts`: credential-free Messages request/result/prepared contracts and fixed-message upstream error; `src/index.ts`: public exports. Typecheck PASS; tests 317 passed, 0 failed (32 files).
-  - [ ] Row 1a — Immutable closed `NativeUsageSnapshot`, safe raw categories/fixed metadata, optional trusted capability/request finalize channel; gateway owns invocation.
+  - [x] Row 1a — Immutable closed `NativeUsageSnapshot`, safe raw categories/fixed metadata, optional trusted capability/request finalize channel; gateway owns invocation. Typecheck PASS; tests 317 passed, 0 failed (32 files).
   - [ ] Row 2 — Structural capability guard (including callable optional hook), empty default allowlist, Anthropic catalog/exclusive validation, pure exact target identity and raw beta composition.
   - [ ] Row 3 — `tests/native-messages.test.ts`: helper behavior and additive `src/routing-contracts.ts` pricing/proof/served-ID/source/uncertainty/inference fields on physical attempt usage.
   - [ ] Row 4 — `src/routing-contracts.ts`, `src/route-quote.ts`: advertisement, required flag/Pick/error/prepared seams, native feasibility/filtering/hash.

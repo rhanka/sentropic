@@ -1,5 +1,60 @@
 import type { RouteAttemptUsage } from './routing-contracts.js';
 
+export type NativeInputUsageSource = 'json' | 'message_start' | 'message_delta';
+export type NativeUsageUncertainty =
+  | 'incomplete_input' | 'invalid_input' | 'cache_write_split_unknown'
+  | 'served_model_unverified' | 'served_model_mismatch' | 'input_breakdown_changed'
+  | 'incomplete_output' | 'invalid_output' | 'missing_usage';
+export type NativeCacheWriteSplitReason = 'cache_write_split_inferred';
+export type NativePricingPolicy = 'anthropic-cache-2026-10-02';
+export type NativeUsageTermination =
+  | 'completed' | 'cancelled' | 'upstream_error' | 'commit_failed'
+  | 'missing_message_stop' | 'frame_overflow' | 'timeout' | 'reader_error'
+  | 'protocol_error';
+
+/** Trusted observer evidence, never populated from caller body/header fields. */
+export interface NativeUsagePricing {
+  readonly nativeInputPriceUnits40?: number;
+  readonly nativePricingPolicy?: NativePricingPolicy;
+  readonly nativeServedModelId?: string;
+  readonly nativeInputUsageValidated?: boolean;
+  readonly nativeInputUsageSource?: NativeInputUsageSource;
+  readonly nativeUsageUncertainty?: NativeUsageUncertainty;
+  /** Inferred growth allocation alone does not make a valid clean turn estimated. */
+  readonly nativeCacheWriteSplitReason?: NativeCacheWriteSplitReason;
+}
+
+/** Safe provider-reported categories only; inferred TTL allocation is never raw. */
+export interface NativeUsageRaw {
+  readonly input_tokens?: number;
+  readonly cache_read_input_tokens?: number;
+  readonly cache_creation_input_tokens?: number;
+  readonly cache_creation?: {
+    readonly ephemeral_5m_input_tokens?: number;
+    readonly ephemeral_1h_input_tokens?: number;
+  };
+  readonly output_tokens?: number;
+}
+
+/**
+ * One immutable pre-financial-floor snapshot, shared by settlement and observation.
+ * Counts are physical and optional: missing evidence never becomes zero/allowance.
+ * The gateway freezes the snapshot and nested raw categories at terminal ownership.
+ * Malformed/decreasing/conflicting input permanently loses its pricing proof (N5).
+ */
+export interface NativeUsageSnapshot extends NativeUsagePricing {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly totalTokens?: number;
+  readonly rawUsage?: NativeUsageRaw;
+  readonly estimated: boolean;
+  readonly finalOutputObserved: boolean;
+  readonly termination: NativeUsageTermination;
+  readonly nativeSelectedModelId: string;
+  readonly fallbackPresent: boolean;
+  readonly iterationsPresent: boolean;
+}
+
 export interface NativeMessagesFeatureHeaders {
   /** Resolved supported version before execute; never an unresolved caller hint. */
   readonly anthropicVersion: string;
@@ -14,6 +69,8 @@ export interface NativeMessagesRequest {
   readonly signal: AbortSignal;
   /** Server gateway request ID, distinct from the cost correlation ID. */
   readonly requestId: string;
+  /** Bound to the prepared host hook; only the gateway invokes it, once per attempt. */
+  readonly finalize?: (snapshot: NativeUsageSnapshot) => void | Promise<void>;
 }
 
 /** Credential-free advertisement; executable closures remain in the trusted host. */
@@ -26,6 +83,8 @@ export interface PreparedNativeMessages extends NativeMessagesAdvertisement {
   readonly modelId: string;
   readonly apiVersions: readonly string[];
   readonly requiredBetas: readonly string[];
+  /** Trusted, body-free observation hook; settlement/cleanup never await this hook. */
+  readonly finalize?: (snapshot: NativeUsageSnapshot) => void | Promise<void>;
   /** Complete/cancel upload and detach request references before exposing a result. */
   execute(request: NativeMessagesRequest): Promise<NativeMessagesResult>;
 }
