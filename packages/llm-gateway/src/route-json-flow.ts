@@ -3,12 +3,13 @@ import { estimateAnthropicInputTokens } from './canonical-stream.js';
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, routeUsage,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, routeUsage,
   settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
+import { NativeAttemptRefusal, prepareNativeMessages } from './route-native.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown, fallback: SettleUsage): SettleUsage => {
@@ -62,6 +63,8 @@ export const runRouteJsonFlow = async (
         prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
       );
       signal?.throwIfAborted();
+      prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
+      signal?.throwIfAborted();
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       response = await (deps.dispatch ?? defaultDispatch).generate({ attempt, request: {
@@ -74,6 +77,9 @@ export const runRouteJsonFlow = async (
     } catch (error) {
       if (error instanceof BudgetDispatchMarkError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
+      }
+      if (error instanceof NativeAttemptRefusal) {
+        throw await refuseNativeAttempt(attempt, () => settle('failed'));
       }
       const classification = classifyRouteError(error, signal?.aborted);
       const usage = errorUsage(error, observedUsage ?? (invoked ? estimate() : routeUsage()));

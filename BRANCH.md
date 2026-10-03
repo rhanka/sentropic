@@ -153,7 +153,7 @@
   - [x] Row 19b — `tests/native-errors.test.ts`: 64 KiB adversarial runs, deterministic linear-work bound and underscore boundaries. Typecheck PASS; tests 595 passed / 0 failed (32 files; 2 new cases).
   - [x] Row 20 — `src/native-errors.ts`, `tests/native-errors.test.ts`: narrow sent-classifier-beta rewrite and official V-2 positives/negatives. Typecheck PASS; tests 610 passed / 0 failed (32 files; 15 new cases).
   - [x] Row 21 — Optional native dispatch/default delegator, execute-time shape/model/version/signal checks and exact prepared eligibility in `src/ports/dispatch.ts`, `src/route-attempt-dispatch.ts`, `src/route-native.ts`. `tests/auth-subpaths.test.ts` qualifies current packed mesh/gateway candidates before T1; released 0.22.3 lacks native declarations. Auth isolation assertions retained. Typecheck PASS; tests 625 passed / 0 failed after resolving the clean-consumer failure. Row 23 adds focused coverage; native invocation follows rows 30/32.
-  - [ ] Row 22 — `src/route-flow-core.ts`, JSON/stream flows: guarded native refusal, release/settlement independently protected.
+  - [x] Row 22 — Guarded required-mode native refusal in `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`; release and settlement independently protected. Typecheck PASS; tests 625 passed / 0 failed.
   - [ ] Row 23 — `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`, flow tests: dispatch/type/skew lifecycle.
   - [ ] Row 24 — `src/native-sse.ts`: bounded byte SSE framer.
   - [ ] Row 25 — `tests/native-sse.test.ts`: CR/LF/CRLF, split UTF-8, chunk boundaries and overflow.
