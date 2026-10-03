@@ -138,7 +138,7 @@
   - [x] Gateway plan-only commit before row 10: full stage checklist/file gates; pass 03 uses the existing allocated ports.
   - [x] Row 10 — `src/native-features.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`: classifier, single invocation, trusted switch and selection seam; required exhaustive `tests/contract-snapshot.test.ts` additions. Typecheck PASS after snapshot update; tests 389 passed / 0 failed (28 files).
   - [x] Row 11 — `tests/native-features.test.ts`: classification matrix, OFF precedence, budget default, empty beta, canonical version-only and standalone OFF refusal; prepared capability/version fallback remains rows 21–23/31. Typecheck PASS after fixture typing; tests 419 passed / 0 failed (29 files; 30 new cases).
-  - [ ] Row 12 — `src/native-headers.ts`: open Anthropic/closed other caller forwarding, credentials/hop-by-hop/Connection exclusions.
+  - [x] Row 12 — `src/native-headers.ts`: open Anthropic/closed other caller forwarding, credentials/hop-by-hop/Connection exclusions; classifier carries filtered headers. Typecheck PASS; tests 419 passed / 0 failed (29 files).
   - [ ] Row 13 — `tests/native-headers.test.ts`: every credential/Connection/internal/IP/user-agent exclusion and synthetic feature fidelity.
   - [ ] Row 14 — `src/route-native.ts`, `src/canonical-ingress.ts`: shallow native body and wire-specific max-token precedence.
   - [ ] Row 15 — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: nested-reference fidelity, no mutation/deep clone, malformed/default/reserved ceilings.
