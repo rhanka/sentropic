@@ -101,6 +101,7 @@
 - [x] BR-REL-EX3 approved under Q-A: rationale: coordinated §6.2 release train; impact: listed cluster/root files only, tuple/range literals, expectations, release docs and generated integrity; rollback: restore prior tuple/ranges and regenerate affected locks/archives before release.
 - [ ] BR-REL-EX4 RESERVED under conductor Q11: rationale: `api/package.json` gateway range must resolve the new exports; impact: only `@sentropic/llm-gateway` to `^0.20.0`; rollback: restore prior range with gateway tuple. Activate and declare its conditional path in the SAME commit as the gateway version bump; no API manifest write in pass 01.
 - [x] No open implementation blocker; stop for uncovered design, scope exception, unfixable row failure or real-call requirement.
+- [x] Pass 02 review remediation: M1 sticky affinity binding assertion and M2 native filter-order coverage (maxAttempts=1 and health suppression) verified in route-planner.test.ts.
 
 ## AI Flaky tests
 - [x] No live AI tests authorized in this pass; never weaken tests or increase timeouts; any later accepted flake requires same-commit success and owner sign-off.
@@ -123,7 +124,7 @@
   - [x] Row 4 — `src/routing-contracts.ts`, `src/route-quote.ts`: advertisement, required flag/Pick/error/prepared seams, native feasibility/filtering/hash. Typecheck PASS; tests 360 passed, 0 failed (33 files).
   - [x] Row 5 — `tests/budget-quote.test.ts`: required filtering, exact identity/exclusive refusal, quote-plan agreement, flag hash and stable canonical references. Typecheck PASS; tests 364 passed, 0 failed (33 files; 4 new cases).
   - [x] Row 6 — `src/route-planner.ts`, `src/route-planner-state.ts`: validated allowlist, P0/P1 before sticky/health/truncation, ineligible affinity ignored without mutation. Typecheck PASS; tests 364 passed, 0 failed (33 files).
-  - [x] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines. Typecheck PASS; tests 368 passed, 0 failed (33 files; 4 new cases).
+  - [x] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines. Typecheck PASS; tests 373 passed, 0 failed (33 files; 7 new cases).
   - [x] Row 8 — `src/route-attempt.ts` and `tests/route-planner.test.ts`: fresh descriptor/target/capability exact-model checks, optional native forwarding and existing terminal guards. Typecheck PASS; tests 369 passed, 0 failed (33 files; 1 new case).
   - [x] Row 9 — `tests/service/local-account-transport-service.test.ts`: no h2a native advertisement/capability; `CHANGELOG.md`: additive mesh native contract/planner release entry. Typecheck PASS; tests 370 passed, 0 failed (33 files; 1 new case).
   - [x] File gate — `tests/native-messages.test.ts`: malformed discriminators/model/versions/betas/execute/finalize rejected; raw arbitrary header map, resolved version, empty-required-beta identity, unknown token/spacing preservation, exact catalog allowlist and exclusive rejection.

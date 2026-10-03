@@ -1146,18 +1146,107 @@ describe('opaque route planner', () => {
     });
     const canonicalPlan = await planner.plan(routingSubject(), {
       requestedModel: 'claude-sonnet-5', affinityKey: 'k1',
+      explicit: { diagnosticAccountRef: 'acct_canonical' },
     });
-    await planner.prepareAttempt(routingSubject(), canonicalPlan.planRef, canonicalPlan.candidateRefs[0]!, 'req-1', 0);
+    const attempt = await planner.prepareAttempt(
+      routingSubject(), canonicalPlan.planRef, canonicalPlan.candidateRefs[0]!, 'req-1', 0,
+    );
+    await attempt.complete();
+
+    const storedAffinity = planner.describeAffinity(routingSubject(), 'k1');
+    expect(storedAffinity).not.toBeNull();
+    expect(storedAffinity?.diagnosticAccountRef).toBe('acct_canonical');
 
     const nativePlan = await planner.plan(routingSubject(), {
       requestedModel: 'claude-sonnet-5', affinityKey: 'k1', nativeMessages: true,
     });
     expect(nativePlan.diagnostics[0]?.diagnosticAccountRef).toBe('acct_native');
 
+    const unchangedAffinity = planner.describeAffinity(routingSubject(), 'k1');
+    expect(unchangedAffinity).toEqual(storedAffinity);
+    expect(unchangedAffinity?.diagnosticAccountRef).toBe('acct_canonical');
+    expect(unchangedAffinity?.target).toEqual(storedAffinity?.target);
+    expect(unchangedAffinity?.revision).toBe(storedAffinity?.revision);
+
     const nextCanonical = await planner.plan(routingSubject(), {
       requestedModel: 'claude-sonnet-5', affinityKey: 'k1',
     });
-    expect(nextCanonical.diagnostics[0]?.diagnosticAccountRef).toBe(canonicalPlan.diagnostics[0]?.diagnosticAccountRef);
+    expect(nextCanonical.diagnostics[0]?.diagnosticAccountRef).toBe('acct_canonical');
+  });
+
+  it('applies native candidate filtering before maxAttempts truncation in mixed pools', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([
+        {
+          accountRef: 'internal-canonical', diagnosticAccountRef: 'acct_canonical',
+          targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+          supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'internal-native', diagnosticAccountRef: 'acct_native',
+          targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+          supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+          nativeMessages: { contractVersion: 1, protocol: 'anthropic-messages' },
+        },
+      ]),
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    const canonicalPlan = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-sonnet-5', policyOverride: { maxAttempts: 1 },
+    });
+    expect(canonicalPlan.diagnostics).toHaveLength(1);
+    expect(canonicalPlan.diagnostics[0]?.diagnosticAccountRef).toBe('acct_canonical');
+
+    const nativePlan = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-sonnet-5', nativeMessages: true, policyOverride: { maxAttempts: 1 },
+    });
+    expect(nativePlan.diagnostics).toHaveLength(1);
+    expect(nativePlan.diagnostics[0]?.diagnosticAccountRef).toBe('acct_native');
+  });
+
+  it('returns native-unavailable rather than no-route for suppressed canonical-only pools', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([{
+        accountRef: 'internal-canonical', diagnosticAccountRef: 'acct_canonical',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      }]),
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    const canonicalPlan = await planner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5' });
+    await (await planner.prepareAttempt(
+      routingSubject(), canonicalPlan.planRef, canonicalPlan.candidateRefs[0]!, 'req-1', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'account' });
+
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5', nativeMessages: true }))
+      .rejects.toMatchObject({ code: 'native-unavailable' });
+  });
+
+  it('preserves no-route when eligible native capacity is suppressed by health', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory([{
+        accountRef: 'internal-native', diagnosticAccountRef: 'acct_native',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+        nativeMessages: { contractVersion: 1, protocol: 'anthropic-messages' },
+      }]),
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    const firstPlan = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-sonnet-5', nativeMessages: true,
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), firstPlan.planRef, firstPlan.candidateRefs[0]!, 'req-2', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'account' });
+
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5', nativeMessages: true }))
+      .rejects.toMatchObject({ code: 'no-route' });
   });
 
   it('forwards native capability only with fresh descriptor, eligible target, and matching model', async () => {
