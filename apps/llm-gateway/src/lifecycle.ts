@@ -9,6 +9,7 @@ import { serve } from '@hono/node-server';
 
 import type { HostApp } from './app';
 import type { HostConfig } from './config';
+import { loadReservationReaperConfig, startReservationReaper } from '../../../api/src/services/llm-metering/reservation-reaper';
 
 /** Bound on awaiting settlement of cancelled work; drain 25 s + 5 s + 1 s close stays inside the 40 s pod grace. */
 export const SETTLE_TIMEOUT_MS = 5_000;
@@ -138,6 +139,9 @@ export const startHost = async (
     });
   });
   options.onListening?.(server);
+  const reaper = host.reaper
+    ? startReservationReaper(config.reaper ?? loadReservationReaperConfig({}, true), host.reaper)
+    : undefined;
 
   const waitForIdle = (timeoutMs: number): Promise<boolean> => new Promise((resolve) => {
     if (inflight === 0) return resolve(true);
@@ -158,6 +162,7 @@ export const startHost = async (
 
   let stopping: Promise<StopReport> | undefined;
   const stop = async (): Promise<StopReport> => {
+    const reaperStopped = reaper?.stop();
     host.readiness.markNotReady();
     host.closeAdmission();
     const drained = await waitForIdle(config.drainTimeoutMs);
@@ -166,7 +171,7 @@ export const startHost = async (
     // Cancelling aborts provider work; the gateway then records the cancelled settlement.
     // Settlement is awaited, bounded, so a provider ignoring the abort cannot hold the pod.
     const reason = new Error(SHUTDOWN);
-    const settling = Promise.all([...pendingRequests, ...openStreams].map((cancel) => cancel(reason)));
+    const settling = Promise.all([reaperStopped, ...[...pendingRequests, ...openStreams].map((cancel) => cancel(reason))]);
     const settled = await within(settling, settleTimeoutMs);
     if (!settled) log(`llm-gateway-host shutdown settlement bound reached pending=${pendingRequests.length + openStreams.length}`);
     await new Promise<void>((resolve) => {

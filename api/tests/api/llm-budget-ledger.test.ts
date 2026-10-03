@@ -282,6 +282,44 @@ describe('route settlement: one ledger row per settled request', () => {
 describe('reservation reaper', () => {
   const past = createBudgetAdmission({ database: db, ownerRef: 'test', now: () => new Date(Date.now() - 2 * 3_600_000), holdTtlMs: 60_000 });
 
+  it('should settle each expired hold once when API and host reapers run concurrently', async () => {
+    await seedTenant();
+    await seedBucket(TENANT, 'workspace', `${TENANT}-ws`, null, { workspaceId: `${TENANT}-ws` });
+    const live = await admitted(`reapers-live-${run}`);
+    const holds: Array<{ id: string; request: string; dispatched: boolean }> = [];
+    for (let index = 0; index < 6; index += 1) {
+      const request = `reapers-${index}-${run}`;
+      const id = await admitted(request, undefined, past);
+      const dispatched = index % 2 === 0;
+      if (dispatched) await past.markDispatched(id, 0);
+      holds.push({ id, request, dispatched });
+    }
+    for (const scope of ['tenant', 'workspace']) {
+      expect(await bucket(TENANT, scope)).toEqual({ reserved: 7 * 3_250, spent: 0 });
+    }
+    const outcomes = await Promise.all([
+      reapExpiredHolds({ database: db }), reapExpiredHolds({ database: db }),
+    ]);
+    expect(outcomes.reduce((sum, next) => ({ released: sum.released + next.released,
+      reconciled: sum.reconciled + next.reconciled, failed: sum.failed + next.failed }),
+    { released: 0, reconciled: 0, failed: 0 })).toEqual({ released: 3, reconciled: 3, failed: 0 });
+    for (const hold of holds) {
+      expect(await rows(sql`SELECT status, settled_at IS NOT NULL AS settled FROM control.budget_holds WHERE id = ${hold.id}`))
+        .toEqual([{ status: hold.dispatched ? 'reconciled' : 'released', settled: true }]);
+      const entries = await ledger(hold.request);
+      expect(entries).toHaveLength(hold.dispatched ? 1 : 0);
+      if (hold.dispatched) {
+        expect(entries[0]).toMatchObject({ hold_id: hold.id, reconciliation_state: 'pending' });
+        expect(num(entries[0]!.cost_micro_usd)).toBe(3_250);
+      }
+    }
+    await expect(reapExpiredHolds({ database: db })).resolves.toEqual({ released: 0, reconciled: 0, failed: 0 });
+    expect(await rows(sql`SELECT status FROM control.budget_holds WHERE id = ${live}`)).toEqual([{ status: 'held' }]);
+    for (const scope of ['tenant', 'workspace']) {
+      expect(await bucket(TENANT, scope)).toEqual({ reserved: 3_250, spent: 3 * 3_250 });
+    }
+  });
+
   it('should roll back a poisoned hold and reap later holds in the same batch', async () => {
     await seedTenant();
     const poisoned = await admitted(`poison-${run}`, undefined, past);
