@@ -102,6 +102,7 @@
 - [ ] BR-REL-EX4 RESERVED under conductor Q11: rationale: `api/package.json` gateway range must resolve the new exports; impact: only `@sentropic/llm-gateway` to `^0.20.0`; rollback: restore prior range with gateway tuple. Activate and declare its conditional path in the SAME commit as the gateway version bump; no API manifest write in pass 01.
 - [x] No open implementation blocker; stop for uncovered design, scope exception, unfixable row failure or real-call requirement.
 - [x] Pass 02 review remediation: M1 sticky affinity binding assertion and M2 native filter-order coverage (maxAttempts=1 and health suppression) verified in route-planner.test.ts.
+- [x] Pass 04 review remediation: M1 native-validation channel restricted to status 400 and invalid_request_error; non-validation and auth errors retain fixed mappings; m4 row 19b restored.
 
 ## AI Flaky tests
 - [x] No live AI tests authorized in this pass; never weaken tests or increase timeouts; any later accepted flake requires same-commit success and owner sign-off.
@@ -147,6 +148,7 @@
   - [x] Row 18 — `src/native-errors.ts`: billing classifier, linear maximal-run identifier neutralization and bounded 400 detail. Typecheck PASS; tests 557 passed / 0 failed (31 files).
   - [x] Row 19 — `tests/native-errors.test.ts`: billing families, late indicators, controls and UTF-8 bounds. Typecheck PASS; tests 582 passed / 0 failed (32 files; 25 new cases).
   - [x] Row 19a — `tests/native-errors.test.ts`: four negative identifiers and identifier-plus-billing positives. Typecheck PASS; tests 593 passed / 0 failed (32 files; 11 new cases).
+  - [x] Row 19b — `tests/native-errors.test.ts`: 64 KiB adversarial runs, deterministic linear-work bound and underscore boundaries. Typecheck PASS; tests 595 passed / 0 failed (32 files; 2 new cases).
   - [x] Row 20 — `src/native-errors.ts`, `tests/native-errors.test.ts`: narrow sent-classifier-beta rewrite and official V-2 positives/negatives. Typecheck PASS; tests 610 passed / 0 failed (32 files; 15 new cases).
   - [ ] Row 21 — `src/ports/dispatch.ts`, `src/route-attempt-dispatch.ts`, `src/route-native.ts`: optional native dispatch and exact prepared model/version eligibility.
   - [ ] Row 22 — `src/route-flow-core.ts`, JSON/stream flows: guarded native refusal, release/settlement independently protected.

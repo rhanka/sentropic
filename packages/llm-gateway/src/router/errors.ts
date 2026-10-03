@@ -119,6 +119,32 @@ const unknownModelMessage = (requestedModel?: string): string =>
 const noRouteMessage = (requestedModel?: string): string =>
   requestedModel ? `No route available for model: ${JSON.stringify(requestedModel)}` : 'No route available';
 
+const isValidValidationDetail = (
+  detail: unknown,
+): detail is NativeValidationPublicDetail =>
+  Boolean(
+    detail
+    && typeof detail === 'object'
+    && (detail as NativeValidationPublicDetail).type === 'invalid_request_error'
+    && typeof (detail as NativeValidationPublicDetail).message === 'string'
+    && (detail as NativeValidationPublicDetail).message.length > 0
+    && (detail as NativeValidationPublicDetail).message.length <= 4096,
+  );
+
+const isNativeMessagesUpstreamError = (
+  error: unknown,
+): error is {
+  status: number;
+  type?: string;
+  validation?: NativeValidationPublicDetail;
+} =>
+  Boolean(
+    error
+    && typeof error === 'object'
+    && (error as { name?: unknown }).name === 'NativeMessagesUpstreamError'
+    && typeof (error as { status?: unknown }).status === 'number',
+  );
+
 /**
  * Map an internal failure class to a provider-shaped error for the wire. The
  * CLIENT-FACING message is a fixed, pool-internal-free string per class; the
@@ -133,12 +159,6 @@ export const mapGatewayError = (
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
-  if (validation) {
-    return anthropic
-      ? anthropicError(400, validation.type, validation.message)
-      : openAiError(400, validation.type, validation.message, 'invalid_request');
-  }
-
   switch (kind) {
     case 'native-required':
     case 'native-unavailable': {
@@ -192,6 +212,11 @@ export const mapGatewayError = (
         : openAiError(400, 'invalid_request_error', 'request not permitted', 'unsupported');
 
     case 'bad-request':
+      if (isValidValidationDetail(validation)) {
+        return anthropic
+          ? anthropicError(400, validation.type, validation.message)
+          : openAiError(400, validation.type, validation.message, 'invalid_request');
+      }
       return anthropic
         ? anthropicError(400, 'invalid_request_error', 'invalid request')
         : openAiError(400, 'invalid_request_error', 'invalid request', 'invalid_request');
@@ -223,13 +248,19 @@ export const toProviderShapedError = (
   if (error instanceof GatewayError) {
     return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, error.validation);
   }
-  const validation = error && typeof error === 'object' && 'validation' in error
-    ? (error as { validation?: NativeValidationPublicDetail }).validation
-    : undefined;
-  if (validation && typeof validation.type === 'string' && typeof validation.message === 'string') {
-    return wire === 'anthropic-messages'
-      ? anthropicError(400, validation.type, validation.message)
-      : openAiError(400, validation.type, validation.message, 'invalid_request');
+  if (isNativeMessagesUpstreamError(error)) {
+    if (
+      error.status === 400
+      && (error.type === undefined || error.type === 'invalid_request_error')
+      && isValidValidationDetail(error.validation)
+    ) {
+      return wire === 'anthropic-messages'
+        ? anthropicError(400, error.validation.type, error.validation.message)
+        : openAiError(400, error.validation.type, error.validation.message, 'invalid_request');
+    }
+    if (error.status === 401 || error.status === 403 || error.type === 'authentication_error') {
+      return mapGatewayError(wire, 'upstream-auth-failed');
+    }
   }
   const diagnostic = error && typeof error === 'object'
     ? (error as { diagnostic?: {
