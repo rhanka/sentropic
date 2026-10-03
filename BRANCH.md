@@ -65,18 +65,20 @@
   - [x] Initialize `.env` with branch ports and environment variables.
   - [x] Define scope boundaries and declare `BRCI-EX1` through `BRCI-EX4`.
 
-- [ ] **Lot 1 — Tool image target & prod runtime without npm**
+- [x] **Lot 1 — Tool image target & prod runtime without npm**
   - [x] Add `ci-tools` target stage in `api/Dockerfile`.
   - [x] Drop npm/npx and `/usr/local/lib/node_modules/npm` from `production` stage in `api/Dockerfile`.
   - [x] Define `API_TOOL_IMAGE_NAME` and `API_TOOL_VERSION` content hash in `Makefile`.
   - [x] Add `build-api-tool-image`, `check-api-tool-image`, `pull-api-tool-image`, `save-api-tool`, `load-api-tool`, `publish-api-tool-image` targets in `Makefile`.
-  - [ ] Local proof: build production image and verify `docker run <prod> sh -c 'command -v npm'` fails.
-  - [ ] Local proof: verify production container boots and database migrations run successfully at startup.
+  - [x] Local proof: build production image and verify `docker run <prod> sh -c 'command -v npm'` fails.
+  - [x] Local proof: verify production container boots and database migrations run successfully at startup.
+  - [x] API and compiled IdP boot without source mounts; both health endpoints return HTTP 200.
+  - [x] Fresh database has 42 public and 9 control migrations; restart leaves migration counts unchanged.
   - [x] Local proof: build tool image and verify `docker run <tool> sh -c 'command -v npm && npx vitest --version'` succeeds.
   - [x] Tool runner check: `api/tests/unit/client-ip.test.ts` passes in the image without mounts or dependency installation (18 tests).
   - [x] Cache check: unchanged build reuses the local image; input addition, modification and rename change the tag; deletion restores it.
   - [x] Artifact check: `make save-api-tool load-api-tool` succeeds.
-  - [ ] Write `.h2a/build/lot1_report.md` for reviewer.
+  - [x] Write `.h2a/build/lot1_report.md` for reviewer.
 
 - [ ] **Lot 2 — Matrix on tool image & smokes/limit as external runner against prod SUT**
   - [ ] Update `docker-compose*.yml` and Makefile test targets for tool image usage.
