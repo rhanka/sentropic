@@ -22,6 +22,11 @@ import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 
+export interface NativeValidationPublicDetail {
+  readonly type: string;
+  readonly message: string;
+}
+
 export interface ProviderShapedError {
   readonly status: number;
   readonly body: unknown;
@@ -45,6 +50,7 @@ export type GatewayFailureKind =
   | 'bad-request'
   | 'native-required'
   | 'native-max-tokens-required'
+  | 'native-unavailable'
   | 'unknown-model'
   | 'no-route'
   | 'cross-user-disabled';
@@ -58,6 +64,8 @@ export class GatewayError extends Error {
     readonly retryAfterSeconds?: number,
     /** Present only after a provider/model has been selected for dispatch. */
     readonly servedTarget?: ResolvedTarget,
+    /** Public validation detail for native 400 fidelity; excluded from logs/ledgers. */
+    readonly validation?: NativeValidationPublicDetail,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -121,12 +129,19 @@ export const mapGatewayError = (
   kind: GatewayFailureKind,
   retryAfterSeconds?: number,
   requestedModel?: string,
+  validation?: NativeValidationPublicDetail,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
+  if (validation) {
+    return anthropic
+      ? anthropicError(400, validation.type, validation.message)
+      : openAiError(400, validation.type, validation.message, 'invalid_request');
+  }
 
   switch (kind) {
-    case 'native-required': {
+    case 'native-required':
+    case 'native-unavailable': {
       const message = anthropic
         ? 'safeguards is not supported by this gateway route; retry without safeguards.'
         : 'safeguards requires the Anthropic Messages endpoint.';
@@ -206,7 +221,15 @@ export const toProviderShapedError = (
   requestedModel?: string,
 ): ProviderShapedError => {
   if (error instanceof GatewayError) {
-    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel);
+    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, error.validation);
+  }
+  const validation = error && typeof error === 'object' && 'validation' in error
+    ? (error as { validation?: NativeValidationPublicDetail }).validation
+    : undefined;
+  if (validation && typeof validation.type === 'string' && typeof validation.message === 'string') {
+    return wire === 'anthropic-messages'
+      ? anthropicError(400, validation.type, validation.message)
+      : openAiError(400, validation.type, validation.message, 'invalid_request');
   }
   const diagnostic = error && typeof error === 'object'
     ? (error as { diagnostic?: {
@@ -228,6 +251,9 @@ export const toProviderShapedError = (
   // quote-mismatch and unclassified errors stay on the generic 503 below.
   if (isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')) {
     return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
+  }
+  if (isRoutePlanError(error, 'native-unavailable') || isRouteQuoteError(error, 'native-unavailable')) {
+    return mapGatewayError(wire, 'native-unavailable');
   }
   // BR-REL-Q7: every known-model no-route without an enrollment diagnostic
   // (checked above) becomes the non-retryable 503. The enrollment-action

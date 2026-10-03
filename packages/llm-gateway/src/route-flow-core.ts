@@ -92,10 +92,11 @@ const isEnrollmentDiagnostic = (error: unknown): boolean => {
  */
 const isRecognizedPlanningRefusal = (error: unknown): boolean => {
   if (error instanceof GatewayError) {
-    return error.kind === 'unknown-model' || error.kind === 'no-route';
+    return error.kind === 'unknown-model' || error.kind === 'no-route' || error.kind === 'native-unavailable';
   }
   return isEnrollmentDiagnostic(error)
     || isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')
+    || isRoutePlanError(error, 'native-unavailable') || isRouteQuoteError(error, 'native-unavailable')
     || isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')
     || isRoutePlanError(error, 'no-route') || isRouteQuoteError(error, 'no-route');
 };
