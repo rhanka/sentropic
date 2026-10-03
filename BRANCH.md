@@ -68,17 +68,18 @@
 - [x] **Lot 3 — Accounting proof and documentation**
   - [x] Extend `api/tests/api/llm-budget-ledger.test.ts` with two concurrent reapers; assert terminal states, exact budget deltas and ledger cardinality, preserving a live reserve across two budget buckets.
   - [x] Update spec section 12.8 after focused scheduler (12), host lifecycle (5), and real Postgres ledger (37) tests pass.
-- [ ] **Lot 4 — Final validation**
+- [x] **Lot 4 — Final validation**
   - [x] Run targeted API and host tests: 12 scheduler tests, 5 lifecycle tests, 37 ledger tests passed.
   - [x] Run `make typecheck-api lint-api`; host typecheck and lint also passed.
-  - [x] Run full API suites: 1,019 unit tests passed, 2 skipped; 974 endpoint tests passed.
-  - [ ] Pass full host suite: 76 passed, 1 failed (BRRS-B2); all 5 new host lifecycle tests passed.
+  - [x] Run full API suites after rebase on origin/main 7d1002505: 1,023 unit tests passed, 2 skipped; 974 endpoint tests passed.
+  - [x] Pass full host suite after BRRS-EX1 and rebase: 77 passed across 7 files.
   - [x] Run `make scope-check` before each commit; update this plan in each commit.
   - [x] Run `make down`; `make ps` confirms no remaining services; record commands and counts for handoff.
 
 ## Validation Evidence
 - [x] PASS: `make typecheck-api lint-api REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
-- [ ] FAIL (BRRS-B2 only): `make up-api-test typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`; startup, host typecheck and lint passed; host tests 76 passed / 1 failed across 7 files.
+- [x] PASS after BRRS-EX1 and rebase: `make up-api-test typecheck-llm-gateway-process lint-llm-gateway-process test-llm-gateway-process REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`; host tests 77 passed across 7 files.
+- [x] PASS after rebase (unit: 114 files, 1,023 passed / 2 skipped; endpoints: 120 files, 974 passed): same unit and endpoint targets and ports as below; `make down` passed.
 - [x] PASS (12 tests): `make test-api-unit SCOPE=tests/unit/reservation-reaper-schedule.test.ts REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
 - [x] PASS (37 tests, real Postgres): `make test-api-endpoints SCOPE=tests/api/llm-budget-ledger.test.ts REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
 - [x] PASS (unit: 114 files, 1,019 passed / 2 skipped; endpoints: 120 files, 974 passed): `make test-api-unit test-api-endpoints REGISTRY=local API_PORT=9482 UI_PORT=5682 MAILDEV_UI_PORT=1582 ENV=test-llm-reaper-schedule`.
