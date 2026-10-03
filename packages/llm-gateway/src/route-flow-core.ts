@@ -55,7 +55,7 @@ export interface RouteFlowDeps {
     readonly cost: CostContext;
     readonly request: GatewayFlowRequest;
     readonly canonical: CanonicalIngressResult;
-  }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities'>;
+  }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities' | 'nativeMessages'>;
   /** Opt-in budget admission; absent means no quote and no reservation. */
   readonly budget?: GatewayBudgetOptions;
   readonly nativeMessagesEnabled?: boolean;
@@ -130,6 +130,7 @@ export const prepareRouteFlow = async (
       requiredCapabilities: canonical.requiredCapabilities,
       workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
     return { cost: auth.cost, subject, canonical, plan, nativeFeatures };
   } catch (error) {
@@ -178,6 +179,7 @@ const prepareAdmittedRouteFlow = async (
       ...(routeInput?.policyProfile ? { policyProfile: routeInput.policyProfile } : {}),
       ...(routeInput?.policyOverride ? { policyOverride: routeInput.policyOverride } : {}),
       ...(routeInput?.explicit ? { explicit: routeInput.explicit } : {}),
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : {}),
     },
   });
   try {
@@ -188,6 +190,7 @@ const prepareAdmittedRouteFlow = async (
       workspaceId: routeInput?.workspaceId ?? cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? cost.correlationId,
       quote: admission.quote,
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
     return { cost, subject, canonical, plan, admission, nativeFeatures };
   } catch (error) {
