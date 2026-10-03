@@ -40,6 +40,8 @@ export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/c
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
+API_IMAGE_RECEIPT ?= .tmp/ci-prod-image/api-image-id
+export API_IMAGE_REF ?= $(shell cat $(API_IMAGE_RECEIPT) 2>/dev/null)
 export API_TOOL_IMAGE_NAME ?= sentropic-api-tools
 # Include source inputs: the toolbox contains test sources and built workspaces.
 # Hash paths as well as bytes, so additions, deletions and renames invalidate it.
@@ -467,7 +469,8 @@ load-ui:
 
 .PHONY: build-api-image
 build-api-image: ## Build the API Docker image for production
-	TARGET=production $(DOCKER_COMPOSE) build --no-cache api
+	API_IMAGE_REF= TARGET=production $(DOCKER_COMPOSE) build --no-cache api
+	@$(MAKE) record-api-image ENV=$(ENV)
 
 .PHONY: build-api
 build-api: build-api-image
@@ -475,12 +478,24 @@ build-api: build-api-image
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
 	@echo "💾 Saving API image as artifact..."
+	@$(MAKE) record-api-image ENV=$(ENV)
 	@docker save $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -o api-image.tar
 
 .PHONY: load-api
 load-api:
 	@echo "📥 Loading API image from artifact..."
 	@docker load -i api-image.tar
+	@$(MAKE) verify-api-image ENV=$(ENV)
+
+.PHONY: record-api-image verify-api-image
+record-api-image: ## Record the locally built artifact identity for transport and runtime pinning
+	@mkdir -p "$$(dirname "$(API_IMAGE_RECEIPT)")"
+	@docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) --format '{{.Id}}' > "$(API_IMAGE_RECEIPT)"
+verify-api-image: ## Fail if the loaded canonical tag differs from the recorded artifact
+	@test -s "$(API_IMAGE_RECEIPT)"
+	@expected="$$(cat "$(API_IMAGE_RECEIPT)")"; actual="$$(docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) --format '{{.Id}}')"; \
+	test "$$actual" = "$$expected" || { echo 'Production artifact identity mismatch'; exit 1; }; \
+	echo "Verified production artifact $$actual"
 
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
@@ -2250,7 +2265,7 @@ latest-prod-backup: ## Print the latest production dump basename for the restore
 ci-test-env:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
 
-CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM initiatives
+CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,data) ORDER BY id)::text,'[]')) FROM initiatives
 CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
 restore-api-sut: ci-test-env ## Restore a dump before the first production boot; verify business data survives
 	@test -n "$(BACKUP_FILE)" && test -f "data/backup/$(BACKUP_FILE)"
@@ -2854,7 +2869,7 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 	@mkdir -p .security
 	@echo "  📋 Step 1: Executing container scan..."
 	@if [ "$*" = "api" ]; then \
-		IMAGE_NAME="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"; \
+		IMAGE_NAME="$(or $(API_IMAGE_REF),$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION))"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	elif [ "$*" = "ui" ]; then \
