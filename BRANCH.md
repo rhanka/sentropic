@@ -231,7 +231,8 @@
   - [x] N3 CL/EOF contract — Content-Length never sizes storage, reservation or N; EOF parses under exact received N, with no speculative trim. Transient transport chunk is the explicit exception and is discarded on refusal; decoded/parsed/outbound forms stay within the 8x amplification allowance.
   - [ ] N3 gates — Row 44d2 injects backing-capacity counters and paused forged-large-CL uploads in both middleware orders, verifies zero allocation before read/after failed extension and full recovery; V-3 additionally measures effective process/cgroup memory before release/edge raise.
   - [x] Row 43a — One process-owned 32000000-byte default pool shared across routers/endpoints; zero-byte leases extend synchronously by actual q before allocation; failed extensions discard partial storage and release once; exact typed 503/api_error, Retry-After:1 and x-should-retry:true; gateway gates in pass11 report.
-  - [ ] Row 43b — Lease ownership and once-only cleanup; gateway retry/cache/body references detached before shrink.
+  - [x] Row 43b — Checked-body owner tracks synchronous reference detachers, clears cache/holders before zero-byte shrink and claims terminal release once; transfer marks stream ownership; read/parse failure drops raw/text references before release; gateway gates in pass11 report.
+  - [ ] Row 43c split — 43c1 native/canonical route ownership and metadata capture; 43c2 router stream transfer/terminal wrapper and independent closure; 43c3 shared passthrough terminal cleanup if needed; each <=120 lines including plan.
   - [ ] Row 43c — Retained retry/upload references and terminal lease transfer; native/canonical lifetime distinction.
   - [ ] Row 44 — `tests/request-body-limit.test.ts`, router integration: pre-parse cap and byte boundaries.
   - [ ] Row 44a — Same file: cross-endpoint/router pool exhaustion, exact 503/Retry-After and zero parse/hold/dispatch.

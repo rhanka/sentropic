@@ -1,14 +1,10 @@
 import { GatewayError } from './router/errors.js';
 import { GATEWAY_MAX_REQUEST_BODY_BYTES } from './request-too-large.js';
-import { defaultGatewayBodyBytePool, type GatewayBodyBytePool, type GatewayBodyByteLease } from './request-body-pool.js';
+import { defaultGatewayBodyBytePool, type GatewayBodyBytePool } from './request-body-pool.js';
+import { CheckedGatewayBody } from './request-body-retention.js';
+export { CheckedGatewayBody } from './request-body-retention.js';
 
 export { GATEWAY_MAX_REQUEST_BODY_BYTES } from './request-too-large.js';
-
-export interface CheckedGatewayBody {
-  body: unknown;
-  readonly bytes: number;
-  readonly lease: GatewayBodyByteLease;
-}
 
 export interface RequestBodyLimitOptions {
   readonly limitBytes?: number;
@@ -28,9 +24,10 @@ const readGatewayBody = async (request: Request, options: RequestBodyLimitOption
   if (!Number.isSafeInteger(limit) || limit < 1) throw new Error('Invalid gateway body limit');
   const pool = options.pool ?? defaultGatewayBodyBytePool;
   if (pool.capacityBytes < limit) throw new Error('Gateway body capacity must cover its request limit');
-  const lease = pool.acquire();
   const reader = request.body?.getReader();
+  const lease = pool.acquire();
   const chunks: Uint8Array[] = [];
+  let text: string | undefined;
   let bytes = 0;
   const abort = () => { void reader?.cancel(request.signal.reason).catch(() => undefined); };
   request.signal.addEventListener('abort', abort, { once: true });
@@ -58,13 +55,18 @@ const readGatewayBody = async (request: Request, options: RequestBodyLimitOption
       }
     }
     const decoder = new TextDecoder();
-    let text = '';
+    text = '';
     for (const chunk of chunks) text += decoder.decode(chunk, { stream: true });
     text += decoder.decode();
     chunks.length = 0;
-    try { return { body: JSON.parse(text), bytes, lease }; }
+    try {
+      const body: unknown = JSON.parse(text);
+      text = undefined;
+      return new CheckedGatewayBody(body, bytes, lease);
+    }
     catch { throw new GatewayError('bad-request', 'Invalid JSON body'); }
   } catch (error) {
+    text = undefined;
     chunks.length = 0;
     lease.release();
     try { await reader?.cancel(error); } catch { /* Preserve the ingress refusal. */ }
