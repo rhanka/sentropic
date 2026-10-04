@@ -237,7 +237,8 @@
   - [x] Row 43c2 — Stream wrapper transfers the owner to terminal cleanup, handles return/throw/EOF/error/abort and never-started streams, detaches the source before release, preserves original errors and releases once; row 44 mounts it at the router seam; gateway gates in pass11 report.
   - [x] Row 43c3 — Shared passthrough closes/detaches its source and releases body independently of rejecting settlement; once-only finish also runs for return before first downstream consumption; retries still retain N; gateway gates in pass11 report.
   - [x] Row 43c — Completed as 43c1–43c3; native detaches only after host upload guarantee/no retry, canonical and passthrough keep N until source cleanup; terminal stream wrapper transferred at row 44.
-  - [ ] Row 44 — `tests/request-body-limit.test.ts`, router integration: pre-parse cap and byte boundaries.
+  - [ ] Row 44 — Split 44-1 router/middleware integration and 44-2 cap/byte-boundary tests in `tests/request-body-limit.test.ts`, each <=140 lines including plan.
+  - [x] Row 44-1 — Exported pre-parser middleware and shared router use one cached bounded read; router-owned body wrapper detaches with cache, all early responses release via finally and streaming transfers to terminal wrapper; all three body paths protected under both switch states; gateway gates in pass11 report.
   - [ ] Row 44a — Same file: cross-endpoint/router pool exhaustion, exact 503/Retry-After and zero parse/hold/dispatch.
   - [ ] Row 44b1 — Same file: host detach/native shrink versus canonical N, races/unconsumed stream/independent finalize.
   - [ ] Row 44b2 — Same file: N2 generation refusal matrix including auth/partition/OFF/native/ceiling/model/quote/route/admission/prepared/mark; `count_off`, `count_denied`, `count_rate`, `count_concurrency` are explicitly deferred to row 49a.
