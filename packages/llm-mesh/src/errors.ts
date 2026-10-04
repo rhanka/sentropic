@@ -1,5 +1,56 @@
 import type { ProviderId } from './providers.js';
 
+/** Trusted transport measurement; never derive numbers from provider prose or caller headers. */
+export interface RequestSizeDetail {
+  readonly requestBytes: number;
+  readonly limitBytes?: number;
+  readonly sizeIsLowerBound?: boolean;
+  readonly source: 'gateway' | 'upstream';
+}
+
+export const readRequestSizeDetail = (value: unknown): RequestSizeDetail | undefined => {
+  const detail = value as Partial<RequestSizeDetail> | null;
+  if (!detail || typeof detail !== 'object' || !Number.isSafeInteger(detail.requestBytes)
+    || detail.requestBytes! < 0 || (detail.source !== 'gateway' && detail.source !== 'upstream')
+    || (detail.limitBytes !== undefined && (!Number.isSafeInteger(detail.limitBytes) || detail.limitBytes <= 0))
+    || (detail.sizeIsLowerBound !== undefined && typeof detail.sizeIsLowerBound !== 'boolean')) return undefined;
+  return Object.freeze({ requestBytes: detail.requestBytes!, source: detail.source,
+    ...(detail.limitBytes !== undefined ? { limitBytes: detail.limitBytes } : {}),
+    ...(detail.sizeIsLowerBound !== undefined ? { sizeIsLowerBound: detail.sizeIsLowerBound } : {}) });
+};
+
+export class RequestTooLargeError extends Error {
+  readonly status = 413;
+  readonly code = 'request_too_large';
+  readonly requestSize: RequestSizeDetail;
+  constructor(detail: RequestSizeDetail) {
+    super('Request body is too large');
+    this.name = 'RequestTooLargeError';
+    const safe = readRequestSizeDetail(detail);
+    if (!safe) throw new TypeError('Invalid request size measurement');
+    this.requestSize = safe;
+  }
+}
+
+/** Bounded cause traversal retains typed size evidence across runtime/SDK wrappers. */
+export const requestTooLargeDetail = (error: unknown): { requestSize?: RequestSizeDetail } | undefined => {
+  let current = error;
+  let detected = false;
+  let requestSize: RequestSizeDetail | undefined;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < 8 && current && typeof current === 'object' && !seen.has(current); depth++) {
+    seen.add(current);
+    const record = current as Record<string, unknown>;
+    const metadata = record.metadata as Record<string, unknown> | undefined;
+    requestSize ??= readRequestSizeDetail(record.requestSize) ?? readRequestSizeDetail(metadata?.requestSize);
+    detected ||= record.status === 413 || record.statusCode === 413 || record.kind === 'request-too-large'
+      || [record.code, record.type].some(value => typeof value === 'string'
+        && ['request_too_large', 'request-too-large'].includes(value.toLowerCase()));
+    current = record.cause ?? record.error ?? record.response;
+  }
+  return detected ? { ...(requestSize ? { requestSize } : {}) } : undefined;
+};
+
 export type ProviderErrorRetryReason =
   | 'rate_limit'
   | 'timeout'
@@ -18,6 +69,7 @@ export interface NormalizedProviderError {
   statusCode?: number;
   cause?: unknown;
   metadata?: Record<string, unknown>;
+  requestSize?: RequestSizeDetail;
 }
 
 export interface ProviderErrorNormalizationOptions {
@@ -75,6 +127,8 @@ export const isRetryableProviderError = (
   code: string | undefined,
   options: ProviderErrorNormalizationOptions = {},
 ): boolean => {
+  if (statusCode === 413 || code?.toLowerCase() === 'request_too_large'
+    || code?.toLowerCase() === 'request-too-large') return false;
   const retryableStatusCodes: readonly number[] =
     options.retryableStatusCodes ?? defaultRetryableStatusCodes;
   const retryableCodes: readonly string[] = options.retryableCodes ?? defaultRetryableCodes;
@@ -95,18 +149,19 @@ export const normalizeProviderError = (
 ): NormalizedProviderError => {
   const record = asRecord(error);
   const nested = nestedErrorRecord(record);
+  const tooLarge = requestTooLargeDetail(error);
   const statusCode =
-    readNumber(record, 'statusCode') ||
+    (tooLarge ? 413 : undefined) || readNumber(record, 'statusCode') ||
     readNumber(record, 'status') ||
     readNumber(nested, 'statusCode') ||
     readNumber(nested, 'status');
   const code =
-    readString(record, 'code') ||
+    (tooLarge ? 'request_too_large' : undefined) || readString(record, 'code') ||
     readString(record, 'type') ||
     readString(nested, 'code') ||
     readString(nested, 'status');
   const message =
-    readString(record, 'message') ||
+    (tooLarge ? 'Request body is too large' : undefined) || readString(record, 'message') ||
     readString(nested, 'message') ||
     (error instanceof Error && error.message) ||
     options.defaultMessage ||
@@ -126,7 +181,8 @@ export const normalizeProviderError = (
     retryable,
     ...(code ? { code } : {}),
     ...(retryReason ? { retryReason } : {}),
-    ...(retryAfterMs ? { retryAfterMs } : {}),
+    ...(!tooLarge && retryAfterMs ? { retryAfterMs } : {}),
+    ...(tooLarge?.requestSize ? { requestSize: tooLarge.requestSize } : {}),
     ...(typeof statusCode === 'number' ? { statusCode } : {}),
     ...(error instanceof Error || record ? { cause: error } : {}),
   };

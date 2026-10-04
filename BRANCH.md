@@ -18,6 +18,8 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/llm-mesh/src/native-messages.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/src/errors.ts` (BR-REL-EX1 approved, M6 rows 40–42)
+  - `packages/llm-mesh/tests/native-error-metadata.test.ts` (BR-REL-EX1 approved, M6 rows 40–42)
   - `packages/llm-mesh/src/index.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-mesh/src/routing-contracts.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-mesh/src/route-quote.ts` (BR-REL-EX1 approved, pass 02)
@@ -205,7 +207,9 @@
   - [x] Row 37 — Router JSON/SSE credentials/cookies/hop-by-hop/Connection/internal spoof isolation, owner-accepted organization exposure, exact UTF-8/CRLF safeguards bytes, own markers/served policy and validation refusal headers; 37b corrects null/typed-array assertion operands; gateway gates recorded in pass10 report.
   - [x] Row 38 — Loopback fake HTTP native provider captures exact request bytes/headers, scripts JSON/SSE/errors, gates first-frame progression and observes socket closure; real fetch adapter and smoke test; 38b uses configured event/forEach APIs and pins dispatch-owned stream override in bytes; gateway gates recorded in pass10 report.
   - [x] Row 39 — HTTP JSON/SSE exact opaque body/header/UTF-8 bytes, closed caller headers/IP/user-agent isolation, server auth, organization exposure, validation/billing 400s, progressive first frame and paused-response cancellation; count endpoint repeats after rows 45–49 and M6 numeric HTTP repeats at row 42; gateway gates recorded in pass10 report.
-  - [ ] Row 40 — EX1 `src/native-messages.ts`, `src/errors.ts`: M6 typed size detail survives normalization/causes.
+  - [x] Row 40 — Split 40a typed measurement/result/error/cause contracts, then 40b terminal normalization and mesh regressions; <=120 lines per split including plan, EX1 approved.
+  - [x] Row 40b — Normalize status/type/code/cause 413 before retry classification, retain closed numeric evidence, fixed internal text, drop retry hints even under custom options; immutable/unsafe/cyclic/renormalization mesh regressions; gateway and mesh gates recorded in pass10 report.
+  - [x] Row 40a — Immutable validated requestBytes/limitBytes/source/lower-bound detail, typed local/native error and response measurement seam, bounded/cycle-safe cause traversal; gateway and mesh gates recorded in pass10 report.
   - [ ] Row 41 — Gateway error/classification seams: terminal 413 preserved on both wires.
   - [ ] Row 42 — `tests/request-too-large.test.ts`, EX1 `tests/native-error-metadata.test.ts`: numeric exact/lower-bound/unknown-limit envelopes.
   - [ ] Row 43 — `src/request-body-limit.ts`: streaming cap/cache; N3 incremental storage only after granted chunk bytes, never allocate from Content-Length.
