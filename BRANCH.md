@@ -64,6 +64,7 @@
   - [x] Preserve the 94 used palette values in `ui/src/tailwind-theme.css`.
   - [x] Upgrade UI Tailwind/svelte-check; CSS-first PostCSS integration for all Vite builds.
   - [x] Replace directives/config with CSS theme/source declarations and preserve custom colors and affected v3 defaults.
+  - [x] Standalone UI scan identifies patched-range updates for devalue and brace-expansion; strengthen existing override minimums without suppressions.
   - [ ] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight.
   - [ ] Regenerate root/standalone UI locks through make; commit generated locks separately.
   - [ ] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
