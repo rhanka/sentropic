@@ -108,6 +108,12 @@ const FROZEN_ERROR_MAP: Record<
     openai: { status: 413, type: 'invalid_request_error', code: 'request_too_large',
       message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
   },
+  'request-body-capacity': {
+    anthropic: { status: 503, type: 'api_error',
+      message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+    openai: { status: 503, type: 'api_error', code: 'request_body_capacity',
+      message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+  },
   'native-required': {
     anthropic: { status: 400, type: 'invalid_request_error',
       message: 'safeguards is not supported by this gateway route; retry without safeguards.' },

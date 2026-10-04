@@ -230,7 +230,7 @@
   - [x] Row 43p3 — N3 contract: check N+q against L, extend actual q bytes atomically, then allocate/copy; retained backing capacity <= grants, with no geometric slack, short views over large buffers or duplicate raw consolidation; gateway gates in pass11 report.
   - [x] N3 CL/EOF contract — Content-Length never sizes storage, reservation or N; EOF parses under exact received N, with no speculative trim. Transient transport chunk is the explicit exception and is discarded on refusal; decoded/parsed/outbound forms stay within the 8x amplification allowance.
   - [ ] N3 gates — Row 44d2 injects backing-capacity counters and paused forged-large-CL uploads in both middleware orders, verifies zero allocation before read/after failed extension and full recovery; V-3 additionally measures effective process/cgroup memory before release/edge raise.
-  - [ ] Row 43a — Shared default byte pool: reserve actual chunks before retention; typed capacity refusal.
+  - [x] Row 43a — One process-owned 32000000-byte default pool shared across routers/endpoints; zero-byte leases extend synchronously by actual q before allocation; failed extensions discard partial storage and release once; exact typed 503/api_error, Retry-After:1 and x-should-retry:true; gateway gates in pass11 report.
   - [ ] Row 43b — Lease ownership and once-only cleanup; gateway retry/cache/body references detached before shrink.
   - [ ] Row 43c — Retained retry/upload references and terminal lease transfer; native/canonical lifetime distinction.
   - [ ] Row 44 — `tests/request-body-limit.test.ts`, router integration: pre-parse cap and byte boundaries.

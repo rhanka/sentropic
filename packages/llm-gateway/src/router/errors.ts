@@ -59,6 +59,7 @@ export type GatewayFailureKind =
   | 'upstream-rate-limited'
   | 'bad-request'
   | 'request-too-large'
+  | 'request-body-capacity'
   | 'native-required'
   | 'native-max-tokens-required'
   | 'native-unavailable'
@@ -165,6 +166,12 @@ export const mapGatewayError = (
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
   switch (kind) {
+    case 'request-body-capacity': {
+      const message = 'Gateway request body capacity is temporarily exhausted; retry later.';
+      const headers = { 'Retry-After': '1', 'x-should-retry': 'true' };
+      return anthropic ? anthropicError(503, 'api_error', message, headers)
+        : openAiError(503, 'api_error', message, 'request_body_capacity', headers);
+    }
     case 'request-too-large': {
       const message = requestTooLargeMessage(requestSize);
       const headers = { 'x-should-retry': 'false' };
