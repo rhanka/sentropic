@@ -19,6 +19,7 @@ export * from './route-json-flow.js';
 export * from './route-stream-flow.js';
 export * from './native-sse.js';
 export * from './native-count-tokens.js';
+export * from './native-count-rate.js';
 export * from './native-usage.js';
 export * from './request-body-limit.js';
 export * from './request-body-pool.js';
