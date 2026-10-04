@@ -90,7 +90,7 @@ Synchronize prod identities and explicitly granted consents into preprod through
   - [x] Grant six consent columns to the reader and export consents in the identity snapshot with its count.
   - [x] Ship the versioned prod-to-preprod client map in the preprod SQL ConfigMap, absent from the relay.
   - [ ] Require four relay files and consent counts; classify consent map and postcondition failures safely.
-  - [ ] Transactionally upsert mapped prod consents and remove missing/revoked grants for prod users; retain preprod-only and unmapped grants, clients and signing keys.
+  - [x] Transactionally upsert mapped prod consents and remove missing/revoked grants for prod users; retain preprod-only and unmapped grants, clients and signing keys.
   - [ ] Audit changed upserts/removals; unchanged reruns report 0/0.
   - [ ] SQL fixtures cover owner scopes, Farid removal, preserved grants, scope changes, revocation, missing/duplicate map targets, consent rollback, DV5 and reader grants.
   - [ ] Selftest verifies new audit counts/codes, four-file manifest and ConfigMap-only map.
