@@ -104,6 +104,24 @@ export const nativeResponseBytes = (response: Response, readiness: NativeReadine
   }) };
 };
 
+/** Own the JSON reader so a readiness timeout can cancel it while a read is pending. */
+export const readNativeJson = async (response: Response, readiness: NativeReadiness): Promise<unknown> => {
+  const reader = response.body?.getReader();
+  if (!reader) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
+  const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const chunk = await readiness.race(reader.read());
+      if (chunk.done) break;
+      chunks.push(chunk.value);
+    }
+    return JSON.parse(new TextDecoder().decode(Buffer.concat(chunks)));
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+};
+
 export const nativeHttpError = async (response: Response, requestBytes: number,
   features: { requestSafeguards: boolean; sentBetas: readonly string[] }): Promise<NativeMessagesUpstreamError> => {
   let validation;
