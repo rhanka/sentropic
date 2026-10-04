@@ -60,6 +60,7 @@
   - [x] Baseline build/typecheck pass; UI tests: 83 files, 489 tests pass.
   - [x] Write `.h2a/build/lot0_report.md`; commit scoped plan and capture harness.
 - [ ] **Lot 1 — UI tooling and CSS migration**
+  - [x] Preserve the 94 used palette values in `ui/src/tailwind-theme.css`.
   - [ ] Upgrade UI Tailwind/svelte-check; CSS-first PostCSS integration for all Vite builds.
   - [ ] Replace directives/config with CSS theme/source declarations and preserve custom colors and affected v3 defaults.
   - [ ] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight.
