@@ -51,13 +51,14 @@
 - [ ] Qualify web/Chrome/VSCode artifacts and retain evidence in `.h2a/build/`.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and migration design**
+- [x] **Lot 0 — Baseline and migration design**
   - [x] Read prior investigation, new brief, MASTER/workflow/testing/security, and template.
   - [x] Verify renamed branch mechanically with `harness check branch`.
   - [x] Confirm assigned ports are free before starting services.
   - [x] Read official upgrade path; inventory CSS sources, theme tokens, changed utilities.
-  - [ ] Capture five baseline pages via `e2e/tests/06-tooling-visual-parity.spec.ts`.
-  - [ ] Write `.h2a/build/lot0_report.md`; commit scoped plan and capture harness.
+  - [x] Capture five baseline pages and computed styles via the visual parity spec; all pass.
+  - [x] Baseline build/typecheck pass; UI tests: 83 files, 489 tests pass.
+  - [x] Write `.h2a/build/lot0_report.md`; commit scoped plan and capture harness.
 - [ ] **Lot 1 — UI tooling and CSS migration**
   - [ ] Upgrade UI Tailwind/svelte-check; CSS-first PostCSS integration for all Vite builds.
   - [ ] Replace directives/config with CSS theme/source declarations and preserve custom colors and affected v3 defaults.
