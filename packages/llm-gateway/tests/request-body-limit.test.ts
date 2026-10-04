@@ -114,8 +114,7 @@ describe('N2 count refusal body ownership', () => {
         const capability = { providerId: 'anthropic', modelId: h.model, apiVersions: ['2023-06-01'], execute };
         const prepare = vi.fn(async () => kind === 'count_denied' ? undefined : capability);
         const port = { modelIds: [h.model], prepare };
-        const auth = await h.deps.config.callerAuth.verify({}, { method: 'POST',
-          url: 'https://gateway.test/v1/messages/count_tokens', requestId: 'prime-rate' });
+        const auth = await h.deps.config.callerAuth.verify();
         if (!auth.ok) throw Error('fixture caller denied');
         if (kind === 'count_rate') rate.acquire(auth.cost)();
         if (rejecting) {

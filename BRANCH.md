@@ -268,6 +268,7 @@
   - [x] Row 49-2 — HTTP default limiter shared across two routers, live-call denial/recovery, dispatch/cancel token consumption, no token charge before eligibility, full-map 503, body-owned identity inert; generation plan/quote/admission/usage/settlement/finalize/attempt hooks untouched on every outcome.
   - [x] Row 49-2b — Runtime gate 1130/0; TypeScript caught zero-argument prepare mock tuple inference; explicitly type prepare and caller verification using their public port signatures, retaining behavior and assertions.
   - [x] Row 49a — N2 named count_off/count_denied/count_rate/count_concurrency matrix: both middleware orders, repeated exact 400/429 envelopes, zero new dispatch/generation/financial/observation hooks, cleared holders, once-only baseline capacity and following generation admission; rejecting unused hooks and cleanup abort races, live count retained until host completion, final zero pool.
+  - [x] Row 49a2 — Runtime gate 1134/0; prime the injected rate using the existing zero-argument budget fixture verifier signature flagged by TypeScript; real router verification and every matrix assertion remain unchanged.
   - [ ] Row 50 — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, canonical ingress/egress/stream tests: ownership inert and canonical regressions.
   - [ ] Row 51 — `CHANGELOG.md`: native 400/header/standalone/count and JSON/SSE served-header contracts.
   - [ ] Row 52 — `CHANGELOG.md`: concurrent byte pool/retention, 413/503 and cache delta/mismatch/iterations policy.
