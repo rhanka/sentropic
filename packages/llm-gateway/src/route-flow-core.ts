@@ -273,6 +273,8 @@ export const classifyRouteError = (
     : typeof record?.status === 'number' ? record.status : undefined;
   const code = typeof record?.code === 'string' ? record.code.toLowerCase() : '';
   const retryAfterMs = typeof record?.retryAfterMs === 'number' ? record.retryAfterMs : undefined;
+  if (code === 'native_protocol_error') return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
+  if (status === 413) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
   if (status === 429 || code.includes('rate')) {
     return {
       reason: 'rate-limited', retryable: true, healthScope: 'provider-model',
