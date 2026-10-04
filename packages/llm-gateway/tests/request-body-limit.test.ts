@@ -6,7 +6,7 @@ import {
 } from '../src/index.js';
 import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
 import { NativeMessagesUpstreamError, RouteQuoteError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
-import { fixtureQuote } from './fixtures/budget.js';
+import { fixtureQuote, textResponse } from './fixtures/budget.js';
 
 const PATHS = ['/v1/messages', '/v1/chat/completions', '/v1/messages/count_tokens'];
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -352,4 +352,76 @@ describe('N2 pre-dispatch refusal matrix (count cases follow at row 49a)', () =>
     expect(response.status).toBe(401); expect(storage).not.toHaveBeenCalled();
     expect(pool.stats).toEqual({ reservedBytes: 0, liveLeases: 0, acquisitions: 0, releases: 0 });
   });
+});
+
+const fourKiBBody = (h: ReturnType<typeof nativeHarness>, stream: boolean) => {
+  const body = { ...h.request.body, safeguards: undefined, stream, padding: '' };
+  body.padding = 'x'.repeat(4096 - utf8(JSON.stringify(body)).length);
+  const bytes = utf8(JSON.stringify(body)); expect(bytes.length).toBe(4096); return bytes;
+};
+describe('default byte pool overlap on one replica', () => {
+  it.each([['product', false], ['product', true], ['standalone', false], ['standalone', true]] as const)(
+    'admits 64x4 KiB plus open native/canonical streams (%s, native=%s)', async (order, enabled) => {
+      const baseline = defaultGatewayBodyBytePool.stats;
+      expect(baseline.reservedBytes).toBe(0); expect(baseline.liveLeases).toBe(0);
+      const nativeDone = deferred(); const nativeClosed = vi.fn();
+      const open = nativeHarness({ execute: async () => {
+        let reads = 0;
+        return { kind: 'stream', status: 200, headers: {}, body: { [Symbol.asyncIterator]: () => ({
+          next: async () => ++reads === 1 ? { done: false, value: nativeStart('claude-sonnet-5') }
+            : (await nativeDone.promise, { done: true, value: undefined }),
+          return: async () => { nativeClosed(); nativeDone.resolve(); return { done: true, value: undefined }; },
+        }) } };
+      } });
+      const sdkHolders = new Set<unknown>(); const canonicalClosed = vi.fn();
+      open.attempt.stream = async request => {
+        let holder: unknown = request;
+        sdkHolders.add(holder); const done = deferred(); let reads = 0;
+        return { [Symbol.asyncIterator]: () => ({
+          next: async (): Promise<IteratorResult<StreamEvent>> => ++reads === 1
+            ? { done: false, value: { type: 'content_delta', data: { delta: 'first' } } }
+            : (await done.promise, { done: true, value: undefined }),
+          return: async () => { sdkHolders.delete(holder); holder = undefined; canonicalClosed(); done.resolve(); return { done: true, value: undefined }; },
+        }) };
+      };
+      const openOwners: CheckedGatewayBody[] = [];
+      const openApp = limitedRouter(open, {}, order, openOwners, { nativeMessagesEnabled: enabled });
+      const openBody = fourKiBBody(open, true);
+      const messages = await openApp.request(bodyRequest([openBody], PATHS[0], { 'anthropic-beta': 'future-feature' }).raw);
+      const chat = await openApp.request(bodyRequest([openBody], PATHS[1]).raw);
+      expect(messages.status).toBe(200); expect(chat.status).toBe(200);
+      const retained = enabled ? 4096 : 8192;
+      expect(sdkHolders.size).toBe(enabled ? 1 : 2);
+      expect(defaultGatewayBodyBytePool.stats.reservedBytes).toBe(retained);
+      expect(openOwners.map(owner => owner.lease.bytes)).toEqual(enabled ? [0, 4096] : [4096, 4096]);
+      const allEntered = deferred(); const allow = deferred(); let entered = 0;
+      const enter = async () => { if (++entered === 64) allEntered.resolve(); await allow.promise; };
+      const h = nativeHarness(); h.attempt.generate = textResponse({ inputTokens: 2, outputTokens: 1 });
+      const config = { ...h.deps.config, callerAuth: { async verify() { await enter(); return h.deps.config.callerAuth.verify(); } } };
+      const apps = Array.from({ length: 4 }, () => {
+        const app = limitedRouter(h, {}, order, [], { config, nativeMessagesEnabled: enabled });
+        // Count handler is an ingress-only stub; row 49a owns the actual count refusal matrix.
+        app.post(PATHS[2]!, async c => { await enter(); return c.json({ input_tokens: 1 }); });
+        return app;
+      });
+      const body = fourKiBBody(h, false);
+      const pending = Array.from({ length: 64 }, (_, index) => apps[index % apps.length]!
+        .request(bodyRequest([body], PATHS[index % 3], { 'anthropic-beta': 'future-feature' }).raw));
+      await allEntered.promise;
+      expect(defaultGatewayBodyBytePool.stats.reservedBytes).toBe(retained + 262144);
+      expect(defaultGatewayBodyBytePool.stats.liveLeases).toBe(66);
+      expect(defaultGatewayBodyBytePool.stats.reservedBytes).toBeLessThan(defaultGatewayBodyBytePool.capacityBytes);
+      expect(h.recorder.admitted).toEqual([]); expect(h.execute).not.toHaveBeenCalled();
+      allow.resolve(); const responses = await Promise.all(pending);
+      expect(responses.map(response => response.status)).toEqual(Array(64).fill(200));
+      expect(defaultGatewayBodyBytePool.stats.reservedBytes).toBe(retained);
+      expect(nativeClosed).not.toHaveBeenCalled(); expect(canonicalClosed).not.toHaveBeenCalled();
+      expect((await apps[0]!.request(bodyRequest([body], PATHS[0], { 'anthropic-beta': 'future-feature' }).raw)).status).toBe(200);
+      expect((await apps[1]!.request(bodyRequest([body], PATHS[2]).raw)).status).toBe(200);
+      await Promise.all([messages.body!.cancel(), chat.body!.cancel()]);
+      expect(sdkHolders.size).toBe(0); expect(canonicalClosed).toHaveBeenCalledTimes(enabled ? 1 : 2);
+      expect(nativeClosed).toHaveBeenCalledTimes(enabled ? 1 : 0);
+      expect(defaultGatewayBodyBytePool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0,
+        acquisitions: baseline.acquisitions + 68, releases: baseline.releases + 68 });
+    });
 });
