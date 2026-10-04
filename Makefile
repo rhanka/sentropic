@@ -507,7 +507,7 @@ api-tool-version: ## Print the content-addressed CI toolbox tag
 
 .PHONY: test-ci-api-tooling
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
-	@bash scripts/ci/test-api-tooling.sh $(or $(CI_TOOLING_CASE),all)
+	@bash scripts/test-api-tooling.sh $(or $(CI_TOOLING_CASE),all)
 
 build-api-tool-image: ## Reuse the toolbox locally or from the registry; build only on a cache miss
 	@if docker image inspect $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
@@ -559,8 +559,8 @@ publish-api-image: docker-login
 	fi
 	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
 
-.PHONY: publish-api-main
-publish-api-main: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
+.PHONY: publish-api-main-image
+publish-api-main-image: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
 	docker tag $(API_IMAGE_REF) $(REGISTRY)/$(API_IMAGE_NAME):main
 	docker push $(REGISTRY)/$(API_IMAGE_NAME):main
 

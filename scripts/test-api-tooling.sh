@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/.."
 mkdir -p .h2a/build
 scratch=$(mktemp -d .h2a/build/tooling-test.XXXXXX)
 probe=tools/ci-tooling-hash-probe.txt
