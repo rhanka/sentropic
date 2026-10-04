@@ -38,6 +38,7 @@ Make a failed preprod import self-explaining in CI (PII-free failure code in the
 ## Feedback Loop
 - `attention` context: run 37204934129 failed by design (empty `ALLOWED_REKEY`, re-key guard) but CI only printed `audit unavailable`; `run.selftest.mjs:89` printed an audit-shaped fixture (`rekeyed 0`, `rekey_pairs []`) that was mistaken for a real audit.
 - `acknowledge` resolved locally by DEV on 2026-10-04: validated failure codes and UUID-only pairs replace the failed-Job audit fallback; the selftest output probe passes without fixture audits or summaries. Lot 3 remains with the conductor.
+- `acknowledge` review follow-up resolved by DEV on 2026-10-04: F1–F4/F6–F9 fixed and tested; F5 retained per conductor decision. Review evidence: `.h2a/inputs/review-br45b.md`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -71,8 +72,9 @@ Make a failed preprod import self-explaining in CI (PII-free failure code in the
   - [x] `run.selftest.mjs`: no fixture audit or summary is printed to stdout/stderr; fixture values made visibly synthetic (e.g. `synced_users: 101`, UUIDs `00000000-0000-4000-8000-00000000000x`).
   - [x] Selftest assertion that the selftest's own output contains no line starting with `{"outcome"`.
   - [x] Lot gate: `make test-idp-sync-selftest ENV=test-idp-sync-codes`.
+  - [x] Review follow-up: snapshot EOF/CR handling, unset allowlist, pair filtering, final import-container verdict, failure-code coverage and import control flow.
 
 - [ ] **Lot 3 — Final validation**
-  - [ ] gemini cross-review recorded; auth review.
+  - [x] gemini cross-review recorded; auth review.
   - [ ] CI green on the PR.
   - [ ] Remove `BRANCH.md` before merge.

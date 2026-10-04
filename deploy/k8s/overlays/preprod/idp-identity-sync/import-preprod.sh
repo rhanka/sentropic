@@ -18,10 +18,12 @@ sql_failure() {
   fi
   if [ "$code" = rekey_not_allowed ]; then
     uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
-    pairs=$(sed -n 's/^.*ERROR:  re-key not covered by allowed_rekey: //p' /work/import-error.log | tr ',' '\n' |
+    pairs=$(sed -n 's/^.*ERROR:  re-key not covered by allowed_rekey: //p' /work/import-error.log | tr ',' '\n' | {
+      sep=''
       while IFS= read -r pair; do
-        if printf '%s\n' "$pair" | grep -Eq "^$uuid>$uuid$"; then printf '%s"%s"' "${sep:-}" "$pair"; sep=,; fi
-      done)
+        if printf '%s\n' "$pair" | grep -Eq "^$uuid>$uuid$"; then printf '%s"%s"' "$sep" "$pair"; sep=,; fi
+      done
+    })
     fail "$code" ",\"rejected_rekey_pairs\":[$pairs]"
   fi
   fail "$code"
@@ -31,14 +33,16 @@ case "${MAX_SNAPSHOT_AGE_S:-}" in ''|*[!0-9]*) fail invalid_age_limit ;; esac
 # The relay contains exactly these three files; refuse paths outside the input set.
 awk 'NF != 2 || $1 !~ /^[a-f0-9]+$/ || length($1) != 64 || ($2 != "users.csv" && $2 != "webauthn.csv" && $2 != "snapshot.csv") {exit 1} {seen[$2]++} END {if (NR != 3 || seen["users.csv"] != 1 || seen["webauthn.csv"] != 1 || seen["snapshot.csv"] != 1) exit 1}' SHA256SUMS 2>/work/manifest-error.log || fail invalid_manifest
 sha256sum -c SHA256SUMS > /work/check.log 2>&1 || fail integrity_failed
-IFS=, read -r snap_ts nu nw < snapshot.csv || fail invalid_counts
+IFS=, read -r snap_ts nu nw < snapshot.csv || [ -n "$nw" ] || fail invalid_counts
+cr=$(printf '\r')
+snap_ts=${snap_ts%"$cr"}; nu=${nu%"$cr"}; nw=${nw%"$cr"}
 case "$nu" in ''|*[!0-9]*) fail invalid_counts ;; esac
 case "$nw" in ''|*[!0-9]*) fail invalid_counts ;; esac
 snapshot_epoch=$(date -u -d "${snap_ts%%.*}" +%s 2>/work/date.log) || fail invalid_timestamp
 age=$(( $(date -u +%s) - snapshot_epoch ))
 [ "$age" -ge 0 ] && [ "$age" -le "$MAX_SNAPSHOT_AGE_S" ] || fail stale_snapshot
 # SQL errors can contain row values: never forward raw stderr or unfiltered rows.
-psql -XAtq -v ON_ERROR_STOP=1 -v dry_run="$DRY_RUN" -v allowed_rekey="$ALLOWED_REKEY" \
+psql -XAtq -v ON_ERROR_STOP=1 -v dry_run="$DRY_RUN" -v allowed_rekey="${ALLOWED_REKEY:-}" \
   -v expected_users="$nu" -v expected_webauthn="$nw" -f /sql/import-preprod.sql \
   > /work/audit.log 2>/work/import-error.log || sql_failure
 awk -F '|' '
