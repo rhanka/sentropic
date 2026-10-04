@@ -595,7 +595,7 @@
         />
         <button
           type="button"
-          class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/30"
           title={$_('folders.export.xlsx.label')}
           aria-label={$_('folders.export.xlsx.label')}
           on:click={handleExportXlsx}
@@ -685,7 +685,7 @@
 
       <article
         {...(canClick ? { role: 'button', tabindex: 0 } : {})}
-        class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}"
+        class="rounded border border-slate-200 bg-white shadow-xs transition-shadow group flex flex-col h-full {(isDetailing || isGenerating) ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}"
         on:click={() => canClick && handleUseCaseClick(useCase.id, useCase.status || 'completed')}
         on:keydown={(e) => {
           if (canClick && (e.key === 'Enter' || e.key === ' ')) {
@@ -704,7 +704,7 @@
           </div>
           {#if !isReadOnly}
             <button
-              class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
               on:click|stopPropagation={() => handleDeleteUseCase(useCase.id)}
               title={$_('common.delete')}
             >
@@ -735,9 +735,9 @@
                     <div class="flex items-center gap-0.5">
                       {#each range(5) as i (i)}
                         {#if i < valueStars}
-                          <Star class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400 fill-yellow-400 flex-shrink-0" />
+                          <Star class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400 fill-yellow-400 shrink-0" />
                         {:else}
-                          <Star class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-300 flex-shrink-0" />
+                          <Star class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-300 shrink-0" />
                         {/if}
                       {/each}
                     </div>
@@ -760,9 +760,9 @@
                     <div class="flex items-center gap-0.5">
                       {#each range(5) as i (i)}
                         {#if i < complexityStars}
-                          <X class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 flex-shrink-0" />
+                          <X class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 shrink-0" />
                         {:else}
-                          <Minus class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-300 flex-shrink-0" />
+                          <Minus class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-300 shrink-0" />
                         {/if}
                       {/each}
                     </div>
@@ -809,7 +809,7 @@
             {/if}
             {#if isDetailing}
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
-                <Loader2 class="w-3 h-3 mr-1 animate-spin flex-shrink-0" />
+                <Loader2 class="w-3 h-3 mr-1 animate-spin shrink-0" />
                 {$_('usecase.status.detailingShort')}
               </span>
             {:else if isDraft}

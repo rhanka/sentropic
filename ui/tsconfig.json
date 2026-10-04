@@ -4,7 +4,6 @@
     "moduleResolution": "bundler",
     "module": "ESNext",
     "target": "ES2022",
-    "importsNotUsedAsValues": "error",
     "allowJs": true,
     "checkJs": false,
     "esModuleInterop": true,
