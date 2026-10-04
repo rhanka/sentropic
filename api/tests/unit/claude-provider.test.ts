@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { channel } from 'node:diagnostics_channel';
 
 // Mock the Anthropic SDK before importing the provider
 const mockAnthropicCreate = vi.fn();
@@ -51,6 +52,15 @@ const nativeRequest = (extra: Record<string, unknown> = {}) => ({
   signal: new AbortController().signal,
   headers: { anthropicVersion: '2023-06-01', forwarded: {} as Record<string, string> },
 });
+const mockNativeResponse = (response: Response) => vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+  const request = {};
+  channel('undici:request:create').publish({ request });
+  const reader = (init.body as ReadableStream<Uint8Array>).getReader();
+  try { while (!(await reader.read()).done) { /* Fake outbound transport drains bytes. */ } }
+  finally { reader.releaseLock(); }
+  channel('undici:request:bodySent').publish({ request });
+  return response;
+}));
 
 describe('ClaudeProviderRuntime', () => {
   let runtime: ClaudeProviderRuntime;
@@ -133,6 +143,75 @@ describe('ClaudeProviderRuntime', () => {
     await withNativeHttp((_request, response) => response.end(JSON.stringify({ input_tokens })), async () => {
       await expect(runtime.nativeCountTokens(nativeRequest())).rejects.toMatchObject({ status: 503, code: 'native_protocol_error' });
     });
+  });
+
+  it('times out before response headers without an SDK retry', async () => {
+    vi.useFakeTimers();
+    const upstream = vi.fn((_url, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+    }));
+    vi.stubGlobal('fetch', upstream);
+    const result = runtime.nativeMessages(nativeRequest()).catch(error => error);
+    await vi.advanceTimersByTimeAsync(55_000);
+    expect(await result).toMatchObject({ code: 'timeout', status: 504 });
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['messages', 'count_tokens'] as const)('bounds %s JSON readiness after headers and cancels its reader', async operation => {
+    vi.useFakeTimers();
+    const cancelled = vi.fn();
+    mockNativeResponse(new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('{"input_tokens":')); },
+      cancel: cancelled,
+    })));
+    const result = (operation === 'messages' ? runtime.nativeMessages(nativeRequest())
+      : runtime.nativeCountTokens(nativeRequest())).catch(error => error);
+    await vi.advanceTimersByTimeAsync(55_000);
+    expect(await result).toMatchObject({ code: 'timeout', status: 504 });
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('clears readiness on a complete non-error frame and retains caller abort afterwards', async () => {
+    vi.useFakeTimers();
+    const cancelled = vi.fn();
+    const caller = new AbortController();
+    const bytes = new TextEncoder().encode('event: message_start\ndata: {"type":"message_start","text":"é"}\n\n');
+    const response = new Response(new ReadableStream({ start(controller) { controller.enqueue(bytes); }, cancel: cancelled }));
+    const deadline = nativeReadiness(caller.signal);
+    const iterator = nativeResponseBytes(response, deadline)[Symbol.asyncIterator]();
+    expect((await iterator.next()).value).toEqual(bytes);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(55_000);
+    expect(deadline.signal.aborted).toBe(false);
+    const pending = iterator.next().catch(error => error);
+    caller.abort();
+    expect(await pending).toMatchObject({ name: 'AbortError' });
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear readiness for an error frame and closes an unconsumed reader', async () => {
+    vi.useFakeTimers();
+    const cancelled = vi.fn();
+    const response = new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('event: error\ndata: {"type":"error"}\n\n')); },
+      cancel: cancelled,
+    }));
+    const iterator = nativeResponseBytes(response, nativeReadiness(new AbortController().signal))[Symbol.asyncIterator]();
+    await iterator.next();
+    expect(vi.getTimerCount()).toBe(1);
+    await iterator.return?.();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('rejects measured local oversize before native fetch with numeric size only', async () => {
+    const upstream = vi.fn();
+    vi.stubGlobal('fetch', upstream);
+    await expect(runtime.nativeCountTokens(nativeRequest({ padding: 'x'.repeat(32_000_000) })))
+      .rejects.toMatchObject({ status: 413, requestSize: { limitBytes: 32_000_000, source: 'gateway' } });
+    expect(upstream).not.toHaveBeenCalled();
   });
 
   it.each(['messages', 'count_tokens'] as const)('relays native %s JSON through fake HTTP after upload completion', async operation => {

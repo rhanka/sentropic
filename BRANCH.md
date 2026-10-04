@@ -120,6 +120,7 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
+- [x] Row 65a2 JSON cleanup — Deterministic fake-response repro: 39 passed / 2 failed; `Response.json()` kept its reader locked after timeout. Explicit JSON-reader ownership restores cancellation/release for Messages and count without timeout changes; both permanent regressions retained.
 - [x] Row 58 green-commit decision — Conductor approved moving minimal literal updates for exactly seven failed cluster assertions from rows 59–60 into T1; includes the remaining version pins within those same cases. Keep T1 <=149 changed lines including this file; all remaining T2 expectations stay in rows 59–60.
 - [x] Pass 11 P2 — v8-addendum review MINOR applied before row 43: N3 storage is incremental after granted actual chunk bytes; Content-Length never sizes storage/reservations, raw backing capacity never exceeds grants and EOF performs no duplicate raw consolidation.
 - [x] Pass 09 terminal contract cleanup — implementer reproduced 2 failures: wrong stream-kind JSON result and invalid-status stream envelope left the returned reader open. Reader ownership now attaches before validation without pulling bytes; terminal snapshot is claimed before cleanup; permanent per-flow regression requires one close/finalize/settlement. Gateway gates and Gemini fix re-review recorded in pass09 report.
@@ -338,8 +339,9 @@
   - [x] Row 62b split — Raw fetch waits for transport completion/cancellation before detaching measured body holders; fake-HTTP JSON/byte/auth smoke verifies the real seam; typecheck PASS, Claude tests 18 passed / 0 failed.
   - [x] Row 63 — Raw count_tokens without callback/SDK/retry, safe count, nonempty body model and measured outgoing 32,000,000-byte guard; typecheck PASS, Claude tests 19 passed / 0 failed.
   - [x] Row 64 — Fixed 55,000-ms deadline through upload/JSON/first complete non-error SSE frame, caller abort and reader/timer cleanup; typecheck PASS, Claude tests 20 passed / 0 failed including partial-frame timeout.
-  - [ ] Row 65a — `api/tests/unit/claude-provider.test.ts`: fake HTTP auth, headers, count, byte measurement, errors and deadline cases.
+  - [x] Row 65a — `api/tests/unit/claude-provider.test.ts`: fake HTTP auth, headers, count, byte measurement, errors and deadline cases; split 65a1/65a2.
   - [x] Row 65a1 split — Fake HTTP Bearer/header fidelity, eight no-retry statuses, bounded validation/billing and invalid count cases; typecheck PASS, Claude tests 35 passed / 0 failed; 65a2 covers deadline/abort/size.
+  - [x] Row 65a2 split — Fixed-timeout before headers/through JSON, frame readiness, post-ready abort, reader/timer closure and oversize before fetch; typecheck PASS, Claude tests 41 passed / 0 failed after owned-JSON-reader fix.
   - [ ] Row 65b — Same file: counted body/serialization/closure holders, open native stream, early response/upload cancellation and JSON/count release (N1).
   - [ ] Row 66 — `anthropic-native.ts`: trusted credential/account availability, execute-time acquisition/null lease, native and count ports; no host request capture.
   - [ ] Row 67 — Attempt-bound body-free finalize callback; `cost-ledger-sink.ts` invariant; observation projects only the immutable gateway snapshot (K5/L4).
