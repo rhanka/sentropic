@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { GatewayError, SAFEGUARDS_NOT_SUPPORTED_MESSAGE, runNativeCountTokens,
+  parseNativeErrorDetail, CLASSIFIER_BETA, DANGEROUS_TOOL_BETA, NATIVE_BILLING_MASKED_MESSAGE,
   type NativeCountTokensResult } from '../src/index.js';
 import { COUNT_COST, countHarness, sendCount } from './fixtures/native-count.js';
 
@@ -56,6 +58,55 @@ describe('native count authentication, switch and model gates', () => {
     expect(response.status).toBe(404); expect(await response.json()).toEqual({ type: 'error',
       error: { type: 'not_found_error', message: 'Unknown model: "absent"' } });
     expect(h.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('count native errors are terminal and sanitized', () => {
+  it.each([
+    ['messages.0.content.0.clear_at: invalid value', undefined, false, 'messages.0.content.0.clear_at: invalid value'],
+    [`Unsupported beta: ${DANGEROUS_TOOL_BETA}`, DANGEROUS_TOOL_BETA, true, `Unsupported beta: ${DANGEROUS_TOOL_BETA}`],
+    [`Unexpected value(s) ${CLASSIFIER_BETA} for the anthropic-beta header`, CLASSIFIER_BETA, true, SAFEGUARDS_NOT_SUPPORTED_MESSAGE],
+    [`Unsupported beta: ${CLASSIFIER_BETA}`, 'other-beta', true, `Unsupported beta: ${CLASSIFIER_BETA}`],
+    ['Your credit balance is too low; purchase credits', undefined, true, NATIVE_BILLING_MASKED_MESSAGE],
+    ['Your organization does not have access to fallback-credit-2026-06-01', undefined, false,
+      'Your organization does not have access to fallback-credit-2026-06-01'],
+    ['bad\u0000 field\nvalue', undefined, false, 'bad fieldvalue'],
+  ] as const)('reuses bounded native validation policy: %s', async (message, beta, safeguards, expected) => {
+    const h = countHarness({}, async request => {
+      const validation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message } }), 400,
+        { requestSafeguards: Object.hasOwn(request.body, 'safeguards'), sentBetas: [request.headers.forwarded['anthropic-beta'] ?? ''] });
+      throw new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation });
+    });
+    const response = await sendCount(h, { model: h.model, ...(safeguards ? { safeguards: {} } : {}) },
+      beta === undefined ? {} : { 'anthropic-beta': beta });
+    expect(response.status).toBe(400); expect(await response.json()).toEqual({ type: 'error',
+      error: { type: 'invalid_request_error', message: expected } });
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(response.headers.has('x-sentropic-relay')).toBe(false);
+    expect(h.h.recorder.settlements).toEqual([]); expect(h.h.finalize).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 404, 413, 429, 500, 503, 529])('makes one call for upstream %s with no error-header forwarding', async status => {
+    const h = countHarness({}, async () => {
+      const error = new NativeMessagesUpstreamError({ status, retryAfterMs: 2500,
+        ...(status === 413 ? { requestSize: { requestBytes: 50, limitBytes: 32, source: 'gateway' as const, sizeIsLowerBound: false } } : {}) });
+      Object.assign(error, { headers: { 'anthropic-organization-id': 'secret-org', 'x-sentropic-request-id': 'spoof',
+        'set-cookie': 'secret-cookie', 'retry-after': '999' } });
+      throw error;
+    });
+    const response = await sendCount(h); const expectedStatus = status === 403 ? 401 : status >= 500 ? 503 : status;
+    expect(response.status).toBe(expectedStatus); const body = await response.json() as { error: { type: string; message: string } };
+    expect(body.error.type).toBe(status === 401 || status === 403 ? 'authentication_error'
+      : status === 404 ? 'not_found_error' : status === 413 ? 'request_too_large'
+        : status === 429 ? 'rate_limit_error' : 'overloaded_error');
+    if (status === 413) expect(body.error.message).toBe('Request size is 50 bytes and exceeds limit 32 bytes.');
+    if (status === 404) expect(body.error.message).toBe(`Unknown model: ${JSON.stringify(h.model)}`);
+    expect(response.headers.get('retry-after')).toBe(status === 429 ? '3' : null);
+    expect(response.headers.get('x-should-retry')).toBe(status === 413 ? 'false' : null);
+    expect(response.headers.get('x-sentropic-request-id')).toBe('req-count');
+    for (const name of ['anthropic-organization-id', 'set-cookie', 'x-sentropic-relay', 'x-sentropic-served']) {
+      expect(response.headers.has(name)).toBe(false);
+    }
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(h.h.calls.plan).toEqual([]);
+    expect(h.h.recorder.events).toEqual([]); expect(h.h.recorder.settlements).toEqual([]);
   });
 });
 
