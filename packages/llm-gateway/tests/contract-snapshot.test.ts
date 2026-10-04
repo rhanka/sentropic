@@ -102,6 +102,12 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
     openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
+  'request-too-large': {
+    anthropic: { status: 413, type: 'request_too_large',
+      message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+    openai: { status: 413, type: 'invalid_request_error', code: 'request_too_large',
+      message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+  },
   'native-required': {
     anthropic: { status: 400, type: 'invalid_request_error',
       message: 'safeguards is not supported by this gateway route; retry without safeguards.' },

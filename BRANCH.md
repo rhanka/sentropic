@@ -210,7 +210,8 @@
   - [x] Row 40 — Split 40a typed measurement/result/error/cause contracts, then 40b terminal normalization and mesh regressions; <=120 lines per split including plan, EX1 approved.
   - [x] Row 40b — Normalize status/type/code/cause 413 before retry classification, retain closed numeric evidence, fixed internal text, drop retry hints even under custom options; immutable/unsafe/cyclic/renormalization mesh regressions; gateway and mesh gates recorded in pass10 report.
   - [x] Row 40a — Immutable validated requestBytes/limitBytes/source/lower-bound detail, typed local/native error and response measurement seam, bounded/cycle-safe cause traversal; gateway and mesh gates recorded in pass10 report.
-  - [ ] Row 41 — Gateway error/classification seams: terminal 413 preserved on both wires.
+  - [ ] Row 41 — Split 41a public numeric mapping/classification, 41b native/canonical flow propagation, 41c canonical stream callback preservation; <=130 lines per split including plan.
+  - [x] Row 41a — Exact/lower-bound/unknown-limit numeric messages, both provider envelopes and no-retry headers, 413-before-auth/rate/overload precedence and terminal helper; exhaustive contract snapshot updated; gateway gates recorded in pass10 report.
   - [ ] Row 42 — `tests/request-too-large.test.ts`, EX1 `tests/native-error-metadata.test.ts`: numeric exact/lower-bound/unknown-limit envelopes.
   - [ ] Row 43 — `src/request-body-limit.ts`: streaming cap/cache; N3 incremental storage only after granted chunk bytes, never allocate from Content-Length.
   - [ ] Row 43p1 — N1 contract: native host upload completes/cancels and detaches before result; canonical streams retain full N until terminal cleanup.

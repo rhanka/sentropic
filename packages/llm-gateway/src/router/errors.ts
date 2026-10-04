@@ -22,6 +22,8 @@ import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
 import * as mesh from '@sentropic/llm-mesh';
 import type { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import { requestTooLargeDetail, type RequestSizeDetail } from '@sentropic/llm-mesh';
+import { requestTooLargeMessage } from '../request-too-large.js';
 import { NativeSseUpstreamError } from '../native-stream-errors.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 import {
@@ -56,6 +58,7 @@ export type GatewayFailureKind =
   | 'upstream-auth-failed'
   | 'upstream-rate-limited'
   | 'bad-request'
+  | 'request-too-large'
   | 'native-required'
   | 'native-max-tokens-required'
   | 'native-unavailable'
@@ -74,6 +77,7 @@ export class GatewayError extends Error {
     readonly servedTarget?: ResolvedTarget,
     /** Public validation detail for native 400 fidelity; excluded from logs/ledgers. */
     readonly validation?: NativeValidationPublicDetail,
+    readonly requestSize?: RequestSizeDetail,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -156,10 +160,17 @@ export const mapGatewayError = (
   retryAfterSeconds?: number,
   requestedModel?: string,
   validation?: NativeValidationPublicDetail,
+  requestSize?: RequestSizeDetail,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
   switch (kind) {
+    case 'request-too-large': {
+      const message = requestTooLargeMessage(requestSize);
+      const headers = { 'x-should-retry': 'false' };
+      return anthropic ? anthropicError(413, 'request_too_large', message, headers)
+        : openAiError(413, 'invalid_request_error', message, 'request_too_large', headers);
+    }
     case 'native-required':
     case 'native-unavailable': {
       const message = anthropic
@@ -241,8 +252,10 @@ export const toProviderShapedError = (
   requestedModel?: string,
 ): ProviderShapedError => {
   if (error instanceof GatewayError) {
-    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, error.validation);
+    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, error.validation, error.requestSize);
   }
+  const tooLarge = requestTooLargeDetail(error);
+  if (tooLarge) return mapGatewayError(wire, 'request-too-large', undefined, requestedModel, undefined, tooLarge.requestSize);
   if (isNativeMessagesUpstreamError(error)) {
     if (error instanceof NativeSseUpstreamError && (error.status === 500 || error.status === 529)) {
       return wire === 'anthropic-messages'
@@ -265,11 +278,6 @@ export const toProviderShapedError = (
     if (error.status === 404) return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
     if (error.status === 429) return mapGatewayError(wire, 'upstream-rate-limited',
       error.retryAfterMs === undefined ? undefined : error.retryAfterMs / 1000);
-    if (error.status === 413) {
-      const type = 'request_too_large';
-      return wire === 'anthropic-messages' ? anthropicError(error.status, type, 'upstream request failed')
-        : openAiError(error.status, type, 'upstream request failed');
-    }
   }
   const diagnostic = error && typeof error === 'object'
     ? (error as { diagnostic?: {
@@ -312,6 +320,13 @@ export const toProviderShapedError = (
   return wire === 'anthropic-messages'
     ? anthropicError(503, 'overloaded_error', 'service temporarily unavailable')
     : openAiError(503, 'rate_limit_error', 'service temporarily unavailable', 'overloaded');
+};
+
+/** Preserve the numeric refusal through operational/financial callback failures. */
+export const gatewayRequestTooLargeError = (error: unknown, target?: ResolvedTarget): GatewayError | undefined => {
+  const detail = requestTooLargeDetail(error);
+  return detail ? new GatewayError('request-too-large', 'Request body is too large', undefined,
+    target, undefined, detail.requestSize) : undefined;
 };
 
 /** Map a gateway condition to a provider-shaped error for the given wire (spec §3b). */
