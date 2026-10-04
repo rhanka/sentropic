@@ -75,6 +75,7 @@ const main = async (): Promise<void> => {
   // the product e2e suite uses) so the prod security headers stay UNCHANGED.
   const browser = await chromium.launch({
     headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     args: [
       '--no-sandbox',
       '--disable-dev-shm-usage',
