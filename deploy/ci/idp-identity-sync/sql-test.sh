@@ -75,6 +75,11 @@ mkdir -p /work /sql
 ln -s "$import" /sql/import-preprod.sql
 cp "$map" /sql/client-map.csv
 sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
+refresh_relay() {
+  sql -d app -U idp_identity_reader -f "$prod/export-prod.sql"
+  IFS=, read -r snapshot users credentials consents < snapshot.csv
+  sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
+}
 wrapper() {
   (
     export PGDATABASE=preprod DRY_RUN="${WRAPPER_DRY_RUN-1}" ALLOWED_REKEY="${WRAPPER_REKEY-$pair}" MAX_SNAPSHOT_AGE_S="${WRAPPER_AGE-7200}"
@@ -101,6 +106,33 @@ grep -Fq '"consents_removed":1' /dev/termination-log
 grep -Fq '"old_id":"9f11d240-fc75-4d55-80be-1bafcd79eadb"' /dev/termination-log
 unchanged
 echo 'PASS: actual pod import wrapper emits safe rolled-back JSON audit'
+cp /sql/client-map.csv map.original
+for mode in missing duplicate; do
+  cp "$map" /sql/client-map.csv
+  if [ "$mode" = missing ]; then sed 's/radar-immobilier-preprod/missing-client/' "$map" > /sql/client-map.csv; else tail -n 1 "$map" >> /sql/client-map.csv; fi
+  reject_wrapper consent_client_missing
+done
+mv map.original /sql/client-map.csv
+sql -d preprod -c "CREATE FUNCTION test_consent_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN NEW.scopes := ARRAY['unexpected']; RETURN NEW; END \$\$; CREATE TRIGGER test_consent_tamper BEFORE INSERT OR UPDATE ON oauth_consents FOR EACH ROW EXECUTE FUNCTION test_consent_tamper();"
+reject_wrapper consent_postcondition_failed
+sql -d preprod -c 'DROP TRIGGER test_consent_tamper ON oauth_consents; DROP FUNCTION test_consent_tamper();'
+cp SHA256SUMS checksums.original
+sed '/ consents.csv$/d' checksums.original > SHA256SUMS
+reject_wrapper invalid_manifest
+cp checksums.original SHA256SUMS
+sha256sum /sql/client-map.csv | sed 's@/sql/@@' >> SHA256SUMS
+reject_wrapper invalid_manifest
+mv checksums.original SHA256SUMS
+cp consents.csv consents.original
+printf 'tampered\n' >> consents.csv
+reject_wrapper integrity_failed
+mv consents.original consents.csv
+cp snapshot.csv snapshot.original
+printf '%s,8,18,2\n' "$snapshot" > snapshot.csv
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
+reject_wrapper manifest_mismatch
+mv snapshot.original snapshot.csv
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 WRAPPER_DRY_RUN=invalid reject_wrapper invalid_dry_run
 WRAPPER_AGE=invalid reject_wrapper invalid_age_limit
 WRAPPER_UNSET_REKEY=1 reject_wrapper rekey_not_allowed
@@ -205,3 +237,31 @@ WRAPPER_UNSET_REKEY=1 wrapper
 grep -Fq '"rekeyed":0' /dev/termination-log
 unchanged
 echo 'PASS: unset allowlist remains valid without collisions'
+stage=consent-scope-change
+sql -d app -c "UPDATE oauth_consents SET scopes = ARRAY['openid'], updated_at = '2026-10-03'"
+refresh_relay
+wrapper
+grep -Fq '"consents_upserted":1' /dev/termination-log
+grep -Fq '"consents_removed":0' /dev/termination-log
+unchanged
+sync -v dry_run=0
+assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid'] AND updated_at = '2026-10-03' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod scope change applied')"
+assert_sql 'UPDATE test_before SET state = test_state()'
+sync -v dry_run=0
+grep -Fxq 'consents_upserted|0' /tmp/sql.log
+grep -Fxq 'consents_removed|0' /tmp/sql.log
+unchanged
+echo 'PASS: consent scope change rolls back in dry-run, commits and reruns as 0/0'
+stage=consent-tenant-and-revocation
+sql -d app -c "INSERT INTO oauth_consents (user_id, client_id, tenant_id, scopes) VALUES ('1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'radar-immobilier', 'other-tenant', ARRAY['openid', 'email'])"
+refresh_relay
+sync -v dry_run=0
+assert_sql "SELECT test_assert((SELECT scopes = ARRAY['openid', 'email'] FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'other-tenant'), 'consent tenant preserved')"
+sql -d app -c "DELETE FROM oauth_consents WHERE tenant_id = 'sentropic'"
+refresh_relay
+sync -v dry_run=0
+grep -Fxq 'consents_upserted|0' /tmp/sql.log
+grep -Fxq 'consents_removed|1' /tmp/sql.log
+assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod revocation applied'); SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE tenant_id = 'other-tenant') = 1, 'other tenant grant retained')"
+assert_sql 'SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), '\''protected clients, keys and grants unchanged'\'')'
+echo 'PASS: tenant grants remain separate; prod revocation removes only its mapped grant'

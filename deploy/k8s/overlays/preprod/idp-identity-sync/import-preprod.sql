@@ -1,12 +1,13 @@
 -- Preprod-side identity sync: prod users + webauthn public keys -> preprod IdP DB (model A:
 -- same user IDs as prod). Idempotent; one transaction; fail-closed (any violation => ROLLBACK).
--- Runs in ns `sentropic-preprod` with cwd=/work/in holding users.csv / webauthn.csv / snapshot.csv
+-- Runs in ns `sentropic-preprod` with cwd=/work/in holding users, WebAuthn, consents and snapshot CSVs
 -- fetched from the S3 relay (written by the PROD export CronJob) and checked against SHA256SUMS.
 -- psql variables: -v dry_run=1 (default) rolls back at the end; -v dry_run=0 commits.
 --
 -- NEVER touched (DV5): oauth_clients (incl. radar-immobilier-preprod), id_token_signing_keys,
--- oauth codes/tokens/consents, and sessions/challenges/magic-links of any user EXCEPT the
+-- oauth codes/tokens, and sessions/challenges/magic-links of any user EXCEPT the
 -- preprod-only duplicates being re-keyed (their ephemeral auth artefacts are dropped).
+-- Mapped consents of imported users mirror prod in step 6.
 -- Additive: preprod-only users with no email collision are kept.
 \set ON_ERROR_STOP on
 \if :{?dry_run}
