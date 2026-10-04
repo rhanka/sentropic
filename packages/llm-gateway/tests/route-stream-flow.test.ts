@@ -9,6 +9,7 @@ import { parseSse } from '../src/wire.js';
 import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNative, nativeAmount } from './fixtures/native-flow.js';
 import { CACHE_START, NATIVE_MODELS } from './fixtures/native-usage.js';
 import * as nativeUsage from '../src/native-usage.js';
+import * as nativeLife from '../src/native-lifecycle.js';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import {
   NOW_MS, answerStream, budgetConfig, quotingPlanner, recordingBudget, streamAttempt, type BudgetRecorder,
@@ -763,6 +764,57 @@ describe('SDK-shaped one-hour cache deltas and pinned amounts', () => {
       expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
       expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_300);
     });
+});
+
+describe('typed native finalize timeout and late results', () => {
+  it.each(['resolve', 'reject'] as const)('ignores late %s after the exact 1000-ms bound without repeating lifecycle work', async mode => {
+    vi.useFakeTimers();
+    const factory = vi.spyOn(nativeLife, 'nativeLifecycle');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const closed = vi.fn(async () => ({ done: true as const, value: undefined }));
+    let resolve!: () => void; let reject!: (error: Error) => void;
+    const deferred = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    try {
+      const chunks = [nativeStart(NATIVE_MODELS[0]), nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop')];
+      let index = 0;
+      const h = nativeHarness({ finalize: () => deferred, execute: async () => ({ kind: 'stream', status: 200, headers: {},
+        body: { [Symbol.asyncIterator]: () => ({ next: async () => index < chunks.length
+          ? { done: false as const, value: chunks[index++]! } : { done: true as const, value: undefined }, return: closed }) } }) });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      const lifecycle = factory.mock.results[0]!.value as ReturnType<typeof nativeLife.nativeLifecycle>;
+      const snapshot = lifecycle.snapshot;
+      const results: nativeLife.NativeFinalizeResult[] = [];
+      void lifecycle.observation!.then(value => { results.push(value); });
+      expect(h.recorder.settlements).toHaveLength(1); expect(closed).toHaveBeenCalledTimes(1);
+      expect(h.attempt.complete).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(999); expect(results).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(results).toEqual([{ kind: 'observation_unavailable', reason: 'hook_timeout' }]);
+      expect(vi.getTimerCount()).toBe(0);
+      if (mode === 'resolve') resolve(); else reject(Error('private late failure'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lifecycle.finish('cancelled')).toBe(snapshot);
+      expect(lifecycle.snapshot).toBe(h.finalize.mock.calls[0]![0]);
+      expect(results).toHaveLength(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+      expect(h.attempt.complete).toHaveBeenCalledTimes(1); expect(closed).toHaveBeenCalledTimes(1);
+      expect(h.recorder.settlements).toHaveLength(1);
+      expect(warn).toHaveBeenCalledTimes(1); expect(JSON.stringify(warn.mock.calls)).not.toContain('private late failure');
+    } finally { factory.mockRestore(); warn.mockRestore(); vi.useRealTimers(); }
+  });
+  it.each(['absent', 'completed', 'throw', 'reject'] as const)('returns a closed typed result and clears its timer: %s', async mode => {
+    vi.useFakeTimers();
+    try {
+      const snapshot = new nativeUsage.NativeUsageObserver(NATIVE_MODELS[0]).snapshot('protocol_error');
+      const hook = mode === 'absent' ? undefined : () => {
+        if (mode === 'throw') throw Error('private hook failure');
+        return mode === 'reject' ? Promise.reject(Error('private hook failure')) : Promise.resolve();
+      };
+      const result = await nativeLife.finalizeNativeObservation(hook, snapshot);
+      expect(result).toEqual(mode === 'absent' || mode === 'completed' ? { kind: mode }
+        : { kind: 'observation_unavailable', reason: 'hook_error' });
+      expect(vi.getTimerCount()).toBe(0); expect(snapshot.termination).toBe('protocol_error');
+    } finally { vi.useRealTimers(); }
+  });
 });
 
 describe('route stream flow with budget admission', () => {
