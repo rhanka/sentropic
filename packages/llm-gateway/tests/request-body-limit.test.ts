@@ -482,3 +482,69 @@ describe('actual incoming bytes and reader cleanup', () => {
     expect(raw.body!.locked).toBe(false); expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
   });
 });
+
+describe('N3 backing storage under reservations', () => {
+  it.each(['product', 'standalone'])('forged_large_CL_slow_uploads_allocate_only_granted_bytes (%s)', async order => {
+    const pool = new GatewayBodyBytePool(4096); const h = nativeHarness(); const owners: CheckedGatewayBody[] = [];
+    const auth = vi.fn(h.deps.config.callerAuth.verify);
+    const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+    const allocations: number[] = []; let capacity = 0;
+    const firstRound = deferred(); const secondRound = deferred();
+    const storage = (bytes: number) => {
+      const chunk = new Uint8Array(bytes);
+      // Count actual backing capacity, not the view's visible length.
+      capacity += chunk.buffer.byteLength; allocations.push(chunk.buffer.byteLength);
+      expect(chunk.byteOffset).toBe(0); expect(chunk.buffer.byteLength).toBe(bytes);
+      expect(capacity).toBeLessThanOrEqual(pool.stats.reservedBytes);
+      expect(pool.stats.reservedBytes).toBeLessThanOrEqual(pool.capacityBytes);
+      if (allocations.length === 32) firstRound.resolve();
+      if (allocations.length === 64) secondRound.resolve();
+      return chunk;
+    };
+    const options = { pool, limitBytes: 4096, storage };
+    const app = limitedRouter(h, options, order, owners, { config: { ...h.deps.config, callerAuth: { verify: auth } } });
+    const pending = Array.from({ length: 32 }, () => {
+      const raw = new Request('https://gateway.test/v1/messages', { method: 'POST', duplex: 'half',
+        headers: { 'content-length': '4096' },
+        body: new ReadableStream<Uint8Array>({ start(controller) { controllers.push(controller); } }),
+      } as RequestInit & { duplex: 'half' });
+      return app.request(raw);
+    });
+    expect(allocations).toEqual([]); expect(pool.stats.reservedBytes).toBe(0);
+    expect(pool.stats.liveLeases).toBe(32);
+    for (const controller of controllers) controller.enqueue(utf8('{"a":"xx'));
+    await firstRound.promise;
+    expect(capacity).toBe(256); expect(pool.stats.reservedBytes).toBe(256);
+    for (const controller of controllers) controller.enqueue(utf8('xxxxxxxx'));
+    await secondRound.promise;
+    expect(capacity).toBe(512); expect(pool.stats.reservedBytes).toBe(512);
+    expect(allocations).toEqual(Array(64).fill(8)); expect(auth).not.toHaveBeenCalled();
+    for (const controller of controllers) { controller.enqueue(utf8('"}')); controller.close(); }
+    const responses = await Promise.all(pending);
+    expect(responses.map(response => response.status)).toEqual(Array(32).fill(400));
+    expect(allocations).toEqual([...Array(64).fill(8), ...Array(32).fill(2)]);
+    expect(capacity).toBe(576); // No Content-Length allocation or duplicate EOF raw consolidation.
+    expect(owners.map(owner => owner.bytes)).toEqual(Array(32).fill(18));
+    expect(owners.every(owner => owner.body === undefined && owner.retainedHolders === 0)).toBe(true);
+    expect(auth).not.toHaveBeenCalled(); expect(h.recorder.events).toEqual([]);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 32, releases: 32 });
+  });
+  it('failed_extension_allocates_nothing_and_cancels_reader', async () => {
+    const pool = new GatewayBodyBytePool(4096); const held = pool.acquire(); held.extend(4050);
+    const allocations: number[] = [];
+    const storage = vi.fn((bytes: number) => {
+      const value = new Uint8Array(bytes); allocations.push(value.buffer.byteLength);
+      expect(value.buffer.byteLength).toBeLessThanOrEqual(pool.stats.reservedBytes - 4050); return value;
+    });
+    // A short transport view must be copied into q bytes, never retain its 64 KiB backing.
+    const backing = new Uint8Array(65536); backing.set(utf8('{"a":"xx'));
+    const { raw, cancel } = bodyRequest([backing.subarray(0, 8), new Uint8Array(64)], PATHS[0], { 'content-length': '32000000' });
+    await expect(ensureCheckedGatewayBody(raw, { pool, limitBytes: 4096, storage })).rejects.toMatchObject({ kind: 'request-body-capacity' });
+    expect(allocations).toEqual([8]); expect(storage).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledTimes(1); expect(raw.body!.locked).toBe(false);
+    expect(pool.stats).toMatchObject({ reservedBytes: 4050, liveLeases: 1, releases: 1 });
+    held.release();
+    const following = await ensureCheckedGatewayBody(bodyRequest([utf8('{}')]).raw, { pool, limitBytes: 4096 });
+    following.release(); expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 3, releases: 3 });
+  });
+});
