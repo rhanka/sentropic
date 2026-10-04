@@ -29,6 +29,7 @@
   - `api/package-lock.json`
   - `apps/auth-idp/web/**`
   - `e2e/tests/05-i18n.spec.ts`
+  - `e2e/tests/06-settings.spec.ts`
   - `packages/auth-ui/**`
   - `packages/chat-ui/**`
   - `Makefile`
@@ -44,6 +45,8 @@
 - [x] BR00-EX5 — owner-authorized Makefile correction: remove the deleted Tailwind JS config from UI image hash inputs; impact: eliminates dangling-path warnings, CSS-first config is already hashed under ui/src; rollback: restore the old config/path together.
 - [x] BR00-EX6 — svelte-check 4 exposes incorrect public legacy-slot declarations in auth-ui/chat-ui; correct declarations and patch package versions, without runtime changes; impact: accurate consumer types; rollback: revert declarations, versions, and lock updates together.
 - [x] BR00-EX7 — i18n E2E matrix dialog locator references removed opacity utilities; locate the same dialog by its translated body; impact: resilient test selector, unchanged assertions/timeouts; rollback: revert the locator with the utility migration.
+- [x] BR00-EX8 — the new visual fixture creates a concurrent workspace; explicitly scope the settings role-update browser to its own workspace using the existing helper; impact: isolated E2E fixture, unchanged role assertions/timeouts; rollback: revert the fixture scoping with the capture test.
+- [x] BR00-E2E1 — full E2E exposed OAuth fixtures for default ports and MinIO free-space refusal on the 99%-full host; provision assigned origins and isolate this environment's MinIO data in 512MB tmpfs through ignored local make/Compose helpers; no product, scanner, or tracked Compose changes.
 
 ## AI Flaky tests
 - [x] No timeout increases or new flaky acceptance; record failures with exact evidence.
