@@ -106,6 +106,7 @@
   - [x] Extend production tag inputs to compiled IdP and migration sources; ignore only the generated identity receipt directory and include the CI overlay in change filters.
   - [x] Normalize the production rate-limit switch to an empty value when the test runner requests enforcement; existing HTTP assertions remain unchanged.
   - [x] Scan the non-shipping toolbox with the existing HIGH/CRITICAL compliance gate; no policy or register changes.
+  - [x] Preserve the UI-only container scan when the toolbox build is intentionally skipped; toolbox failures still block API/global runs.
   - [x] Wire `.github/workflows/ci.yml` with exact content-tag archive caching; a cache hit loads the toolbox without any build.
   - [x] Record and verify the production artifact image ID during save/load; use it for runtime and scans.
   - [x] E2E, VSCode and publication load the current run artifact; reject canonical tag collisions and promote the verified image without re-pulling.
