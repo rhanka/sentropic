@@ -4,6 +4,45 @@
 
 ### 0.20.0 native Anthropic relay
 
+- Messages, Chat Completions and count_tokens share a process-wide default
+  32,000,000-byte in-flight body pool and a 32,000,000-byte per-request ingress
+  cap, including when native is disabled. Concurrent small bodies reserve their
+  actual chunks, not a full cap per request; no request semaphore or queue.
+  Check size, grant bytes, then allocate exact chunk backing storage.
+  Content-Length never sizes storage, reservations or measured bytes; parse once
+  at EOF without duplicate raw consolidation or a Request clone.
+- Leases follow retained references: native hosts must finish/cancel uploads and
+  detach request/serialized holders before returning a commit-ready stream or
+  completed JSON/count. Gateway detaches its cache/body/retry holders before
+  shrinking to zero; an open native stream can admit more small requests.
+  Canonical streams keep measured N until terminal cleanup/SDK retries settle.
+  Completion, abort, errors, unconsumed streams and every post-acquisition refusal
+  clear holders and release once, independently of observation-hook completion.
+- Unavailable chunk capacity returns retryable 503 `request-body-capacity`,
+  `Retry-After: 1`, `x-should-retry: true`, before parse/admission/dispatch.
+  Oversize received bytes take precedence and return terminal 413:
+  Anthropic `request_too_large`, OpenAI `invalid_request_error` /
+  `request_too_large`. Typed upstream 413 is preserved without overload/retry
+  remapping; numeric messages distinguish exact N, received lower bounds and
+  unknown upstream limits, never trusting Content-Length or provider prose.
+- Native usage counts physical U+R+aggregate writes once, with sourced pricing:
+  uncached input at full rate, reads 0.1x (Sonnet 5/Opus 5), 0.025x (Fable 5.1),
+  five-minute writes 1.25x and one-hour writes 2x, represented in bounded integer
+  units40.
+  Start-anchored deltas inherit absent/null categories and unchanged TTL splits;
+  aggregate growth alone costs 1.25x when default TTL is eligible, otherwise only
+  the growth costs 2x with separate inference evidence, compatible with measured
+  clean completion. Decreases/conflicts/malformed input permanently revoke proof.
+- Clean measured native usage retains actual final output without an allowance
+  floor. Interrupted streams with usable same-model input proof preserve latest
+  accepted input and floor output only. Missing/revoked proof restores input and
+  output allowance floors; mismatch, fallback or substantive/malformed iterations
+  disables discounted pricing and uses full physical input rate. Missing/null/[]
+  iterations are absent. Observation snapshots stay physical and pre-floor;
+  successful latched turns can still charge 32,000 output against 500 observed
+  (64x output), with selected-price/feature-cost uncertainty retained. Host pinned
+  cache pricing, audit persistence and live qualification remain integration gates.
+
 - Anthropic Messages with own top-level `safeguards` requires native execution;
   `anthropic-beta` presence makes native optional, including empty/unknown values.
   Version-only Messages stays canonical. Optional fallback is pre-dispatch only;
