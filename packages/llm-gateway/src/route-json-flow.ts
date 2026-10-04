@@ -7,7 +7,7 @@ import {
   settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 import { dispatchNativeMessages } from './route-attempt-dispatch.js';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
@@ -125,10 +125,11 @@ export const runRouteJsonFlow = async (
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
-      const terminal = () => error instanceof NativeMessagesUpstreamError ? error
+      const terminal = () => gatewayRequestTooLargeError(error, nativeObserver ? undefined : servedTargetFor(diagnostic))
+        ?? (error instanceof NativeMessagesUpstreamError ? error
         : nativeObserver ? new NativeMessagesUpstreamError({ status: 503 }) : terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned routes failed',
-      );
+        classification, servedTargetFor(diagnostic), 'all planned routes failed', error,
+      ));
       try {
         if (attempt) {
           if (classification.reason === 'cancelled') await attempt.releaseCancelled();
