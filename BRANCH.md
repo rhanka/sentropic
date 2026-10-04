@@ -108,6 +108,7 @@
 - [x] Pass 06 review remediation (M1/M2): bounded SSE framer enforces cumulative 1 MiB limit during scanning and before emission, retaining per-frame semantics; empty frames preserve blank lines and concatenated byte fidelity.
 - [x] Pass 06 review remediation (M3/M4): usage accumulator retains attempt-lifetime proof revocation with conflict on second start, and evaluates input validity independently of output.
 - [x] Pass 06 review remediation (M5/M6/M7): usage accumulator uses safe bigint arithmetic, enforces physical anchoring for lower bounds with category absence fidelity, and separates reported TTL from inferred allocation.
+- [x] Pass 06 review test coverage (M5/M6/M7): verified safe arithmetic overflow rejection, unanchored/anchored nullable delta bounds, absence fidelity, and explicit split resolution.
 
 ## AI Flaky tests
 - [x] No live AI tests authorized in this pass; never weaken tests or increase timeouts; any later accepted flake requires same-commit success and owner sign-off.
