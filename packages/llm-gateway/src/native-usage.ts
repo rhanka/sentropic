@@ -33,7 +33,7 @@ export const nativeDefaultTtlEligible = (body: Readonly<Record<string, unknown>>
       const { type, ttl } = control as Record<string, unknown>;
       if (type !== 'ephemeral' || (ttl !== undefined && ttl !== '5m')) return false;
     }
-    pending.push(...Object.values(value));
+    for (const child of Object.values(value)) pending.push(child);
   }
   return true;
 };
