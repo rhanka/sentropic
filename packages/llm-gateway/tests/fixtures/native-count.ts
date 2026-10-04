@@ -9,7 +9,7 @@ export const countHarness = (overrides: Partial<CreateGatewayRouterOptions> = {}
   handler?: (request: NativeCountTokensRequest) => Promise<NativeCountTokensResult>) => {
   const h = nativeHarness();
   const auth = vi.fn(async () => ({ ok: true as const, cost: COUNT_COST }));
-  const execute = vi.fn(handler ?? (async () => ({ kind: 'json' as const, status: 200 as const,
+  const execute = vi.fn<(request: NativeCountTokensRequest) => Promise<NativeCountTokensResult>>(handler ?? (async () => ({ kind: 'json' as const, status: 200 as const,
     headers: {}, body: { input_tokens: 0, future: { kept: true } } })));
   const capability: PreparedNativeCountTokens = { providerId: 'anthropic', modelId: h.model,
     apiVersions: ['2023-06-01'], execute };
