@@ -117,7 +117,9 @@
   - [x] Document architecture in `docs/ci-images.md` and finalize reports.
   - [x] Write `.h2a/build/lot3_report.md` for reviewer.
   - [x] Record the blocking toolbox scan: 52 HIGH and 4 CRITICAL unaccepted findings; production has zero. No severity/register changes; full qualification remains open.
-  - [x] Apply Gemini review registry, cache-log and tools-hash findings with failing-then-passing checks in `scripts/ci/test-api-tooling.sh`, wired into CI.
+  - [x] Apply Lot 1 review registry, cache-log and tools-hash findings with failing-then-passing checks in `scripts/ci/test-api-tooling.sh`, wired into CI.
+  - [x] Purge `/root/.npm` from production alongside npm/npx; add a runtime regression gate for CLI, global package tree and cache absence.
+  - [x] Trigger CI for toolbox `tools/**` and regression-script changes so hash invalidation and its tests are exercised.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app smoke verification on running stack.
@@ -129,4 +131,4 @@
   - [x] Run `make scope-check`; PASS C2.
   - [x] Run `make check-ci-version-filters`; PASS. Containerized actionlint also passes.
   - [x] Run security scans: production PASS; toolbox compliance FAIL, recorded for conductor.
-  - [x] Final lot reports written; no push, PR, merge or publication. Gemini review file has not arrived.
+  - [x] Final lot reports written; Lot 1 external review PASS with four findings addressed. Push/PR are authorized; CI qualification pending, no merge or publication.
