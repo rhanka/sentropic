@@ -41,6 +41,7 @@ import { authenticateCaller, validateAuthContext } from '../internal/caller-auth
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 import type { GatewayBudgetOptions } from '../ports/budget.js';
 import { assertBudgetRouteDeps } from '../admission.js';
+import { nativeHeaderExclusions } from '../native-headers.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -125,12 +126,16 @@ const FORWARDABLE_PROVIDER_HEADERS: ReadonlySet<string> = new Set([
 const forwardProviderHeaders = (
   c: import('hono').Context,
   headers: ProviderResponseHeaders | undefined,
+  native = false,
 ): void => {
   if (!headers) {
     return;
   }
+  const excluded = native ? nativeHeaderExclusions(headers) : undefined;
   for (const [key, value] of Object.entries(headers)) {
-    if (FORWARDABLE_PROVIDER_HEADERS.has(key.toLowerCase())) {
+    const name = key.toLowerCase();
+    if (native && (excluded!.has(name) || name.startsWith('x-sentropic-'))) continue;
+    if (FORWARDABLE_PROVIDER_HEADERS.has(name) || (native && name.startsWith('anthropic-'))) {
       c.header(key, value);
     }
   }
@@ -264,9 +269,16 @@ export const createGatewayRouter = (
         const result = routeFlowDeps
           ? await runRouteJsonFlow(routeFlowDeps, flowRequest)
           : await runJsonFlow(flowDeps!, flowRequest);
-        forwardProviderHeaders(c, result.headers); // #4 allowlisted provider headers
+        const native = 'relay' in result && result.relay === 'native';
+        forwardProviderHeaders(c, result.headers, native);
         c.header(REQUEST_ID_HEADER, id);
-        c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
+        if (!native) c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
+        else {
+          c.header('X-Sentropic-Relay', 'native');
+          if ('nativeServedModelId' in result && typeof result.nativeServedModelId === 'string') {
+            c.header(SERVED_HEADER, servedHeaderValue({ ...result.servedTarget, model: result.nativeServedModelId }));
+          }
+        }
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
         return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
@@ -292,11 +304,14 @@ export const createGatewayRouter = (
       return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
     }
 
-    forwardProviderHeaders(c, streamResult.headers); // #4 allowlisted provider headers
+    forwardProviderHeaders(c, streamResult.headers, streamResult.relay === 'native');
     c.header('Content-Type', SSE_CONTENT_TYPE);
     c.header('Cache-Control', 'no-cache');
     c.header(REQUEST_ID_HEADER, id);
-    c.header(SERVED_HEADER, servedHeaderValue(streamResult.servedTarget));
+    if (streamResult.relay === 'native') {
+      c.header('X-Sentropic-Relay', 'native');
+      c.header('X-Accel-Buffering', 'no');
+    } else c.header(SERVED_HEADER, servedHeaderValue(streamResult.servedTarget));
     // B3: relay provider frames VERBATIM. The gateway synthesizes NO terminator —
     // a real OpenAI transport emits its own `[DONE]`; Anthropic uses message_stop.
     // On a mid-stream error the stream simply ends (no synthetic [DONE]).

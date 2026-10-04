@@ -1,6 +1,6 @@
 import { RoutePlanError, type PreparedRouteAttempt, type RoutePlanner } from '@sentropic/llm-mesh';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
-import { nativeHarness } from './fixtures/native-flow.js';
+import { nativeHarness, sendNative } from './fixtures/native-flow.js';
 import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
@@ -58,6 +58,39 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
 });
 
 describe('native route JSON flow', () => {
+  it('forwards native response headers with credential/Connection exclusions and gateway authority last', async () => {
+    const h = nativeHarness({ execute: async () => ({ kind: 'json', status: 200,
+      headers: { 'anthropic-future': 'kept', 'anthropic-organization-id': 'org', 'request-id': 'provider',
+        'anthropic-api-key': 'secret', connection: 'Anthropic-Drop', 'Anthropic-Drop': 'hidden',
+        'set-cookie': 'secret', 'x-sentropic-relay': 'spoof', 'x-sentropic-request-id': 'spoof',
+        'x-sentropic-served': 'spoof', 'content-length': '999', 'other': 'hidden' }, body: { model: 'claude-opus-5' } }) });
+    const response = await sendNative(h);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('anthropic-future')).toBe('kept');
+    expect(response.headers.get('anthropic-organization-id')).toBe('org');
+    expect(response.headers.get('x-sentropic-request-id')).toBe('req-native');
+    expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    expect(response.headers.get('x-sentropic-served')).toContain('model=claude-opus-5');
+    for (const name of ['anthropic-api-key', 'anthropic-drop', 'set-cookie', 'other', 'content-length']) {
+      expect(response.headers.get(name)).toBeNull();
+    }
+  });
+  it.each([{ model: undefined }, { model: 'invalid model' },
+    { model: 'claude-sonnet-5', usage: { iterations: [{}] } },
+    { model: 'claude-sonnet-5', content: [{ type: 'fallback' }] }])(
+    'omits served certification for unverified or segmented JSON: %j', async body => {
+      const h = nativeHarness({ execute: async () => ({ kind: 'json', status: 200, headers: {}, body }) });
+      const response = await sendNative(h);
+      expect(response.headers.get('x-sentropic-served')).toBeNull();
+      expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    });
+  it('never forwards native upstream headers or a relay marker on refusal', async () => {
+    const h = nativeHarness({ execute: async () => { throw new NativeMessagesUpstreamError({ status: 400 }); } });
+    const response = await sendNative(h);
+    expect(response.status).toBe(400);
+    expect(response.headers.get('x-sentropic-relay')).toBeNull();
+    expect(response.headers.get('x-sentropic-served')).toBeNull();
+  });
   it('relays all JSON fields and shallow body identity through the default native delegator', async () => {
     const nested = { opaque: ['unchanged'] };
     const h = nativeHarness({ body: { future: nested } });
