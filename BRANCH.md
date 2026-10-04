@@ -27,7 +27,8 @@
   - `BRANCH.md`
   - `.gitignore`
   - `docs/ci-images.md`
-  - `scripts/ci/test-api-tooling.sh`
+  - `scripts/test-api-tooling.sh`
+  - `scripts/ci/test-api-tooling.sh` (removal only)
 - [x] **Forbidden Paths (must not change in this branch)**:
   - `deploy/k8s/**`
   - `packages/**`
@@ -117,10 +118,11 @@
   - [x] Document architecture in `docs/ci-images.md` and finalize reports.
   - [x] Write `.h2a/build/lot3_report.md` for reviewer.
   - [x] Record the blocking toolbox scan: 52 HIGH and 4 CRITICAL unaccepted findings; production has zero. No severity/register changes; full qualification remains open.
-  - [x] Apply Lot 1 review registry, cache-log and tools-hash findings with failing-then-passing checks in `scripts/ci/test-api-tooling.sh`, wired into CI.
+  - [x] Apply Lot 1 review registry, cache-log and tools-hash findings with failing-then-passing checks in `scripts/test-api-tooling.sh`, wired into CI.
   - [x] Purge `/root/.npm` from production alongside npm/npx; add a runtime regression gate for CLI, global package tree and cache absence.
   - [x] Trigger CI for toolbox `tools/**` and regression-script changes so hash invalidation and its tests are exercised.
   - [x] Recheck all four regressions, ShellCheck/actionlint, scope/hash coverage, source unit (1011 passed, 2 skipped), production scan (zero findings), restore (9), smoke (13), limit (4) and compiled IdP browser smoke after review fixes.
+  - [x] Correct CI manifest wiring: keep toolbox regressions outside the reserved `scripts/ci` publisher namespace and name the main-image helper with the `-image` suffix.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app smoke verification on running stack.
