@@ -77,7 +77,7 @@
   - [x] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
 - [ ] **Lot 2 — Related trees and qualification**
   - [x] Migrate standalone IdP tooling and CSS-first config while preserving auth host defaults.
-  - [ ] Correct legacy-slot declarations and chat callback contracts exposed by svelte-check 4; verify UI/IdP checks without suppressions.
+  - [x] Correct legacy-slot declarations and chat callback contracts exposed by svelte-check 4; UI/API and IdP checks pass without suppressions (auth-ui 0.7.4, chat-ui 0.34.1; registry versions verified).
   - [ ] Audit API and standalone UI/IdP trees; migrate same-chain consumers as required.
   - [ ] Build UI web/Chrome/VSCode via `make build-ui` and production image for E2E.
   - [ ] Run `make typecheck`, `make lint`, `make test-ui`, and all SCA targets.
