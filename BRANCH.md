@@ -95,6 +95,7 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
+- [x] Pass 08 R1 — fixed by reviewer per build mode: valid cumulative output accepted independently of input updates; permanent V-1, output-only, rejected-input and decrease regressions. Scoped repro: 1 failed / 5 passed before fix; gateway typecheck PASS and full tests 643 passed / 0 failed after fix.
 - [x] Scope gate clarification: harness exception grammar accepts numeric branch IDs only; approved pass 01 EX1 paths are mirrored explicitly in Allowed Paths so C2 verifies the granted scope without changing harness or inventing an exception ID.
 - [x] BR-REL-EX1 approved by frozen §2: rationale: mesh capability/planner/quote/attempt/error seams; impact: additive contracts, tests, exports, version and CHANGELOG only; rollback: revert mesh feature commits and tuple before release.
 - [x] BR-REL-EX2 approved by frozen §2: rationale: product native execution/count/classification/body-cap/M6 and trusted metering; impact: listed API paths only, no general metering refactor; rollback: disable switch and restart/redeploy, then revert API feature commits.

@@ -10,6 +10,22 @@ describe('native usage accumulator', () => {
     output_tokens: 1,
   };
 
+  it('should retain V-1 cumulative output independently of input-bearing deltas (R1)', () => {
+    const acc = new NativeCumulativeUsageAccumulator({ input_tokens: 2679,
+      cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 3 });
+    acc.applyDelta({ input_tokens: 10682, cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0, output_tokens: 510, server_tool_use: { web_search_requests: 1 } });
+    expect(acc.getState()).toMatchObject({ physicalInput: 10682, acceptedOutputTokens: 510 });
+    expect(acc.getRawUsage().output_tokens).toBe(510);
+    acc.applyDelta({ output_tokens: 510 });
+    expect(acc.getState().acceptedOutputTokens).toBe(510);
+    acc.applyDelta({ input_tokens: 1.5, output_tokens: 520 });
+    expect(acc.getState()).toMatchObject({ proofRevoked: true, acceptedOutputTokens: 520 });
+    expect(acc.getRawUsage().output_tokens).toBe(520);
+    acc.applyDelta({ output_tokens: 519 });
+    expect(acc.getState().acceptedOutputTokens).toBe(520);
+  });
+
   it('permanently retains attempt-lifetime revocation and rejects second start as conflict', () => {
     const acc = new NativeCumulativeUsageAccumulator(validStart);
     expect(acc.getState().inputUsageValidated).toBe(true);
