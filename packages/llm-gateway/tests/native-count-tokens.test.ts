@@ -97,7 +97,7 @@ describe('count native errors are terminal and sanitized', () => {
     expect(body.error.type).toBe(status === 401 || status === 403 ? 'authentication_error'
       : status === 404 ? 'not_found_error' : status === 413 ? 'request_too_large'
         : status === 429 ? 'rate_limit_error' : 'overloaded_error');
-    if (status === 413) expect(body.error.message).toBe('Request size is 50 bytes and exceeds limit 32 bytes.');
+    if (status === 413) expect(body.error.message).toBe('Request size 50 bytes exceeds limit 32 bytes.');
     if (status === 404) expect(body.error.message).toBe(`Unknown model: ${JSON.stringify(h.model)}`);
     expect(response.headers.get('retry-after')).toBe(status === 429 ? '3' : null);
     expect(response.headers.get('x-should-retry')).toBe(status === 413 ? 'false' : null);

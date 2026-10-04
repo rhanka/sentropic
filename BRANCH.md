@@ -262,6 +262,7 @@
   - [x] Row 48b — Opaque top-level clone/nested references/input immutability, exact version-only/native/no inserted fields, caller stream stays JSON, shared header exclusions/organization/diagnostic ownership, nominated version refusal and terminal malformed envelope/input_tokens checks.
   - [x] Row 48b2 — Runtime gate 1099/0; TypeScript caught zero-argument default mock inference in recorded request tuples; explicit native count request/result mock signature fixes only the fixture type, with all assertions retained.
   - [x] Row 48c — Count uses shared bounded validation/billing/safeguards policy and fixed auth/403/404/numeric 413/429/5xx envelopes; one upstream invocation/no retry, locally generated retry/size headers and no error headers/relay/served/financial callbacks.
+  - [x] Row 48c2 — Full gate 1113/1 exposed the new exact-size 413 fixture using lower-bound sentence grammar; pin the existing exact-size M6 wording verbatim, with status/type/numeric/no-retry assertions retained.
   - [ ] Row 49 — Same file: rate/concurrency/expiry/map bounds; no hold/settlement/usage/finalize.
   - [ ] Row 49a — `tests/request-body-limit.test.ts`: deferred N2 count_off/count_denied/count_rate/count_concurrency refusal matrix.
   - [ ] Row 50 — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, canonical ingress/egress/stream tests: ownership inert and canonical regressions.
