@@ -106,6 +106,7 @@
 - [x] Pass 04 review remediation (M4): billing decided once on full bounded message before truncation and carried through verified native-validation channel without re-detection; both-wire parser-native-mapper regressions added.
 - [x] Pass 06 M5 — Conductor decision: reviewer implements the fix; Gemini cross-reviews. Private frozen parser results bind authorization to exact type/message; forged markers and changed copies receive the complete bounded policy. Both-wire forged/mutation/oversize regressions added; M4 long dated-token and independent billing fixtures retained; all M1 boundary negatives rerun.
 - [x] Pass 06 review remediation (M1/M2): bounded SSE framer enforces cumulative 1 MiB limit during scanning and before emission, retaining per-frame semantics; empty frames preserve blank lines and concatenated byte fidelity.
+- [x] Pass 06 review remediation (M3/M4): usage accumulator retains attempt-lifetime proof revocation with conflict on second start, and evaluates input validity independently of output.
 
 ## AI Flaky tests
 - [x] No live AI tests authorized in this pass; never weaken tests or increase timeouts; any later accepted flake requires same-commit success and owner sign-off.
