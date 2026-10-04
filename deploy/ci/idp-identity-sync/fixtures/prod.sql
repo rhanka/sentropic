@@ -13,3 +13,7 @@ SELECT 'prod-cred-' || n, 'synthetic-credential-' || n, 'synthetic-public-cose-'
             ELSE 'prod-user-' || (3 + (n - 11) % 6) END,
        'Synthetic device', '["internal"]', true, '2026-01-01', '2026-10-01'
 FROM generate_series(1, 18) n;
+INSERT INTO oauth_clients (id, client_id, name, redirect_uris, allowed_scopes)
+VALUES ('prod-radar', 'radar-immobilier', 'Synthetic radar', ARRAY['https://radar.example.invalid/callback'], ARRAY['openid', 'profile', 'email']);
+INSERT INTO oauth_consents (user_id, client_id, tenant_id, scopes, created_at, updated_at)
+VALUES ('1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'radar-immobilier', 'sentropic', ARRAY['openid', 'profile', 'email'], '2026-01-01', '2026-10-01');

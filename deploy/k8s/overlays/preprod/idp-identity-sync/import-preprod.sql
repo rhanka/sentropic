@@ -151,7 +151,58 @@ ON CONFLICT (id) DO UPDATE SET
   transports_json = EXCLUDED.transports_json, uv = EXCLUDED.uv,
   last_used_at = GREATEST(webauthn_credentials.last_used_at, EXCLUDED.last_used_at);
 
--- 5. Post-conditions (inside the transaction: any failure rolls everything back).
+-- 6. Explicit prod consents converge only for mapped clients and prod users.
+CREATE TEMP TABLE src_consents (LIKE oauth_consents INCLUDING DEFAULTS) ON COMMIT DROP;
+CREATE TEMP TABLE client_map (prod_client_id text, preprod_client_id text) ON COMMIT DROP;
+\copy src_consents (user_id, client_id, tenant_id, scopes, created_at, updated_at) FROM 'consents.csv' WITH (FORMAT csv, HEADER true)
+-- \copy does not interpolate psql variables; its client-side cat uses this fixed path.
+\setenv IDP_SYNC_CLIENT_MAP :client_map_path
+\copy client_map FROM PROGRAM 'cat "$IDP_SYNC_CLIENT_MAP"' WITH (FORMAT csv, HEADER true)
+SELECT set_config('sync.expected_consents', :'expected_consents', true) \gset sync_
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM src_consents) <> current_setting('sync.expected_consents')::int
+    THEN RAISE EXCEPTION 'export row count does not match manifest'; END IF;
+  IF NOT EXISTS (SELECT FROM client_map)
+     OR EXISTS (SELECT FROM client_map m LEFT JOIN oauth_clients c ON c.client_id = m.preprod_client_id
+                WHERE c.client_id IS NULL OR coalesce(m.prod_client_id, '') = '')
+     OR EXISTS (SELECT FROM client_map GROUP BY prod_client_id HAVING count(*) > 1)
+    THEN RAISE EXCEPTION 'consent client map target missing'; END IF;
+END $$;
+CREATE TEMP TABLE desired_consents ON COMMIT DROP AS
+SELECT s.user_id, m.preprod_client_id AS client_id, s.tenant_id, s.scopes, s.created_at, s.updated_at
+FROM src_consents s JOIN client_map m ON m.prod_client_id = s.client_id
+WHERE s.user_id IN (SELECT id FROM src_users);
+WITH written AS (
+  INSERT INTO oauth_consents (user_id, client_id, tenant_id, scopes, created_at, updated_at)
+  SELECT user_id, client_id, tenant_id, scopes, created_at, updated_at FROM desired_consents
+  ON CONFLICT (user_id, client_id, tenant_id) DO UPDATE SET
+    scopes = EXCLUDED.scopes, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at
+  WHERE (oauth_consents.scopes, oauth_consents.created_at, oauth_consents.updated_at)
+    IS DISTINCT FROM (EXCLUDED.scopes, EXCLUDED.created_at, EXCLUDED.updated_at)
+  RETURNING 1
+)
+SELECT 'consents_upserted', count(*) FROM written;
+WITH removed AS (
+  DELETE FROM oauth_consents c
+  WHERE c.user_id IN (SELECT id FROM src_users) AND c.client_id IN (SELECT preprod_client_id FROM client_map)
+    AND NOT EXISTS (SELECT FROM desired_consents d
+                    WHERE (d.user_id, d.client_id, d.tenant_id) = (c.user_id, c.client_id, c.tenant_id))
+  RETURNING 1
+)
+SELECT 'consents_removed', count(*) FROM removed;
+CREATE TEMP TABLE actual_consents ON COMMIT DROP AS
+SELECT c.user_id, c.client_id, c.tenant_id, c.scopes, c.created_at, c.updated_at
+FROM oauth_consents c
+WHERE c.user_id IN (SELECT id FROM src_users) AND c.client_id IN (SELECT preprod_client_id FROM client_map);
+DO $$
+BEGIN
+  IF EXISTS ((SELECT * FROM desired_consents EXCEPT SELECT * FROM actual_consents)
+             UNION ALL (SELECT * FROM actual_consents EXCEPT SELECT * FROM desired_consents))
+    THEN RAISE EXCEPTION 'consent post-condition failed'; END IF;
+END $$;
+
+-- 7. Post-conditions (inside the transaction: any failure rolls everything back).
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM src_users s LEFT JOIN users u ON u.id = s.id WHERE u.id IS NULL)
