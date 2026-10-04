@@ -203,7 +203,7 @@
   - [x] Row 35 — Exact safeguards bytes, eight pre/late error classes (403->401), empty/partial/overflow refusal, late EOF/unknown/overflow without manufactured stop, progressive-first-frame regression, planned native-only retry and single settlement; header repro found 3 failures, native terminal wrappers now omit selected/unverified served certification, JSON regression included; gateway gates in pass09 report.
   - [x] Row 36 — Dedicated native response-header policy extends canonical safe names with open Anthropic headers and owner-accepted organization exposure; JSON relay/safe single served-model tests; post-commit gateway gates recorded in pass10 report.
   - [x] Row 37 — Router JSON/SSE credentials/cookies/hop-by-hop/Connection/internal spoof isolation, owner-accepted organization exposure, exact UTF-8/CRLF safeguards bytes, own markers/served policy and validation refusal headers; 37b corrects null/typed-array assertion operands; gateway gates recorded in pass10 report.
-  - [ ] Row 38 — `tests/fixtures/anthropic-native-http.ts`: fake upstream HTTP fixture.
+  - [x] Row 38 — Loopback fake HTTP native provider captures exact request bytes/headers, scripts JSON/SSE/errors, gates first-frame progression and observes socket closure; real fetch adapter and smoke test; 38b uses configured event/forEach APIs and pins dispatch-owned stream override in bytes; gateway gates recorded in pass10 report.
   - [ ] Row 39 — `tests/anthropic-native-relay.integration.test.ts`: exact body/header/IP/error/count/cancel/backpressure fidelity.
   - [ ] Row 40 — EX1 `src/native-messages.ts`, `src/errors.ts`: M6 typed size detail survives normalization/causes.
   - [ ] Row 41 — Gateway error/classification seams: terminal 413 preserved on both wires.
