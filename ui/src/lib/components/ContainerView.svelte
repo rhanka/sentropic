@@ -122,7 +122,7 @@
               {#if action.href}
                 <a
                   href={action.href}
-                  class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-sm transition {variantClasses[action.variant ?? 'secondary']}"
+                  class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-xs transition {variantClasses[action.variant ?? 'secondary']}"
                 >
                   {#if action.icon}
                     <svelte:component this={action.icon} class="h-4 w-4" />
@@ -132,7 +132,7 @@
               {:else}
                 <button
                   on:click={action.onClick}
-                  class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-sm transition {variantClasses[action.variant ?? 'secondary']}"
+                  class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-xs transition {variantClasses[action.variant ?? 'secondary']}"
                 >
                   {#if action.icon}
                     <svelte:component this={action.icon} class="h-4 w-4" />
@@ -170,7 +170,7 @@
   {#if loading}
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {#each Array(6) as _}
-        <div class="animate-pulse rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="animate-pulse rounded-lg border border-slate-200 bg-white p-5 shadow-xs">
           <div class="mb-3 h-5 w-2/3 rounded bg-slate-200"></div>
           <div class="mb-2 h-3 w-full rounded bg-slate-100"></div>
           <div class="h-3 w-1/2 rounded bg-slate-100"></div>
@@ -194,7 +194,7 @@
           {#if card.href}
             <a
               href={card.href}
-              class="group flex flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+              class="group flex flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-xs transition hover:border-slate-300 hover:shadow-md"
             >
               <div class="flex items-start gap-3">
                 {#if card.icon}
@@ -222,7 +222,7 @@
           {:else}
             <button
               on:click={card.onClick}
-              class="group flex flex-col rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 hover:shadow-md"
+              class="group flex flex-col rounded-lg border border-slate-200 bg-white p-5 text-left shadow-xs transition hover:border-slate-300 hover:shadow-md"
             >
               <div class="flex items-start gap-3">
                 {#if card.icon}

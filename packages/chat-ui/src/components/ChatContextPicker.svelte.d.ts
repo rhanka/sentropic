@@ -1,4 +1,4 @@
-import type { Component } from 'svelte';
+import type { SvelteComponent } from 'svelte';
 import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
 import type { ChatContextEntry } from '../state/chat-context.js';
 
@@ -24,6 +24,10 @@ export type ChatContextPickerProps = {
   maxHeightStyle?: string;
 };
 
-declare const ChatContextPicker: Component<ChatContextPickerProps>;
+declare class ChatContextPicker extends SvelteComponent<
+  ChatContextPickerProps,
+  Record<string, never>,
+  { 'leading': Record<string, never> }
+> {}
 
 export default ChatContextPicker;

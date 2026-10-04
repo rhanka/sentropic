@@ -1,7 +1,7 @@
 {
   "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes. 0.34.0 breaking change: ChatWidget whole-shell override removed; use typed header/content/pager snippets. ChatPanel override remains.",
   "_generated": "2026-07-25",
-  "_version": "0.34.0",
+  "_version": "0.34.1",
   "subpaths": {
     ".": {
       "kind": "ts",

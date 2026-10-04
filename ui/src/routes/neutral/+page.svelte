@@ -129,7 +129,7 @@
       {#each dashboardWorkspaces as ws}
         {@const cfg = WORKSPACE_TYPE_ICONS[ws.type] ?? WORKSPACE_TYPE_ICONS['ai-priorities']}
         <article
-          class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full hover:shadow-md cursor-pointer"
+          class="rounded border border-slate-200 bg-white shadow-xs transition-shadow group flex flex-col h-full hover:shadow-md cursor-pointer"
           role="button"
           tabindex="0"
           on:click={() => handleWorkspaceClick(ws)}
@@ -154,7 +154,7 @@
           <div class="p-3 sm:p-4 pt-2 flex-1 min-h-0">
             <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
               <span class="flex items-center gap-1 whitespace-nowrap">
-                <FileText class="w-4 h-4 flex-shrink-0" />
+                <FileText class="w-4 h-4 shrink-0" />
                 {ws.initiativeCount} {ws.initiativeCount === 1 ? 'initiative' : 'initiatives'}
               </span>
               <span class="text-xs text-slate-400">

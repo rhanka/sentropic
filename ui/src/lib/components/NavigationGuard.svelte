@@ -125,7 +125,7 @@
 </script>
 
 {#if showWarning}
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-lg max-w-md w-full mx-4 p-6">
       <div class="flex items-center mb-4">
         <AlertTriangle class="w-6 h-6 text-yellow-500 mr-3" />
