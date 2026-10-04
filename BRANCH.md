@@ -294,7 +294,7 @@
   - [x] Pass 13 checklist recorded before stage implementation: documentation rows 53–57 only; release train rows 58–61 remain conductor-owned.
   - [x] Row 53 — Routing §4.12: exact-model quote/planner/prepared feasibility, ten selection cases, empty qualification list and standalone safeguards refusal; sequential gateway pre/post-commit gates in packet report.
   - [x] Row 54 — Routing §5.3 terminal numeric 413 and §5.4 verbatim frozen owner-accepted native exception; account-id/credential/internal-header and canonical invariants retained; sequential gateway pre/post-commit gates in packet report.
-  - [ ] Row 55 — Routing §5.6: opaque JSON/SSE, count auth/rate/no-financial lifecycle, usage/cache/delta proof and N1–N3/N5 contracts.
+  - [x] Row 55 — Routing §5.6: opaque relay/header/served/error/count contracts, shared pool and N1–N3 retention/cleanup/storage, cumulative pricing/proof/floors and N5 revocation; canonical compaction distinguished; sequential gateway pre/post-commit gates in packet report.
   - [ ] Row 56 — `spec/SPEC_EVOL_LLM_GATEWAY.md` §3 endpoints/§3b: native errors/headers/served identity, 32,000,000-byte cap/shared pool, retention/refusal and measured/floored settlement.
   - [ ] Row 57 — `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: financial/observation roles, snapshot, cumulative proof, exact price identity and audit join; distinguish built gateway from pending API integration.
   - [ ] Pass 13 gates — Before and after each commit, gateway typecheck/full tests; mesh too if mesh files change; sequential single Make target with API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay last.

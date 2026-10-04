@@ -780,11 +780,110 @@ buffer the provider response, make an extra provider call or alter route
 selection. If an adapter can provide exact input usage before commitment, exact
 usage takes precedence.
 
-The terminal Anthropic `message_delta.usage` carries output usage only.
+The terminal canonical Anthropic `message_delta.usage` carries output usage only.
 Provider-reported input/output usage remains authoritative for aggregate
 financial settlement and diagnostics; the first-frame estimate is a
 caller-compatibility signal, not a billing record. OpenAI stream usage is
 unchanged.
+
+### 5.6 Native relay, count and usage
+
+This section describes built mesh/gateway contracts. Native API transport,
+pricing/ledger wiring and live gates remain pending; no production enablement is
+claimed. Canonical compaction/egress in §5.5 is unchanged; native usage bytes may
+contain cumulative input extensions and are never reconstructed canonically.
+
+Native Messages preserves nested body identity/unknown fields with a shallow
+copy, overriding only selected model, boolean stream and validated/admitted
+max_tokens. Native JSON success requires kind=json/status=200 and relays the
+parsed object semantically, including safeguard_results. SSE relays original
+bytes/comments/unknown events/line endings with pull backpressure and a 1 MiB
+pending-frame bound. The first complete non-error frame commits once; no retry
+after commitment or rejected commit callback. Late errors are sanitized native
+error frames, close upstream and never manufacture message_stop. Bounded native
+validation messages and terminal request_too_large follow §§5.3–5.4.
+
+Request forwarding starts empty and permits only anthropic-*, x-app and
+x-stainless-* after credential/session/hop-by-hop/Connection/internal exclusions;
+caller user-agent/IP/encoding/authority headers are dropped. Hosts derive transport
+headers/Content-Length from the trusted URL/serialized bytes and set server auth
+last. Native success adds anthropic-* to canonical safe response names, including
+owner-accepted organization disclosure; errors forward no upstream headers.
+Validation 400s are bounded to a 64 KiB UTF-8 error body and a control-stripped
+4096-byte public message. Billing masking precedes truncation/safeguards detection;
+only an owned safeguards request rejecting the exact sent classifier beta gets
+the narrow rewrite. Canonical 400s and other errors keep fixed sanitization.
+
+X-Sentropic-Relay:native is success-only. Native Messages JSON X-Sentropic-Served
+comes only from a safe response ID for one model without fallback/substantive
+iterations; selected identity is never a substitute. A safe mismatch can be
+reported while pricing remains uncertain. Native SSE omits the header because
+late evidence can invalidate identity; no delayed bytes or invented trailers.
+Count omits it. Gateway diagnostics are emitted last and cannot be spoofed.
+
+POST /v1/messages/count_tokens is authenticated, partition-checked and JSON-only.
+Explicit native enabled plus a trusted count port/exact model/version is required;
+OFF/known denial returns 400, unknown catalog models 404. ON is native even without
+beta/safeguards. Forward a shallow copy unchanged, insert no ceiling/stream and
+make one call without retry. Validate input_tokens as a nonnegative safe integer.
+One process limiter keys verified tenant/principal: burst 10, refill 1/second,
+two concurrent calls; 429 has integer Retry-After, cancellation never refunds a
+dispatch token. Evict idle keys after ten minutes excluding live calls; at 10,000
+keys a new key fails closed with 503. Count has no generation plan/admission,
+hold, dispatch marker, financial settlement, usage observation or debit.
+
+All three POST paths share one checked bounded read and one process-owned pool,
+native ON or OFF: L=B=32,000,000 actual bytes by default. Start at zero; check
+N+q <= L, grant q atomically, then retain/copy exact q backing capacity. No
+Content-Length allocation/reservation, geometric slack, oversized backing views,
+raw consolidation, clone or waiting queue. EOF decodes/parses once under exact N.
+Unavailable extension cancels reading, discards partial storage and returns
+retryable pre-parse request-body-capacity 503 with Retry-After:1 and
+x-should-retry:true, without quote/hold/dispatch/financial or observation event.
+Actual oversize has 413 precedence. Concurrent small requests reserve actual
+bytes rather than one full cap each. Transport chunks are the explicit transient
+exception; pool accounting/8x sizing assumptions are not measured memory proof.
+
+N1 retention follows references: native hosts finish/cancel upload and detach
+body/serialized/view holders before exposing commit-ready SSE or completed
+JSON/count. Response iterators/abort/finalize closures retain response state and
+bounded metadata only. Gateway clears cache/body/retry holders before shrinking;
+fetch headers alone cannot prove upload completion. Canonical SDK operations and
+streams keep measured N through retries and terminal cleanup. N2 cleanup detaches
+before once-only release on every post-acquisition refusal, abort/error/timeout,
+completion and never-consumed stream, preserving original refusal/hold rules and
+adding no financial event. Cleanup never waits for observation hooks. N3 storage
+never exceeds granted backing bytes, including forged Content-Length uploads.
+
+The gateway owns one usage fold and freezes one pre-floor terminal snapshot for
+settlement and once-only finalize. Physical P=U+R+aggregate writes; TTL splits are
+not added twice. Policy anthropic-cache-2026-10-02 prices units40 as
+40U+50W5+80W1+4R (Sonnet 5/Opus 5), or 40U+50W5+80W1+R (Fable 5.1). A safe
+matching served model, complete JSON/start proof and bounded integers are required.
+Missing/null/[] iterations are absent; fallback, mismatch or substantive/malformed
+iterations permanently latch served_model_mismatch, disable discounts and use the
+pinned selected model's full physical rate with allowance floors. Iterations are
+never summed or latest-wins; opaque wire data is not persisted usage.
+
+Start-anchored deltas inherit absent/null U/R/aggregate/split. Equal aggregates
+reuse accepted TTL allocation; growth alone uses eligible five-minute weight,
+otherwise 2x with separate cache_write_split_inferred evidence, which alone does
+not prevent measured clean completion. Reported TTL counts remain distinct from
+inference; a later consistent split may resolve allocation. Decrease/conflict or
+fractional/nonfinite/unsafe input atomically rejects the update and permanently
+revokes proof (N5); safe counts remain physical lower-bound evidence, never a
+restored discount. Partial deltas cannot bootstrap a missing start or combine
+conflicting starts/models. Cumulative output is not summed; start output is
+provisional, final delta plus clean message_stop (or successful JSON) is final.
+
+Clean positive measured input/output has no allowance floor. Interrupted SSE
+with usable same-model start-derived input proof preserves latest accepted input
+and floors output only. No-proof cases floor both sides; initial unknown write
+split uses the sourced 2x bound conservatively. Observation counts stay physical
+and pre-floor even if financial output rises from 500 to 32,000. Host pricing must
+validate exact pinned provider/model/served identity, policy and units40 bounds;
+failed validation uses full physical rate. API persistence/audit joins and live
+memory/pricing qualification remain later gates, not inferred from package tests.
 
 ## 6. Compatibility and migration
 
