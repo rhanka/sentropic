@@ -188,7 +188,7 @@
   - [x] Row 31 — JSON fidelity/identity, execute-time version and optional capability fallback, malformed terminal envelope, exactly-once observation/settlement and rejecting error callbacks; shared `tests/fixtures/native-flow.ts` fake-provider harness; gateway gates in pass09 report.
   - [ ] Row 32 — Split 32.1/32.2/32.3 to stay <=149 changed lines: progressive framing/error classes, native stream execution, dispatch/byte result plumbing.
   - [x] Row 32.1 — `src/native-sse.ts`, `src/native-stream-errors.ts`, error mapper: yield the first complete frame before scanning later chunk bytes; eight bounded pre-commit error classes and sanitized late error bytes; gateway gates in pass09 report.
-  - [ ] Row 32.2 — Native response iterator, first-frame observation and pull-based terminal execution.
+  - [x] Row 32.2 — `src/route-native-stream.ts`: response-only frame iterator, first-frame observation, original byte yields, one terminal execution, failure/cancel/EOF paths and raw-reader closure; gateway gates in pass09 report.
   - [ ] Row 32.3 — Native dispatch/commit gate and minimum byte union/router enqueue integration; header policy remains row 33.
   - [ ] Row 32a — Stream lifecycle: shared snapshot and bounded observation task independent of settlement/reader cleanup.
   - [ ] Row 33 — `src/router/index.ts`, result types: native byte stream and downstream cancellation.
