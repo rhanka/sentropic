@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NativeCumulativeUsageAccumulator, NativeUsageObserver, nativeDefaultTtlEligible } from '../src/native-usage.js';
-import { CACHE_START, NATIVE_MODELS, nativeUsageTurn } from './fixtures/native-usage.js';
+import { CACHE_START, NATIVE_MODELS, nativeUsageTurn, observeNativeEvent } from './fixtures/native-usage.js';
 
 describe('native usage accumulator', () => {
   const validStart = {
@@ -244,5 +244,82 @@ describe('native cache pricing and TTL evidence', () => {
     expect(snapshot).toMatchObject({ inputTokens: 10300, estimated: true,
       nativeInputUsageValidated: false, nativeUsageUncertainty: 'cache_write_split_unknown' });
     expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+  });
+});
+
+describe('native proof and output provenance', () => {
+  it.each([undefined, null, []])('should treat empty iterations %j as absent in JSON and SSE', iterations => {
+    const json = new NativeUsageObserver(NATIVE_MODELS[0]);
+    json.observeJson({ model: NATIVE_MODELS[0], usage: { ...CACHE_START, output_tokens: 500, iterations } });
+    const stream = nativeUsageTurn(NATIVE_MODELS[0], CACHE_START, { output_tokens: 500, iterations });
+    for (const observer of [json, stream]) expect(observer.snapshot('completed')).toMatchObject({
+      iterationsPresent: false, nativeInputUsageValidated: true, estimated: false, finalOutputObserved: true });
+  });
+
+  it.each([[{ input_tokens: 999999 }], {}, 'opaque', 1, false])('should latch substantive iterations %j without folding arrays', iterations => {
+    const observer = nativeUsageTurn(NATIVE_MODELS[0], CACHE_START, { output_tokens: 500, iterations });
+    observeNativeEvent(observer, 'message_delta', { usage: { output_tokens: 500, iterations: [] } });
+    const snapshot = observer.snapshot('completed');
+    expect(snapshot).toMatchObject({ inputTokens: 10300, outputTokens: 500, iterationsPresent: true,
+      nativeInputUsageValidated: false, estimated: true, nativeUsageUncertainty: 'served_model_mismatch' });
+    expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+    expect(snapshot.rawUsage).not.toHaveProperty('iterations');
+    const json = new NativeUsageObserver(NATIVE_MODELS[0]);
+    json.observeJson({ model: NATIVE_MODELS[0], usage: { ...CACHE_START, iterations } });
+    expect(json.snapshot('completed').iterationsPresent).toBe(true);
+  });
+
+  it.each([[NATIVE_MODELS[0], NATIVE_MODELS[2]], [NATIVE_MODELS[2], NATIVE_MODELS[1]]])('should disable selected %s discounts for served %s', (selected, served) => {
+    const json = new NativeUsageObserver(selected);
+    json.observeJson({ model: served, usage: { ...CACHE_START, output_tokens: 500 } });
+    expect(json.snapshot('completed')).toMatchObject({ nativeServedModelId: served,
+      nativeInputUsageValidated: false, estimated: true, nativeUsageUncertainty: 'served_model_mismatch' });
+    expect(json.snapshot('completed').nativeInputPriceUnits40).toBeUndefined();
+    const stream = nativeUsageTurn(selected);
+    observeNativeEvent(stream, 'message_start', { message: { model: served, usage: CACHE_START } });
+    observeNativeEvent(stream, 'message_delta', { usage: { input_tokens: 500, output_tokens: 600 } });
+    expect(stream.snapshot('completed')).toMatchObject({ inputTokens: 10300, outputTokens: 600,
+      nativeInputUsageValidated: false, nativeUsageUncertainty: 'served_model_mismatch' });
+  });
+
+  it('should latch fallback blocks and missing or malformed served identity', () => {
+    const stream = nativeUsageTurn();
+    observeNativeEvent(stream, 'content_block_start', { content_block: { type: 'fallback', fallback_credit_token: 'private' } });
+    expect(stream.snapshot('completed')).toMatchObject({ fallbackPresent: true, estimated: true,
+      nativeInputUsageValidated: false, nativeUsageUncertainty: 'served_model_mismatch' });
+    expect(JSON.stringify(stream.snapshot('completed'))).not.toContain('private');
+    for (const model of [undefined, '', 'invalid model', 'x'.repeat(129)]) {
+      const json = new NativeUsageObserver(NATIVE_MODELS[0]);
+      json.observeJson({ model, usage: CACHE_START, content: [] });
+      expect(json.snapshot('completed')).toMatchObject({ nativeInputUsageValidated: false,
+        nativeUsageUncertainty: 'served_model_unverified' });
+    }
+  });
+
+  it.each(['cancelled', 'upstream_error', 'commit_failed', 'missing_message_stop', 'frame_overflow', 'timeout', 'reader_error'] as const)(
+    'should preserve valid input while output remains nonfinal after %s', termination => {
+      const observer = nativeUsageTurn(NATIVE_MODELS[0], CACHE_START, { input_tokens: 100, output_tokens: 500 });
+      expect(observer.snapshot(termination)).toMatchObject({ inputTokens: 10300, outputTokens: 500,
+        nativeInputUsageValidated: true, nativeInputUsageSource: 'message_delta',
+        nativeInputPriceUnits40: 60000, estimated: true, finalOutputObserved: false });
+      expect(nativeUsageTurn(NATIVE_MODELS[0], CACHE_START, {}, true).snapshot('completed')).toMatchObject({
+        nativeInputUsageValidated: true, outputTokens: 1, estimated: true, finalOutputObserved: false });
+    });
+
+  it('should latch finite decreases separately from malformed input and advance only safe lower bounds', () => {
+    const observer = nativeUsageTurn(NATIVE_MODELS[0], CACHE_START, { input_tokens: 10000.5, output_tokens: 500 });
+    expect(observer.accumulator.getState().messageDeltaInputDecreased).toBe(false);
+    observeNativeEvent(observer, 'message_delta', { usage: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300 } });
+    observeNativeEvent(observer, 'message_delta', { usage: { cache_creation_input_tokens: 300 } });
+    expect(observer.snapshot('completed')).toMatchObject({ inputTokens: 10400, nativeInputUsageValidated: false,
+      nativeUsageUncertainty: 'invalid_input', estimated: true });
+    expect(observer.snapshot('completed').nativeInputPriceUnits40).toBeUndefined();
+    observeNativeEvent(observer, 'message_delta', { usage: { cache_creation_input_tokens: 299 } });
+    expect(observer.accumulator.getState()).toMatchObject({ physicalLowerBound: 10400, messageDeltaInputDecreased: true });
+    const valid = nativeUsageTurn();
+    observeNativeEvent(valid, 'message_delta', { usage: { input_tokens: null, cache_creation_input_tokens: null } });
+    expect(valid.accumulator.getState().messageDeltaInputDecreased).toBe(false);
+    observeNativeEvent(valid, 'message_delta', { usage: { input_tokens: 0 } });
+    expect(valid.accumulator.getState().messageDeltaInputDecreased).toBe(true);
   });
 });
