@@ -1,4 +1,4 @@
-import type { Component } from 'svelte';
+import type { SvelteComponent } from 'svelte';
 import type {
   AuthUiError,
   AuthUiLabels,
@@ -16,5 +16,9 @@ export interface AuthMagicLinkVerifyProps {
   redirectDelayMs?: number;
 }
 
-declare const AuthMagicLinkVerify: Component<AuthMagicLinkVerifyProps>;
+declare class AuthMagicLinkVerify extends SvelteComponent<
+  AuthMagicLinkVerifyProps,
+  Record<string, never>,
+  { 'back-to-login': Record<string, never> }
+> {}
 export default AuthMagicLinkVerify;

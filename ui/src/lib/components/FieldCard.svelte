@@ -8,9 +8,9 @@
   export let onOpenComments: (() => void) | null = null;
   /**
    * Visual variant:
-   * - 'colored' (default, InitiativeDetail): colored header bg-{color}-100, rounded-lg shadow-sm card
+   * - 'colored' (default, InitiativeDetail): colored header bg-{color}-100, rounded-lg shadow-xs card
    * - 'plain' (OrganizationForm): simple rounded border card with plain h3 label
-   * - 'bordered' (Dashboard): rounded-lg shadow-sm card with border-b header separator
+   * - 'bordered' (Dashboard): rounded-lg shadow-xs card with border-b header separator
    */
   export let variant: 'colored' | 'plain' | 'bordered' = 'colored';
 
@@ -31,8 +31,8 @@
     variant === 'plain'
       ? 'rounded border border-slate-200 bg-white p-4'
       : variant === 'bordered'
-        ? 'rounded-lg border border-slate-200 bg-white p-6 shadow-sm'
-        : 'rounded-lg border border-slate-200 bg-white p-4 shadow-sm';
+        ? 'rounded-lg border border-slate-200 bg-white p-6 shadow-xs'
+        : 'rounded-lg border border-slate-200 bg-white p-4 shadow-xs';
 </script>
 
 <div class="{cardClasses} h-full" data-comment-section={commentSection}>

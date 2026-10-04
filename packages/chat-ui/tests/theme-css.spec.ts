@@ -196,8 +196,8 @@ describe('theme stylesheet drift guard', () => {
         offenders.push(file);
       }
     }
-    const tailwindConfig = readFileSync(join(uiRoot, 'tailwind.config.cjs'), 'utf8');
-    expect(tailwindConfig).not.toContain('.css');
+    const hostCss = readFileSync(join(uiRoot, 'src', 'app.css'), 'utf8');
+    expect(hostCss).not.toMatch(/@source[^;]*\.css/);
     expect(offenders).toEqual([]);
   });
 });

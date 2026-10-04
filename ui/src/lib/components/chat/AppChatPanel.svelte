@@ -1616,7 +1616,9 @@
   };
 
 
-  const startEditMessage = (m: ChatMessage) => {
+  const startEditMessage = (message: { id: string }) => {
+    const m = messages.find((candidate) => candidate.id === message.id);
+    if (!m) return;
     if (!m.id || m.role !== 'user') return;
     editingMessageId = m.id;
     editingContent = m.content ?? '';
@@ -1805,7 +1807,7 @@
   const isCopied = (messageId: string) => copiedMessageIds.has(messageId);
 
   const copyToClipboard = async (text: string, html?: string) => {
-    if (!text) return;
+    if (!text) return false;
     try {
       if (
         navigator?.clipboard?.write &&

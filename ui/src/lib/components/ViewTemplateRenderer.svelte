@@ -35,7 +35,7 @@
   />
 {:else if descriptor.mode === 'detail'}
   <!-- Detail mode: extensible slot for future detail renderers -->
-  <div class="rounded border border-slate-200 bg-white p-6 shadow-sm">
+  <div class="rounded border border-slate-200 bg-white p-6 shadow-xs">
     {#if descriptor.title}
       <h2 class="text-xl font-semibold text-slate-900">{descriptor.title}</h2>
     {/if}

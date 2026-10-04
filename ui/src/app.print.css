@@ -669,7 +669,7 @@
   /* Force display of all conditional sections in print - override Svelte conditionals */
   .template-initiative [class*="rounded-lg"],
   .template-initiative [class*="border"],
-  .template-initiative [class*="shadow-sm"],
+  .template-initiative [class*="shadow-xs"],
   .template-initiative > div[class*="grid"],
   .template-initiative > div[class*="rounded"],
   .template-initiative > div {
@@ -738,7 +738,7 @@
   /* Cards and boxes - COMPACT - Retirer toutes les bordures et rendre transparent */
   .template-initiative .rounded-lg,
   .template-initiative .border,
-  .template-initiative .shadow-sm,
+  .template-initiative .shadow-xs,
   .template-initiative [class*="border-"],
   .template-initiative [class*="bg-white"],
   .template-initiative [class*="bg-slate"] {
@@ -840,7 +840,7 @@
   /* EXCLURE Description (.prose) et Technologies (qui a ml-4) */
   .template-initiative .rounded-lg ul:not(.prose ul):not(.ml-4),
   .template-initiative .border ul:not(.prose ul):not(.ml-4),
-  .template-initiative .shadow-sm ul:not(.prose ul):not(.ml-4) {
+  .template-initiative .shadow-xs ul:not(.prose ul):not(.ml-4) {
     margin-left: 2pt !important;
     padding-left: 2pt !important;
   }
@@ -862,7 +862,7 @@
   /* Marges de gauche réduites pour les li avec flex (Bénéfices, Risques, Mesures) */
   .template-initiative .rounded-lg li.flex,
   .template-initiative .border li.flex,
-  .template-initiative .shadow-sm li.flex {
+  .template-initiative .shadow-xs li.flex {
     margin-left: 0 !important;
     padding-left: 0 !important;
   }
@@ -876,7 +876,7 @@
   /* Marges inférieures encore plus réduites pour les li dans les box */
   .template-initiative .rounded-lg li,
   .template-initiative .border li,
-  .template-initiative .shadow-sm li {
+  .template-initiative .shadow-xs li {
     margin-bottom: 0.3pt !important;
   }
 
@@ -1015,7 +1015,7 @@
   /* Taille réduite pour les textes dans les box (hors description) */
   .template-initiative .rounded-lg .text-slate-600:not(.prose),
   .template-initiative .border .text-slate-600:not(.prose),
-  .template-initiative .shadow-sm .text-slate-600:not(.prose) {
+  .template-initiative .shadow-xs .text-slate-600:not(.prose) {
     font-size: 6.5pt !important;
   }
 
@@ -1220,7 +1220,7 @@
   /* Ensure all sections are visible in print - force display */
   .template-initiative .rounded-lg,
   .template-initiative .border,
-  .template-initiative .shadow-sm {
+  .template-initiative .shadow-xs {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -1723,12 +1723,12 @@
      ============================================ */
   /* Marges plus importantes pour Technologies (qui utilise ml-4 = 16px = ~12pt) */
   /* Spécificité maximale pour s'assurer que cette règle prend le dessus sur toutes les autres */
-  .template-initiative .rounded-lg.border.shadow-sm ul.list-disc.ml-4,
+  .template-initiative .rounded-lg.border.shadow-xs ul.list-disc.ml-4,
   .template-initiative .rounded-lg.border ul.list-disc.ml-4,
-  .template-initiative .rounded-lg.shadow-sm ul.list-disc.ml-4,
+  .template-initiative .rounded-lg.shadow-xs ul.list-disc.ml-4,
   .template-initiative .rounded-lg ul.list-disc.ml-4,
   .template-initiative .border ul.list-disc.ml-4,
-  .template-initiative .shadow-sm ul.list-disc.ml-4,
+  .template-initiative .shadow-xs ul.list-disc.ml-4,
   .template-initiative ul.list-disc.ml-4 {
     margin-left: 9pt !important;
     padding-left: 5pt !important;

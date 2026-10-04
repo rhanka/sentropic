@@ -1,4 +1,4 @@
-import type { Component } from 'svelte';
+import type { SvelteComponent } from 'svelte';
 import type {
   AuthUiError,
   AuthUiFederationProvider,
@@ -28,5 +28,9 @@ export interface AuthRegisterProps {
   federationProviders?: AuthUiFederationProvider[];
 }
 
-declare const AuthRegister: Component<AuthRegisterProps>;
+declare class AuthRegister extends SvelteComponent<
+  AuthRegisterProps,
+  Record<string, never>,
+  { 'login-link': Record<string, never> }
+> {}
 export default AuthRegister;

@@ -106,7 +106,7 @@ test.describe('Internationalization reliability', () => {
     // Fallback path when no active matrix is loaded: keep deterministic i18n checks in the matrix area.
     await expect(page.getByText(emptyText)).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: createLabel }).click();
-    const createDialog = page.locator('div.fixed.inset-0.bg-black.bg-opacity-50').last();
+    const createDialog = page.locator('div.fixed.inset-0').filter({ hasText: createDialogBody }).last();
     await expect(createDialog).toBeVisible({ timeout: 5_000 });
     await expect(createDialog.getByText(createDialogBody)).toBeVisible({ timeout: 5_000 });
     await expect(createDialog.getByText(baseLabel)).toBeVisible({ timeout: 5_000 });

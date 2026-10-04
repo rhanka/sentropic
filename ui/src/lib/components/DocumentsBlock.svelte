@@ -372,7 +372,7 @@
               <th class="py-2 w-10"><span class="sr-only">{$_('documents.table.actions')}</span></th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="[&>tr+tr]:border-t [&>tr+tr]:border-slate-100">
             {#each items as doc (doc.id)}
               <tr class="align-top">
                 <td class="py-3 pr-2">
