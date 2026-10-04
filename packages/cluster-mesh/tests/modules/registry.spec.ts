@@ -146,6 +146,27 @@ describe('module registry', () => {
     expect(namespace.createGatewayRouter()).toBe('gw:createGatewayRouter');
   });
 
+  it.each([['0.22.3', '0.19.1'], ['0.23.0', '0.20.0']])(
+    'should load the coherent supported mesh %s and gateway %s tuple', async (meshVersion, gatewayVersion) => {
+      tree.install('app', fakeMesh('mesh', meshVersion));
+      tree.install('app', fakeGateway('gw', gatewayVersion));
+      const modules = registry();
+      await modules.load('llm-mesh');
+      await modules.load('gateway');
+      expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: meshVersion });
+      expect(modules.snapshot().gateway).toMatchObject({ state: 'loaded', installedVersion: gatewayVersion });
+    },
+  );
+
+  it.each(['0.21.0', '0.20.1-rc.1'])('should refuse gateway %s before evaluation', async (version) => {
+    tree.install('app', fakeMesh('mesh', '0.23.0'));
+    tree.install('app', fakeGateway('gw', version));
+    await expect(registry().load('gateway')).rejects.toMatchObject({
+      reason: 'incompatible_version', packageName: '@sentropic/llm-gateway', installedVersion: version,
+    });
+    expect(evaluations()).toEqual([]);
+  });
+
   it('should probe metadata without evaluating and demote after a later failure', async () => {
     tree.install('app', fakeMesh('mesh'));
     tree.install('app', {
@@ -184,19 +205,24 @@ describe('module registry', () => {
 
 describe('release range check', () => {
   it.each([
-    ['0.22.0', '>=0.22.0 <0.23.0', true],
-    ['0.22.9', '>=0.22.0 <0.23.0', true],
-    ['0.23.0', '>=0.22.0 <0.23.0', false],
-    ['0.21.2', '>=0.22.0 <0.23.0', false],
+    ['0.22.0', '>=0.22.0 <0.24.0', true],
+    ['0.22.9', '>=0.22.0 <0.24.0', true],
+    ['0.23.0', '>=0.22.0 <0.24.0', true],
+    ['0.23.9', '>=0.22.0 <0.24.0', true],
+    ['0.24.0', '>=0.22.0 <0.24.0', false],
+    ['0.21.2', '>=0.22.0 <0.24.0', false],
     ['5.10.3', '^5.10.0', true],
     ['6.0.0', '^5.10.0', false],
     ['0.15.4', '^0.15.0', true],
     ['0.16.0', '^0.15.0', false],
-    ['0.19.0-beta.1', '>=0.19.0 <0.20.0', false],
-    ['0.19.0+build.7', '>=0.19.0 <0.20.0', true],
-    ['0.20.0+build.7', '>=0.19.0 <0.20.0', false],
-    ['0.19.0-beta.1+build.7', '>=0.19.0 <0.20.0', false],
-    ['0.19.0+', '>=0.19.0 <0.20.0', false],
+    ['0.19.0-beta.1', '>=0.19.0 <0.21.0', false],
+    ['0.19.0+build.7', '>=0.19.0 <0.21.0', true],
+    ['0.20.0+build.7', '>=0.19.0 <0.21.0', true],
+    ['0.20.1-rc.1', '>=0.19.0 <0.21.0', false],
+    ['0.21.0', '>=0.19.0 <0.21.0', false],
+    ['0.18.0', '>=0.19.0 <0.21.0', false],
+    ['0.19.0-beta.1+build.7', '>=0.19.0 <0.21.0', false],
+    ['0.19.0+', '>=0.19.0 <0.21.0', false],
     [undefined, '^5.10.0', false],
   ])('should evaluate %s against %s as %s', (version, range, expected) => {
     expect(satisfiesRange(version, range)).toBe(expected);
