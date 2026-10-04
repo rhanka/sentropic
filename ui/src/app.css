@@ -1,6 +1,41 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss' source(none);
+@import './tailwind-theme.css';
+
+@source '.';
+@source '../../packages/chat-ui/src';
+
+@theme {
+  --color-primary: oklch(50% 0.134 242.749);
+  --color-accent: oklch(70.4% 0.14 182.503);
+  --color-warning: oklch(57.7% 0.245 27.325);
+}
+
+/* Preserve the existing touch hover behavior and preflight defaults. */
+@custom-variant hover (&:hover);
+
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  dialog {
+    margin: auto;
+  }
+}
 
 :root {
   --chat-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
