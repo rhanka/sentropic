@@ -6,7 +6,7 @@ import {
 } from '../src/index.js';
 import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
 import { NativeMessagesUpstreamError, RouteQuoteError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
-import { fixtureQuote, textResponse } from './fixtures/budget.js';
+import { fixtureQuote } from './fixtures/budget.js';
 
 const PATHS = ['/v1/messages', '/v1/chat/completions', '/v1/messages/count_tokens'];
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -396,7 +396,10 @@ describe('default byte pool overlap on one replica', () => {
       expect(openOwners.map(owner => owner.lease.bytes)).toEqual(enabled ? [0, 4096] : [4096, 4096]);
       const allEntered = deferred(); const allow = deferred(); let entered = 0;
       const enter = async () => { if (++entered === 64) allEntered.resolve(); await allow.promise; };
-      const h = nativeHarness(); h.attempt.generate = textResponse({ inputTokens: 2, outputTokens: 1 });
+      const h = nativeHarness();
+      h.attempt.generate = async () => ({ id: 'fixture', providerId: 'anthropic', modelId: h.model,
+        message: { role: 'assistant', content: 'answer' }, text: 'answer', toolCalls: [],
+        finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 } });
       const config = { ...h.deps.config, callerAuth: { async verify() { await enter(); return h.deps.config.callerAuth.verify(); } } };
       const apps = Array.from({ length: 4 }, () => {
         const app = limitedRouter(h, {}, order, [], { config, nativeMessagesEnabled: enabled });
