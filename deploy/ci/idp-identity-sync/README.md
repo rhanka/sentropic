@@ -1,8 +1,9 @@
 # IdP identity sync prod → preprod
 
 This CD flow preserves prod `users.id` as the IdP subject in preprod. It copies only
-the reviewed users/WebAuthn columns; preprod OAuth clients, signing keys and the
-authentication state of users whose IDs do not change remain intact.
+the reviewed users/WebAuthn columns and explicit OAuth consents. Preprod OAuth
+clients, signing keys and other authentication state of users whose IDs do not
+change remain intact.
 
 ## Flow and ownership
 
@@ -108,13 +109,44 @@ Kubeconfigs may be raw YAML or base64. Each job removes its private files in an
 
 The JSON includes `synced_users`, `synced_webauthn`, `rekeyed`,
 `preprod_only_kept`, `post_users`, `post_webauthn`, `rekey_dropped_sessions`,
-`rekey_moved_webauthn`, `rekey_pairs`, and `outcome`. Job completion alone is not
+`rekey_moved_webauthn`, `consents_upserted`, `consents_removed`, `rekey_pairs`,
+and `outcome`. Job completion alone is not
 acceptance: the expected termination audit must also be available and valid.
+
+## Consent convergence and client mapping
+
+For each prod user, preprod has exactly the prod grants on mapped clients: a
+missing grant still shows the consent screen, including for a newly imported
+user. No trusted-client flag or consent bypass is introduced.
+
+The versioned [client-map.csv](../../k8s/overlays/preprod/idp-identity-sync/client-map.csv)
+maps `radar-immobilier` to `radar-immobilier-preprod`. It ships only in the preprod
+SQL ConfigMap. Source and target client IDs are both unique in the map, and every
+target must already exist in preprod; an invalid map aborts the entire transaction.
+
+The same repeatable-read export includes `users.csv`, `webauthn.csv`,
+`consents.csv` and `snapshot.csv`, all covered by SHA256SUMS. Snapshot fields are
+UTC timestamp, user count, WebAuthn count and consent count. The reader has only
+the six consent-column grants and cannot read OAuth clients.
+
+The importer maps consent client IDs and copies tenant IDs, scopes and timestamps
+exactly. It updates changed grants and deletes grants absent from prod for
+imported users on mapped clients, including revocations. Preprod-only users'
+grants and grants on unmapped clients stay intact. Rekeying drops the duplicate's
+grants; consent sync recreates explicit prod grants under the prod user ID.
+Audit counts `consents_upserted` and `consents_removed` report actual changes;
+an unchanged rerun reports 0/0. Failed maps and postconditions emit only
+`consent_client_missing` or `consent_postcondition_failed`.
+
+On merge, `deploy-preprod` ships the importer expecting four relay files, while
+the `bundle-prod` push ships the exporter and reader GRANT. A scheduled run
+between those updates fails closed on the manifest; the next run converges.
+After both updates, s-conductor dispatches a dry-run and then an approved real run.
 
 ## Failure and rollback
 
 On import SQL/integrity/freshness failure, no transaction commits. Inspect the
-generic Job verdict and IDs/counts; never publish raw diagnostic files or CSVs.
+validated failure code and UUID-only rekey pairs; never publish raw diagnostic files or CSVs.
 Export failure re-suspends prod; the workflow skips the dependent import.
 
 To reverse a **committed** import, first disable scheduled runs and stop preprod
