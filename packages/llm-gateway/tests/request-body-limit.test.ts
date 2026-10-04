@@ -428,3 +428,57 @@ describe('default byte pool overlap on one replica', () => {
         acquisitions: baseline.acquisitions + 68, releases: baseline.releases + 68 });
     });
 });
+
+describe('actual incoming bytes and reader cleanup', () => {
+  it.each([undefined, '0', '1', '32000000', '999999999'])('ignores Content-Length %s for grants and exact EOF size', async length => {
+    const pool = new GatewayBodyBytePool(32); const granted: number[] = [];
+    const bytes = utf8('{"text":"é😀"}');
+    const storage = (size: number) => { granted.push(pool.stats.reservedBytes); return new Uint8Array(size); };
+    const { raw } = bodyRequest([bytes.subarray(0, 2), bytes.subarray(2, 5), bytes.subarray(5)], PATHS[0],
+      length === undefined ? {} : { 'content-length': length });
+    const owner = await ensureCheckedGatewayBody(raw, { pool, limitBytes: 32, storage });
+    expect(granted).toEqual([2, 5, bytes.length]);
+    expect(owner.bytes).toBe(bytes.length); expect(owner.lease.bytes).toBe(bytes.length);
+    expect(owner.body).toEqual({ text: 'é😀' }); expect(raw.body!.locked).toBe(false);
+    owner.release(); expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
+  });
+  it('actual oversize has 413 precedence over unavailable capacity on the returned chunk', async () => {
+    const pool = new GatewayBodyBytePool(8); const held = pool.acquire(); held.extend(3);
+    const storage = vi.fn((size: number) => new Uint8Array(size));
+    const { raw, cancel } = bodyRequest([utf8('{} '), utf8('abcdef')], PATHS[1], { 'content-length': '1' });
+    await expect(ensureCheckedGatewayBody(raw, { pool, limitBytes: 8, storage })).rejects.toMatchObject({
+      kind: 'request-too-large', requestSize: { requestBytes: 9, limitBytes: 8, source: 'gateway', sizeIsLowerBound: true },
+    });
+    expect(storage.mock.calls).toEqual([[3]]); expect(cancel).toHaveBeenCalledTimes(1);
+    expect(raw.body!.locked).toBe(false); expect(pool.stats.reservedBytes).toBe(3);
+    held.release(); expect(pool.stats.reservedBytes).toBe(0);
+  });
+  it.each([false, true])('abort preserves its reason and restores partial bytes even if reader cancellation rejects (%s)', async rejecting => {
+    const pool = new GatewayBodyBytePool(32); const firstStored = deferred();
+    const abort = new AbortController(); const reason = new DOMException('Ingress timeout', 'TimeoutError');
+    const cancel = vi.fn(async () => { if (rejecting) throw Error('reader cancel failed'); });
+    const raw = new Request('https://gateway.test/v1/messages', { method: 'POST', signal: abort.signal,
+      body: new ReadableStream({ start(controller) { controller.enqueue(utf8('{')); }, cancel }), duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const pending = ensureCheckedGatewayBody(raw, { pool, limitBytes: 32,
+      storage: size => { firstStored.resolve(); return new Uint8Array(size); } });
+    await firstStored.promise; expect(pool.stats.reservedBytes).toBe(1);
+    const refused = expect(pending).rejects.toBe(reason);
+    abort.abort(reason); await refused;
+    expect(cancel).toHaveBeenCalledTimes(1); expect(raw.body!.locked).toBe(false);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+  it('read failure releases received chunks without fabricating a numeric 413', async () => {
+    const pool = new GatewayBodyBytePool(32); const stored = deferred();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const raw = new Request('https://gateway.test/v1/messages', { method: 'POST', duplex: 'half',
+      body: new ReadableStream<Uint8Array>({ start(input) { controller = input; input.enqueue(utf8('{"')); } }),
+    } as RequestInit & { duplex: 'half' });
+    const pending = ensureCheckedGatewayBody(raw, { pool, limitBytes: 32,
+      storage: size => { stored.resolve(); return new Uint8Array(size); } });
+    await stored.promise; expect(pool.stats.reservedBytes).toBe(2);
+    const failure = Error('transport read failed'); const refused = expect(pending).rejects.toBe(failure);
+    controller.error(failure); await refused;
+    expect(raw.body!.locked).toBe(false); expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
+  });
+});
