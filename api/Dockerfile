@@ -125,6 +125,41 @@ FROM base AS development
 WORKDIR /workspace/api
 CMD ["npm", "run", "dev"]
 
+# Retain legacy esbuild interfaces while rebuilding their embedded Go runtime.
+FROM golang:1.26.7-alpine3.23@sha256:b17af760035fc2f338eed92d448a6c67f2d45438844fc6c60678fa5f99e44b57 AS ci-esbuild
+RUN mkdir -p /patched && \
+    GOBIN=/patched go install github.com/evanw/esbuild/cmd/esbuild@v0.19.12 && \
+    mv /patched/esbuild /patched/esbuild-0.19.12 && \
+    GOBIN=/patched go install github.com/evanw/esbuild/cmd/esbuild@v0.18.20 && \
+    mv /patched/esbuild /patched/esbuild-0.18.20
+
+# CI runners retain npm, devDependencies, test sources and built workspaces.
+# This target is a toolbox only; the production target is the shipped SUT.
+FROM development AS ci-tools
+COPY --from=ci-esbuild /patched /patched
+RUN test "$(node -p "require('/workspace/node_modules/esbuild/package.json').version")" = 0.19.12 && \
+    test "$(node -p "require('/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild/package.json').version")" = 0.18.20 && \
+    architecture="$(node -p 'process.arch')" && \
+    cp /patched/esbuild-0.19.12 /workspace/node_modules/@esbuild/linux-${architecture}/bin/esbuild && \
+    cp /patched/esbuild-0.19.12 /workspace/node_modules/esbuild/bin/esbuild && \
+    cp /patched/esbuild-0.18.20 /workspace/node_modules/@esbuild-kit/core-utils/node_modules/@esbuild/linux-${architecture}/bin/esbuild && \
+    cp /patched/esbuild-0.18.20 /workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild/bin/esbuild && \
+    /workspace/node_modules/esbuild/bin/esbuild --version | grep -qx '0.19.12' && \
+    /workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild/bin/esbuild --version | grep -qx '0.18.20' && \
+    rm -rf /patched
+# Update vulnerable bundled npm packages without changing npm's major version.
+RUN mkdir -p /tmp/tool-npm-patches && \
+    for dependency in ip-address@10.3.1 pacote@21.5.1; do \
+      package="${dependency%@*}"; version="${dependency##*@}"; \
+      npm pack "$dependency" --pack-destination /tmp/tool-npm-patches && \
+      rm -rf "/usr/local/lib/node_modules/npm/node_modules/$package" && \
+      mkdir -p "/usr/local/lib/node_modules/npm/node_modules/$package" && \
+      tar -xzf "/tmp/tool-npm-patches/$package-$version.tgz" --strip-components=1 \
+        -C "/usr/local/lib/node_modules/npm/node_modules/$package" || exit 1; \
+    done && rm -rf /tmp/tool-npm-patches /root/.npm
+RUN apk add --no-cache chromium && \
+    npm --prefix /workspace/e2e ci --ignore-scripts
+
 # BR-39 deploy (D4-a) — IdP screens build stage. Self-contained, mirrors
 # apps/auth-idp/web/Dockerfile (NOT a root workspace member; pulls @sentropic/auth-ui
 # via the relative `file:` dependency). Output: apps/auth-idp/web/build, COPYed into
@@ -168,6 +203,9 @@ ENV NODE_ENV=production
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 # Exception-aware gate (inherits .security/ from the base stage's COPY . .).
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
+# Runtime entrypoints and boot migrations use Node directly, never npm/npx.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /root/.npm && \
+    ! command -v npm && ! command -v npx && test ! -e /root/.npm
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);

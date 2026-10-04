@@ -1,6 +1,6 @@
 services:
   api:
-    image: ${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION:-latest}
+    image: ${API_IMAGE_REF:-${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION:-latest}}
     build:
       context: .
       dockerfile: ./api/Dockerfile

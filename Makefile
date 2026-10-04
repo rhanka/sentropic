@@ -7,6 +7,11 @@ export COMPOSE_PROJECT_NAME ?= $(ENV)
 DOCKER_COMPOSE  ?= docker compose
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
+CI_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml
+API_TEST_CI ?= 0
+API_TEST_SUT ?= 0
+API_TEST_RUN = $(if $(filter 1,$(API_TEST_CI)),$(CI_COMPOSE) run --rm --no-deps,$(DOCKER_COMPOSE) exec -T)
+API_TEST_URL = $(if $(filter 1,$(API_TEST_SUT)),http://api-sut:8787,http://api:8787)
 
 export API_PORT ?= 8787
 export UI_PORT ?= 5173
@@ -31,10 +36,20 @@ export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
-export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/cluster-mesh/src packages/cluster-mesh/package.json packages/cluster-mesh/tsconfig.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json packages/chat-server/src packages/chat-server/package.json packages/chat-server/tsconfig.json packages/comments/src packages/comments/package.json packages/comments/tsconfig.json api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/cluster-mesh/src packages/cluster-mesh/package.json packages/cluster-mesh/tsconfig.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json packages/chat-server/src packages/chat-server/package.json packages/chat-server/tsconfig.json packages/comments/src packages/comments/package.json packages/comments/tsconfig.json api/src api/drizzle apps/auth-idp api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
+API_IMAGE_RECEIPT ?= .tmp/ci-prod-image/api-image-id
+export API_IMAGE_REF ?= $(shell cat $(API_IMAGE_RECEIPT) 2>/dev/null)
+export API_TOOL_IMAGE_NAME ?= sentropic-api-tools
+# Include source inputs: the toolbox contains test sources and built workspaces.
+# Hash paths as well as bytes, so additions, deletions and renames invalidate it.
+ifndef API_TOOL_VERSION
+API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+endif
+export API_TOOL_VERSION
+API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
 export UI_IMAGE_NAME  ?= sentropic-ui
 export E2E_IMAGE_NAME ?= sentropic-e2e
 export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
@@ -454,7 +469,8 @@ load-ui:
 
 .PHONY: build-api-image
 build-api-image: ## Build the API Docker image for production
-	TARGET=production $(DOCKER_COMPOSE) build --no-cache api
+	API_IMAGE_REF= TARGET=production $(DOCKER_COMPOSE) build --no-cache api
+	@$(MAKE) record-api-image ENV=$(ENV)
 
 .PHONY: build-api
 build-api: build-api-image
@@ -462,12 +478,64 @@ build-api: build-api-image
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
 	@echo "💾 Saving API image as artifact..."
+	@$(MAKE) record-api-image ENV=$(ENV)
 	@docker save $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -o api-image.tar
 
 .PHONY: load-api
 load-api:
 	@echo "📥 Loading API image from artifact..."
 	@docker load -i api-image.tar
+	@$(MAKE) verify-api-image ENV=$(ENV)
+
+.PHONY: record-api-image verify-api-image
+record-api-image: ## Record the locally built artifact identity for transport and runtime pinning
+	@mkdir -p "$$(dirname "$(API_IMAGE_RECEIPT)")"
+	@docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) --format '{{.Id}}' > "$(API_IMAGE_RECEIPT)"
+verify-api-image: ## Fail if the loaded canonical tag differs from the recorded artifact
+	@test -s "$(API_IMAGE_RECEIPT)"
+	@expected="$$(cat "$(API_IMAGE_RECEIPT)")"; actual="$$(docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) --format '{{.Id}}')"; \
+	test "$$actual" = "$$expected" || { echo 'Production artifact identity mismatch'; exit 1; }; \
+	echo "Verified production artifact $$actual"
+
+.PHONY: test-ci-api-runtime
+test-ci-api-runtime: verify-api-image ## Prove the production artifact has no npm CLI, global tree or cache
+	@docker run --rm $(API_IMAGE_REF) sh -ec '! command -v npm; ! command -v npx; test ! -e /usr/local/lib/node_modules/npm; test ! -e /root/.npm; node --version'
+
+.PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
+api-tool-version: ## Print the content-addressed CI toolbox tag
+	@echo $(API_TOOL_VERSION)
+
+.PHONY: test-ci-api-tooling
+test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
+	@bash scripts/test-api-tooling.sh $(or $(CI_TOOLING_CASE),all)
+
+.PHONY: test-ci-api-tool-runtime
+test-ci-api-tool-runtime: ci-test-env ## Verify npm runners and rebuilt esbuild Node interfaces
+	@docker run --rm $(API_TOOL_IMAGE) node -e 'const {execFileSync}=require("node:child_process"); execFileSync("npm",["--version"],{stdio:"inherit"}); execFileSync("npx",["--no-install","vitest","--version"],{stdio:"inherit"}); for(const path of ["/workspace/node_modules/esbuild","/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild"]){const tool=require(path); const result={exports:null}; new Function("module",tool.transformSync("module.exports = 6 * 7 as number",{loader:"ts"}).code)(result); if(result.exports!==42)throw Error("esbuild transform failed: "+path); console.log("PASS: esbuild",tool.version,"TypeScript transform and Node protocol");}'
+
+build-api-tool-image: ## Reuse the toolbox locally or from the registry; build only on a cache miss
+	@if docker image inspect $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
+		echo "Reusing local toolbox $(API_TOOL_IMAGE)"; \
+	elif docker pull $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
+		echo "Reusing registry toolbox $(API_TOOL_IMAGE)"; \
+	else \
+		docker build --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .; \
+	fi
+
+check-api-tool-image: ## Check the toolbox tag in the registry (uses existing Docker credentials)
+	@docker manifest inspect $(API_TOOL_IMAGE) >/dev/null
+
+pull-api-tool-image: ## Pull the toolbox by its input hash
+	@docker pull $(API_TOOL_IMAGE)
+
+save-api-tool: ## Save the toolbox for CI artifact transport
+	@docker save $(API_TOOL_IMAGE) -o api-tool-image.tar
+
+load-api-tool: ## Load the toolbox from a CI artifact
+	@docker load -i api-tool-image.tar
+
+publish-api-tool-image: docker-login ## Publish the non-shipping toolbox for reuse across CI runs
+	@docker push $(API_TOOL_IMAGE)
 
 # -----------------------------------------------------------------------------
 # Docker helpers
@@ -487,7 +555,18 @@ pull-api-image: docker-login
 
 publish-api-image: docker-login
 	@echo "▶ Pushing api image to registry"
+	@$(MAKE) verify-api-image ENV=$(ENV)
+	@if docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/ci-prod-image/existing-manifest.json 2> .tmp/ci-prod-image/manifest-error; then \
+		docker run --rm -i $(LLM_MESH_NODE_IMAGE) node -e 'let s=""; for await (const c of process.stdin) s+=c; const m=JSON.parse(s); if (m.config?.digest !== process.argv[1]) { console.error("Production tag collision: recorded artifact differs from registry"); process.exit(1); }' "$(API_IMAGE_REF)" < .tmp/ci-prod-image/existing-manifest.json; \
+	elif ! grep -Eq 'manifest unknown|no such manifest|manifest not found' .tmp/ci-prod-image/manifest-error; then \
+		echo 'Cannot establish production registry tag identity; refusing publication'; exit 1; \
+	fi
 	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+
+.PHONY: publish-api-main-image
+publish-api-main-image: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
+	docker tag $(API_IMAGE_REF) $(REGISTRY)/$(API_IMAGE_NAME):main
+	docker push $(REGISTRY)/$(API_IMAGE_NAME):main
 
 check-ui-image: docker-login
 	@echo "▶ Checking if image $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) exists"
@@ -2216,10 +2295,63 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
-up-api-test-ci: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
+up-api-test-ci: ci-test-env ## Start source API from the cached toolbox; no install, workspace build or mount
+	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
+	DISABLE_RATE_LIMIT=true $(CI_COMPOSE) up --no-build -d --wait api
+
+.PHONY: up-api-sut down-api-ci logs-api-ci
+up-api-sut: ci-test-env ## Start the shipped API as-is; boot owns migrations
+	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
+	# The app treats any nonempty value as disabled; the runner expects literal false.
+	DISABLE_RATE_LIMIT=$(if $(filter false 0,$(DISABLE_RATE_LIMIT)),,$(or $(DISABLE_RATE_LIMIT),true)) $(CI_COMPOSE) up --no-build -d --wait api-sut
+down-api-ci: ## Stop the isolated CI source/SUT stack
+	$(CI_COMPOSE) down
+logs-api-ci: ## Print source and production SUT logs
+	$(CI_COMPOSE) logs --no-color api api-sut auth-idp
+
+.PHONY: ci-test-env restore-api-sut verify-api-sut-restart
+latest-prod-backup: ## Print the latest production dump basename for the restore job
+	@find data/backup -maxdepth 1 -name 'prod-*.dump' -printf '%T@ %f\n' | sort -nr | head -n 1 | cut -d' ' -f2-
+ci-test-env:
+	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
+
+CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,data) ORDER BY id)::text,'[]')) FROM initiatives
+CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
+restore-api-sut: ci-test-env ## Restore a dump before the first production boot; verify business data survives
+	@test -n "$(BACKUP_FILE)" && test -f "data/backup/$(BACKUP_FILE)"
+	$(CI_COMPOSE) stop api api-sut auth-idp
+	$(CI_COMPOSE) up -d --wait postgres
+	$(CI_COMPOSE) exec -T postgres pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges -U app -d app < "data/backup/$(BACKUP_FILE)"
+	@set -eu; before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
+	$(MAKE) up-api-sut ENV=$(ENV); \
+	after="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_DATA_SNAPSHOT)" )"; \
+	test "$$before" = "$$after"; echo "Restored business data preserved across production boot: $$after"
+
+verify-api-sut-restart: ci-test-env ## Verify restart does not replay migrations or alter restored business data
+	@set -eu; before="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_MIGRATION_SNAPSHOT); $(CI_DATA_SNAPSHOT)" )"; \
+	$(CI_COMPOSE) restart api-sut; \
+	$(CI_COMPOSE) up --no-build -d --wait api-sut; \
+	after="$$( $(CI_COMPOSE) exec -T postgres psql -U app -d app -At -v ON_ERROR_STOP=1 -c "$(CI_MIGRATION_SNAPSHOT); $(CI_DATA_SNAPSHOT)" )"; \
+	test "$$before" = "$$after"; echo "Production restart preserves migration journals and business data: $$after"
+
+.PHONY: up-idp-sut smoke-idp-screens-ci
+up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrated database
+	$(CI_COMPOSE) run --rm --no-deps api npm run oauth:seed-clients
+	# Production CSP permits HTTPS RP redirects; this callback is intercepted by Playwright.
+	$(CI_COMPOSE) exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 -c "UPDATE oauth_clients SET redirect_uris=ARRAY['https://ci-rp.invalid/auth/oauth/callback'] WHERE client_id='design-system';"
+	$(CI_COMPOSE) up --no-build -d --wait auth-idp
+smoke-idp-screens-ci: ci-test-env ## Run the existing screen smoke from the cached toolbox against compiled IdP
+	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
+	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
+	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
+	test -n "$$user_id"; test -n "$$session_token"; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace/e2e \
+		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
+		-e SCREEN_SMOKE_REDIRECT_URI=https://ci-rp.invalid/auth/oauth/callback \
+		-e SCREEN_SMOKE_EMAIL="$$smoke_email" \
+		-e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
+		api sh -ec 'cp ../apps/auth-idp/screen-smoke.ts ./idp-screen-smoke.ts; node ./idp-screen-smoke.ts'
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
@@ -2792,11 +2924,15 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 	@mkdir -p .security
 	@echo "  📋 Step 1: Executing container scan..."
 	@if [ "$*" = "api" ]; then \
-		IMAGE_NAME="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"; \
+		IMAGE_NAME="$(or $(API_IMAGE_REF),$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION))"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	elif [ "$*" = "ui" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
+		echo "  Scanning image: $$IMAGE_NAME"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
+	elif [ "$*" = "api-tool" ]; then \
+		IMAGE_NAME="$(API_TOOL_IMAGE)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	else \
@@ -2851,7 +2987,7 @@ API_TEST_ARGS ?=
 .PHONY: test-api-%
 
 test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SCOPE=admin make test-api-unit)
-	@$(DOCKER_COMPOSE) exec -T -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
+	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) -e SCOPE="$(SCOPE)" -e VITEST_MAX_WORKERS="$(API_TEST_WORKERS)" -e API_TEST_ARGS="$(API_TEST_ARGS)" api sh -lc ' \
 	  TEST_TYPE="$*"; \
 	  requested_workers="$${VITEST_MAX_WORKERS:-4}"; \
 	  extra_args="$${API_TEST_ARGS:-}"; \
@@ -2883,7 +3019,7 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 
 .PHONY: test-api-smoke-restore
 test-api-smoke-restore: ## Run smoke tests in production mode (for restore validation)
-	@$(DOCKER_COMPOSE) exec -T api sh -lc 'npm run test:smoke:restore'
+	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) api sh -lc 'npm run test:smoke:restore'
 
 # -----------------------------------------------------------------------------
 # Queue Management
