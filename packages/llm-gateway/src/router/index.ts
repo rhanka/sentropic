@@ -44,6 +44,8 @@ import { assertBudgetRouteDeps } from '../admission.js';
 import { buildNativeResponseHeaders } from '../native-headers.js';
 import { ensureCheckedGatewayBody, gatewayRequestBodyLimit, type RequestBodyLimitOptions } from '../request-body-limit.js';
 import { retainGatewayStreamBody } from '../request-body-retention.js';
+import { runNativeCountTokens, NativeCountTokensRefusal, type NativeCountTokensPort } from '../native-count-tokens.js';
+import type { NativeCountTokensRateLimiter } from '../native-count-rate.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -83,6 +85,9 @@ export interface CreateGatewayRouterOptions {
   readonly budget?: GatewayBudgetOptions;
   /** Trusted construction-time switch; absent hosts rely on capability gates. */
   readonly nativeMessagesEnabled?: boolean;
+  readonly nativeCountTokens?: NativeCountTokensPort;
+  /** Trusted injection; omitted routers share the process-wide count limiter. */
+  readonly nativeCountRate?: NativeCountTokensRateLimiter;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -351,6 +356,30 @@ export const createGatewayRouter = (
   // --- Provider-compat wire (FROZEN v1 surface) ---
   app.post('/v1/messages', handle('anthropic-messages'));
   app.post('/v1/chat/completions', handle('openai-chat-completions'));
+
+  app.post('/v1/messages/count_tokens', async c => {
+    const id = requestId();
+    const owner = await ensureCheckedGatewayBody(c.req.raw, options.requestBody);
+    const headers = readHeaders(c.req.raw.headers);
+    try {
+      const auth = await authenticateCaller(config.callerAuth, headers, authContextFor(c.req.raw, id));
+      if (!auth.ok || !auth.cost) throw new GatewayError('caller-auth-failed', 'count caller denied');
+      if (config.mode === 'cross-user-pool' && !config.crossUserPoolEnabled) {
+        throw new GatewayError('cross-user-disabled', 'count partition disabled');
+      }
+      const result = await runNativeCountTokens({ enabled: options.nativeMessagesEnabled,
+        port: options.nativeCountTokens, rate: options.nativeCountRate }, {
+        cost: auth.cost, body: owner.body, headers, signal: c.req.raw.signal, requestId: id,
+      });
+      forwardProviderHeaders(c, result.headers, true);
+      c.header(REQUEST_ID_HEADER, id);
+      c.header('X-Sentropic-Relay', 'native');
+      return c.json(result.body as object, 200);
+    } catch (error) {
+      return sendError(c, error instanceof NativeCountTokensRefusal ? error.response
+        : toProviderShapedError('anthropic-messages', error, readModel(owner.body) ?? undefined), id);
+    }
+  });
 
   app.get('/v1/models', async (c) => {
     const id = requestId();
