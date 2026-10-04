@@ -12,6 +12,7 @@ namespace: sentropic-preprod
 resources:
   - ../../base
   - ingress.yaml
+  - idp-identity-sync
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
 #   images:
