@@ -120,7 +120,8 @@ export const runRouteJsonFlow = async (
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
-      const terminal = () => error instanceof NativeMessagesUpstreamError ? error : terminalGatewayError(
+      const terminal = () => error instanceof NativeMessagesUpstreamError ? error
+        : nativeObserver ? new NativeMessagesUpstreamError({ status: 503 }) : terminalGatewayError(
         classification, servedTargetFor(diagnostic), 'all planned routes failed',
       );
       try {

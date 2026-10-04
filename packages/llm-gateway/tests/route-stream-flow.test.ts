@@ -10,6 +10,7 @@ import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNativ
 import { CACHE_START, NATIVE_MODELS } from './fixtures/native-usage.js';
 import * as nativeUsage from '../src/native-usage.js';
 import * as nativeLife from '../src/native-lifecycle.js';
+import { concatBytes } from '../src/native-sse.js';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import {
   NOW_MS, answerStream, budgetConfig, quotingPlanner, recordingBudget, streamAttempt, type BudgetRecorder,
@@ -859,6 +860,82 @@ describe('N5 malformed native input and physical lower bounds', () => {
       nativeUsageUncertainty: 'served_model_mismatch', estimated: true });
     expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
     expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_400);
+  });
+});
+
+describe('native safeguards, errors, EOF and overflow', () => {
+  it('relays opaque delta safeguard_results unchanged across every single-byte split', async () => {
+    const results = { future: { unicode: 'é💡', nested: [null, false, { kept: 7 }] } };
+    const delta = nativeFrame('message_delta', { delta: { safeguard_results: results }, usage: { output_tokens: 3 } });
+    const bytes = concatBytes([nativeStart(NATIVE_MODELS[0]), delta, nativeFrame('message_stop')]);
+    const h = nativeStreamHarness(Array.from(bytes, (_, index) => bytes.subarray(index, index + 1)));
+    const wire = await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(wire).toBe(new TextDecoder().decode(bytes));
+    expect(h.snapshots[0]).toMatchObject({ estimated: false, finalOutputObserved: true });
+    expect(JSON.stringify(h.snapshots)).not.toContain('safeguard_results');
+  });
+  const types = [ ['invalid_request_error', 400], ['authentication_error', 401], ['permission_error', 401],
+    ['not_found_error', 404], ['request_too_large', 413], ['rate_limit_error', 429], ['api_error', 500], ['overloaded_error', 529] ] as const;
+  it.each(types)('maps pre-commit %s to HTTP %s with one estimated settlement', async (type, status) => {
+    const h = nativeStreamHarness([nativeFrame('error', { error: { type, message: 'future_field: invalid value' }, secret: 'hidden' })]);
+    const response = await sendNative(h, true);
+    expect(response.status).toBe(status); expect(response.headers.get('x-sentropic-relay')).toBeNull();
+    expect(h.attempt.markCommitted).not.toHaveBeenCalled(); expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.recorder.settlements[0]!.usage).toMatchObject({ inputTokens: 10_000, outputTokens: 32_000, estimated: true });
+    expect(h.snapshots[0]).toMatchObject({ termination: 'upstream_error', finalOutputObserved: false, estimated: true });
+  });
+  it.each(types)('keeps committed HTTP 200 and sanitized late %s without a terminator', async (type) => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0]), nativeFrame('error', {
+      error: { type, message: 'future_field: invalid value' }, secret: 'hidden' })]);
+    const response = await sendNative(h, true);
+    const wire = await response.text();
+    expect(response.status).toBe(200); expect(wire).toContain(`"type":"${type}"`);
+    expect(wire).not.toContain('hidden'); expect(wire).not.toContain('message_stop');
+    if (type === 'invalid_request_error') expect(wire).toContain('future_field: invalid value');
+    else expect(wire).not.toContain('future_field: invalid value');
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.recorder.settlements[0]!.attempts[0]!.usage).toMatchObject({ inputTokens: 2, outputTokens: 32_000, estimated: true });
+  });
+  it.each(['empty', 'partial', 'overflow'] as const)('rejects %s before a complete frame without commitment', async cause => {
+    const chunks = cause === 'empty' ? [] : [cause === 'partial' ? new TextEncoder().encode('data: partial')
+      : new Uint8Array(1_048_577).fill(65)];
+    const h = nativeStreamHarness(chunks);
+    const response = await sendNative(h, true);
+    expect(response.status).toBe(503); expect(h.attempt.markCommitted).not.toHaveBeenCalled();
+    expect(response.headers.get('x-sentropic-served')).toBeNull();
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it.each(['eof', 'overflow', 'unknown'] as const)('emits one fixed api_error after commitment on %s', async cause => {
+    const start = nativeStart(NATIVE_MODELS[0]);
+    const chunks = cause === 'eof' ? [start] : cause === 'overflow'
+      ? [concatBytes([start, new Uint8Array(1_048_577).fill(65)])]
+      : [start, nativeFrame('error', { error: { type: 'unknown_type', message: 'hidden' } })];
+    const h = nativeStreamHarness(chunks);
+    const response = await sendNative(h, true);
+    const wire = await response.text();
+    expect(response.status).toBe(200); expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1);
+    expect(wire).toContain('"type":"api_error","message":"stream failed after commitment"');
+    expect(wire.match(/event: error/g)).toHaveLength(1); expect(wire).not.toContain('message_stop');
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(64_002);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it('retries a pre-commit rate error on an already-planned native candidate and settles once', async () => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0]), nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop')]);
+    const plan = h.deps.routePlanner.plan;
+    h.deps.routePlanner.plan = async (...args) => {
+      const value = await plan(...args);
+      return { ...value, candidateRefs: ['candidate-0', 'candidate-1'],
+        diagnostics: [value.diagnostics[0]!, { ...value.diagnostics[0]!, candidateRef: 'candidate-1' }] };
+    };
+    h.deps.routePlanner.prepareAttempt = async () => h.attempt;
+    h.execute.mockResolvedValueOnce({ kind: 'stream', status: 200, headers: {},
+      body: (async function* () { yield nativeFrame('error', { error: { type: 'rate_limit_error', message: 'hidden' } }); })() });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(h.execute).toHaveBeenCalledTimes(2); expect(h.attempt.generate).not.toHaveBeenCalled();
+    expect(h.finalize).toHaveBeenCalledTimes(2); expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.recorder.settlements[0]!.attempts).toHaveLength(2);
   });
 });
 
