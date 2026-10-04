@@ -1,8 +1,9 @@
-import type { NativeUsageTermination, PreparedRouteAttempt, RouteFailureClassification } from '@sentropic/llm-mesh';
+import type { NativeMessagesRequest, NativeUsageTermination, PreparedRouteAttempt, RouteFailureClassification } from '@sentropic/llm-mesh';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import type { ResolvedTarget } from './flow.js';
 import { classifyRouteError, attemptUsage, type RouteAttemptSettlement } from './route-flow-core.js';
-import { NativeUsageObserver, nativeSnapshotUsage } from './native-usage.js';
+import { NativeUsageObserver } from './native-usage.js';
+import { nativeLifecycle } from './native-lifecycle.js';
 import { parseNativeSseStream, NativeSseFrameOverflowError, type NativeSseFrame } from './native-sse.js';
 import { nativeFrameError, nativeLateErrorBytes } from './native-stream-errors.js';
 
@@ -15,6 +16,7 @@ export const nativeStreamTermination = (error: unknown, aborted = false): Native
 export const nativeStreamExecution = (input: {
   attempt: PreparedRouteAttempt; observer: NativeUsageObserver; controller: AbortController;
   signal?: AbortSignal; target: ResolvedTarget; candidateRef: string; attempts: RouteAttemptSettlement[];
+  requestId: string; finalize?: NativeMessagesRequest['finalize'];
   features: { requestSafeguards: boolean; sentBetas: readonly string[] };
   settle: (outcome: 'success' | 'failed' | 'cancelled') => Promise<void>;
 }) => {
@@ -23,13 +25,27 @@ export const nativeStreamExecution = (input: {
   let first: NativeSseFrame | undefined;
   let stopped = false;
   let terminal = false;
+  let cancelled = false;
+  let resolveAbort!: () => void;
+  const aborted = new Promise<void>(resolve => { resolveAbort = resolve; });
+  const lifecycle = nativeLifecycle(input.observer, input.finalize,
+    { requestId: input.requestId, attemptRef: input.attempt.attemptRef });
   let finishing: Promise<void> | undefined;
   let closing: Promise<void> | undefined;
   const closeRaw = () => closing ??= Promise.resolve().then(() => raw?.return?.()).then(() => undefined, () => undefined);
   const close = () => {
+    input.signal?.removeEventListener('abort', onAbort);
     input.controller.abort();
     void frames?.return(undefined).catch(() => undefined);
     return closeRaw();
+  };
+  const read = async () => {
+    const next = await Promise.race([
+      frames!.next().then(value => ({ kind: 'frame' as const, value })),
+      aborted.then(() => ({ kind: 'aborted' as const })),
+    ]);
+    if (next.kind === 'aborted') throw new DOMException('Native stream cancelled', 'AbortError');
+    return next.value;
   };
   const observe = (frame: NativeSseFrame) => {
     const error = nativeFrameError(frame, input.features);
@@ -43,7 +59,9 @@ export const nativeStreamExecution = (input: {
     settleNow = true): Promise<void> => {
     if (terminal) return finishing ?? Promise.resolve();
     terminal = true;
-    const usage = nativeSnapshotUsage(input.observer.snapshot(termination));
+    cancelled = classification.reason === 'cancelled';
+    input.signal?.removeEventListener('abort', onAbort);
+    const usage = lifecycle.usage(termination);
     input.attempts.push({ candidateRef: input.candidateRef, providerId: input.target.providerId,
       modelId: input.target.model, transportProviderId: input.target.transportProviderId,
       outcome: classification.reason, usage });
@@ -60,15 +78,24 @@ export const nativeStreamExecution = (input: {
     return finishing;
   };
   const cancel = async () => {
+    resolveAbort();
     const done = finish({ reason: 'cancelled', retryable: false, healthScope: 'route' }, 'cancelled');
     await Promise.all([done, close()]);
   };
+  const onAbort = () => {
+    input.controller.abort(input.signal?.reason);
+    resolveAbort();
+    if (raw) void cancel().catch(() => undefined);
+  };
+  input.signal?.addEventListener('abort', onAbort, { once: true });
+  if (input.signal?.aborted) onAbort();
   const prime = async (source: AsyncIterable<Uint8Array>) => {
     raw = source[Symbol.asyncIterator]();
     frames = parseNativeSseStream({ [Symbol.asyncIterator]: () => ({
       next: () => raw!.next(), return: async () => { await closeRaw(); return { done: true as const, value: undefined }; },
     }) });
-    const next = await frames.next();
+    if (input.signal?.aborted) onAbort();
+    const next = await read();
     input.signal?.throwIfAborted();
     if (next.done) throw Object.assign(Error('Native stream is empty'), { code: 'empty_stream' });
     first = next.value;
@@ -80,7 +107,7 @@ export const nativeStreamExecution = (input: {
         input.signal?.throwIfAborted();
         if (terminal) return;
         yield { bytes: first!.rawBytes };
-        for (let next = await frames!.next(); !next.done; next = await frames!.next()) {
+        for (let next = await read(); !next.done; next = await read()) {
           input.signal?.throwIfAborted();
           if (terminal) return;
           observe(next.value);
@@ -91,7 +118,7 @@ export const nativeStreamExecution = (input: {
           yield { bytes: nativeLateErrorBytes(undefined) };
         } else await finish({ reason: 'success', retryable: false, healthScope: 'route' }, 'completed');
       } catch (error) {
-        if (terminal) throw error;
+        if (terminal) { if (cancelled) return; throw error; }
         const classification = classifyRouteError(error, input.signal?.aborted);
         try { await finish(classification, nativeStreamTermination(error, input.signal?.aborted)); }
         catch { /* The original wire failure wins over callback errors. */ }
@@ -102,5 +129,5 @@ export const nativeStreamExecution = (input: {
     stream.return = async value => { await cancel(); return originalReturn(value); };
     return stream;
   };
-  return { prime, expose, finish, close, cancel, get terminal() { return terminal; } };
+  return { prime, expose, finish, close, cancel, lifecycle, get terminal() { return terminal; } };
 };
