@@ -1104,7 +1104,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <!-- Value Axes Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-linear-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
+        <div class="bg-linear-to-r/srgb from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">{$_('matrix.valueAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
@@ -1207,7 +1207,7 @@
       
       <!-- Complexity Axes Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-linear-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
+        <div class="bg-linear-to-r/srgb from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">{$_('matrix.complexityAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
@@ -1312,7 +1312,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <!-- Value Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-linear-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
+        <div class="bg-linear-to-r/srgb from-purple-700 to-purple-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold">{$_('matrix.valueThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
@@ -1360,7 +1360,7 @@
       
       <!-- Complexity Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-linear-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
+        <div class="bg-linear-to-r/srgb from-gray-700 to-gray-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold">{$_('matrix.complexityThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
