@@ -74,6 +74,7 @@ export class PassthroughDispatch implements GatewayDispatchPort {
     // Faithful: provider status + body + headers verbatim. No mutation (#4).
     return {
       status: response.status,
+      ...(response.requestSize ? { requestSize: response.requestSize } : {}),
       body: response.body,
       ...(response.headers ? { headers: response.headers } : {}),
     };

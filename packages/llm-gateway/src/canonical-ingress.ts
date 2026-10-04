@@ -287,7 +287,7 @@ export const normalizeGatewayIngress = (
       : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(typeof raw.max_tokens === 'number' ? { maxOutputTokens: raw.max_tokens } : {}),
-    ...(typeof raw.max_completion_tokens === 'number'
+    ...(wire === 'openai-chat-completions' && typeof raw.max_completion_tokens === 'number'
       ? { maxOutputTokens: raw.max_completion_tokens }
       : {}),
     ...(typeof raw.temperature === 'number' ? { temperature: raw.temperature } : {}),

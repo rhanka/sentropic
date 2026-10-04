@@ -41,6 +41,9 @@ import { authenticateCaller, validateAuthContext } from '../internal/caller-auth
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 import type { GatewayBudgetOptions } from '../ports/budget.js';
 import { assertBudgetRouteDeps } from '../admission.js';
+import { buildNativeResponseHeaders } from '../native-headers.js';
+import { ensureCheckedGatewayBody, gatewayRequestBodyLimit, type RequestBodyLimitOptions } from '../request-body-limit.js';
+import { retainGatewayStreamBody } from '../request-body-retention.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -48,6 +51,8 @@ export interface ReadinessProbe {
 }
 
 export interface CreateGatewayRouterOptions {
+  /** Trusted tests/host composition; absent means the process-wide bounded default. */
+  readonly requestBody?: RequestBodyLimitOptions;
   readonly routeDispatch?: RouteAttemptDispatchPort;
   /** Trusted ingress reconstruction, including external scheme and rewritten path. */
   readonly publicUrl?: (req: Request) => string;
@@ -76,6 +81,8 @@ export interface CreateGatewayRouterOptions {
    * and `routeMetering`; construction fails otherwise. Absent: no quote call.
    */
   readonly budget?: GatewayBudgetOptions;
+  /** Trusted construction-time switch; absent hosts rely on capability gates. */
+  readonly nativeMessagesEnabled?: boolean;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -123,12 +130,15 @@ const FORWARDABLE_PROVIDER_HEADERS: ReadonlySet<string> = new Set([
 const forwardProviderHeaders = (
   c: import('hono').Context,
   headers: ProviderResponseHeaders | undefined,
+  native = false,
 ): void => {
   if (!headers) {
     return;
   }
-  for (const [key, value] of Object.entries(headers)) {
-    if (FORWARDABLE_PROVIDER_HEADERS.has(key.toLowerCase())) {
+  const forwarded = native ? buildNativeResponseHeaders(headers, FORWARDABLE_PROVIDER_HEADERS) : headers;
+  for (const [key, value] of Object.entries(forwarded)) {
+    const name = key.toLowerCase();
+    if (FORWARDABLE_PROVIDER_HEADERS.has(name) || (native && name.startsWith('anthropic-'))) {
       c.header(key, value);
     }
   }
@@ -181,6 +191,7 @@ export const createGatewayRouter = (
   assertBudgetRouteDeps(options.routePlanner, Boolean(options.routeMetering), options.budget);
   const requestId = options.requestId ?? defaultRequestId;
   const app = new Hono();
+  app.use('*', gatewayRequestBodyLimit(options.requestBody, requestId));
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
     try {
       const context = {
@@ -218,6 +229,7 @@ export const createGatewayRouter = (
         ...(options.routeDispatch ? { dispatch: options.routeDispatch } : {}),
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
         ...(options.budget ? { budget: options.budget } : {}),
+        nativeMessagesEnabled: options.nativeMessagesEnabled,
       }
     : undefined;
 
@@ -231,8 +243,9 @@ export const createGatewayRouter = (
 
     // Parse the provider-native body (bad JSON -> provider-shaped 400, §3b).
     let body: unknown;
+    const bodyLease = await ensureCheckedGatewayBody(c.req.raw, options.requestBody);
     try {
-      body = await c.req.json();
+      body = bodyLease.body;
     } catch {
       return sendError(c, mapGatewayError(wire, 'bad-request'), id);
     }
@@ -252,18 +265,27 @@ export const createGatewayRouter = (
       return sendError(c, toProviderShapedError(wire, error, model), id);
     }
     const flowRequest = {
-      wire, headers, body, model, stream, authContext,
+      wire, headers, body, bodyLease, model, stream, authContext,
       signal: c.req.raw.signal,
     };
+    body = undefined;
+    bodyLease.trackDetach(() => { flowRequest.body = undefined; });
 
     if (!stream) {
       try {
         const result = routeFlowDeps
           ? await runRouteJsonFlow(routeFlowDeps, flowRequest)
           : await runJsonFlow(flowDeps!, flowRequest);
-        forwardProviderHeaders(c, result.headers); // #4 allowlisted provider headers
+        const native = 'relay' in result && result.relay === 'native';
+        forwardProviderHeaders(c, result.headers, native);
         c.header(REQUEST_ID_HEADER, id);
-        c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
+        if (!native) c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
+        else {
+          c.header('X-Sentropic-Relay', 'native');
+          if ('nativeServedModelId' in result && typeof result.nativeServedModelId === 'string') {
+            c.header(SERVED_HEADER, servedHeaderValue({ ...result.servedTarget, model: result.nativeServedModelId }));
+          }
+        }
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
         return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
@@ -289,11 +311,16 @@ export const createGatewayRouter = (
       return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
     }
 
-    forwardProviderHeaders(c, streamResult.headers); // #4 allowlisted provider headers
+    forwardProviderHeaders(c, streamResult.headers, streamResult.relay === 'native');
+    streamResult = { ...streamResult,
+      stream: retainGatewayStreamBody(streamResult.stream, bodyLease, cancellation.signal) };
     c.header('Content-Type', SSE_CONTENT_TYPE);
     c.header('Cache-Control', 'no-cache');
     c.header(REQUEST_ID_HEADER, id);
-    c.header(SERVED_HEADER, servedHeaderValue(streamResult.servedTarget));
+    if (streamResult.relay === 'native') {
+      c.header('X-Sentropic-Relay', 'native');
+      c.header('X-Accel-Buffering', 'no');
+    } else c.header(SERVED_HEADER, servedHeaderValue(streamResult.servedTarget));
     // B3: relay provider frames VERBATIM. The gateway synthesizes NO terminator —
     // a real OpenAI transport emits its own `[DONE]`; Anthropic uses message_stop.
     // On a mid-stream error the stream simply ends (no synthetic [DONE]).
@@ -306,7 +333,7 @@ export const createGatewayRouter = (
             const next = await streamResult.stream.next();
             if (closed) return;
             if (next.done) { closed = true; detach(); controller.close(); }
-            else controller.enqueue(new TextEncoder().encode(next.value.raw));
+            else controller.enqueue('bytes' in next.value ? next.value.bytes : new TextEncoder().encode(next.value.raw));
           } catch (error) {
             if (!closed) { closed = true; detach(); controller.error(error); }
           }

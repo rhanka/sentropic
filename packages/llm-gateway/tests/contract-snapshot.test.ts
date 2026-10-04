@@ -102,6 +102,36 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
     openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
+  'request-too-large': {
+    anthropic: { status: 413, type: 'request_too_large',
+      message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+    openai: { status: 413, type: 'invalid_request_error', code: 'request_too_large',
+      message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+  },
+  'request-body-capacity': {
+    anthropic: { status: 503, type: 'api_error',
+      message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+    openai: { status: 503, type: 'api_error', code: 'request_body_capacity',
+      message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+  },
+  'native-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires the Anthropic Messages endpoint.' },
+  },
+  'native-max-tokens-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards requires a positive integer max_tokens.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires a positive integer max_tokens.' },
+  },
+  'native-unavailable': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires the Anthropic Messages endpoint.' },
+  },
   'unknown-model': {
     anthropic: { status: 404, type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
     openai: { status: 404, type: 'invalid_request_error', message: 'Unknown model: "no-such-model"', code: 'model_not_found' },

@@ -4,6 +4,9 @@ import type {
 } from '@sentropic/llm-mesh';
 import type { GatewayConfig } from './config.js';
 import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonical-ingress.js';
+import { classifyNativeFeatures, type NativeFeatureSelection } from './native-features.js';
+import { requestTooLargeDetail } from '@sentropic/llm-mesh';
+import { gatewayRequestTooLargeError } from './router/errors.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
@@ -54,19 +57,28 @@ export interface RouteFlowDeps {
     readonly cost: CostContext;
     readonly request: GatewayFlowRequest;
     readonly canonical: CanonicalIngressResult;
-  }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities'>;
+  }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities' | 'nativeMessages'>;
   /** Opt-in budget admission; absent means no quote and no reservation. */
   readonly budget?: GatewayBudgetOptions;
+  readonly nativeMessagesEnabled?: boolean;
 }
 
 export interface PreparedRouteFlow {
   readonly cost: CostContext;
   readonly subject: VerifiedRoutingSubject;
-  readonly canonical: CanonicalIngressResult;
+  canonical: CanonicalIngressResult;
   readonly plan: RoutePlan;
+  readonly nativeFeatures: NativeFeatureSelection;
   /** Present only when budget admission admitted the request. */
   readonly admission?: AdmittedRoute;
 }
+
+/** Retry projection is detached only when native upload/commit or terminal SDK cleanup permits it. */
+export const retainRouteBody = (prepared: PreparedRouteFlow, request: GatewayFlowRequest): void => {
+  request.bodyLease?.trackDetach(() => {
+    prepared.canonical = { request: { model: prepared.canonical.request.model, messages: [] }, requiredCapabilities: [] };
+  });
+};
 
 export const routingSubjectForCost = (cost: CostContext): VerifiedRoutingSubject => ({
   principalRef: cost.principalId,
@@ -89,10 +101,11 @@ const isEnrollmentDiagnostic = (error: unknown): boolean => {
  */
 const isRecognizedPlanningRefusal = (error: unknown): boolean => {
   if (error instanceof GatewayError) {
-    return error.kind === 'unknown-model' || error.kind === 'no-route';
+    return error.kind === 'unknown-model' || error.kind === 'no-route' || error.kind === 'native-unavailable';
   }
   return isEnrollmentDiagnostic(error)
     || isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')
+    || isRoutePlanError(error, 'native-unavailable') || isRouteQuoteError(error, 'native-unavailable')
     || isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')
     || isRoutePlanError(error, 'no-route') || isRouteQuoteError(error, 'no-route');
 };
@@ -110,11 +123,14 @@ export const prepareRouteFlow = async (
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
   const canonical = normalizeGatewayIngress(request.wire, request.body);
+  const nativeFeatures = classifyNativeFeatures(request.wire, request.headers, request.body, canonical, {
+    budget: deps.budget, nativeMessagesEnabled: deps.nativeMessagesEnabled,
+  });
   const subject = routingSubjectForCost(auth.cost);
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
-    return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, bounded);
+    return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, bounded, nativeFeatures);
   }
   try {
     const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
@@ -124,8 +140,9 @@ export const prepareRouteFlow = async (
       requiredCapabilities: canonical.requiredCapabilities,
       workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost: auth.cost, subject, canonical, plan };
+    return { cost: auth.cost, subject, canonical, plan, nativeFeatures };
   } catch (error) {
     if (isRecognizedPlanningRefusal(error)) {
       try {
@@ -158,6 +175,7 @@ const prepareAdmittedRouteFlow = async (
   cost: CostContext,
   subject: VerifiedRoutingSubject,
   canonical: CanonicalIngressResult,
+  nativeFeatures: NativeFeatureSelection,
 ): Promise<PreparedRouteFlow> => {
   assertBudgetRouteDeps(deps.routePlanner, true, deps.budget);
   const routeInput = deps.routeInput?.({ cost, request, canonical });
@@ -171,6 +189,7 @@ const prepareAdmittedRouteFlow = async (
       ...(routeInput?.policyProfile ? { policyProfile: routeInput.policyProfile } : {}),
       ...(routeInput?.policyOverride ? { policyOverride: routeInput.policyOverride } : {}),
       ...(routeInput?.explicit ? { explicit: routeInput.explicit } : {}),
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : {}),
     },
   });
   try {
@@ -181,8 +200,9 @@ const prepareAdmittedRouteFlow = async (
       workspaceId: routeInput?.workspaceId ?? cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? cost.correlationId,
       quote: admission.quote,
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost, subject, canonical, plan, admission };
+    return { cost, subject, canonical, plan, admission, nativeFeatures };
   } catch (error) {
     // The admitted request's one zero-usage settlement, with hold release
     // (release-before-metering inside settleRouteRequest). A ledger failure
@@ -239,16 +259,31 @@ export const refuseUnmarkedDispatch = async (
   return new GatewayError('budget-unavailable', 'budget dispatch marker unavailable');
 };
 
+/**
+ * Required native capability unavailable: release attempt without health penalty,
+ * settle once with failed outcome, return native-required refusal.
+ */
+export const refuseNativeAttempt = async (
+  attempt: PreparedRouteAttempt | undefined,
+  settle: () => Promise<void>,
+): Promise<GatewayError> => {
+  try { await attempt?.releaseCancelled(); } catch { /* The refusal wins. */ }
+  try { await settle(); } catch { /* Rejected settlement never replaces the refusal. */ }
+  return new GatewayError('native-required', 'native capability unavailable for required request');
+};
+
 export const classifyRouteError = (
   error: unknown,
   aborted = false,
 ): RouteFailureClassification => {
   if (aborted) return { reason: 'cancelled', retryable: false, healthScope: 'route' };
+  if (requestTooLargeDetail(error)) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
   const record = asRecord(error);
   const status = typeof record?.statusCode === 'number' ? record.statusCode
     : typeof record?.status === 'number' ? record.status : undefined;
   const code = typeof record?.code === 'string' ? record.code.toLowerCase() : '';
   const retryAfterMs = typeof record?.retryAfterMs === 'number' ? record.retryAfterMs : undefined;
+  if (code === 'native_protocol_error') return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
   if (status === 429 || code.includes('rate')) {
     return {
       reason: 'rate-limited', retryable: true, healthScope: 'provider-model',
@@ -297,7 +332,10 @@ export const terminalGatewayError = (
   classification: RouteFailureClassification,
   target: ResolvedTarget,
   fallbackMessage: string,
+  originalError?: unknown,
 ): GatewayError => {
+  const tooLarge = gatewayRequestTooLargeError(originalError, target);
+  if (classification.reason !== 'cancelled' && tooLarge) return tooLarge;
   if (classification.reason === 'invalid-request') {
     return new GatewayError(
       'bad-request', 'upstream refused the request as invalid', undefined, target,

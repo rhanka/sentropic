@@ -1,0 +1,284 @@
+# Feature: Native Anthropic Messages relay on product /gw
+
+## Objective
+- [ ] Deliver spec_v8 plus its N1–N7 addendum: opaque native Messages, count_tokens and joined usage observation with one financial settlement.
+
+## Scope / Guardrails
+- [x] Worktree `tmp/llm-gateway-native-relay`, branch `feat/llm-gateway-native-relay`, base `7d1002505`; mechanical branch check passed.
+- [x] Implementer pass 01: rows 0a, 0b, 1, 1a, 2, 3 in order; conductor `s-conductor` owns later passes and review.
+- [x] Make-only, Docker-first; English text; no Python, real provider calls, push, merge or publication.
+- [x] Every commit is one row or declared split, at most 149 additions plus deletions including this file; selective staging and scope-check before commit.
+- [x] Owner dev/UAT root remains reserved; automated checks use `ENV=test-llm-native-relay` last on every Make command.
+- [x] Slot owner: pass 01 implementer; `API_PORT=9471`, `UI_PORT=5671`, `MAILDEV_UI_PORT=1571`; conductor checked ports free.
+- [x] No schema/migration, identity, catalog, enrollment, general retry-policy or h2a transport changes.
+- [ ] Before each later stage, add its full checklist and file-level gates in a bounded plan commit; no undeclared implementation.
+- [ ] Operator UAT branch is separate, never merged; record exact feature/UAT SHAs and rebuild after rebases.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `packages/llm-mesh/src/native-messages.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/src/errors.ts` (BR-REL-EX1 approved, M6 rows 40–42)
+  - `packages/llm-mesh/tests/native-error-metadata.test.ts` (BR-REL-EX1 approved, M6 rows 40–42)
+  - `packages/llm-mesh/src/index.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/src/routing-contracts.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/src/route-quote.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/src/route-planner.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/src/route-planner-state.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/src/route-attempt.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/tests/native-messages.test.ts` (BR-REL-EX1 approved, pass 01)
+  - `packages/llm-mesh/tests/budget-quote.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/tests/route-planner.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/tests/route-selection.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/tests/service/local-account-transport-service.test.ts` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-mesh/CHANGELOG.md` (BR-REL-EX1 approved, pass 02)
+  - `packages/llm-gateway/src/**`
+  - `packages/llm-gateway/tests/**`
+  - `packages/llm-gateway/package.json`
+  - `packages/llm-gateway/CHANGELOG.md`
+  - `packages/llm-gateway/README.md`
+  - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
+  - `spec/SPEC_EVOL_LLM_GATEWAY.md`
+  - `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md`
+  - `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `apps/**`
+  - `.github/**`
+  - `PLAN.md`
+  - `plan/**`
+  - `ui/**`
+  - `deploy/**`
+  - `packages/llm-mesh/src/routing-targets.ts`
+  - `packages/llm-mesh/src/providers.ts`
+  - `packages/llm-mesh/src/catalog.ts`
+  - `packages/llm-mesh/src/adapter-auth.ts`
+  - `api/package-lock.json`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `packages/llm-mesh/src/native-messages.ts`
+  - `packages/llm-mesh/src/index.ts`
+  - `packages/llm-mesh/src/routing-contracts.ts`
+  - `packages/llm-mesh/src/route-planner.ts`
+  - `packages/llm-mesh/src/route-planner-state.ts`
+  - `packages/llm-mesh/src/route-quote.ts`
+  - `packages/llm-mesh/src/route-attempt.ts`
+  - `packages/llm-mesh/src/errors.ts`
+  - `packages/llm-mesh/tests/**`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/CHANGELOG.md`
+  - `api/src/services/llm-runtime/**`
+  - `api/src/services/providers/claude-provider.ts`
+  - `api/src/routes/namespaces/gw.ts`
+  - `api/src/services/llm-metering/budget-admission.ts`
+  - `api/src/services/llm-metering/route-settlement.ts`
+  - `api/src/services/llm-metering/cost-ledger-sink.ts`
+  - `api/tests/**`
+  - `package-lock.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/README.md`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/lock-integrity.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/lock-integrity-registry.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/release-matrix-sources.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/siblings.spec.ts`
+- [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
+
+## Feedback Loop
+- [x] Pass 11 P2 — v8-addendum review MINOR applied before row 43: N3 storage is incremental after granted actual chunk bytes; Content-Length never sizes storage/reservations, raw backing capacity never exceeds grants and EOF performs no duplicate raw consolidation.
+- [x] Pass 09 terminal contract cleanup — implementer reproduced 2 failures: wrong stream-kind JSON result and invalid-status stream envelope left the returned reader open. Reader ownership now attaches before validation without pulling bytes; terminal snapshot is claimed before cleanup; permanent per-flow regression requires one close/finalize/settlement. Gateway gates and Gemini fix re-review recorded in pass09 report.
+- [x] Pass 08 independent reproductions — fixed by reviewer per build mode: all 21 supplied re-review reproductions promoted unchanged to permanent native-review-regressions.test.ts; Gemini fix review GO (0 BLOCKER/MAJOR/MINOR); 143 changed lines including plan; typecheck PASS, tests 673 passed / 0 failed.
+- [x] Pass 08 M6-R — fixed by reviewer per build mode: independent safe raw evidence, null/invalid omission, explicit zero and prior evidence retained; permanent mixed-validity, incomplete, fractional/nonfinite/unsafe start/delta regressions. Scoped reproduction: 5 failed / 10 passed; post-commit gateway gates recorded in pass report.
+- [x] Pass 08 M4-R — fixed by reviewer per build mode: output validity is independent of start/delta input proof, with invalid-output uncertainty and permanent start/input-bearing/output-only regressions. Scoped reproduction confirmed start/delta proof failures; post-commit gateway gates recorded in pass report.
+- [x] Pass 08 R1 — fixed by reviewer per build mode: valid cumulative output accepted independently of input updates; permanent V-1, output-only, rejected-input and decrease regressions. Scoped repro: 1 failed / 5 passed before fix; gateway typecheck PASS and full tests 643 passed / 0 failed after fix.
+- [x] Scope gate clarification: harness exception grammar accepts numeric branch IDs only; approved pass 01 EX1 paths are mirrored explicitly in Allowed Paths so C2 verifies the granted scope without changing harness or inventing an exception ID.
+- [x] BR-REL-EX1 approved by frozen §2: rationale: mesh capability/planner/quote/attempt/error seams; impact: additive contracts, tests, exports, version and CHANGELOG only; rollback: revert mesh feature commits and tuple before release.
+- [x] BR-REL-EX2 approved by frozen §2: rationale: product native execution/count/classification/body-cap/M6 and trusted metering; impact: listed API paths only, no general metering refactor; rollback: disable switch and restart/redeploy, then revert API feature commits.
+- [x] BR-REL-EX3 approved under Q-A: rationale: coordinated §6.2 release train; impact: listed cluster/root files only, tuple/range literals, expectations, release docs and generated integrity; rollback: restore prior tuple/ranges and regenerate affected locks/archives before release.
+- [ ] BR-REL-EX4 RESERVED under conductor Q11: rationale: `api/package.json` gateway range must resolve the new exports; impact: only `@sentropic/llm-gateway` to `^0.20.0`; rollback: restore prior range with gateway tuple. Activate and declare its conditional path in the SAME commit as the gateway version bump; no API manifest write in pass 01.
+- [x] No open implementation blocker; stop for uncovered design, scope exception, unfixable row failure or real-call requirement.
+- [x] Pass 02 review remediation: M1 sticky affinity binding assertion and M2 native filter-order coverage (maxAttempts=1 and health suppression) verified in route-planner.test.ts.
+- [x] Pass 04 review remediation: M1 native validation channel restricted to NativeMessagesUpstreamError 400 with bounded §4.7 sanitization, fixed generic bad-request and both-wire negatives; M2 billing masked on 400 prior to type validation; M3 exact classifier token matched with V-2 official negatives; m1 non-control whitespace preserved; m2 12-char identifier minimum; m3 linear work instrumented and bounded; m4 row 19b restored.
+- [x] Pass 04 review remediation (M4): billing decided once on full bounded message before truncation and carried through verified native-validation channel without re-detection; both-wire parser-native-mapper regressions added.
+- [x] Pass 06 M5 — Conductor decision: reviewer implements the fix; Gemini cross-reviews. Private frozen parser results bind authorization to exact type/message; forged markers and changed copies receive the complete bounded policy. Both-wire forged/mutation/oversize regressions added; M4 long dated-token and independent billing fixtures retained; all M1 boundary negatives rerun.
+- [x] Pass 06 review remediation (M1/M2): bounded SSE framer enforces cumulative 1 MiB limit during scanning and before emission, retaining per-frame semantics; empty frames preserve blank lines and concatenated byte fidelity.
+- [x] Pass 06 review remediation (M3/M4): usage accumulator retains attempt-lifetime proof revocation with conflict on second start, and evaluates input validity independently of output.
+- [x] Pass 06 review remediation (M5/M6/M7): usage accumulator uses safe bigint arithmetic, enforces physical anchoring for lower bounds with category absence fidelity, and separates reported TTL from inferred allocation.
+- [x] Pass 06 review test coverage (M5/M6/M7): verified safe arithmetic overflow rejection, unanchored/anchored nullable delta bounds, absence fidelity, and explicit split resolution.
+- [x] Pass 06 review reconciliation (C1/C2): verified required-mode native skew lifecycle across JSON and stream flows (zero dispatch, single release/settlement, independent rejecting cleanup/settlement); reconciled row 24 (140 lines vs 130 planned) and row 25a (140 lines vs 120 planned) under the global <=149 line ceiling.
+
+## AI Flaky tests
+- [x] No live AI tests authorized in this pass; never weaken tests or increase timeouts; any later accepted flake requires same-commit success and owner sign-off.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch: sequential conductor-assigned passes on this worktree, with cross-review managed by conductor; no cherry-pick or delegation in pass 01.
+- [ ] Multi-branch.
+
+## UAT Management (in orchestration context)
+- [ ] Operator owns separate exact-SHA UAT setup, edge/resource evidence, OFF client release gate and authorized ON qualification; production remains OFF pending all M8 facts and owner GO.
+
+## Plan / Todo (lot-based)
+- [x] Row 0a — Minimal template skeleton, scope/exceptions, ports and stage index.
+- [x] Row 0b — Mesh-stage checklist and file-level gates before row 1.
+- [x] Stage 1 — Mesh: rows 1–9 (pass 01 ends at row 3; pass 02 rows 4–9 complete).
+  - [x] Row 1 — `src/native-messages.ts`: credential-free Messages request/result/prepared contracts and fixed-message upstream error; `src/index.ts`: public exports. Typecheck PASS; tests 317 passed, 0 failed (32 files).
+  - [x] Row 1a — Immutable closed `NativeUsageSnapshot`, safe raw categories/fixed metadata, optional trusted capability/request finalize channel; gateway owns invocation. Typecheck PASS; tests 317 passed, 0 failed (32 files).
+  - [x] Row 2 — Structural capability guard (including callable optional hook), empty default allowlist, Anthropic catalog/exclusive validation, pure exact target identity and raw beta composition. Typecheck PASS; tests 317 passed, 0 failed (32 files).
+  - [x] Row 3 — `tests/native-messages.test.ts`: helper behavior and additive `src/routing-contracts.ts` pricing/proof/served-ID/source/uncertainty/inference fields on physical attempt usage. Typecheck PASS; tests 360 passed, 0 failed (33 files; 43 new cases); no split needed.
+  - [x] Row 4 — `src/routing-contracts.ts`, `src/route-quote.ts`: advertisement, required flag/Pick/error/prepared seams, native feasibility/filtering/hash. Typecheck PASS; tests 360 passed, 0 failed (33 files).
+  - [x] Row 5 — `tests/budget-quote.test.ts`: required filtering, exact identity/exclusive refusal, quote-plan agreement, flag hash and stable canonical references. Typecheck PASS; tests 364 passed, 0 failed (33 files; 4 new cases).
+  - [x] Row 6 — `src/route-planner.ts`, `src/route-planner-state.ts`: validated allowlist, P0/P1 before sticky/health/truncation, ineligible affinity ignored without mutation. Typecheck PASS; tests 364 passed, 0 failed (33 files).
+  - [x] Row 7 — `tests/route-planner.test.ts`, `tests/route-selection.test.ts`: exclusive/sticky/filter-order, empty versus filtered-empty and canonical baselines. Typecheck PASS; tests 373 passed, 0 failed (33 files; 7 new cases).
+  - [x] Row 8 — `src/route-attempt.ts` and `tests/route-planner.test.ts`: fresh descriptor/target/capability exact-model checks, optional native forwarding and existing terminal guards. Typecheck PASS; tests 369 passed, 0 failed (33 files; 1 new case).
+  - [x] Row 9 — `tests/service/local-account-transport-service.test.ts`: no h2a native advertisement/capability; `CHANGELOG.md`: additive mesh native contract/planner release entry. Typecheck PASS; tests 370 passed, 0 failed (33 files; 1 new case).
+  - [x] File gate — `tests/native-messages.test.ts`: malformed discriminators/model/versions/betas/execute/finalize rejected; raw arbitrary header map, resolved version, empty-required-beta identity, unknown token/spacing preservation, exact catalog allowlist and exclusive rejection.
+  - [x] File gate — `tests/native-messages.test.ts`: closed snapshot and additive usage contracts preserve physical counts, separate raw reported TTL from inferred allocation, fixed reasons/provenance; caller body cannot supply trusted pricing fields.
+  - [x] M6 mesh file gate — `tests/native-error-metadata.test.ts`, `src/errors.ts`, `src/native-messages.ts`: typed numeric size details survive normalization/cause wrapping, unsafe values/prose excluded; rows 40–42 complete.
+  - [ ] After EVERY code row/split: `make typecheck-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`.
+  - [ ] After EVERY code row/split: `make test-llm-mesh API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`; record per-row counts below.
+  - [ ] Before EVERY commit: `make scope-check API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay`; stage explicit files plus this checklist, commit through Make.
+  - [ ] Mesh stage handoff: conductor cross-review, full scoped gates, no live qualification; package bump stays in atomic T1 row 58 after registry checks.
+- [ ] Stage 2 — Gateway selection/headers/body/errors/SSE/usage/count: rows 10–52a, with addendum insertions.
+  - [x] Gateway plan-only commit before row 10: full stage checklist/file gates; pass 03 uses the existing allocated ports.
+  - [x] Row 10 — `src/native-features.ts`, `src/route-flow-core.ts`, `src/router/index.ts`, `src/router/errors.ts`: classifier, single invocation, trusted switch and selection seam; required exhaustive `tests/contract-snapshot.test.ts` additions. Typecheck PASS after snapshot update; tests 389 passed / 0 failed (28 files).
+  - [x] Row 11 — `tests/native-features.test.ts`: classification matrix, OFF precedence, budget default, empty beta, canonical version-only and standalone OFF refusal; prepared capability/version fallback remains rows 21–23/31. Typecheck PASS after fixture typing; tests 419 passed / 0 failed (29 files; 30 new cases).
+  - [x] Row 12 — `src/native-headers.ts`: open Anthropic/closed other caller forwarding, credentials/hop-by-hop/Connection exclusions; classifier carries filtered headers. Typecheck PASS; tests 419 passed / 0 failed (29 files).
+  - [x] Row 13 — `tests/native-headers.test.ts`: every credential/Connection/internal/IP/user-agent exclusion and synthetic feature fidelity. Typecheck PASS; tests 522 passed / 0 failed (30 files; 103 new cases).
+  - [x] Row 14 — `src/route-native.ts`, `src/canonical-ingress.ts`: shallow native body, valid supplied ceiling capped without increase, default only when omitted, wire-specific max-token precedence. Typecheck PASS; tests 522 passed / 0 failed (30 files).
+  - [x] Row 15 — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: nested-reference fidelity, no mutation/deep clone, malformed/default/reserved ceilings and both wire projections. Typecheck PASS; tests 554 passed / 0 failed (31 files; 32 new cases).
+  - [x] Row 16 — `src/route-flow-core.ts`, `src/admission.ts`, `tests/route-flow-core.test.ts`: required quote/plan flag and host routeInput injection guard. Typecheck PASS; tests 555 passed / 0 failed (31 files; 1 new case).
+  - [x] Row 17 — Native-only typed validation/error contract in gateway and EX1 mesh native error seam. Typecheck PASS; tests 557 passed / 0 failed (31 files; 2 new cases); mesh 373 passed.
+  - [x] Row 18 — `src/native-errors.ts`: billing classifier, linear maximal-run identifier neutralization and bounded 400 detail. Typecheck PASS; tests 557 passed / 0 failed (31 files).
+  - [x] Row 19 — `tests/native-errors.test.ts`: billing families, late indicators, controls and UTF-8 bounds. Typecheck PASS; tests 582 passed / 0 failed (32 files; 25 new cases).
+  - [x] Row 19a — `tests/native-errors.test.ts`: four negative identifiers and identifier-plus-billing positives. Typecheck PASS; tests 593 passed / 0 failed (32 files; 11 new cases).
+  - [x] Row 19b — `tests/native-errors.test.ts`: 64 KiB adversarial runs, deterministic linear-work bound and underscore boundaries. Typecheck PASS; tests 595 passed / 0 failed (32 files; 2 new cases).
+  - [x] Row 20 — `src/native-errors.ts`, `tests/native-errors.test.ts`: narrow sent-classifier-beta rewrite and official V-2 positives/negatives. Typecheck PASS; tests 610 passed / 0 failed (32 files; 15 new cases).
+  - [x] Row 21 — Optional native dispatch/default delegator, execute-time shape/model/version/signal checks and exact prepared eligibility in `src/ports/dispatch.ts`, `src/route-attempt-dispatch.ts`, `src/route-native.ts`. `tests/auth-subpaths.test.ts` qualifies current packed mesh/gateway candidates before T1; released 0.22.3 lacks native declarations. Auth isolation assertions retained. Typecheck PASS; tests 625 passed / 0 failed after resolving the clean-consumer failure. Row 23 adds focused coverage; native invocation follows rows 30/32.
+  - [x] Row 22 — Guarded required-mode native refusal in `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`; release and settlement independently protected. Typecheck PASS; tests 625 passed / 0 failed.
+  - [x] Row 23 — `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`: dispatch, delegator, capability validity, refusal, integrated skew flow and lifecycle tests. Typecheck PASS; tests 642 passed / 0 failed.
+  - [x] Row 24 — planned 130, reconciled 140 (<=149); `src/native-sse.ts`: bounded byte SSE framer with 1 MiB frame ceiling and stream generator. Typecheck PASS; tests 628 passed / 0 failed.
+  - [x] Row 25 — `tests/native-sse.test.ts`: CR/LF/CRLF, split UTF-8, chunk boundaries, comment parsing and 1 MiB frame overflow. Typecheck PASS; tests 634 passed / 0 failed.
+  - [x] Row 25a — planned 120, reconciled 140 (<=149); `src/native-usage.ts`: L2/K1 nullable cumulative contract, reported/inferred TTL split; N5 permanently revokes malformed proof before row 26. Typecheck PASS; tests 634 passed / 0 failed.
+  - [x] Row 26 — `src/native-usage.ts`: JSON/SSE cumulative fold, immutable physical/raw pre-floor snapshot, delta-plus-clean-stop final output and unsuccessful termination; N4 finite decrease receipt compares accepted reported categories. Post-commit gates in pass report.
+  - [x] Row 26a — Required row 26 identity dependency: safe response-served ID, permanent mismatch/unverified/fallback/substantive-iterations latch; null/[] absent; no iteration array folding or stored payload. Row 26 gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
+  - [ ] Row 26b — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: JSON/SSE identities and no cross-iteration fold.
+  - [x] Row 27 — `src/native-usage.ts`: sourced served-model policy, exact bigint units40 with lower/upper safe bounds, observer pricing/proof projection; unverified/overflow fallback omits units. Row 26a gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
+  - [x] Row 27a — Row 27 proof dependency: complete split-only start, nullable/equal cumulative inheritance, atomic monotonic checks and decrease precedence, permanent units overflow invalidation; conflicting served-model segments cannot combine input categories. Row 27 gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
+  - [x] Row 27b — Row 27 allocation dependency: inspect actual outbound controls once, retain default-TTL eligibility across nullable deltas, preserve reported split while pricing only non-default growth at 2x. Row 27a gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
+  - [x] Row 28 — `tests/native-usage.test.ts`, `tests/fixtures/native-usage.ts`: served-model read/5m/1h/mixed weights, actual outbound TTL, default versus growth-only 2x allocation, physical/raw/inferred separation and unknown initial split. Row 27b gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
+  - [x] Row 28a — `tests/native-usage.test.ts`: JSON/SSE empty/substantive iterations, bidirectional model mismatch and no cross-model input fold, fallback/redaction/unverified IDs, every unsuccessful output provenance and N4 decrease-versus-malformed receipt/N5 atomic lower bounds. Row 28 gates: typecheck PASS; 684 tests passed / 0 failed. Post-commit gates in pass report.
+  - [x] Row 28b — `tests/native-usage.test.ts`: exact lower/upper policy/model bounds, malformed/unsafe inputs and units, bigint products/overflow/total omission, split-only proof and JSON fallback; wide outbound traversal repro failed with stack overflow, fixed by bounded per-child push. Row 28a gates: typecheck PASS; 703 tests passed / 0 failed. Post-commit gates in pass report.
+  - [ ] Row 28c — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: U/R growth/equality/decrease/null and official V-1 fixtures.
+  - [ ] Row 28d — `tests/native-usage.test.ts`: realistic output allowance and iterations latch fixtures.
+  - [ ] Row 28e — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: one-hour no-split/equal/growth pinned amounts.
+  - [ ] Row 28f1 — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: split conflicts/decreases/later explicit resolution.
+  - [ ] Row 28f2 — Same files: N5 malformed permanent revocation and latched nullable physical-bound fixtures.
+  - [x] Row 29 — `src/admission.ts`, `src/flow.ts`, `src/native-usage.ts`: trusted per-attempt pricing/proof projection from the observer snapshot; validated stream input stays exact, output-only floor on failure; no-proof full-rate floors and same-model uncertain-TTL premium bound. Row 28b gates: typecheck PASS; 718 tests passed / 0 failed. Row 29a is the bounded settlement/amount test split; post-commit gates in pass report.
+  - [x] Row 29a — Row 29 test split in `tests/native-budget-usage.test.ts`: actual charged projections pin 2500/1750, 65500/64750, 2700/1950, 74300 and V-1 11702/74682; measured SSE has no output floor (N4), failed proof keeps full-rate floors (N5), unknown TTL premiums retained, unmarked/canonical aggregation behavior preserved. Row 29 gates: typecheck PASS; 718 tests passed / 0 failed. Post-commit gates in pass report.
+  - [x] Row 30 — `src/route-json-flow.ts`, `src/route-native.ts`: native JSON dispatch, shallow outbound request, closed bounded-host result, exact response body, served identity and native error preservation; post-commit gateway gates in pass09 report.
+  - [x] Row 30a — `src/native-lifecycle.ts`, JSON flow: synchronous terminal latch, same immutable pre-floor snapshot for projection/hook, once-only independent 1000-ms typed timeout/error fallback, handled late results; no canonical dispatch after native invocation; gateway gates in pass09 report.
+  - [x] Row 31 — JSON fidelity/identity, execute-time version and optional capability fallback, malformed terminal envelope, exactly-once observation/settlement and rejecting error callbacks; shared `tests/fixtures/native-flow.ts` fake-provider harness; gateway gates in pass09 report.
+  - [x] Row 32 — Split 32.1/32.2/32.3 to stay <=149 changed lines: progressive framing/error classes, native stream execution, dispatch/byte result plumbing.
+  - [x] Row 32.1 — `src/native-sse.ts`, `src/native-stream-errors.ts`, error mapper: yield the first complete frame before scanning later chunk bytes; eight bounded pre-commit error classes and sanitized late error bytes; gateway gates in pass09 report.
+  - [x] Row 32.2 — `src/route-native-stream.ts`: response-only frame iterator, first-frame observation, original byte yields, one terminal execution, failure/cancel/EOF paths and raw-reader closure; gateway gates in pass09 report.
+  - [x] Row 32.3 — Native dispatch/commit gate, exact first frame before markCommitted, no retry after rejected commit, native candidate-only retries, byte result union and direct router enqueue; test collector adapts union; header policy remains row 33; gateway gates in pass09 report.
+  - [x] Row 32a — Native stream terminal paths share `nativeLifecycle` snapshot and independent bounded finalize task; abort races pending reads, detaches listeners, aborts upstream and joins one terminal completion/reader closure; gateway gates in pass09 report.
+  - [x] Row 33 — Native router header policy: unknown Anthropic/organization exposure with credential/hop-by-hop exclusions, gateway diagnostics last, response-served JSON identity only, SSE served omission and buffering hint; byte enqueue/downstream cancellation use row 32.3 union; JSON router regressions; gateway gates in pass09 report.
+  - [x] Row 34 — Exact comment/unknown/UTF-8/CRLF byte and router headers, rejected commitment snapshot/output floor, never-consumed return, pending-read abort, once-only reader/finalize/settlement, provisional-versus-final output; gateway gates in pass09 report.
+  - [x] Row 34a — Same file: K1 clean/interrupted growth amounts for all three models, equal/absent/null categories, permanent U/R/zero decrease revocation, exact official V-1 usage/11702 and 74682 amounts, distinct pre-floor snapshots; gateway gates in pass09 report.
+  - [x] Row 34b — Same file: shared missing/null/empty versus substantive/malformed iterations predicate, permanent late model/fallback/iterations latch, opaque wire preserved without folding arrays, realistic 74350 full-rate/64x output floor versus 2450/1700 measured amounts; gateway gates in pass09 report.
+  - [x] Row 34c — Same exact immutable snapshot object reaches projection/hook once on clean/cancel/commit/EOF/overflow/reader/upstream exits; never-settling observation cannot delay settlement, raw-reader closure or injected lease-release seam; JSON throw/reject/never parity; real pool repeats at row 44b; gateway gates in pass09 report.
+  - [x] Row 34d — Same file: all three models, 1h/unknown TTL, SDK no-split/equal/aggregate-only/nullable/omitted/growth repetitions and exact clean/interrupted 2500/1750, 65500/64750, 2700/1950, 65700/64950; mixed growth 2650/1900 and 65650/64900; default 2475/1725; decrease/conflict 74300; raw TTL remains reported evidence; gateway gates in pass09 report.
+  - [x] Row 34e — Same file: typed absent/completed/hook_error/hook_timeout, 999+1-ms timer boundary, settled/closed before expiry, cleared timers, handled late fulfillment/rejection, unchanged snapshot and once-only completion/finalize/settlement; gateway gates in pass09 report.
+  - [x] Row 34f — N5 addendum insertion before row 35: all three models, fractional/nonfinite/unsafe JSON numeric deltas, clean/interrupted 74300 full-rate charge and pre-floor 10300/500 observation; later valid growth cannot restore proof; latched nullable aggregate bound advances to 10400 once; gateway gates in pass09 report.
+  - [x] Row 35 — Exact safeguards bytes, eight pre/late error classes (403->401), empty/partial/overflow refusal, late EOF/unknown/overflow without manufactured stop, progressive-first-frame regression, planned native-only retry and single settlement; header repro found 3 failures, native terminal wrappers now omit selected/unverified served certification, JSON regression included; gateway gates in pass09 report.
+  - [x] Row 36 — Dedicated native response-header policy extends canonical safe names with open Anthropic headers and owner-accepted organization exposure; JSON relay/safe single served-model tests; post-commit gateway gates recorded in pass10 report.
+  - [x] Row 37 — Router JSON/SSE credentials/cookies/hop-by-hop/Connection/internal spoof isolation, owner-accepted organization exposure, exact UTF-8/CRLF safeguards bytes, own markers/served policy and validation refusal headers; 37b corrects null/typed-array assertion operands; gateway gates recorded in pass10 report.
+  - [x] Row 38 — Loopback fake HTTP native provider captures exact request bytes/headers, scripts JSON/SSE/errors, gates first-frame progression and observes socket closure; real fetch adapter and smoke test; 38b uses configured event/forEach APIs and pins dispatch-owned stream override in bytes; gateway gates recorded in pass10 report.
+  - [x] Row 39 — HTTP JSON/SSE exact opaque body/header/UTF-8 bytes, closed caller headers/IP/user-agent isolation, server auth, organization exposure, validation/billing 400s, progressive first frame and paused-response cancellation; count endpoint repeats after rows 45–49 and M6 numeric HTTP repeats at row 42; gateway gates recorded in pass10 report.
+  - [x] Row 40 — Typed measurement and terminal normalization implemented in two increments, consolidated into one <=120-line row commit before review; EX1 approved; gateway and mesh gates recorded in pass10 report.
+  - [x] Contract gate — Immutable validated requestBytes/limitBytes/source/lower-bound detail, typed local/native error and response measurement seam, bounded/cycle-safe cause traversal.
+  - [x] Normalization gate — Status/type/code/cause 413 precedes retry classification, retains closed numeric evidence/fixed text and drops retry hints under custom options; immutable/unsafe/cyclic/renormalization mesh regressions.
+  - [x] Row 41 — Split 41a public numeric mapping/classification, 41b native/canonical flow and callback propagation, 41c shared passthrough transport propagation; <=130 lines per split including plan.
+  - [x] Row 41c — Shared passthrough JSON response/thrown and pre-commit SSE 413 retain numeric detail, drop error headers, close failed readers and survive rejecting settlement; gateway gates recorded in pass10 report.
+  - [x] Row 41a — Exact/lower-bound/unknown-limit numeric messages, both provider envelopes and no-retry headers, 413-before-auth/rate/overload precedence and terminal helper; exhaustive contract snapshot updated; gateway gates recorded in pass10 report.
+  - [x] Row 41b — Native/canonical JSON and pre-commit SSE retain numeric 413 across rejected outcome/settlement callbacks; trusted host result measurement feeds pre/late SSE events, status-only late 413 keeps native type; gateway gates recorded in pass10 report.
+  - [x] Row 42 — Split 42a numeric envelopes/classification, 42b routed callback/no-retry matrix, 42c measured HTTP/pre/late SSE regressions; <=140 lines per split including plan.
+  - [x] Row 42a — Both wires: exact/lower-bound/unknown-limit/N<=L/zero messages through typed/normalized/cause errors, status/type/code-only precedence and cancellation, invalid metadata/prose never fabricates numbers; gateway gates recorded in pass10 report.
+  - [x] Row 42b — Both-wire canonical JSON/open/in-band error and native JSON/open/frame matrices: typed/status/code/cause 413, planned second candidate unused, rejecting outcome/sink combinations preserve refusal, reader closure, single attempt/finalize/settlement and allowance floors; gateway gates recorded in pass10 report.
+  - [x] Row 42c — Real loopback outgoing UTF-8 measurement/serialize-once, trusted/unknown/N<=L limits, HTTP JSON/SSE and pre/late SSE 413 fidelity with private prose/forged numeric fields discarded; gateway gates recorded in pass10 report.
+  - [x] Row 43 — Streaming actual-byte cap, trusted request-local read/parse cache, exact chunk backing storage and incremental UTF-8 decode without raw consolidation; N3/P2 applies now; gateway gates in pass11 report.
+  - [x] Row 43p1 — N1 chooses the host obligation, without a new release channel; gateway may shrink only after its own detachment; gateway gates in pass11 report.
+  - [x] N1 native contract — Before commit-ready SSE or JSON/count completion, host finishes/cancels upload and drops body, serialization and views; fetch headers alone prove nothing. Iterators/readiness/abort/finalize closures retain response state and bounded metadata only.
+  - [x] N1 canonical contract — Canonical SDK/Chat Completions retain measured N through operation/retries and stream completion/cancellation/error cleanup, including never-consumed streams; iterator resolution and first-frame commit do not shrink N.
+  - [ ] N1 host gates — Rows 65b/69c/70a2 prove native reference holders empty before commitment, early-response upload cancellation, JSON/count detachment and canonical SDK lifetime with counted holders; V-3 mixes open native and canonical streams.
+  - [x] Row 43p2 — N2 contract: all early returns after acquisition share detach-before-release exactly-once cleanup, including abort races/rejecting callbacks; original refusals, hold-release/settlement rules and zero extra financial/observation events preserved; gateway gates in pass11 report.
+  - [x] N2 generation matrix — caller_auth, partition, safeguards_off, native_required, native_max_tokens_required, unknown_model, native_unavailable, quote_failure, no_route, budget_admission, prepared_attempt, dispatch_mark; verify original envelope, zero provider calls, empty holders, baseline capacity, following admission and repeated refusals under both middleware orders.
+  - [ ] N2 count matrix — count_off, count_denied, count_rate, count_concurrency explicitly deferred to row 49a after rows 45–49; product session denial before the cap acquires/releases nothing.
+  - [x] Row 43p3 — N3 contract: check N+q against L, extend actual q bytes atomically, then allocate/copy; retained backing capacity <= grants, with no geometric slack, short views over large buffers or duplicate raw consolidation; gateway gates in pass11 report.
+  - [x] N3 CL/EOF contract — Content-Length never sizes storage, reservation or N; EOF parses under exact received N, with no speculative trim. Transient transport chunk is the explicit exception and is discarded on refusal; decoded/parsed/outbound forms stay within the 8x amplification allowance.
+  - [ ] N3 gates — Row 44d2 injects backing-capacity counters and paused forged-large-CL uploads in both middleware orders, verifies zero allocation before read/after failed extension and full recovery; V-3 additionally measures effective process/cgroup memory before release/edge raise.
+  - [x] Row 43a — One process-owned 32000000-byte default pool shared across routers/endpoints; zero-byte leases extend synchronously by actual q before allocation; failed extensions discard partial storage and release once; exact typed 503/api_error, Retry-After:1 and x-should-retry:true; gateway gates in pass11 report.
+  - [x] Row 43b — Checked-body owner tracks synchronous reference detachers, clears cache/holders before zero-byte shrink and claims terminal release once; transfer marks stream ownership; read/parse failure drops raw/text references before release; gateway gates in pass11 report.
+  - [x] Row 43c split — 43c1 native/canonical route ownership and metadata capture; 43c2 router stream transfer/terminal wrapper and independent closure; 43c3 shared passthrough terminal cleanup; each <=120 lines including plan.
+  - [x] Row 43c1 — Route retry/canonical projections register with the body owner; successful JSON detaches after usage capture; native request wrappers drop after N1 host return and commit detaches cached/retry forms; canonical streams keep N until source close, releasing independently of callbacks; gateway gates in pass11 report.
+  - [x] Row 43c2 — Stream wrapper transfers the owner to terminal cleanup, handles return/throw/EOF/error/abort and never-started streams, detaches the source before release, preserves original errors and releases once; row 44 mounts it at the router seam; gateway gates in pass11 report.
+  - [x] Row 43c3 — Shared passthrough closes/detaches its source and releases body independently of rejecting settlement; once-only finish also runs for return before first downstream consumption; retries still retain N; gateway gates in pass11 report.
+  - [x] Row 43c — Completed as 43c1–43c3; native detaches only after host upload guarantee/no retry, canonical and passthrough keep N until source cleanup; terminal stream wrapper transferred at row 44.
+  - [x] Row 44 — Split 44-1 router/middleware integration and 44-2 cap/byte-boundary tests in `tests/request-body-limit.test.ts`, each <=140 lines including plan; corrections 44-1b/44-2b retain frozen assertions.
+  - [x] Row 44-1 — Exported pre-parser middleware and shared router use one cached bounded read; router-owned body wrapper detaches with cache, all early responses release via finally and streaming transfers to terminal wrapper; all three body paths protected under both switch states; gateway gates in pass11 report.
+  - [x] Row 44-1b — Full suite reproduced 1 scaffold regression (1007 passed): absent transport body was parsed as empty JSON; now yields a zero-byte checked owner so the existing frozen 501 test retains its original envelope; gateway rechecks in pass11 report.
+  - [x] Row 44-2 — All three ingress paths refuse actual over-cap bytes before auth/quote/hold/dispatch, exact numeric 413/no-retry/cancel; exact/below cap split UTF-8 parses once, invalid JSON restores capacity, both middleware orders coalesce one lease and clear JSON holders; gateway gates in pass11 report.
+  - [x] Row 44-2b — Three numeric fixture failures (1013 passed) measured 18 actual bytes correctly; corrected the fixture to literal 17 bytes for the unchanged L+1 expected envelopes; gateway rechecks in pass11 report.
+  - [x] Row 44a — Exact B accepted across generation/count ingress owners; multiple routers/all three paths refuse next actual extension with exact typed 503/headers and zero parse/auth/quote/hold/dispatch/finalize/settlement; partial reservation recovery and following successful admission; gateway gates in pass11 report.
+  - [x] Row 44b1 — Split 44b1a native/canonical host-holder lifetime and 44b1b terminal/abort/error/commit/unconsumed/finalize races, each <=140 lines including plan.
+  - [x] Row 44b1a — Both middleware orders: native upload/body/serialized holders keep N until detach/host return, commit clears gateway holders and admits another generation while response stays open; canonical SDK holder keeps exact N at commitment until source close/cancel; once-only cleanup and restored following admission; gateway gates in pass11 report.
+  - [x] Row 44b1b — Actual pool restoration/empty holders/once-only reader, finalize and settlement on JSON, dispatch/serialization/timeout/pre-read/commit/late/EOF errors, unconsumed cancel, abort/cancel races and clean stop; rejecting and never-settling finalize hooks cannot delay cleanup, including standalone order; gateway gates in pass11 report.
+  - [x] Row 44b2 — N2 named 12-case generation matrix, both middleware orders/JSON/SSE/rejecting hold-release/sink/attempt cleanup and abort variants; repeated original-envelope refusals, zero dispatch/finalize, cleared holders, once-only baseline restoration and following generation admission; product session denial acquires nothing; count_off/count_denied/count_rate/count_concurrency deferred to row 49a; gateway gates in pass11 report.
+  - [x] Row 44b2b — Runtime matrix/full suite passes; corrected test-only mutable override type and async Hono middleware declaration flagged by TypeScript; behavior/assertions unchanged; gateway rechecks in pass11 report.
+  - [x] Row 44c — Default process pool across four routers/all three ingress paths: 64 overlapping 4096-byte bodies reserve 262144 actual bytes plus open canonical stream N; ON native stream holds zero after detachment, OFF streams remain canonical; both middleware orders/switch states, further generation/count ingress admission without capacity refusal and exact final restoration; count handler is explicitly an ingress stub; gateway gates in pass11 report.
+  - [x] Row 44c2 — Full runtime suite passed; TypeScript identified widened literals in the generic response fixture; now uses a contextually typed matching Anthropic provider/model response, retaining all concurrency assertions; gateway rechecks in pass11 report.
+  - [x] Row 44d1 — Missing/zero/small/large forged Content-Length grants actual chunk bytes and exact EOF N; actual oversized returned chunk wins 413 over capacity, no failed-chunk allocation; timeout/abort/read failure preserve original reasons, close/unlock reader and restore partial reservations even when cancellation rejects; gateway gates in pass11 report.
+  - [x] Row 44d2 — Both middleware orders, 32 paused uploads claiming L: zero pre-read allocation, exact q backing counters at every allocation <= grants/B, 256/512-byte intermediate reservations, exact 18-byte EOF leases and no raw consolidation; short transport views copy only q bytes, failed extension allocates nothing/cancels/unlocks/restores capacity; gateway gates in pass11 report.
+  - [ ] Row 45 — Count port/handler: JSON-only, switch and exact model/version validation.
+  - [ ] Row 46 — Count per-principal rate/concurrency/expiry/map bounds.
+  - [ ] Row 47 — Router count endpoint: shared caller authentication/header/body/error reuse.
+  - [ ] Row 48 — `tests/native-count-tokens.test.ts`: OFF/ON/fidelity/shallow copy/errors; no stream/ceiling/beta insertion.
+  - [ ] Row 49 — Same file: rate/concurrency/expiry/map bounds; no hold/settlement/usage/finalize.
+  - [ ] Row 49a — `tests/request-body-limit.test.ts`: deferred N2 count_off/count_denied/count_rate/count_concurrency refusal matrix.
+  - [ ] Row 50 — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, canonical ingress/egress/stream tests: ownership inert and canonical regressions.
+  - [ ] Row 51 — `CHANGELOG.md`: native 400/header/standalone/count and JSON/SSE served-header contracts.
+  - [ ] Row 52 — `CHANGELOG.md`: concurrent byte pool/retention, 413/503 and cache delta/mismatch/iterations policy.
+  - [ ] Row 52a — `README.md`: shared pool/retention and native/count/cache/served-header behavior.
+  - [ ] File gate — `tests/native-features.test.ts`: all ten selection rows, single invocation after auth/before admission, no settlement on classifier refusal; prepared eligibility/fallback due rows 21–23/31.
+  - [ ] File gate — `tests/native-headers.test.ts`: complete §4.3 request policy; server auth/transport recomputation stays host-owned in stage 4.
+  - [ ] File gate — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: shallow nested identity, top-level only overrides, inert ownership, no malformed ceiling replacement.
+  - [ ] File gate — `tests/native-errors.test.ts`, `tests/errors.test.ts`, `tests/contract-snapshot.test.ts`, `tests/unknown-model.test.ts`: bounded native 400, billing/rewrite fidelity, exact envelopes/403/404/413.
+  - [ ] File gate — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: complete L2/units40/served/latch fixtures; N5 malformed proof never recovers and physical lower bounds remain atomic.
+  - [ ] File gate — `tests/route-json-flow.test.ts`, `tests/route-stream-flow.test.ts`: exact native relay, no post-invocation canonical fallback, once-only settlement/finalize and independent cleanup.
+  - [ ] File gate — `tests/router.test.ts`, `tests/anthropic-native-relay.integration.test.ts`: byte/header/body/error/IP fidelity, safe organization exposure, response served-ID contract.
+  - [ ] File gate — `tests/request-too-large.test.ts`: both wires/JSON/pre-commit streams, typed/status/code 413, terminal no-retry and numeric limit wording.
+  - [ ] File gate — `tests/request-body-limit.test.ts`: N1 reference probes/lifetimes, N2 all refusals and abort/rejecting-cleanup races, N3 actual backing capacity <= leases, restored capacity.
+  - [ ] File gate — `tests/native-count-tokens.test.ts`: same auth/switch/native error policy, exact shallow body, rate bounds and zero financial/observation events.
+  - [ ] File gate — `tests/budget-admission.test.ts`, `tests/budget-hardening.test.ts`, `tests/route-flow-core.test.ts`, `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`: ceiling/flags/hash/guards/pricing invariants.
+  - [ ] File gate — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, `tests/canonical-egress.test.ts`, `tests/canonical-stream.test.ts`: credential/owner integrity and canonical/compaction preservation.
+  - [ ] File gate — After EVERY code row/split: gateway typecheck and full gateway tests with all three ports and `ENV=test-llm-native-relay` last; mesh gates additionally when mesh files change.
+  - [ ] File gate — Before EVERY commit: scope-check, <=149 changed lines including this file, explicit staging; commit through Make with all three ports and ENV last.
+  - [ ] File gate — Gateway handoff: build/typecheck/tests plus existing standalone process typecheck/tests; forbidden apps paths remain untouched.
+  - [ ] File gate — Pass 03 boundary: implement rows 10–15 only, report commits/counts/gates/status; later rows stay unchecked for conductor-owned passes.
+- [ ] Stage 3 — Contract documentation and atomic release train: rows 53–61 (T1 activates reserved EX4).
+- [ ] Stage 4 — API execution/pricing/route plane/ledger: rows 62–81e2, with addendum insertions.
+- [ ] Stage 5 — Operator setup, HTTP-only qualification and OFF/ON client gates: rows 82a–83b plus 82c.
+- [ ] Stage 6 — Qualified default list, final train packing, Ffinal/Ufinal evidence and release handoff: rows 84–87.
