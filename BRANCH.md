@@ -34,10 +34,11 @@
   - [x] Declare reason, impact, and rollback before conditional edits.
 
 ## Feedback Loop
-- [x] BR-TW4-EX1 — owner-authorized manifests/locks: remove vulnerable tooling chains; impact: dependency resolutions; rollback: revert manifest and generated lock commits together.
-- [x] BR-TW4-EX2 — generated lockfile-only commits may exceed 150 lines; impact: one generated artifact per commit; rollback: revert its lockfile commit.
-- [x] BR-TW4-EX3 — `.security/**` generated scan evidence only; impact: ignored artifacts; rollback: regenerate; no register or policy edits.
-- [x] BR-TW4-EX4 — standalone IdP web tooling/config if its audit retains the same chain; impact: auth-screen build; rollback: revert its migration and lock.
+- [x] BR00-EX1 — owner-authorized manifests/locks: remove vulnerable tooling chains; impact: dependency resolutions; rollback: revert manifest and generated lock commits together.
+- [x] BR00-EX2 — generated lockfile-only commits may exceed 150 lines; impact: one generated artifact per commit; rollback: revert its lockfile commit.
+- [x] BR00-EX3 — `.security/**` generated scan evidence only; impact: ignored artifacts; rollback: regenerate; no register or policy edits.
+- [x] BR00-EX4 — standalone IdP web tooling/config if its audit retains the same chain; impact: auth-screen build; rollback: revert its migration and lock.
+- [x] BR00-EX5 — owner-authorized Makefile correction: remove the deleted Tailwind JS config from UI image hash inputs; impact: eliminates dangling-path warnings, CSS-first config is already hashed under ui/src; rollback: restore the old config/path together.
 
 ## AI Flaky tests
 - [x] No timeout increases or new flaky acceptance; record failures with exact evidence.
@@ -61,8 +62,8 @@
   - [x] Write `.h2a/build/lot0_report.md`; commit scoped plan and capture harness.
 - [ ] **Lot 1 — UI tooling and CSS migration**
   - [x] Preserve the 94 used palette values in `ui/src/tailwind-theme.css`.
-  - [ ] Upgrade UI Tailwind/svelte-check; CSS-first PostCSS integration for all Vite builds.
-  - [ ] Replace directives/config with CSS theme/source declarations and preserve custom colors and affected v3 defaults.
+  - [x] Upgrade UI Tailwind/svelte-check; CSS-first PostCSS integration for all Vite builds.
+  - [x] Replace directives/config with CSS theme/source declarations and preserve custom colors and affected v3 defaults.
   - [ ] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight.
   - [ ] Regenerate root/standalone UI locks through make; commit generated locks separately.
   - [ ] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
