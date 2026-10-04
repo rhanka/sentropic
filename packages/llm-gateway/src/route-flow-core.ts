@@ -5,6 +5,8 @@ import type {
 import type { GatewayConfig } from './config.js';
 import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonical-ingress.js';
 import { classifyNativeFeatures, type NativeFeatureSelection } from './native-features.js';
+import { requestTooLargeDetail } from '@sentropic/llm-mesh';
+import { gatewayRequestTooLargeError } from './router/errors.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError } from './router/errors.js';
@@ -268,13 +270,13 @@ export const classifyRouteError = (
   aborted = false,
 ): RouteFailureClassification => {
   if (aborted) return { reason: 'cancelled', retryable: false, healthScope: 'route' };
+  if (requestTooLargeDetail(error)) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
   const record = asRecord(error);
   const status = typeof record?.statusCode === 'number' ? record.statusCode
     : typeof record?.status === 'number' ? record.status : undefined;
   const code = typeof record?.code === 'string' ? record.code.toLowerCase() : '';
   const retryAfterMs = typeof record?.retryAfterMs === 'number' ? record.retryAfterMs : undefined;
   if (code === 'native_protocol_error') return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
-  if (status === 413) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
   if (status === 429 || code.includes('rate')) {
     return {
       reason: 'rate-limited', retryable: true, healthScope: 'provider-model',
@@ -323,7 +325,10 @@ export const terminalGatewayError = (
   classification: RouteFailureClassification,
   target: ResolvedTarget,
   fallbackMessage: string,
+  originalError?: unknown,
 ): GatewayError => {
+  const tooLarge = gatewayRequestTooLargeError(originalError, target);
+  if (classification.reason !== 'cancelled' && tooLarge) return tooLarge;
   if (classification.reason === 'invalid-request') {
     return new GatewayError(
       'bad-request', 'upstream refused the request as invalid', undefined, target,
