@@ -295,7 +295,7 @@ describe('N2 pre-dispatch refusal matrix (count cases follow at row 49a)', () =>
       const h = nativeHarness(); const pool = new GatewayBodyBytePool(4096); const owners: CheckedGatewayBody[] = [];
       const generate = vi.fn(h.attempt.generate); const dispatchStream = vi.fn(h.attempt.stream);
       h.attempt.generate = generate; h.attempt.stream = dispatchStream;
-      const overrides: Partial<CreateGatewayRouterOptions> = {};
+      const overrides: { -readonly [K in keyof CreateGatewayRouterOptions]?: CreateGatewayRouterOptions[K] } = {};
       let controller = new AbortController(); const body: Record<string, unknown> = { ...h.request.body, stream };
       switch (row.name) {
         case 'caller_auth': case 'partition':
@@ -346,7 +346,7 @@ describe('N2 pre-dispatch refusal matrix (count cases follow at row 49a)', () =>
   });
   it('product session denial before the cap acquires and releases nothing', async () => {
     const pool = new GatewayBodyBytePool(4096); const storage = vi.fn(); const app = new Hono();
-    app.use('*', c => c.json({ error: 'session denied' }, 401));
+    app.use('*', async c => c.json({ error: 'session denied' }, 401));
     app.use('*', gatewayRequestBodyLimit({ pool, limitBytes: 4096, storage }));
     const response = await app.request(bodyRequest([utf8('{}')]).raw);
     expect(response.status).toBe(401); expect(storage).not.toHaveBeenCalled();
