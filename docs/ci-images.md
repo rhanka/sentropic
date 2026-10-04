@@ -76,8 +76,8 @@ and a fresh user in the disposable fixture. Restore uses
 
 API and toolbox scans both use the existing HIGH/CRITICAL compliance gate via
 `make test-api-security-container` and `make test-api-tool-security-container`.
-The toolbox still contains vulnerable npm/development tools. Scan failures remain
-blocking; no severity change or vulnerability-register exception is introduced.
+Scan failures remain blocking for both production and toolbox images; no severity
+change or vulnerability-register exception is introduced.
 Use `make down-api-ci` to stop this branch's stack.
 
 The toolbox rebuilds its legacy esbuild 0.19.12 and 0.18.20 binaries with pinned

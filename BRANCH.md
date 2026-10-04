@@ -4,7 +4,7 @@
 - [ ] Remove the npm CLI from the production API image runtime stage (remediating CVE-2026-93748 / GHSA-ch52-4w7c-c8xp) by separating a CI tool image from the prod image, caching the tool image across runs, running the API test matrix inside the tool image, and qualifying the production image as SUT.
 
 ## Scope / Guardrails
-- [x] Work only in `tmp/ci-prod-image-sut`, branch `feat/ci-prod-image-sut`, base `7d1002505`; mechanical harness branch check passed.
+- [x] Work only in `tmp/ci-prod-image-sut`, branch `feat/ci-prod-image-sut`; original base `7d1002505`, rebased onto `origin/main` at `99d28fdeb`; mechanical harness branch check passed.
 - [x] Scope: Option O-min+ of decision dossier 632-npm-image-dossier.md v4.2 under owner authorization (2026-10-03).
 - [x] Production image drops `npm` and `npx` from its runtime stage; runtime entrypoints stay `node dist/index.js` and `node apps/auth-idp/dist/index.js`; migrations run at boot.
 - [x] CI tool image carries npm, test runner, workspace dependencies, and test sources; content-hashed tag on inputs and cached.
@@ -14,6 +14,7 @@
 - [x] Make-only, Docker-first workflow; no native npm on host, no Python; ENV always last: `API_PORT=9491 UI_PORT=5691 MAILDEV_UI_PORT=1591 ENV=test-ci-prod-image-sut`.
 - [x] Atomic commits under 150 lines; selective git add; commit via `make commit MSG="..."`.
 - [x] Owner authorizes branch push and PR to main on 2026-10-04 after review fixes and local gates; no merge or publication.
+- [x] Conductor authorizes rebase on merged PR #637 and force-with-lease push on 2026-10-04; qualify PR #636 without merging.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
@@ -117,14 +118,17 @@
   - [x] Pin the production artifact config ID through local load, runtime and scan; transport a receipt and reject mismatches. Registry OCI and deployed digest evidence remain follow-ups.
   - [x] Document architecture in `docs/ci-images.md` and finalize reports.
   - [x] Write `.h2a/build/lot3_report.md` for reviewer.
-  - [x] Record the blocking toolbox scan: 52 HIGH and 4 CRITICAL unaccepted findings; production has zero. No severity/register changes; full qualification remains open.
+  - [x] Record the original blocking toolbox scan (52 HIGH and 4 CRITICAL), then remediate its dependencies without severity/register changes.
   - [x] Apply Lot 1 review registry, cache-log and tools-hash findings with failing-then-passing checks in `scripts/test-api-tooling.sh`, wired into CI.
   - [x] Purge `/root/.npm` from production alongside npm/npx; add a runtime regression gate for CLI, global package tree and cache absence.
   - [x] Trigger CI for toolbox `tools/**` and regression-script changes so hash invalidation and its tests are exercised.
   - [x] Recheck all four regressions, ShellCheck/actionlint, scope/hash coverage, source unit (1011 passed, 2 skipped), production scan (zero findings), restore (9), smoke (13), limit (4) and compiled IdP browser smoke after review fixes.
   - [x] Correct CI manifest wiring: keep toolbox regressions outside the reserved `scripts/ci` publisher namespace and name the main-image helper with the `-image` suffix.
-  - [ ] Remediate the blocking toolbox scan without changing policy: rebuild esbuild 0.19.12/0.18.20 with pinned Go 1.26.7 and patch bundled npm ip-address/pacote; retain npm and runner interfaces.
+  - [x] Remediate the blocking toolbox scan without changing policy: rebuild esbuild 0.19.12/0.18.20 with pinned Go 1.26.7 and patch bundled npm ip-address/pacote; retain npm and runner interfaces.
   - [x] Verify npm/npx and both rebuilt esbuild Node interfaces with a real TypeScript transform after toolbox builds and cache loads; local build passes and scan falls from 56 to two findings addressed by PR #637.
+  - [x] Rebase onto merged Tailwind 4/npm dependency fixes; resolve the Makefile conflict by preserving API/IdP tag coverage and main's UI hash inputs.
+  - [x] Rebuild the rebased toolbox: npm/Vitest and both esbuild TypeScript transforms pass; strict container scan and UI SCA report zero findings.
+  - [x] Qualify the rebased production artifact locally: npm/cache absence, zero-finding scan, unit (1011 passed, 2 skipped), restore (9), smoke (13), limit (4) and compiled IdP browser/token/userinfo pass.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app smoke verification on running stack.
@@ -135,5 +139,5 @@
 - [x] **Lot N — Local validation and handoff**
   - [x] Run `make scope-check`; PASS C2.
   - [x] Run `make check-ci-version-filters`; PASS. Containerized actionlint also passes.
-  - [x] Run security scans: production PASS; toolbox compliance FAIL, recorded for conductor.
-  - [x] Final lot reports written; Lot 1 external review PASS with four findings addressed. Push/PR are authorized; CI qualification pending, no merge or publication.
+  - [x] Run security scans after the rebase and dependency remediation: production, toolbox and UI SCA PASS with zero findings.
+  - [x] Final lot reports written; Lot 1 external review PASS with four findings addressed. Local rebase gates pass; PR #636 CI qualification remains pending, no merge or publication.
