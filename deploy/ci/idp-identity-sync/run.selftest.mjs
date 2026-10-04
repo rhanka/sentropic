@@ -3,9 +3,9 @@ import { readFileSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { render, validateRun, classifyJobStatus, exportSnapshot, configure, waitJob } from './run-core.mjs';
+import { render, validateRun, classifyJobStatus, exportSnapshot, configure, waitJob, failureSummary } from './run-core.mjs';
 import { antiRceGate, replaceSecrets, policyName } from './bundle-cd.mjs';
-import { auditSummary, collectAudit } from './run.mjs';
+import { auditSummary, collectAudit, failureVerdict } from './run.mjs';
 const { parse } = createRequire('/tmp/idp-tools/package.json')('yaml');
 export async function runTests(load, bundles) {
   let passed = 0;
@@ -91,6 +91,21 @@ export async function runTests(load, bundles) {
     assert.throws(() => auditSummary(JSON.stringify(value), 'committed')); assert.throws(() => auditSummary(JSON.stringify({ ...value, post_users: -1 }), 'rolled_back'));
     const k = args => ({ stdout: args.includes('logs') ? 'non-audit line\n' : JSON.stringify({ items: [{ status: { containerStatuses: [{ name: 'import-preprod', state: { terminated: { message: JSON.stringify(value) } } }] } }] }) });
     assert.equal(collectAudit('test', 'rolled_back', k).post_users, 9);
+  });
+  await check('failed imports report only known codes and strict UUID pairs from pod status', () => {
+    const pair = '00000000-0000-4000-8000-000000000001>00000000-0000-4000-8000-000000000002';
+    const value = { outcome: 'failed', code: 'rekey_not_allowed', rejected_rekey_pairs: [pair] };
+    assert.deepEqual(failureSummary(JSON.stringify(value)), value);
+    for (const code of ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit']) assert.equal(failureSummary(JSON.stringify({ outcome: 'failed', code })).code, code);
+    const pod = message => ({ stdout: JSON.stringify({ items: [{ status: { containerStatuses: [{ name: 'import-preprod', state: { terminated: { message } } }] } }] }) });
+    assert.equal(failureVerdict('synthetic', args => { assert.ok(!args.includes('logs')); return pod(JSON.stringify(value)); }), `job/synthetic failed: rekey_not_allowed (${pair})`);
+    assert.equal(failureVerdict('synthetic', () => pod('{"outcome":"failed","code":"sql_error"}')), 'job/synthetic failed: sql_error');
+    const invalid = ['private@example.invalid', 'null', '[]', '{"outcome":', JSON.stringify({ ...value, outcome: 'committed' }), JSON.stringify({ ...value, code: 'private@example.invalid' }), JSON.stringify({ ...value, rejected_rekey_pairs: ['private@example.invalid'] }), JSON.stringify({ ...value, rejected_rekey_pairs: ['-'.repeat(36) + '>' + '-'.repeat(36)] }), JSON.stringify({ ...value, rejected_rekey_pairs: [pair + '\n'] }), JSON.stringify({ ...value, stderr: 'private@example.invalid' }), JSON.stringify({ ...value, code: 'sql_error' })];
+    for (const raw of invalid) {
+      assert.throws(() => failureSummary(raw), { message: 'invalid import failure message' });
+      assert.throws(() => failureVerdict('synthetic', () => pod(raw)), { message: 'job/synthetic failed: termination failure code unavailable' });
+    }
+    for (const stdout of ['private@example.invalid', '{"items":[]}']) assert.throws(() => failureVerdict('synthetic', () => ({ stdout })), { message: 'job/synthetic failed: termination failure code unavailable' });
   });
   return passed;
 }
