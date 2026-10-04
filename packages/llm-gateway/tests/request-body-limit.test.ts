@@ -2,10 +2,11 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CheckedGatewayBody, GatewayBodyBytePool, createGatewayRouter, defaultGatewayBodyBytePool,
-  ensureCheckedGatewayBody, gatewayRequestBodyLimit, type RequestBodyLimitOptions,
+  ensureCheckedGatewayBody, gatewayRequestBodyLimit, type RequestBodyLimitOptions, type CreateGatewayRouterOptions,
 } from '../src/index.js';
 import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
-import { NativeMessagesUpstreamError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, RouteQuoteError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
+import { fixtureQuote } from './fixtures/budget.js';
 
 const PATHS = ['/v1/messages', '/v1/chat/completions', '/v1/messages/count_tokens'];
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -25,7 +26,7 @@ const bodyRequest = (chunks: readonly Uint8Array[], path = PATHS[0]!, headers: R
   return { raw, cancel };
 };
 const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBodyLimitOptions,
-  order = 'product', owners: CheckedGatewayBody[] = []) => {
+  order = 'product', owners: CheckedGatewayBody[] = [], overrides: Partial<CreateGatewayRouterOptions> = {}) => {
   const app = new Hono();
   const inspect: MiddlewareHandler = async (c, next) => {
     owners.push(await ensureCheckedGatewayBody(c.req.raw, options)); await next();
@@ -36,7 +37,7 @@ const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBody
   if (order === 'product') app.use('*', inspect);
   app.route('/', createGatewayRouter({ config: h.deps.config, routePlanner: h.deps.routePlanner,
     routeMetering: h.deps.metering, budget: h.deps.budget, nativeMessagesEnabled: true,
-    requestBody: options, requestId: () => 'req-native' }));
+    requestBody: options, requestId: () => 'req-native', ...overrides }));
   return app;
 };
 
@@ -271,5 +272,84 @@ describe('body terminal ownership', () => {
       await vi.advanceTimersByTimeAsync(1000);
       expect(h.finalize).toHaveBeenCalledTimes(1); expect(pool.stats.releases).toBe(1);
     } finally { vi.useRealTimers(); }
+  });
+});
+
+const generationRefusals = [
+  { name: 'caller_auth', status: 401, type: 'authentication_error', message: 'authentication failed' },
+  { name: 'partition', status: 401, type: 'authentication_error', message: 'authentication failed' },
+  { name: 'safeguards_off', status: 400, type: 'invalid_request_error', message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+  { name: 'native_required', status: 400, type: 'invalid_request_error', message: 'safeguards requires the Anthropic Messages endpoint.' },
+  { name: 'native_max_tokens_required', status: 400, type: 'invalid_request_error', message: 'safeguards requires a positive integer max_tokens.' },
+  { name: 'unknown_model', status: 404, type: 'not_found_error', message: 'Unknown model: "claude-sonnet-5"' },
+  { name: 'native_unavailable', status: 400, type: 'invalid_request_error', message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+  { name: 'quote_failure', status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
+  { name: 'no_route', status: 503, type: 'api_error', message: 'No route available for model: "claude-sonnet-5"' },
+  { name: 'budget_admission', status: 429, type: 'rate_limit_error', message: 'rate limit exceeded' },
+  { name: 'prepared_attempt', status: 400, type: 'invalid_request_error', message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+  { name: 'dispatch_mark', status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
+];
+describe('N2 pre-dispatch refusal matrix (count cases follow at row 49a)', () => {
+  it.each(generationRefusals.map(row => [row.name, row] as const))('pre_dispatch_%s_restores_capacity_once', async (_name, row) => {
+    for (const order of ['product', 'standalone']) for (const stream of [false, true]) for (const rejecting of [false, true]) {
+      const h = nativeHarness(); const pool = new GatewayBodyBytePool(4096); const owners: CheckedGatewayBody[] = [];
+      const generate = vi.fn(h.attempt.generate); const dispatchStream = vi.fn(h.attempt.stream);
+      h.attempt.generate = generate; h.attempt.stream = dispatchStream;
+      const overrides: Partial<CreateGatewayRouterOptions> = {};
+      let controller = new AbortController(); const body: Record<string, unknown> = { ...h.request.body, stream };
+      switch (row.name) {
+        case 'caller_auth': case 'partition':
+          overrides.config = { ...h.deps.config, callerAuth: { async verify() { return { ok: false, reason: row.name }; } } }; break;
+        case 'safeguards_off': overrides.nativeMessagesEnabled = false; break;
+        case 'native_max_tokens_required': overrides.budget = undefined; delete body.max_tokens; break;
+        case 'unknown_model': case 'native_unavailable':
+          h.deps.routePlanner.quote = () => { throw new RouteQuoteError('refused', row.name === 'unknown_model' ? 'unknown-model' : 'native-unavailable'); }; break;
+        case 'quote_failure': h.deps.routePlanner.quote = () => { throw Error('quote failed'); }; break;
+        case 'no_route': h.deps.routePlanner.quote = () => fixtureQuote({ requestedModel: h.model, candidates: [] }); break;
+        case 'budget_admission': h.recorder.port.admit = async input => {
+          h.recorder.events.push('admit'); h.recorder.admitted.push(input);
+          return { kind: 'over-budget', resetAtMs: h.deps.budget.now!() + 1000 };
+        }; break;
+        case 'prepared_attempt': h.attempt.nativeMessages.apiVersions = []; break;
+        case 'dispatch_mark': h.recorder.port.markDispatched = async () => { throw Error('mark failed'); }; break;
+      }
+      const originalSettle = h.recorder.metering.settleRoute;
+      h.recorder.metering.settleRoute = async value => { await originalSettle(value); if (rejecting) throw Error('sink failed'); };
+      const originalRelease = h.recorder.port.release;
+      h.recorder.port.release = async hold => { await originalRelease(hold); if (rejecting) throw Error('release failed'); };
+      if (rejecting) h.attempt.releaseCancelled.mockImplementation(async () => { controller.abort(); throw Error('cleanup failed'); });
+      const path = row.name === 'native_required' ? PATHS[1]! : PATHS[0]!;
+      const app = limitedRouter(h, { pool, limitBytes: 4096 }, order, owners, overrides);
+      for (let repeat = 1; repeat <= 2; repeat += 1) {
+        controller = new AbortController();
+        const response = await app.request(bodyRequest([utf8(JSON.stringify(body))], path, {}, controller.signal).raw);
+        expect(response.status).toBe(row.status);
+        expect(await response.json()).toEqual(path.includes('chat')
+          ? { error: { type: row.type, code: 'invalid_request', message: row.message } }
+          : { type: 'error', error: { type: row.type, message: row.message } });
+        expect(h.execute).not.toHaveBeenCalled(); expect(h.finalize).not.toHaveBeenCalled();
+        expect(generate).not.toHaveBeenCalled(); expect(dispatchStream).not.toHaveBeenCalled();
+        expect(owners.at(-1)!.body).toBeUndefined(); expect(owners.at(-1)!.retainedHolders).toBe(0);
+        expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: repeat * 2 - 1, releases: repeat * 2 - 1 });
+        const settled = ['prepared_attempt', 'dispatch_mark'].includes(row.name);
+        expect(h.recorder.settlements).toHaveLength(settled ? repeat : 0);
+        expect(h.recorder.events.filter(event => event.startsWith('release:'))).toHaveLength(settled ? repeat : 0);
+        expect(h.recorder.admitted).toHaveLength(settled || row.name === 'budget_admission' ? repeat : 0);
+        if (settled) expect(h.recorder.settlements.at(-1)!.usage).toEqual({ inputTokens: 0, outputTokens: 0, estimated: false });
+        // A distinct following generation proves returned capacity, without reusing refusal callbacks.
+        const following = nativeHarness(); const next = await limitedRouter(following, { pool, limitBytes: 4096 })
+          .request(bodyRequest([utf8(JSON.stringify(following.request.body))]).raw);
+        expect(next.status).toBe(200); expect(following.execute).toHaveBeenCalledTimes(1);
+        expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: repeat * 2, releases: repeat * 2 });
+      }
+    }
+  });
+  it('product session denial before the cap acquires and releases nothing', async () => {
+    const pool = new GatewayBodyBytePool(4096); const storage = vi.fn(); const app = new Hono();
+    app.use('*', c => c.json({ error: 'session denied' }, 401));
+    app.use('*', gatewayRequestBodyLimit({ pool, limitBytes: 4096, storage }));
+    const response = await app.request(bodyRequest([utf8('{}')]).raw);
+    expect(response.status).toBe(401); expect(storage).not.toHaveBeenCalled();
+    expect(pool.stats).toEqual({ reservedBytes: 0, liveLeases: 0, acquisitions: 0, releases: 0 });
   });
 });
