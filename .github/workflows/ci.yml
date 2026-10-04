@@ -1043,6 +1043,8 @@ jobs:
       - name: Build CI toolbox
         if: steps.tool-cache.outputs.cache-hit != 'true'
         run: make build-api-tool-image ENV=test-ci-api
+      - name: Verify toolbox runner and compiler interfaces
+        run: make test-ci-api-tool-runtime ENV=test-ci-api
       - name: Save CI toolbox
         if: steps.tool-cache.outputs.cache-hit != 'true'
         run: make save-api-tool ENV=test-ci-api

@@ -80,6 +80,12 @@ The toolbox still contains vulnerable npm/development tools. Scan failures remai
 blocking; no severity change or vulnerability-register exception is introduced.
 Use `make down-api-ci` to stop this branch's stack.
 
+The toolbox rebuilds its legacy esbuild 0.19.12 and 0.18.20 binaries with pinned
+Go 1.26.7, retaining the existing Node interfaces. Only the rebuilt binaries are
+copied from the compiler stage. Bundled npm ip-address/pacote receive their fixed
+versions. `make test-ci-api-tool-runtime` verifies npm/npx and executes TypeScript
+transforms through both esbuild Node interfaces on cache hits and fresh builds.
+
 `make test-ci-api-tooling` regresses the empty registry reference, quiet cache
 fallback and `tools/` hash invalidation with a controlled Docker command stub.
 `make test-ci-api-runtime` checks the recorded production artifact for CLI,
