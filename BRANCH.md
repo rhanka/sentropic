@@ -271,7 +271,7 @@
   - [x] Row 49a2 — Runtime gate 1134/0; prime the injected rate using the existing zero-argument budget fixture verifier signature flagged by TypeScript; real router verification and every matrix assertion remain unchanged.
   - [x] Row 50 — Redaction and count ownership/auth-context tests pin session/internal credential exclusions, trusted subject/workspace/request ID and opaque body inertness; canonical ingress aliases/compaction, egress usage and both-wire stream termination ignore count/native extensions without altering generation shapes.
   - [x] Row 50b — Typecheck/runtime (1142/1) caught the new redaction test importing an internal native-header helper from root exports; use its existing module path without changing the public API or any assertion.
-  - [ ] Row 51 — `CHANGELOG.md`: native 400/header/standalone/count and JSON/SSE served-header contracts.
+  - [x] Row 51 — `CHANGELOG.md`: built native selection/400/header/standalone/count and JSON/SSE served-header contracts; gateway pre/post-commit gates recorded in pass13 report.
   - [ ] Row 52 — `CHANGELOG.md`: concurrent byte pool/retention, 413/503 and cache delta/mismatch/iterations policy.
   - [ ] Row 52a — `README.md`: shared pool/retention and native/count/cache/served-header behavior.
   - [ ] File gate — `tests/native-features.test.ts`: all ten selection rows, single invocation after auth/before admission, no settlement on classifier refusal; prepared eligibility/fallback due rows 21–23/31.
@@ -291,6 +291,15 @@
   - [ ] File gate — Gateway handoff: build/typecheck/tests plus existing standalone process typecheck/tests; forbidden apps paths remain untouched.
   - [ ] File gate — Pass 03 boundary: implement rows 10–15 only, report commits/counts/gates/status; later rows stay unchecked for conductor-owned passes.
 - [ ] Stage 3 — Contract documentation and atomic release train: rows 53–61 (T1 activates reserved EX4).
+  - [x] Pass 13 checklist recorded before stage implementation: documentation rows 53–57 only; release train rows 58–61 remain conductor-owned.
+  - [ ] Row 53 — `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §4.12: native feasibility, selection, exact model and standalone safeguards refusal.
+  - [ ] Row 54 — Routing §5.3 terminal numeric 413 and §5.4 exact narrow R-Q3/Q-G/R-Q5 native exception; retain account-id and canonical invariants.
+  - [ ] Row 55 — Routing §5.6: opaque JSON/SSE, count auth/rate/no-financial lifecycle, usage/cache/delta proof and N1–N3/N5 contracts.
+  - [ ] Row 56 — `spec/SPEC_EVOL_LLM_GATEWAY.md` §3 endpoints/§3b: native errors/headers/served identity, 32,000,000-byte cap/shared pool, retention/refusal and measured/floored settlement.
+  - [ ] Row 57 — `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: financial/observation roles, snapshot, cumulative proof, exact price identity and audit join; distinguish built gateway from pending API integration.
+  - [ ] Pass 13 gates — Before and after each commit, gateway typecheck/full tests; mesh too if mesh files change; sequential single Make target with API_PORT=9471 UI_PORT=5671 MAILDEV_UI_PORT=1571 ENV=test-llm-native-relay last.
+  - [ ] Pass 13 commit gates — Scope-check, explicit staging including this plan, <=149 changed lines (split <=140), Make commit only; no push/provider/publication/design decisions.
+  - [ ] Pass 13 handoff — Gemini 3.8 Flash high via AGY read-only review of all pass commits into `.h2a/build/pass13_review_gemini.md`; fix BLOCKER/MAJOR with regression per MAJOR and re-review; print packet report.
 - [ ] Stage 4 — API execution/pricing/route plane/ledger: rows 62–81e2, with addendum insertions.
 - [ ] Stage 5 — Operator setup, HTTP-only qualification and OFF/ON client gates: rows 82a–83b plus 82c.
 - [ ] Stage 6 — Qualified default list, final train packing, Ffinal/Ufinal evidence and release handoff: rows 84–87.
