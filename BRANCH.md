@@ -333,8 +333,9 @@
   - [ ] Pass 13 commit gates — Scope-check, explicit staging including this plan, <=149 changed lines (split <=140), Make commit only; no push/provider/publication/design decisions.
   - [ ] Pass 13 handoff — Gemini 3.8 Flash high via AGY read-only review of all pass commits into `.h2a/build/pass13_review_gemini.md`; fix BLOCKER/MAJOR with regression per MAJOR and re-review; print packet report.
 - [ ] Stage 4 — API execution/pricing/route plane/ledger: rows 62–81e2, with addendum insertions.
-  - [ ] Row 62 — Native raw fetch, trusted auth, request headers and response seam; detach upload/body holders before exposing results (N1).
+  - [x] Row 62 — Native raw fetch, trusted auth, request headers and response seam; detach upload/body holders before exposing results (N1); split 62a/62b.
   - [x] Row 62a split — Body-free upload/headers/response helpers in `anthropic-native-transport.ts`; typecheck PASS, Claude tests 17 passed / 0 failed; 62b connects raw fetch/provider seam.
+  - [x] Row 62b split — Raw fetch waits for transport completion/cancellation before detaching measured body holders; fake-HTTP JSON/byte/auth smoke verifies the real seam; typecheck PASS, Claude tests 18 passed / 0 failed.
   - [ ] Row 63 — Non-billable count_tokens endpoint, exact source/model and outgoing-size guards.
   - [ ] Row 64 — 55,000-ms deadline through JSON/first non-error SSE frame, caller abort and reader/timer cleanup.
   - [ ] Row 65a — `api/tests/unit/claude-provider.test.ts`: fake HTTP auth, headers, count, byte measurement, errors and deadline cases.
