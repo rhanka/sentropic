@@ -172,7 +172,7 @@
   - [ ] Row 26b — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: JSON/SSE identities and no cross-iteration fold.
   - [x] Row 27 — `src/native-usage.ts`: sourced served-model policy, exact bigint units40 with lower/upper safe bounds, observer pricing/proof projection; unverified/overflow fallback omits units. Row 26a gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
   - [x] Row 27a — Row 27 proof dependency: complete split-only start, nullable/equal cumulative inheritance, atomic monotonic checks and decrease precedence, permanent units overflow invalidation; conflicting served-model segments cannot combine input categories. Row 27 gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
-  - [ ] Row 27b — `src/native-usage.ts`: default TTL growth versus 2x growth-only bounds; inference provenance.
+  - [x] Row 27b — Row 27 allocation dependency: inspect actual outbound controls once, retain default-TTL eligibility across nullable deltas, preserve reported split while pricing only non-default growth at 2x. Row 27a gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
   - [ ] Row 28 — `tests/native-usage.test.ts`: usage/cache/TTL/uncertainty.
   - [ ] Row 28a — `tests/native-usage.test.ts`: proof validity/revocation/output provenance.
   - [ ] Row 28b — `tests/native-usage.test.ts`: model/policy/units40 lower-upper bounds and safe arithmetic.
