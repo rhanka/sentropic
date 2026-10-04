@@ -170,7 +170,7 @@
   - [x] Row 26 — `src/native-usage.ts`: JSON/SSE cumulative fold, immutable physical/raw pre-floor snapshot, delta-plus-clean-stop final output and unsuccessful termination; N4 finite decrease receipt compares accepted reported categories. Post-commit gates in pass report.
   - [x] Row 26a — Required row 26 identity dependency: safe response-served ID, permanent mismatch/unverified/fallback/substantive-iterations latch; null/[] absent; no iteration array folding or stored payload. Row 26 gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
   - [ ] Row 26b — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: JSON/SSE identities and no cross-iteration fold.
-  - [ ] Row 27 — `src/native-usage.ts`: sourced model cache multipliers and integer-rational units40.
+  - [x] Row 27 — `src/native-usage.ts`: sourced served-model policy, exact bigint units40 with lower/upper safe bounds, observer pricing/proof projection; unverified/overflow fallback omits units. Row 26a gates: typecheck PASS; 673 tests passed / 0 failed. Post-commit gates in pass report.
   - [ ] Row 27a — `src/native-usage.ts`: start proof, nullable inheritance, equal aggregate, monotonic updates and N5 atomic validity.
   - [ ] Row 27b — `src/native-usage.ts`: default TTL growth versus 2x growth-only bounds; inference provenance.
   - [ ] Row 28 — `tests/native-usage.test.ts`: usage/cache/TTL/uncertainty.
