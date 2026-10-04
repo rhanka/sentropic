@@ -256,6 +256,7 @@
   - [x] Row 45 — Count port/handler: JSON-only, exact ON switch, host catalog/partition preparation, shared native model/version eligibility, untouched shallow body and safe input_tokens; host deadline/upload detachment contract; no generation/financial path.
   - [x] Row 46 — One shared process limiter: verified tenant/principal tuple, capacity 10/refill 1 per second/concurrency 2, idle 10-minute eviction excluding live calls, 10000-key fail-closed cap, injected limits/clock; token charged at execute, no cancel refund, once-only concurrency release.
   - [x] Row 47 — Shared count route reuses bounded body, caller auth/context and partition fence before handler validation; sanitized native request/response headers and Anthropic errors, server request ID and success-only relay; trusted port/rate options, no served assertion or generation dependencies.
+  - [x] Row 47b — Full gate reproduced route inventory and count ingress-stub shadowing (1061/5); explicitly freeze sixth authorized route and mount ingress-only stub before real router, retaining every overlap/capacity assertion; gateway rechecks in pass12 report.
   - [ ] Row 48 — `tests/native-count-tokens.test.ts`: OFF/ON/fidelity/shallow copy/errors; no stream/ceiling/beta insertion.
   - [ ] Row 49 — Same file: rate/concurrency/expiry/map bounds; no hold/settlement/usage/finalize.
   - [ ] Row 49a — `tests/request-body-limit.test.ts`: deferred N2 count_off/count_denied/count_rate/count_concurrency refusal matrix.
