@@ -13,7 +13,7 @@
 - [x] Out of scope: endpoint conversion to HTTP (option O), k8s manifests, scanner policy/thresholds, vulnerability register exceptions.
 - [x] Make-only, Docker-first workflow; no native npm on host, no Python; ENV always last: `API_PORT=9491 UI_PORT=5691 MAILDEV_UI_PORT=1591 ENV=test-ci-prod-image-sut`.
 - [x] Atomic commits under 150 lines; selective git add; commit via `make commit MSG="..."`.
-- [x] No push, PR, merge, or publish without conductor.
+- [x] Owner authorizes branch push and PR to main on 2026-10-04 after review fixes and local gates; no merge or publication.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
@@ -27,6 +27,7 @@
   - `BRANCH.md`
   - `.gitignore`
   - `docs/ci-images.md`
+  - `scripts/ci/test-api-tooling.sh`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - `deploy/k8s/**`
   - `packages/**`
@@ -56,7 +57,7 @@
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
 
-## Orchestration Mode (AI-selected)
+## Orchestration Mode
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [x] Rationale: Direct sequential lots in worktree `tmp/ci-prod-image-sut`, verified by local reviewer at each lot boundary.
 
@@ -116,6 +117,7 @@
   - [x] Document architecture in `docs/ci-images.md` and finalize reports.
   - [x] Write `.h2a/build/lot3_report.md` for reviewer.
   - [x] Record the blocking toolbox scan: 52 HIGH and 4 CRITICAL unaccepted findings; production has zero. No severity/register changes; full qualification remains open.
+  - [x] Apply Gemini review registry, cache-log and tools-hash findings with failing-then-passing checks in `scripts/ci/test-api-tooling.sh`, wired into CI.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app smoke verification on running stack.
