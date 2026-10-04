@@ -293,7 +293,7 @@
 - [ ] Stage 3 — Contract documentation and atomic release train: rows 53–61 (T1 activates reserved EX4).
   - [x] Pass 13 checklist recorded before stage implementation: documentation rows 53–57 only; release train rows 58–61 remain conductor-owned.
   - [x] Row 53 — Routing §4.12: exact-model quote/planner/prepared feasibility, ten selection cases, empty qualification list and standalone safeguards refusal; sequential gateway pre/post-commit gates in packet report.
-  - [ ] Row 54 — Routing §5.3 terminal numeric 413 and §5.4 exact narrow R-Q3/Q-G/R-Q5 native exception; retain account-id and canonical invariants.
+  - [x] Row 54 — Routing §5.3 terminal numeric 413 and §5.4 verbatim frozen owner-accepted native exception; account-id/credential/internal-header and canonical invariants retained; sequential gateway pre/post-commit gates in packet report.
   - [ ] Row 55 — Routing §5.6: opaque JSON/SSE, count auth/rate/no-financial lifecycle, usage/cache/delta proof and N1–N3/N5 contracts.
   - [ ] Row 56 — `spec/SPEC_EVOL_LLM_GATEWAY.md` §3 endpoints/§3b: native errors/headers/served identity, 32,000,000-byte cap/shared pool, retention/refusal and measured/floored settlement.
   - [ ] Row 57 — `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`: financial/observation roles, snapshot, cumulative proof, exact price identity and audit join; distinguish built gateway from pending API integration.
