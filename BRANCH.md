@@ -259,6 +259,7 @@
   - [x] Row 47b — Full gate reproduced route inventory and count ingress-stub shadowing (1061/5); explicitly freeze sixth authorized route and mount ingress-only stub before real router, retaining every overlap/capacity assertion; gateway rechecks in pass12 report.
   - [ ] Row 48 — `tests/native-count-tokens.test.ts`: OFF/ON/fidelity/shallow copy/errors; no stream/ceiling/beta insertion.
   - [x] Row 48a — Declared split 48a authentication/switch/model fixtures, 48b opaque body/headers/protocol, 48c upstream errors, each <=140 lines including plan; 48a covers auth/partition precedence, exact ON/OFF, minimal schema, missing port/capability, exact model/provider/list/version denial and catalog 404.
+  - [x] Row 48b — Opaque top-level clone/nested references/input immutability, exact version-only/native/no inserted fields, caller stream stays JSON, shared header exclusions/organization/diagnostic ownership, nominated version refusal and terminal malformed envelope/input_tokens checks.
   - [ ] Row 49 — Same file: rate/concurrency/expiry/map bounds; no hold/settlement/usage/finalize.
   - [ ] Row 49a — `tests/request-body-limit.test.ts`: deferred N2 count_off/count_denied/count_rate/count_concurrency refusal matrix.
   - [ ] Row 50 — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, canonical ingress/egress/stream tests: ownership inert and canonical regressions.
