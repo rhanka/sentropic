@@ -607,6 +607,60 @@ SSE ordering. BR-73 adds an executable Codex/OpenAI adapter; Codex re-enrollment
 creates a descriptor with `targetProviderId='openai'` and
 `transportProviderId='codex'`, without legacy import or normalization.
 
+### 4.12 Native Anthropic feasibility and selection
+
+The gateway package and reference mesh implement this additive contract; API
+native transport/quote wiring and live qualification remain separate build gates.
+`NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS` is currently empty pending qualification.
+Trusted code-only test overrides must name catalogued exact Anthropic models,
+excluding exclusive launch aliases. Beta names and opaque body fields do not
+grant model eligibility or select provider credentials.
+
+`RoutePlanInput.nativeMessages?: true` and the quote field mean **required**
+native execution. Quotes bind that flag in their identity; canonical quote refs
+omit it and remain unchanged. Check unknown models/capabilities first, then
+requested exact-model feasibility before candidates/stickiness. Filter candidates
+by contractVersion=1, anthropic-messages protocol, allowlist and equality to the
+requested model before health suppression/attempt limits. Ineligible sticky
+affinity is ignored without mutating stored state. Known native-denied models
+return `native-unavailable`; genuinely unknown models retain 404, and an already
+empty route retains no-route/enrollment behavior.
+
+Preparation rechecks the fresh descriptor and opaque target. Native capability
+must have matching exact model, supported API versions, valid shape and execute
+function. Required beta declarations are empty; no feature-name permission list
+is introduced. Optional requests can receive a prepared native capability without
+constraining their canonical plan. Gateway rechecks target/version/capability
+after preparation and before marking dispatch; a required-mode refusal records
+no attempted dispatch, releases once and preserves its 400 even if cleanup fails.
+
+Messages classification runs once after ingress/caller authentication, before
+subject construction, quote/admission or plan. Own top-level safeguards counts
+even when null/empty. Effective ceiling is the Anthropic max_tokens projection or
+trusted budget default, a positive safe integer; OpenAI retains its own ceiling
+precedence. The host cannot inject required native through routeInput.
+
+| Request / condition | Selection / result |
+|---|---|
+| Messages without beta/safeguards, including version-only | Canonical. |
+| Beta present, even empty, with feasible model/version/capability/ceiling | Optional native. |
+| Beta-only with unavailable switch/port/eligibility/version/ceiling | Canonical before invocation. |
+| Own top-level safeguards | Required native, quote/plan flag true. |
+| Safeguards with explicit OFF or failed known-model feasibility | 400 native-required naming safeguards. |
+| Required native with unknown feature names/fields | Preserve them; transport exclusions still apply. |
+| Required, no budget, missing/invalid effective ceiling | 400 native-max-tokens-required; budget hosts retain invalid-ceiling 400. |
+| Required prepared capability/model/version missing or changed | Guarded pre-dispatch 400, no attempt charge. |
+| OpenAI without safeguards, even with Anthropic headers | Canonical OpenAI flow. |
+| OpenAI with own safeguards | OpenAI-shaped 400 requiring the Messages endpoint. |
+
+Explicit nativeMessagesEnabled:false refuses safeguards before model lookup;
+classifier refusals create no settlement. Once admitted, plan refusal preserves
+existing hold release/settlement rules. Optional native can fall back canonically
+only before native invocation; subsequent provider errors never reconstruct a
+canonical call. Standalone/shared routers without native capability also return
+the safeguards 400 instead of silently losing the field. Count_tokens has its
+own always-native-when-enabled contract (§5.6), including version-only requests.
+
 ## 5. Gateway execution contract
 
 ### 5.1 Ingress neutrality

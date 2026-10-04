@@ -292,7 +292,7 @@
   - [ ] File gate — Pass 03 boundary: implement rows 10–15 only, report commits/counts/gates/status; later rows stay unchecked for conductor-owned passes.
 - [ ] Stage 3 — Contract documentation and atomic release train: rows 53–61 (T1 activates reserved EX4).
   - [x] Pass 13 checklist recorded before stage implementation: documentation rows 53–57 only; release train rows 58–61 remain conductor-owned.
-  - [ ] Row 53 — `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §4.12: native feasibility, selection, exact model and standalone safeguards refusal.
+  - [x] Row 53 — Routing §4.12: exact-model quote/planner/prepared feasibility, ten selection cases, empty qualification list and standalone safeguards refusal; sequential gateway pre/post-commit gates in packet report.
   - [ ] Row 54 — Routing §5.3 terminal numeric 413 and §5.4 exact narrow R-Q3/Q-G/R-Q5 native exception; retain account-id and canonical invariants.
   - [ ] Row 55 — Routing §5.6: opaque JSON/SSE, count auth/rate/no-financial lifecycle, usage/cache/delta proof and N1–N3/N5 contracts.
   - [ ] Row 56 — `spec/SPEC_EVOL_LLM_GATEWAY.md` §3 endpoints/§3b: native errors/headers/served identity, 32,000,000-byte cap/shared pool, retention/refusal and measured/floored settlement.
