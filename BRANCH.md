@@ -273,7 +273,7 @@
   - [x] Row 50b — Typecheck/runtime (1142/1) caught the new redaction test importing an internal native-header helper from root exports; use its existing module path without changing the public API or any assertion.
   - [x] Row 51 — `CHANGELOG.md`: built native selection/400/header/standalone/count and JSON/SSE served-header contracts; gateway pre/post-commit gates recorded in pass13 report.
   - [x] Row 52 — `CHANGELOG.md`: actual-chunk concurrent pool/reference retention, numeric 413/retryable 503, inherited/growth-only TTL pricing, revoked proof/mismatch/iterations and measured versus floored settlement; sequential gateway pre/post-commit gates in packet report.
-  - [ ] Row 52a — `README.md`: shared pool/retention and native/count/cache/served-header behavior.
+  - [x] Row 52a — `README.md`: native selection/count/header/error/served contracts, actual-byte shared pool/reference retention and cache proof/floors; empty qualification list and pending host integration explicit; sequential gateway pre/post-commit gates in packet report.
   - [ ] File gate — `tests/native-features.test.ts`: all ten selection rows, single invocation after auth/before admission, no settlement on classifier refusal; prepared eligibility/fallback due rows 21–23/31.
   - [ ] File gate — `tests/native-headers.test.ts`: complete §4.3 request policy; server auth/transport recomputation stays host-owned in stage 4.
   - [ ] File gate — `tests/native-body.test.ts`, `tests/canonical-ingress.test.ts`: shallow nested identity, top-level only overrides, inert ownership, no malformed ceiling replacement.
