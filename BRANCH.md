@@ -270,6 +270,7 @@
   - [x] Row 49a — N2 named count_off/count_denied/count_rate/count_concurrency matrix: both middleware orders, repeated exact 400/429 envelopes, zero new dispatch/generation/financial/observation hooks, cleared holders, once-only baseline capacity and following generation admission; rejecting unused hooks and cleanup abort races, live count retained until host completion, final zero pool.
   - [x] Row 49a2 — Runtime gate 1134/0; prime the injected rate using the existing zero-argument budget fixture verifier signature flagged by TypeScript; real router verification and every matrix assertion remain unchanged.
   - [x] Row 50 — Redaction and count ownership/auth-context tests pin session/internal credential exclusions, trusted subject/workspace/request ID and opaque body inertness; canonical ingress aliases/compaction, egress usage and both-wire stream termination ignore count/native extensions without altering generation shapes.
+  - [x] Row 50b — Typecheck/runtime (1142/1) caught the new redaction test importing an internal native-header helper from root exports; use its existing module path without changing the public API or any assertion.
   - [ ] Row 51 — `CHANGELOG.md`: native 400/header/standalone/count and JSON/SSE served-header contracts.
   - [ ] Row 52 — `CHANGELOG.md`: concurrent byte pool/retention, 413/503 and cache delta/mismatch/iterations policy.
   - [ ] Row 52a — `README.md`: shared pool/retention and native/count/cache/served-header behavior.
