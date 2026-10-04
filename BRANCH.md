@@ -216,6 +216,7 @@
   - [x] Row 41b — Native/canonical JSON and pre-commit SSE retain numeric 413 across rejected outcome/settlement callbacks; trusted host result measurement feeds pre/late SSE events, status-only late 413 keeps native type; gateway gates recorded in pass10 report.
   - [ ] Row 42 — Split 42a numeric envelopes/classification, 42b routed callback/no-retry matrix, 42c measured HTTP/pre/late SSE regressions; <=140 lines per split including plan.
   - [x] Row 42a — Both wires: exact/lower-bound/unknown-limit/N<=L/zero messages through typed/normalized/cause errors, status/type/code-only precedence and cancellation, invalid metadata/prose never fabricates numbers; gateway gates recorded in pass10 report.
+  - [x] Row 42b — Both-wire canonical JSON/open/in-band error and native JSON/open/frame matrices: typed/status/code/cause 413, planned second candidate unused, rejecting outcome/sink combinations preserve refusal, reader closure, single attempt/finalize/settlement and allowance floors; gateway gates recorded in pass10 report.
   - [ ] Row 43 — `src/request-body-limit.ts`: streaming cap/cache; N3 incremental storage only after granted chunk bytes, never allocate from Content-Length.
   - [ ] Row 43p1 — N1 contract: native host upload completes/cancels and detaches before result; canonical streams retain full N until terminal cleanup.
   - [ ] Row 43p2 — N2 contract: detach/release once on every pre-dispatch refusal, preserving original financial/observation behavior.
