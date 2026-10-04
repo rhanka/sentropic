@@ -14,6 +14,18 @@ export const nativeHeaderExclusions = (
     ? value.split(',').map((nominated) => nominated.trim().toLowerCase()) : []),
 ]);
 
+/** Native responses extend canonical safe headers; shared organization exposure is owner-accepted. */
+export const buildNativeResponseHeaders = (
+  headers: Readonly<Record<string, string>>, canonicalSafe: ReadonlySet<string>,
+): Readonly<Record<string, string>> => {
+  const excluded = nativeHeaderExclusions(headers);
+  return Object.fromEntries(Object.entries(headers).filter(([key]) => {
+    const name = key.toLowerCase();
+    return !excluded.has(name) && !name.startsWith('x-sentropic-')
+      && (canonicalSafe.has(name) || name.startsWith('anthropic-'));
+  }));
+};
+
 /** Caller values only. The host adds URL-derived transport metadata and server auth last. */
 export const buildNativeRequestHeaders = (
   headers: Readonly<Record<string, string>>,

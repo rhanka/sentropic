@@ -41,7 +41,7 @@ import { authenticateCaller, validateAuthContext } from '../internal/caller-auth
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 import type { GatewayBudgetOptions } from '../ports/budget.js';
 import { assertBudgetRouteDeps } from '../admission.js';
-import { nativeHeaderExclusions } from '../native-headers.js';
+import { buildNativeResponseHeaders } from '../native-headers.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -131,10 +131,9 @@ const forwardProviderHeaders = (
   if (!headers) {
     return;
   }
-  const excluded = native ? nativeHeaderExclusions(headers) : undefined;
-  for (const [key, value] of Object.entries(headers)) {
+  const forwarded = native ? buildNativeResponseHeaders(headers, FORWARDABLE_PROVIDER_HEADERS) : headers;
+  for (const [key, value] of Object.entries(forwarded)) {
     const name = key.toLowerCase();
-    if (native && (excluded!.has(name) || name.startsWith('x-sentropic-'))) continue;
     if (FORWARDABLE_PROVIDER_HEADERS.has(name) || (native && name.startsWith('anthropic-'))) {
       c.header(key, value);
     }
