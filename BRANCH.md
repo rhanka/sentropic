@@ -336,7 +336,7 @@
   - [x] Row 62 — Native raw fetch, trusted auth, request headers and response seam; detach upload/body holders before exposing results (N1); split 62a/62b.
   - [x] Row 62a split — Body-free upload/headers/response helpers in `anthropic-native-transport.ts`; typecheck PASS, Claude tests 17 passed / 0 failed; 62b connects raw fetch/provider seam.
   - [x] Row 62b split — Raw fetch waits for transport completion/cancellation before detaching measured body holders; fake-HTTP JSON/byte/auth smoke verifies the real seam; typecheck PASS, Claude tests 18 passed / 0 failed.
-  - [ ] Row 63 — Non-billable count_tokens endpoint, exact source/model and outgoing-size guards.
+  - [x] Row 63 — Raw count_tokens without callback/SDK/retry, safe count, nonempty body model and measured outgoing 32,000,000-byte guard; typecheck PASS, Claude tests 19 passed / 0 failed.
   - [ ] Row 64 — 55,000-ms deadline through JSON/first non-error SSE frame, caller abort and reader/timer cleanup.
   - [ ] Row 65a — `api/tests/unit/claude-provider.test.ts`: fake HTTP auth, headers, count, byte measurement, errors and deadline cases.
   - [ ] Row 65b — Same file: counted body/serialization/closure holders, open native stream, early response/upload cancellation and JSON/count release (N1).

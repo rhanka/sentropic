@@ -43,15 +43,17 @@ describe('ClaudeProviderRuntime', () => {
     vi.unstubAllEnvs();
   });
 
-  it('relays native JSON through fake HTTP after confirmed upload completion', async () => {
+  it.each(['messages', 'count_tokens'] as const)('relays native %s JSON through fake HTTP after upload completion', async operation => {
     let received = '';
     let auth: string | undefined;
+    let path: string | undefined;
     const server = createServer((request, response) => {
+      path = request.url;
       auth = request.headers['x-api-key'] as string | undefined;
       request.on('data', chunk => { received += chunk.toString(); });
       request.on('end', () => {
         response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ model: 'claude-sonnet-5', opaque: true }));
+        response.end(JSON.stringify({ model: 'claude-sonnet-5', opaque: true, input_tokens: 123 }));
       });
     });
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -59,11 +61,15 @@ describe('ClaudeProviderRuntime', () => {
     const body = { model: 'claude-sonnet-5', messages: [], future: { unchanged: 'é' } };
     vi.stubEnv('ANTHROPIC_BASE_URL', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
     try {
-      const result = await runtime.nativeMessages({ body, stream: false, requestId: 'native-test',
+      const started = vi.fn();
+      const request = { body, stream: false, requestId: 'native-test', onResponseStarted: started,
         signal: new AbortController().signal,
         headers: { anthropicVersion: '2023-06-01', forwarded: { 'x-api-key': 'caller-key' } },
-        bodyProbe: (holder, retained) => retained ? holders.add(holder) : holders.delete(holder),
-      });
+        bodyProbe: (holder: string, retained: boolean) => retained ? holders.add(holder) : holders.delete(holder),
+      };
+      const result = operation === 'messages' ? await runtime.nativeMessages(request) : await runtime.nativeCountTokens(request);
+      expect(path).toBe(operation === 'messages' ? '/v1/messages' : '/v1/messages/count_tokens');
+      expect(started).toHaveBeenCalledTimes(operation === 'messages' ? 1 : 0);
       expect(result).toMatchObject({ kind: 'json', status: 200, body: { opaque: true } });
       expect(received).toBe(JSON.stringify(body));
       expect(auth).toBe('test-anthropic-key');
