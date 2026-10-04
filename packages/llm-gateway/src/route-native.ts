@@ -74,3 +74,13 @@ export const assertNativeMessagesResult: (result: NativeMessagesResult, kind: 'j
     throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
   }
 };
+
+/** Register response ownership before envelope validation, without reading any bytes. */
+export const nativeResponseReader = (result: NativeMessagesResult): AsyncIterator<Uint8Array> | undefined => {
+  if (result?.kind !== 'stream' || !result.body || typeof result.body[Symbol.asyncIterator] !== 'function') return undefined;
+  const reader = result.body[Symbol.asyncIterator]();
+  if (!reader || typeof reader.next !== 'function' || (reader.return !== undefined && typeof reader.return !== 'function')) {
+    throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
+  }
+  return reader;
+};
