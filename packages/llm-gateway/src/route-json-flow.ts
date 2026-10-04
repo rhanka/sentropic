@@ -11,7 +11,7 @@ import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 import { dispatchNativeMessages } from './route-attempt-dispatch.js';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
-import { assertNativeMessagesResult, buildNativeMessagesRequest, NativeAttemptRefusal, prepareNativeMessages } from './route-native.js';
+import { assertNativeMessagesResult, buildNativeMessagesRequest, NativeAttemptRefusal, nativeResponseReader, prepareNativeMessages } from './route-native.js';
 import { nativeDefaultTtlEligible, NativeUsageObserver, nativeSnapshotUsage } from './native-usage.js';
 import { nativeLifecycle } from './native-lifecycle.js';
 const defaultDispatch = new RouteAttemptDispatch();
@@ -66,6 +66,7 @@ export const runRouteJsonFlow = async (
     let observedUsage: SettleUsage | undefined;
     let nativeObserver: NativeUsageObserver | undefined;
     let lifecycle: ReturnType<typeof nativeLifecycle> | undefined;
+    let nativeReader: ReturnType<typeof nativeResponseReader>;
     let nativeServedModelId: string | undefined;
     try {
       signal?.throwIfAborted();
@@ -85,6 +86,7 @@ export const runRouteJsonFlow = async (
           { requestId: nativeRequest.requestId, attemptRef: attempt.attemptRef });
         nativeInvoked = true;
         const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
+        nativeReader = nativeResponseReader(result);
         assertNativeMessagesResult(result, 'json');
         if (result.kind !== 'json') throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
         nativeObserver.observeJson(result.body);
@@ -114,6 +116,9 @@ export const runRouteJsonFlow = async (
         : error instanceof NativeMessagesUpstreamError && error.code === 'timeout' ? 'timeout' : 'upstream_error';
       const usage = lifecycle ? lifecycle.usage(termination)
         : errorUsage(error, observedUsage ?? (invoked ? estimate() : routeUsage()));
+      if (nativeReader) {
+        try { await nativeReader.return?.(); } catch { /* Preserve the claimed native contract refusal. */ }
+      }
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,
