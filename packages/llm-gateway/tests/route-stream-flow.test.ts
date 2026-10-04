@@ -817,6 +817,51 @@ describe('typed native finalize timeout and late results', () => {
   });
 });
 
+describe('N5 malformed native input and physical lower bounds', () => {
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].flatMap(clean => ['10000.5', '9e400', '9007199254740992'].map(value => ({ model, clean, value })))))(
+    'malformed_one_hour_delta_charges_74300: $model clean=$clean input=$value', async ({ model, clean, value }) => {
+      const malformed = new TextEncoder().encode('event: message_delta\ndata: {"type":"message_delta","usage":{'
+        + `"input_tokens":${value},"cache_read_input_tokens":10000,"cache_creation_input_tokens":200,"output_tokens":500}}\n\n`);
+      const h = nativeStreamHarness([nativeStart(model, CACHE_START), malformed,
+        ...(clean ? [nativeFrame('message_stop')] : [])], { model, allowanceInput: 10_300,
+        body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+      const wire = await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(wire).toContain(new TextDecoder().decode(malformed));
+      const snapshot = h.snapshots[0]!;
+      expect(snapshot).toMatchObject({ inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800,
+        nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input', estimated: true,
+        finalOutputObserved: clean, rawUsage: { input_tokens: 100, cache_creation_input_tokens: 200 } });
+      expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+      const charged = h.recorder.settlements[0]!.attempts[0]!.usage;
+      expect(charged).toMatchObject({ inputTokens: 10_300, outputTokens: 32_000, estimated: true });
+      expect(nativeAmount(charged)).toBe(74_300);
+      expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    });
+  it('never restores malformed pricing proof after later safe cumulative growth', async () => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], CACHE_START),
+      nativeFrame('message_delta', { usage: { input_tokens: 10_000.5, output_tokens: 500 } }),
+      nativeFrame('message_delta', { usage: { input_tokens: 101, output_tokens: 500 } }), nativeFrame('message_stop')],
+    { allowanceInput: 20_000 });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_301, outputTokens: 500, nativeInputUsageValidated: false,
+      nativeUsageUncertainty: 'invalid_input', estimated: true });
+    expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(84_000);
+  });
+  it('advances a latched nullable physical lower bound once and rejects malformed/decreasing candidates', async () => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], CACHE_START),
+      nativeFrame('message_delta', { usage: { iterations: [{}], output_tokens: 500 } }),
+      ...[300, 300, 299, 300.5].map(aggregate => nativeFrame('message_delta', { usage: {
+        input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: aggregate } })), nativeFrame('message_stop')],
+    { allowanceInput: 10_300, body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_400, outputTokens: 500, nativeInputUsageValidated: false,
+      nativeUsageUncertainty: 'served_model_mismatch', estimated: true });
+    expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_400);
+  });
+});
+
 describe('route stream flow with budget admission', () => {
   const deps = (planner: RoutePlanner, recorder: BudgetRecorder) => ({
     config: budgetConfig, routePlanner: planner, metering: recorder.metering, budget: recorder.options,
