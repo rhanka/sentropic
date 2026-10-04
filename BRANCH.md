@@ -109,6 +109,7 @@
 - [x] Pass 06 review remediation (M3/M4): usage accumulator retains attempt-lifetime proof revocation with conflict on second start, and evaluates input validity independently of output.
 - [x] Pass 06 review remediation (M5/M6/M7): usage accumulator uses safe bigint arithmetic, enforces physical anchoring for lower bounds with category absence fidelity, and separates reported TTL from inferred allocation.
 - [x] Pass 06 review test coverage (M5/M6/M7): verified safe arithmetic overflow rejection, unanchored/anchored nullable delta bounds, absence fidelity, and explicit split resolution.
+- [x] Pass 06 review reconciliation (C1/C2): verified required-mode native skew lifecycle across JSON and stream flows (zero dispatch, single release/settlement, independent rejecting cleanup/settlement); reconciled row 24 (140 lines vs 130 planned) and row 25a (140 lines vs 120 planned) under the global <=149 line ceiling.
 
 ## AI Flaky tests
 - [x] No live AI tests authorized in this pass; never weaken tests or increase timeouts; any later accepted flake requires same-commit success and owner sign-off.
@@ -158,10 +159,10 @@
   - [x] Row 20 — `src/native-errors.ts`, `tests/native-errors.test.ts`: narrow sent-classifier-beta rewrite and official V-2 positives/negatives. Typecheck PASS; tests 610 passed / 0 failed (32 files; 15 new cases).
   - [x] Row 21 — Optional native dispatch/default delegator, execute-time shape/model/version/signal checks and exact prepared eligibility in `src/ports/dispatch.ts`, `src/route-attempt-dispatch.ts`, `src/route-native.ts`. `tests/auth-subpaths.test.ts` qualifies current packed mesh/gateway candidates before T1; released 0.22.3 lacks native declarations. Auth isolation assertions retained. Typecheck PASS; tests 625 passed / 0 failed after resolving the clean-consumer failure. Row 23 adds focused coverage; native invocation follows rows 30/32.
   - [x] Row 22 — Guarded required-mode native refusal in `src/route-flow-core.ts`, `src/route-json-flow.ts`, `src/route-stream-flow.ts`; release and settlement independently protected. Typecheck PASS; tests 625 passed / 0 failed.
-  - [x] Row 23 — `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`: dispatch, delegator, capability validity, refusal and lifecycle tests. Typecheck PASS; tests 628 passed / 0 failed.
-  - [x] Row 24 — `src/native-sse.ts`: bounded byte SSE framer with 1 MiB frame ceiling and stream generator. Typecheck PASS; tests 628 passed / 0 failed.
+  - [x] Row 23 — `tests/route-attempt-dispatch.test.ts`, `tests/native-contract-types.test.ts`: dispatch, delegator, capability validity, refusal, integrated skew flow and lifecycle tests. Typecheck PASS; tests 642 passed / 0 failed.
+  - [x] Row 24 — planned 130, reconciled 140 (<=149); `src/native-sse.ts`: bounded byte SSE framer with 1 MiB frame ceiling and stream generator. Typecheck PASS; tests 628 passed / 0 failed.
   - [x] Row 25 — `tests/native-sse.test.ts`: CR/LF/CRLF, split UTF-8, chunk boundaries, comment parsing and 1 MiB frame overflow. Typecheck PASS; tests 634 passed / 0 failed.
-  - [x] Row 25a — `src/native-usage.ts`: L2/K1 nullable cumulative contract, reported/inferred TTL split; N5 permanently revokes malformed proof before row 26. Typecheck PASS; tests 634 passed / 0 failed.
+  - [x] Row 25a — planned 120, reconciled 140 (<=149); `src/native-usage.ts`: L2/K1 nullable cumulative contract, reported/inferred TTL split; N5 permanently revokes malformed proof before row 26. Typecheck PASS; tests 634 passed / 0 failed.
   - [ ] Row 26 — `src/native-usage.ts`: cumulative usage fold, final output provenance and unsuccessful termination.
   - [ ] Row 26a — `src/native-usage.ts`: served-model/mismatch/fallback/iterations latch; null/[] absent.
   - [ ] Row 26b — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: JSON/SSE identities and no cross-iteration fold.
