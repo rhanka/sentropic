@@ -1,6 +1,6 @@
 # BR-37c Lot 1 — nightly Postgres backup to SCW Object Storage.
 # initContainer dumps with pg_dump (postgres:17-alpine, matches the tenant DB),
-# main container uploads the gzip dump to s3://$S3_BUCKET/pg/<ts>.sql.gz via aws-cli.
+# main container uploads the gzip dump to s3://$S3_BUCKET/pg/<ts>.sql.gz via s5cmd.
 # Bucket name comes from the sentropic-pgbackup SealedSecret (S3_BUCKET), not hardcoded.
 apiVersion: batch/v1
 kind: CronJob
@@ -29,7 +29,7 @@ spec:
               emptyDir: {}
           initContainers:
             - name: dump
-              image: postgres:17-alpine
+              image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
               command:
                 - sh
                 - -c
@@ -43,6 +43,7 @@ spec:
                   test -s "/work/${ts}.sql"
                   gzip -9 "/work/${ts}.sql"
                   echo "$ts" > /work/ts
+                  printf 'cp /work/%s.sql.gz s3://%s/pg/%s.sql.gz\n' "$ts" "$S3_BUCKET" "$ts" > /work/upload.cmd
                   ls -lh /work
               env:
                 - name: PGHOST
@@ -58,22 +59,22 @@ spec:
                     secretKeyRef:
                       name: sentropic-postgres
                       key: POSTGRES_PASSWORD
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: sentropic-pgbackup
+                      key: S3_BUCKET
               volumeMounts:
                 - name: work
                   mountPath: /work
           containers:
             - name: upload
-              image: amazon/aws-cli:2.34.53
-              command:
-                - sh
-                - -c
-                - |
-                  set -eu
-                  ts="$(cat /work/ts)"
-                  echo "uploading ${ts}.sql.gz to s3://${S3_BUCKET}/pg/"
-                  aws s3 cp "/work/${ts}.sql.gz" "s3://${S3_BUCKET}/pg/${ts}.sql.gz" \
-                    --endpoint-url "${S3_ENDPOINT}" --region "${S3_REGION}"
-                  echo "backup uploaded"
+              image: peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a
+              args:
+                - --endpoint-url
+                - $(S3_ENDPOINT)
+                - run
+                - /work/upload.cmd
               env:
                 - name: AWS_ACCESS_KEY_ID
                   valueFrom:
@@ -90,7 +91,7 @@ spec:
                     secretKeyRef:
                       name: sentropic-pgbackup
                       key: S3_BUCKET
-                - name: S3_REGION
+                - name: AWS_REGION
                   valueFrom:
                     secretKeyRef:
                       name: sentropic-pgbackup
