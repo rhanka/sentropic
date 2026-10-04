@@ -255,6 +255,15 @@ export const toProviderShapedError = (
     if (error.status === 401 || error.status === 403 || error.type === 'authentication_error') {
       return mapGatewayError(wire, 'upstream-auth-failed');
     }
+    if (error.code === 'native_protocol_error') return anthropicError(503, 'api_error', 'upstream protocol failure');
+    if (error.status === 404) return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
+    if (error.status === 429) return mapGatewayError(wire, 'upstream-rate-limited',
+      error.retryAfterMs === undefined ? undefined : error.retryAfterMs / 1000);
+    if (error.status === 413) {
+      const type = 'request_too_large';
+      return wire === 'anthropic-messages' ? anthropicError(error.status, type, 'upstream request failed')
+        : openAiError(error.status, type, 'upstream request failed');
+    }
   }
   const diagnostic = error && typeof error === 'object'
     ? (error as { diagnostic?: {
