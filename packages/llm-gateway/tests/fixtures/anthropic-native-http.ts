@@ -8,6 +8,7 @@ import { buildNativeRequestHeaders } from '../../src/native-headers.js';
 export const nativeHttpFixture = async (options: {
   json?: Record<string, unknown>; frames?: readonly Uint8Array[]; status?: number;
   headers?: Record<string, string>; pauseAfterFirst?: boolean;
+  rejectingLimit?: number;
 } = {}) => {
   const requests: { path: string; headers: IncomingHttpHeaders; bytes: Uint8Array; body: unknown }[] = [];
   let resume!: () => void;
@@ -36,24 +37,31 @@ export const nativeHttpFixture = async (options: {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const execute = async (request: NativeMessagesRequest): Promise<NativeMessagesResult> => {
+    const serialized = JSON.stringify(request.body);
+    const requestSize = { requestBytes: new TextEncoder().encode(serialized).byteLength, source: 'upstream' as const,
+      ...(options.rejectingLimit !== undefined ? { limitBytes: options.rejectingLimit } : {}) };
     const response = await fetch(`${url}/v1/messages`, { method: 'POST', signal: request.signal,
       headers: { ...buildNativeRequestHeaders(request.headers.forwarded),
         'anthropic-version': request.headers.anthropicVersion, 'content-type': 'application/json',
         accept: request.stream ? 'text/event-stream' : 'application/json', 'x-api-key': 'SERVER-FIXTURE-KEY' },
-      body: JSON.stringify(request.body) });
+      body: serialized });
     const headers: Record<string, string> = {};
     response.headers.forEach((value, name) => { headers[name] = value; });
     if (!response.ok) {
-      const validation = parseNativeErrorDetail(await response.text(), response.status, {
-        requestSafeguards: Object.hasOwn(request.body, 'safeguards'),
-        sentBetas: (request.headers.forwarded['anthropic-beta'] ?? '').split(',').map(beta => beta.trim()),
-      });
+      let validation;
+      if (response.status === 400) {
+        try { validation = parseNativeErrorDetail(await response.text(), response.status, {
+          requestSafeguards: Object.hasOwn(request.body, 'safeguards'),
+          sentBetas: (request.headers.forwarded['anthropic-beta'] ?? '').split(',').map(beta => beta.trim()),
+        }); } catch { /* Malformed validation retains fixed 400 policy. */ }
+      } else await response.body?.cancel();
       throw new NativeMessagesUpstreamError({ status: response.status,
-        type: response.status === 400 ? 'invalid_request_error' : undefined, validation });
+        type: response.status === 400 ? 'invalid_request_error' : response.status === 413 ? 'request_too_large' : undefined,
+        ...(response.status === 413 ? { requestSize } : {}), validation });
     }
     if (!request.stream) return { kind: 'json', status: 200, headers, body: await response.json() };
     const reader = response.body!.getReader();
-    return { kind: 'stream', status: 200, headers, body: { async *[Symbol.asyncIterator]() {
+    return { kind: 'stream', status: 200, headers, requestSize, body: { async *[Symbol.asyncIterator]() {
       try { for (let next = await reader.read(); !next.done; next = await reader.read()) yield next.value; }
       finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
     } } };
