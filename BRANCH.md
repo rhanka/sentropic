@@ -28,6 +28,8 @@
   - `api/package.json`
   - `api/package-lock.json`
   - `apps/auth-idp/web/**`
+  - `packages/auth-ui/**`
+  - `packages/chat-ui/**`
   - `Makefile`
   - `.security/**`
 - **Exception process**:
@@ -39,6 +41,7 @@
 - [x] BR00-EX3 — `.security/**` generated scan evidence only; impact: ignored artifacts; rollback: regenerate; no register or policy edits.
 - [x] BR00-EX4 — standalone IdP web tooling/config if its audit retains the same chain; impact: auth-screen build; rollback: revert its migration and lock.
 - [x] BR00-EX5 — owner-authorized Makefile correction: remove the deleted Tailwind JS config from UI image hash inputs; impact: eliminates dangling-path warnings, CSS-first config is already hashed under ui/src; rollback: restore the old config/path together.
+- [x] BR00-EX6 — svelte-check 4 exposes incorrect public legacy-slot declarations in auth-ui/chat-ui; correct declarations and patch package versions, without runtime changes; impact: accurate consumer types; rollback: revert declarations, versions, and lock updates together.
 
 ## AI Flaky tests
 - [x] No timeout increases or new flaky acceptance; record failures with exact evidence.
@@ -74,6 +77,7 @@
   - [x] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
 - [ ] **Lot 2 — Related trees and qualification**
   - [x] Migrate standalone IdP tooling and CSS-first config while preserving auth host defaults.
+  - [ ] Correct legacy-slot declarations and chat callback contracts exposed by svelte-check 4; verify UI/IdP checks without suppressions.
   - [ ] Audit API and standalone UI/IdP trees; migrate same-chain consumers as required.
   - [ ] Build UI web/Chrome/VSCode via `make build-ui` and production image for E2E.
   - [ ] Run `make typecheck`, `make lint`, `make test-ui`, and all SCA targets.
