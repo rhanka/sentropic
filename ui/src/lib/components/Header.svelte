@@ -159,7 +159,7 @@
 <header class="border-b border-slate-200 bg-white">
   <div class="mx-auto flex max-w-7xl items-center justify-between px-4 h-14">
     <!-- Brand zone — always visible -->
-    <a href="/" class="flex items-center gap-2 mr-4 flex-shrink-0">
+    <a href="/" class="flex items-center gap-2 mr-4 shrink-0">
       <img src="/SENT-logo-squared.svg" alt="Sentropic" class="h-7 w-7" />
       <span class="font-semibold text-sm text-slate-800">Sentropic</span>
     </a>
