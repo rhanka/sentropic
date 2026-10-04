@@ -720,6 +720,7 @@ Terminal without fallback:
   unavailability by that adapter;
 - any error after commitment;
 - cancellation;
+- typed/status/code request-too-large, including upstream HTTP 413;
 - account auth failure when strict stickiness forbids another account and no
   same-account equivalent route exists.
 
@@ -737,12 +738,24 @@ and a ledger/settlement or `recordOutcome` failure never replaces the typed/term
 refusal (attempted once, swallowed, original thrown). After response commitment
 the HTTP status is never rewritten.
 
+Request-too-large is terminal on both wires, JSON and pre-commit SSE: HTTP 413,
+Anthropic request_too_large, OpenAI invalid_request_error / request_too_large,
+x-should-retry:false and no Retry-After. Check typed size evidence before broad
+auth/rate/overload heuristics, after cancellation; preserve it through cause
+wrapping and rejected outcomes. Never retry through SDK/account/model/canonical
+fallback or remap it to overload. Numeric wording uses measured UTF-8 bytes and
+trusted limits: exact N exceeds L, or received lower bound "at least N" exceeds L.
+For an upstream rejection with unknown limit or N <= claimed L, state the measured
+size and local 32000000-byte limit while declaring the upstream limit unavailable.
+Missing size evidence remains explicitly unavailable; Content-Length and provider
+prose never supply numeric facts. Late native SSE retains request_too_large and
+the same size policy without rewriting committed HTTP status.
+
 ### 5.4 Wire invariants
 
 - Anthropic ingress returns Anthropic-shaped errors and event order.
 - OpenAI ingress returns OpenAI-shaped errors and event order.
-- No upstream credential, account id, internal provider URL, benchmark artifact
-  or council internals leak into headers/body.
+- No upstream credential, account id, internal provider URL, benchmark artifact or council internals leak into headers/body. Native Anthropic relay exceptions only: (a) success responses forward non-credential, non-hop-by-hop anthropic-* response headers, including anthropic-organization-id, whose disclosure is owner-accepted (R-Q3, 2026-10-02); (b) provider-authored success bodies and SSE bytes are relayed opaquely (Q-G), and bounded request-validation messages are relayed under R-Q5. Credential/session headers and upstream X-Sentropic-* headers remain excluded. Canonical response-header policy is unchanged.
 - Request/cost correlation is stable across attempts, with a separate attempt
   index for audit.
 - Only one financial cost event is emitted per request, aggregating actual or
