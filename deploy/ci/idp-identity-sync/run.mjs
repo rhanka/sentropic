@@ -26,7 +26,7 @@ export function failureVerdict(name, k = kube) {
     const pods = JSON.parse(k(['-n', 'sentropic-preprod', 'get', 'pods', '-l', `job-name=${name}`, '-o', 'json']).stdout).items;
     const messages = pods.flatMap(p => p.status?.containerStatuses ?? []).filter(c => c.name === 'import-preprod').map(c => c.state?.terminated?.message).filter(Boolean);
     if (!messages.length) throw new Error();
-    const failure = messages.map(failureSummary).at(-1);
+    const failure = failureSummary(messages.at(-1));
     const pairs = failure.rejected_rekey_pairs ?? [];
     return `job/${name} failed: ${failure.code}${pairs.length ? ` (${pairs.join(',')})` : ''}`;
   } catch { throw new Error(`job/${name} failed: termination failure code unavailable`); }
@@ -57,14 +57,11 @@ export async function main(action = process.argv[2]) {
       const name = `sentropic-idp-sync-${suffix}`;
       if (name.length > 63) throw new Error('Job name too long');
       applyJob('sentropic-preprod', name, render(template('import-job.tmpl.yaml'), { ...inputs, JOB_NAME: name }));
-      let verdict;
-      try { verdict = await waitJob('sentropic-preprod', name, 900); }
-      finally {
-        if (verdict === 'failed') throw new Error(failureVerdict(name));
-        try { collectAudit(name, inputs.DRY_RUN === '1' ? 'rolled_back' : 'committed'); }
-        catch (error) { console.log(`job/${name}: audit unavailable`); if (verdict === 'complete') throw error; }
-      }
+      const verdict = await waitJob('sentropic-preprod', name, 900);
+      if (verdict === 'failed') throw new Error(failureVerdict(name));
       if (verdict !== 'complete') throw new Error(`job/${name} failed`);
+      try { collectAudit(name, inputs.DRY_RUN === '1' ? 'rolled_back' : 'committed'); }
+      catch (error) { console.log(`job/${name}: audit unavailable`); throw error; }
       return;
     }
     case 'cleanup': rmSync(workdir(), { recursive: true, force: true }); return;
