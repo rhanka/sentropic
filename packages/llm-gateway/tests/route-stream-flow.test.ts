@@ -8,6 +8,8 @@ import { stubGatewayConfig } from '../src/stubs.js';
 import { parseSse } from '../src/wire.js';
 import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNative, nativeAmount } from './fixtures/native-flow.js';
 import { NATIVE_MODELS } from './fixtures/native-usage.js';
+import * as nativeUsage from '../src/native-usage.js';
+import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import {
   NOW_MS, answerStream, budgetConfig, quotingPlanner, recordingBudget, streamAttempt, type BudgetRecorder,
 } from './fixtures/budget.js';
@@ -621,6 +623,80 @@ describe('native served-model and substantive-iterations latches', () => {
       expect(JSON.stringify(h.snapshots)).not.toContain('999999');
       expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
     });
+});
+
+describe('native finalize parity and independent cleanup', () => {
+  it.each(['clean', 'cancel', 'commit', 'eof', 'overflow', 'reader', 'upstream'] as const)(
+    'shares one snapshot and releases the reader/lease seam before a never-settling hook: %s', async cause => {
+      vi.useFakeTimers();
+      const snapshotSpy = vi.spyOn(nativeUsage.NativeUsageObserver.prototype, 'snapshot');
+      const projectionSpy = vi.spyOn(nativeUsage, 'nativeSnapshotUsage');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const leaseReleased = vi.fn();
+      const closed = vi.fn(async () => { leaseReleased(); return { done: true as const, value: undefined }; });
+      try {
+        const chunks = [nativeStart(NATIVE_MODELS[0])];
+        if (cause === 'clean') chunks.push(nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop'));
+        if (cause === 'overflow') chunks.push(new Uint8Array(1_048_577).fill(65));
+        if (cause === 'upstream') chunks.push(nativeFrame('error', { error: { type: 'rate_limit_error', message: 'secret' } }));
+        let index = 0;
+        const h = nativeHarness({ finalize: () => new Promise<void>(() => {}), execute: async () => ({
+          kind: 'stream', status: 200, headers: {}, body: { [Symbol.asyncIterator]: () => ({
+            next: async () => {
+              if (index < chunks.length) return { done: false as const, value: chunks[index++]! };
+              if (cause === 'reader') throw Error('private reader failure');
+              return { done: true as const, value: undefined };
+            }, return: closed,
+          }) },
+        }) });
+        if (cause === 'commit') h.attempt.markCommitted.mockRejectedValue(Error('private commit failure'));
+        if (cause === 'commit') await expect(runRouteStreamFlow(h.deps, { ...h.request, stream: true })).rejects.toThrow();
+        else {
+          const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+          if (cause === 'cancel') await result.stream.return(undefined);
+          else await collect(result.stream);
+          await result.stream.return(undefined);
+        }
+        const snapshot = h.finalize.mock.calls[0]![0]!;
+        expect(h.finalize).toHaveBeenCalledTimes(1); expect(snapshotSpy).toHaveBeenCalledTimes(1);
+        expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+        expect(projectionSpy).toHaveBeenCalledExactlyOnceWith(snapshot);
+        expect(Object.isFrozen(snapshot)).toBe(true); expect(Object.isFrozen(snapshot.rawUsage)).toBe(true);
+        expect(h.recorder.settlements).toHaveLength(1);
+        expect(closed).toHaveBeenCalledTimes(1); expect(leaseReleased).toHaveBeenCalledTimes(1);
+        expect(h.recorder.settlements[0]!.attempts[0]!.usage).toMatchObject({
+          inputTokens: snapshot.inputTokens, outputTokens: cause === 'clean' ? snapshot.outputTokens : 32_000,
+          estimated: snapshot.estimated, nativeInputUsageSource: snapshot.nativeInputUsageSource,
+          nativeUsageUncertainty: snapshot.nativeUsageUncertainty,
+        });
+        expect(vi.getTimerCount()).toBe(1);
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(h.recorder.settlements).toHaveLength(1); expect(leaseReleased).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledExactlyOnceWith('Native observation unavailable', {
+          requestId: 'req-native', attemptRef: 'attempt', reason: 'hook_timeout' });
+      } finally { snapshotSpy.mockRestore(); projectionSpy.mockRestore(); warn.mockRestore(); vi.useRealTimers(); }
+    });
+  it.each(['reject', 'throw', 'never'] as const)('completes JSON accounting independently of observation: %s', async mode => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const snapshotSpy = vi.spyOn(nativeUsage.NativeUsageObserver.prototype, 'snapshot');
+    const projectionSpy = vi.spyOn(nativeUsage, 'nativeSnapshotUsage');
+    try {
+      const h = nativeHarness({ finalize: () => {
+        if (mode === 'throw') throw Error('private hook failure');
+        return mode === 'reject' ? Promise.reject(Error('private hook failure')) : new Promise<void>(() => {});
+      } });
+      await expect(runRouteJsonFlow(h.deps, h.request)).resolves.toMatchObject({ status: 200, relay: 'native' });
+      const snapshot = h.finalize.mock.calls[0]![0]!;
+      expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+      expect(projectionSpy).toHaveBeenCalledExactlyOnceWith(snapshot);
+      expect(h.attempt.complete).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('private hook failure');
+    } finally { warn.mockRestore(); snapshotSpy.mockRestore(); projectionSpy.mockRestore(); vi.useRealTimers(); }
+  });
 });
 
 describe('route stream flow with budget admission', () => {
