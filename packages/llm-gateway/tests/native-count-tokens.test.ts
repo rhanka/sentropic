@@ -3,7 +3,7 @@ import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { GatewayError, SAFEGUARDS_NOT_SUPPORTED_MESSAGE, runNativeCountTokens,
   parseNativeErrorDetail, CLASSIFIER_BETA, DANGEROUS_TOOL_BETA, NATIVE_BILLING_MASKED_MESSAGE,
   type NativeCountTokensResult } from '../src/index.js';
-import { NativeCountTokensRateLimiter, NativeCountTokensRefusal } from '../src/index.js';
+import { NativeCountTokensRateLimiter, NativeCountTokensRefusal, createGatewayRouter } from '../src/index.js';
 import { COUNT_COST, countHarness, sendCount } from './fixtures/native-count.js';
 
 describe('native count authentication, switch and model gates', () => {
@@ -59,6 +59,74 @@ describe('native count authentication, switch and model gates', () => {
     expect(response.status).toBe(404); expect(await response.json()).toEqual({ type: 'error',
       error: { type: 'not_found_error', message: 'Unknown model: "absent"' } });
     expect(h.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('count HTTP limits and absence of generation side effects', () => {
+  const deferred = () => {
+    let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; });
+    return { promise, resolve };
+  };
+  const noFinancial = (h: ReturnType<typeof countHarness>) => {
+    expect(h.h.calls.plan).toEqual([]); expect(h.h.calls.quote).toEqual([]);
+    expect(h.h.recorder.admitted).toEqual([]); expect(h.h.recorder.events).toEqual([]);
+    expect(h.h.recorder.settlements).toEqual([]); expect(h.h.finalize).not.toHaveBeenCalled();
+    expect(h.h.execute).not.toHaveBeenCalled(); expect(h.h.attempt.releaseCancelled).not.toHaveBeenCalled();
+    expect(h.h.attempt.markCommitted).not.toHaveBeenCalled(); expect(h.h.attempt.complete).not.toHaveBeenCalled();
+  };
+  it('shares the default two-live-call limit across router instances and restores concurrency', async () => {
+    const entered = deferred(); const done = deferred(); let calls = 0;
+    const h = countHarness({ nativeCountRate: undefined }, async () => {
+      if (++calls === 2) entered.resolve(); await done.promise;
+      return { kind: 'json', status: 200, headers: {}, body: { input_tokens: 999_999 } };
+    });
+    h.options.config.callerAuth.verify = async () => ({ ok: true, cost: { ...COUNT_COST, tenantId: 'default-sharing-test' } });
+    const other = { ...h, app: createGatewayRouter(h.options) };
+    const first = sendCount(h); const second = sendCount(other); await entered.promise;
+    const excess = await sendCount(other);
+    expect(excess.status).toBe(429); expect(excess.headers.get('retry-after')).toBe('1');
+    expect(await excess.json()).toEqual({ type: 'error', error: { type: 'rate_limit_error', message: 'Token counting request limit exceeded.' } });
+    expect(h.execute).toHaveBeenCalledTimes(2);
+    done.resolve(); expect((await first).status).toBe(200); expect((await second).status).toBe(200);
+    expect((await sendCount(other)).status).toBe(200); noFinancial(h);
+  });
+  it('charges dispatch tokens despite cancellation and releases concurrency without a generation event', async () => {
+    const entered = deferred(); let now = 0; const abort = new AbortController();
+    const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => now });
+    const h = countHarness({ nativeCountRate: rate }, async request => {
+      entered.resolve(); await new Promise<void>((_, reject) => request.signal.addEventListener('abort',
+        () => reject(request.signal.reason), { once: true }));
+      throw Error('unexpected count continuation');
+    });
+    const pending = sendCount(h, { model: h.model }, {}, abort.signal); await entered.promise;
+    abort.abort(new Error('cancelled')); expect((await pending).status).toBe(503);
+    expect((await sendCount(h)).status).toBe(429); expect(h.execute).toHaveBeenCalledTimes(1);
+    h.execute.mockResolvedValue({ kind: 'json', status: 200, headers: {}, body: { input_tokens: 2 } });
+    now = 1000; expect((await sendCount(h)).status).toBe(200); noFinancial(h);
+  });
+  it('charges failed dispatches, but does not consume tokens for native eligibility refusals', async () => {
+    const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => 0 });
+    const h = countHarness({ nativeCountRate: rate }, async () => { throw new Error('transport secret'); });
+    expect((await sendCount(h, { model: h.model }, { 'anthropic-version': 'unsupported' })).status).toBe(400);
+    expect((await sendCount(h)).status).toBe(503); expect((await sendCount(h)).status).toBe(429);
+    expect(h.execute).toHaveBeenCalledTimes(1); noFinancial(h);
+  });
+  it('fails closed for a new authenticated principal when the active map is full, before upstream call', async () => {
+    const rate = new NativeCountTokensRateLimiter({ maxKeys: 1, now: () => 0 });
+    const h = countHarness({ nativeCountRate: rate }); expect((await sendCount(h)).status).toBe(200);
+    h.options.config.callerAuth.verify = async () => ({ ok: true, cost: { ...COUNT_COST, principalId: 'other' } });
+    const response = await sendCount(h); expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ type: 'error', error: { type: 'overloaded_error', message: 'service temporarily unavailable' } });
+    expect(h.execute).toHaveBeenCalledTimes(1); noFinancial(h);
+  });
+  it('uses verified identity for limits despite caller-owned tenant, principal, workspace and auth fields', async () => {
+    const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => 0 });
+    const h = countHarness({ nativeCountRate: rate }); expect((await sendCount(h)).status).toBe(200);
+    const forged = { model: h.model, tenantId: 'other', principalId: 'other', workspaceId: 'other',
+      cost: { ...COUNT_COST, principalId: 'other' }, authContext: { requestId: 'spoof' } };
+    expect((await sendCount(h, forged)).status).toBe(429); expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(h.prepare.mock.calls[1]![0]).toEqual({ principalRef: COUNT_COST.principalId, ownerScopeRef: COUNT_COST.ownerScopeRef });
+    noFinancial(h);
   });
 });
 
