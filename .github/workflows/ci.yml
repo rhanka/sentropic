@@ -1003,6 +1003,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Test toolbox image references, cache fallback and hash inputs
+        run: make test-ci-api-tooling ENV=test-ci-api
       - name: Compute toolbox content tag
         id: tool-version
         run: echo "tag=$(make -s api-tool-version ENV=test-ci-api)" >> "$GITHUB_OUTPUT"
