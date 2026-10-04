@@ -50,4 +50,77 @@ describe('native usage accumulator', () => {
     expect(acc.getState().acceptedInputTokens).toBe(100);
     expect(acc.getState().physicalLowerBound).toBe(10300);
   });
+
+  it('rejects unsafe totals computed with bigint atomically without advancing bounds (M5)', () => {
+    const accStart = new NativeCumulativeUsageAccumulator({
+      input_tokens: Number.MAX_SAFE_INTEGER,
+      cache_read_input_tokens: 1,
+      cache_creation_input_tokens: 0,
+    });
+    expect(accStart.getState().inputUsageValidated).toBe(false);
+    expect(accStart.getState().proofRevoked).toBe(true);
+    expect(accStart.getState().uncertaintyReason).toBe('invalid_input');
+    expect(accStart.getState().physicalLowerBound).toBe(0);
+
+    const accDelta = new NativeCumulativeUsageAccumulator(validStart);
+    const res = accDelta.applyDelta({
+      input_tokens: Number.MAX_SAFE_INTEGER,
+      cache_read_input_tokens: 10_000,
+    });
+    expect(res).toBe(false);
+    expect(accDelta.getState().inputUsageValidated).toBe(false);
+    expect(accDelta.getState().proofRevoked).toBe(true);
+    expect(accDelta.getState().uncertaintyReason).toBe('invalid_input');
+    expect(accDelta.getState().physicalLowerBound).toBe(10300);
+  });
+
+  it('requires physical anchor and preserves absent fields in raw usage (M6)', () => {
+    const fresh = new NativeCumulativeUsageAccumulator();
+    fresh.applyDelta({ input_tokens: 100 });
+    expect(fresh.getState().physicalLowerBound).toBe(0);
+    expect(fresh.getState().physicalInput).toBe(0);
+    expect(fresh.getState().inputUsageValidated).toBe(false);
+    expect(fresh.getRawUsage()).toEqual({ input_tokens: 100 });
+
+    const acc = new NativeCumulativeUsageAccumulator(validStart);
+    expect(acc.getState().physicalLowerBound).toBe(10300);
+
+    acc.applyDelta({ cache_creation_input_tokens: 300 });
+    expect(acc.getState().physicalLowerBound).toBe(10400);
+
+    acc.applyDelta({ cache_creation_input_tokens: 300 });
+    expect(acc.getState().physicalLowerBound).toBe(10400);
+
+    acc.applyDelta({ input_tokens: 10000.5 });
+    expect(acc.getState().physicalLowerBound).toBe(10400);
+
+    acc.applyDelta({ cache_creation_input_tokens: 299 });
+    expect(acc.getState().physicalLowerBound).toBe(10400);
+  });
+
+  it('separates inferred TTL from provider-reported evidence (M7)', () => {
+    const acc = new NativeCumulativeUsageAccumulator({
+      input_tokens: 100,
+      cache_read_input_tokens: 10_000,
+      cache_creation_input_tokens: 200,
+      output_tokens: 1,
+    }, { defaultTtlEligible: true });
+
+    expect(acc.getState().reportedCacheCreation5m).toBeUndefined();
+    expect(acc.getState().reportedCacheCreation1h).toBeUndefined();
+    expect(acc.getState().inferredCacheCreation1h).toBeUndefined();
+    expect(acc.getRawUsage().cache_creation).toBeUndefined();
+
+    const res = acc.applyDelta({
+      cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 },
+      cache_creation_input_tokens: 200,
+    });
+    expect(res).toBe(true);
+    expect(acc.getState().reportedCacheCreation5m).toBe(0);
+    expect(acc.getState().reportedCacheCreation1h).toBe(200);
+    expect(acc.getRawUsage().cache_creation).toEqual({
+      ephemeral_5m_input_tokens: 0,
+      ephemeral_1h_input_tokens: 200,
+    });
+  });
 });
