@@ -41,7 +41,8 @@ export function checkBundle(objects, tier) {
   assert.deepEqual(network.spec.ingress, [{ from: [{ podSelector: { matchLabels: { 'app.kubernetes.io/component': component } } }], ports: [{ protocol: 'TCP', port: 5432 }] }]);
   if (prod) {
     assert.deepEqual(pod.initContainers.map(c => c.name), ['export']); assert.deepEqual(pod.containers.map(c => c.name), ['upload']);
-    assert(pod.initContainers[0].args.join(' ').includes('sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS'));
+    assert(pod.initContainers[0].args.join(' ').includes('sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS'));
+    assert(!Object.hasOwn(get('ConfigMap', 'sentropic-idp-identity-export-sql').data, 'client-map.csv'));
     assert(pod.containers[0].args.includes('/work/*')); assert(pod.containers[0].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/'));
     get('ConfigMap', 'sentropic-idp-identity-export-sql'); get('ConfigMap', 'sentropic-idp-reader-role-sql');
     assert.equal(get('ServiceAccount', 'sentropic-ci-trigger-idp-export').automountServiceAccountToken, false);
@@ -67,6 +68,7 @@ export function checkBundle(objects, tier) {
     assert(pod.initContainers[1].args.includes('run')); assert(pod.initContainers[1].args.includes('/work/rb/upload.s5cmd'));
     assert(pod.initContainers[2].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/*'));
     const cm = get('ConfigMap', 'sentropic-idp-identity-sync-sql');
+    assert.equal(cm.data['client-map.csv'], 'prod_client_id,preprod_client_id\nradar-immobilier,radar-immobilier-preprod\n');
     for (const command of ['sha256sum -c SHA256SUMS', 'MAX_SNAPSHOT_AGE_S', 'expected_users', 'expected_webauthn', '/dev/termination-log']) assert(cm.data['import-preprod.sh'].includes(command));
   }
   return cj;
