@@ -26,6 +26,7 @@ export type TodoRuntimePanelLike = {
 
 export type ChatPanelShellProps = {
   mode?: 'ai' | 'comments';
+  streamClient?: unknown;
   assistantLayout?: 'bubble' | 'plain';
   panelEl?: HTMLDivElement | null;
   // comments mode
