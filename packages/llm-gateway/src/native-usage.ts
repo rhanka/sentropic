@@ -28,13 +28,21 @@ export class NativeCumulativeUsageAccumulator {
   private u = 0; private r = 0; private w = 0; private s5?: number; private s1?: number; private i1?: number;
   private o = 0; private p = 0; private plb = 0; private valid = false; private source?: NativeInputUsageSource;
   private reason?: NativeUsageUncertainty; private splitReason?: NativeCacheWriteSplitReason;
-  private revoked = false; private est = false; private anchored = false;
+  private revoked = false; private est = false; private anchored = false; private startSeen = false;
 
   constructor(initial?: RawNativeUsageUpdate, opts?: { isStart?: boolean; defaultTtlEligible?: boolean }) {
     if (initial) this.acceptStart(initial, opts);
   }
 
   acceptStart(raw: RawNativeUsageUpdate, opts?: { isStart?: boolean; defaultTtlEligible?: boolean }): boolean {
+    if (this.startSeen) {
+      this.revoke('input_breakdown_changed');
+      return false;
+    }
+    if (this.revoked) {
+      return false;
+    }
+    this.startSeen = true;
     const isStart = opts?.isStart !== false;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = raw;
     if (!isSafeNonNegativeInteger(u) || !isSafeNonNegativeInteger(r) || !isSafeNonNegativeInteger(w)) {
@@ -60,18 +68,28 @@ export class NativeCumulativeUsageAccumulator {
     this.u = u; this.r = r; this.w = w; this.s5 = s5; this.s1 = s1;
     this.p = u + r + w; this.plb = this.p; this.valid = true;
     this.source = isStart ? 'message_start' : 'json'; this.anchored = isStart;
-    this.revoked = false; this.est = false;
+    this.est = false;
     return true;
   }
 
   applyDelta(delta?: RawNativeUsageUpdate | null, opts?: { defaultTtlEligible?: boolean }): boolean {
     if (!delta) return true;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = delta;
+    let outputValid = true;
     if (o != null) {
-      if (!isSafeNonNegativeInteger(o) || o < this.o) { this.est = true; this.reason = this.reason || 'invalid_output'; return false; }
-      this.o = o;
+      if (!isSafeNonNegativeInteger(o) || o < this.o) {
+        this.est = true;
+        outputValid = false;
+      }
     }
-    if (u == null && r == null && w == null && split == null) return true;
+    if (u == null && r == null && w == null && split == null) {
+      if (!outputValid) {
+        this.reason = this.reason || 'invalid_output';
+        return false;
+      }
+      if (o != null) this.o = o;
+      return true;
+    }
 
     const check = (val: unknown, accepted: number): { ok: boolean; n?: number } => {
       if (val == null) return { ok: true, n: accepted };
@@ -81,8 +99,8 @@ export class NativeCumulativeUsageAccumulator {
       return { ok: true, n: val };
     };
 
-    const cu = check(u, this.u); if (!cu.ok) return false;
-    const cr = check(r, this.r); if (!cr.ok) return false;
+    const cu = check(u, this.u); if (!cu.ok) { if (!outputValid) this.reason = this.reason || 'invalid_output'; return false; }
+    const cr = check(r, this.r); if (!cr.ok) { if (!outputValid) this.reason = this.reason || 'invalid_output'; return false; }
     let cw = this.w, c5 = this.s5, c1 = this.s1, ci1 = this.i1, csplit = this.splitReason;
 
     if (split != null) {
