@@ -3,6 +3,7 @@ import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { GatewayError, SAFEGUARDS_NOT_SUPPORTED_MESSAGE, runNativeCountTokens,
   parseNativeErrorDetail, CLASSIFIER_BETA, DANGEROUS_TOOL_BETA, NATIVE_BILLING_MASKED_MESSAGE,
   type NativeCountTokensResult } from '../src/index.js';
+import { NativeCountTokensRateLimiter, NativeCountTokensRefusal } from '../src/index.js';
 import { COUNT_COST, countHarness, sendCount } from './fixtures/native-count.js';
 
 describe('native count authentication, switch and model gates', () => {
@@ -59,6 +60,65 @@ describe('native count authentication, switch and model gates', () => {
       error: { type: 'not_found_error', message: 'Unknown model: "absent"' } });
     expect(h.execute).not.toHaveBeenCalled();
   });
+});
+
+describe('count token bucket, expiry and bounded identities', () => {
+  const refusal = (call: () => unknown) => {
+    try { call(); throw Error('expected count refusal'); }
+    catch (error) { if (!(error instanceof NativeCountTokensRefusal)) throw error; return error.response; }
+  };
+  it('allows the default ten-call burst and one refill per second without refund on release', () => {
+    let now = 0; const rate = new NativeCountTokensRateLimiter({ now: () => now });
+    for (let index = 0; index < 10; index++) { const done = rate.acquire(COUNT_COST); done(); done(); }
+    expect(refusal(() => rate.acquire(COUNT_COST))).toEqual({ status: 429,
+      headers: { 'Retry-After': '1' }, body: { type: 'error', error: { type: 'rate_limit_error',
+        message: 'Token counting request limit exceeded.' } } });
+    now = 999; expect(refusal(() => rate.acquire(COUNT_COST)).status).toBe(429);
+    now = 1000; rate.acquire(COUNT_COST)();
+    expect(refusal(() => rate.acquire(COUNT_COST)).status).toBe(429);
+  });
+  it('uses integer Retry-After from fractional refill and never mints tokens on clock reversal', () => {
+    let now = 1000; const rate = new NativeCountTokensRateLimiter({ capacity: 1, refillPerSecond: 0.25, now: () => now });
+    rate.acquire(COUNT_COST)(); now = 1500;
+    expect(refusal(() => rate.acquire(COUNT_COST)).headers).toEqual({ 'Retry-After': '4' });
+    now = 0; expect(refusal(() => rate.acquire(COUNT_COST)).status).toBe(429);
+    now = 4999; expect(refusal(() => rate.acquire(COUNT_COST)).status).toBe(429);
+    now = 5000; rate.acquire(COUNT_COST)();
+  });
+  it('bounds default concurrency at two and releases each call once', () => {
+    const rate = new NativeCountTokensRateLimiter({ now: () => 0 });
+    const first = rate.acquire(COUNT_COST); const second = rate.acquire(COUNT_COST);
+    expect(refusal(() => rate.acquire(COUNT_COST)).headers).toEqual({ 'Retry-After': '1' });
+    first(); first(); const third = rate.acquire(COUNT_COST);
+    expect(refusal(() => rate.acquire(COUNT_COST)).status).toBe(429);
+    third(); second(); rate.acquire(COUNT_COST)();
+  });
+  it('partitions by both tenant and principal, using an unambiguous tuple', () => {
+    const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => 0 });
+    for (const cost of [{ tenantId: 'a:b', principalId: 'c' }, { tenantId: 'a', principalId: 'b:c' },
+      { tenantId: 'a:b', principalId: 'd' }, { tenantId: 'z', principalId: 'c' }]) {
+      rate.acquire(cost)(); expect(refusal(() => rate.acquire(cost)).status).toBe(429);
+    }
+  });
+  it('fails closed for new identities at map capacity and evicts only at ten idle minutes', () => {
+    let now = 0; const rate = new NativeCountTokensRateLimiter({ maxKeys: 2, now: () => now });
+    rate.acquire(COUNT_COST)(); rate.acquire({ ...COUNT_COST, principalId: 'second' })();
+    const third = { ...COUNT_COST, principalId: 'third' };
+    expect(() => rate.acquire(third)).toThrowError(expect.objectContaining({ kind: 'pooled-account-unavailable' }));
+    now = 599_999; expect(() => rate.acquire(third)).toThrow(GatewayError);
+    now = 600_000; rate.acquire(third)();
+  });
+  it('never evicts live calls, and idle time starts again when their cleanup completes', () => {
+    let now = 0; const rate = new NativeCountTokensRateLimiter({ maxKeys: 1, now: () => now });
+    const release = rate.acquire(COUNT_COST); const other = { ...COUNT_COST, principalId: 'other' };
+    now = 600_000; expect(() => rate.acquire(other)).toThrow(GatewayError);
+    release(); now = 1_199_999; expect(() => rate.acquire(other)).toThrow(GatewayError);
+    now = 1_200_000; rate.acquire(other)();
+  });
+  it.each([{ capacity: 0 }, { refillPerSecond: NaN }, { maxInFlight: 1.5 }, { idleMs: 0 }, { maxKeys: 0 }])
+    ('rejects invalid trusted limits %j', limits => {
+      expect(() => new NativeCountTokensRateLimiter(limits)).toThrow('Invalid native count rate limits');
+    });
 });
 
 describe('count native errors are terminal and sanitized', () => {
