@@ -185,7 +185,7 @@
   - [x] Row 29a — Row 29 test split in `tests/native-budget-usage.test.ts`: actual charged projections pin 2500/1750, 65500/64750, 2700/1950, 74300 and V-1 11702/74682; measured SSE has no output floor (N4), failed proof keeps full-rate floors (N5), unknown TTL premiums retained, unmarked/canonical aggregation behavior preserved. Row 29 gates: typecheck PASS; 718 tests passed / 0 failed. Post-commit gates in pass report.
   - [x] Row 30 — `src/route-json-flow.ts`, `src/route-native.ts`: native JSON dispatch, shallow outbound request, closed bounded-host result, exact response body, served identity and native error preservation; post-commit gateway gates in pass09 report.
   - [x] Row 30a — `src/native-lifecycle.ts`, JSON flow: synchronous terminal latch, same immutable pre-floor snapshot for projection/hook, once-only independent 1000-ms typed timeout/error fallback, handled late results; no canonical dispatch after native invocation; gateway gates in pass09 report.
-  - [ ] Row 31 — `tests/route-json-flow.test.ts`: JSON fidelity, optional fallback before invocation, errors and cleanup.
+  - [x] Row 31 — JSON fidelity/identity, execute-time version and optional capability fallback, malformed terminal envelope, exactly-once observation/settlement and rejecting error callbacks; shared `tests/fixtures/native-flow.ts` fake-provider harness; gateway gates in pass09 report.
   - [ ] Row 32 — `src/route-stream-flow.ts`: first-frame native readiness/commitment.
   - [ ] Row 32a — Stream lifecycle: shared snapshot and bounded observation task independent of settlement/reader cleanup.
   - [ ] Row 33 — `src/router/index.ts`, result types: native byte stream and downstream cancellation.
