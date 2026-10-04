@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 // Mock the Anthropic SDK before importing the provider
@@ -32,6 +32,26 @@ import { ClaudeProviderRuntime } from '../../src/services/providers/claude-provi
 import { nativeReadiness } from '../../src/services/llm-runtime/anthropic-native-readiness';
 import { nativeResponseBytes } from '../../src/services/llm-runtime/anthropic-native-transport';
 
+const withNativeHttp = async (reply: (request: IncomingMessage, response: ServerResponse, body: string) => void,
+  run: () => Promise<void>) => {
+  const server = createServer((request, response) => {
+    let body = '';
+    request.on('data', chunk => { body += chunk.toString(); });
+    request.on('end', () => reply(request, response, body));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  vi.stubEnv('ANTHROPIC_BASE_URL', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+  try { await run(); } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+};
+const nativeRequest = (extra: Record<string, unknown> = {}) => ({
+  body: { model: 'claude-sonnet-5', messages: [], ...extra }, stream: false, requestId: 'native-fixture',
+  signal: new AbortController().signal,
+  headers: { anthropicVersion: '2023-06-01', forwarded: {} as Record<string, string> },
+});
+
 describe('ClaudeProviderRuntime', () => {
   let runtime: ClaudeProviderRuntime;
 
@@ -61,6 +81,58 @@ describe('ClaudeProviderRuntime', () => {
     expect(await pending).toMatchObject({ status: 504, code: 'timeout' });
     expect(cancelled).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('uses trusted Bearer auth and excludes caller credentials, transport and Connection nominations', async () => {
+    await withNativeHttp((request, response, body) => {
+      expect(request.headers.authorization).toBe('Bearer server-account');
+      expect(request.headers['x-api-key']).toBeUndefined();
+      expect(request.headers.cookie).toBeUndefined();
+      expect(request.headers['x-forwarded-for']).toBeUndefined();
+      expect(request.headers['anthropic-hidden']).toBeUndefined();
+      expect(request.headers['anthropic-future']).toBe('opaque');
+      expect(request.headers['anthropic-beta']).toBe('future-one, future-two');
+      expect(JSON.parse(body).future).toEqual({ unchanged: true });
+      response.setHeader('anthropic-future', 'response-opaque');
+      response.end('{}');
+    }, async () => {
+      const request = nativeRequest({ future: { unchanged: true } });
+      request.headers.forwarded = { authorization: 'caller', 'x-api-key': 'caller', cookie: 'secret',
+        'x-forwarded-for': 'private', connection: 'Anthropic-Hidden', 'anthropic-hidden': 'private',
+        'anthropic-future': 'opaque', 'anthropic-beta': 'future-one, future-two' };
+      const result = await runtime.nativeMessages({ ...request, claudeCodeTransport: { accessToken: 'server-account' } });
+      expect(result.headers['anthropic-future']).toBe('response-opaque');
+      expect(mockAnthropicConstructor).not.toHaveBeenCalled();
+    });
+  });
+
+  it.each([400, 401, 403, 404, 413, 429, 500, 529])('does not retry native HTTP %i', async status => {
+    let calls = 0;
+    await withNativeHttp((_request, response) => {
+      calls++;
+      response.statusCode = status;
+      response.end(JSON.stringify({ error: { type: 'invalid_request_error', message: 'future validation' } }));
+    }, async () => {
+      await expect(runtime.nativeMessages(nativeRequest())).rejects.toMatchObject({ status });
+    });
+    expect(calls).toBe(1);
+  });
+
+  it.each(['future validation', 'insufficient credit balance'])('preserves the bounded 400 policy for %s', async message => {
+    await withNativeHttp((_request, response) => {
+      response.statusCode = 400;
+      response.end(JSON.stringify({ error: { type: 'invalid_request_error', message } }));
+    }, async () => {
+      await expect(runtime.nativeMessages(nativeRequest())).rejects.toMatchObject({ status: 400,
+        validation: { message: message.includes('credit') ? 'The upstream service could not accept this request.' : message },
+      });
+    });
+  });
+
+  it.each([-1, 1.5, null, '1'])('rejects invalid count_tokens result %s', async input_tokens => {
+    await withNativeHttp((_request, response) => response.end(JSON.stringify({ input_tokens })), async () => {
+      await expect(runtime.nativeCountTokens(nativeRequest())).rejects.toMatchObject({ status: 503, code: 'native_protocol_error' });
+    });
   });
 
   it.each(['messages', 'count_tokens'] as const)('relays native %s JSON through fake HTTP after upload completion', async operation => {

@@ -339,6 +339,7 @@
   - [x] Row 63 — Raw count_tokens without callback/SDK/retry, safe count, nonempty body model and measured outgoing 32,000,000-byte guard; typecheck PASS, Claude tests 19 passed / 0 failed.
   - [x] Row 64 — Fixed 55,000-ms deadline through upload/JSON/first complete non-error SSE frame, caller abort and reader/timer cleanup; typecheck PASS, Claude tests 20 passed / 0 failed including partial-frame timeout.
   - [ ] Row 65a — `api/tests/unit/claude-provider.test.ts`: fake HTTP auth, headers, count, byte measurement, errors and deadline cases.
+  - [x] Row 65a1 split — Fake HTTP Bearer/header fidelity, eight no-retry statuses, bounded validation/billing and invalid count cases; typecheck PASS, Claude tests 35 passed / 0 failed; 65a2 covers deadline/abort/size.
   - [ ] Row 65b — Same file: counted body/serialization/closure holders, open native stream, early response/upload cancellation and JSON/count release (N1).
   - [ ] Row 66 — `anthropic-native.ts`: trusted credential/account availability, execute-time acquisition/null lease, native and count ports; no host request capture.
   - [ ] Row 67 — Attempt-bound body-free finalize callback; `cost-ledger-sink.ts` invariant; observation projects only the immutable gateway snapshot (K5/L4).
