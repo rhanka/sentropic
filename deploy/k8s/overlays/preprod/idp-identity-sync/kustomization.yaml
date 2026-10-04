@@ -8,4 +8,4 @@ generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:
   - name: sentropic-idp-identity-sync-sql
-    files: [import-preprod.sql, import-preprod.sh]
+    files: [import-preprod.sql, import-preprod.sh, client-map.csv]

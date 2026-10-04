@@ -43,6 +43,9 @@ INSERT INTO oauth_tokens (jti, token_type, client_id, user_id, scope, audience, 
 VALUES ('synthetic-token', 'access_token', 'synthetic-client', 'efd67056-fb60-42e6-a386-6264c854da55', 'openid', 'synthetic', '2027-01-01');
 INSERT INTO oauth_consents (client_id, user_id, scopes)
 VALUES ('synthetic-client', 'efd67056-fb60-42e6-a386-6264c854da55', ARRAY['openid']);
+INSERT INTO oauth_consents (client_id, user_id, scopes) VALUES
+('radar-immobilier-preprod', 'efd67056-fb60-42e6-a386-6264c854da55', ARRAY['openid']),
+('radar-immobilier-preprod', 'preprod-only', ARRAY['openid']);
 INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at)
 VALUES ('duplicate-code', 'synthetic-client', '9f11d240-fc75-4d55-80be-1bafcd79eadb', 'https://client.example.invalid/callback', 'openid', 'synthetic-proof', 'S256', '2027-01-01');
 INSERT INTO oauth_tokens (jti, token_type, client_id, user_id, scope, audience, expires_at)
