@@ -12,6 +12,7 @@
  */
 
 import type { SecretAuthMaterial } from '@sentropic/llm-mesh';
+import type { RequestSizeDetail } from '@sentropic/llm-mesh';
 import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult } from '@sentropic/llm-mesh';
 import type { NativeMessagesRequest, NativeMessagesResult, PreparedNativeMessages } from '@sentropic/llm-mesh';
 
@@ -63,6 +64,8 @@ export type ProviderResponseHeaders = Readonly<Record<string, string>>;
 
 /** Non-stream provider-native response, passed through verbatim. */
 export interface GatewayDispatchResponse {
+  /** Trusted transport measurement for terminal numeric 413; never caller-derived. */
+  readonly requestSize?: RequestSizeDetail;
   readonly status: number;
   readonly body: unknown;
   /** Provider response headers (lowercased). The router forwards the allowlist (#4). */
