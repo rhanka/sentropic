@@ -7,7 +7,7 @@ import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import { parseSse } from '../src/wire.js';
 import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNative, nativeAmount } from './fixtures/native-flow.js';
-import { NATIVE_MODELS } from './fixtures/native-usage.js';
+import { CACHE_START, NATIVE_MODELS } from './fixtures/native-usage.js';
 import * as nativeUsage from '../src/native-usage.js';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import {
@@ -697,6 +697,72 @@ describe('native finalize parity and independent cleanup', () => {
       expect(JSON.stringify(warn.mock.calls)).not.toContain('private hook failure');
     } finally { warn.mockRestore(); snapshotSpy.mockRestore(); projectionSpy.mockRestore(); vi.useRealTimers(); }
   });
+});
+
+describe('SDK-shaped one-hour cache deltas and pinned amounts', () => {
+  const cases = [
+    { name: 'equal-no-split', delta: { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 }, growth: false },
+    { name: 'aggregate-only', delta: { cache_creation_input_tokens: 200 }, growth: false },
+    { name: 'nullable', delta: { input_tokens: 100, cache_read_input_tokens: null, cache_creation_input_tokens: null }, growth: false },
+    { name: 'all-null', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null }, growth: false },
+    { name: 'omitted', delta: {}, growth: false },
+    { name: 'growth', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300 }, growth: true },
+  ];
+  const matrix = NATIVE_MODELS.flatMap(model => [false, true].flatMap(clean => ['1h', 'unknown'].flatMap(ttl =>
+    cases.map(test => ({ model, clean, ttl, ...test })))));
+  it.each(matrix)('inherits/reprices only growth: $model $name ttl=$ttl clean=$clean', async ({ model, clean, ttl, delta, growth }) => {
+    const h = nativeStreamHarness([nativeStart(model, CACHE_START),
+      nativeFrame('message_delta', { usage: { ...delta, output_tokens: 500 } }),
+      nativeFrame('message_delta', { usage: delta }), ...(clean ? [nativeFrame('message_stop')] : [])], {
+      model, allowanceInput: 10_300, body: { system: [{ type: 'text', text: 'cached', cache_control: { type: 'ephemeral', ttl } }] },
+    });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    const fable = model === NATIVE_MODELS[2];
+    const expected = growth ? clean ? fable ? 1950 : 2700 : fable ? 64_950 : 65_700
+      : clean ? fable ? 1750 : 2500 : fable ? 64_750 : 65_500;
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(expected);
+    expect(h.snapshots[0]).toMatchObject({ inputTokens: growth ? 10_400 : 10_300, outputTokens: 500,
+      totalTokens: growth ? 10_900 : 10_800, nativeInputUsageValidated: true, estimated: !clean, finalOutputObserved: clean,
+      rawUsage: { cache_creation_input_tokens: growth ? 300 : 200,
+        cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } } });
+    expect(h.snapshots[0]!.nativeInputPriceUnits40).toBe(growth ? fable ? 38_000 : 68_000 : fable ? 30_000 : 60_000);
+    expect(h.snapshots[0]!.nativeCacheWriteSplitReason).toBe(growth ? 'cache_write_split_inferred' : undefined);
+    expect(h.snapshots[0]!.nativeUsageUncertainty).toBe(clean ? undefined : 'incomplete_output');
+  });
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].map(clean => ({ model, clean }))))(
+    'preserves mixed prior allocation and prices only +100 at 2x: $model clean=$clean', async ({ model, clean }) => {
+      const h = nativeStreamHarness([nativeStart(model, { ...CACHE_START, cache_creation_input_tokens: 250,
+        cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 } }),
+        nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 350, output_tokens: 500 } }),
+        ...(clean ? [nativeFrame('message_stop')] : [])], { model,
+        body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean
+        ? model === NATIVE_MODELS[2] ? 1900 : 2650 : model === NATIVE_MODELS[2] ? 64_900 : 65_650);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_450, outputTokens: 500,
+        rawUsage: { cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 } } });
+    });
+  it.each(NATIVE_MODELS)('keeps eligible default-TTL growth at 1.25x: %s', async model => {
+    const h = nativeStreamHarness([nativeStart(model, { ...CACHE_START,
+      cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 0 } }),
+      nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 300, output_tokens: 500 } }),
+      nativeFrame('message_stop')], { model });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(model === NATIVE_MODELS[2] ? 1725 : 2475);
+    expect(h.snapshots[0]!.nativeCacheWriteSplitReason).toBeUndefined();
+  });
+  it.each([{ cache_creation_input_tokens: 199 }, { cache_creation_input_tokens: 199,
+    cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 199 } },
+    { cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 201 } }])(
+    'revokes a supplied aggregate/split decrease or conflict permanently: %j', async delta => {
+      const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], CACHE_START), nativeFrame('message_delta', { usage: delta }),
+        nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 200, output_tokens: 500 } }), nativeFrame('message_stop')],
+      { allowanceInput: 10_300, body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(h.snapshots[0]).toMatchObject({ nativeInputUsageValidated: false, estimated: true, inputTokens: 10_300 });
+      expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_300);
+    });
 });
 
 describe('route stream flow with budget admission', () => {
