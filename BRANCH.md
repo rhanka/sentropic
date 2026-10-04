@@ -102,26 +102,28 @@
   - [x] Run available credential-free test suites and verify no suite is duplicated in CI routing.
   - [x] Write `.h2a/build/lot2_report.md` for reviewer.
 
-- [ ] **Lot 3 — CI cache wiring, verification & docs**
+- [x] **Lot 3 — CI cache wiring, verification & docs**
   - [x] Extend production tag inputs to compiled IdP and migration sources; ignore only the generated identity receipt directory and include the CI overlay in change filters.
   - [x] Normalize the production rate-limit switch to an empty value when the test runner requests enforcement; existing HTTP assertions remain unchanged.
   - [x] Scan the non-shipping toolbox with the existing HIGH/CRITICAL compliance gate; no policy or register changes.
   - [x] Wire `.github/workflows/ci.yml` with exact content-tag archive caching; a cache hit loads the toolbox without any build.
   - [x] Record and verify the production artifact image ID during save/load; use it for runtime and scans.
   - [x] E2E, VSCode and publication load the current run artifact; reject canonical tag collisions and promote the verified image without re-pulling.
-  - [ ] Validate cache reuse on unchanged inputs.
-  - [ ] Pin image digest where cheap according to G-PROD v4.1.
-  - [ ] Document architecture in docs and finalize reports.
-  - [ ] Write `.h2a/build/lot3_report.md` for reviewer.
+  - [x] Serialize API publication and fail closed on registry inspection errors other than a missing manifest; remote publication remains unexecuted.
+  - [x] Validate local cache reuse and image archive save/load on unchanged inputs; hosted second-run cache validation remains pending without a push.
+  - [x] Pin the production artifact config ID through local load, runtime and scan; transport a receipt and reject mismatches. Registry OCI and deployed digest evidence remain follow-ups.
+  - [x] Document architecture in `docs/ci-images.md` and finalize reports.
+  - [x] Write `.h2a/build/lot3_report.md` for reviewer.
+  - [x] Record the blocking toolbox scan: 52 HIGH and 4 CRITICAL unaccepted findings; production has zero. No severity/register changes; full qualification remains open.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app smoke verification on running stack.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Review documentation updates and remove temporary plan notes.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Review documentation updates and document pending qualification explicitly.
 
-- [ ] **Lot N — Final validation**
-  - [ ] Run `make scope-check`.
-  - [ ] Run `make check-ci-version-filters`.
-  - [ ] Run security scans: `make test-api-security-container`.
-  - [ ] Final lot report and handoff.
+- [x] **Lot N — Local validation and handoff**
+  - [x] Run `make scope-check`; PASS C2.
+  - [x] Run `make check-ci-version-filters`; PASS. Containerized actionlint also passes.
+  - [x] Run security scans: production PASS; toolbox compliance FAIL, recorded for conductor.
+  - [x] Final lot reports written; no push, PR, merge or publication. Gemini review file has not arrived.

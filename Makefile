@@ -544,8 +544,10 @@ pull-api-image: docker-login
 publish-api-image: docker-login
 	@echo "▶ Pushing api image to registry"
 	@$(MAKE) verify-api-image ENV=$(ENV)
-	@if docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/ci-prod-image/existing-manifest.json 2>/dev/null; then \
+	@if docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/ci-prod-image/existing-manifest.json 2> .tmp/ci-prod-image/manifest-error; then \
 		docker run --rm -i $(LLM_MESH_NODE_IMAGE) node -e 'let s=""; for await (const c of process.stdin) s+=c; const m=JSON.parse(s); if (m.config?.digest !== process.argv[1]) { console.error("Production tag collision: recorded artifact differs from registry"); process.exit(1); }' "$(API_IMAGE_REF)" < .tmp/ci-prod-image/existing-manifest.json; \
+	elif ! grep -Eq 'manifest unknown|no such manifest|manifest not found' .tmp/ci-prod-image/manifest-error; then \
+		echo 'Cannot establish production registry tag identity; refusing publication'; exit 1; \
 	fi
 	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
 
@@ -2326,7 +2328,7 @@ up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrate
 	# Production CSP permits HTTPS RP redirects; this callback is intercepted by Playwright.
 	$(CI_COMPOSE) exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 -c "UPDATE oauth_clients SET redirect_uris=ARRAY['https://ci-rp.invalid/auth/oauth/callback'] WHERE client_id='design-system';"
 	$(CI_COMPOSE) up --no-build -d --wait auth-idp
-smoke-idp-screens-ci: ## Run the existing screen smoke from the cached toolbox against compiled IdP
+smoke-idp-screens-ci: ci-test-env ## Run the existing screen smoke from the cached toolbox against compiled IdP
 	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
 	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
 	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
