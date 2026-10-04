@@ -242,7 +242,7 @@
   - [x] Row 44-1b — Full suite reproduced 1 scaffold regression (1007 passed): absent transport body was parsed as empty JSON; now yields a zero-byte checked owner so the existing frozen 501 test retains its original envelope; gateway rechecks in pass11 report.
   - [x] Row 44-2 — All three ingress paths refuse actual over-cap bytes before auth/quote/hold/dispatch, exact numeric 413/no-retry/cancel; exact/below cap split UTF-8 parses once, invalid JSON restores capacity, both middleware orders coalesce one lease and clear JSON holders; gateway gates in pass11 report.
   - [x] Row 44-2b — Three numeric fixture failures (1013 passed) measured 18 actual bytes correctly; corrected the fixture to literal 17 bytes for the unchanged L+1 expected envelopes; gateway rechecks in pass11 report.
-  - [ ] Row 44a — Same file: cross-endpoint/router pool exhaustion, exact 503/Retry-After and zero parse/hold/dispatch.
+  - [x] Row 44a — Exact B accepted across generation/count ingress owners; multiple routers/all three paths refuse next actual extension with exact typed 503/headers and zero parse/auth/quote/hold/dispatch/finalize/settlement; partial reservation recovery and following successful admission; gateway gates in pass11 report.
   - [ ] Row 44b1 — Same file: host detach/native shrink versus canonical N, races/unconsumed stream/independent finalize.
   - [ ] Row 44b2 — Same file: N2 generation refusal matrix including auth/partition/OFF/native/ceiling/model/quote/route/admission/prepared/mark; `count_off`, `count_denied`, `count_rate`, `count_concurrency` are explicitly deferred to row 49a.
   - [ ] Row 44c — Same file: 64x4 KiB overlap/committed streams, switch states and both middleware orders.
