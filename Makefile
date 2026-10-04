@@ -2297,14 +2297,19 @@ verify-api-sut-restart: ci-test-env ## Verify restart does not replay migrations
 .PHONY: up-idp-sut smoke-idp-screens-ci
 up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrated database
 	$(CI_COMPOSE) run --rm --no-deps api npm run oauth:seed-clients
+	# Production CSP permits HTTPS RP redirects; this callback is intercepted by Playwright.
+	$(CI_COMPOSE) exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 -c "UPDATE oauth_clients SET redirect_uris=ARRAY['https://ci-rp.invalid/auth/oauth/callback'] WHERE client_id='design-system';"
 	$(CI_COMPOSE) up --no-build -d --wait auth-idp
 smoke-idp-screens-ci: ## Run the existing screen smoke from the cached toolbox against compiled IdP
 	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
-	$(CI_COMPOSE) run --rm --no-deps -w /workspace api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
+	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
+	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
 	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
 	test -n "$$user_id"; test -n "$$session_token"; \
 	$(CI_COMPOSE) run --rm --no-deps -w /workspace/e2e \
 		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
+		-e SCREEN_SMOKE_REDIRECT_URI=https://ci-rp.invalid/auth/oauth/callback \
+		-e SCREEN_SMOKE_EMAIL="$$smoke_email" \
 		-e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
 		api sh -ec 'cp ../apps/auth-idp/screen-smoke.ts ./idp-screen-smoke.ts; node ./idp-screen-smoke.ts'
 
