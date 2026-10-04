@@ -201,7 +201,7 @@
   - [x] Row 34e — Same file: typed absent/completed/hook_error/hook_timeout, 999+1-ms timer boundary, settled/closed before expiry, cleared timers, handled late fulfillment/rejection, unchanged snapshot and once-only completion/finalize/settlement; gateway gates in pass09 report.
   - [x] Row 34f — N5 addendum insertion before row 35: all three models, fractional/nonfinite/unsafe JSON numeric deltas, clean/interrupted 74300 full-rate charge and pre-floor 10300/500 observation; later valid growth cannot restore proof; latched nullable aggregate bound advances to 10400 once; gateway gates in pass09 report.
   - [x] Row 35 — Exact safeguards bytes, eight pre/late error classes (403->401), empty/partial/overflow refusal, late EOF/unknown/overflow without manufactured stop, progressive-first-frame regression, planned native-only retry and single settlement; header repro found 3 failures, native terminal wrappers now omit selected/unverified served certification, JSON regression included; gateway gates in pass09 report.
-  - [ ] Row 36 — Native response header policy/router: open Anthropic, organization exposure, relay marker and served-model policy.
+  - [x] Row 36 — Dedicated native response-header policy extends canonical safe names with open Anthropic headers and owner-accepted organization exposure; JSON relay/safe single served-model tests; post-commit gateway gates recorded in pass10 report.
   - [ ] Row 37 — `tests/router.test.ts`: response credentials/cookies/internal spoof, native byte and JSON/SSE served headers.
   - [ ] Row 38 — `tests/fixtures/anthropic-native-http.ts`: fake upstream HTTP fixture.
   - [ ] Row 39 — `tests/anthropic-native-relay.integration.test.ts`: exact body/header/IP/error/count/cancel/backpressure fidelity.
