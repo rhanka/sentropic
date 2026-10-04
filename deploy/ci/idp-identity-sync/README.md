@@ -121,8 +121,8 @@ user. No trusted-client flag or consent bypass is introduced.
 
 The versioned [client-map.csv](../../k8s/overlays/preprod/idp-identity-sync/client-map.csv)
 maps `radar-immobilier` to `radar-immobilier-preprod`. It ships only in the preprod
-SQL ConfigMap. Each source client has one target, and every target must already
-exist in preprod; an invalid map aborts the entire transaction.
+SQL ConfigMap. Source and target client IDs are both unique in the map, and every
+target must already exist in preprod; an invalid map aborts the entire transaction.
 
 The same repeatable-read export includes `users.csv`, `webauthn.csv`,
 `consents.csv` and `snapshot.csv`, all covered by SHA256SUMS. Snapshot fields are

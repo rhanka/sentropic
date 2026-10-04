@@ -97,8 +97,8 @@ export async function exportSnapshot(k = kube, delay = sleep) {
         const pods = JSON.parse(k(['-n', 'sentropic', 'get', 'pods', '-l', `job-name=${job.metadata.name}`, '-o', 'json']).stdout).items;
         const message = pods.flatMap(p => p.status?.initContainerStatuses ?? []).find(c => c.name === 'export')?.state?.terminated?.message;
         const counts = JSON.parse(message || '{}');
-        if (!Number.isInteger(counts.users) || counts.users <= 0 || !Number.isInteger(counts.webauthn) || counts.webauthn < 0) throw new Error('invalid export termination verdict');
-        console.log(`export users=${counts.users} webauthn=${counts.webauthn}`);
+        if (!Number.isInteger(counts.users) || counts.users <= 0 || !Number.isInteger(counts.webauthn) || counts.webauthn < 0 || !Number.isSafeInteger(counts.consents) || counts.consents < 0) throw new Error('invalid export termination verdict');
+        console.log(`export users=${counts.users} webauthn=${counts.webauthn} consents=${counts.consents}`);
         return job.metadata.name;
       }
       await delay(5000);
