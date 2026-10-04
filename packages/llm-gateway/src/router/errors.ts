@@ -22,6 +22,7 @@ import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
 import * as mesh from '@sentropic/llm-mesh';
 import type { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import { NativeSseUpstreamError } from '../native-stream-errors.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 import {
   isProcessedNativeValidationDetail,
@@ -243,6 +244,11 @@ export const toProviderShapedError = (
     return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, error.validation);
   }
   if (isNativeMessagesUpstreamError(error)) {
+    if (error instanceof NativeSseUpstreamError && (error.status === 500 || error.status === 529)) {
+      return wire === 'anthropic-messages'
+        ? anthropicError(error.status, error.status === 500 ? 'api_error' : 'overloaded_error', 'upstream request failed')
+        : openAiError(error.status, 'server_error', 'upstream request failed');
+    }
     if (error.status === 400) {
       const detail = extractNativeValidationDetail(error);
       if (detail) {
