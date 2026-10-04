@@ -1,0 +1,41 @@
+# k8s-owned admission control. Tenant CD verifies enforcement; it never applies this file.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: sentropic-ci-trigger-suspend-only
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["cronjobs"]
+  matchConditions:
+    - name: only-ci-trigger-sa
+      expression: "request.userInfo.username == 'system:serviceaccount:sentropic:sentropic-ci-trigger-idp-export'"
+  validations:
+    - expression: "object.metadata.name == 'sentropic-idp-identity-export' && object.metadata.namespace == 'sentropic'"
+      message: "trigger SA: only the prod identity export CronJob is permitted"
+    - expression: "object.spec.jobTemplate == oldObject.spec.jobTemplate"
+      message: "trigger SA: jobTemplate mutation forbidden; only spec.suspend may change"
+    - expression: "object.spec.schedule == oldObject.spec.schedule"
+      message: "trigger SA: schedule mutation forbidden"
+    - expression: "object.spec.concurrencyPolicy == oldObject.spec.concurrencyPolicy"
+      message: "trigger SA: concurrencyPolicy mutation forbidden"
+    - expression: "has(object.spec.timeZone) == has(oldObject.spec.timeZone) && (!has(object.spec.timeZone) || object.spec.timeZone == oldObject.spec.timeZone)"
+      message: "trigger SA: timeZone mutation forbidden"
+    - expression: "has(object.spec.startingDeadlineSeconds) == has(oldObject.spec.startingDeadlineSeconds) && (!has(object.spec.startingDeadlineSeconds) || object.spec.startingDeadlineSeconds == oldObject.spec.startingDeadlineSeconds)"
+      message: "trigger SA: startingDeadlineSeconds mutation forbidden"
+    - expression: "has(object.spec.successfulJobsHistoryLimit) == has(oldObject.spec.successfulJobsHistoryLimit) && (!has(object.spec.successfulJobsHistoryLimit) || object.spec.successfulJobsHistoryLimit == oldObject.spec.successfulJobsHistoryLimit)"
+      message: "trigger SA: successfulJobsHistoryLimit mutation forbidden"
+    - expression: "has(object.spec.failedJobsHistoryLimit) == has(oldObject.spec.failedJobsHistoryLimit) && (!has(object.spec.failedJobsHistoryLimit) || object.spec.failedJobsHistoryLimit == oldObject.spec.failedJobsHistoryLimit)"
+      message: "trigger SA: failedJobsHistoryLimit mutation forbidden"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: sentropic-ci-trigger-suspend-only
+spec:
+  policyName: sentropic-ci-trigger-suspend-only
+  validationActions: ["Deny"]
