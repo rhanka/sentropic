@@ -21,7 +21,7 @@
  * provider failure settles with failure/estimated usage and does NOT retry.
  */
 
-import type { AccountTransportOutcome } from '@sentropic/llm-mesh';
+import type { AccountTransportOutcome, NativeUsagePricing } from '@sentropic/llm-mesh';
 
 import type { GatewayConfig } from './config.js';
 import type { CostContext } from './ports/cost-context.js';
@@ -44,7 +44,7 @@ import { redactSelection, type RedactedSelectionView } from './redaction.js';
  * Normalized usage the settle hook records. `estimated` is true when the
  * provider did not report usage (spec §5 never-zero -> estimate).
  */
-export interface SettleUsage {
+export interface SettleUsage extends NativeUsagePricing {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly estimated: boolean;

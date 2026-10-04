@@ -19,6 +19,7 @@ import {
 } from './ports/budget.js';
 import type { SettleUsage } from './flow.js';
 import { GatewayError } from './router/errors.js';
+import { validateNativeInputPriceUnits40 } from './native-usage.js';
 
 export interface AdmittedRoute {
   readonly requestId: string;
@@ -217,6 +218,39 @@ const isMeasured = (usage: SettleUsage): boolean => !usage.estimated
 
 const countOrZero = (value: number): number => (isCount(value, 0) ? value : 0);
 
+const hasNativeInputProof = (attempt: AttemptView): boolean => {
+  const usage = attempt.usage;
+  return usage.nativeInputUsageValidated === true && isCount(usage.inputTokens, 1)
+    && (usage.nativeInputUsageSource === 'message_start' || usage.nativeInputUsageSource === 'message_delta')
+    && attempt.providerId === 'anthropic' && usage.nativeServedModelId === attempt.modelId
+    && (usage.nativeUsageUncertainty === undefined || usage.nativeUsageUncertainty === 'incomplete_output'
+      || usage.nativeUsageUncertainty === 'invalid_output')
+    && validateNativeInputPriceUnits40(usage.inputTokens, usage.nativeInputPriceUnits40,
+      usage.nativeServedModelId, usage.nativePricingPolicy);
+};
+
+const unmeasuredUsage = (attempt: AttemptView, allowance: RouteUsageCeiling): SettleUsage => {
+  const usage = attempt.usage, preserveInput = hasNativeInputProof(attempt);
+  const inputTokens = preserveInput ? usage.inputTokens : Math.max(countOrZero(usage.inputTokens), allowance.inputTokens);
+  const { nativeInputPriceUnits40: units, ...detail } = usage;
+  let chargedUnits = preserveInput ? units : undefined;
+  if (!preserveInput && usage.nativeUsageUncertainty === 'cache_write_split_unknown'
+    && attempt.providerId === 'anthropic' && usage.nativeServedModelId === attempt.modelId
+    && validateNativeInputPriceUnits40(usage.inputTokens, units, usage.nativeServedModelId, usage.nativePricingPolicy)) {
+    const floor = 40n * BigInt(inputTokens), observed = BigInt(units!);
+    const conservative = floor > observed ? floor : observed;
+    if (conservative <= BigInt(Number.MAX_SAFE_INTEGER)
+      && validateNativeInputPriceUnits40(inputTokens, Number(conservative), usage.nativeServedModelId, usage.nativePricingPolicy)) {
+      chargedUnits = Number(conservative);
+    }
+  }
+  return { ...detail, inputTokens, outputTokens: Math.max(countOrZero(usage.outputTokens), allowance.outputTokens),
+    estimated: true,
+    ...(usage.nativeInputUsageValidated !== undefined ? { nativeInputUsageValidated: preserveInput } : {}),
+    ...(chargedUnits !== undefined ? { nativeInputPriceUnits40: chargedUnits } : {}),
+  };
+};
+
 /**
  * Charged usage per attempt: a dispatched attempt without measured usage is
  * charged at least its quoted allowance, never an estimated zero. Overruns
@@ -232,11 +266,7 @@ export const chargeAdmittedAttempts = <T extends AttemptView>(
     const candidates = coveringCandidates(admission.quote, attempt);
     const allowance = allowanceFor(candidates);
     if (!isMeasured(attempt.usage)) {
-      return { ...attempt, usage: {
-        inputTokens: Math.max(countOrZero(attempt.usage.inputTokens), allowance.inputTokens),
-        outputTokens: Math.max(countOrZero(attempt.usage.outputTokens), allowance.outputTokens),
-        estimated: true,
-      } };
+      return { ...attempt, usage: unmeasuredUsage(attempt, allowance) };
     }
     if (attempt.usage.inputTokens > allowance.inputTokens
       || attempt.usage.outputTokens > allowance.outputTokens) {
