@@ -51,7 +51,7 @@
 - [ ] Multi-branch.
 
 ## UAT Management (in orchestration context)
-- [ ] Compare identical-data before/after screenshots for login, home/dashboard, list, detail, and chat using existing Playwright through make.
+- [x] Compare identical-data before/after screenshots for login, home/dashboard, list, detail, and chat using existing Playwright through make; home/list/chat pixel-identical, transient login/detail differences documented.
 - [ ] Qualify web/Chrome/VSCode artifacts and retain evidence in `.h2a/build/`.
 
 ## Plan / Todo (lot-based)
@@ -68,7 +68,7 @@
   - [x] Upgrade UI Tailwind/svelte-check; CSS-first PostCSS integration for all Vite builds.
   - [x] Replace directives/config with CSS theme/source declarations and preserve custom colors and affected v3 defaults.
   - [x] Standalone UI scan identifies patched-range updates for devalue and brace-expansion; strengthen existing override minimums without suppressions.
-  - [ ] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight.
+  - [x] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight; restore sibling spacing for hidden chat stages and native select background.
   - [x] Adapt host component shadow/focus/shrink/opacity utilities and matching print selectors.
   - [x] Adapt route utilities, matrix gradients/overlays, and editable-field focus outlines.
   - [x] Preserve the four matrix header gradients' sRGB interpolation explicitly with Tailwind 4 modifiers.
@@ -84,7 +84,7 @@
   - [x] Audit API and standalone UI/IdP trees; workspace and all three standalone scans have zero HIGH/CRITICAL.
   - [ ] Build UI web/Chrome/VSCode via `make build-ui` and production image for E2E.
   - [ ] Run `make typecheck`, `make lint`, `make test-ui`, and all SCA targets.
-  - [ ] Capture after migration and compare all five pages; report differences.
+  - [x] Capture after migration and compare all five pages; `.h2a/build/visual_report.md` records all differences and the corrected 12px chat spacing.
   - [ ] Run full `make test-e2e` with assigned ports/ENV; investigate/fix failures.
   - [ ] Write `.h2a/build/lot2_report.md`; resolve review and scope findings.
 - [ ] **Lot 3 — PR and CI**
