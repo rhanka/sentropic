@@ -20,7 +20,7 @@ services:
     command: [node, dist/index.js]
     environment:
       - NODE_ENV=production
-      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT:-true}
+      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT-true}
       - JWT_SECRET=dev-secret-key-change-in-production-please
       - OAUTH_SIGNING_KEK=ci-disposable-signing-kek-never-production
       - OUTBOX_DISPATCHER_AUTOSTART=false
