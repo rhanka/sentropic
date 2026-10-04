@@ -4,7 +4,7 @@ import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonica
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, routeUsage,
-  settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
+  settleRouteRequest, terminalGatewayError, retainRouteBody, type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
@@ -43,6 +43,7 @@ export const runRouteJsonFlow = async (
   request: GatewayFlowRequest,
 ): Promise<RouteGatewayJsonResult> => {
   const prepared = await prepareRouteFlow(deps, request);
+  retainRouteBody(prepared, request);
   const attempts: RouteAttemptSettlement[] = [];
   const signal = request.signal ?? request.authContext.signal;
   const estimate = (output = ''): SettleUsage => ({
@@ -80,12 +81,13 @@ export const runRouteJsonFlow = async (
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       if (native) {
-        const nativeRequest = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
+        let nativeRequest = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
         nativeObserver = new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body));
         lifecycle = nativeLifecycle(nativeObserver, nativeRequest.finalize,
           { requestId: nativeRequest.requestId, attemptRef: attempt.attemptRef });
         nativeInvoked = true;
         const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
+        nativeRequest = undefined!;
         nativeReader = nativeResponseReader(result);
         assertNativeMessagesResult(result, 'json');
         if (result.kind !== 'json') throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
@@ -161,6 +163,8 @@ export const runRouteJsonFlow = async (
       throw terminal();
     }
     const usage = observedUsage ?? estimate(response?.text);
+    // A successful JSON operation cannot retry; its host upload/SDK references are now gone.
+    request.bodyLease?.detach();
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
       outcome: 'success', usage });

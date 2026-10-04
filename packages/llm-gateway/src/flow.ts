@@ -38,6 +38,7 @@ import type {
 import type { PoolSelection, PoolSelectionRequest } from './ports/pool.js';
 import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { ProviderRateLimitError } from './internal/provider-rate-limit-error.js';
+import type { CheckedGatewayBody } from './request-body-retention.js';
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
 
 /**
@@ -102,6 +103,8 @@ export interface GatewayFlowDeps {
 
 /** Inputs the router hands the flow per request. */
 export interface GatewayFlowRequest {
+  /** Router-owned reference/lease lifecycle; trusted pre-parsers share this owner. */
+  readonly bodyLease?: CheckedGatewayBody;
   readonly authContext: CallerAuthRequestContext;
   readonly wire: GatewayWire;
   readonly headers: Readonly<Record<string, string>>;
