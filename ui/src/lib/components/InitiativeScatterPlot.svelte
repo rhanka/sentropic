@@ -2401,7 +2401,7 @@
 </script>
 
 <div class="w-full max-w-[640px] mx-auto">
-  <div class="relative w-full aspect-square bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+  <div class="relative w-full aspect-square bg-white rounded-lg shadow-xs border border-slate-200 p-4">
     {#if useCases.length === 0}
       <div class="absolute inset-0 flex items-center justify-center text-slate-500">
         <div class="text-center">
@@ -2436,7 +2436,7 @@
         {#each legendEntries as entry (entry.key)}
           <button
             type="button"
-            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-opacity focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/30"
             class:border-slate-300={!entry.filtered}
             class:border-slate-200={entry.filtered}
             class:opacity-40={entry.filtered}

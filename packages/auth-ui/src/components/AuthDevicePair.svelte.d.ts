@@ -1,4 +1,4 @@
-import type { Component } from 'svelte';
+import type { SvelteComponent } from 'svelte';
 import type {
   AuthUiError,
   AuthUiLabels,
@@ -13,5 +13,9 @@ export interface AuthDevicePairProps {
   onError?: (error: AuthUiError) => void;
 }
 
-declare const AuthDevicePair: Component<AuthDevicePairProps>;
+declare class AuthDevicePair extends SvelteComponent<
+  AuthDevicePairProps,
+  Record<string, never>,
+  { 'back-to-devices': Record<string, never>; 'cancel': Record<string, never> }
+> {}
 export default AuthDevicePair;

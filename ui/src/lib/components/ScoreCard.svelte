@@ -9,7 +9,7 @@
   $: starDisplay = { filled: stars, empty: 5 - stars };
 </script>
 
-<div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+<div class="rounded-lg border border-slate-200 bg-white p-4 shadow-xs">
   <h3 class="font-semibold text-slate-900 mb-2">{title}</h3>
   <div class="flex items-center gap-3">
     <StarRating 
