@@ -13,8 +13,9 @@ import {
   newCorrelationId,
   redactForLog,
   redactSelection,
-  buildNativeRequestHeaders, toProviderShapedError,
+  toProviderShapedError,
 } from '../src/index.js';
+import { buildNativeRequestHeaders } from '../src/native-headers.js';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 
 /** One caller-owned account (owner `p`) for the kill-switch select() tests. */
