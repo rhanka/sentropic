@@ -34,6 +34,7 @@ const readGatewayBody = async (request: Request, options: RequestBodyLimitOption
   request.signal.addEventListener('abort', abort, { once: true });
   try {
     request.signal.throwIfAborted();
+    if (!reader) return new CheckedGatewayBody(undefined, 0, lease);
     if (reader) {
       for (;;) {
         const next = await reader.read();

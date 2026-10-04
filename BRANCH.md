@@ -239,6 +239,7 @@
   - [x] Row 43c — Completed as 43c1–43c3; native detaches only after host upload guarantee/no retry, canonical and passthrough keep N until source cleanup; terminal stream wrapper transferred at row 44.
   - [ ] Row 44 — Split 44-1 router/middleware integration and 44-2 cap/byte-boundary tests in `tests/request-body-limit.test.ts`, each <=140 lines including plan.
   - [x] Row 44-1 — Exported pre-parser middleware and shared router use one cached bounded read; router-owned body wrapper detaches with cache, all early responses release via finally and streaming transfers to terminal wrapper; all three body paths protected under both switch states; gateway gates in pass11 report.
+  - [x] Row 44-1b — Full suite reproduced 1 scaffold regression (1007 passed): absent transport body was parsed as empty JSON; now yields a zero-byte checked owner so the existing frozen 501 test retains its original envelope; gateway rechecks in pass11 report.
   - [ ] Row 44a — Same file: cross-endpoint/router pool exhaustion, exact 503/Retry-After and zero parse/hold/dispatch.
   - [ ] Row 44b1 — Same file: host detach/native shrink versus canonical N, races/unconsumed stream/independent finalize.
   - [ ] Row 44b2 — Same file: N2 generation refusal matrix including auth/partition/OFF/native/ceiling/model/quote/route/admission/prepared/mark; `count_off`, `count_denied`, `count_rate`, `count_concurrency` are explicitly deferred to row 49a.
