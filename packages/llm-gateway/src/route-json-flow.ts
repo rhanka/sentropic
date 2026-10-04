@@ -13,6 +13,7 @@ import { dispatchNativeMessages } from './route-attempt-dispatch.js';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { assertNativeMessagesResult, buildNativeMessagesRequest, NativeAttemptRefusal, prepareNativeMessages } from './route-native.js';
 import { nativeDefaultTtlEligible, NativeUsageObserver, nativeSnapshotUsage } from './native-usage.js';
+import { nativeLifecycle } from './native-lifecycle.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown, fallback: SettleUsage): SettleUsage => {
@@ -49,6 +50,7 @@ export const runRouteJsonFlow = async (
     outputTokens: Math.min(1_000_000, Math.ceil(output.length / 4)), estimated: true,
   });
   let settled = false;
+  let nativeInvoked = false;
   const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
     if (settled) return;
     settled = true;
@@ -63,6 +65,7 @@ export const runRouteJsonFlow = async (
     let invoked = false;
     let observedUsage: SettleUsage | undefined;
     let nativeObserver: NativeUsageObserver | undefined;
+    let lifecycle: ReturnType<typeof nativeLifecycle> | undefined;
     let nativeServedModelId: string | undefined;
     try {
       signal?.throwIfAborted();
@@ -71,18 +74,22 @@ export const runRouteJsonFlow = async (
       );
       signal?.throwIfAborted();
       const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
+      if (nativeInvoked && !native) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
       signal?.throwIfAborted();
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       if (native) {
         const nativeRequest = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
         nativeObserver = new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body));
+        lifecycle = nativeLifecycle(nativeObserver, nativeRequest.finalize,
+          { requestId: nativeRequest.requestId, attemptRef: attempt.attemptRef });
+        nativeInvoked = true;
         const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
         assertNativeMessagesResult(result, 'json');
         if (result.kind !== 'json') throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
         nativeObserver.observeJson(result.body);
         signal?.throwIfAborted();
-        const snapshot = nativeObserver.snapshot('completed');
+        const snapshot = lifecycle.finish('completed');
         observedUsage = nativeSnapshotUsage(snapshot);
         if (!snapshot.fallbackPresent && !snapshot.iterationsPresent) nativeServedModelId = snapshot.nativeServedModelId;
         encoded = result;
@@ -102,7 +109,10 @@ export const runRouteJsonFlow = async (
         throw await refuseNativeAttempt(attempt, () => settle('failed'));
       }
       const classification = classifyRouteError(error, signal?.aborted);
-      const usage = nativeObserver ? nativeSnapshotUsage(nativeObserver.snapshot(signal?.aborted ? 'cancelled' : 'upstream_error'))
+      const termination = signal?.aborted ? 'cancelled' : error instanceof NativeMessagesUpstreamError
+        && error.code === 'native_protocol_error' ? 'protocol_error'
+        : error instanceof NativeMessagesUpstreamError && error.code === 'timeout' ? 'timeout' : 'upstream_error';
+      const usage = lifecycle ? lifecycle.usage(termination)
         : errorUsage(error, observedUsage ?? (invoked ? estimate() : routeUsage()));
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
