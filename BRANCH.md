@@ -313,7 +313,7 @@
   - [x] Row 59 — T2a: module registry/range/topology expectations accept both supported minors and reject upper boundaries/prereleases, retaining lower-tuple negatives; pre-typecheck PASS, cluster 404/0 (34 skipped).
   - [x] T1 post-gates — Mesh 385/0, gateway 1143/0, cluster 394/0 (34 skipped), all package typechecks and API typecheck PASS; generated mesh cache EACCES resolved with worktree-only clean-node-modules before cluster retry.
   - [x] Row 60 — T2b: remaining integration label and packaging skew/optional-install range expectations updated; version pins moved into T1, old skew negatives retained; pre-typecheck PASS, cluster 404/0 (34 skipped); selected train fixture/integrities remain T3 work.
-  - [ ] Row 61 — T2c: cluster 0.14.0 CHANGELOG/README tuple and widened ranges; preserve other release entries.
+  - [x] Row 61 — T2c: cluster 0.14.0 CHANGELOG/README target tuple, widened ranges and retained baseline; other release entries preserved, final archive/selected-lock qualification remains T3; pre-typecheck PASS, cluster 404/0 (34 skipped).
   - [ ] Release gates — After each commit, sequential mesh typecheck/tests, gateway typecheck/tests, cluster typecheck/tests; API typecheck additionally after T1; all three ports and ENV last, stop on stall/ENOSPC.
   - [ ] Release handoff — Conductor launches Gemini cross-review; no local review launch, push, tag, publication or provider call; print SHAs, changed-line counts and test counts.
   - [x] Pass 13 checklist recorded before stage implementation: documentation rows 53–57 only; release train rows 58–61 remain conductor-owned.

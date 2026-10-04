@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.0
+
+- Widen the optional LLM peer ranges to llm-mesh `>=0.22.0 <0.24.0` and
+  llm-gateway `>=0.19.0 <0.21.0` for the native Anthropic relay release train:
+  cluster-mesh 0.14.0, llm-mesh 0.23.0 and llm-gateway 0.20.0.
+- Retain the previously qualified llm-mesh 0.22.x / llm-gateway 0.19.x tuple.
+  llm-mesh 0.24.0, llm-gateway 0.21.0 and prereleases remain outside the window;
+  the old 0.21.x / 0.18.x skew is still refused. Existing topology and lazy-load
+  behavior is unchanged beyond the two accepted ranges.
+- Gateway 0.20.0 requires llm-mesh `^0.23.0`; upgrade those providers together
+  and retain one physical llm-mesh shared with the gateway. mcp-auth
+  `>=0.2.1 <0.3.0`, auth-hono `^0.15.0` and jose `^5.10.0` remain unchanged.
+
 ## 0.13.0
 
 - Move the optional peers to the Lot D release tuple: llm-mesh `>=0.22.0 <0.23.0`
