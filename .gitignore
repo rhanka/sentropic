@@ -55,6 +55,7 @@ registry/
 
 # tmp workspace clones
 /tmp/
+/.tmp/ci-prod-image/
 
 # Graphify runtime state
 .graphify/
