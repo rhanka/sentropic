@@ -309,7 +309,7 @@ export const createGatewayRouter = (
             const next = await streamResult.stream.next();
             if (closed) return;
             if (next.done) { closed = true; detach(); controller.close(); }
-            else controller.enqueue(new TextEncoder().encode(next.value.raw));
+            else controller.enqueue('bytes' in next.value ? next.value.bytes : new TextEncoder().encode(next.value.raw));
           } catch (error) {
             if (!closed) { closed = true; detach(); controller.error(error); }
           }

@@ -355,11 +355,13 @@ export const runJsonFlow = async (
  * here — `runStreamFlow` rejects with a provider-shaped `GatewayError` instead
  * (#6), so the router can return a real HTTP error, never an empty 200.
  */
+export interface GatewayNativeStreamBytes { readonly bytes: Uint8Array; }
 export interface GatewayStreamResult {
+  readonly relay?: 'native';
   readonly headers?: ProviderResponseHeaders;
   /** Gateway-resolved provider and model that received the request. */
   readonly servedTarget: ResolvedTarget;
-  readonly stream: AsyncGenerator<GatewayDispatchStreamEvent, void, unknown>;
+  readonly stream: AsyncGenerator<GatewayDispatchStreamEvent | GatewayNativeStreamBytes, void, unknown>;
 }
 
 /**
