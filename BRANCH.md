@@ -71,6 +71,7 @@
   - [ ] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight.
   - [x] Adapt host component shadow/focus/shrink/opacity utilities and matching print selectors.
   - [x] Adapt route utilities, matrix gradients/overlays, and editable-field focus outlines.
+  - [x] Preserve the four matrix header gradients' sRGB interpolation explicitly with Tailwind 4 modifiers.
   - [x] Regenerate root/standalone UI locks through make; commit generated locks separately.
   - [x] Regenerate root lock; workspace UI/API SCA pass and braces is absent.
   - [x] Regenerate standalone UI lock; patched brace-expansion/devalue and no HIGH/CRITICAL.
