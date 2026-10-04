@@ -152,7 +152,7 @@ const handleImportComplete = async () => {
       {@const canClick = !isEnriching}
       <article
         {...(canClick ? { role: 'button', tabindex: 0 } : {})}
-        class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {isEnriching ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}"
+        class="rounded border border-slate-200 bg-white shadow-xs transition-shadow group flex flex-col h-full {isEnriching ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-md cursor-pointer'}"
         on:click={() => { if (canClick) openOrganization(organization); }}
         on:keydown={(e) => { if (canClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openOrganization(organization); } }}
       >
@@ -163,7 +163,7 @@ const handleImportComplete = async () => {
             </div>
             {#if !isReadOnly}
               <button
-                class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded flex-shrink-0"
+                class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded shrink-0"
                 on:click|stopPropagation={() => handleDeleteOrganization(organization.id)}
 	                title={$_('organizations.delete')}
               >
@@ -184,7 +184,7 @@ const handleImportComplete = async () => {
             <div class="flex-1 min-w-0">
                     <h2 class="text-lg sm:text-xl font-medium truncate text-purple-800 group-hover:text-purple-900 transition-colors">{organization.name}</h2>
             </div>
-            <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
               {#if !isReadOnly}
                 <button
                   class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"

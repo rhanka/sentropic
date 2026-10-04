@@ -415,7 +415,9 @@ test.describe('Page Paramètres', () => {
         throw new Error(`Impossible d'ajouter user-b en viewer (status ${addRes.status()})`);
       }
 
-      const userAContext = await browser.newContext({ storageState: USER_A_STATE });
+      const userAContext = await browser.newContext({
+        storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceLiveId),
+      });
       const userBContext = await browser.newContext({ storageState: USER_B_STATE });
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
