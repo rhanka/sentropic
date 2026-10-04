@@ -120,6 +120,7 @@
   - [x] Apply Lot 1 review registry, cache-log and tools-hash findings with failing-then-passing checks in `scripts/ci/test-api-tooling.sh`, wired into CI.
   - [x] Purge `/root/.npm` from production alongside npm/npx; add a runtime regression gate for CLI, global package tree and cache absence.
   - [x] Trigger CI for toolbox `tools/**` and regression-script changes so hash invalidation and its tests are exercised.
+  - [x] Recheck all four regressions, ShellCheck/actionlint, scope/hash coverage, source unit (1011 passed, 2 skipped), production scan (zero findings), restore (9), smoke (13), limit (4) and compiled IdP browser smoke after review fixes.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app smoke verification on running stack.
