@@ -95,7 +95,7 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
-- [x] Pass 08 independent reproductions — fixed by reviewer per build mode: all 21 supplied re-review reproductions promoted unchanged to permanent native-review-regressions.test.ts; Gemini fix review GO (0 BLOCKER/MAJOR/MINOR); 144 changed lines including plan, post-commit gates in pass report.
+- [x] Pass 08 independent reproductions — fixed by reviewer per build mode: all 21 supplied re-review reproductions promoted unchanged to permanent native-review-regressions.test.ts; Gemini fix review GO (0 BLOCKER/MAJOR/MINOR); 143 changed lines including plan; typecheck PASS, tests 673 passed / 0 failed.
 - [x] Pass 08 M6-R — fixed by reviewer per build mode: independent safe raw evidence, null/invalid omission, explicit zero and prior evidence retained; permanent mixed-validity, incomplete, fractional/nonfinite/unsafe start/delta regressions. Scoped reproduction: 5 failed / 10 passed; post-commit gateway gates recorded in pass report.
 - [x] Pass 08 M4-R — fixed by reviewer per build mode: output validity is independent of start/delta input proof, with invalid-output uncertainty and permanent start/input-bearing/output-only regressions. Scoped reproduction confirmed start/delta proof failures; post-commit gateway gates recorded in pass report.
 - [x] Pass 08 R1 — fixed by reviewer per build mode: valid cumulative output accepted independently of input updates; permanent V-1, output-only, rejected-input and decrease regressions. Scoped repro: 1 failed / 5 passed before fix; gateway typecheck PASS and full tests 643 passed / 0 failed after fix.
@@ -167,7 +167,7 @@
   - [x] Row 24 — planned 130, reconciled 140 (<=149); `src/native-sse.ts`: bounded byte SSE framer with 1 MiB frame ceiling and stream generator. Typecheck PASS; tests 628 passed / 0 failed.
   - [x] Row 25 — `tests/native-sse.test.ts`: CR/LF/CRLF, split UTF-8, chunk boundaries, comment parsing and 1 MiB frame overflow. Typecheck PASS; tests 634 passed / 0 failed.
   - [x] Row 25a — planned 120, reconciled 140 (<=149); `src/native-usage.ts`: L2/K1 nullable cumulative contract, reported/inferred TTL split; N5 permanently revokes malformed proof before row 26. Typecheck PASS; tests 634 passed / 0 failed.
-  - [ ] Row 26 — `src/native-usage.ts`: cumulative usage fold, final output provenance and unsuccessful termination.
+  - [x] Row 26 — `src/native-usage.ts`: JSON/SSE cumulative fold, immutable physical/raw pre-floor snapshot, delta-plus-clean-stop final output and unsuccessful termination; N4 finite decrease receipt compares accepted reported categories. Post-commit gates in pass report.
   - [ ] Row 26a — `src/native-usage.ts`: served-model/mismatch/fallback/iterations latch; null/[] absent.
   - [ ] Row 26b — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: JSON/SSE identities and no cross-iteration fold.
   - [ ] Row 27 — `src/native-usage.ts`: sourced model cache multipliers and integer-rational units40.
