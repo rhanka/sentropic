@@ -46,6 +46,7 @@ Synchronize prod identities and explicitly granted consents into preprod through
 - `acknowledge` resolved locally by DEV on 2026-10-04: validated failure codes and UUID-only pairs replace the failed-Job audit fallback; the selftest output probe passes without fixture audits or summaries. Lot 3 remains with the conductor.
 - `acknowledge` review follow-up resolved by DEV on 2026-10-04: F1–F4/F6–F9 fixed and tested; F5 retained per conductor decision. Review evidence: `.h2a/inputs/review-br45b.md`.
 - BR45b-EX1 — Owner decision "Synchro des consentements" (2026-10-04, `.h2a/inputs/consent_brief.md`): permit consent SQL, six read-only consent column grants and the versioned ConfigMap client map. Include the prod CronJob's checksum/snapshot parsing because its hardcoded three-file manifest cannot transport the new export correctly. Impact: four-file relay and transactional mapped consent convergence; no trusted-client bypass or Kubernetes privilege/trigger change. Rollback: revert the Lot 4 commits.
+- `acknowledge` Lot 4 implemented by DEV on 2026-10-04 under BR45b-EX1: SQL gate 50 PASS lines; selftest 36 PASS, 0 failures. Consent review, PR CI, push and rollout remain conductor-owned.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -86,13 +87,13 @@ Synchronize prod identities and explicitly granted consents into preprod through
   - [ ] CI green on the PR.
   - [ ] Remove `BRANCH.md` before merge.
 
-- [ ] **Lot 4 — Consent sync**
+- [x] **Lot 4 — Consent sync**
   - [x] Grant six consent columns to the reader and export consents in the identity snapshot with its count.
   - [x] Ship the versioned prod-to-preprod client map in the preprod SQL ConfigMap, absent from the relay.
   - [x] Require four relay files and consent counts; classify consent map and postcondition failures safely.
   - [x] Transactionally upsert mapped prod consents and remove missing/revoked grants for prod users; retain preprod-only and unmapped grants, clients and signing keys.
   - [x] Audit changed upserts/removals; unchanged reruns report 0/0.
-  - [ ] SQL fixtures cover owner scopes, Farid removal, preserved grants, scope changes, revocation, missing/duplicate map targets, consent rollback, DV5 and reader grants.
+  - [x] SQL fixtures cover owner scopes, Farid removal, preserved grants, scope changes, revocation, missing/duplicate map targets, consent rollback, DV5 and reader grants.
   - [x] Selftest verifies new audit counts/codes, four-file manifest and ConfigMap-only map.
-  - [ ] README documents consent semantics, versioned mapping and fail-closed rollout order.
-  - [ ] Lot gates: `make test-idp-sync-sql ENV=test-idp-sync-codes` and `make test-idp-sync-selftest ENV=test-idp-sync-codes`.
+  - [x] README documents consent semantics, versioned mapping and fail-closed rollout order.
+  - [x] Lot gates: `make test-idp-sync-sql ENV=test-idp-sync-codes` and `make test-idp-sync-selftest ENV=test-idp-sync-codes`.

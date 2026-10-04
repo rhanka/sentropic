@@ -6,6 +6,7 @@ SELECT test_assert((SELECT email_verified FROM users WHERE id = '1b9b9e15-2956-4
 SELECT test_assert((SELECT count(*) FROM users WHERE email = 'owner@example.invalid') = 1, 'zero owner email collisions');
 SELECT test_assert((SELECT count(*) FROM users WHERE id = 'preprod-only') = 1, 'preprod-only user kept');
 SELECT test_assert((SELECT count(*) FROM users WHERE id = 'prod-user-8') = 1, 'missing prod user inserted');
+SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = 'prod-user-8'), 'new user without prod consent gets no automatic grant');
 SELECT test_assert((SELECT count(*) FROM users WHERE approved_by_user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096') = 7, 'approval self FK');
 SELECT test_assert((SELECT user_id FROM chat_sessions WHERE id = 'duplicate-chat') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'chat FK repointed');
 SELECT test_assert((SELECT created_by = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND assigned_to = created_by FROM comments WHERE id = 'duplicate-comment'), 'both comment FKs repointed');
