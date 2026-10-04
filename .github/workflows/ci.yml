@@ -177,7 +177,7 @@ jobs:
               - 'docker-compose.test.yml'
               - 'docker-compose.ci.yml'
               - 'tools/**'
-              - 'scripts/ci/test-api-tooling.sh'
+              - 'scripts/test-api-tooling.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
@@ -1583,7 +1583,7 @@ jobs:
       - name: Publish API image
         run: make publish-api-image
       - name: Push main alias tag (API)
-        run: make publish-api-main
+        run: make publish-api-main-image
 
   # Release train (BRDP-EX10): llm-mesh -> llm-gateway -> cluster-mesh publish in a strict chain,
   # never before the three train validations pass (a validation counts as skipped only when its
