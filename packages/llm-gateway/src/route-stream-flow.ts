@@ -3,7 +3,7 @@ import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-s
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, routeUsage,
-  settleRouteRequest, terminalGatewayError,
+  settleRouteRequest, terminalGatewayError, retainRouteBody,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
@@ -51,7 +51,8 @@ const trackedExecution = (input: {
   let priming = true;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
   const isCancelled = () => terminal === 'cancelled';
-  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
+  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.())
+    .catch(() => undefined).finally(() => request.bodyLease?.release());
   const usage = (): SettleUsage => reported ?? ({
     inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
     outputTokens: Math.min(1_000_000, Math.ceil(outputCharacters / 4)), estimated: true,
@@ -161,6 +162,7 @@ export const runRouteStreamFlow = async (
   request: GatewayFlowRequest,
 ): Promise<GatewayStreamResult> => {
   const prepared = await prepareRouteFlow(deps, request);
+  retainRouteBody(prepared, request);
   const attempts: RouteAttemptSettlement[] = [];
   const signal = request.signal ?? request.authContext.signal;
   let settled = false;
@@ -194,7 +196,7 @@ export const runRouteStreamFlow = async (
       invoked = true;
       if (native) {
         const controller = new AbortController();
-        const nativeRequest = buildNativeMessagesRequest(prepared, request, native, controller.signal);
+        let nativeRequest = buildNativeMessagesRequest(prepared, request, native, controller.signal);
         nativeExecution = nativeStreamExecution({ attempt: preparedAttempt, controller, signal,
           requestId: nativeRequest.requestId, finalize: nativeRequest.finalize,
           observer: new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body)),
@@ -203,6 +205,8 @@ export const runRouteStreamFlow = async (
             sentBetas: [nativeRequest.headers.forwarded['anthropic-beta'] ?? ''] } });
         nativeInvoked = true;
         const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
+        // N1: execute has finished/cancelled upload and exposes response-only host state.
+        nativeRequest = undefined!;
         const reader = nativeResponseReader(result);
         if (reader) nativeExecution.attach(reader, result.requestSize);
         assertNativeMessagesResult(result, 'stream');
@@ -212,6 +216,7 @@ export const runRouteStreamFlow = async (
         committingNative = true;
         await preparedAttempt.markCommitted();
         signal?.throwIfAborted();
+        request.bodyLease?.detach();
         return { relay: 'native', servedTarget: servedTargetFor(diagnostic), headers: result.headers,
           stream: nativeExecution.expose() };
       }
