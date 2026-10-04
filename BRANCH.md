@@ -4,7 +4,7 @@
 - [ ] Deliver spec_v8 plus its N1–N7 addendum: opaque native Messages, count_tokens and joined usage observation with one financial settlement.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/llm-gateway-native-relay`, branch `feat/llm-gateway-native-relay`, base `7d1002505`; mechanical branch check passed.
+- [x] Worktree `tmp/llm-gateway-native-relay`, branch `feat/llm-gateway-native-relay`, rebased base `12be48eeb`; mechanical branch check passed.
 - [x] Implementer pass 01: rows 0a, 0b, 1, 1a, 2, 3 in order; conductor `s-conductor` owns later passes and review.
 - [x] Make-only, Docker-first; English text; no Python, real provider calls, push, merge or publication.
 - [x] Every commit is one row or declared split, at most 149 additions plus deletions including this file; selective staging and scope-check before commit.
@@ -37,6 +37,21 @@
   - `packages/llm-gateway/package.json`
   - `packages/llm-gateway/CHANGELOG.md`
   - `packages/llm-gateway/README.md`
+  - `packages/llm-mesh/package.json` (BR-REL-EX1, T1)
+  - `api/package.json` (BR-REL-EX4 activated under conductor Q11, gateway range only)
+  - `package-lock.json` (BR-REL-EX3, generated affected workspace tuple only)
+  - `packages/cluster-mesh/package.json` (BR-REL-EX3, T1 tuple and two peer ranges only)
+  - `packages/cluster-mesh/src/modules/catalog.ts` (BR-REL-EX3, two LLM ranges only)
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts` (BR-REL-EX3, T2a)
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts` (BR-REL-EX3, T2a)
+  - `packages/cluster-mesh/tests/modules/topology.spec.ts` (BR-REL-EX3, T2a)
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR-REL-EX3, T2b)
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (BR-REL-EX3, T2b)
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts` (BR-REL-EX3, T2b)
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (BR-REL-EX3, T2b)
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts` (BR-REL-EX3, T2b)
+  - `packages/cluster-mesh/CHANGELOG.md` (BR-REL-EX3, T2c)
+  - `packages/cluster-mesh/README.md` (BR-REL-EX3, T2c)
   - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
   - `spec/SPEC_EVOL_LLM_GATEWAY.md`
   - `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md`
@@ -76,6 +91,7 @@
   - `api/src/services/llm-metering/cost-ledger-sink.ts`
   - `api/tests/**`
   - `package-lock.json`
+  - `api/package.json`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/src/modules/catalog.ts`
   - `packages/cluster-mesh/CHANGELOG.md`
@@ -97,6 +113,7 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
+- [x] Row 58 green-commit decision — Conductor approved moving minimal literal updates for exactly seven failed cluster assertions from rows 59–60 into T1; includes the remaining version pins within those same cases. Keep T1 <=149 changed lines including this file; all remaining T2 expectations stay in rows 59–60.
 - [x] Pass 11 P2 — v8-addendum review MINOR applied before row 43: N3 storage is incremental after granted actual chunk bytes; Content-Length never sizes storage/reservations, raw backing capacity never exceeds grants and EOF performs no duplicate raw consolidation.
 - [x] Pass 09 terminal contract cleanup — implementer reproduced 2 failures: wrong stream-kind JSON result and invalid-status stream envelope left the returned reader open. Reader ownership now attaches before validation without pulling bytes; terminal snapshot is claimed before cleanup; permanent per-flow regression requires one close/finalize/settlement. Gateway gates and Gemini fix re-review recorded in pass09 report.
 - [x] Pass 08 independent reproductions — fixed by reviewer per build mode: all 21 supplied re-review reproductions promoted unchanged to permanent native-review-regressions.test.ts; Gemini fix review GO (0 BLOCKER/MAJOR/MINOR); 143 changed lines including plan; typecheck PASS, tests 673 passed / 0 failed.
@@ -107,7 +124,7 @@
 - [x] BR-REL-EX1 approved by frozen §2: rationale: mesh capability/planner/quote/attempt/error seams; impact: additive contracts, tests, exports, version and CHANGELOG only; rollback: revert mesh feature commits and tuple before release.
 - [x] BR-REL-EX2 approved by frozen §2: rationale: product native execution/count/classification/body-cap/M6 and trusted metering; impact: listed API paths only, no general metering refactor; rollback: disable switch and restart/redeploy, then revert API feature commits.
 - [x] BR-REL-EX3 approved under Q-A: rationale: coordinated §6.2 release train; impact: listed cluster/root files only, tuple/range literals, expectations, release docs and generated integrity; rollback: restore prior tuple/ranges and regenerate affected locks/archives before release.
-- [ ] BR-REL-EX4 RESERVED under conductor Q11: rationale: `api/package.json` gateway range must resolve the new exports; impact: only `@sentropic/llm-gateway` to `^0.20.0`; rollback: restore prior range with gateway tuple. Activate and declare its conditional path in the SAME commit as the gateway version bump; no API manifest write in pass 01.
+- [x] BR-REL-EX4 ACTIVATED under conductor Q11 in T1: rationale: `api/package.json` gateway range must resolve the new exports; impact: only `@sentropic/llm-gateway` to `^0.20.0`; rollback: restore prior range with gateway tuple.
 - [x] No open implementation blocker; stop for uncovered design, scope exception, unfixable row failure or real-call requirement.
 - [x] Pass 02 review remediation: M1 sticky affinity binding assertion and M2 native filter-order coverage (maxAttempts=1 and health suppression) verified in route-planner.test.ts.
 - [x] Pass 04 review remediation: M1 native validation channel restricted to NativeMessagesUpstreamError 400 with bounded §4.7 sanitization, fixed generic bad-request and both-wire negatives; M2 billing masked on 400 prior to type validation; M3 exact classifier token matched with V-2 official negatives; m1 non-control whitespace preserved; m2 12-char identifier minimum; m3 linear work instrumented and bounded; m4 row 19b restored.
@@ -291,6 +308,13 @@
   - [ ] File gate — Gateway handoff: build/typecheck/tests plus existing standalone process typecheck/tests; forbidden apps paths remain untouched.
   - [ ] File gate — Pass 03 boundary: implement rows 10–15 only, report commits/counts/gates/status; later rows stay unchecked for conductor-owned passes.
 - [ ] Stage 3 — Contract documentation and atomic release train: rows 53–61 (T1 activates reserved EX4).
+  - [x] Release checklist — Rows 58–61 sequential; T1 stays atomic with the seven-failure expectation updates under 150 changed lines; registry baseline mesh 0.22.3/gateway 0.19.1/cluster 0.13.0 verified before bump.
+  - [x] Row 58 — T1: three package versions, gateway mesh dependency, cluster peer/catalog ranges, EX4 API dependency and generated root lock plus seven-failure expectation updates; pre-typechecks PASS, mesh 385/0, gateway 1143/0, cluster 394/0 (34 skipped).
+  - [ ] Row 59 — T2a: module registry/range/topology expectations accept both qualified minors and reject upper boundaries/prereleases, retaining lower-tuple negatives.
+  - [ ] Row 60 — T2b: integration version pins and packaging skew/optional-install range expectations only; selected train fixture/integrities remain T3 work.
+  - [ ] Row 61 — T2c: cluster 0.14.0 CHANGELOG/README tuple and widened ranges; preserve other release entries.
+  - [ ] Release gates — After each commit, sequential mesh typecheck/tests, gateway typecheck/tests, cluster typecheck/tests; API typecheck additionally after T1; all three ports and ENV last, stop on stall/ENOSPC.
+  - [ ] Release handoff — Conductor launches Gemini cross-review; no local review launch, push, tag, publication or provider call; print SHAs, changed-line counts and test counts.
   - [x] Pass 13 checklist recorded before stage implementation: documentation rows 53–57 only; release train rows 58–61 remain conductor-owned.
   - [x] Row 53 — Routing §4.12: exact-model quote/planner/prepared feasibility, ten selection cases, empty qualification list and standalone safeguards refusal; sequential gateway pre/post-commit gates in packet report.
   - [x] Row 54 — Routing §5.3 terminal numeric 413 and §5.4 verbatim frozen owner-accepted native exception; account-id/credential/internal-header and canonical invariants retained; sequential gateway pre/post-commit gates in packet report.
