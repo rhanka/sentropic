@@ -36,7 +36,7 @@ import type {
   ProviderResponseHeaders,
 } from './ports/dispatch.js';
 import type { PoolSelection, PoolSelectionRequest } from './ports/pool.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { ProviderRateLimitError } from './internal/provider-rate-limit-error.js';
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
 
@@ -310,9 +310,18 @@ export const runJsonFlow = async (
     let response: GatewayDispatchResponse;
     try {
       response = await deps.config.dispatch.dispatch(dispatchRequest);
-    } catch {
-      await settle(deps, request, prepared, 'failed', undefined);
-      throw new GatewayError('pooled-account-unavailable', 'dispatch failed', undefined, prepared.target);
+    } catch (error) {
+      const tooLarge = gatewayRequestTooLargeError(error, prepared.target);
+      try { await settle(deps, request, prepared, 'failed', undefined); }
+      catch (callbackError) { if (!tooLarge) throw callbackError; }
+      throw tooLarge ?? new GatewayError('pooled-account-unavailable', 'dispatch failed', undefined, prepared.target);
+    }
+
+    const tooLarge = gatewayRequestTooLargeError(response, prepared.target);
+    if (tooLarge) {
+      try { await settle(deps, request, prepared, 'failed', extractUsage(request.wire, response.body)); }
+      catch { /* Preserve the terminal numeric refusal. */ }
+      throw tooLarge;
     }
 
     const ok = response.status >= 200 && response.status < 300;
@@ -419,7 +428,8 @@ export const runStreamFlow = async (
       break; // Success — first byte received (or empty stream)
     } catch (error) {
       // Pre-first-byte failure: check if it's a 429 for retry.
-      if (error instanceof ProviderRateLimitError && attempt < maxRetries) {
+      const tooLarge = gatewayRequestTooLargeError(error, prepared.target);
+      if (!tooLarge && error instanceof ProviderRateLimitError && attempt < maxRetries) {
         // Clean up the failed stream iterator to release transport resources.
         await iterator?.return?.();
         await settle(deps, request, prepared, 'rate_limited', undefined, error.retryAfterMs);
@@ -431,6 +441,7 @@ export const runStreamFlow = async (
         }
       }
       const unknownModel = isUnknownModelStreamOpenError(error);
+      if (tooLarge) { try { await iterator?.return?.(); } catch { /* Refusal wins. */ } }
       try {
         await settle(deps, request, prepared, 'failed', undefined);
       } catch {
@@ -438,6 +449,7 @@ export const runStreamFlow = async (
         // mapper would turn the settle error into overloaded_error. One
         // attempt, swallowed, never exposed; the terminal refusal wins.
       }
+      if (tooLarge) throw tooLarge;
       if (unknownModel) {
         throw new GatewayError('unknown-model', 'unknown model', undefined, prepared.target);
       }
