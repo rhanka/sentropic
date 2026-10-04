@@ -60,7 +60,7 @@
   - [x] Capture five baseline pages and computed styles via the visual parity spec; all pass.
   - [x] Baseline build/typecheck pass; UI tests: 83 files, 489 tests pass.
   - [x] Write `.h2a/build/lot0_report.md`; commit scoped plan and capture harness.
-- [ ] **Lot 1 — UI tooling and CSS migration**
+- [x] **Lot 1 — UI tooling and CSS migration**
   - [x] Preserve the 94 used palette values in `ui/src/tailwind-theme.css`.
   - [x] Upgrade UI Tailwind/svelte-check; CSS-first PostCSS integration for all Vite builds.
   - [x] Replace directives/config with CSS theme/source declarations and preserve custom colors and affected v3 defaults.
@@ -68,11 +68,12 @@
   - [ ] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight.
   - [x] Adapt host component shadow/focus/shrink/opacity utilities and matching print selectors.
   - [x] Adapt route utilities, matrix gradients/overlays, and editable-field focus outlines.
-  - [ ] Regenerate root/standalone UI locks through make; commit generated locks separately.
+  - [x] Regenerate root/standalone UI locks through make; commit generated locks separately.
   - [x] Regenerate root lock; workspace UI/API SCA pass and braces is absent.
   - [x] Regenerate standalone UI lock; patched brace-expansion/devalue and no HIGH/CRITICAL.
-  - [ ] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
+  - [x] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
 - [ ] **Lot 2 — Related trees and qualification**
+  - [x] Migrate standalone IdP tooling and CSS-first config while preserving auth host defaults.
   - [ ] Audit API and standalone UI/IdP trees; migrate same-chain consumers as required.
   - [ ] Build UI web/Chrome/VSCode via `make build-ui` and production image for E2E.
   - [ ] Run `make typecheck`, `make lint`, `make test-ui`, and all SCA targets.
