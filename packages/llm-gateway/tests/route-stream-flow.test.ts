@@ -55,9 +55,9 @@ const attempt = (events: () => AsyncIterable<StreamEvent>, hooks: string[]): Pre
   async releaseCancelled() { hooks.push('cancelled'); },
 });
 
-const collect = async (stream: AsyncIterable<{ raw: string }>) => {
+const collect = async (stream: AsyncIterable<{ raw: string } | { bytes: Uint8Array }>) => {
   let raw = '';
-  for await (const frame of stream) raw += frame.raw;
+  for await (const frame of stream) raw += 'bytes' in frame ? new TextDecoder().decode(frame.bytes) : frame.raw;
   return raw;
 };
 
@@ -219,7 +219,7 @@ describe('route stream flow', () => {
     }, hooks);
     const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request);
     let raw = '';
-    await expect((async () => { for await (const frame of result.stream) raw += frame.raw; })())
+    await expect((async () => { for await (const frame of result.stream) raw += 'bytes' in frame ? new TextDecoder().decode(frame.bytes) : frame.raw; })())
       .rejects.toThrow('ledger failure');
     expect(raw).not.toContain('[DONE]');
     expect(raw).not.toContain('"finish_reason":"stop"');
