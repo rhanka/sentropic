@@ -220,7 +220,10 @@
   - [x] Row 42b — Both-wire canonical JSON/open/in-band error and native JSON/open/frame matrices: typed/status/code/cause 413, planned second candidate unused, rejecting outcome/sink combinations preserve refusal, reader closure, single attempt/finalize/settlement and allowance floors; gateway gates recorded in pass10 report.
   - [x] Row 42c — Real loopback outgoing UTF-8 measurement/serialize-once, trusted/unknown/N<=L limits, HTTP JSON/SSE and pre/late SSE 413 fidelity with private prose/forged numeric fields discarded; gateway gates recorded in pass10 report.
   - [x] Row 43 — Streaming actual-byte cap, trusted request-local read/parse cache, exact chunk backing storage and incremental UTF-8 decode without raw consolidation; N3/P2 applies now; gateway gates in pass11 report.
-  - [ ] Row 43p1 — N1 contract: native host upload completes/cancels and detaches before result; canonical streams retain full N until terminal cleanup.
+  - [x] Row 43p1 — N1 chooses the host obligation, without a new release channel; gateway may shrink only after its own detachment; gateway gates in pass11 report.
+  - [x] N1 native contract — Before commit-ready SSE or JSON/count completion, host finishes/cancels upload and drops body, serialization and views; fetch headers alone prove nothing. Iterators/readiness/abort/finalize closures retain response state and bounded metadata only.
+  - [x] N1 canonical contract — Canonical SDK/Chat Completions retain measured N through operation/retries and stream completion/cancellation/error cleanup, including never-consumed streams; iterator resolution and first-frame commit do not shrink N.
+  - [ ] N1 host gates — Rows 65b/69c/70a2 prove native reference holders empty before commitment, early-response upload cancellation, JSON/count detachment and canonical SDK lifetime with counted holders; V-3 mixes open native and canonical streams.
   - [ ] Row 43p2 — N2 contract: detach/release once on every pre-dispatch refusal, preserving original financial/observation behavior.
   - [ ] Row 43p3 — N3 contract: raw backing capacity <= granted bytes, no geometric slack/duplicate consolidation allocation.
   - [ ] Row 43a — Shared default byte pool: reserve actual chunks before retention; typed capacity refusal.
