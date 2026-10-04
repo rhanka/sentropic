@@ -2262,7 +2262,8 @@ up-api-test-ci: ci-test-env ## Start source API from the cached toolbox; no inst
 .PHONY: up-api-sut down-api-ci logs-api-ci
 up-api-sut: ci-test-env ## Start the shipped API as-is; boot owns migrations
 	$(CI_COMPOSE) up -d --wait postgres maildev scw-tem-mock
-	$(CI_COMPOSE) up --no-build -d --wait api-sut
+	# The app treats any nonempty value as disabled; the runner expects literal false.
+	DISABLE_RATE_LIMIT=$(if $(filter false 0,$(DISABLE_RATE_LIMIT)),,$(or $(DISABLE_RATE_LIMIT),true)) $(CI_COMPOSE) up --no-build -d --wait api-sut
 down-api-ci: ## Stop the isolated CI source/SUT stack
 	$(CI_COMPOSE) down
 logs-api-ci: ## Print source and production SUT logs
