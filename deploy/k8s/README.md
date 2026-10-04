@@ -21,6 +21,12 @@ overlay (BR-55c/d); the preprod overlay is `overlays/preprod/` (BR-55b — see
 
 ## Files (under `base/`, except the ingress which is in `overlays/prod/`)
 
+The prod and preprod overlays also include dormant `idp-identity-sync/` bundles
+for CD-driven identity export/import. Bootstrap ownership, dry-run acceptance,
+rollback and credential rotation are documented in
+[the IdP sync runbook](../ci/idp-identity-sync/README.md) and
+[its credential cycle](../ci/idp-identity-sync/CRED_CYCLE.md).
+
 - `10-rbac.yaml` — namespace-scoped ServiceAccount used by every Pod, with
   `imagePullSecrets: [{ name: sentropic-registry }]` so every Pod can pull
   from the SCW Container Registry.
