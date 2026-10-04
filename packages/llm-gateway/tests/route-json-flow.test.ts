@@ -58,6 +58,12 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
 });
 
 describe('native route JSON flow', () => {
+  it('omits unverified served identity on an untyped native reader/transport failure', async () => {
+    const h = nativeHarness({ execute: async () => { throw new TypeError('private transport failure'); } });
+    const response = await sendNative(h);
+    expect(response.status).toBe(503); expect(response.headers.get('x-sentropic-served')).toBeNull();
+    expect(response.headers.get('x-sentropic-relay')).toBeNull();
+  });
   it('forwards native response headers with credential/Connection exclusions and gateway authority last', async () => {
     const h = nativeHarness({ execute: async () => ({ kind: 'json', status: 200,
       headers: { 'anthropic-future': 'kept', 'anthropic-organization-id': 'org', 'request-id': 'provider',

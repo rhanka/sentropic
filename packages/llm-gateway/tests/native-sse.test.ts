@@ -151,4 +151,11 @@ describe('native SSE byte framer', () => {
     }
     expect(received).toEqual(['start', 'stop']);
   });
+  it('yields a completed first frame before a later overflow in the same transport chunk', async () => {
+    const first = enc(': ready\r\n\r\n');
+    const source = (async function* () { yield concatBytes([first, enc('x'.repeat(41))]); })();
+    const frames = parseNativeSseStream(source, 40);
+    expect((await frames.next()).value).toMatchObject({ rawBytes: first });
+    await expect(frames.next()).rejects.toBeInstanceOf(NativeSseFrameOverflowError);
+  });
 });
