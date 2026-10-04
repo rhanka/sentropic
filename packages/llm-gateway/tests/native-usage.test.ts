@@ -53,6 +53,19 @@ describe('native usage accumulator', () => {
     expect(acc2.getState().inputUsageValidated).toBe(false);
   });
 
+  it.each(['start', 'input delta', 'output delta'])('should preserve valid input with invalid output in %s (M4-R)', phase => {
+    const acc = new NativeCumulativeUsageAccumulator({ ...validStart,
+      ...(phase === 'start' ? { output_tokens: -1 } : {}) });
+    if (phase !== 'start') acc.applyDelta({ output_tokens: -1,
+      ...(phase === 'input delta' ? { input_tokens: 200 } : {}) });
+    expect(acc.getState()).toMatchObject({ inputUsageValidated: true, proofRevoked: false,
+      physicalInput: phase === 'input delta' ? 10400 : 10300,
+      estimated: true, uncertaintyReason: 'invalid_output' });
+    acc.applyDelta({ input_tokens: 10000.5, output_tokens: -1 });
+    expect(acc.getState()).toMatchObject({ inputUsageValidated: false, proofRevoked: true,
+      uncertaintyReason: 'invalid_input' });
+  });
+
   it('validates input update independently of output validity and revokes malformed input', () => {
     const acc = new NativeCumulativeUsageAccumulator(validStart);
     expect(acc.getState().inputUsageValidated).toBe(true);
