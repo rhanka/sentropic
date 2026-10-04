@@ -1,4 +1,4 @@
-import type { PreparedRouteAttempt, StreamEvent, RouteFailureClassification } from '@sentropic/llm-mesh';
+import type { NativeMessagesRequest, PreparedRouteAttempt, StreamEvent, RouteFailureClassification } from '@sentropic/llm-mesh';
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
@@ -196,7 +196,7 @@ export const runRouteStreamFlow = async (
       invoked = true;
       if (native) {
         const controller = new AbortController();
-        let nativeRequest = buildNativeMessagesRequest(prepared, request, native, controller.signal);
+        let nativeRequest: NativeMessagesRequest | undefined = buildNativeMessagesRequest(prepared, request, native, controller.signal);
         nativeExecution = nativeStreamExecution({ attempt: preparedAttempt, controller, signal,
           requestId: nativeRequest.requestId, finalize: nativeRequest.finalize,
           observer: new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body)),
@@ -206,7 +206,7 @@ export const runRouteStreamFlow = async (
         nativeInvoked = true;
         const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
         // N1: execute has finished/cancelled upload and exposes response-only host state.
-        nativeRequest = undefined!;
+        nativeRequest = undefined;
         const reader = nativeResponseReader(result);
         if (reader) nativeExecution.attach(reader, result.requestSize);
         assertNativeMessagesResult(result, 'stream');
