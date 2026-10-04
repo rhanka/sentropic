@@ -28,6 +28,7 @@
   - `api/package.json`
   - `api/package-lock.json`
   - `apps/auth-idp/web/**`
+  - `e2e/tests/05-i18n.spec.ts`
   - `packages/auth-ui/**`
   - `packages/chat-ui/**`
   - `Makefile`
@@ -42,6 +43,7 @@
 - [x] BR00-EX4 — standalone IdP web tooling/config if its audit retains the same chain; impact: auth-screen build; rollback: revert its migration and lock.
 - [x] BR00-EX5 — owner-authorized Makefile correction: remove the deleted Tailwind JS config from UI image hash inputs; impact: eliminates dangling-path warnings, CSS-first config is already hashed under ui/src; rollback: restore the old config/path together.
 - [x] BR00-EX6 — svelte-check 4 exposes incorrect public legacy-slot declarations in auth-ui/chat-ui; correct declarations and patch package versions, without runtime changes; impact: accurate consumer types; rollback: revert declarations, versions, and lock updates together.
+- [x] BR00-EX7 — i18n E2E matrix dialog locator references removed opacity utilities; locate the same dialog by its translated body; impact: resilient test selector, unchanged assertions/timeouts; rollback: revert the locator with the utility migration.
 
 ## AI Flaky tests
 - [x] No timeout increases or new flaky acceptance; record failures with exact evidence.
@@ -82,8 +84,8 @@
   - [x] Correct legacy-slot declarations and chat callback contracts exposed by svelte-check 4; UI/API and IdP checks pass without suppressions (auth-ui 0.7.4, chat-ui 0.34.1; registry versions verified).
   - [x] Declare existing ChatPanelShell streamClient and ChatContextPicker leading slot; align edit/clipboard callbacks and version snapshots.
   - [x] Audit API and standalone UI/IdP trees; workspace and all three standalone scans have zero HIGH/CRITICAL.
-  - [ ] Build UI web/Chrome/VSCode via `make build-ui` and production image for E2E.
-  - [ ] Run `make typecheck`, `make lint`, `make test-ui`, and all SCA targets.
+  - [x] Build UI web/Chrome/VSCode via `make build-ui`; production API/UI images and IdP build pass.
+  - [x] Run `make typecheck`, `make lint`, `make test-ui` (83 files/489 tests), and all SCA targets (zero HIGH/CRITICAL); auth-ui 49 and chat-ui 1,032 tests pass.
   - [x] Capture after migration and compare all five pages; `.h2a/build/visual_report.md` records all differences and the corrected 12px chat spacing.
   - [ ] Run full `make test-e2e` with assigned ports/ENV; investigate/fix failures.
   - [ ] Write `.h2a/build/lot2_report.md`; resolve review and scope findings.
