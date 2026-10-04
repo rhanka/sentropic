@@ -69,7 +69,17 @@ stage=pod-import-wrapper
 mkdir -p /work /sql
 ln -s "$import" /sql/import-preprod.sql
 sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
-wrapper() { PGDATABASE=preprod DRY_RUN=1 ALLOWED_REKEY="$pair" MAX_SNAPSHOT_AGE_S=7200 sh /workspace/deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh > /tmp/wrapper.log 2>&1; }
+wrapper() { PGDATABASE=preprod DRY_RUN=1 ALLOWED_REKEY="${WRAPPER_REKEY-$pair}" MAX_SNAPSHOT_AGE_S=7200 sh /workspace/deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh > /tmp/wrapper.log 2>&1; }
+reject_wrapper() {
+  stage="pod wrapper $1"
+  if wrapper; then exit 1; fi
+  extra=''
+  [ "$1" != rekey_not_allowed ] || extra=",\"rejected_rekey_pairs\":[\"$pair\"]"
+  grep -Fxq "{\"outcome\":\"failed\",\"code\":\"$1\"$extra}" /dev/termination-log
+  [ "$(cat /tmp/wrapper.log)" = "$1" ]
+  unchanged
+  echo "PASS: $stage"
+}
 wrapper
 grep -Fq '"outcome":"rolled_back"' /dev/termination-log
 grep -Fq '"post_users":9' /dev/termination-log
@@ -79,19 +89,25 @@ unchanged
 echo 'PASS: actual pod import wrapper emits safe rolled-back JSON audit'
 cp users.csv users.original
 printf 'tampered\n' >> users.csv
-if wrapper; then exit 1; fi
-grep -Fq 'relay integrity check failed' /tmp/wrapper.log
+reject_wrapper integrity_failed
 mv users.original users.csv
 echo 'PASS: pod wrapper rejects checksum tampering'
 cp snapshot.csv snapshot.original
 printf '2000-01-01 00:00:00,8,18\n' > snapshot.csv
 sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
-if wrapper; then exit 1; fi
-grep -Fq 'snapshot outside freshness window' /tmp/wrapper.log
+reject_wrapper stale_snapshot
 mv snapshot.original snapshot.csv
 sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
 unchanged
 echo 'PASS: pod wrapper rejects stale snapshot'
+WRAPPER_REKEY='' reject_wrapper rekey_not_allowed
+WRAPPER_REKEY='unknown>unknown' reject_wrapper rekey_not_allowed
+cp snapshot.csv snapshot.original
+printf '%s,9,18\n' "$snapshot" > snapshot.csv
+sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+reject_wrapper manifest_mismatch
+mv snapshot.original snapshot.csv
+sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
 reject 'empty rekey allowlist fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v expected_users=8 -v expected_webauthn=18 -f "$import"
 unchanged
 reject 'unknown rekey pair fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v allowed_rekey='unknown>unknown' -v expected_users=8 -v expected_webauthn=18 -f "$import"
@@ -101,6 +117,7 @@ unchanged
 # Test-only trigger tampers inside the import transaction after inv_before is captured.
 stage=install-dv5-tamper
 sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET client_secret_hash = 'synthetic-tamper'; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON users FOR EACH ROW EXECUTE FUNCTION test_tamper();"
+reject_wrapper dv5_invariant_changed
 reject 'DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -f "$import"
 unchanged
 sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
