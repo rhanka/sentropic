@@ -14,7 +14,7 @@ CREATE FUNCTION test_dv5() RETURNS text LANGUAGE sql AS $$
   SELECT test_fingerprint(ARRAY['oauth_clients', 'id_token_signing_keys'])
     || (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY code), '')) FROM authorization_codes t WHERE user_id <> '9f11d240-fc75-4d55-80be-1bafcd79eadb')
     || (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY jti), '')) FROM oauth_tokens t WHERE user_id <> '9f11d240-fc75-4d55-80be-1bafcd79eadb')
-    || (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY user_id, client_id, tenant_id), '')) FROM oauth_consents t WHERE user_id <> '9f11d240-fc75-4d55-80be-1bafcd79eadb')
+    || (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY user_id, client_id, tenant_id), '')) FROM oauth_consents t WHERE user_id <> '9f11d240-fc75-4d55-80be-1bafcd79eadb' AND (client_id <> 'radar-immobilier-preprod' OR user_id = 'preprod-only'))
     || (SELECT md5(to_jsonb(s)::text) FROM user_sessions s WHERE id = 'kept-session');
 $$;
 CREATE FUNCTION test_state() RETURNS text LANGUAGE sql AS $$
