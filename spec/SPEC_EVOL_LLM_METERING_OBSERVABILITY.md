@@ -5,6 +5,10 @@
 > **TO CONFIRM** (§6). Answers the owner blocker: *"is observability/metering correctly wired,
 > or is it a missing lib/layer?"* — for a gateway-first PERSONAL-PASSTHROUGH target.
 
+Sections 1–6 preserve the historical inspected study, not current deployment
+status. The native generation contract/status in §7 supersedes its older
+single-row and absent-persistence guidance for this branch.
+
 ## 1. Observability / metering MAP
 
 Legend: **captured** = the layer has usage/cost in hand; **emitted** = it hands it to a seam;
@@ -25,7 +29,7 @@ Legend: **captured** = the layer has usage/cost in hand; **emitted** = it hands 
 
 ## 2. What is actually wired vs not
 
-**Wired today: nothing that persists a usage or cost record.** Observability of LLM egress is
+**At the historical study snapshot: nothing persisted a usage or cost record.** Observability of LLM egress was
 NOT wired end-to-end. Every place usage exists, it is dropped before reaching storage:
 
 - **Drop #1 (non-stream).** Four of the five non-stream generate paths fabricate an OpenAI
@@ -180,3 +184,69 @@ Ordered, reversible-first. Each step: owning package · effort · reversibility 
   same tx as settle via the ARCH-14 outbox. Confirm the existing `control.event_outbox`
   (`api/drizzle/control/0000_*.sql`) is the intended transport and consumable from a metering sink.
   **TO CONFIRM.**
+
+## 7. Native generation: financial and observation roles
+
+The mesh/gateway package implements one usage fold, immutable terminal snapshot,
+bounded finalize and financial projection. Existing API admission/settlement and
+observe-only storage are present; native host transport/pricing/observer/audit
+wiring remains pending. Package fake-port tests do not prove database rows, live
+amounts or production enablement. Count_tokens creates neither ledger role.
+
+The native integration contract has exactly one **financial** cost_ledger row per
+settled generation request, hold_id IS NOT NULL, idempotency_key=server requestId.
+It aggregates charged attempts and is the sole debit/settlement-outbox authority.
+Native observations have hold_id IS NULL and cost_micro_usd IS NULL, keyed by a
+fresh stable attempt callId, with response_id=requestId. With product maxAttempts=1,
+expect one observation plus one financial row; multiple attempts may have separate
+started-response observations, never a second financial row. Preserve canonical
+call identities. Financial consumption/cost readers filter hold_id IS NOT NULL;
+physical observation readers select their separate role and never sum both.
+
+At every native terminal path the gateway synchronously claims one lifecycle,
+freezes one pre-financial-floor NativeUsageSnapshot and passes that exact object
+to settlement projection and once-only request.finalize. It carries physical/raw
+counts, selected/reported model, termination, final_output_observed, estimated,
+input proof/provenance, fixed uncertainty and growth-inference evidence. Missing
+counts remain absent, never zero/allowances. Finalize retains bounded snapshot and
+trusted identity only. The host must not fold bytes, select another uncertainty
+or finalize independently. Before execute/no successful response its observation
+is a no-op; counting never invokes finalize.
+
+Observation starts independently and is fail-open. The built helper bounds its
+own await at 1,000 ms, yielding observation_unavailable/hook_error or hook_timeout
+on failure. Settlement, reader closure and body release do not await even that
+bound. Late fulfillment/rejection cannot mutate snapshot or repeat cleanup/debit;
+timeout does not cancel an issued write or confirm persistence. Production gates
+still require a real joined observation. Persist only safe numeric usage and
+closed metadata, never safeguard_results, classifier context, headers/error prose.
+
+Physical input is U+R+aggregate writes once. Valid JSON/start proof requires safe
+matching served identity; cumulative start-derived deltas inherit absent/null
+categories and unchanged TTL splits. Growth alone uses eligible default 5m weight
+or 2x with cache_write_split_inferred separate from uncertainty; a clean valid
+turn can stay measured. Decrease/conflict/fractional/nonfinite/unsafe input rejects
+the update atomically and permanently revokes proof, retaining only safe physical
+lower bounds. Later growth cannot recover discounts or invent a missing anchor.
+Missing/null/[] iterations are absent; fallback/mismatch/substantive or malformed
+iterations latch served_model_mismatch. Never fold iteration arrays or combine
+conflicting model/start categories.
+
+Clean positive measured final usage is not floored. Interrupted streams with
+usable same-model input proof preserve accepted input and floor output only;
+no-proof cases floor both sides. Observations remain pre-floor, e.g. 500 observed
+output may correspond to 32,000 charged. Sourced policy anthropic-cache-2026-10-02
+uses units40=40U+50W5+80W1+4R (Sonnet 5/Opus 5), or 40U+50W5+80W1+R
+(Fable 5.1). Host pricing requires the hold's exact pinned provider/model, matching
+served ID, policy and bigint bounds minReadUnits*P <= units40 <= 80*P, with
+minReadUnits=4 (Sonnet/Opus) or 1 (Fable). Failed checks use
+full physical input rate; initial unknown write splits retain the conservative
+2x bound/floors. Selected-price and opaque feature/fallback uncertainty remains.
+
+Native latch audits reuse blocked_attempts.reason='overrun', even below the hold.
+That table has no attempts column: join blocked_attempts.request_id to financial
+cost_ledger.idempotency_key and inspect cost_ledger.attempts/served_model_mismatch.
+Observation joins use observation.response_id=financial.idempotency_key=
+X-Sentropic-Request-Id, never cost correlation ID/callId as the request join.
+Native audit persistence, exact-price validation and live row/amount parity remain
+later API/qualification gates; this contract adds no schema or migration.
