@@ -36,6 +36,20 @@ export function classifyJobStatus(status = {}) {
   if (Number(status?.succeeded) > 0 || conditions.some(c => c.type === 'Complete' && c.status === 'True')) return 'complete';
   return Number(status?.active) > 0 ? 'active' : 'pending';
 }
+export function failureSummary(raw) {
+  const codes = ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'rekey_not_allowed', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit', 'consent_client_missing', 'consent_postcondition_failed'];
+  const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
+  try {
+    const value = JSON.parse(raw);
+    if (!value || value.outcome !== 'failed' || !codes.includes(value.code) || Object.keys(value).some(k => !['outcome', 'code', 'rejected_rekey_pairs'].includes(k))) throw new Error();
+    if (value.code === 'rekey_not_allowed') {
+      if (!Array.isArray(value.rejected_rekey_pairs) || value.rejected_rekey_pairs.some(p => typeof p !== 'string' || !new RegExp(`^${uuid}>${uuid}$`).test(p))) throw new Error();
+      return { outcome: 'failed', code: value.code, rejected_rekey_pairs: [...value.rejected_rekey_pairs] };
+    }
+    if (Object.hasOwn(value, 'rejected_rekey_pairs')) throw new Error();
+    return { outcome: 'failed', code: value.code };
+  } catch { throw new Error('invalid import failure message'); }
+}
 export function validateRun(env = process.env, now = new Date()) {
   if (env.GITHUB_REF !== 'refs/heads/main') throw new Error('identity sync runs require main');
   const scheduled = env.GITHUB_EVENT_NAME === 'schedule';

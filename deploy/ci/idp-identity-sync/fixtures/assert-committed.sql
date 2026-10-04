@@ -6,6 +6,7 @@ SELECT test_assert((SELECT email_verified FROM users WHERE id = '1b9b9e15-2956-4
 SELECT test_assert((SELECT count(*) FROM users WHERE email = 'owner@example.invalid') = 1, 'zero owner email collisions');
 SELECT test_assert((SELECT count(*) FROM users WHERE id = 'preprod-only') = 1, 'preprod-only user kept');
 SELECT test_assert((SELECT count(*) FROM users WHERE id = 'prod-user-8') = 1, 'missing prod user inserted');
+SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = 'prod-user-8'), 'new user without prod consent gets no automatic grant');
 SELECT test_assert((SELECT count(*) FROM users WHERE approved_by_user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096') = 7, 'approval self FK');
 SELECT test_assert((SELECT user_id FROM chat_sessions WHERE id = 'duplicate-chat') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'chat FK repointed');
 SELECT test_assert((SELECT created_by = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND assigned_to = created_by FROM comments WHERE id = 'duplicate-comment'), 'both comment FKs repointed');
@@ -21,5 +22,9 @@ SELECT test_assert((SELECT last_used_at FROM webauthn_credentials WHERE id = 'pr
 SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), 'full DV5 fingerprints unchanged');
 SELECT test_assert(NOT EXISTS (SELECT FROM authorization_codes WHERE code = 'duplicate-code'), 'duplicate authorization code dropped');
 SELECT test_assert(NOT EXISTS (SELECT FROM oauth_tokens WHERE jti = 'duplicate-token'), 'duplicate OAuth token dropped');
-SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096'), 'duplicate consent dropped rather than moved');
+SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'synthetic-client'), 'duplicate unmapped consent dropped rather than moved');
+SELECT test_assert((SELECT scopes = ARRAY['openid', 'profile', 'email'] AND created_at = '2026-01-01' AND updated_at = '2026-10-01' FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'owner prod consent recreated with exact scopes and timestamps');
+SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = 'efd67056-fb60-42e6-a386-6264c854da55' AND client_id = 'radar-immobilier-preprod'), 'Farid without prod consent must consent');
+SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE user_id = 'preprod-only' AND client_id = 'radar-immobilier-preprod') = 1, 'preprod-only consent kept');
+SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE user_id = 'efd67056-fb60-42e6-a386-6264c854da55' AND client_id = 'synthetic-client') = 1, 'unmapped consent kept');
 SELECT test_assert((SELECT user_id FROM revoked_tokens WHERE jti = 'duplicate-revocation') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'revocation survives and is repointed');
