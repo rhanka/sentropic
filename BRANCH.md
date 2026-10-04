@@ -190,7 +190,7 @@
   - [x] Row 32.1 — `src/native-sse.ts`, `src/native-stream-errors.ts`, error mapper: yield the first complete frame before scanning later chunk bytes; eight bounded pre-commit error classes and sanitized late error bytes; gateway gates in pass09 report.
   - [x] Row 32.2 — `src/route-native-stream.ts`: response-only frame iterator, first-frame observation, original byte yields, one terminal execution, failure/cancel/EOF paths and raw-reader closure; gateway gates in pass09 report.
   - [x] Row 32.3 — Native dispatch/commit gate, exact first frame before markCommitted, no retry after rejected commit, native candidate-only retries, byte result union and direct router enqueue; test collector adapts union; header policy remains row 33; gateway gates in pass09 report.
-  - [ ] Row 32a — Stream lifecycle: shared snapshot and bounded observation task independent of settlement/reader cleanup.
+  - [x] Row 32a — Native stream terminal paths share `nativeLifecycle` snapshot and independent bounded finalize task; abort races pending reads, detaches listeners, aborts upstream and joins one terminal completion/reader closure; gateway gates in pass09 report.
   - [ ] Row 33 — `src/router/index.ts`, result types: native byte stream and downstream cancellation.
   - [ ] Row 34 — `tests/route-stream-flow.test.ts`: commitment/cancel/final output lifecycle.
   - [ ] Row 34a — Same file: L2 U/R growth/equality/decrease/null and V-1 clean/interrupted amounts.
