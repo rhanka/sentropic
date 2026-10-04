@@ -1,7 +1,7 @@
 # Feature: Migrate UI tooling to Tailwind 4 and svelte-check 4
 
 ## Objective
-- [ ] Remove GHSA-vfj7-8cjw-p6xm from the UI tree without acceptances or scanner changes, preserving appearance and behavior.
+- [x] Remove GHSA-vfj7-8cjw-p6xm from the UI tree without acceptances or scanner changes, preserving appearance and behavior.
 
 ## Scope / Guardrails
 - [x] Owner decision: migration first; Tailwind 3 to 4 and svelte-check 3 to 4.
@@ -57,7 +57,7 @@
 
 ## UAT Management (in orchestration context)
 - [x] Compare identical-data before/after screenshots for login, home/dashboard, list, detail, and chat using existing Playwright through make; home/list/chat pixel-identical, transient login/detail differences documented.
-- [ ] Qualify web/Chrome/VSCode artifacts and retain evidence in `.h2a/build/`.
+- [x] Qualify web/Chrome/VSCode build artifacts and retain evidence in `.h2a/build/`; five web surfaces have before/after comparisons.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and migration design**
@@ -82,7 +82,7 @@
   - [x] Regenerate root lock; workspace UI/API SCA pass and braces is absent.
   - [x] Regenerate standalone UI lock; patched brace-expansion/devalue and no HIGH/CRITICAL.
   - [x] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
-- [ ] **Lot 2 — Related trees and qualification**
+- [x] **Lot 2 — Related trees and qualification**
   - [x] Migrate standalone IdP tooling and CSS-first config while preserving auth host defaults.
   - [x] Correct legacy-slot declarations and chat callback contracts exposed by svelte-check 4; UI/API and IdP checks pass without suppressions (auth-ui 0.7.4, chat-ui 0.34.1; registry versions verified).
   - [x] Declare existing ChatPanelShell streamClient and ChatContextPicker leading slot; align edit/clipboard callbacks and version snapshots.
@@ -90,8 +90,8 @@
   - [x] Build UI web/Chrome/VSCode via `make build-ui`; production API/UI images and IdP build pass.
   - [x] Run `make typecheck`, `make lint`, `make test-ui` (83 files/489 tests), and all SCA targets (zero HIGH/CRITICAL); auth-ui 49 and chat-ui 1,032 tests pass.
   - [x] Capture after migration and compare all five pages; `.h2a/build/visual_report.md` records all differences and the corrected 12px chat spacing.
-  - [ ] Run full `make test-e2e` with assigned ports/ENV; investigate/fix failures.
-  - [ ] Write `.h2a/build/lot2_report.md`; resolve review and scope findings.
+  - [x] Run full `make test-e2e` with assigned ports/ENV: all groups 00–10 pass; 239 passed, 11 existing skips, zero failures/retries.
+  - [x] Write `.h2a/build/lot2_report.md`; builder inspection has no unresolved finding, scope passes; owner-provided read-only review remains available before merge.
 - [ ] **Lot 3 — PR and CI**
   - [ ] Push branch/create PR to main with this plan and concrete validation evidence.
   - [ ] Wait for CI/fix failures; write lot3 report and final `.h2a/report.md`.
