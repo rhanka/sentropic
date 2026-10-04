@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CheckedGatewayBody, GatewayBodyBytePool, createGatewayRouter, defaultGatewayBodyBytePool,
   ensureCheckedGatewayBody, gatewayRequestBodyLimit, type RequestBodyLimitOptions, type CreateGatewayRouterOptions,
+  NativeCountTokensRateLimiter, type NativeCountTokensResult,
 } from '../src/index.js';
 import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
 import { NativeMessagesUpstreamError, RouteQuoteError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
@@ -27,10 +28,11 @@ const bodyRequest = (chunks: readonly Uint8Array[], path = PATHS[0]!, headers: R
 };
 const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBodyLimitOptions,
   order = 'product', owners: CheckedGatewayBody[] = [], overrides: Partial<CreateGatewayRouterOptions> = {},
-  countIngress?: MiddlewareHandler) => {
+  countIngress?: MiddlewareHandler, onBody?: (owner: CheckedGatewayBody, request: Request) => void) => {
   const app = new Hono();
   const inspect: MiddlewareHandler = async (c, next) => {
-    owners.push(await ensureCheckedGatewayBody(c.req.raw, options)); await next();
+    const owner = await ensureCheckedGatewayBody(c.req.raw, options);
+    owners.push(owner); onBody?.(owner, c.req.raw); await next();
   };
   // Product cap precedes settlement inspection; standalone inspection ensures the cap itself.
   if (order === 'standalone') app.use('*', (c, next) => gatewayRequestBodyLimit(options)(c, async () => { await inspect(c, next); }));
@@ -95,6 +97,74 @@ describe('gateway bounded ingress', () => {
       expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
     }
   });
+});
+
+describe('N2 count refusal body ownership', () => {
+  it.each(['count_off', 'count_denied', 'count_rate', 'count_concurrency'])
+    ('pre_dispatch_%s_restores_capacity_once', async kind => {
+      for (const order of ['product', 'standalone']) for (const rejecting of [false, true]) {
+        const h = nativeHarness(); const pool = new GatewayBodyBytePool(4096); const owners: CheckedGatewayBody[] = [];
+        const entered = deferred(); const finish = deferred(); let abort = new AbortController();
+        const rate = new NativeCountTokensRateLimiter({ capacity: kind === 'count_rate' ? 1 : 10,
+          maxInFlight: 1, now: () => 0 });
+        const execute = vi.fn(async (): Promise<NativeCountTokensResult> => {
+          entered.resolve(); if (kind === 'count_concurrency') await finish.promise;
+          return { kind: 'json', status: 200, headers: {}, body: { input_tokens: 3 } };
+        });
+        const capability = { providerId: 'anthropic', modelId: h.model, apiVersions: ['2023-06-01'], execute };
+        const prepare = vi.fn(async () => kind === 'count_denied' ? undefined : capability);
+        const port = { modelIds: [h.model], prepare };
+        const auth = await h.deps.config.callerAuth.verify({}, { method: 'POST',
+          url: 'https://gateway.test/v1/messages/count_tokens', requestId: 'prime-rate' });
+        if (!auth.ok) throw Error('fixture caller denied');
+        if (kind === 'count_rate') rate.acquire(auth.cost)();
+        if (rejecting) {
+          h.attempt.releaseCancelled.mockImplementation(async () => { throw Error('attempt cleanup rejected'); });
+          h.finalize.mockImplementation(async () => { throw Error('observation rejected'); });
+          h.recorder.port.release = async () => { throw Error('hold release rejected'); };
+          h.recorder.metering.settleRoute = async () => { throw Error('sink rejected'); };
+        }
+        const app = limitedRouter(h, { pool, limitBytes: 4096 }, order, owners,
+          { nativeMessagesEnabled: kind !== 'count_off', nativeCountTokens: port, nativeCountRate: rate }, undefined,
+          owner => { if (rejecting) owner.trackDetach(() => abort.abort(new Error('cleanup abort race'))); });
+        const bytes = utf8(JSON.stringify({ model: h.model, opaque: { retained: ['body'] } }));
+        let live: Promise<Response> | undefined;
+        if (kind === 'count_concurrency') {
+          live = Promise.resolve(app.request(bodyRequest([bytes], PATHS[2]).raw)); await entered.promise;
+        }
+        const baseline = pool.stats; const upstreamBefore = execute.mock.calls.length;
+        const status = kind === 'count_off' || kind === 'count_denied' ? 400 : 429;
+        const message = kind === 'count_off'
+          ? 'Token counting is not supported by this gateway route while native Messages is disabled.'
+          : kind === 'count_denied' ? 'Token counting is not supported by this gateway route for this request.'
+            : 'Token counting request limit exceeded.';
+        for (let repeat = 1; repeat <= 3; repeat++) {
+          abort = new AbortController();
+          const response = await app.request(bodyRequest([bytes], PATHS[2], {}, abort.signal).raw);
+          expect(response.status).toBe(status); expect(await response.json()).toEqual({ type: 'error',
+            error: { type: status === 400 ? 'invalid_request_error' : 'rate_limit_error', message } });
+          expect(response.headers.get('retry-after')).toBe(status === 429 ? '1' : null);
+          expect(response.headers.has('x-sentropic-relay')).toBe(false);
+          expect(execute).toHaveBeenCalledTimes(upstreamBefore); expect(h.execute).not.toHaveBeenCalled();
+          expect(h.finalize).not.toHaveBeenCalled(); expect(h.attempt.releaseCancelled).not.toHaveBeenCalled();
+          expect(h.recorder.admitted).toEqual([]); expect(h.recorder.events).toEqual([]);
+          expect(h.recorder.settlements).toEqual([]); expect(h.calls.quote).toEqual([]); expect(h.calls.plan).toEqual([]);
+          expect(owners.at(-1)!.body).toBeUndefined(); expect(owners.at(-1)!.retainedHolders).toBe(0);
+          expect(pool.stats).toMatchObject({ reservedBytes: baseline.reservedBytes, liveLeases: baseline.liveLeases,
+            acquisitions: baseline.acquisitions + repeat * 2 - 1, releases: baseline.releases + repeat * 2 - 1 });
+          if (rejecting) expect(abort.signal.aborted).toBe(true);
+          const following = nativeHarness(); const next = await limitedRouter(following, { pool, limitBytes: 4096 })
+            .request(bodyRequest([utf8(JSON.stringify(following.request.body))]).raw);
+          expect(next.status).toBe(200); expect(following.execute).toHaveBeenCalledTimes(1);
+          expect(pool.stats).toMatchObject({ reservedBytes: baseline.reservedBytes, liveLeases: baseline.liveLeases,
+            acquisitions: baseline.acquisitions + repeat * 2, releases: baseline.releases + repeat * 2 });
+        }
+        finish.resolve(); if (live) expect((await live).status).toBe(200);
+        expect(owners.every(owner => owner.body === undefined && owner.retainedHolders === 0)).toBe(true);
+        expect(pool.stats.reservedBytes).toBe(0); expect(pool.stats.liveLeases).toBe(0);
+        expect(pool.stats.acquisitions).toBe(pool.stats.releases);
+      }
+    });
 });
 
 describe('shared ingress capacity', () => {
