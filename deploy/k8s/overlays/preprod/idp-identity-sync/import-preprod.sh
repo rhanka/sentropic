@@ -47,7 +47,7 @@ age=$(( $(date -u +%s) - snapshot_epoch ))
 # SQL errors can contain row values: never forward raw stderr or unfiltered rows.
 psql -XAtq -v ON_ERROR_STOP=1 -v dry_run="$DRY_RUN" -v allowed_rekey="${ALLOWED_REKEY:-}" \
   -v expected_users="$nu" -v expected_webauthn="$nw" -v expected_consents="$nc" \
-  -v client_map_path=/sql/client-map.csv -f /sql/import-preprod.sql \
+  -f /sql/import-preprod.sql \
   > /work/audit.log 2>/work/import-error.log || sql_failure
 awk -F '|' '
   /^(synced_users|synced_webauthn|rekeyed|preprod_only_kept|post_users|post_webauthn|rekey_dropped_sessions|rekey_moved_webauthn|consents_upserted|consents_removed)\|[0-9]+$/ {counts[$1]=$2; next}
