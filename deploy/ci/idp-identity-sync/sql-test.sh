@@ -53,8 +53,10 @@ IFS=, read -r snapshot users credentials consents < snapshot.csv
 [ "$users" = 8 ] && [ "$credentials" = 18 ] && [ "$consents" = 1 ]
 [ "$(wc -l < users.csv)" -eq 9 ] && [ "$(wc -l < webauthn.csv)" -eq 19 ]
 echo 'PASS: read-only snapshot users=8 credentials=18'
+mkdir -p /sql
+cp "$map" /sql/client-map.csv
 pair='9f11d240-fc75-4d55-80be-1bafcd79eadb>1b9b9e15-2956-4df4-9ee1-a42273f0d096'
-sync() { sql -d preprod -v expected_users="$users" -v expected_webauthn="$credentials" -v expected_consents="$consents" -v client_map_path="$map" "$@" -f "$import"; }
+sync() { sql -d preprod -v expected_users="$users" -v expected_webauthn="$credentials" -v expected_consents="$consents" "$@" -f "$import"; }
 unchanged() { assert_sql 'SELECT test_assert(test_state() = (SELECT state FROM test_before), '\''all state rolled back'\'')'; }
 stage=dry-run
 sync -v allowed_rekey="$pair"
@@ -73,7 +75,6 @@ echo 'PASS: default and explicit dry-run rolled back; audit users=9 credentials=
 stage=pod-import-wrapper
 mkdir -p /work /sql
 ln -s "$import" /sql/import-preprod.sql
-cp "$map" /sql/client-map.csv
 sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 refresh_relay() {
   sql -d app -U idp_identity_reader -f "$prod/export-prod.sql"
@@ -107,9 +108,18 @@ grep -Fq '"old_id":"9f11d240-fc75-4d55-80be-1bafcd79eadb"' /dev/termination-log
 unchanged
 echo 'PASS: actual pod import wrapper emits safe rolled-back JSON audit'
 cp /sql/client-map.csv map.original
-for mode in missing duplicate; do
+mv /sql/client-map.csv map.absent
+reject_wrapper sql_error
+mv map.absent /sql/client-map.csv
+for mode in missing duplicate shared_target empty zero_bytes; do
   cp "$map" /sql/client-map.csv
-  if [ "$mode" = missing ]; then sed 's/radar-immobilier-preprod/missing-client/' "$map" > /sql/client-map.csv; else tail -n 1 "$map" >> /sql/client-map.csv; fi
+  case "$mode" in
+    missing) sed 's/radar-immobilier-preprod/missing-client/' "$map" > /sql/client-map.csv ;;
+    duplicate) tail -n 1 "$map" >> /sql/client-map.csv ;;
+    shared_target) printf 'other-prod-client,radar-immobilier-preprod\n' >> /sql/client-map.csv ;;
+    empty) head -n 1 "$map" > /sql/client-map.csv ;;
+    zero_bytes) : > /sql/client-map.csv ;;
+  esac
   reject_wrapper consent_client_missing
 done
 mv map.original /sql/client-map.csv
@@ -201,22 +211,22 @@ sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 reject_wrapper manifest_mismatch
 mv snapshot.original snapshot.csv
 sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
-reject 'empty rekey allowlist fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
+reject 'empty rekey allowlist fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -f "$import"
 unchanged
-reject 'unknown rekey pair fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v allowed_rekey='unknown>unknown' -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
+reject 'unknown rekey pair fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v allowed_rekey='unknown>unknown' -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -f "$import"
 unchanged
-reject 'manifest mismatch fails closed' 'export row count does not match manifest' -d preprod -v expected_users=9 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
+reject 'manifest mismatch fails closed' 'export row count does not match manifest' -d preprod -v expected_users=9 -v expected_webauthn=18 -v expected_consents=1 -f "$import"
 unchanged
 # Test-only trigger tampers inside the import transaction after inv_before is captured.
 stage=install-dv5-tamper
 sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET client_secret_hash = 'synthetic-tamper'; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON users FOR EACH ROW EXECUTE FUNCTION test_tamper();"
 reject_wrapper dv5_invariant_changed
-reject 'DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
+reject 'DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -f "$import"
 unchanged
 sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
 for mutation in "UPDATE oauth_clients SET name = 'synthetic-tamper'" "UPDATE id_token_signing_keys SET public_jwk = '{}'::jsonb"; do
   sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN $mutation; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON users FOR EACH ROW EXECUTE FUNCTION test_tamper();"
-  reject 'whole-row DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
+  reject 'whole-row DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -f "$import"
   unchanged
   sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
 done

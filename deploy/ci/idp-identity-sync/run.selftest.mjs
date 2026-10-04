@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -55,8 +56,22 @@ export async function runTests(load, bundles) {
     let calls = 0;
     assert.equal(await waitJob('test', 'job', 1, () => ({ stdout: JSON.stringify({ status: ++calls === 1 ? { active: 1 } : { succeeded: 1 } }) }), async () => {}), 'complete');
   });
-  for (const verdict of ['complete', 'failed', 'invalid']) await check(`export ${verdict} always re-suspends and uses pod status only`, async () => {
+  await check('rendered prod export reports user, WebAuthn and consent counts only', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'idp-export-test-'));
+    try {
+      writeFileSync(join(dir, 'snapshot.csv'), '2026-10-04 00:00:00,108,118,128\n');
+      const script = bundles.prod.find(o => o.kind === 'CronJob').spec.jobTemplate.spec.template.spec.initContainers[0].args[0];
+      const reporting = script.slice(script.indexOf('IFS=, read')).replace('/dev/termination-log', './termination.json');
+      const result = spawnSync('sh', ['-ec', reporting], { cwd: dir, encoding: 'utf8' });
+      assert.equal(result.status, 0); assert.equal(result.stderr, '');
+      assert.equal(result.stdout, 'users=108 webauthn=118 consents=128\n');
+      assert.deepEqual(JSON.parse(readFileSync(join(dir, 'termination.json'), 'utf8')), { users: 108, webauthn: 118, consents: 128 });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  for (const verdict of ['complete', 'failed', 'invalid', 'zero-consents', 'missing-consents', 'invalid-consents', 'negative-consents', 'fractional-consents', 'unsafe-consents']) await check(`export ${verdict} always re-suspends and uses pod status only`, async () => {
     const patches = []; let lists = 0;
+    const consentCounts = { 'zero-consents': 0, 'missing-consents': undefined, 'invalid-consents': 'private@example.invalid', 'negative-consents': -1, 'fractional-consents': 1.5, 'unsafe-consents': Number.MAX_SAFE_INTEGER + 1 };
+    const consents = Object.hasOwn(consentCounts, verdict) ? consentCounts[verdict] : 128;
     const old = { metadata: { uid: 'old', name: 'old', ownerReferences: [{ uid: 'cron' }] }, status: { succeeded: 1 } };
     const fresh = { metadata: { uid: 'fresh', name: 'fresh', ownerReferences: [{ uid: 'cron' }] } };
     const k = args => {
@@ -66,12 +81,17 @@ export async function runTests(load, bundles) {
       const data = resource === 'cronjob' ? { metadata: { uid: 'cron' }, spec: { suspend: true } }
         : resource === 'jobs' ? { items: ++lists === 1 ? [old] : [old, fresh] }
         : resource === 'job' ? { status: verdict === 'failed' ? { failed: 1 } : { succeeded: 1 } }
-        : { items: [{ status: { initContainerStatuses: [{ name: 'export', state: { terminated: { message: JSON.stringify({ users: verdict === 'invalid' ? 0 : 108, webauthn: 118 }) } } }] } }] };
+        : { items: [{ status: { initContainerStatuses: [{ name: 'export', state: { terminated: { message: JSON.stringify({ users: verdict === 'invalid' ? 0 : 108, webauthn: 118, consents, forbidden: 'private@example.invalid' }) } } }] } }] };
       if (resource === 'job') assert.equal(args[4], 'fresh');
       return { stdout: JSON.stringify(data) };
     };
-    if (verdict === 'complete') assert.equal(await exportSnapshot(k, async () => {}), 'fresh');
-    else await assert.rejects(exportSnapshot(k, async () => {}));
+    const output = [], log = console.log;
+    console.log = value => output.push(value);
+    try {
+      if (['complete', 'zero-consents'].includes(verdict)) assert.equal(await exportSnapshot(k, async () => {}), 'fresh');
+      else await assert.rejects(exportSnapshot(k, async () => {}), { message: verdict === 'failed' ? 'prod export Job failed' : 'invalid export termination verdict' });
+    } finally { console.log = log; }
+    assert.deepEqual(output, ['complete', 'zero-consents'].includes(verdict) ? [`export users=108 webauthn=118 consents=${consents}`] : []);
     assert.deepEqual(patches, [false, true]);
   });
   for (const mode of ['policy-denial', 'rbac-denial', 'admitted', 'suspend-denied']) await check(`anti-RCE ${mode} verifies admission and fails closed`, () => {
