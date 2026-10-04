@@ -25,6 +25,8 @@
   - `api/tests/smoke/**`
   - `apps/auth-idp/screen-smoke.ts`
   - `BRANCH.md`
+  - `.gitignore`
+  - `docs/ci-images.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - `deploy/k8s/**`
   - `packages/**`
@@ -98,6 +100,7 @@
   - [ ] Write `.h2a/build/lot2_report.md` for reviewer.
 
 - [ ] **Lot 3 — CI cache wiring, verification & docs**
+  - [x] Normalize the production rate-limit switch to an empty value when the test runner requests enforcement; existing HTTP assertions remain unchanged.
   - [x] Scan the non-shipping toolbox with the existing HIGH/CRITICAL compliance gate; no policy or register changes.
   - [x] Wire `.github/workflows/ci.yml` with exact content-tag archive caching; a cache hit loads the toolbox without any build.
   - [x] Record and verify the production artifact image ID during save/load; use it for runtime and scans.
