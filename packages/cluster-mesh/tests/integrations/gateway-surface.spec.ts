@@ -53,7 +53,7 @@ describe('gateway static leaves', () => {
     }
   });
 
-  it('should carry the 0.19 budget admission and 0.22 quote surfaces of the new-minor tuple', async () => {
+  it('should carry budget admission and quote surfaces through the native relay tuple', async () => {
     expect(gatewayLeaf.BudgetConfigurationError).toBe(gatewayProvider.BudgetConfigurationError);
     expect(gatewayLeaf.MAX_BUDGET_RETRY_AFTER_SECONDS).toBe(60);
     expect(meshLeaf.quoteRoute).toBe(meshProvider.quoteRoute);
