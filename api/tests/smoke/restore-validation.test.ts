@@ -6,6 +6,20 @@ import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('Restore Validation', () => {
   describe('Schema Validation', () => {
+    it('should have settings and control schema initialized by production boot', async () => {
+      const columns = await db.all(sql`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'settings'
+      `) as { column_name: string }[];
+      expect(columns.map(row => row.column_name)).toEqual(expect.arrayContaining(['key', 'value', 'user_id']));
+      const controlTables = await db.all(sql`
+        SELECT table_name FROM information_schema.tables WHERE table_schema = 'control'
+      `) as { table_name: string }[];
+      expect(controlTables.map(row => row.table_name)).toEqual(expect.arrayContaining(['event_outbox', 'cluster_mesh_namespace_cutovers']));
+      const journal = await db.all(sql`SELECT count(*)::int AS count FROM public.__drizzle_control_migrations`) as { count: number }[];
+      expect(journal[0].count).toBeGreaterThan(0);
+    });
+
     it('should have required core tables present', async () => {
       const tables = await db.all(sql`
         SELECT table_name 
@@ -176,4 +190,3 @@ describe('Restore Validation', () => {
     });
   });
 });
-
