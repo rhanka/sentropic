@@ -55,15 +55,15 @@ Make a failed preprod import self-explaining in CI (PII-free failure code in the
 - **Mono-branch**: no UI change; acceptance = local gates + CI green.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Worktree `tmp/idp-sync-failure-codes` from `origin/main` (ade43cc07).
   - [x] Confirm root causes (run 37204934129 log; `run.selftest.mjs:89`).
 
 - [ ] **Lot 1 — PII-free failure codes**
-  - [ ] `import-preprod.sh`: every `fail` writes `{"outcome":"failed","code":"<code>"}` to `/dev/termination-log` (codes: `invalid_dry_run`, `invalid_age_limit`, `invalid_manifest`, `integrity_failed`, `invalid_counts`, `invalid_timestamp`, `stale_snapshot`, `rekey_not_allowed`, `manifest_mismatch`, `empty_export`, `dv5_invariant_changed`, `postcondition_failed`, `lock_timeout`, `sql_error`, `invalid_audit`); SQL failures are classified by matching the known `RAISE EXCEPTION` texts in the private stderr file; for `rekey_not_allowed` add `rejected_rekey_pairs` extracted with a strict UUID>UUID regex; nothing else from stderr is forwarded.
+  - [x] `import-preprod.sh`: every `fail` writes `{"outcome":"failed","code":"<code>"}` to `/dev/termination-log` (codes: `invalid_dry_run`, `invalid_age_limit`, `invalid_manifest`, `integrity_failed`, `invalid_counts`, `invalid_timestamp`, `stale_snapshot`, `rekey_not_allowed`, `manifest_mismatch`, `empty_export`, `dv5_invariant_changed`, `postcondition_failed`, `lock_timeout`, `sql_error`, `invalid_audit`); SQL failures are classified by matching the known `RAISE EXCEPTION` texts in the private stderr file; for `rekey_not_allowed` add `rejected_rekey_pairs` extracted with a strict UUID>UUID regex; nothing else from stderr is forwarded.
   - [ ] `run.mjs` / `run-core.mjs`: on a failed Job, read the termination message, validate it against the failure schema (known code, UUID-only pairs) and print `job/<name> failed: <code>` (+ pairs); keep failing the step.
   - [ ] Lot gate:
-    - [ ] `make test-idp-sync-sql ENV=test-idp-sync-codes`: wrapper cases assert the code for empty allowlist, unknown pair, manifest mismatch, DV5 tamper, checksum tamper and stale snapshot.
+    - [x] `make test-idp-sync-sql ENV=test-idp-sync-codes`: wrapper cases assert the code for empty allowlist, unknown pair, manifest mismatch, DV5 tamper, checksum tamper and stale snapshot.
     - [ ] `make test-idp-sync-selftest ENV=test-idp-sync-codes`: failure-message parsing, unknown code rejected, non-UUID pair rejected.
 
 - [ ] **Lot 2 — Silent, unmistakable fixtures**
