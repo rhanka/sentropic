@@ -250,7 +250,7 @@
   - [x] Row 44b2b — Runtime matrix/full suite passes; corrected test-only mutable override type and async Hono middleware declaration flagged by TypeScript; behavior/assertions unchanged; gateway rechecks in pass11 report.
   - [x] Row 44c — Default process pool across four routers/all three ingress paths: 64 overlapping 4096-byte bodies reserve 262144 actual bytes plus open canonical stream N; ON native stream holds zero after detachment, OFF streams remain canonical; both middleware orders/switch states, further generation/count ingress admission without capacity refusal and exact final restoration; count handler is explicitly an ingress stub; gateway gates in pass11 report.
   - [x] Row 44c2 — Full runtime suite passed; TypeScript identified widened literals in the generic response fixture; now uses a contextually typed matching Anthropic provider/model response, retaining all concurrency assertions; gateway rechecks in pass11 report.
-  - [ ] Row 44d1 — Same file: absent/forged CL, actual EOF bytes, cap precedence and reader cancellation.
+  - [x] Row 44d1 — Missing/zero/small/large forged Content-Length grants actual chunk bytes and exact EOF N; actual oversized returned chunk wins 413 over capacity, no failed-chunk allocation; timeout/abort/read failure preserve original reasons, close/unlock reader and restore partial reservations even when cancellation rejects; gateway gates in pass11 report.
   - [ ] Row 44d2 — Same file: N3 backing-allocation counters, forged-large-CL slow uploads, failed extension allocates nothing.
   - [ ] Row 45 — Count port/handler: JSON-only, switch and exact model/version validation.
   - [ ] Row 46 — Count per-principal rate/concurrency/expiry/map bounds.
