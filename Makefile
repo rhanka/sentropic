@@ -1442,6 +1442,32 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 		-w /workspace/packages/harness \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,harness,--access public)'
 
+IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
+.PHONY: test-idp-sync-selftest
+test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without cluster access (BR45-EX1)
+	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
+	@set -eu; rendered="$$(mktemp -d)"; trap 'rm -rf "$$rendered"' EXIT; \
+	for tier in prod preprod; do \
+		docker run --rm --network none -v "$(CURDIR)/deploy/k8s:/workspace/deploy/k8s:ro" \
+			$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/deploy/k8s/overlays/$$tier/idp-identity-sync > "$$rendered/$$tier.yaml"; \
+		docker run --rm --network none -v "$(CURDIR)/deploy/k8s:/workspace/deploy/k8s:ro" \
+			$(IDP_SYNC_KUBECTL_IMAGE) kustomize /workspace/deploy/k8s/overlays/$$tier > "$$rendered/$$tier-parent.yaml"; \
+	done; \
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+		-v "$(CURDIR)/deploy:/workspace/deploy:ro" -v "$(CURDIR)/.github:/workspace/.github:ro" \
+		-v "$(CURDIR)/Makefile:/workspace/Makefile:ro" -v "$$rendered:/rendered:ro" -w /workspace \
+		$(LLM_MESH_NODE_IMAGE)@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 \
+		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund yaml@2.8.1 >/dev/null; node deploy/ci/idp-identity-sync/idp-sync.selftest.mjs'
+
+.PHONY: test-idp-sync-sql
+test-idp-sync-sql: ## Test the IdP relay SQL on a disposable, isolated Postgres database (BR45-EX1)
+	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
+	@docker run --rm --network none --tmpfs /tmp:rw,exec \
+		-v "$(CURDIR)/api/drizzle:/workspace/api/drizzle:ro" \
+		-v "$(CURDIR)/deploy:/workspace/deploy:ro" \
+		--entrypoint sh postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
+		/workspace/deploy/ci/idp-identity-sync/sql-test.sh
+
 .PHONY: scope-check
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
@@ -3199,8 +3225,9 @@ gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_R
 # --- Postgres backup (BR37c-EX1, append-only; operator-side, live cluster) ----
 # Manual trigger / restore helpers around deploy/k8s/base/70-pgbackup-cronjob.yaml.
 # Backup S3 creds + bucket come from the sentropic-pgbackup SealedSecret; the
-# CronJob dumps with pg_dump (initContainer) and uploads via aws-cli. These
-# targets never hardcode a secret value.
+# CronJob dumps with pg_dump (initContainer) and uploads via pinned s5cmd.
+# Restore downloads with an s5cmd initContainer into a shared volume before
+# PostgreSQL verifies the scratch DB. These targets never hardcode a secret value.
 .PHONY: k8s-pgbackup-now k8s-pgbackup-restore
 
 k8s-pgbackup-now: ## Trigger an immediate Postgres backup Job from the CronJob and wait for completion
@@ -3217,19 +3244,29 @@ k8s-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verificati
 	@test -n "$(PG_BACKUP_KEY)" || { echo "ERROR: set PG_BACKUP_KEY=pg/<timestamp>.sql.gz (see: make k8s-pgbackup-list)" >&2; exit 1; }
 	@set -eu ; pod="pgbackup-restore-$$(date -u +%Y%m%d%H%M%S)" ; \
 	echo "==> Restoring $(PG_BACKUP_KEY) into scratch DB restore_check on postgres (non-destructive to app DB)" ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
 	  --labels="app.kubernetes.io/name=sentropic,app.kubernetes.io/component=pgbackup" \
 	  --env PGHOST=postgres --env PGPORT=5432 --env PGUSER=app --env PGDATABASE=app \
-	  --env PGPASSWORD="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)" \
-	  --env AWS_ACCESS_KEY_ID="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ACCESS_KEY}' | base64 -d)" \
-	  --env AWS_SECRET_ACCESS_KEY="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_SECRET_KEY}' | base64 -d)" \
-	  --env S3_BUCKET="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_BUCKET}' | base64 -d)" \
-	  --env S3_ENDPOINT="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ENDPOINT}' | base64 -d)" \
-	  --env S3_REGION="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_REGION}' | base64 -d)" \
-	  --command -- sh -c 'set -e; apk add --no-cache aws-cli >/dev/null 2>&1 || true; \
-	    aws s3 cp "s3://$$S3_BUCKET/$(PG_BACKUP_KEY)" /tmp/d.sql.gz --endpoint-url "$$S3_ENDPOINT" --region "$$S3_REGION"; \
+	  --override-type=strategic --overrides="$$(printf '%s' \
+	    '{"spec":{' \
+	    '"volumes":[{"name":"work","emptyDir":{}}],' \
+	    '"initContainers":[{"name":"download",' \
+	      '"image":"peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a",' \
+	      '"resources":{"requests":{"cpu":"20m","memory":"32Mi"},"limits":{"cpu":"200m","memory":"128Mi"}},' \
+	      '"args":["--endpoint-url","$$(S3_ENDPOINT)","cp","s3://$$(S3_BUCKET)/$(PG_BACKUP_KEY)","/work/d.sql.gz"],' \
+	      '"env":[' \
+	        '{"name":"AWS_ACCESS_KEY_ID","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_ACCESS_KEY"}}},' \
+	        '{"name":"AWS_SECRET_ACCESS_KEY","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_SECRET_KEY"}}},' \
+	        '{"name":"AWS_REGION","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_REGION"}}},' \
+	        '{"name":"S3_BUCKET","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_BUCKET"}}},' \
+	        '{"name":"S3_ENDPOINT","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_ENDPOINT"}}}],' \
+	      '"volumeMounts":[{"name":"work","mountPath":"/work"}]}],' \
+	    '"containers":[{"name":"'"$$pod"'",' \
+	      '"env":[{"name":"PGPASSWORD","valueFrom":{"secretKeyRef":{"name":"sentropic-postgres","key":"POSTGRES_PASSWORD"}}}],' \
+	      '"volumeMounts":[{"name":"work","mountPath":"/work"}]}]}}')" \
+	  --command -- sh -c 'set -e; \
 	    psql -c "DROP DATABASE IF EXISTS restore_check;" -c "CREATE DATABASE restore_check;"; \
-	    gunzip -c /tmp/d.sql.gz | psql -d restore_check; \
+	    gunzip -c /work/d.sql.gz | psql -d restore_check; \
 	    psql -d restore_check -c "SELECT count(*) AS organizations FROM organizations;" || true; \
 	    psql -c "DROP DATABASE restore_check;"; echo "restore verification OK"'
 
