@@ -95,6 +95,7 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
+- [x] Pass 08 M6-R — fixed by reviewer per build mode: independent safe raw evidence, null/invalid omission, explicit zero and prior evidence retained; permanent mixed-validity, incomplete, fractional/nonfinite/unsafe start/delta regressions. Scoped reproduction: 5 failed / 10 passed; post-commit gateway gates recorded in pass report.
 - [x] Pass 08 M4-R — fixed by reviewer per build mode: output validity is independent of start/delta input proof, with invalid-output uncertainty and permanent start/input-bearing/output-only regressions. Scoped reproduction confirmed start/delta proof failures; post-commit gateway gates recorded in pass report.
 - [x] Pass 08 R1 — fixed by reviewer per build mode: valid cumulative output accepted independently of input updates; permanent V-1, output-only, rejected-input and decrease regressions. Scoped repro: 1 failed / 5 passed before fix; gateway typecheck PASS and full tests 643 passed / 0 failed after fix.
 - [x] Scope gate clarification: harness exception grammar accepts numeric branch IDs only; approved pass 01 EX1 paths are mirrored explicitly in Allowed Paths so C2 verifies the granted scope without changing harness or inventing an exception ID.

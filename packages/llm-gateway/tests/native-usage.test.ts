@@ -127,6 +127,36 @@ describe('native usage accumulator', () => {
     expect(acc.getState().physicalLowerBound).toBe(10400);
   });
 
+  it('should omit null evidence and retain independent safe start fields (M6-R)', () => {
+    const acc = new NativeCumulativeUsageAccumulator();
+    acc.applyDelta({ input_tokens: null, cache_read_input_tokens: null,
+      cache_creation_input_tokens: null, output_tokens: null });
+    expect(acc.getRawUsage()).toEqual({});
+    const mixed = new NativeCumulativeUsageAccumulator({ input_tokens: 1.5,
+      cache_read_input_tokens: 10, cache_creation_input_tokens: 0, output_tokens: 2 });
+    expect(mixed.getRawUsage()).toEqual({ cache_read_input_tokens: 10,
+      cache_creation_input_tokens: 0, output_tokens: 2 });
+    expect(mixed.getState().physicalLowerBound).toBe(0);
+  });
+
+  it.each([1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('should retain safe raw fields across invalid counts %s (M6-R)', bad => {
+    const acc = new NativeCumulativeUsageAccumulator({ input_tokens: bad,
+      cache_read_input_tokens: 10, cache_creation_input_tokens: 0, output_tokens: 2 });
+    acc.applyDelta({ input_tokens: bad, cache_read_input_tokens: 20, output_tokens: 3 });
+    expect(acc.getRawUsage()).toEqual({ cache_read_input_tokens: 20,
+      cache_creation_input_tokens: 0, output_tokens: 3 });
+    const valid = new NativeCumulativeUsageAccumulator(validStart);
+    valid.applyDelta({ input_tokens: bad, cache_read_input_tokens: null, output_tokens: null });
+    expect(valid.getRawUsage()).toEqual(validStart);
+  });
+
+  it('should preserve explicit raw zero and omit incomplete start categories (M6-R)', () => {
+    const acc = new NativeCumulativeUsageAccumulator({ input_tokens: 0, output_tokens: 0 });
+    expect(acc.getRawUsage()).toEqual({ input_tokens: 0, output_tokens: 0 });
+    acc.applyDelta({ input_tokens: null, output_tokens: -1 });
+    expect(acc.getRawUsage()).toEqual({ input_tokens: 0, output_tokens: 0 });
+  });
+
   it('separates inferred TTL from provider-reported evidence (M7)', () => {
     const acc = new NativeCumulativeUsageAccumulator({
       input_tokens: 100,
