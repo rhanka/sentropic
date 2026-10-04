@@ -29,6 +29,7 @@ export class NativeCumulativeUsageAccumulator {
   private o = 0; private p = 0; private plb = 0; private valid = false; private source?: NativeInputUsageSource;
   private reason?: NativeUsageUncertainty; private splitReason?: NativeCacheWriteSplitReason;
   private revoked = false; private est = false; private anchored = false; private startSeen = false;
+  private hasRawU = false; private hasRawR = false; private hasRawW = false; private hasRawO = false;
 
   constructor(initial?: RawNativeUsageUpdate, opts?: { isStart?: boolean; defaultTtlEligible?: boolean }) {
     if (initial) this.acceptStart(initial, opts);
@@ -45,20 +46,38 @@ export class NativeCumulativeUsageAccumulator {
     this.startSeen = true;
     const isStart = opts?.isStart !== false;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = raw;
+    if (u !== undefined) this.hasRawU = true;
+    if (r !== undefined) this.hasRawR = true;
+    if (w !== undefined) this.hasRawW = true;
+    if (o !== undefined) this.hasRawO = true;
     if (!isSafeNonNegativeInteger(u) || !isSafeNonNegativeInteger(r) || !isSafeNonNegativeInteger(w)) {
       this.revoke(u === undefined || r === undefined || w === undefined ? 'incomplete_input' : 'invalid_input');
+      return false;
+    }
+    const sumP = BigInt(u) + BigInt(r) + BigInt(w);
+    if (sumP > BigInt(Number.MAX_SAFE_INTEGER)) {
+      this.revoke('invalid_input');
       return false;
     }
     let s5: number | undefined, s1: number | undefined;
     if (split != null) {
       if (typeof split !== 'object') { this.revoke('invalid_input'); return false; }
       s5 = split.ephemeral_5m_input_tokens ?? undefined; s1 = split.ephemeral_1h_input_tokens ?? undefined;
-      if (!isSafeNonNegativeInteger(s5) || !isSafeNonNegativeInteger(s1) || s5 + s1 !== w) {
+      if (!isSafeNonNegativeInteger(s5) || !isSafeNonNegativeInteger(s1)) {
         this.revoke('invalid_input'); return false;
       }
-    } else if (w === 0) { s5 = 0; s1 = 0; } else if (opts?.defaultTtlEligible) { s5 = w; s1 = 0; } else {
+      const splitSum = BigInt(s5) + BigInt(s1);
+      if (splitSum > BigInt(Number.MAX_SAFE_INTEGER) || splitSum !== BigInt(w)) {
+        this.revoke('invalid_input'); return false;
+      }
+    } else if (w === 0) {
+      // Split omitted; reported TTL remains undefined.
+    } else if (opts?.defaultTtlEligible) {
+      // Pricing allocation default TTL; reported TTL evidence remains undefined.
+    } else {
       this.revoke('cache_write_split_unknown');
-      this.u = u; this.r = r; this.w = w; this.p = u + r + w; this.plb = this.p;
+      this.u = u; this.r = r; this.w = w; this.p = Number(sumP); this.plb = this.p;
+      this.anchored = isStart;
       return false;
     }
     if (o != null) {
@@ -66,7 +85,7 @@ export class NativeCumulativeUsageAccumulator {
       this.o = o;
     }
     this.u = u; this.r = r; this.w = w; this.s5 = s5; this.s1 = s1;
-    this.p = u + r + w; this.plb = this.p; this.valid = true;
+    this.p = Number(sumP); this.plb = this.p; this.valid = true;
     this.source = isStart ? 'message_start' : 'json'; this.anchored = isStart;
     this.est = false;
     return true;
@@ -75,6 +94,10 @@ export class NativeCumulativeUsageAccumulator {
   applyDelta(delta?: RawNativeUsageUpdate | null, opts?: { defaultTtlEligible?: boolean }): boolean {
     if (!delta) return true;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = delta;
+    if (u !== undefined) this.hasRawU = true;
+    if (r !== undefined) this.hasRawR = true;
+    if (w !== undefined) this.hasRawW = true;
+    if (o !== undefined) this.hasRawO = true;
     let outputValid = true;
     if (o != null) {
       if (!isSafeNonNegativeInteger(o) || o < this.o) {
@@ -107,27 +130,67 @@ export class NativeCumulativeUsageAccumulator {
       if (typeof split !== 'object') { this.revoke('invalid_input'); return false; }
       const s5 = split.ephemeral_5m_input_tokens, s1 = split.ephemeral_1h_input_tokens;
       if (!isSafeNonNegativeInteger(s5) || !isSafeNonNegativeInteger(s1)) { this.revoke('invalid_input'); return false; }
-      const sum = s5 + s1;
+      const splitSum = BigInt(s5) + BigInt(s1);
+      if (splitSum > BigInt(Number.MAX_SAFE_INTEGER)) { this.revoke('invalid_input'); return false; }
+      const sum = Number(splitSum);
       if (w != null && (!isSafeNonNegativeInteger(w) || w !== sum)) { this.revoke('invalid_input'); return false; }
       cw = sum;
       if ((this.s5 !== undefined && s5 < this.s5) || (this.s1 !== undefined && s1 < this.s1) || cw < this.w) {
         this.revoke('input_breakdown_changed'); return false;
       }
       c5 = s5; c1 = s1;
+      csplit = undefined; ci1 = undefined;
     } else if (w != null) {
       const resW = check(w, this.w); if (!resW.ok) return false;
       cw = resW.n!;
       if (cw > this.w && !opts?.defaultTtlEligible) {
-        ci1 = (this.i1 ?? (this.s1 ?? 0)) + (cw - this.w); csplit = 'cache_write_split_inferred';
+        const growth = BigInt(cw - this.w);
+        const base = BigInt(this.i1 ?? (this.s1 ?? 0));
+        const nextI1 = base + growth;
+        if (nextI1 > BigInt(Number.MAX_SAFE_INTEGER)) { this.revoke('invalid_input'); return false; }
+        ci1 = Number(nextI1);
+        csplit = 'cache_write_split_inferred';
       }
     }
 
-    const candP = cu.n! + cr.n! + cw;
-    this.u = cu.n!; this.r = cr.n!; this.w = cw; this.s5 = c5; this.s1 = c1;
-    this.i1 = ci1; this.splitReason = csplit; this.plb = Math.max(this.plb, candP);
-    if (this.revoked || !this.anchored) { this.valid = false; this.p = this.plb; return true; }
-    this.p = candP; this.source = 'message_delta';
-    return true;
+    const candPBig = BigInt(cu.n!) + BigInt(cr.n!) + BigInt(cw);
+    if (candPBig > BigInt(Number.MAX_SAFE_INTEGER)) {
+      this.revoke('invalid_input');
+      return false;
+    }
+    const candP = Number(candPBig);
+
+    this.u = cu.n!; this.r = cr.n!; this.w = cw;
+    if (c5 !== undefined) this.s5 = c5;
+    if (c1 !== undefined) this.s1 = c1;
+    this.i1 = ci1;
+    this.splitReason = csplit;
+
+    if (!this.anchored) {
+      this.valid = false;
+      this.p = 0;
+      this.plb = 0;
+      if (!outputValid) {
+        this.reason = this.reason || 'invalid_output';
+        return false;
+      }
+      return true;
+    }
+
+    this.plb = Math.max(this.plb, candP);
+    if (this.revoked) {
+      this.valid = false;
+      this.p = this.plb;
+    } else if (!outputValid) {
+      this.valid = false;
+      this.p = candP;
+      return false;
+    } else {
+      this.valid = true;
+      this.p = candP;
+      this.source = 'message_delta';
+    }
+    return outputValid;
   }
 
   revoke(reason?: NativeUsageUncertainty): void {
@@ -147,9 +210,16 @@ export class NativeCumulativeUsageAccumulator {
 
   getRawUsage(): NativeUsageRaw {
     return {
-      input_tokens: this.u, cache_read_input_tokens: this.r, cache_creation_input_tokens: this.w,
-      ...(this.s5 !== undefined || this.s1 !== undefined ? { cache_creation: { ephemeral_5m_input_tokens: this.s5, ephemeral_1h_input_tokens: this.s1 } } : {}),
-      output_tokens: this.o,
+      ...(this.hasRawU ? { input_tokens: this.u } : {}),
+      ...(this.hasRawR ? { cache_read_input_tokens: this.r } : {}),
+      ...(this.hasRawW ? { cache_creation_input_tokens: this.w } : {}),
+      ...(this.s5 !== undefined || this.s1 !== undefined ? {
+        cache_creation: {
+          ...(this.s5 !== undefined ? { ephemeral_5m_input_tokens: this.s5 } : {}),
+          ...(this.s1 !== undefined ? { ephemeral_1h_input_tokens: this.s1 } : {}),
+        },
+      } : {}),
+      ...(this.hasRawO ? { output_tokens: this.o } : {}),
     };
   }
 }
