@@ -20,6 +20,7 @@ reject() {
 fixtures=/workspace/deploy/ci/idp-identity-sync/fixtures
 prod=/workspace/deploy/k8s/overlays/prod/idp-identity-sync
 import=/workspace/deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql
+map=/workspace/deploy/k8s/overlays/preprod/idp-identity-sync/client-map.csv
 stage=migrations
 createdb identity_schema
 for migration in /workspace/api/drizzle/*.sql; do sql -d identity_schema -f "$migration"; done
@@ -42,16 +43,18 @@ sql -d app -c "DO \$\$ BEGIN
   IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'users') <> 13 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'webauthn_credentials') <> 10 THEN RAISE EXCEPTION 'reader column grants'; END IF;
 END \$\$;"
 reject 'reader cannot read oauth clients' 'permission denied' -d app -U idp_identity_reader -c 'SELECT * FROM oauth_clients'
+sql -d app -U idp_identity_reader -c 'SELECT user_id, client_id, tenant_id, scopes, created_at, updated_at FROM oauth_consents'
+sql -d app -c "DO \$\$ BEGIN IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'oauth_consents') <> 6 THEN RAISE EXCEPTION 'reader consent grants'; END IF; END \$\$;"
 reject 'reader cannot write identities' 'read-only transaction' -d app -U idp_identity_reader -c "UPDATE users SET role = 'guest'"
 stage=export
 cd /tmp/relay
 sql -d app -U idp_identity_reader -f "$prod/export-prod.sql"
-IFS=, read -r snapshot users credentials < snapshot.csv
-[ "$users" = 8 ] && [ "$credentials" = 18 ]
+IFS=, read -r snapshot users credentials consents < snapshot.csv
+[ "$users" = 8 ] && [ "$credentials" = 18 ] && [ "$consents" = 1 ]
 [ "$(wc -l < users.csv)" -eq 9 ] && [ "$(wc -l < webauthn.csv)" -eq 19 ]
 echo 'PASS: read-only snapshot users=8 credentials=18'
 pair='9f11d240-fc75-4d55-80be-1bafcd79eadb>1b9b9e15-2956-4df4-9ee1-a42273f0d096'
-sync() { sql -d preprod -v expected_users="$users" -v expected_webauthn="$credentials" "$@" -f "$import"; }
+sync() { sql -d preprod -v expected_users="$users" -v expected_webauthn="$credentials" -v expected_consents="$consents" -v client_map_path="$map" "$@" -f "$import"; }
 unchanged() { assert_sql 'SELECT test_assert(test_state() = (SELECT state FROM test_before), '\''all state rolled back'\'')'; }
 stage=dry-run
 sync -v allowed_rekey="$pair"
@@ -61,6 +64,8 @@ grep -Fxq 'rekey_dropped_sessions|9' /tmp/sql.log
 grep -Fxq 'rekey_moved_webauthn|8' /tmp/sql.log
 grep -Fxq 'post_users|9' /tmp/sql.log
 grep -Fxq 'post_webauthn|22' /tmp/sql.log
+grep -Fxq 'consents_upserted|1' /tmp/sql.log
+grep -Fxq 'consents_removed|1' /tmp/sql.log
 unchanged
 sync -v dry_run=1 -v allowed_rekey="unknown>unknown, $pair "
 unchanged
@@ -68,7 +73,8 @@ echo 'PASS: default and explicit dry-run rolled back; audit users=9 credentials=
 stage=pod-import-wrapper
 mkdir -p /work /sql
 ln -s "$import" /sql/import-preprod.sql
-sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+cp "$map" /sql/client-map.csv
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 wrapper() {
   (
     export PGDATABASE=preprod DRY_RUN="${WRAPPER_DRY_RUN-1}" ALLOWED_REKEY="${WRAPPER_REKEY-$pair}" MAX_SNAPSHOT_AGE_S="${WRAPPER_AGE-7200}"
@@ -90,6 +96,8 @@ wrapper
 grep -Fq '"outcome":"rolled_back"' /dev/termination-log
 grep -Fq '"post_users":9' /dev/termination-log
 grep -Fq '"post_webauthn":22' /dev/termination-log
+grep -Fq '"consents_upserted":1' /dev/termination-log
+grep -Fq '"consents_removed":1' /dev/termination-log
 grep -Fq '"old_id":"9f11d240-fc75-4d55-80be-1bafcd79eadb"' /dev/termination-log
 unchanged
 echo 'PASS: actual pod import wrapper emits safe rolled-back JSON audit'
@@ -102,28 +110,28 @@ reject_wrapper invalid_manifest
 mv checksums.original SHA256SUMS
 cp snapshot.csv snapshot.original
 for ending in '' '\r\n'; do
-  printf '%s,8,18%b' "$snapshot" "$ending" > snapshot.csv
-  sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+  printf '%s,8,18,1%b' "$snapshot" "$ending" > snapshot.csv
+  sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
   wrapper; grep -Fq '"outcome":"rolled_back"' /dev/termination-log; unchanged
 done
-printf '%s\r,8\r,18\r\n' "$snapshot" > snapshot.csv
-sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+printf '%s\r,8\r,18\r,1\r\n' "$snapshot" > snapshot.csv
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 wrapper; grep -Fq '"outcome":"rolled_back"' /dev/termination-log; unchanged
 echo 'PASS: snapshot EOF and trailing CR fields are accepted'
 for code in invalid_counts invalid_timestamp; do
-  if [ "$code" = invalid_counts ]; then printf '%s,8,invalid\n' "$snapshot"; else printf 'invalid,8,18\n'; fi > snapshot.csv
-  sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+  if [ "$code" = invalid_counts ]; then printf '%s,8,18,invalid\n' "$snapshot"; else printf 'invalid,8,18,1\n'; fi > snapshot.csv
+  sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
   reject_wrapper "$code"
 done
 mv snapshot.original snapshot.csv
 for code in empty_export sql_error; do
   cp users.csv users.original
   if [ "$code" = empty_export ]; then head -n 1 users.original > users.csv; else printf 'private@example.invalid\n' >> users.csv; fi
-  sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+  sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
   reject_wrapper "$code"
   mv users.original users.csv
 done
-sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 # Exercise safe classification and filtering without changing the import SQL.
 mkdir -p /tmp/mock-bin
 cat > /tmp/mock-bin/psql <<'MOCK'
@@ -146,37 +154,37 @@ reject_wrapper integrity_failed
 mv users.original users.csv
 echo 'PASS: pod wrapper rejects checksum tampering'
 cp snapshot.csv snapshot.original
-printf '2000-01-01 00:00:00,8,18\n' > snapshot.csv
-sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+printf '2000-01-01 00:00:00,8,18,1\n' > snapshot.csv
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 reject_wrapper stale_snapshot
 mv snapshot.original snapshot.csv
-sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 unchanged
 echo 'PASS: pod wrapper rejects stale snapshot'
 WRAPPER_REKEY='' reject_wrapper rekey_not_allowed
 WRAPPER_REKEY='unknown>unknown' reject_wrapper rekey_not_allowed
 cp snapshot.csv snapshot.original
-printf '%s,9,18\n' "$snapshot" > snapshot.csv
-sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+printf '%s,9,18,1\n' "$snapshot" > snapshot.csv
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
 reject_wrapper manifest_mismatch
 mv snapshot.original snapshot.csv
-sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
-reject 'empty rekey allowlist fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v expected_users=8 -v expected_webauthn=18 -f "$import"
+sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
+reject 'empty rekey allowlist fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
 unchanged
-reject 'unknown rekey pair fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v allowed_rekey='unknown>unknown' -v expected_users=8 -v expected_webauthn=18 -f "$import"
+reject 'unknown rekey pair fails closed' 're-key not covered by allowed_rekey' -d preprod -v dry_run=0 -v allowed_rekey='unknown>unknown' -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
 unchanged
-reject 'manifest mismatch fails closed' 'export row count does not match manifest' -d preprod -v expected_users=9 -v expected_webauthn=18 -f "$import"
+reject 'manifest mismatch fails closed' 'export row count does not match manifest' -d preprod -v expected_users=9 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
 unchanged
 # Test-only trigger tampers inside the import transaction after inv_before is captured.
 stage=install-dv5-tamper
 sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN UPDATE oauth_clients SET client_secret_hash = 'synthetic-tamper'; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON users FOR EACH ROW EXECUTE FUNCTION test_tamper();"
 reject_wrapper dv5_invariant_changed
-reject 'DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -f "$import"
+reject 'DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
 unchanged
 sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
 for mutation in "UPDATE oauth_clients SET name = 'synthetic-tamper'" "UPDATE id_token_signing_keys SET public_jwk = '{}'::jsonb"; do
   sql -d preprod -c "CREATE FUNCTION test_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN $mutation; RETURN NEW; END \$\$; CREATE TRIGGER test_tamper BEFORE INSERT OR UPDATE ON users FOR EACH ROW EXECUTE FUNCTION test_tamper();"
-  reject 'whole-row DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -f "$import"
+  reject 'whole-row DV5 tampering fails closed' 'post: DV5 invariant changed' -d preprod -v dry_run=0 -v allowed_rekey="$pair" -v expected_users=8 -v expected_webauthn=18 -v expected_consents=1 -v client_map_path="$map" -f "$import"
   unchanged
   sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
 done
@@ -189,6 +197,8 @@ echo 'PASS: committed users=9 credentials=22 collisions=0; product FKs and DV5 p
 stage=idempotent-rerun
 sync -v dry_run=0
 grep -Fxq 'rekeyed|0' /tmp/sql.log
+grep -Fxq 'consents_upserted|0' /tmp/sql.log
+grep -Fxq 'consents_removed|0' /tmp/sql.log
 unchanged
 echo 'PASS: rerun with empty allowlist is a no-op'
 WRAPPER_UNSET_REKEY=1 wrapper

@@ -37,7 +37,7 @@ export function classifyJobStatus(status = {}) {
   return Number(status?.active) > 0 ? 'active' : 'pending';
 }
 export function failureSummary(raw) {
-  const codes = ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'rekey_not_allowed', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit'];
+  const codes = ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'rekey_not_allowed', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit', 'consent_client_missing', 'consent_postcondition_failed'];
   const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
   try {
     const value = JSON.parse(raw);
