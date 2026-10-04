@@ -259,8 +259,7 @@ export const runRouteStreamFlow = async (
         await Promise.allSettled([nativeExecution.finish(classification, termination, false), nativeExecution.close()]);
         if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
         try { await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed'); } catch { /* Original refusal wins. */ }
-        throw error instanceof NativeMessagesUpstreamError ? error : terminalGatewayError(
-          classification, servedTargetFor(diagnostic), 'native stream failed before commitment');
+        throw error instanceof NativeMessagesUpstreamError ? error : new NativeMessagesUpstreamError({ status: 503 });
       }
       if (execution?.terminal) {
         try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
