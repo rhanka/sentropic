@@ -9,7 +9,22 @@ import { auditSummary, collectAudit, failureVerdict } from './run.mjs';
 const { parse } = createRequire('/tmp/idp-tools/package.json')('yaml');
 export async function runTests(load, bundles) {
   let passed = 0;
-  const check = async (name, fn) => { await fn(); passed++; console.log(`PASS: ${name}`); };
+  const check = async (name, fn) => {
+    const stdout = process.stdout.write, stderr = process.stderr.write;
+    const summary = process.env.GITHUB_STEP_SUMMARY;
+    // Exercise production printers without publishing fixtures or a step summary.
+    process.stdout.write = process.stderr.write = (_chunk, encoding, callback) => {
+      if (typeof encoding === 'function') encoding(); else callback?.();
+      return true;
+    };
+    delete process.env.GITHUB_STEP_SUMMARY;
+    try { await fn(); }
+    finally {
+      process.stdout.write = stdout; process.stderr.write = stderr;
+      if (summary === undefined) delete process.env.GITHUB_STEP_SUMMARY; else process.env.GITHUB_STEP_SUMMARY = summary;
+    }
+    passed++; console.log(`PASS: ${name}`);
+  };
   const path = name => new URL(name, import.meta.url);
   const now = new Date('2026-10-03T12:00:00Z');
   const env = { GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', DRY_RUN: '1' };
@@ -51,7 +66,7 @@ export async function runTests(load, bundles) {
       const data = resource === 'cronjob' ? { metadata: { uid: 'cron' }, spec: { suspend: true } }
         : resource === 'jobs' ? { items: ++lists === 1 ? [old] : [old, fresh] }
         : resource === 'job' ? { status: verdict === 'failed' ? { failed: 1 } : { succeeded: 1 } }
-        : { items: [{ status: { initContainerStatuses: [{ name: 'export', state: { terminated: { message: JSON.stringify({ users: verdict === 'invalid' ? 0 : 8, webauthn: 18 }) } } }] } }] };
+        : { items: [{ status: { initContainerStatuses: [{ name: 'export', state: { terminated: { message: JSON.stringify({ users: verdict === 'invalid' ? 0 : 108, webauthn: 118 }) } } }] } }] };
       if (resource === 'job') assert.equal(args[4], 'fresh');
       return { stdout: JSON.stringify(data) };
     };
@@ -86,11 +101,11 @@ export async function runTests(load, bundles) {
     });
   } finally { rmSync(dir, { recursive: true, force: true }); if (previous === undefined) delete process.env.IDP_SYNC_WORKDIR; else process.env.IDP_SYNC_WORKDIR = previous; }
   await check('audit rejects invalid outcomes/counts and strips non-audit fields', () => {
-    const value = { outcome: 'rolled_back', synced_users: 8, synced_webauthn: 18, rekeyed: 0, preprod_only_kept: 1, post_users: 9, post_webauthn: 22, rekey_dropped_sessions: 9, rekey_moved_webauthn: 8, rekey_pairs: [], forbidden: 'discard' };
+    const value = { outcome: 'rolled_back', synced_users: 101, synced_webauthn: 118, rekeyed: 1, preprod_only_kept: 103, post_users: 109, post_webauthn: 122, rekey_dropped_sessions: 104, rekey_moved_webauthn: 105, rekey_pairs: [{ old_id: '00000000-0000-4000-8000-000000000001', new_id: '00000000-0000-4000-8000-000000000002' }], forbidden: 'discard' };
     assert.equal(Object.hasOwn(auditSummary(JSON.stringify(value), 'rolled_back'), 'forbidden'), false);
     assert.throws(() => auditSummary(JSON.stringify(value), 'committed')); assert.throws(() => auditSummary(JSON.stringify({ ...value, post_users: -1 }), 'rolled_back'));
     const k = args => ({ stdout: args.includes('logs') ? 'non-audit line\n' : JSON.stringify({ items: [{ status: { containerStatuses: [{ name: 'import-preprod', state: { terminated: { message: JSON.stringify(value) } } }] } }] }) });
-    assert.equal(collectAudit('test', 'rolled_back', k).post_users, 9);
+    assert.equal(collectAudit('synthetic', 'rolled_back', k).post_users, 109);
   });
   await check('failed imports report only known codes and strict UUID pairs from pod status', () => {
     const pair = '00000000-0000-4000-8000-000000000001>00000000-0000-4000-8000-000000000002';
