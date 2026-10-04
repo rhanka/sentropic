@@ -5,7 +5,7 @@ import {
   ensureCheckedGatewayBody, gatewayRequestBodyLimit, type RequestBodyLimitOptions,
 } from '../src/index.js';
 import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
-import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
 
 const PATHS = ['/v1/messages', '/v1/chat/completions', '/v1/messages/count_tokens'];
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -207,5 +207,69 @@ describe('request reference lifetimes', () => {
     expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 2, releases: 2 });
     const following = await ensureCheckedGatewayBody(bodyRequest([utf8('{}')]).raw, options);
     expect(following.lease.bytes).toBe(2); following.release();
+  });
+});
+
+describe('body terminal ownership', () => {
+  it.each(['json', 'dispatch_error', 'serialization', 'timeout', 'pre_read_error', 'commit_error',
+    'late_error', 'eof', 'unconsumed', 'abort', 'complete'])('releases once on %s', async mode => {
+    const done = deferred(); let reads = 0;
+    const closed = vi.fn(async () => { done.resolve(); return { done: true as const, value: undefined }; });
+    const h = nativeHarness({ execute: async () => {
+      if (mode === 'dispatch_error') throw Error('dispatch failed');
+      if (mode === 'serialization') throw new NativeMessagesUpstreamError({ status: 413,
+        requestSize: { requestBytes: 5000, limitBytes: 4096, source: 'gateway' } });
+      if (mode === 'timeout') throw new NativeMessagesUpstreamError({ status: 503, code: 'timeout' });
+      if (mode === 'json') return { kind: 'json', status: 200, headers: {}, body: { model: 'claude-sonnet-5',
+        usage: { input_tokens: 1, output_tokens: 1 } } };
+      return { kind: 'stream', status: 200, headers: {}, body: { [Symbol.asyncIterator]: () => ({
+        next: async () => {
+          if (mode === 'pre_read_error') throw Error('reader failed');
+          if (++reads === 1) return { done: false, value: nativeStart('claude-sonnet-5') };
+          if (mode === 'unconsumed' || mode === 'abort') await done.promise;
+          if (mode === 'late_error' && reads === 2) return { done: false,
+            value: nativeFrame('error', { error: { type: 'overloaded_error', message: 'private' } }) };
+          if (mode === 'complete' && reads === 2) return { done: false, value: nativeFrame('message_delta', { usage: { output_tokens: 2 } }) };
+          if (mode === 'complete' && reads === 3) return { done: false, value: nativeFrame('message_stop') };
+          return { done: true, value: undefined };
+        }, return: closed,
+      }) } };
+    } });
+    if (mode === 'commit_error') h.attempt.markCommitted.mockRejectedValue(Error('commit failed'));
+    const pool = new GatewayBodyBytePool(4096); const owners: CheckedGatewayBody[] = [];
+    const cancellation = new AbortController();
+    const response = await limitedRouter(h, { pool, limitBytes: 4096 }, 'product', owners)
+      .request(bodyRequest([utf8(JSON.stringify({ ...h.request.body, stream: mode !== 'json' }))], PATHS[0], {}, cancellation.signal).raw);
+    const refusal = ['dispatch_error', 'serialization', 'timeout', 'pre_read_error', 'commit_error'].includes(mode);
+    expect(response.status).toBe(refusal ? mode === 'serialization' ? 413 : 503 : 200);
+    if (mode === 'abort') {
+      cancellation.abort(); await Promise.allSettled([response.body!.cancel(), response.body!.cancel()]);
+    } else if (mode === 'unconsumed') await response.body!.cancel();
+    else await response.text();
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+    expect(owners[0]!.body).toBeUndefined(); expect(owners[0]!.retainedHolders).toBe(0);
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(closed).toHaveBeenCalledTimes(['json', 'dispatch_error', 'serialization', 'timeout'].includes(mode) ? 0 : 1);
+    const following = await ensureCheckedGatewayBody(bodyRequest([utf8('{}')]).raw, { pool, limitBytes: 4096 });
+    following.release(); expect(pool.stats.reservedBytes).toBe(0);
+  });
+  it.each(['rejecting', 'never_settling'])('cleanup never waits for a %s finalize hook', async hook => {
+    vi.useFakeTimers();
+    try {
+      const h = nativeHarness({ finalize: async () => {
+        if (hook === 'rejecting') throw Error('observation unavailable');
+        await new Promise<void>(() => undefined);
+      }, execute: async () => ({ kind: 'stream', status: 200, headers: {}, body: {
+        async *[Symbol.asyncIterator]() { yield nativeStart('claude-sonnet-5'); yield nativeFrame('message_stop'); },
+      } }) });
+      const pool = new GatewayBodyBytePool(4096); const owners: CheckedGatewayBody[] = [];
+      const response = await limitedRouter(h, { pool, limitBytes: 4096 }, 'standalone', owners)
+        .request(bodyRequest([utf8(JSON.stringify({ ...h.request.body, stream: true }))]).raw);
+      await response.text();
+      expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
+      expect(owners[0]!.retainedHolders).toBe(0); expect(h.recorder.settlements).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(h.finalize).toHaveBeenCalledTimes(1); expect(pool.stats.releases).toBe(1);
+    } finally { vi.useRealTimers(); }
   });
 });
