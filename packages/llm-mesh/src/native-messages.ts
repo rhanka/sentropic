@@ -1,4 +1,5 @@
 import type { RouteAttemptUsage } from './routing-contracts.js';
+import { readRequestSizeDetail, type RequestSizeDetail } from './errors.js';
 import { modelProfiles } from './catalog.js';
 import { EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS } from './routing-targets.js';
 
@@ -91,13 +92,16 @@ export interface PreparedNativeMessages extends NativeMessagesAdvertisement {
   execute(request: NativeMessagesRequest): Promise<NativeMessagesResult>;
 }
 
-export type NativeMessagesResult =
+export type NativeMessagesResult = (
   | { readonly kind: 'json'; readonly status: 200;
       readonly body: Readonly<Record<string, unknown>>;
       readonly headers: Readonly<Record<string, string>> }
   | { readonly kind: 'stream'; readonly status: 200;
       readonly body: AsyncIterable<Uint8Array>;
-      readonly headers: Readonly<Record<string, string>> };
+      readonly headers: Readonly<Record<string, string>> }) & {
+  /** Host-measured outgoing bytes, retained for numeric pre/late SSE 413 errors. */
+  readonly requestSize?: RequestSizeDetail;
+};
 
 /** Empty until real qualification; trusted hosts may supply a code-only override. */
 export const NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS: readonly string[] = Object.freeze([]);
@@ -162,6 +166,7 @@ export interface NativeValidationPublicDetail {
 }
 
 export interface NativeMessagesUpstreamErrorOptions {
+  readonly requestSize?: RequestSizeDetail;
   readonly status: number;
   readonly type?: NativeMessagesProviderErrorType;
   readonly code?: NativeMessagesTransportCode;
@@ -173,6 +178,7 @@ export interface NativeMessagesUpstreamErrorOptions {
 
 /** Never place upstream validation prose, payloads or credentials in this error. */
 export class NativeMessagesUpstreamError extends Error {
+  readonly requestSize?: RequestSizeDetail;
   readonly status: number;
   readonly type?: NativeMessagesProviderErrorType;
   readonly code?: NativeMessagesTransportCode;
@@ -189,5 +195,6 @@ export class NativeMessagesUpstreamError extends Error {
     this.retryAfterMs = options.retryAfterMs;
     this.usage = options.usage;
     this.validation = options.validation;
+    this.requestSize = readRequestSizeDetail(options.requestSize);
   }
 }
