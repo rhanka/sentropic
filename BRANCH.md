@@ -235,7 +235,8 @@
   - [ ] Row 43c split — 43c1 native/canonical route ownership and metadata capture; 43c2 router stream transfer/terminal wrapper and independent closure; 43c3 shared passthrough terminal cleanup if needed; each <=120 lines including plan.
   - [x] Row 43c1 — Route retry/canonical projections register with the body owner; successful JSON detaches after usage capture; native request wrappers drop after N1 host return and commit detaches cached/retry forms; canonical streams keep N until source close, releasing independently of callbacks; gateway gates in pass11 report.
   - [x] Row 43c2 — Stream wrapper transfers the owner to terminal cleanup, handles return/throw/EOF/error/abort and never-started streams, detaches the source before release, preserves original errors and releases once; row 44 mounts it at the router seam; gateway gates in pass11 report.
-  - [ ] Row 43c — Retained retry/upload references and terminal lease transfer; native/canonical lifetime distinction.
+  - [x] Row 43c3 — Shared passthrough closes/detaches its source and releases body independently of rejecting settlement; once-only finish also runs for return before first downstream consumption; retries still retain N; gateway gates in pass11 report.
+  - [x] Row 43c — Completed as 43c1–43c3; native detaches only after host upload guarantee/no retry, canonical and passthrough keep N until source cleanup; terminal stream wrapper transferred at row 44.
   - [ ] Row 44 — `tests/request-body-limit.test.ts`, router integration: pre-parse cap and byte boundaries.
   - [ ] Row 44a — Same file: cross-endpoint/router pool exhaustion, exact 503/Retry-After and zero parse/hold/dispatch.
   - [ ] Row 44b1 — Same file: host detach/native shrink versus canonical N, races/unconsumed stream/independent finalize.
