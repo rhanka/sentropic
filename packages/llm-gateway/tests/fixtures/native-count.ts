@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import { createGatewayRouter, NativeCountTokensRateLimiter, type CreateGatewayRouterOptions,
-  type NativeCountTokensRequest, type NativeCountTokensResult, type PreparedNativeCountTokens } from '../../src/index.js';
+  type NativeCountTokensRequest, type NativeCountTokensResult, type PreparedNativeCountTokens,
+  type NativeCountTokensPort, type CallerAuthPort } from '../../src/index.js';
 import { nativeHarness } from './native-flow.js';
 
 export const COUNT_COST = { tenantId: 'count-tenant', principalId: 'count-principal',
@@ -8,12 +9,12 @@ export const COUNT_COST = { tenantId: 'count-tenant', principalId: 'count-princi
 export const countHarness = (overrides: Partial<CreateGatewayRouterOptions> = {},
   handler?: (request: NativeCountTokensRequest) => Promise<NativeCountTokensResult>) => {
   const h = nativeHarness();
-  const auth = vi.fn(async () => ({ ok: true as const, cost: COUNT_COST }));
+  const auth = vi.fn<CallerAuthPort['verify']>(async () => ({ ok: true as const, cost: COUNT_COST }));
   const execute = vi.fn<(request: NativeCountTokensRequest) => Promise<NativeCountTokensResult>>(handler ?? (async () => ({ kind: 'json' as const, status: 200 as const,
     headers: {}, body: { input_tokens: 0, future: { kept: true } } })));
   const capability: PreparedNativeCountTokens = { providerId: 'anthropic', modelId: h.model,
     apiVersions: ['2023-06-01'], execute };
-  const prepare = vi.fn(async (): Promise<PreparedNativeCountTokens | undefined> => capability);
+  const prepare = vi.fn<NativeCountTokensPort['prepare']>(async () => capability);
   const port = { modelIds: [h.model], prepare };
   const rate = new NativeCountTokensRateLimiter();
   const config = { ...h.deps.config, callerAuth: { verify: auth } };
