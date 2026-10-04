@@ -3,7 +3,8 @@
 CI builds two images from `api/Dockerfile`. Only `production` ships. Its default
 command is `node dist/index.js`; the same image serves the standalone IdP with
 `node apps/auth-idp/dist/index.js`. API boot runs the database migrations. The
-runtime filesystem contains neither npm/npx nor their global npm dependency tree.
+runtime filesystem contains neither npm/npx, their global npm dependency tree,
+nor the root npm cache.
 The inherited build layers still contain build tooling; this change removes it
 from the runtime filesystem rather than redesigning the production base stage.
 
@@ -78,3 +79,8 @@ API and toolbox scans both use the existing HIGH/CRITICAL compliance gate via
 The toolbox still contains vulnerable npm/development tools. Scan failures remain
 blocking; no severity change or vulnerability-register exception is introduced.
 Use `make down-api-ci` to stop this branch's stack.
+
+`make test-ci-api-tooling` regresses the empty registry reference, quiet cache
+fallback and `tools/` hash invalidation with a controlled Docker command stub.
+`make test-ci-api-runtime` checks the recorded production artifact for CLI,
+global npm tree and cache absence. Both checks run in CI before qualification.
