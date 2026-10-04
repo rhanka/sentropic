@@ -181,7 +181,7 @@
   - [ ] Row 28e — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: one-hour no-split/equal/growth pinned amounts.
   - [ ] Row 28f1 — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: split conflicts/decreases/later explicit resolution.
   - [ ] Row 28f2 — Same files: N5 malformed permanent revocation and latched nullable physical-bound fixtures.
-  - [ ] Row 29 — `src/admission.ts`, settlement seams: native input proof/pricing fields and validated output-only floor.
+  - [x] Row 29 — `src/admission.ts`, `src/flow.ts`, `src/native-usage.ts`: trusted per-attempt pricing/proof projection from the observer snapshot; validated stream input stays exact, output-only floor on failure; no-proof full-rate floors and same-model uncertain-TTL premium bound. Row 28b gates: typecheck PASS; 718 tests passed / 0 failed. Row 29a is the bounded settlement/amount test split; post-commit gates in pass report.
   - [ ] Row 29a — `tests/budget-admission.test.ts`, `tests/budget-hardening.test.ts`: missing/invalid/mismatch fallback; N5 full-rate allowance charge.
   - [ ] Row 30 — `src/route-json-flow.ts`, native helper: JSON native flow and bounded result.
   - [ ] Row 30a — Gateway lifecycle: shared pre-floor snapshot, exactly-once finalize, independent 1000-ms timeout/fallback.
