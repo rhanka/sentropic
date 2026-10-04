@@ -75,7 +75,7 @@
       role="alert"
     >
       <div class="flex items-start">
-        <div class="flex-shrink-0">
+        <div class="shrink-0">
           <Icon class="w-5 h-5" />
         </div>
         <div class="ml-3 flex-1">
@@ -94,9 +94,9 @@
             </div>
           {/if}
         </div>
-        <div class="ml-4 flex-shrink-0">
+        <div class="ml-4 shrink-0">
           <button
-            class="text-gray-400 hover:text-gray-600 focus:outline-none"
+            class="text-gray-400 hover:text-gray-600 focus:outline-hidden"
             on:click={() => removeToast(toast.id)}
           >
             <span class="sr-only">{$_('common.close')}</span>
