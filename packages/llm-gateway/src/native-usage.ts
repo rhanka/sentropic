@@ -29,7 +29,24 @@ export class NativeCumulativeUsageAccumulator {
   private o = 0; private p = 0; private plb = 0; private valid = false; private source?: NativeInputUsageSource;
   private reason?: NativeUsageUncertainty; private splitReason?: NativeCacheWriteSplitReason;
   private revoked = false; private est = false; private anchored = false; private startSeen = false;
-  private hasRawU = false; private hasRawR = false; private hasRawW = false; private hasRawO = false;
+  private raw: NativeUsageRaw = {};
+
+  private retainRaw(update: RawNativeUsageUpdate): void {
+    const next = { ...this.raw };
+    for (const key of ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens'] as const) {
+      const value = update[key];
+      if (isSafeNonNegativeInteger(value)) next[key] = Math.max(next[key] ?? 0, value);
+    }
+    if (update.cache_creation && typeof update.cache_creation === 'object') {
+      const split = { ...next.cache_creation };
+      for (const key of ['ephemeral_5m_input_tokens', 'ephemeral_1h_input_tokens'] as const) {
+        const value = update.cache_creation[key];
+        if (isSafeNonNegativeInteger(value)) split[key] = Math.max(split[key] ?? 0, value);
+      }
+      if (Object.keys(split).length) next.cache_creation = split;
+    }
+    this.raw = next;
+  }
 
   constructor(initial?: RawNativeUsageUpdate, opts?: { isStart?: boolean; defaultTtlEligible?: boolean }) {
     if (initial) this.acceptStart(initial, opts);
@@ -46,10 +63,7 @@ export class NativeCumulativeUsageAccumulator {
     this.startSeen = true;
     const isStart = opts?.isStart !== false;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = raw;
-    if (u !== undefined) this.hasRawU = true;
-    if (r !== undefined) this.hasRawR = true;
-    if (w !== undefined) this.hasRawW = true;
-    if (o !== undefined) this.hasRawO = true;
+    this.retainRaw(raw);
     if (o != null) {
       if (!isSafeNonNegativeInteger(o)) { this.est = true; this.reason = 'invalid_output'; }
       else this.o = o;
@@ -93,10 +107,7 @@ export class NativeCumulativeUsageAccumulator {
   applyDelta(delta?: RawNativeUsageUpdate | null, opts?: { defaultTtlEligible?: boolean }): boolean {
     if (!delta) return true;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = delta;
-    if (u !== undefined) this.hasRawU = true;
-    if (r !== undefined) this.hasRawR = true;
-    if (w !== undefined) this.hasRawW = true;
-    if (o !== undefined) this.hasRawO = true;
+    this.retainRaw(delta);
     let outputValid = true;
     if (o != null) {
       if (!isSafeNonNegativeInteger(o) || o < this.o) {
@@ -205,16 +216,8 @@ export class NativeCumulativeUsageAccumulator {
 
   getRawUsage(): NativeUsageRaw {
     return {
-      ...(this.hasRawU ? { input_tokens: this.u } : {}),
-      ...(this.hasRawR ? { cache_read_input_tokens: this.r } : {}),
-      ...(this.hasRawW ? { cache_creation_input_tokens: this.w } : {}),
-      ...(this.s5 !== undefined || this.s1 !== undefined ? {
-        cache_creation: {
-          ...(this.s5 !== undefined ? { ephemeral_5m_input_tokens: this.s5 } : {}),
-          ...(this.s1 !== undefined ? { ephemeral_1h_input_tokens: this.s1 } : {}),
-        },
-      } : {}),
-      ...(this.hasRawO ? { output_tokens: this.o } : {}),
+      ...this.raw,
+      ...(this.raw.cache_creation ? { cache_creation: { ...this.raw.cache_creation } } : {}),
     };
   }
 }
