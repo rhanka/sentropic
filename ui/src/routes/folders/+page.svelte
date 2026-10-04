@@ -219,7 +219,7 @@
             {@const initiativeCount = getUseCaseCount(folder.id)}
             {@const canClick = !isGenerating || initiativeCount > 0}
             <article 
-              class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {canClick ? 'hover:shadow-md cursor-pointer' : 'opacity-60 cursor-not-allowed'}" 
+              class="rounded border border-slate-200 bg-white shadow-xs transition-shadow group flex flex-col h-full {canClick ? 'hover:shadow-md cursor-pointer' : 'opacity-60 cursor-not-allowed'}" 
               {...(canClick ? { role: 'button', tabindex: 0 } : {})}
               on:click={() => canClick ? handleFolderClick(folder.id, folder.status || 'completed') : null}
               on:keydown={(e) => {
@@ -234,7 +234,7 @@
                 <div class="flex-1 min-w-0">
                   <h2 class="text-lg sm:text-xl font-medium truncate {canClick ? 'text-green-800 group-hover:text-green-900 transition-colors' : 'text-slate-400'}">{folder.name}</h2>
                 </div>
-                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
 	                  {#if !isReadOnly}
 	                    <button 
 	                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
@@ -255,7 +255,7 @@
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
                   {#if !(isGenerating && initiativeCount === 0)}
 	                  <span class="flex items-center gap-1 whitespace-nowrap">
-	                    <FileText class="w-4 h-4 flex-shrink-0" />
+	                    <FileText class="w-4 h-4 shrink-0" />
 	                    {$_('folders.useCaseCount', { values: { count: initiativeCount } })}
 	                  </span>
                   {/if}

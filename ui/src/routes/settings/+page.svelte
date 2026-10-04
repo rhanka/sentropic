@@ -1160,7 +1160,7 @@
         value={$themePreference}
         on:change={(event) =>
           updateThemePreference((event.currentTarget as HTMLSelectElement).value)}
-        class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
       >
         <option value="system">{$_('settings.theme.modes.system')}</option>
         <option value="light">{$_('settings.theme.modes.light')}</option>
@@ -1188,7 +1188,7 @@
             id="user-ai-default-model"
             value={selectedUserDefaultModelSelectionKey()}
             on:change={handleUserDefaultModelSelectionChange}
-            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
             {#if modelCatalogGroups.length === 0}
               {#if fallbackUserDefaultModelOption()}
@@ -1743,7 +1743,7 @@
             id="ai-default-model"
             value={selectedDefaultModelSelectionKey()}
             on:change={handleDefaultModelSelectionChange}
-            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           >
             {#if modelCatalogGroups.length === 0}
               {#if fallbackDefaultModelOption()}
@@ -1781,7 +1781,7 @@
             bind:value={aiSettings.concurrency}
             min="1" 
             max="50"
-            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
           <p class="text-xs text-slate-500 mt-1">{$_('settings.aiConcurrencyHint')}</p>
         </div>
@@ -1795,7 +1795,7 @@
             bind:value={aiSettings.publishingConcurrency}
             min="1"
             max="50"
-            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
           <p class="text-xs text-slate-500 mt-1">{$_('settings.publishingConcurrencyHint')}</p>
         </div>
@@ -1810,7 +1810,7 @@
             min="1000" 
             max="60000"
             step="1000"
-            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
           <p class="text-xs text-slate-500 mt-1">{$_('settings.aiIntervalHint')}</p>
         </div>

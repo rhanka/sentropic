@@ -1104,7 +1104,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <!-- Value Axes Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
+        <div class="bg-linear-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">{$_('matrix.valueAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
@@ -1118,7 +1118,7 @@
           </h2>
 	          <button
 	            on:click={() => addAxis(true)}
-	            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+	            class="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-sm flex items-center"
 	            title={$_('matrix.addValueAxis')}
 	          >
 	            <Plus class="w-4 h-4 mr-1" />
@@ -1207,7 +1207,7 @@
       
       <!-- Complexity Axes Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
+        <div class="bg-linear-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg flex items-center justify-between">
           <h2 class="text-white text-lg font-semibold flex items-center">
             <span class="mr-2">{$_('matrix.complexityAxes')}</span>
             <div class="flex items-center gap-1 ml-1">
@@ -1221,7 +1221,7 @@
           </h2>
 	          <button
 	            on:click={() => addAxis(false)}
-	            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1 rounded text-sm flex items-center"
+	            class="bg-white/20 hover:bg-white/30 text-white px-3 py-1 rounded text-sm flex items-center"
 	            title={$_('matrix.addComplexityAxis')}
 	          >
 	            <Plus class="w-4 h-4 mr-1" />
@@ -1312,7 +1312,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       <!-- Value Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-gradient-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
+        <div class="bg-linear-to-r from-purple-700 to-purple-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold">{$_('matrix.valueThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
@@ -1360,7 +1360,7 @@
       
       <!-- Complexity Threshold Configuration -->
       <div class="bg-white rounded-lg shadow-md">
-        <div class="bg-gradient-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
+        <div class="bg-linear-to-r from-gray-700 to-gray-900 p-4 rounded-t-lg">
           <h2 class="text-white text-lg font-semibold">{$_('matrix.complexityThresholdsTitle')}</h2>
         </div>
         <div class="p-0">
@@ -1437,7 +1437,7 @@
 
 <!-- Dialog for displaying and editing detailed level descriptions -->
 {#if showDescriptionsDialog}
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-lg max-w-3xl max-h-[80vh] overflow-y-auto w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-2">
@@ -1530,7 +1530,7 @@
 
 <!-- Dialog for creating a new matrix -->
 {#if showCreateMatrixDialog}
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-lg max-w-md w-full mx-4">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-4">
@@ -1617,7 +1617,7 @@
 
 <!-- Warning popup for unsaved changes when closing descriptions dialog -->
 {#if showCloseWarning}
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white rounded-lg max-w-md w-full mx-4 p-6">
       <div class="flex items-center mb-4">
         <AlertTriangle class="w-6 h-6 text-yellow-500 mr-3" />

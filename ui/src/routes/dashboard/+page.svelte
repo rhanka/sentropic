@@ -1304,9 +1304,9 @@
         {:else if fieldKey === 'scatter_plot'}
           <div class="report-introduction">
             <div class="grid gap-4 md:grid-cols-2">
-              <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200">
+              <div class="rounded-lg bg-white p-4 shadow-xs border border-slate-200">
                 <div class="flex items-center">
-                  <div class="flex-shrink-0"><FileText class="w-8 h-8 text-blue-500" /></div>
+                  <div class="shrink-0"><FileText class="w-8 h-8 text-blue-500" /></div>
                   <div class="ml-4">
                     <p class="text-sm font-medium text-slate-500">{$_('dashboard.useCaseCount')}</p>
                     <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
@@ -1317,9 +1317,9 @@
                 </div>
               </div>
               {#if showROIQuadrant}
-                <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200 border-green-300 bg-green-50">
+                <div class="rounded-lg bg-white p-4 shadow-xs border border-slate-200 border-green-300 bg-green-50">
                   <div class="flex items-center">
-                    <div class="flex-shrink-0"><TrendingUp class="w-8 h-8 text-green-600" /></div>
+                    <div class="shrink-0"><TrendingUp class="w-8 h-8 text-green-600" /></div>
                     <div class="ml-4 flex-1">
                       <p class="text-sm font-medium text-green-700">{$_('dashboard.quickWins')}</p>
                       <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
@@ -1328,9 +1328,9 @@
                 </div>
               {/if}
             </div>
-            <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200 relative report-scatter-plot-container my-6">
+            <div class="rounded-lg bg-white p-6 shadow-xs border border-slate-200 relative report-scatter-plot-container my-6">
               <div class="absolute top-4 right-4 z-10">
-                <div class="flex items-center rounded-lg bg-white border border-slate-200 shadow-sm">
+                <div class="flex items-center rounded-lg bg-white border border-slate-200 shadow-xs">
                   <button type="button" on:click={() => hideLabels = !hideLabels} class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded" title={hideLabels ? $_('usecase.scatterPlot.showLabels') : $_('usecase.scatterPlot.hideLabels')} aria-label={hideLabels ? $_('usecase.scatterPlot.showLabels') : $_('usecase.scatterPlot.hideLabels')} aria-pressed={hideLabels}><Tag class="w-5 h-5 {hideLabels ? 'text-slate-300' : 'text-slate-500'}" /></button>
                   <button on:click={() => configOpen = !configOpen} class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded" title={$_('dashboard.roiConfig.buttonTitle')}><Settings class="w-5 h-5 text-slate-500" />{#if valueThreshold !== null || complexityThreshold !== null}<span class="ml-1 w-2 h-2 bg-primary rounded-full"></span>{/if}</button>
                   {#if configOpen}
@@ -1343,7 +1343,7 @@
                         <div>
                           <label for="value-threshold" class="block text-sm font-medium text-slate-700 mb-2">{$_('dashboard.roiConfig.valueThreshold')}</label>
                           <div class="flex items-center gap-2">
-                            <input id="value-threshold" type="number" min="0" max="100" step="0.1" value={valueThreshold ?? ''} on:input={(e) => { const val = (e.target as HTMLInputElement)?.value || ''; valueThreshold = val === '' ? null : parseFloat(val); }} placeholder={medianValue.toFixed(1)} class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            <input id="value-threshold" type="number" min="0" max="100" step="0.1" value={valueThreshold ?? ''} on:input={(e) => { const val = (e.target as HTMLInputElement)?.value || ''; valueThreshold = val === '' ? null : parseFloat(val); }} placeholder={medianValue.toFixed(1)} class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500" />
                             <button on:click={() => valueThreshold = null} class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1" title={$_('common.useMedian')}>{$_('common.median')} ({medianValue.toFixed(1)})</button>
                           </div>
                           <p class="text-xs text-slate-500 mt-1">{valueThreshold !== null ? `${$_('dashboard.roiConfig.customThreshold')}: ${valueThreshold.toFixed(1)}` : `${$_('dashboard.roiConfig.currentMedian')}: ${medianValue.toFixed(1)}`}</p>
@@ -1351,7 +1351,7 @@
                         <div>
                           <label for="complexity-threshold" class="block text-sm font-medium text-slate-700 mb-2">{$_('dashboard.roiConfig.complexityThreshold')}</label>
                           <div class="flex items-center gap-2">
-                            <input id="complexity-threshold" type="number" min="0" max="100" step="0.1" value={complexityThreshold ?? ''} on:input={(e) => { const val = (e.target as HTMLInputElement)?.value || ''; complexityThreshold = val === '' ? null : parseFloat(val); }} placeholder={medianComplexity.toFixed(1)} class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            <input id="complexity-threshold" type="number" min="0" max="100" step="0.1" value={complexityThreshold ?? ''} on:input={(e) => { const val = (e.target as HTMLInputElement)?.value || ''; complexityThreshold = val === '' ? null : parseFloat(val); }} placeholder={medianComplexity.toFixed(1)} class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500" />
                             <button on:click={() => complexityThreshold = null} class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1" title={$_('common.useMedian')}>{$_('common.median')} ({medianComplexity.toFixed(1)})</button>
                           </div>
                           <p class="text-xs text-slate-500 mt-1">{complexityThreshold !== null ? `${$_('dashboard.roiConfig.customThreshold')}: ${complexityThreshold.toFixed(1)}` : `${$_('dashboard.roiConfig.currentMedian')}: ${medianComplexity.toFixed(1)}`}</p>
