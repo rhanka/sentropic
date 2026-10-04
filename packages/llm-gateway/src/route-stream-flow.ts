@@ -7,7 +7,7 @@ import {
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 import type { GatewayDispatchStreamEvent } from './ports/dispatch.js';
 import { assertNativeMessagesResult, buildNativeMessagesRequest, NativeAttemptRefusal, nativeResponseReader, prepareNativeMessages } from './route-native.js';
@@ -43,6 +43,7 @@ const trackedExecution = (input: {
   const { attempt, iterator, prepared, request, target } = input;
   const signal = request.signal ?? request.authContext.signal;
   let terminal: RouteFailureClassification['reason'] | undefined;
+  let refusal: GatewayError | undefined;
   let finishing: Promise<void> | undefined;
   let closing: Promise<unknown> | undefined;
   let outputCharacters = 0;
@@ -108,7 +109,8 @@ const trackedExecution = (input: {
       if (terminal) throw error; // callback failure: never record/settle again
       reported = errorUsage(error) ?? reported;
       const classification = classifyRouteError(error, signal?.aborted);
-      await finish(classification);
+      refusal = gatewayRequestTooLargeError(error, target);
+      try { await finish(classification); } catch (callbackError) { if (!refusal) throw callbackError; }
       if (classification.reason !== 'cancelled') yield { type: 'error', data: {
         providerId: target.providerId as never,
         message: 'stream failed after commitment', retryable: false,
@@ -150,7 +152,8 @@ const trackedExecution = (input: {
     priming = false;
     if (input.first.type === 'done') await finish({ reason: 'success', retryable: false, healthScope: 'route' });
   };
-  return { encoded, expose, commit, get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
+  return { encoded, expose, commit, get refusal() { return refusal; },
+    get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
 };
 
 export const runRouteStreamFlow = async (
@@ -201,7 +204,7 @@ export const runRouteStreamFlow = async (
         nativeInvoked = true;
         const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
         const reader = nativeResponseReader(result);
-        if (reader) nativeExecution.attach(reader);
+        if (reader) nativeExecution.attach(reader, result.requestSize);
         assertNativeMessagesResult(result, 'stream');
         if (result.kind !== 'stream') throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
         await nativeExecution.prime();
@@ -242,7 +245,7 @@ export const runRouteStreamFlow = async (
       const buffered: GatewayDispatchStreamEvent[] = [];
       do {
         const frame = await execution.encoded.next();
-        if (execution.terminal) throw terminalGatewayError(
+        if (execution.terminal) throw execution.refusal ?? terminalGatewayError(
           { reason: execution.terminal, retryable: false, healthScope: 'route' },
           servedTargetFor(diagnostic), 'stream failed before commitment');
         if (frame.done || typeof frame.value.raw !== 'string' || !frame.value.raw) throw Error('empty encoded stream');
@@ -261,11 +264,12 @@ export const runRouteStreamFlow = async (
         await Promise.allSettled([nativeExecution.finish(classification, termination, false), nativeExecution.close()]);
         if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
         try { await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed'); } catch { /* Original refusal wins. */ }
-        throw error instanceof NativeMessagesUpstreamError ? error : new NativeMessagesUpstreamError({ status: 503 });
+        throw gatewayRequestTooLargeError(error)
+          ?? (error instanceof NativeMessagesUpstreamError ? error : new NativeMessagesUpstreamError({ status: 503 }));
       }
       if (execution?.terminal) {
         try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
-        throw error;
+        throw execution.refusal ?? error;
       }
       if (error instanceof BudgetDispatchMarkError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
@@ -286,7 +290,7 @@ export const runRouteStreamFlow = async (
         outcome: classification.reason, usage,
       });
       const terminal = () => terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned streams failed',
+        classification, servedTargetFor(diagnostic), 'all planned streams failed', error,
       );
       try {
         if (attempt) {
