@@ -1566,6 +1566,9 @@ jobs:
 
   publish-api-image:
     runs-on: ubuntu-latest
+    concurrency:
+      group: api-image-publication
+      cancel-in-progress: false
     needs: [changes, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
     if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
