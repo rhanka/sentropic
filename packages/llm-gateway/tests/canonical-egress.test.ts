@@ -17,6 +17,15 @@ const response = {
 };
 
 describe('canonical gateway egress', () => {
+  it.each(['anthropic-messages', 'openai-chat-completions'] as const)
+    ('keeps generation usage and canonical response shape separate from count/native extensions on %s', wire => {
+      const baseline = encodeGatewayResponse(wire, response);
+      const extended = encodeGatewayResponse(wire, { ...response, providerMetadata: {
+        ...response.providerMetadata, input_tokens: 999, safeguard_results: { providerOnly: true } } });
+      expect(extended).toEqual(baseline);
+      expect(extended.body).not.toHaveProperty('input_tokens');
+      expect(extended.body).not.toHaveProperty('safeguard_results');
+    });
   it('encodes an Anthropic message without flattening tool calls', () => {
     const encoded = encodeGatewayResponse('anthropic-messages', response);
 
