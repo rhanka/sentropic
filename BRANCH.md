@@ -342,7 +342,7 @@
   - [x] Row 65a — `api/tests/unit/claude-provider.test.ts`: fake HTTP auth, headers, count, byte measurement, errors and deadline cases; split 65a1/65a2.
   - [x] Row 65a1 split — Fake HTTP Bearer/header fidelity, eight no-retry statuses, bounded validation/billing and invalid count cases; typecheck PASS, Claude tests 35 passed / 0 failed; 65a2 covers deadline/abort/size.
   - [x] Row 65a2 split — Fixed-timeout before headers/through JSON, frame readiness, post-ready abort, reader/timer closure and oversize before fetch; typecheck PASS, Claude tests 41 passed / 0 failed after owned-JSON-reader fix.
-  - [ ] Row 65b — Same file: counted body/serialization/closure holders, open native stream, early response/upload cancellation and JSON/count release (N1).
+  - [x] Row 65b — Counted request/body/serialization/upload-closure holders release once before open stream/JSON/count, including early-header abort; typecheck PASS, Claude tests 45 passed / 0 failed; canonical lifetime remains 70a2.
   - [ ] Row 66 — `anthropic-native.ts`: trusted credential/account availability, execute-time acquisition/null lease, native and count ports; no host request capture.
   - [ ] Row 67 — Attempt-bound body-free finalize callback; `cost-ledger-sink.ts` invariant; observation projects only the immutable gateway snapshot (K5/L4).
   - [ ] Row 67a — `budget-admission.ts`, `route-settlement.ts`: pricing provider/model identity and pinned-versus-costliest provenance.

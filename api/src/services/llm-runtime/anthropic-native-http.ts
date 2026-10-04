@@ -26,8 +26,11 @@ export const executeClaudeNative = async (request: ClaudeNativeRequest | undefin
     { credential: request.credential, accessToken: request.claudeCodeTransport?.accessToken });
   const features = { requestSafeguards: Object.hasOwn(request.body, 'safeguards'),
     sentBetas: headers.get('anthropic-beta')?.split(',') ?? [] };
-  const upload = createNativeUpload(request.body, request.bodyProbe);
-  request = undefined;
+  const bodyProbe = request.bodyProbe;
+  bodyProbe?.('request', true);
+  let upload: ReturnType<typeof createNativeUpload>;
+  try { upload = createNativeUpload(request.body, bodyProbe); }
+  finally { request = undefined; bodyProbe?.('request', false); }
   const base = process.env.ANTHROPIC_BASE_URL?.trim() || 'https://api.anthropic.com';
   let response: Response | undefined;
   const readiness = nativeReadiness(signal);
