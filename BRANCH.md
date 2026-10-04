@@ -252,7 +252,8 @@
   - [x] Row 44c2 — Full runtime suite passed; TypeScript identified widened literals in the generic response fixture; now uses a contextually typed matching Anthropic provider/model response, retaining all concurrency assertions; gateway rechecks in pass11 report.
   - [x] Row 44d1 — Missing/zero/small/large forged Content-Length grants actual chunk bytes and exact EOF N; actual oversized returned chunk wins 413 over capacity, no failed-chunk allocation; timeout/abort/read failure preserve original reasons, close/unlock reader and restore partial reservations even when cancellation rejects; gateway gates in pass11 report.
   - [x] Row 44d2 — Both middleware orders, 32 paused uploads claiming L: zero pre-read allocation, exact q backing counters at every allocation <= grants/B, 256/512-byte intermediate reservations, exact 18-byte EOF leases and no raw consolidation; short transport views copy only q bytes, failed extension allocates nothing/cancels/unlocks/restores capacity; gateway gates in pass11 report.
-  - [ ] Row 45 — Count port/handler: JSON-only, switch and exact model/version validation.
+  - [x] Pass 12 post-rebase gates — origin/main 12be48eeb: mesh typecheck/tests (385/0), gateway typecheck/tests (1066/0); sequential commands, no rebase fix required.
+  - [x] Row 45 — Count port/handler: JSON-only, exact ON switch, host catalog/partition preparation, shared native model/version eligibility, untouched shallow body and safe input_tokens; host deadline/upload detachment contract; no generation/financial path.
   - [ ] Row 46 — Count per-principal rate/concurrency/expiry/map bounds.
   - [ ] Row 47 — Router count endpoint: shared caller authentication/header/body/error reuse.
   - [ ] Row 48 — `tests/native-count-tokens.test.ts`: OFF/ON/fidelity/shallow copy/errors; no stream/ceiling/beta insertion.
