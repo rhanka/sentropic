@@ -175,6 +175,7 @@ jobs:
               - 'Makefile'
               - 'docker-compose.yml'
               - 'docker-compose.test.yml'
+              - 'docker-compose.ci.yml'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs

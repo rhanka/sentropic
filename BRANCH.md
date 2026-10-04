@@ -100,6 +100,7 @@
   - [ ] Write `.h2a/build/lot2_report.md` for reviewer.
 
 - [ ] **Lot 3 — CI cache wiring, verification & docs**
+  - [x] Extend production tag inputs to compiled IdP and migration sources; ignore only the generated identity receipt directory and include the CI overlay in change filters.
   - [x] Normalize the production rate-limit switch to an empty value when the test runner requests enforcement; existing HTTP assertions remain unchanged.
   - [x] Scan the non-shipping toolbox with the existing HIGH/CRITICAL compliance gate; no policy or register changes.
   - [x] Wire `.github/workflows/ci.yml` with exact content-tag archive caching; a cache hit loads the toolbox without any build.
