@@ -3,7 +3,7 @@ import { NATIVE_MAX_ERROR_BODY_BYTES, parseNativeErrorDetail, NativeSseFramer } 
 import type { NativeReadiness } from './anthropic-native-readiness';
 
 /** Test instrumentation observes actual holders, never request contents. */
-export type NativeBodyProbe = (holder: 'request' | 'body' | 'serialization' | 'upload', retained: boolean) => void;
+export type NativeBodyProbe = (holder: 'port-request' | 'port-outgoing' | 'request' | 'body' | 'serialization' | 'upload', retained: boolean) => void;
 
 /** A zero-prefetch upload: completion/cancellation clears every host-owned body holder. */
 export const createNativeUpload = (body: Readonly<Record<string, unknown>> | undefined, probe?: NativeBodyProbe) => {
