@@ -46,10 +46,10 @@ export API_TOOL_IMAGE_NAME ?= sentropic-api-tools
 # Include source inputs: the toolbox contains test sources and built workspaces.
 # Hash paths as well as bytes, so additions, deletions and renames invalidate it.
 ifndef API_TOOL_VERSION
-API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 endif
 export API_TOOL_VERSION
-API_TOOL_IMAGE = $(REGISTRY)/$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
+API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
 export UI_IMAGE_NAME  ?= sentropic-ui
 export E2E_IMAGE_NAME ?= sentropic-e2e
 export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
@@ -501,10 +501,14 @@ verify-api-image: ## Fail if the loaded canonical tag differs from the recorded 
 api-tool-version: ## Print the content-addressed CI toolbox tag
 	@echo $(API_TOOL_VERSION)
 
+.PHONY: test-ci-api-tooling
+test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
+	@bash scripts/ci/test-api-tooling.sh $(or $(CI_TOOLING_CASE),all)
+
 build-api-tool-image: ## Reuse the toolbox locally or from the registry; build only on a cache miss
 	@if docker image inspect $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
 		echo "Reusing local toolbox $(API_TOOL_IMAGE)"; \
-	elif docker pull $(API_TOOL_IMAGE); then \
+	elif docker pull $(API_TOOL_IMAGE) >/dev/null 2>&1; then \
 		echo "Reusing registry toolbox $(API_TOOL_IMAGE)"; \
 	else \
 		docker build --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .; \
