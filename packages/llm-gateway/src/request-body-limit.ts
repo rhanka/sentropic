@@ -1,4 +1,5 @@
-import { GatewayError } from './router/errors.js';
+import type { MiddlewareHandler } from 'hono';
+import { GatewayError, toProviderShapedError } from './router/errors.js';
 import { GATEWAY_MAX_REQUEST_BODY_BYTES } from './request-too-large.js';
 import { defaultGatewayBodyBytePool, type GatewayBodyBytePool } from './request-body-pool.js';
 import { CheckedGatewayBody } from './request-body-retention.js';
@@ -87,4 +88,23 @@ export const ensureCheckedGatewayBody = (
     checked.set(request, result);
   }
   return result;
+};
+
+/** Mount after product authentication and before any gateway settlement/body parser. */
+export const gatewayRequestBodyLimit = (
+  options: RequestBodyLimitOptions = {}, requestId: () => string = () => crypto.randomUUID(),
+): MiddlewareHandler => async (c, next) => {
+  if (!isGatewayBodyPath(c.req.raw)) return next();
+  let owner: CheckedGatewayBody;
+  try { owner = await ensureCheckedGatewayBody(c.req.raw, options); }
+  catch (error) {
+    const wire = new URL(c.req.raw.url).pathname.endsWith('/chat/completions')
+      ? 'openai-chat-completions' : 'anthropic-messages';
+    const mapped = toProviderShapedError(wire, error);
+    for (const [key, value] of Object.entries(mapped.headers ?? {})) c.header(key, value);
+    c.header('X-Sentropic-Request-Id', requestId());
+    return c.json(mapped.body as object, mapped.status as 400);
+  }
+  try { await next(); }
+  finally { if (!owner.transferred) owner.release(); }
 };

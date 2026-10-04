@@ -42,6 +42,8 @@ import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller
 import type { GatewayBudgetOptions } from '../ports/budget.js';
 import { assertBudgetRouteDeps } from '../admission.js';
 import { buildNativeResponseHeaders } from '../native-headers.js';
+import { ensureCheckedGatewayBody, gatewayRequestBodyLimit, type RequestBodyLimitOptions } from '../request-body-limit.js';
+import { retainGatewayStreamBody } from '../request-body-retention.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -49,6 +51,8 @@ export interface ReadinessProbe {
 }
 
 export interface CreateGatewayRouterOptions {
+  /** Trusted tests/host composition; absent means the process-wide bounded default. */
+  readonly requestBody?: RequestBodyLimitOptions;
   readonly routeDispatch?: RouteAttemptDispatchPort;
   /** Trusted ingress reconstruction, including external scheme and rewritten path. */
   readonly publicUrl?: (req: Request) => string;
@@ -187,6 +191,7 @@ export const createGatewayRouter = (
   assertBudgetRouteDeps(options.routePlanner, Boolean(options.routeMetering), options.budget);
   const requestId = options.requestId ?? defaultRequestId;
   const app = new Hono();
+  app.use('*', gatewayRequestBodyLimit(options.requestBody, requestId));
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
     try {
       const context = {
@@ -238,8 +243,9 @@ export const createGatewayRouter = (
 
     // Parse the provider-native body (bad JSON -> provider-shaped 400, §3b).
     let body: unknown;
+    const bodyLease = await ensureCheckedGatewayBody(c.req.raw, options.requestBody);
     try {
-      body = await c.req.json();
+      body = bodyLease.body;
     } catch {
       return sendError(c, mapGatewayError(wire, 'bad-request'), id);
     }
@@ -259,9 +265,11 @@ export const createGatewayRouter = (
       return sendError(c, toProviderShapedError(wire, error, model), id);
     }
     const flowRequest = {
-      wire, headers, body, model, stream, authContext,
+      wire, headers, body, bodyLease, model, stream, authContext,
       signal: c.req.raw.signal,
     };
+    body = undefined;
+    bodyLease.trackDetach(() => { flowRequest.body = undefined; });
 
     if (!stream) {
       try {
@@ -304,6 +312,8 @@ export const createGatewayRouter = (
     }
 
     forwardProviderHeaders(c, streamResult.headers, streamResult.relay === 'native');
+    streamResult = { ...streamResult,
+      stream: retainGatewayStreamBody(streamResult.stream, bodyLease, cancellation.signal) };
     c.header('Content-Type', SSE_CONTENT_TYPE);
     c.header('Cache-Control', 'no-cache');
     c.header(REQUEST_ID_HEADER, id);
