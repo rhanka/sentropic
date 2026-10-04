@@ -9,8 +9,56 @@ import {
   type GatewayConfig,
 } from '../src/index.js';
 import { parseSse } from '../src/wire.js';
+import { nativeHarness, nativeChunks, nativeFrame, nativeStart, sendNative } from './fixtures/native-flow.js';
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 
 const buildApp = () => createGatewayRouter({ config: stubGatewayConfig });
+
+describe('native router isolation and bytes', () => {
+  const excluded = ['authorization', 'x-api-key', 'api-key', 'anthropic-api-key',
+    'anthropic-admin-api-key', 'anthropic-oauth-token', 'anthropic-key', 'cookie', 'cookie2',
+    'set-cookie', 'set-cookie2', 'connection', 'keep-alive', 'proxy-connection', 'te', 'trailer',
+    'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization',
+    'x-sentropic-request-id', 'x-sentropic-served', 'x-sentropic-relay', 'x-sentropic-future',
+    'x-account', 'x-forwarded-for', 'content-length', 'content-encoding', 'x-accel-buffering',
+    'anthropic-nominated', 'request-id'];
+  it.each([false, true])('filters response authority before emitting own headers (stream=%s)', async stream => {
+    const bytes = [new TextEncoder().encode(': comment ☃\r\n\r\n'), nativeStart('claude-sonnet-5'),
+      nativeFrame('message_delta', { delta: { safeguard_results: { unknown: ['雪'] } }, usage: { output_tokens: 3 } }),
+      nativeFrame('message_stop')];
+    const headers = { ...Object.fromEntries(excluded.map(name => [name.toUpperCase(), 'UPSTREAM-SECRET'])),
+      Connection: 'Anthropic-Nominated, Request-Id', 'Anthropic-Organization-Id': 'org-shared',
+      'Anthropic-Future': 'kept', 'X-Request-Id': 'safe-upstream' };
+    const h = nativeHarness({ execute: async () => stream
+      ? { kind: 'stream', status: 200, headers, body: nativeChunks(bytes) }
+      : { kind: 'json', status: 200, headers, body: { model: 'claude-sonnet-5', safeguard_results: { unknown: true } } } });
+    const response = await sendNative(h, stream);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('anthropic-organization-id')).toBe('org-shared');
+    expect(response.headers.get('anthropic-future')).toBe('kept');
+    expect(response.headers.get('x-request-id')).toBe('safe-upstream');
+    expect(response.headers.get('x-sentropic-request-id')).toBe('req-native');
+    expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    for (const name of excluded) expect(response.headers.get(name) ?? '').not.toContain('UPSTREAM-SECRET');
+    if (stream) {
+      expect(response.headers.has('x-sentropic-served')).toBe(false);
+      expect(response.headers.get('x-accel-buffering')).toBe('no');
+      expect(response.headers.get('cache-control')).toBe('no-cache');
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array(Buffer.concat(bytes)));
+    } else expect(response.headers.get('x-sentropic-served')).toContain('model=claude-sonnet-5');
+    expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it.each([false, true])('exposes no success headers on native validation refusal (stream=%s)', async stream => {
+    const h = nativeHarness({ execute: async () => { throw new NativeMessagesUpstreamError({ status: 400,
+      type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: 'Invalid tool field.' } }); } });
+    const response = await sendNative(h, stream);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'Invalid tool field.' } });
+    for (const name of ['x-sentropic-relay', 'x-sentropic-served', 'anthropic-organization-id', 'x-accel-buffering']) {
+      expect(response.headers.has(name)).toBe(false);
+    }
+  });
+});
 
 describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
   const createOpenAiRoutePlanner = (
