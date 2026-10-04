@@ -1,11 +1,11 @@
-# Feature: BR-45b — IdP identity sync: PII-free failure codes and silent selftest fixtures
+# Feature: BR-45b — IdP identity and consent sync with safe failure reporting
 
 ## Objective
-Make a failed preprod import self-explaining in CI (PII-free failure code in the termination message, printed by the run workflow) and stop the selftest from printing audit-shaped fixtures that can be mistaken for a real audit.
+Synchronize prod identities and explicitly granted consents into preprod through a versioned client map, with PII-free failure reporting and silent synthetic selftests. Users without prod consent must still see the consent screen.
 
 ## Scope / Guardrails
-- Scope limited to the BR-45 identity sync wrapper, run orchestration and their selftests.
-- No change to `import-preprod.sql` semantics, to the Kubernetes objects' privileges, or to the workflow triggers.
+- Scope limited to BR-45 identity/consent export, import, orchestration and their selftests.
+- Consent semantics and reader column grants are authorized by BR45b-EX1; Kubernetes privileges and workflow triggers stay unchanged.
 - Make-only workflow, no direct Docker commands; ZERO Python.
 - Failure output carries a fixed code and, for re-key refusals, UUID pairs only; never raw SQL stderr, emails or secrets.
 - Root workspace `~/src/sentropic` is reserved for user dev/UAT and must remain stable.
@@ -19,6 +19,13 @@ Make a failed preprod import self-explaining in CI (PII-free failure code in the
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh`
+  - `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`
+  - `deploy/k8s/overlays/preprod/idp-identity-sync/kustomization.yaml`
+  - `deploy/k8s/overlays/preprod/idp-identity-sync/client-map.csv`
+  - `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`
+  - `deploy/k8s/overlays/prod/idp-identity-sync/reader-role.sql`
+  - `deploy/k8s/overlays/prod/idp-identity-sync/kustomization.yaml`
+  - `deploy/k8s/overlays/prod/idp-identity-sync/cronjob.yaml`
   - `deploy/ci/idp-identity-sync/**`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -26,7 +33,6 @@ Make a failed preprod import self-explaining in CI (PII-free failure code in the
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**`
-  - `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`
   - `api/**`, `ui/**`, `packages/**`
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
@@ -39,6 +45,7 @@ Make a failed preprod import self-explaining in CI (PII-free failure code in the
 - `attention` context: run 37204934129 failed by design (empty `ALLOWED_REKEY`, re-key guard) but CI only printed `audit unavailable`; `run.selftest.mjs:89` printed an audit-shaped fixture (`rekeyed 0`, `rekey_pairs []`) that was mistaken for a real audit.
 - `acknowledge` resolved locally by DEV on 2026-10-04: validated failure codes and UUID-only pairs replace the failed-Job audit fallback; the selftest output probe passes without fixture audits or summaries. Lot 3 remains with the conductor.
 - `acknowledge` review follow-up resolved by DEV on 2026-10-04: F1–F4/F6–F9 fixed and tested; F5 retained per conductor decision. Review evidence: `.h2a/inputs/review-br45b.md`.
+- BR45b-EX1 — Owner decision "Synchro des consentements" (2026-10-04, `.h2a/inputs/consent_brief.md`): permit consent SQL, six read-only consent column grants and the versioned ConfigMap client map. Include the prod CronJob's checksum/snapshot parsing because its hardcoded three-file manifest cannot transport the new export correctly. Impact: four-file relay and transactional mapped consent convergence; no trusted-client bypass or Kubernetes privilege/trigger change. Rollback: revert the Lot 4 commits.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -78,3 +85,14 @@ Make a failed preprod import self-explaining in CI (PII-free failure code in the
   - [x] gemini cross-review recorded; auth review.
   - [ ] CI green on the PR.
   - [ ] Remove `BRANCH.md` before merge.
+
+- [ ] **Lot 4 — Consent sync**
+  - [x] Grant six consent columns to the reader and export consents in the identity snapshot with its count.
+  - [x] Ship the versioned prod-to-preprod client map in the preprod SQL ConfigMap, absent from the relay.
+  - [ ] Require four relay files and consent counts; classify consent map and postcondition failures safely.
+  - [ ] Transactionally upsert mapped prod consents and remove missing/revoked grants for prod users; retain preprod-only and unmapped grants, clients and signing keys.
+  - [ ] Audit changed upserts/removals; unchanged reruns report 0/0.
+  - [ ] SQL fixtures cover owner scopes, Farid removal, preserved grants, scope changes, revocation, missing/duplicate map targets, consent rollback, DV5 and reader grants.
+  - [ ] Selftest verifies new audit counts/codes, four-file manifest and ConfigMap-only map.
+  - [ ] README documents consent semantics, versioned mapping and fail-closed rollout order.
+  - [ ] Lot gates: `make test-idp-sync-sql ENV=test-idp-sync-codes` and `make test-idp-sync-selftest ENV=test-idp-sync-codes`.
