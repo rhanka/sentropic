@@ -9,7 +9,10 @@ import {
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
-import { NativeAttemptRefusal, prepareNativeMessages } from './route-native.js';
+import { dispatchNativeMessages } from './route-attempt-dispatch.js';
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import { assertNativeMessagesResult, buildNativeMessagesRequest, NativeAttemptRefusal, prepareNativeMessages } from './route-native.js';
+import { nativeDefaultTtlEligible, NativeUsageObserver, nativeSnapshotUsage } from './native-usage.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown, fallback: SettleUsage): SettleUsage => {
@@ -20,6 +23,8 @@ const errorUsage = (error: unknown, fallback: SettleUsage): SettleUsage => {
 
 export interface RouteGatewayJsonResult extends CanonicalGatewayResponse {
   readonly servedTarget: ResolvedTarget;
+  readonly relay?: 'native';
+  readonly nativeServedModelId?: string;
 }
 
 const servedTargetFor = (diagnostic: {
@@ -53,27 +58,42 @@ export const runRouteJsonFlow = async (
     const candidateRef = prepared.plan.candidateRefs[index]!;
     const diagnostic = prepared.plan.diagnostics[index]!;
     let attempt: PreparedRouteAttempt | undefined;
-    let response: GenerateResponse;
+    let response: GenerateResponse | undefined;
     let encoded: CanonicalGatewayResponse;
     let invoked = false;
     let observedUsage: SettleUsage | undefined;
+    let nativeObserver: NativeUsageObserver | undefined;
+    let nativeServedModelId: string | undefined;
     try {
       signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
         prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
       );
       signal?.throwIfAborted();
-      prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
+      const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
       signal?.throwIfAborted();
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
-      response = await (deps.dispatch ?? defaultDispatch).generate({ attempt, request: {
-        ...prepared.canonical.request,
-        ...(signal ? { signal } : {}),
-      } });
-      if (response.usage) observedUsage = routeUsage(response.usage);
-      signal?.throwIfAborted();
-      encoded = encodeGatewayResponse(request.wire, response);
+      if (native) {
+        const nativeRequest = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
+        nativeObserver = new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body));
+        const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
+        assertNativeMessagesResult(result, 'json');
+        if (result.kind !== 'json') throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
+        nativeObserver.observeJson(result.body);
+        signal?.throwIfAborted();
+        const snapshot = nativeObserver.snapshot('completed');
+        observedUsage = nativeSnapshotUsage(snapshot);
+        if (!snapshot.fallbackPresent && !snapshot.iterationsPresent) nativeServedModelId = snapshot.nativeServedModelId;
+        encoded = result;
+      } else {
+        response = await (deps.dispatch ?? defaultDispatch).generate({ attempt, request: {
+          ...prepared.canonical.request, ...(signal ? { signal } : {}),
+        } });
+        if (response.usage) observedUsage = routeUsage(response.usage);
+        signal?.throwIfAborted();
+        encoded = encodeGatewayResponse(request.wire, response);
+      }
     } catch (error) {
       if (error instanceof BudgetDispatchMarkError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
@@ -82,14 +102,15 @@ export const runRouteJsonFlow = async (
         throw await refuseNativeAttempt(attempt, () => settle('failed'));
       }
       const classification = classifyRouteError(error, signal?.aborted);
-      const usage = errorUsage(error, observedUsage ?? (invoked ? estimate() : routeUsage()));
+      const usage = nativeObserver ? nativeSnapshotUsage(nativeObserver.snapshot(signal?.aborted ? 'cancelled' : 'upstream_error'))
+        : errorUsage(error, observedUsage ?? (invoked ? estimate() : routeUsage()));
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
-      const terminal = () => terminalGatewayError(
+      const terminal = () => error instanceof NativeMessagesUpstreamError ? error : terminalGatewayError(
         classification, servedTargetFor(diagnostic), 'all planned routes failed',
       );
       try {
@@ -122,14 +143,15 @@ export const runRouteJsonFlow = async (
       // collapsing into pooled-account-unavailable (503).
       throw terminal();
     }
-    const usage = response.usage ? routeUsage(response.usage) : estimate(response.text);
+    const usage = observedUsage ?? estimate(response?.text);
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
       outcome: 'success', usage });
     // Operational and financial callbacks are outside provider retry handling.
     try { await attempt.complete(attemptUsage(usage)); }
     finally { await settle('success'); }
-    return { ...encoded, servedTarget: servedTargetFor(diagnostic) };
+    return { ...encoded, servedTarget: servedTargetFor(diagnostic),
+      ...(nativeObserver ? { relay: 'native', nativeServedModelId } : {}) };
   }
   try {
     await settle('failed');
