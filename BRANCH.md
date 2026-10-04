@@ -197,7 +197,7 @@
   - [x] Row 34b — Same file: shared missing/null/empty versus substantive/malformed iterations predicate, permanent late model/fallback/iterations latch, opaque wire preserved without folding arrays, realistic 74350 full-rate/64x output floor versus 2450/1700 measured amounts; gateway gates in pass09 report.
   - [x] Row 34c — Same exact immutable snapshot object reaches projection/hook once on clean/cancel/commit/EOF/overflow/reader/upstream exits; never-settling observation cannot delay settlement, raw-reader closure or injected lease-release seam; JSON throw/reject/never parity; real pool repeats at row 44b; gateway gates in pass09 report.
   - [x] Row 34d — Same file: all three models, 1h/unknown TTL, SDK no-split/equal/aggregate-only/nullable/omitted/growth repetitions and exact clean/interrupted 2500/1750, 65500/64750, 2700/1950, 65700/64950; mixed growth 2650/1900 and 65650/64900; default 2475/1725; decrease/conflict 74300; raw TTL remains reported evidence; gateway gates in pass09 report.
-  - [ ] Row 34e — Same file: fake-timer finalize timeout and ignored late resolution/rejection.
+  - [x] Row 34e — Same file: typed absent/completed/hook_error/hook_timeout, 999+1-ms timer boundary, settled/closed before expiry, cleared timers, handled late fulfillment/rejection, unchanged snapshot and once-only completion/finalize/settlement; gateway gates in pass09 report.
   - [ ] Row 34f — Same file: N5 malformed one-hour delta charges 74300, clean stop/interruption, later growth.
   - [ ] Row 35 — `tests/native-sse.test.ts`, stream tests: exact safeguards bytes, errors/EOF/overflow and estimated settlement.
   - [ ] Row 36 — Native response header policy/router: open Anthropic, organization exposure, relay marker and served-model policy.
