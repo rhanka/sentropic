@@ -123,6 +123,8 @@
   - [x] Trigger CI for toolbox `tools/**` and regression-script changes so hash invalidation and its tests are exercised.
   - [x] Recheck all four regressions, ShellCheck/actionlint, scope/hash coverage, source unit (1011 passed, 2 skipped), production scan (zero findings), restore (9), smoke (13), limit (4) and compiled IdP browser smoke after review fixes.
   - [x] Correct CI manifest wiring: keep toolbox regressions outside the reserved `scripts/ci` publisher namespace and name the main-image helper with the `-image` suffix.
+  - [ ] Remediate the blocking toolbox scan without changing policy: rebuild esbuild 0.19.12/0.18.20 with pinned Go 1.26.7 and patch bundled npm ip-address/pacote; retain npm and runner interfaces.
+  - [x] Verify npm/npx and both rebuilt esbuild Node interfaces with a real TypeScript transform after toolbox builds and cache loads; local build passes and scan falls from 56 to two findings addressed by PR #637.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app smoke verification on running stack.
