@@ -69,6 +69,7 @@
   - [x] Adapt host component shadow/focus/shrink/opacity utilities and matching print selectors.
   - [x] Adapt route utilities, matrix gradients/overlays, and editable-field focus outlines.
   - [ ] Regenerate root/standalone UI locks through make; commit generated locks separately.
+  - [x] Regenerate root lock; workspace UI/API SCA pass and braces is absent.
   - [ ] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
 - [ ] **Lot 2 — Related trees and qualification**
   - [ ] Audit API and standalone UI/IdP trees; migrate same-chain consumers as required.
