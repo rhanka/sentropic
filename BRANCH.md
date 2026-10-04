@@ -182,7 +182,7 @@
   - [ ] Row 28f1 — `tests/native-usage.test.ts`, `tests/native-sse.test.ts`: split conflicts/decreases/later explicit resolution.
   - [ ] Row 28f2 — Same files: N5 malformed permanent revocation and latched nullable physical-bound fixtures.
   - [x] Row 29 — `src/admission.ts`, `src/flow.ts`, `src/native-usage.ts`: trusted per-attempt pricing/proof projection from the observer snapshot; validated stream input stays exact, output-only floor on failure; no-proof full-rate floors and same-model uncertain-TTL premium bound. Row 28b gates: typecheck PASS; 718 tests passed / 0 failed. Row 29a is the bounded settlement/amount test split; post-commit gates in pass report.
-  - [ ] Row 29a — `tests/budget-admission.test.ts`, `tests/budget-hardening.test.ts`: missing/invalid/mismatch fallback; N5 full-rate allowance charge.
+  - [x] Row 29a — Row 29 test split in `tests/native-budget-usage.test.ts`: actual charged projections pin 2500/1750, 65500/64750, 2700/1950, 74300 and V-1 11702/74682; measured SSE has no output floor (N4), failed proof keeps full-rate floors (N5), unknown TTL premiums retained, unmarked/canonical aggregation behavior preserved. Row 29 gates: typecheck PASS; 718 tests passed / 0 failed. Post-commit gates in pass report.
   - [ ] Row 30 — `src/route-json-flow.ts`, native helper: JSON native flow and bounded result.
   - [ ] Row 30a — Gateway lifecycle: shared pre-floor snapshot, exactly-once finalize, independent 1000-ms timeout/fallback.
   - [ ] Row 31 — `tests/route-json-flow.test.ts`: JSON fidelity, optional fallback before invocation, errors and cleanup.
