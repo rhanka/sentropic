@@ -465,6 +465,22 @@ export const runStreamFlow = async (
   let usage: SettleUsage | undefined = firstResult!.done
     ? undefined
     : extractUsageFromFrame(request.wire, firstResult!.value.raw);
+  let finished = false;
+  let closing: Promise<void> | undefined;
+  const close = () => closing ??= Promise.resolve().then(async () => {
+    const current = iterator;
+    iterator = undefined;
+    dispatchStream = undefined;
+    try { await current?.return?.(); }
+    finally { request.bodyLease?.release(); }
+  });
+  const finish = async (failed: boolean) => {
+    if (finished) return;
+    finished = true;
+    // Capture estimation while request references remain; cleanup never waits on the sink.
+    const done = settle(deps, request, prepared, failed ? 'failed' : 'success', usage);
+    await Promise.all([done, close()]);
+  };
 
   const stream = (async function* (): AsyncGenerator<
     GatewayDispatchStreamEvent,
@@ -490,12 +506,14 @@ export const runStreamFlow = async (
       // error event. The gateway synthesizes NO terminator (B3).
       failed = true;
     } finally {
-      await settle(deps, request, prepared, failed ? 'failed' : 'success', usage);
+      await finish(failed);
     }
   })();
+  const originalReturn = stream.return.bind(stream);
+  stream.return = async value => { await finish(true); return originalReturn(value); };
 
   return {
-    ...(dispatchStream.headers ? { headers: dispatchStream.headers } : {}),
+    ...(dispatchStream?.headers ? { headers: dispatchStream.headers } : {}),
     servedTarget: prepared.target,
     stream,
   };
