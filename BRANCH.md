@@ -204,7 +204,7 @@
   - [x] Row 36 — Dedicated native response-header policy extends canonical safe names with open Anthropic headers and owner-accepted organization exposure; JSON relay/safe single served-model tests; post-commit gateway gates recorded in pass10 report.
   - [x] Row 37 — Router JSON/SSE credentials/cookies/hop-by-hop/Connection/internal spoof isolation, owner-accepted organization exposure, exact UTF-8/CRLF safeguards bytes, own markers/served policy and validation refusal headers; 37b corrects null/typed-array assertion operands; gateway gates recorded in pass10 report.
   - [x] Row 38 — Loopback fake HTTP native provider captures exact request bytes/headers, scripts JSON/SSE/errors, gates first-frame progression and observes socket closure; real fetch adapter and smoke test; 38b uses configured event/forEach APIs and pins dispatch-owned stream override in bytes; gateway gates recorded in pass10 report.
-  - [ ] Row 39 — `tests/anthropic-native-relay.integration.test.ts`: exact body/header/IP/error/count/cancel/backpressure fidelity.
+  - [x] Row 39 — HTTP JSON/SSE exact opaque body/header/UTF-8 bytes, closed caller headers/IP/user-agent isolation, server auth, organization exposure, validation/billing 400s, progressive first frame and paused-response cancellation; count endpoint repeats after rows 45–49 and M6 numeric HTTP repeats at row 42; gateway gates recorded in pass10 report.
   - [ ] Row 40 — EX1 `src/native-messages.ts`, `src/errors.ts`: M6 typed size detail survives normalization/causes.
   - [ ] Row 41 — Gateway error/classification seams: terminal 413 preserved on both wires.
   - [ ] Row 42 — `tests/request-too-large.test.ts`, EX1 `tests/native-error-metadata.test.ts`: numeric exact/lower-bound/unknown-limit envelopes.
