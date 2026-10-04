@@ -6,6 +6,7 @@ import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import { parseSse } from '../src/wire.js';
+import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNative } from './fixtures/native-flow.js';
 import {
   NOW_MS, answerStream, budgetConfig, quotingPlanner, recordingBudget, streamAttempt, type BudgetRecorder,
 } from './fixtures/budget.js';
@@ -460,6 +461,70 @@ describe('route stream flow', () => {
     expect(settlements[0]).toMatchObject({
       outcome: 'cancelled', attempts: [{ outcome: 'cancelled' }],
     });
+  });
+});
+
+describe('native stream commitment and cancellation', () => {
+  it('relays exact comment/unknown/UTF-8/CRLF bytes and native SSE headers', async () => {
+    const comment = new TextEncoder().encode(': ready\r\n\r\n');
+    const future = new TextEncoder().encode('event: future\ndata: {"text":"é💡"}\n\n');
+    const h = nativeStreamHarness([comment, nativeStart('claude-sonnet-5'), future,
+      nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop')]);
+    const response = await sendNative(h, true);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    expect(response.headers.get('x-sentropic-served')).toBeNull();
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
+    expect(response.headers.get('cache-control')).toBe('no-cache');
+    const raw = new TextDecoder().decode(await response.arrayBuffer());
+    expect(raw).toBe(new TextDecoder().decode(comment) + new TextDecoder().decode(nativeStart(h.model))
+      + new TextDecoder().decode(future) + new TextDecoder().decode(nativeFrame('message_delta', { usage: { output_tokens: 3 } }))
+      + new TextDecoder().decode(nativeFrame('message_stop')));
+    expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.snapshots[0]).toMatchObject({ estimated: false, finalOutputObserved: true, termination: 'completed' });
+  });
+  it('claims one failed snapshot when markCommitted rejects after a valid start', async () => {
+    const h = nativeStreamHarness([nativeStart('claude-sonnet-5')]);
+    h.attempt.markCommitted.mockRejectedValue(Error('commit failed'));
+    await expect(runRouteStreamFlow(h.deps, { ...h.request, stream: true })).rejects.toThrow();
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(h.snapshots[0]).toMatchObject({ termination: 'commit_failed', inputTokens: 2,
+      outputTokens: 1, nativeInputUsageValidated: true, finalOutputObserved: false, estimated: true });
+    expect(h.recorder.settlements[0]!.attempts[0]!.usage).toMatchObject({ inputTokens: 2, outputTokens: 32_000, estimated: true });
+    expect(h.attempt.recordOutcome).toHaveBeenCalledTimes(1);
+  });
+  it('cancels an exposed but never-consumed stream once', async () => {
+    const h = nativeStreamHarness([nativeStart('claude-sonnet-5')]);
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+    await result.stream.return(undefined); await result.stream.return(undefined);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.attempt.releaseCancelled).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.snapshots[0]).toMatchObject({ termination: 'cancelled', finalOutputObserved: false });
+  });
+  it('settles and closes once when caller cancellation interrupts a pending read', async () => {
+    const controller = new AbortController(); const closed = vi.fn(async () => ({ done: true as const, value: undefined }));
+    let reads = 0;
+    const h = nativeHarness({ execute: async () => ({ kind: 'stream', status: 200, headers: {}, body: {
+      [Symbol.asyncIterator]: () => ({ next: () => ++reads === 1
+        ? Promise.resolve({ done: false as const, value: nativeStart('claude-sonnet-5') })
+        : new Promise<IteratorResult<Uint8Array>>(() => {}), return: closed }),
+    } }) });
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true, signal: controller.signal });
+    await result.stream.next(); const pending = result.stream.next();
+    await Promise.resolve(); controller.abort();
+    await expect(pending).resolves.toMatchObject({ done: true });
+    await result.stream.return(undefined);
+    expect(closed).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(h.attempt.releaseCancelled).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it.each([false, true])('requires a final delta before clean stop establishes measured output: delta=%s', async delta => {
+    const h = nativeStreamHarness([nativeStart('claude-sonnet-5'),
+      ...(delta ? [nativeFrame('message_delta', { usage: { output_tokens: 3 } })] : []), nativeFrame('message_stop')]);
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+    await collect(result.stream);
+    expect(h.snapshots[0]).toMatchObject({ finalOutputObserved: delta, estimated: !delta, outputTokens: delta ? 3 : 1 });
+    expect(h.recorder.settlements[0]!.usage.outputTokens).toBe(delta ? 3 : 32_000);
   });
 });
 

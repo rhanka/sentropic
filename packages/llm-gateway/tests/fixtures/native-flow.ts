@@ -58,3 +58,8 @@ export const nativeRouter = (h: ReturnType<typeof nativeHarness>) => createGatew
 export const sendNative = (h: ReturnType<typeof nativeHarness>, stream = false): Promise<Response> =>
   Promise.resolve(nativeRouter(h).request('/v1/messages', { method: 'POST',
     headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...h.request.body, stream }) }));
+
+export const nativeStreamHarness = (chunks: readonly Uint8Array[],
+  options: NonNullable<Parameters<typeof nativeHarness>[0]> = {}) => nativeHarness({ ...options,
+  execute: async () => ({ kind: 'stream', status: 200, headers: {}, body: nativeChunks(chunks) }),
+});
