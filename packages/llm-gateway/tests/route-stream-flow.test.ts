@@ -6,7 +6,8 @@ import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import { parseSse } from '../src/wire.js';
-import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNative } from './fixtures/native-flow.js';
+import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNative, nativeAmount } from './fixtures/native-flow.js';
+import { NATIVE_MODELS } from './fixtures/native-usage.js';
 import {
   NOW_MS, answerStream, budgetConfig, quotingPlanner, recordingBudget, streamAttempt, type BudgetRecorder,
 } from './fixtures/budget.js';
@@ -526,6 +527,57 @@ describe('native stream commitment and cancellation', () => {
     expect(h.snapshots[0]).toMatchObject({ finalOutputObserved: delta, estimated: !delta, outputTokens: delta ? 3 : 1 });
     expect(h.recorder.settlements[0]!.usage.outputTokens).toBe(delta ? 3 : 32_000);
   });
+});
+
+describe('native cumulative input and pinned stream amounts', () => {
+  const start = { input_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0, output_tokens: 1 };
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].map(clean => ({ model, clean }))))(
+    'prices K1 growth once without a clean output floor: $model clean=$clean', async ({ model, clean }) => {
+      const h = nativeStreamHarness([nativeStart(model, start), nativeFrame('message_delta', { usage: {
+        input_tokens: 150, cache_read_input_tokens: 2000, cache_creation_input_tokens: 0, output_tokens: 500 } }),
+        ...(clean ? [nativeFrame('message_stop')] : [])], { model });
+      const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+      await collect(result.stream);
+      const fable = model === NATIVE_MODELS[2];
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean ? fable ? 1200 : 1350 : fable ? 64_200 : 64_350);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 2150, outputTokens: 500, totalTokens: 2650,
+        nativeInputUsageValidated: true, nativeInputUsageSource: 'message_delta', finalOutputObserved: clean, estimated: !clean });
+      expect(h.recorder.settlements[0]!.usage.outputTokens).toBe(clean ? 500 : 32_000);
+    });
+  it.each([{ input_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0 },
+    { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null }, {},
+    { input_tokens: 100, cache_read_input_tokens: null }, { cache_read_input_tokens: 1000 }])(
+    'keeps equal/absent/nullable cumulative categories without revoking proof: %j', async delta => {
+      const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], start),
+        nativeFrame('message_delta', { usage: { ...delta, output_tokens: 500 } }), nativeFrame('message_stop')]);
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 1100, nativeInputUsageValidated: true, estimated: false });
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(1200);
+    });
+  it.each([{ input_tokens: 99 }, { cache_read_input_tokens: 999 }, { input_tokens: 0 }])(
+    'permanently revokes decreased input even after later growth: %j', async decrease => {
+      const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], start), nativeFrame('message_delta', { usage: decrease }),
+        nativeFrame('message_delta', { usage: { input_tokens: 150, cache_read_input_tokens: 2000, output_tokens: 500 } }),
+        nativeFrame('message_stop')]);
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(h.snapshots[0]).toMatchObject({ nativeInputUsageValidated: false, estimated: true,
+        nativeUsageUncertainty: 'input_breakdown_changed', outputTokens: 500 });
+      expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_000);
+    });
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].map(clean => ({ model, clean }))))(
+    'pins official V-1 cumulative usage: $model clean=$clean', async ({ model, clean }) => {
+      const h = nativeStreamHarness([nativeStart(model, { input_tokens: 2679, cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0, output_tokens: 3 }), nativeFrame('message_delta', { usage: {
+          input_tokens: 10_682, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 510,
+          server_tool_use: { web_search_requests: 1 } } }), ...(clean ? [nativeFrame('message_stop')] : [])],
+      { model, allowanceInput: 20_000 });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean ? 11_702 : 74_682);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_682, outputTokens: 510, totalTokens: 11_192,
+        nativeInputUsageValidated: true, finalOutputObserved: clean, estimated: !clean });
+      expect(JSON.stringify(h.snapshots)).not.toContain('server_tool_use');
+    });
 });
 
 describe('route stream flow with budget admission', () => {

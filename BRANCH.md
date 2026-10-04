@@ -193,7 +193,7 @@
   - [x] Row 32a — Native stream terminal paths share `nativeLifecycle` snapshot and independent bounded finalize task; abort races pending reads, detaches listeners, aborts upstream and joins one terminal completion/reader closure; gateway gates in pass09 report.
   - [x] Row 33 — Native router header policy: unknown Anthropic/organization exposure with credential/hop-by-hop exclusions, gateway diagnostics last, response-served JSON identity only, SSE served omission and buffering hint; byte enqueue/downstream cancellation use row 32.3 union; JSON router regressions; gateway gates in pass09 report.
   - [x] Row 34 — Exact comment/unknown/UTF-8/CRLF byte and router headers, rejected commitment snapshot/output floor, never-consumed return, pending-read abort, once-only reader/finalize/settlement, provisional-versus-final output; gateway gates in pass09 report.
-  - [ ] Row 34a — Same file: L2 U/R growth/equality/decrease/null and V-1 clean/interrupted amounts.
+  - [x] Row 34a — Same file: K1 clean/interrupted growth amounts for all three models, equal/absent/null categories, permanent U/R/zero decrease revocation, exact official V-1 usage/11702 and 74682 amounts, distinct pre-floor snapshots; gateway gates in pass09 report.
   - [ ] Row 34b — Same file: late mismatch/iterations and realistic output flooring.
   - [ ] Row 34c — Same file: once-only finalize/rejecting/never-settling hook and independent cleanup.
   - [ ] Row 34d — Same file: one-hour no-split/equal/growth clean/interrupted amounts.
