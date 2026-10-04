@@ -182,6 +182,9 @@ jobs:
               - 'Makefile'
               - 'docker-compose.yml'
               - 'docker-compose.test.yml'
+              - 'docker-compose.ci.yml'
+              - 'tools/**'
+              - 'scripts/test-api-tooling.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
@@ -998,6 +1001,9 @@ jobs:
       - name: Build API image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make build-api
+      - name: Verify npm CLI and cache are absent from the production runtime
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-ci-api-runtime ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
@@ -1006,13 +1012,60 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: api-image
-          path: api-image.tar
+          path: |
+            api-image.tar
+            .tmp/ci-prod-image/api-image-id
+          include-hidden-files: true
+          compression-level: 0
+
+  build-api-tool-image:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Test toolbox image references, cache fallback and hash inputs
+        run: make test-ci-api-tooling ENV=test-ci-api
+      - name: Compute toolbox content tag
+        id: tool-version
+        run: echo "tag=$(make -s api-tool-version ENV=test-ci-api)" >> "$GITHUB_OUTPUT"
+      - name: Restore exact toolbox cache
+        id: tool-cache
+        uses: actions/cache@v4
+        with:
+          path: api-tool-image.tar
+          key: ${{ runner.os }}-api-tools-v1-${{ steps.tool-version.outputs.tag }}
+      - name: Load cached toolbox
+        if: steps.tool-cache.outputs.cache-hit == 'true'
+        run: make load-api-tool ENV=test-ci-api
+      - name: Build CI toolbox
+        if: steps.tool-cache.outputs.cache-hit != 'true'
+        run: make build-api-tool-image ENV=test-ci-api
+      - name: Verify toolbox runner and compiler interfaces
+        run: make test-ci-api-tool-runtime ENV=test-ci-api
+      - name: Save CI toolbox
+        if: steps.tool-cache.outputs.cache-hit != 'true'
+        run: make save-api-tool ENV=test-ci-api
+      - uses: actions/upload-artifact@v7
+        with:
+          name: api-tool-image
+          path: api-tool-image.tar
+          compression-level: 0
 
   test-api-unit-integration:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image]
+    needs: [changes, build-api-image, build-api-tool-image]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     continue-on-error: ${{ matrix.suite == 'ai' }}
+    env:
+      API_TEST_CI: '1'
+      API_TEST_SUT: ${{ (matrix.suite == 'smoke' || matrix.suite == 'limit') && '1' || '0' }}
+      DISABLE_RATE_LIMIT: ${{ matrix.suite == 'limit' && 'false' || 'true' }}
+      API_PORT: '9491'
+      UI_PORT: '5691'
+      MAILDEV_UI_PORT: '1591'
     strategy:
       fail-fast: false
       matrix:
@@ -1049,15 +1102,29 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Download CI toolbox
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load CI toolbox
+        run: make load-api-tool ENV=test-ci-api
       - name: Download API image artifact
+        if: matrix.suite == 'smoke' || matrix.suite == 'limit'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
       - name: Load API image from artifact
-        run: make load-api
+        if: matrix.suite == 'smoke' || matrix.suite == 'limit'
+        run: make load-api ENV=test-ci-api
       - name: Start API test stack
-        run: make up-api-test-ci
+        run: |
+          if [ "$API_TEST_SUT" = 1 ]; then
+            make up-api-sut ENV=test-ci-api
+          else
+            make up-api-test-ci ENV=test-ci-api
+          fi
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -1069,12 +1136,12 @@ jobs:
       - name: Test API (${{ matrix.suite }})
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then
-            make test-api-endpoints API_TEST_WORKERS=1 API_TEST_ARGS="--shard=${{ matrix.endpoints_shard }}/4"
+            make test-api-endpoints API_TEST_WORKERS=1 API_TEST_ARGS="--shard=${{ matrix.endpoints_shard }}/4" ENV=test-ci-api
           elif [ "${{ matrix.suite }}" = "ai" ] && [ -n "${{ matrix.ai_specs }}" ]; then
             SPECS=$(echo "${{ matrix.ai_specs }}" | tr ',' ' ' | xargs -I{} echo "tests/ai/{}.test.ts" | tr '\n' ' ')
-            make test-api-ai SCOPE="$SPECS" API_TEST_WORKERS=1
+            make test-api-ai SCOPE="$SPECS" API_TEST_WORKERS=1 ENV=test-ci-api
           else
-            make test-api-${{ matrix.suite }}
+            make test-api-${{ matrix.suite }} ENV=test-ci-api
           fi
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1086,7 +1153,10 @@ jobs:
           MUSE_API_KEY: ${{ secrets.MUSE_API_KEY }} # BR75-EX4
       - name: Show API logs on failure
         if: failure()
-        run: make logs-api
+        run: make logs-api-ci ENV=test-ci-api
+      - name: Tear down API test stack
+        if: always()
+        run: make down-api-ci ENV=test-ci-api
 
   # Build & Unit Test UI
   build-ui:
@@ -1159,19 +1229,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Pull if API image is up to date
-        id: check-api-image
-        run: make pull-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.check-api-image.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
-      - name: Load UI image from artifact
-        if: steps.check-ui-image.outcome == 'failure'
-        run: make load-ui
       - name: Pull if UI image is up to date
         id: check-ui-image
         run: make pull-ui-image
@@ -1183,8 +1245,10 @@ jobs:
           name: ui-image
           path: .
       - name: Load API image from artifact
-        if: steps.check-api-image.outcome == 'failure'
         run: make load-api
+      - name: Load UI image from artifact
+        if: steps.check-ui-image.outcome == 'failure'
+        run: make load-ui
       - name: Pull e2e image artifact
         run: make pull-e2e-image
       - name: Test e2e API & UI (${{ matrix.group }})
@@ -1214,18 +1278,12 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Pull if API image is up to date
-        id: check-api-image-vscode
-        run: make pull-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.check-api-image-vscode.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
       - name: Load API image from artifact
-        if: steps.check-api-image-vscode.outcome == 'failure'
         run: make load-api
       - name: Pull if UI image is up to date
         id: check-ui-image-vscode
@@ -1267,41 +1325,43 @@ jobs:
   # API/unit suite never exercised the served consent screen end-to-end.
   smoke-idp-screens:
     runs-on: ubuntu-latest
-    needs: [changes, typecheck-lint-api, build-api-image, build-e2e, security-sast-sca]
+    needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
       DISABLE_RATE_LIMIT: 'true'
+      API_PORT: '9491'
+      UI_PORT: '5691'
+      MAILDEV_UI_PORT: '1591'
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Pull if API image is up to date
-        id: check-api-image-idp
-        run: make pull-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.check-api-image-idp.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
       - name: Load API image from artifact
-        if: steps.check-api-image-idp.outcome == 'failure'
-        run: make load-api
-      - name: Pull e2e image artifact
-        run: make pull-e2e-image
+        run: make load-api ENV=test-ci-idp
+      - name: Download CI toolbox
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load CI toolbox
+        run: make load-api-tool ENV=test-ci-idp
       - name: Start standalone IdP (screens + API on shared DB)
-        run: make dev-idp
+        run: make up-idp-sut ENV=test-ci-idp
       - name: Screen-driven SSO smoke (served login + consent screens)
-        run: make smoke-idp-screens
+        run: make smoke-idp-screens-ci ENV=test-ci-idp
       - name: IdP logs on failure
         if: failure()
-        run: make logs-idp-once
+        run: make logs-api-ci ENV=test-ci-idp
       - name: Tear down IdP overlay
         if: always()
-        run: make down-idp
+        run: make down-api-ci ENV=test-ci-idp
 
   # Security: SAST and SCA scans (code and dependencies)
   security-sast-sca:
@@ -1365,8 +1425,15 @@ jobs:
   # Security: Container scans (Docker images)
   security-container:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-ui]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    needs: [changes, build-api-image, build-api-tool-image, build-ui]
+    # UI-only changes intentionally skip the toolbox job; keep the UI scan active.
+    if: >-
+      !cancelled() &&
+      needs.changes.result == 'success' &&
+      needs.build-api-image.result == 'success' &&
+      needs.build-ui.result == 'success' &&
+      (needs.build-api-tool-image.result == 'success' || (needs.build-api-tool-image.result == 'skipped' && needs.changes.outputs.api != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     env:
       REGISTRY: ${{ secrets.REGISTRY }}
     steps:
@@ -1395,6 +1462,16 @@ jobs:
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-api-security-container
         continue-on-error: false
+      - name: Download API toolbox artifact
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Scan API toolbox with the existing container gate
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make load-api-tool test-api-tool-security-container
+        continue-on-error: false
       - name: Run container scan on UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ui-security-container
@@ -1411,12 +1488,32 @@ jobs:
 
   test-smoke-restore:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-ui, build-e2e, security-sast-sca]
+    needs: [changes, build-api-image, build-api-tool-image, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    env:
+      API_TEST_CI: '1'
+      API_TEST_SUT: '1'
+      API_PORT: '9491'
+      UI_PORT: '5691'
+      MAILDEV_UI_PORT: '1591'
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Download API image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: api-image
+          path: .
+      - name: Load API image
+        run: make load-api ENV=test-ci-restore
+      - name: Download CI toolbox
+        uses: actions/download-artifact@v7
+        with:
+          name: api-tool-image
+          path: .
+      - name: Load CI toolbox
+        run: make load-api-tool ENV=test-ci-restore
       - name: Backup production database (k8s in-cluster postgres)
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
@@ -1428,7 +1525,7 @@ jobs:
           fi
           printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
           chmod 600 kubeconfig.yaml
-          make db-backup-prod KUBECONFIG="$PWD/kubeconfig.yaml"
+          make db-backup-prod KUBECONFIG="$PWD/kubeconfig.yaml" ENV=test-ci-restore
       - name: Test restore and smoke tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1437,7 +1534,15 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        run: make db-restore up-api-test test-api-smoke-restore BACKUP_FILE=$(ls -t data/backup/prod-*.dump | head -1 | xargs basename) SKIP_CONFIRM=true
+        run: |
+          backup="$(make -s latest-prod-backup ENV=test-ci-restore)"
+          make restore-api-sut verify-api-sut-restart test-api-smoke-restore BACKUP_FILE="$backup" ENV=test-ci-restore
+      - name: Show restore SUT logs on failure
+        if: failure()
+        run: make logs-api-ci ENV=test-ci-restore
+      - name: Tear down restore SUT
+        if: always()
+        run: make down-api-ci ENV=test-ci-restore
 
   publish-ui-image:
     runs-on: ubuntu-latest
@@ -1477,6 +1582,9 @@ jobs:
 
   publish-api-image:
     runs-on: ubuntu-latest
+    concurrency:
+      group: api-image-publication
+      cancel-in-progress: false
     needs: [changes, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
     if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
@@ -1485,31 +1593,17 @@ jobs:
       API_IMAGE_NAME: sentropic-api
     steps:
       - uses: actions/checkout@v6
-      - name: Check if API image is up to date
-        id: image-check
-        run: make check-api-image
-        continue-on-error: true
       - name: Download API image artifact
-        if: steps.image-check.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
       - name: Load API image from artifact
-        if: steps.image-check.outcome == 'failure'
         run: make load-api
       - name: Publish API image
-        if: steps.image-check.outcome == 'failure'
         run: make publish-api-image
       - name: Push main alias tag (API)
-        run: |
-          set -eu
-          ALIAS="main"
-          API_VERSION="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
-          # Ensure canonical tag is present locally (it may not be if image-check passed)
-          docker pull "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
-          docker tag  "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}" "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
-          docker push "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
+        run: make publish-api-main-image
 
   # Release train (BRDP-EX10): llm-mesh -> llm-gateway -> cluster-mesh publish in a strict chain,
   # never before the three train validations pass (a validation counts as skipped only when its
