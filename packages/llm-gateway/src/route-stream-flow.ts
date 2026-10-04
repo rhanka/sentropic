@@ -193,6 +193,7 @@ export const runRouteStreamFlow = async (
         const controller = new AbortController();
         const nativeRequest = buildNativeMessagesRequest(prepared, request, native, controller.signal);
         nativeExecution = nativeStreamExecution({ attempt: preparedAttempt, controller, signal,
+          requestId: nativeRequest.requestId, finalize: nativeRequest.finalize,
           observer: new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body)),
           target: servedTargetFor(diagnostic), candidateRef, attempts, settle,
           features: { requestSafeguards: Object.hasOwn(nativeRequest.body, 'safeguards'),
