@@ -254,7 +254,7 @@
   - [x] Row 44d2 — Both middleware orders, 32 paused uploads claiming L: zero pre-read allocation, exact q backing counters at every allocation <= grants/B, 256/512-byte intermediate reservations, exact 18-byte EOF leases and no raw consolidation; short transport views copy only q bytes, failed extension allocates nothing/cancels/unlocks/restores capacity; gateway gates in pass11 report.
   - [x] Pass 12 post-rebase gates — origin/main 12be48eeb: mesh typecheck/tests (385/0), gateway typecheck/tests (1066/0); sequential commands, no rebase fix required.
   - [x] Row 45 — Count port/handler: JSON-only, exact ON switch, host catalog/partition preparation, shared native model/version eligibility, untouched shallow body and safe input_tokens; host deadline/upload detachment contract; no generation/financial path.
-  - [ ] Row 46 — Count per-principal rate/concurrency/expiry/map bounds.
+  - [x] Row 46 — One shared process limiter: verified tenant/principal tuple, capacity 10/refill 1 per second/concurrency 2, idle 10-minute eviction excluding live calls, 10000-key fail-closed cap, injected limits/clock; token charged at execute, no cancel refund, once-only concurrency release.
   - [ ] Row 47 — Router count endpoint: shared caller authentication/header/body/error reuse.
   - [ ] Row 48 — `tests/native-count-tokens.test.ts`: OFF/ON/fidelity/shallow copy/errors; no stream/ceiling/beta insertion.
   - [ ] Row 49 — Same file: rate/concurrency/expiry/map bounds; no hold/settlement/usage/finalize.

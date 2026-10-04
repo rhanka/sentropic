@@ -5,6 +5,7 @@ import { routingSubjectForCost } from './route-flow-core.js';
 import { assertNativeMessagesResult } from './route-native.js';
 import { buildNativeRequestHeaders } from './native-headers.js';
 import { GatewayError, anthropicError, mapGatewayError, type ProviderShapedError } from './router/errors.js';
+import { defaultNativeCountTokensRateLimiter, type NativeCountTokensRateLimiter } from './native-count-rate.js';
 
 export type NativeCountTokensRequest = Pick<NativeMessagesRequest, 'body' | 'headers' | 'signal' | 'requestId'>;
 export type NativeCountTokensResult = Extract<NativeMessagesResult, { kind: 'json' }>;
@@ -35,7 +36,7 @@ const refuseCount = (safeguards: boolean, disabled: boolean): never => {
 
 /** Authenticated count only: no canonical projection, generation plan, hold, usage or settlement. */
 export const runNativeCountTokens = async (options: {
-  readonly enabled?: boolean; readonly port?: NativeCountTokensPort;
+  readonly enabled?: boolean; readonly port?: NativeCountTokensPort; readonly rate?: NativeCountTokensRateLimiter;
 }, request: {
   readonly cost: CostContext; readonly body: unknown; readonly headers: Readonly<Record<string, string>>;
   readonly signal: AbortSignal; readonly requestId: string;
@@ -62,6 +63,8 @@ export const runNativeCountTokens = async (options: {
     return refuseCount(safeguards, false);
   }
   request.signal.throwIfAborted();
+  const release = (options.rate ?? defaultNativeCountTokensRateLimiter).acquire(request.cost);
+  try {
   const result = await capability.execute({ body: { ...body },
     headers: { forwarded: headers, anthropicVersion: version }, signal: request.signal, requestId: request.requestId });
   assertNativeMessagesResult(result, 'json');
@@ -69,4 +72,5 @@ export const runNativeCountTokens = async (options: {
     throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
   }
   return result;
+  } finally { release(); }
 };
