@@ -20,6 +20,7 @@ import { CoordinatorPoolState, PersonalPassthroughCallerAuth,
 import { FixtureTransport } from './fixtures/transport.js';
 import { authHeaders, buildHarness } from './fixtures/harness.js';
 import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
+import { COUNT_COST, countHarness, sendCount } from './fixtures/native-count.js';
 
 /** One Claude-Code account owned by `owner`, with a distinct token/id. */
 const accountFor = (owner: string, suffix: string): AccountTransportAccount => ({
@@ -41,6 +42,24 @@ const accountIdOf = (material: unknown): string | undefined =>
     : undefined;
 
 describe('B1 caller==provider — caller-owned account selection', () => {
+  it('count forwarding preserves opaque body fields without delegating caller ownership or authority', async () => {
+    const h = countHarness(); const body = { model: h.model, tenantId: 'forged-tenant', principalId: 'forged-principal',
+      ownerScopeRef: 'forged-owner', workspaceId: 'forged-workspace', upstreamUrl: 'https://caller.invalid',
+      auth: { accessToken: 'forged-body-token' }, cost: { correlationId: 'forged-cost' },
+      requestId: 'forged-request', nativeMessagesEnabled: true, finalize: 'forged-finalize' };
+    const response = await sendCount(h, body, { 'x-sentropic-caller-token': 'internal-caller-token',
+      'x-sentropic-settlement-mode': 'reader', 'x-owner-scope-ref': 'header-owner', 'anthropic-api-key': 'caller-provider-key' });
+    expect(response.status).toBe(200);
+    expect(h.auth).toHaveBeenCalledWith(expect.objectContaining({ authorization: 'Bearer caller-session',
+      'x-sentropic-caller-token': 'internal-caller-token' }), expect.objectContaining({ method: 'POST',
+      url: 'http://localhost/v1/messages/count_tokens', requestId: 'req-count' }));
+    expect(h.prepare.mock.calls[0]![0]).toEqual({ principalRef: COUNT_COST.principalId, ownerScopeRef: COUNT_COST.ownerScopeRef });
+    expect(h.prepare.mock.calls[0]![1].workspaceId).toBe(COUNT_COST.workspaceId);
+    const sent = h.execute.mock.calls[0]![0]; expect(sent.body).toEqual(body);
+    expect(sent.requestId).toBe('req-count'); expect(sent.headers.forwarded).toEqual({});
+    expect(Object.keys(sent).sort()).toEqual(['body', 'headers', 'requestId', 'signal']);
+    expect(h.h.recorder.events).toEqual([]); expect(h.h.recorder.settlements).toEqual([]);
+  });
   it('preserves the exact enrolled owner from trusted mapping despite forged identity headers', async () => {
     const auth = new PersonalPassthroughCallerAuth({
       verifyToken: { verify: () => ({ tenantId: 'tenant', principalId: 'user-a',

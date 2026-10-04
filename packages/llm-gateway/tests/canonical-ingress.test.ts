@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 
 describe('canonical gateway ingress', () => {
+  it.each(['anthropic-messages', 'openai-chat-completions'] as const)
+    ('preserves canonical aliases/compaction extensions and their original projection on %s', wire => {
+      const body = { model: 'claude-opus-5-high', messages: [{ role: 'user', content: 'compact this history' }],
+        max_tokens: 42, context_management: { edits: [{ type: 'compact_20260112', trigger: { type: 'input_tokens', value: 10 } }] },
+        tenantId: 'caller-extension', nativeInputPriceUnits40: 1 };
+      const result = normalizeGatewayIngress(wire, body);
+      expect(result.request.model).toBe(body.model); expect(result.request.maxOutputTokens).toBe(42);
+      expect(result.request.messages).toMatchObject([{ role: 'user', content: 'compact this history' }]);
+      expect(result.requiredCapabilities).toEqual([]); expect(result.request.providerOptions?.ingressBody).toBe(body);
+      expect(result.request).not.toHaveProperty('nativeMessages'); expect(result.request).not.toHaveProperty('nativeInputPriceUnits40');
+    });
   it.each([
     ['anthropic-messages', { max_tokens: 32, max_completion_tokens: 9999 }, 32],
     ['anthropic-messages', { max_completion_tokens: 9999 }, undefined],

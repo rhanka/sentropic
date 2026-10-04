@@ -13,7 +13,9 @@ import {
   newCorrelationId,
   redactForLog,
   redactSelection,
+  buildNativeRequestHeaders, toProviderShapedError,
 } from '../src/index.js';
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 
 /** One caller-owned account (owner `p`) for the kill-switch select() tests. */
 const ownedByP = (): AccountTransportAccount[] => [
@@ -28,6 +30,21 @@ const ownedByP = (): AccountTransportAccount[] => [
 ];
 
 describe('redaction helpers', () => {
+  it('native/count request policy removes credentials, caller sessions and internal authority', () => {
+    const headers = buildNativeRequestHeaders({ authorization: 'Bearer SESSION-SECRET', cookie: 'SESSION-COOKIE',
+      'anthropic-api-key': 'PROVIDER-SECRET', 'anthropic-oauth-token': 'OAUTH-SECRET',
+      'x-sentropic-caller-token': 'CALLER-SECRET', 'x-sentropic-settlement-mode': 'reader',
+      'user-agent': 'private-agent', 'anthropic-beta': 'opaque-feature', 'x-stainless-lang': 'js' });
+    expect(headers).toEqual({ 'anthropic-beta': 'opaque-feature', 'x-stainless-lang': 'js' });
+    expect(JSON.stringify(headers)).not.toMatch(/SECRET|SESSION|private-agent|reader/);
+  });
+  it('native/count transport failures never expose error-owned secrets or response headers', () => {
+    const error = new NativeMessagesUpstreamError({ status: 500 });
+    Object.assign(error, { message: 'SESSION-SECRET PROVIDER-SECRET acct-private',
+      headers: { authorization: 'Bearer SECRET', 'anthropic-organization-id': 'private-org' } });
+    expect(toProviderShapedError('anthropic-messages', error)).toEqual({ status: 503, body: { type: 'error',
+      error: { type: 'overloaded_error', message: 'service temporarily unavailable' } } });
+  });
   it('mints an opaque correlation id not derived from any pool id', () => {
     const a = newCorrelationId();
     const b = newCorrelationId();

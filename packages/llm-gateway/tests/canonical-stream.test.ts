@@ -59,6 +59,19 @@ const collectCompleteArguments = async (
 };
 
 describe('canonical gateway streams', () => {
+  it.each(['anthropic-messages', 'openai-chat-completions'] as const)
+    ('does not turn count/native extension events into canonical generation bytes on %s', async wire => {
+      const extended = async function* (): AsyncGenerator<StreamEvent> {
+        yield { type: 'done', data: { input_tokens: 999, safeguard_results: { future: true },
+          finishReason: 'stop', usage: { inputTokens: 12, outputTokens: 7, totalTokens: 19 } } } as StreamEvent;
+      };
+      let text = '';
+      for await (const frame of encodeGatewayStream(wire, 'requested-model', 'response', extended())) text += frame.raw;
+      expect(text).not.toContain('safeguard_results'); expect(text).not.toContain('999');
+      const frames = parseSse(text);
+      expect(frames.at(-1)?.data === '[DONE]' || frames.at(-1)?.event === 'message_stop').toBe(true);
+      expect(text).toContain(wire === 'anthropic-messages' ? '"output_tokens":7' : '"completion_tokens":7');
+    });
   it('preserves Anthropic block boundaries and terminal ordering', async () => {
     const frames = await collect('anthropic-messages');
 
