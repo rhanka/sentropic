@@ -156,9 +156,7 @@ ON CONFLICT (id) DO UPDATE SET
 CREATE TEMP TABLE src_consents (LIKE oauth_consents INCLUDING DEFAULTS) ON COMMIT DROP;
 CREATE TEMP TABLE client_map (prod_client_id text, preprod_client_id text) ON COMMIT DROP;
 \copy src_consents (user_id, client_id, tenant_id, scopes, created_at, updated_at) FROM 'consents.csv' WITH (FORMAT csv, HEADER true)
--- \copy does not interpolate psql variables; its client-side cat uses this fixed path.
-\setenv IDP_SYNC_CLIENT_MAP :client_map_path
-\copy client_map FROM PROGRAM 'cat "$IDP_SYNC_CLIENT_MAP"' WITH (FORMAT csv, HEADER true)
+\copy client_map FROM '/sql/client-map.csv' WITH (FORMAT csv, HEADER true)
 SELECT set_config('sync.expected_consents', :'expected_consents', true) \gset sync_
 DO $$
 BEGIN
@@ -168,6 +166,7 @@ BEGIN
      OR EXISTS (SELECT FROM client_map m LEFT JOIN oauth_clients c ON c.client_id = m.preprod_client_id
                 WHERE c.client_id IS NULL OR coalesce(m.prod_client_id, '') = '')
      OR EXISTS (SELECT FROM client_map GROUP BY prod_client_id HAVING count(*) > 1)
+     OR EXISTS (SELECT FROM client_map GROUP BY preprod_client_id HAVING count(*) > 1)
     THEN RAISE EXCEPTION 'consent client map target missing'; END IF;
 END $$;
 CREATE TEMP TABLE desired_consents ON COMMIT DROP AS
