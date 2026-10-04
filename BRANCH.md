@@ -89,10 +89,10 @@ Synchronize prod identities and explicitly granted consents into preprod through
 - [ ] **Lot 4 — Consent sync**
   - [x] Grant six consent columns to the reader and export consents in the identity snapshot with its count.
   - [x] Ship the versioned prod-to-preprod client map in the preprod SQL ConfigMap, absent from the relay.
-  - [ ] Require four relay files and consent counts; classify consent map and postcondition failures safely.
+  - [x] Require four relay files and consent counts; classify consent map and postcondition failures safely.
   - [x] Transactionally upsert mapped prod consents and remove missing/revoked grants for prod users; retain preprod-only and unmapped grants, clients and signing keys.
-  - [ ] Audit changed upserts/removals; unchanged reruns report 0/0.
+  - [x] Audit changed upserts/removals; unchanged reruns report 0/0.
   - [ ] SQL fixtures cover owner scopes, Farid removal, preserved grants, scope changes, revocation, missing/duplicate map targets, consent rollback, DV5 and reader grants.
-  - [ ] Selftest verifies new audit counts/codes, four-file manifest and ConfigMap-only map.
+  - [x] Selftest verifies new audit counts/codes, four-file manifest and ConfigMap-only map.
   - [ ] README documents consent semantics, versioned mapping and fail-closed rollout order.
   - [ ] Lot gates: `make test-idp-sync-sql ENV=test-idp-sync-codes` and `make test-idp-sync-selftest ENV=test-idp-sync-codes`.
