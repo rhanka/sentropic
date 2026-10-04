@@ -580,6 +580,49 @@ describe('native cumulative input and pinned stream amounts', () => {
     });
 });
 
+describe('native served-model and substantive-iterations latches', () => {
+  const mixed = { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 250,
+    cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 }, output_tokens: 1 };
+  it.each(NATIVE_MODELS.flatMap(model => [undefined, null, [], [{}], {}, 'malformed', 0, false].map(iterations => ({ model, iterations }))))(
+    'uses the shared empty-iterations predicate and realistic floor: $model iterations=$iterations', async ({ model, iterations }) => {
+      const h = nativeStreamHarness([nativeStart(model, mixed), nativeFrame('message_delta', {
+        usage: { output_tokens: 500, iterations } }), nativeFrame('message_delta', { usage: { iterations: [] } }),
+        nativeFrame('message_stop')], { model });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      const latched = iterations != null && (!Array.isArray(iterations) || iterations.length > 0);
+      const snapshot = h.snapshots[0]!;
+      expect(snapshot).toMatchObject({ inputTokens: 10_350, outputTokens: 500, totalTokens: 10_850,
+        iterationsPresent: latched, nativeInputUsageValidated: !latched, estimated: latched, finalOutputObserved: true });
+      const charged = h.recorder.settlements[0]!.attempts[0]!.usage;
+      expect(nativeAmount(charged)).toBe(latched ? 74_350 : model === NATIVE_MODELS[2] ? 1700 : 2450);
+      expect(charged.outputTokens).toBe(latched ? 32_000 : 500);
+      if (latched) {
+        expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+        expect(snapshot.nativeUsageUncertainty).toBe('served_model_mismatch');
+        expect(charged.outputTokens / snapshot.outputTokens!).toBe(64);
+      } else expect(snapshot.nativeUsageUncertainty).toBeUndefined();
+      expect(JSON.stringify(snapshot.rawUsage)).not.toContain('iterations');
+    });
+  it.each(NATIVE_MODELS.flatMap(model => ['mismatch', 'fallback', 'iterations'].map(cause => ({ model, cause }))))(
+    'keeps a late latch after valid input even if later evidence looks normal: $model $cause', async ({ model, cause }) => {
+      const other = model === NATIVE_MODELS[2] ? NATIVE_MODELS[1] : NATIVE_MODELS[2];
+      const trigger = cause === 'mismatch' ? nativeStart(other, mixed)
+        : cause === 'fallback' ? nativeFrame('content_block_start', { content_block: { type: 'fallback', fallback_credit_token: 'opaque' } })
+          : nativeFrame('message_delta', { usage: { iterations: [{ input_tokens: 999_999, output_tokens: 999_999 }] } });
+      const h = nativeStreamHarness([nativeStart(model, mixed), trigger,
+        ...(cause === 'mismatch' ? [nativeStart(model, mixed)] : []),
+        nativeFrame('message_delta', { usage: { output_tokens: 500, iterations: null } }), nativeFrame('message_stop')], { model });
+      const wire = await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(wire).toContain(new TextDecoder().decode(trigger));
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_350, outputTokens: 500, nativeInputUsageValidated: false,
+        nativeUsageUncertainty: 'served_model_mismatch', estimated: true });
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_350);
+      expect(JSON.stringify(h.snapshots)).not.toContain('fallback_credit_token');
+      expect(JSON.stringify(h.snapshots)).not.toContain('999999');
+      expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    });
+});
+
 describe('route stream flow with budget admission', () => {
   const deps = (planner: RoutePlanner, recorder: BudgetRecorder) => ({
     config: budgetConfig, routePlanner: planner, metering: recorder.metering, budget: recorder.options,
