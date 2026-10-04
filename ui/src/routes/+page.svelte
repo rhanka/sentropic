@@ -8,7 +8,7 @@
     {$_('home.tagline')}
   </p>
   <a
-    class="inline-flex items-center rounded bg-primary px-4 py-2 text-white shadow hover:opacity-90"
+    class="inline-flex items-center rounded bg-primary px-4 py-2 text-white shadow-sm hover:opacity-90"
     href="/home"
     >{$_('home.getStarted')}</a
   >

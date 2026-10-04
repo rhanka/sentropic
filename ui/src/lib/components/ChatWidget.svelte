@@ -2301,13 +2301,13 @@
 
       <!-- Badge: loading (petit spinner) -->
       {#if jobBadgeState.kind === 'loading'}
-        <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow">
+        <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow-sm">
           <Loader2 class="w-3 h-3 animate-spin" />
         </span>
       {:else if jobBadgeState.kind === 'active'}
         <!-- Badge: jobs en cours => montre -->
         <span
-          class="absolute top-1 right-1 text-white rounded-full p-1 shadow"
+          class="absolute top-1 right-1 text-white rounded-full p-1 shadow-sm"
           title={$_('chat.queue.badge.active', {
             values: { count: jobBadgeState.count },
           })}
@@ -2317,7 +2317,7 @@
       {:else if jobBadgeState.kind === 'failed'}
         <!-- Badge: au moins un job en échec -->
         <span
-          class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow"
+          class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow-sm"
           title={$_('chat.queue.badge.failed', {
             values: { count: jobBadgeState.count },
           })}
@@ -2374,7 +2374,7 @@
                         <button
                           class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
                           'server'
-                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
+                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-xs'
                             : 'text-slate-500 hover:text-slate-700'}"
                           type="button"
                           on:click={() => (extensionSettingsTab = 'server')}
@@ -2384,7 +2384,7 @@
                         <button
                           class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
                           'workspace'
-                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
+                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-xs'
                             : 'text-slate-500 hover:text-slate-700'}"
                           type="button"
                           on:click={() => (extensionSettingsTab = 'workspace')}
@@ -2395,7 +2395,7 @@
                           <button
                             class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
                             'tools'
-                              ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
+                              ? 'extension-main-tab-active bg-white text-slate-900 shadow-xs'
                               : 'text-slate-500 hover:text-slate-700'}"
                             type="button"
                             on:click={() => (extensionSettingsTab = 'tools')}

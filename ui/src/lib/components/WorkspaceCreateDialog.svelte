@@ -53,7 +53,7 @@
 </script>
 
 {#if open}
-  <div class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" on:click|self={close}>
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" on:click|self={close}>
     <div class="bg-white rounded-lg max-w-md w-full mx-4">
       <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
         <h3 class="text-lg font-semibold">{$_('workspaceSettings.createDialog.title')}</h3>
