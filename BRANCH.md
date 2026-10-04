@@ -55,7 +55,7 @@
   - [x] Read prior investigation, new brief, MASTER/workflow/testing/security, and template.
   - [x] Verify renamed branch mechanically with `harness check branch`.
   - [x] Confirm assigned ports are free before starting services.
-  - [ ] Read official upgrade path; inventory CSS sources, theme tokens, changed utilities.
+  - [x] Read official upgrade path; inventory CSS sources, theme tokens, changed utilities.
   - [ ] Capture five baseline pages via `e2e/tests/06-tooling-visual-parity.spec.ts`.
   - [ ] Write `.h2a/build/lot0_report.md`; commit scoped plan and capture harness.
 - [ ] **Lot 1 — UI tooling and CSS migration**
