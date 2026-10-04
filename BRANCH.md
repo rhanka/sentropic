@@ -97,6 +97,7 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
+- [x] Pass 11 P2 — v8-addendum review MINOR applied before row 43: N3 storage is incremental after granted actual chunk bytes; Content-Length never sizes storage/reservations, raw backing capacity never exceeds grants and EOF performs no duplicate raw consolidation.
 - [x] Pass 09 terminal contract cleanup — implementer reproduced 2 failures: wrong stream-kind JSON result and invalid-status stream envelope left the returned reader open. Reader ownership now attaches before validation without pulling bytes; terminal snapshot is claimed before cleanup; permanent per-flow regression requires one close/finalize/settlement. Gateway gates and Gemini fix re-review recorded in pass09 report.
 - [x] Pass 08 independent reproductions — fixed by reviewer per build mode: all 21 supplied re-review reproductions promoted unchanged to permanent native-review-regressions.test.ts; Gemini fix review GO (0 BLOCKER/MAJOR/MINOR); 143 changed lines including plan; typecheck PASS, tests 673 passed / 0 failed.
 - [x] Pass 08 M6-R — fixed by reviewer per build mode: independent safe raw evidence, null/invalid omission, explicit zero and prior evidence retained; permanent mixed-validity, incomplete, fractional/nonfinite/unsafe start/delta regressions. Scoped reproduction: 5 failed / 10 passed; post-commit gateway gates recorded in pass report.
@@ -218,7 +219,7 @@
   - [x] Row 42a — Both wires: exact/lower-bound/unknown-limit/N<=L/zero messages through typed/normalized/cause errors, status/type/code-only precedence and cancellation, invalid metadata/prose never fabricates numbers; gateway gates recorded in pass10 report.
   - [x] Row 42b — Both-wire canonical JSON/open/in-band error and native JSON/open/frame matrices: typed/status/code/cause 413, planned second candidate unused, rejecting outcome/sink combinations preserve refusal, reader closure, single attempt/finalize/settlement and allowance floors; gateway gates recorded in pass10 report.
   - [x] Row 42c — Real loopback outgoing UTF-8 measurement/serialize-once, trusted/unknown/N<=L limits, HTTP JSON/SSE and pre/late SSE 413 fidelity with private prose/forged numeric fields discarded; gateway gates recorded in pass10 report.
-  - [ ] Row 43 — `src/request-body-limit.ts`: streaming cap/cache; N3 incremental storage only after granted chunk bytes, never allocate from Content-Length.
+  - [x] Row 43 — Streaming actual-byte cap, trusted request-local read/parse cache, exact chunk backing storage and incremental UTF-8 decode without raw consolidation; N3/P2 applies now; gateway gates in pass11 report.
   - [ ] Row 43p1 — N1 contract: native host upload completes/cancels and detaches before result; canonical streams retain full N until terminal cleanup.
   - [ ] Row 43p2 — N2 contract: detach/release once on every pre-dispatch refusal, preserving original financial/observation behavior.
   - [ ] Row 43p3 — N3 contract: raw backing capacity <= granted bytes, no geometric slack/duplicate consolidation allocation.
