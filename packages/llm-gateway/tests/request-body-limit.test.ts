@@ -46,7 +46,7 @@ describe('gateway bounded ingress', () => {
     const app = createGatewayRouter({ config: { ...h.deps.config, callerAuth: { verify: auth } },
       routePlanner: h.deps.routePlanner, routeMetering: h.deps.metering, budget: h.deps.budget,
       requestBody: { pool, limitBytes: 16 } });
-    const { raw, cancel } = bodyRequest([utf8('not JSON at all!!!')], path);
+    const { raw, cancel } = bodyRequest([utf8('not JSON at all!!')], path);
     const response = await app.request(raw);
     expect(response.status).toBe(413); expect(cancel).toHaveBeenCalledTimes(1);
     expect(response.headers.get('x-should-retry')).toBe('false');
