@@ -5,7 +5,7 @@
 export type Detail = Readonly<Record<string, string>>;
 
 export interface SkewTuple {
-  /** Exact candidate identity, e.g. `@sentropic/cluster-mesh@0.13.0`. */
+  /** Exact candidate identity, e.g. `@sentropic/cluster-mesh@0.14.0`. */
   readonly candidate: string;
   /** Out-of-range llm-mesh / llm-gateway versions of the skewed tree. */
   readonly mesh: RegExp;
@@ -63,7 +63,7 @@ const TOPOLOGY = { code: 'cluster_mesh_topology_invalid', reason: 'incompatible_
 export function runtimeRefusalViolations(probe: Probe, entries: readonly string[], tuple: SkewTuple): string[] {
   const out: string[] = [];
   const named = new RegExp(`installed @sentropic/llm-mesh@${tuple.mesh.source.replace(/^\^|\$$/gu, '')} at \\S+ `
-    + 'does not satisfy the required range ">=0\\.22\\.0 <0\\.23\\.0"', 'u');
+    + 'does not satisfy the required range ">=0\\.22\\.0 <0\\.24\\.0"', 'u');
   const topology = (label: string, value: Refusal | string | undefined): void => {
     if (typeof value !== 'object' || value.code !== TOPOLOGY.code || value.reason !== TOPOLOGY.reason
       || !named.test(value.message ?? '')) out.push(`${label} not refused with incompatible_version: ${JSON.stringify(value)}`);
@@ -72,7 +72,7 @@ export function runtimeRefusalViolations(probe: Probe, entries: readonly string[
   for (const entry of entries) topology(entry, probe.entries[entry]);
   const load = probe.load;
   if (typeof load !== 'object' || load.code !== 'cluster_mesh_module_unavailable' || load.reason !== 'incompatible_version'
-    || load.packageName !== '@sentropic/llm-gateway' || load.requiredRange !== '>=0.19.0 <0.20.0'
+    || load.packageName !== '@sentropic/llm-gateway' || load.requiredRange !== '>=0.19.0 <0.21.0'
     || !tuple.gateway.test(load.installedVersion ?? '')) {
     out.push(`load('gateway') not refused with incompatible_version: ${JSON.stringify(load)}`);
   }
