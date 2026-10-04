@@ -1,3 +1,40 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss' source(none);
+
+@source '.';
+@source '../../../../packages/auth-ui/src';
+
+@theme {
+  --color-primary: oklch(50% 0.134 242.749);
+  --color-accent: oklch(70.4% 0.14 182.503);
+  --color-warning: oklch(57.7% 0.245 27.325);
+  --color-gray-50: #f9fafb;
+  --color-gray-200: #e5e7eb;
+  --color-gray-400: #9ca3af;
+  --color-slate-500: #64748b;
+}
+
+@custom-variant hover (&:hover);
+
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  dialog {
+    margin: auto;
+  }
+}
