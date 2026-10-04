@@ -1,7 +1,7 @@
 import { readFileSync, appendFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { kube, configure, req, render, validateRun, waitJob, applyJob, exportSnapshot, flip, workdir, exportName } from './run-core.mjs';
+import { kube, configure, req, render, validateRun, waitJob, applyJob, exportSnapshot, flip, workdir, exportName, failureSummary } from './run-core.mjs';
 import { replaceSecrets, antiRceGate, neutralize } from './bundle-cd.mjs';
 const template = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 export function auditSummary(raw, expectedOutcome) {
@@ -20,6 +20,16 @@ export function collectAudit(name, expectedOutcome, k = kube) {
   const json = JSON.stringify(summaries.at(-1)); console.log(json);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### IdP sync job/${name}\n\n\`\`\`json\n${json}\n\`\`\`\n`);
   return summaries.at(-1);
+}
+export function failureVerdict(name, k = kube) {
+  try {
+    const pods = JSON.parse(k(['-n', 'sentropic-preprod', 'get', 'pods', '-l', `job-name=${name}`, '-o', 'json']).stdout).items;
+    const messages = pods.flatMap(p => p.status?.containerStatuses ?? []).filter(c => c.name === 'import-preprod').map(c => c.state?.terminated?.message).filter(Boolean);
+    if (!messages.length) throw new Error();
+    const failure = messages.map(failureSummary).at(-1);
+    const pairs = failure.rejected_rekey_pairs ?? [];
+    return `job/${name} failed: ${failure.code}${pairs.length ? ` (${pairs.join(',')})` : ''}`;
+  } catch { throw new Error(`job/${name} failed: termination failure code unavailable`); }
 }
 export async function main(action = process.argv[2]) {
   switch (action) {
@@ -50,6 +60,7 @@ export async function main(action = process.argv[2]) {
       let verdict;
       try { verdict = await waitJob('sentropic-preprod', name, 900); }
       finally {
+        if (verdict === 'failed') throw new Error(failureVerdict(name));
         try { collectAudit(name, inputs.DRY_RUN === '1' ? 'rolled_back' : 'committed'); }
         catch (error) { console.log(`job/${name}: audit unavailable`); if (verdict === 'complete') throw error; }
       }
