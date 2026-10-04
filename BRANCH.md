@@ -343,8 +343,9 @@
   - [x] Row 65a1 split — Fake HTTP Bearer/header fidelity, eight no-retry statuses, bounded validation/billing and invalid count cases; typecheck PASS, Claude tests 35 passed / 0 failed; 65a2 covers deadline/abort/size.
   - [x] Row 65a2 split — Fixed-timeout before headers/through JSON, frame readiness, post-ready abort, reader/timer closure and oversize before fetch; typecheck PASS, Claude tests 41 passed / 0 failed after owned-JSON-reader fix.
   - [x] Row 65b — Counted request/body/serialization/upload-closure holders release once before open stream/JSON/count, including early-header abort; typecheck PASS, Claude tests 45 passed / 0 failed; canonical lifetime remains 70a2.
-  - [ ] Row 66 — `anthropic-native.ts`: trusted credential/account availability, execute-time acquisition/null lease, native and count ports; no host request capture.
+  - [x] Row 66 — `anthropic-native.ts`: trusted auth, execute-time account acquisition/null lease, native/count ports and body-free closures; split 66a/66b.
   - [x] Row 66a split — Trusted auth resolver and response-only account lease lifecycle; typecheck PASS, Claude tests 45 passed / 0 failed; 66b attaches capabilities and execute-time acquisition.
+  - [x] Row 66b split — Exact allowlist/version/model, independent count, execute-time acquisition/null lease and detached port holders; corrected token-mode lease initialization before commit; typecheck PASS, tests 47 passed / 0 failed.
   - [ ] Row 67 — Attempt-bound body-free finalize callback; `cost-ledger-sink.ts` invariant; observation projects only the immutable gateway snapshot (K5/L4).
   - [ ] Row 67a — `budget-admission.ts`, `route-settlement.ts`: pricing provider/model identity and pinned-versus-costliest provenance.
   - [ ] Row 68 — Native rational usageCost identity/policy/model/bounds guards; canonical cost preserved.
