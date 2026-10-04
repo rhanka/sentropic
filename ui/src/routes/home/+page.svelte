@@ -10,7 +10,7 @@
 </script>
 
 <section class="space-y-6">
-  <div class="rounded border border-slate-200 bg-white p-6 shadow-sm">
+  <div class="rounded border border-slate-200 bg-white p-6 shadow-xs">
     {$_('home.redirectingTo', { values: { path: '/neutral' } })}
   </div>
 </section>

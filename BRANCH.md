@@ -67,6 +67,7 @@
   - [x] Standalone UI scan identifies patched-range updates for devalue and brace-expansion; strengthen existing override minimums without suppressions.
   - [ ] Audit/adapt renamed utilities, borders/rings, spacing/dividers, hover, preflight.
   - [x] Adapt host component shadow/focus/shrink/opacity utilities and matching print selectors.
+  - [x] Adapt route utilities, matrix gradients/overlays, and editable-field focus outlines.
   - [ ] Regenerate root/standalone UI locks through make; commit generated locks separately.
   - [ ] Verify UI SCA removes braces; write `.h2a/build/lot1_report.md`.
 - [ ] **Lot 2 — Related trees and qualification**
