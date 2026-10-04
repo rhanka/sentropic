@@ -69,12 +69,18 @@ stage=pod-import-wrapper
 mkdir -p /work /sql
 ln -s "$import" /sql/import-preprod.sql
 sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
-wrapper() { PGDATABASE=preprod DRY_RUN=1 ALLOWED_REKEY="${WRAPPER_REKEY-$pair}" MAX_SNAPSHOT_AGE_S=7200 sh /workspace/deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh > /tmp/wrapper.log 2>&1; }
+wrapper() {
+  (
+    export PGDATABASE=preprod DRY_RUN="${WRAPPER_DRY_RUN-1}" ALLOWED_REKEY="${WRAPPER_REKEY-$pair}" MAX_SNAPSHOT_AGE_S="${WRAPPER_AGE-7200}"
+    [ "${WRAPPER_UNSET_REKEY-0}" = 0 ] || unset ALLOWED_REKEY
+    PATH="${WRAPPER_PATH-$PATH}" sh /workspace/deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sh
+  ) > /tmp/wrapper.log 2>&1
+}
 reject_wrapper() {
   stage="pod wrapper $1"
   if wrapper; then exit 1; fi
   extra=''
-  [ "$1" != rekey_not_allowed ] || extra=",\"rejected_rekey_pairs\":[\"$pair\"]"
+  [ "$1" != rekey_not_allowed ] || extra=",\"rejected_rekey_pairs\":[${WRAPPER_PAIRS-\"$pair\"}]"
   grep -Fxq "{\"outcome\":\"failed\",\"code\":\"$1\"$extra}" /dev/termination-log
   [ "$(cat /tmp/wrapper.log)" = "$1" ]
   unchanged
@@ -87,6 +93,53 @@ grep -Fq '"post_webauthn":22' /dev/termination-log
 grep -Fq '"old_id":"9f11d240-fc75-4d55-80be-1bafcd79eadb"' /dev/termination-log
 unchanged
 echo 'PASS: actual pod import wrapper emits safe rolled-back JSON audit'
+WRAPPER_DRY_RUN=invalid reject_wrapper invalid_dry_run
+WRAPPER_AGE=invalid reject_wrapper invalid_age_limit
+WRAPPER_UNSET_REKEY=1 reject_wrapper rekey_not_allowed
+cp SHA256SUMS checksums.original
+printf 'invalid manifest\n' > SHA256SUMS
+reject_wrapper invalid_manifest
+mv checksums.original SHA256SUMS
+cp snapshot.csv snapshot.original
+for ending in '' '\r\n'; do
+  printf '%s,8,18%b' "$snapshot" "$ending" > snapshot.csv
+  sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+  wrapper; grep -Fq '"outcome":"rolled_back"' /dev/termination-log; unchanged
+done
+printf '%s\r,8\r,18\r\n' "$snapshot" > snapshot.csv
+sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+wrapper; grep -Fq '"outcome":"rolled_back"' /dev/termination-log; unchanged
+echo 'PASS: snapshot EOF and trailing CR fields are accepted'
+for code in invalid_counts invalid_timestamp; do
+  if [ "$code" = invalid_counts ]; then printf '%s,8,invalid\n' "$snapshot"; else printf 'invalid,8,18\n'; fi > snapshot.csv
+  sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+  reject_wrapper "$code"
+done
+mv snapshot.original snapshot.csv
+for code in empty_export sql_error; do
+  cp users.csv users.original
+  if [ "$code" = empty_export ]; then head -n 1 users.original > users.csv; else printf 'private@example.invalid\n' >> users.csv; fi
+  sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+  reject_wrapper "$code"
+  mv users.original users.csv
+done
+sha256sum users.csv webauthn.csv snapshot.csv > SHA256SUMS
+# Exercise safe classification and filtering without changing the import SQL.
+mkdir -p /tmp/mock-bin
+cat > /tmp/mock-bin/psql <<'MOCK'
+#!/bin/sh
+printf '%s\n' "${MOCK_STDERR:-}" >&2
+[ "${MOCK_SUCCESS:-0}" = 1 ]
+MOCK
+chmod +x /tmp/mock-bin/psql
+WRAPPER_PATH="/tmp/mock-bin:$PATH" MOCK_STDERR='ERROR:  canceling statement due to lock timeout' reject_wrapper lock_timeout
+for text in 'a prod user id is missing' 'a prod email is not bound to its prod id' 'a prod credential is missing or bound to another user'; do
+  WRAPPER_PATH="/tmp/mock-bin:$PATH" MOCK_STDERR="ERROR:  post: $text" reject_wrapper postcondition_failed
+done
+WRAPPER_PATH="/tmp/mock-bin:$PATH" MOCK_SUCCESS=1 reject_wrapper invalid_audit
+pair2='00000000-0000-4000-8000-000000000003>00000000-0000-4000-8000-000000000004'
+WRAPPER_PATH="/tmp/mock-bin:$PATH" sep=, MOCK_STDERR="ERROR:  re-key not covered by allowed_rekey: $pair,$pair2,00000000-0000-4000-8000-00000000000A>00000000-0000-4000-8000-00000000000B,private@example.invalid" WRAPPER_PAIRS="\"$pair\",\"$pair2\"" reject_wrapper rekey_not_allowed
+WRAPPER_PATH="/tmp/mock-bin:$PATH" MOCK_STDERR='ERROR:  re-key not covered by allowed_rekey: private@example.invalid' WRAPPER_PAIRS='' reject_wrapper rekey_not_allowed
 cp users.csv users.original
 printf 'tampered\n' >> users.csv
 reject_wrapper integrity_failed
@@ -138,3 +191,7 @@ sync -v dry_run=0
 grep -Fxq 'rekeyed|0' /tmp/sql.log
 unchanged
 echo 'PASS: rerun with empty allowlist is a no-op'
+WRAPPER_UNSET_REKEY=1 wrapper
+grep -Fq '"rekeyed":0' /dev/termination-log
+unchanged
+echo 'PASS: unset allowlist remains valid without collisions'

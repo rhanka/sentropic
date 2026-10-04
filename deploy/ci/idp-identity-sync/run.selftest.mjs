@@ -115,6 +115,18 @@ export async function runTests(load, bundles) {
     const pod = message => ({ stdout: JSON.stringify({ items: [{ status: { containerStatuses: [{ name: 'import-preprod', state: { terminated: { message } } }] } }] }) });
     assert.equal(failureVerdict('synthetic', args => { assert.ok(!args.includes('logs')); return pod(JSON.stringify(value)); }), `job/synthetic failed: rekey_not_allowed (${pair})`);
     assert.equal(failureVerdict('synthetic', () => pod('{"outcome":"failed","code":"sql_error"}')), 'job/synthetic failed: sql_error');
+    const pair2 = '00000000-0000-4000-8000-000000000003>00000000-0000-4000-8000-000000000004';
+    const multi = JSON.stringify({ ...value, rejected_rekey_pairs: [pair, pair2] });
+    assert.equal(failureVerdict('synthetic', () => pod(multi)), `job/synthetic failed: rekey_not_allowed (${pair},${pair2})`);
+    const latest = JSON.parse(pod(multi).stdout).items[0];
+    latest.status.containerStatuses.push({ name: 'sidecar', state: { terminated: { message: 'private@example.invalid' } } });
+    latest.status.initContainerStatuses = [{ name: 'import-preprod', state: { terminated: { message: 'private@example.invalid' } } }];
+    assert.equal(failureVerdict('synthetic', () => ({ stdout: JSON.stringify({ items: [...JSON.parse(pod('OOMKilled').stdout).items, latest] }) })), `job/synthetic failed: rekey_not_allowed (${pair},${pair2})`);
+    assert.throws(() => failureVerdict('synthetic', () => ({ stdout: JSON.stringify({ items: [latest, ...JSON.parse(pod('OOMKilled').stdout).items] }) })), { message: 'job/synthetic failed: termination failure code unavailable' });
+    const empty = JSON.stringify({ ...value, rejected_rekey_pairs: [] });
+    assert.deepEqual(failureSummary(empty).rejected_rekey_pairs, []);
+    assert.equal(failureVerdict('synthetic', () => pod(empty)), 'job/synthetic failed: rekey_not_allowed');
+    assert.throws(() => failureSummary(JSON.stringify({ ...value, rejected_rekey_pairs: [pair.replace(/1/g, 'A')] })), { message: 'invalid import failure message' });
     const invalid = ['private@example.invalid', 'null', '[]', '{"outcome":', JSON.stringify({ ...value, outcome: 'committed' }), JSON.stringify({ ...value, code: 'private@example.invalid' }), JSON.stringify({ ...value, rejected_rekey_pairs: ['private@example.invalid'] }), JSON.stringify({ ...value, rejected_rekey_pairs: ['-'.repeat(36) + '>' + '-'.repeat(36)] }), JSON.stringify({ ...value, rejected_rekey_pairs: [pair + '\n'] }), JSON.stringify({ ...value, stderr: 'private@example.invalid' }), JSON.stringify({ ...value, code: 'sql_error' })];
     for (const raw of invalid) {
       assert.throws(() => failureSummary(raw), { message: 'invalid import failure message' });
