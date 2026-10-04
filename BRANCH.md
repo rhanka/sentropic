@@ -17,6 +17,13 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `api/src/services/llm-runtime/**` (BR-REL-EX2 approved, Stage 4)
+  - `api/src/services/providers/claude-provider.ts` (BR-REL-EX2 approved, Stage 4)
+  - `api/src/routes/namespaces/gw.ts` (BR-REL-EX2 approved, Stage 4)
+  - `api/src/services/llm-metering/budget-admission.ts` (BR-REL-EX2 approved, Stage 4)
+  - `api/src/services/llm-metering/route-settlement.ts` (BR-REL-EX2 approved, Stage 4)
+  - `api/src/services/llm-metering/cost-ledger-sink.ts` (BR-REL-EX2 approved, Stage 4)
+  - `api/tests/**` (BR-REL-EX2 approved, Stage 4)
   - `packages/llm-mesh/src/native-messages.ts` (BR-REL-EX1 approved, pass 01)
   - `packages/llm-mesh/src/errors.ts` (BR-REL-EX1 approved, M6 rows 40–42)
   - `packages/llm-mesh/tests/native-error-metadata.test.ts` (BR-REL-EX1 approved, M6 rows 40–42)
@@ -326,5 +333,24 @@
   - [ ] Pass 13 commit gates — Scope-check, explicit staging including this plan, <=149 changed lines (split <=140), Make commit only; no push/provider/publication/design decisions.
   - [ ] Pass 13 handoff — Gemini 3.8 Flash high via AGY read-only review of all pass commits into `.h2a/build/pass13_review_gemini.md`; fix BLOCKER/MAJOR with regression per MAJOR and re-review; print packet report.
 - [ ] Stage 4 — API execution/pricing/route plane/ledger: rows 62–81e2, with addendum insertions.
+  - [ ] Row 62 — Native raw fetch, trusted auth, request headers and response seam; detach upload/body holders before exposing results (N1).
+  - [ ] Row 63 — Non-billable count_tokens endpoint, exact source/model and outgoing-size guards.
+  - [ ] Row 64 — 55,000-ms deadline through JSON/first non-error SSE frame, caller abort and reader/timer cleanup.
+  - [ ] Row 65a — `api/tests/unit/claude-provider.test.ts`: fake HTTP auth, headers, count, byte measurement, errors and deadline cases.
+  - [ ] Row 65b — Same file: counted body/serialization/closure holders, open native stream, early response/upload cancellation and JSON/count release (N1).
+  - [ ] Row 66 — `anthropic-native.ts`: trusted credential/account availability, execute-time acquisition/null lease, native and count ports; no host request capture.
+  - [ ] Row 67 — Attempt-bound body-free finalize callback; `cost-ledger-sink.ts` invariant; observation projects only the immutable gateway snapshot (K5/L4).
+  - [ ] Row 67a — `budget-admission.ts`, `route-settlement.ts`: pricing provider/model identity and pinned-versus-costliest provenance.
+  - [ ] Row 68 — Native rational usageCost identity/policy/model/bounds guards; canonical cost preserved.
+  - [ ] Row 68a — Closed native attempt audit fields; mismatch triggers one transactional overrun-style audit.
+  - [ ] Row 68b — `api/tests/unit/llm-budget-admission-native.test.ts`: exact amounts, wrong/missing identity, costliest fallback and unsafe bounds.
+  - [ ] Row 69 — `api/tests/unit/anthropic-native.test.ts`: credential precedence, account/null lease, observation identity, physical/raw projections, count without observation.
+  - [ ] Row 69a — Same file: gateway JSON/stream/cancel/commit-failure parity, rejecting/never-settling hooks, independent settlement/reader/lease cleanup.
+  - [ ] Row 69b1 — Same file: L2 one-hour repeat/growth/nullable parity and bounded-finalize timeout/late completion.
+  - [ ] Row 69b2 — Same file: malformed delta permanently loses proof and charges 74,300 micro-USD (N5).
+  - [ ] Row 69c — Same file: real host-port closure retains response only while stream stays open (N1).
+  - [ ] Before and after EVERY commit: `make typecheck-api` and touched `make test-api-unit SCOPE=tests/unit/<file>` / `make test-api-endpoints SCOPE=tests/api/<file>`; sequential, all three allocated ports, `ENV=test-llm-native-relay` last.
+  - [ ] Gateway changes additionally require sequential `make test-llm-gateway`; scope-check before every commit; split rows above 149 changed lines including this checklist.
+  - [ ] Pass end: full `make test-api-unit`, full `make test-api-endpoints`, `make down`, clean status and packet report; conductor owns cross-review, no push or real provider calls.
 - [ ] Stage 5 — Operator setup, HTTP-only qualification and OFF/ON client gates: rows 82a–83b plus 82c.
 - [ ] Stage 6 — Qualified default list, final train packing, Ffinal/Ufinal evidence and release handoff: rows 84–87.
