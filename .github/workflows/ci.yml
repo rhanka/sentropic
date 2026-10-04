@@ -1417,7 +1417,14 @@ jobs:
   security-container:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image, build-api-tool-image, build-ui]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    # UI-only changes intentionally skip the toolbox job; keep the UI scan active.
+    if: >-
+      !cancelled() &&
+      needs.changes.result == 'success' &&
+      needs.build-api-image.result == 'success' &&
+      needs.build-ui.result == 'success' &&
+      (needs.build-api-tool-image.result == 'success' || (needs.build-api-tool-image.result == 'skipped' && needs.changes.outputs.api != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     env:
       REGISTRY: ${{ secrets.REGISTRY }}
     steps:
