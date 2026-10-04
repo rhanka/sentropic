@@ -264,6 +264,7 @@
   - [x] Row 48c — Count uses shared bounded validation/billing/safeguards policy and fixed auth/403/404/numeric 413/429/5xx envelopes; one upstream invocation/no retry, locally generated retry/size headers and no error headers/relay/served/financial callbacks.
   - [x] Row 48c2 — Full gate 1113/1 exposed the new exact-size 413 fixture using lower-bound sentence grammar; pin the existing exact-size M6 wording verbatim, with status/type/numeric/no-retry assertions retained.
   - [ ] Row 49 — Same file: rate/concurrency/expiry/map bounds; no hold/settlement/usage/finalize.
+  - [x] Row 49-1 — Declared split 49-1 deterministic limiter behavior / 49-2 HTTP concurrency/cancel/process sharing and no-financial hooks, each <=140 lines; default ten burst/one-per-second/two concurrent, integer refill retry, clock reversal, tenant/principal tuple isolation, bounded map/new-key fail-closed and ten-minute idle eviction excluding live calls.
   - [ ] Row 49a — `tests/request-body-limit.test.ts`: deferred N2 count_off/count_denied/count_rate/count_concurrency refusal matrix.
   - [ ] Row 50 — `tests/redaction.test.ts`, `tests/caller-ownership.test.ts`, canonical ingress/egress/stream tests: ownership inert and canonical regressions.
   - [ ] Row 51 — `CHANGELOG.md`: native 400/header/standalone/count and JSON/SSE served-header contracts.
