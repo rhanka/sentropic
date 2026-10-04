@@ -42,6 +42,7 @@ const REQUEST_ID_HEADER = 'x-sentropic-request-id';
 const FROZEN_ROUTES = [
   { method: 'POST', path: '/v1/messages', wire: 'anthropic-messages' },
   { method: 'POST', path: '/v1/chat/completions', wire: 'openai-chat-completions' },
+  { method: 'POST', path: '/v1/messages/count_tokens', wire: 'anthropic-messages' },
   { method: 'GET', path: '/v1/models' },
   { method: 'GET', path: '/healthz' },
   { method: 'GET', path: '/readyz' },
@@ -180,10 +181,11 @@ const actualRouterRoutes = (app: { routes: { method: string; path: string }[] })
 describe('BR-46 v1 wire contract snapshot — route inventory', () => {
   it('freezes the exact v1 route inventory + methods (spec §3)', () => {
     // The inventory itself is the snapshot: count + each (method, path) pair.
-    expect(FROZEN_ROUTES).toHaveLength(5);
+    expect(FROZEN_ROUTES).toHaveLength(6);
     expect(FROZEN_ROUTES.map((r) => `${r.method} ${r.path}`)).toEqual([
       'POST /v1/messages',
       'POST /v1/chat/completions',
+      'POST /v1/messages/count_tokens',
       'GET /v1/models',
       'GET /healthz',
       'GET /readyz',

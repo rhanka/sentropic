@@ -26,7 +26,8 @@ const bodyRequest = (chunks: readonly Uint8Array[], path = PATHS[0]!, headers: R
   return { raw, cancel };
 };
 const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBodyLimitOptions,
-  order = 'product', owners: CheckedGatewayBody[] = [], overrides: Partial<CreateGatewayRouterOptions> = {}) => {
+  order = 'product', owners: CheckedGatewayBody[] = [], overrides: Partial<CreateGatewayRouterOptions> = {},
+  countIngress?: MiddlewareHandler) => {
   const app = new Hono();
   const inspect: MiddlewareHandler = async (c, next) => {
     owners.push(await ensureCheckedGatewayBody(c.req.raw, options)); await next();
@@ -35,6 +36,7 @@ const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBody
   if (order === 'standalone') app.use('*', (c, next) => gatewayRequestBodyLimit(options)(c, async () => { await inspect(c, next); }));
   app.use('*', gatewayRequestBodyLimit(options));
   if (order === 'product') app.use('*', inspect);
+  if (countIngress) app.post(PATHS[2]!, countIngress);
   app.route('/', createGatewayRouter({ config: h.deps.config, routePlanner: h.deps.routePlanner,
     routeMetering: h.deps.metering, budget: h.deps.budget, nativeMessagesEnabled: true,
     requestBody: options, requestId: () => 'req-native', ...overrides }));
@@ -402,10 +404,9 @@ describe('default byte pool overlap on one replica', () => {
         finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 } });
       const config = { ...h.deps.config, callerAuth: { async verify() { await enter(); return h.deps.config.callerAuth.verify(); } } };
       const apps = Array.from({ length: 4 }, () => {
-        const app = limitedRouter(h, {}, order, [], { config, nativeMessagesEnabled: enabled });
         // Count handler is an ingress-only stub; row 49a owns the actual count refusal matrix.
-        app.post(PATHS[2]!, async c => { await enter(); return c.json({ input_tokens: 1 }); });
-        return app;
+        return limitedRouter(h, {}, order, [], { config, nativeMessagesEnabled: enabled },
+          async c => { await enter(); return c.json({ input_tokens: 1 }); });
       });
       const body = fourKiBBody(h, false);
       const pending = Array.from({ length: 64 }, (_, index) => apps[index % apps.length]!
