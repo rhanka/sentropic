@@ -29,6 +29,8 @@ vi.mock('../../src/config/env', () => ({
 }));
 
 import { ClaudeProviderRuntime } from '../../src/services/providers/claude-provider';
+import { nativeReadiness } from '../../src/services/llm-runtime/anthropic-native-readiness';
+import { nativeResponseBytes } from '../../src/services/llm-runtime/anthropic-native-transport';
 
 describe('ClaudeProviderRuntime', () => {
   let runtime: ClaudeProviderRuntime;
@@ -41,6 +43,24 @@ describe('ClaudeProviderRuntime', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
+
+  it('keeps the 55-second deadline through a partial first frame and closes its reader', async () => {
+    vi.useFakeTimers();
+    const cancelled = vi.fn();
+    const response = new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('event: message_start\ndata: {}\n')); },
+      cancel: cancelled,
+    }));
+    const deadline = nativeReadiness(new AbortController().signal);
+    const iterator = nativeResponseBytes(response, deadline)[Symbol.asyncIterator]();
+    expect((await iterator.next()).done).toBe(false);
+    const pending = iterator.next().then(() => undefined, error => error);
+    await vi.advanceTimersByTimeAsync(55_000);
+    expect(await pending).toMatchObject({ status: 504, code: 'timeout' });
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it.each(['messages', 'count_tokens'] as const)('relays native %s JSON through fake HTTP after upload completion', async operation => {
