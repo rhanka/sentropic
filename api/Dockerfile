@@ -20,6 +20,15 @@ RUN mkdir -p /tmp/undici-update && \
     tar -xzf /tmp/undici-update/undici-6.28.1.tgz && \
     mv package undici && \
     rm -rf /tmp/undici-update
+# Security: Patch npm's bundled http-cache-semantics for CVE-2026-93748
+RUN mkdir -p /tmp/http-cache-semantics-update && \
+    cd /tmp/http-cache-semantics-update && \
+    npm pack http-cache-semantics@4.3.0 && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    rm -rf http-cache-semantics && \
+    tar -xzf /tmp/http-cache-semantics-update/http-cache-semantics-4.3.0.tgz && \
+    mv package http-cache-semantics && \
+    rm -rf /tmp/http-cache-semantics-update
 # Security: Force update glob in npm itself to fix CVE-2025-64756
 # Download glob 11.1.0 first, then replace npm's glob directory
 RUN mkdir -p /tmp/glob-update && \

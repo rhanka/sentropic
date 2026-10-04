@@ -27,6 +27,7 @@
   - `package-lock.json`
   - `api/package.json`
   - `api/package-lock.json`
+  - `api/Dockerfile`
   - `apps/auth-idp/web/**`
   - `e2e/tests/05-i18n.spec.ts`
   - `e2e/tests/06-settings.spec.ts`
@@ -47,6 +48,7 @@
 - [x] BR00-EX7 — i18n E2E matrix dialog locator references removed opacity utilities; locate the same dialog by its translated body; impact: resilient test selector, unchanged assertions/timeouts; rollback: revert the locator with the utility migration.
 - [x] BR00-EX8 — the new visual fixture creates a concurrent workspace; explicitly scope the settings role-update browser to its own workspace using the existing helper; impact: isolated E2E fixture, unchanged role assertions/timeouts; rollback: revert the fixture scoping with the capture test.
 - [x] BR00-E2E1 — full E2E exposed OAuth fixtures for default ports and MinIO free-space refusal on the 99%-full host; provision assigned origins and isolate this environment's MinIO data in 512MB tmpfs through ignored local make/Compose helpers; no product, scanner, or tracked Compose changes.
+- [x] BR00-EX9 — PR CI exposes CVE-2026-93748 in npm's bundled http-cache-semantics 4.2.0; pin published 4.3.0 using the existing Dockerfile bundle-patching pattern; impact: API image build tooling, unchanged runtime configuration; rollback: revert the single patch block. No acceptance or scanner change.
 
 ## AI Flaky tests
 - [x] No timeout increases or new flaky acceptance; record failures with exact evidence.
@@ -93,9 +95,10 @@
   - [x] Run full `make test-e2e` with assigned ports/ENV: all groups 00–10 pass; 239 passed, 11 existing skips, zero failures/retries.
   - [x] Write `.h2a/build/lot2_report.md`; builder inspection has no unresolved finding, scope passes; owner-provided read-only review remains available before merge.
 - [ ] **Lot 3 — PR and CI**
-  - [ ] Push branch/create PR to main with this plan and concrete validation evidence.
+  - [x] Push branch/create PR #637 to main with this plan and concrete validation evidence.
+  - [x] Patch npm's bundled http-cache-semantics to 4.3.0 for the CI container finding; production rebuild and API container scan pass (zero unaccepted findings).
   - [ ] Wait for CI/fix failures; write lot3 report and final `.h2a/report.md`.
-  - [ ] Stop isolated services and verify no branch containers remain.
+  - [x] Stop isolated services and verify no branch containers remain after local qualification; repeat after any CI fix verification.
   - [x] Keep BRANCH.md and leave the PR unmerged, as explicitly instructed.
 
 ## Deferred to BR-XX
