@@ -9,6 +9,7 @@ import { ensureAdminWorkspaceExists, claimAdminWorkspaceOwner } from './services
 import { runAdminApprovalSweep } from './services/admin-approval-sweep';
 import { runChatTracePurge } from './services/chat-trace-sweep';
 import { runQueueReaperSweep } from './services/queue-reaper-sweep';
+import { loadReservationReaperConfig, runReservationReaperSweep, startReservationReaper } from './services/llm-metering/reservation-reaper';
 import { runStreamEventsPurge } from './services/chat/stream-purge-sweep';
 import { outboxDispatcher } from './services/outbox/outbox-dispatcher';
 import { objectTypeRegistry } from './services/object-registry';
@@ -17,6 +18,7 @@ import { createJwksAdapter } from './services/auth/jwks-adapter';
 import { lt } from 'drizzle-orm';
 
 const port = env.PORT;
+const reservationReaperConfig = loadReservationReaperConfig(process.env, Boolean(process.env.LLM_GATEWAY_PARTITION));
 
 type LockObjectType = 'organization' | 'folder' | 'initiative';
 
@@ -138,6 +140,10 @@ try {
 }
 
 // Admin approval sweep (48h -> read-only). Run once at boot, then periodically.
+const reservationReaper = startReservationReaper(reservationReaperConfig,
+  (limit) => runReservationReaperSweep({ database: db, limit }));
+process.once('exit', () => { void reservationReaper.stop(); });
+
 if (process.env.NODE_ENV !== 'test') {
   try {
     await runAdminApprovalSweep();
