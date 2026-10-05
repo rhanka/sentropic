@@ -20,6 +20,48 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
   });
 });
+const malformedDelta = (value: number | 'nonfinite') => {
+  const bytes = nativeFrame('message_delta', { usage: { input_tokens: value, cache_read_input_tokens: 10000,
+    cache_creation_input_tokens: 200, output_tokens: 500 } });
+  // JSON numeric overflow reaches the observer as Infinity; JSON.stringify(Infinity) would become null.
+  return value === 'nonfinite' ? new TextEncoder().encode(new TextDecoder().decode(bytes).replace('"nonfinite"', '1e400')) : bytes;
+};
+it.each(MODELS.flatMap(model => [10000.5, 'nonfinite', Number.MAX_SAFE_INTEGER + 1].flatMap(value =>
+  [false, true].map(clean => [model, value as number | 'nonfinite', clean] as const))))
+('malformed_one_hour_delta_charges_74300 (%s %s clean=%s)', async (model, value, clean) => {
+  await withNativeLedger({ model, allowanceInput: 10300, allowanceOutput: 32000,
+    chunks: [nativeStart(model, oneHour), malformedDelta(value), ...(clean ? [nativeFrame('message_stop')] : [])] }, async h => {
+    await h.run(true);
+    const row = await h.financial(), obs = await h.observation(), snapshot = h.snapshots[0]!;
+    expect(Number(row.cost_micro_usd)).toBe(74300); expect(row).toMatchObject({ input_tokens: 10300, output_tokens: 32000 });
+    expect(row.attempts[0]).toMatchObject({ estimated: true, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+    expect(row.attempts[0].nativeInputPriceUnits40).toBeUndefined();
+    expect(snapshot).toMatchObject({ inputTokens: 10300, outputTokens: 500, totalTokens: 10800,
+      estimated: true, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+    expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+    expect(obs).toMatchObject({ input_tokens: 10300, output_tokens: 500, total_tokens: 10800, cost_micro_usd: null });
+    expect(obs.usage_raw).toMatchObject({ input_tokens: 100, input_usage_validated: false,
+      uncertainty_reason: 'invalid_input', estimated: true, final_output_observed: clean });
+    expect(h.record).toHaveBeenCalledOnce(); expect(h.settled).toHaveLength(1); expect(h.close).toHaveBeenCalledOnce();
+  });
+});
+it.each(MODELS.flatMap(model => [false, true].map(clean => [model, clean] as const)))
+('latched_nullable_delta_advances_physical_lower_bound_once (%s clean=%s)', async (model, clean) => {
+  const grown = nativeFrame('message_delta', { usage: { input_tokens: null, cache_read_input_tokens: null,
+    cache_creation_input_tokens: 300, output_tokens: 500 } });
+  await withNativeLedger({ model, allowanceInput: 10300, allowanceOutput: 32000,
+    chunks: [nativeStart(model, oneHour), malformedDelta(10000.5), grown, grown,
+      nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 299 } }), malformedDelta(10000.5),
+      ...(clean ? [nativeFrame('message_stop')] : [])] }, async h => {
+    await h.run(true); const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe(74400); expect(row).toMatchObject({ input_tokens: 10400, output_tokens: 32000 });
+    expect(row.attempts[0].nativeInputPriceUnits40).toBeUndefined();
+    expect(obs).toMatchObject({ input_tokens: 10400, output_tokens: 500, total_tokens: 10900 });
+    expect(obs.usage_raw).toMatchObject({ input_tokens: 100, cache_creation_input_tokens: 300,
+      cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 }, input_usage_validated: false,
+      uncertainty_reason: 'invalid_input', estimated: true });
+  });
+});
 const oneHour = { ...mixed, cache_creation_input_tokens: 200,
   cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 }, output_tokens: 1 };
 const hourCases = [
