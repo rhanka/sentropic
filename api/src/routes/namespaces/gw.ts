@@ -12,6 +12,7 @@ import { createGatewayNamespaceModule } from '@sentropic/cluster-mesh/compose/ga
 import type {
   BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink,
 } from '@sentropic/llm-gateway';
+import { gatewayRequestBodyLimit, type RequestBodyLimitOptions } from '@sentropic/llm-gateway';
 import { sql } from 'drizzle-orm';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
@@ -25,6 +26,7 @@ import {
   withSettlementMode, type RoutePartitionConfig, type RoutePartitionRevision, type RoutePartitionSource,
 } from '../../services/llm-metering';
 import { createApplicationGatewayRoutePlane } from '../../services/llm-runtime/gateway-route-plane';
+import { gatewayNativeMessagesEnabled } from '../../services/llm-runtime/gateway-native-config';
 
 export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
@@ -118,6 +120,9 @@ const refused = (what: string) => async (): Promise<never> => {
 type Probed<T> = T & { probe?(): Promise<boolean> };
 
 export interface CreateGwNamespaceModuleOptions {
+  readonly nativeMessagesEnabled?: boolean;
+  /** Trusted deterministic limits; absent options use the process-owned shared pool. */
+  readonly bodyLimit?: RequestBodyLimitOptions;
   readonly enabled?: boolean;
   readonly authenticate?: MiddlewareHandler;
   /** Verified caller → directory-resolved cost context; undefined refuses (401), a throw is 503. */
@@ -146,7 +151,8 @@ const unavailableGwModule = (): ClusterMeshHonoNamespaceModule => ({
 export const createGwNamespaceModule = async (
   options: CreateGwNamespaceModuleOptions = {},
 ): Promise<ClusterMeshHonoNamespaceModule> => {
-  const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane();
+  const nativeMessagesEnabled = options.nativeMessagesEnabled ?? gatewayNativeMessagesEnabled(process.env.LLM_GATEWAY_NATIVE_MESSAGES);
+  const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane({ nativeMessages: nativeMessagesEnabled });
   const identity = options.resolveCaller ? undefined : productIdentity();
   const resolveCaller = options.resolveCaller ?? resolveProductCaller(identity!);
   const ownerRef = `product-api:${control.runtime.generation.generationId}`;
@@ -196,6 +202,7 @@ export const createGwNamespaceModule = async (
         const router = new Hono();
         applyAuthorFence(router);
         router.use('/v1/*', options.authenticate ?? requireAuth);
+        router.use('/v1/*', gatewayRequestBodyLimit(options.bodyLimit));
         router.use('/v1/*', settlementModeMiddleware());
         router.use('/v1/*', async (context, next) => {
           const token = crypto.randomUUID();
@@ -214,6 +221,7 @@ export const createGwNamespaceModule = async (
         });
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
+          nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens,
           budget: { port: budget, defaultOutputTokens: options.defaultOutputTokens ?? GW_DEFAULT_OUTPUT_TOKENS },
         }));
         return router;
