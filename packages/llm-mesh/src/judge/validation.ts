@@ -15,29 +15,49 @@ export const isMicroUsd = (value: unknown): value is string =>
 export const isCorrelationId = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value);
 
-/** Check before serialization: JSON.stringify otherwise drops or coerces invalid data. */
-function isJson(value: unknown, depth: number): boolean {
-  if (depth > JUDGE_MAX_JSON_DEPTH) return false;
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (typeof value !== 'object' || Object.getOwnPropertySymbols(value).length) return false;
+/** Copy data descriptors only; never serialize or read fields from the live caller object. */
+function copyJson(value: unknown, depth: number, budget: { remaining: number }): unknown {
+  if (--budget.remaining < 0 || depth > JUDGE_MAX_JSON_DEPTH) throw new Error('Invalid JSON.');
+  if (typeof value === 'string') {
+    budget.remaining -= value.length;
+    if (budget.remaining < 0) throw new Error('Invalid JSON.');
+    return value;
+  }
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'object' || Object.getOwnPropertySymbols(value).length) throw new Error('Invalid JSON.');
   const array = Array.isArray(value);
   const proto = Object.getPrototypeOf(value);
-  if (proto !== (array ? Array.prototype : Object.prototype) && proto !== null) return false;
+  if (proto !== (array ? Array.prototype : Object.prototype) && proto !== null) throw new Error('Invalid JSON.');
   const descriptors = Object.getOwnPropertyDescriptors(value);
-  if (array && Object.keys(descriptors).length !== value.length + 1) return false;
-  return Object.entries(descriptors).every(([key, descriptor]) => {
-    if (array && key === 'length') return true;
-    if (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)) return false;
-    return !unsafeKeys.has(key) && descriptor.enumerable === true
-      && has(descriptor, 'value') && isJson(descriptor.value, depth + 1);
-  });
+  const length = descriptors.length?.value;
+  if (array && (!Number.isSafeInteger(length) || length < 0
+    || Object.keys(descriptors).length !== length + 1)) throw new Error('Invalid JSON.');
+  const copy: Record<string, unknown> = array ? [] as unknown as Record<string, unknown> : Object.create(null);
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (array && key === 'length') continue;
+    if (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= length)) throw new Error('Invalid JSON.');
+    if (unsafeKeys.has(key) || descriptor.enumerable !== true || !has(descriptor, 'value')) throw new Error('Invalid JSON.');
+    // Node visits and text lengths are lower bounds on serialized bytes, including shared paths.
+    if (!array) budget.remaining -= key.length;
+    if (budget.remaining < 0) throw new Error('Invalid JSON.');
+    copy[key] = copyJson(descriptor.value, depth + 1, budget);
+  }
+  return copy;
 }
 
-export function isBoundedJson(value: unknown, maxBytes = JUDGE_MAX_JSON_BYTES): boolean {
+export function snapshotBoundedJson(value: unknown, maxBytes = JUDGE_MAX_JSON_BYTES):
+  { ok: true; value: unknown } | { ok: false } {
   try {
-    return isJson(value, 0) && new TextEncoder().encode(JSON.stringify(value)).byteLength <= maxBytes;
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) return { ok: false };
+    const copy = copyJson(value, 0, { remaining: maxBytes });
+    const serialized = JSON.stringify(copy);
+    if (new TextEncoder().encode(serialized).byteLength > maxBytes) return { ok: false };
+    return { ok: true, value: JSON.parse(serialized) as unknown };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
+
+export const isBoundedJson = (value: unknown, maxBytes = JUDGE_MAX_JSON_BYTES): boolean =>
+  snapshotBoundedJson(value, maxBytes).ok;

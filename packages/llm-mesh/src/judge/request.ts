@@ -2,7 +2,7 @@ import type { ProviderId } from '../providers.js';
 import { isProviderId } from '../providers.js';
 import { isJudgeCriterion, isJudgeDecisionRule } from './criterion.js';
 import { isRawPolicy, isRequestPolicy } from './request-policy.js';
-import { has, hasOnlyKeys, isBoundedJson, isCorrelationId, isRecord, isText } from './validation.js';
+import { has, hasOnlyKeys, isCorrelationId, isRecord, isText, snapshotBoundedJson } from './validation.js';
 
 export type Json = null | boolean | number | string | readonly Json[]
   | { readonly [key: string]: Json };
@@ -59,7 +59,10 @@ export type JudgeRequestParseResult =
 /** Pure preflight parsing: capabilities and descriptor revisions remain service-owned. */
 export function parseJudgeRequest(value: unknown): JudgeRequestParseResult {
   const invalid = { ok: false, code: 'REQUEST_INVALID' } as const;
-  if (!isBoundedJson(value) || !isRecord(value)) return invalid;
+  const snapshot = snapshotBoundedJson(value);
+  if (!snapshot.ok) return invalid;
+  value = snapshot.value;
+  if (!isRecord(value)) return invalid;
   // Unsupported retention policy takes precedence over ordinary extra-property errors.
   if (isRecord(value.policy) && has(value.policy, 'zdr')) {
     return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
@@ -87,6 +90,5 @@ export function parseJudgeRequest(value: unknown): JudgeRequestParseResult {
     || (has(value, 'raw') && !isRawPolicy(value.raw))
     || (has(value, 'correlationId') && !isCorrelationId(value.correlationId))) return invalid;
   if (!isProviderId(value.evaluator.providerId)) return { ok: false, code: 'PROVIDER_UNKNOWN' };
-  // Snapshot the validated JSON so caller mutation cannot change later admission inputs.
-  return { ok: true, request: JSON.parse(JSON.stringify(value)) as JudgeRequest };
+  return { ok: true, request: value as unknown as JudgeRequest };
 }
