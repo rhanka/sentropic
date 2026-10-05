@@ -17,6 +17,7 @@ import { sql } from 'drizzle-orm';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { db } from '../../db/client';
+import { logger } from '../../logger';
 import { requireAuth, type AuthUser } from '../../middleware/auth';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { createLlmCallerIdentity, type LlmCallerIdentity } from '../../services/llm-identity/caller-auth';
@@ -27,6 +28,7 @@ import {
 } from '../../services/llm-metering';
 import { createApplicationGatewayRoutePlane } from '../../services/llm-runtime/gateway-route-plane';
 import { gatewayNativeMessagesEnabled } from '../../services/llm-runtime/gateway-native-config';
+import { gatewayStartupRecord, resolveGatewayPackageVersion } from '../../services/llm-runtime/gateway-package-version';
 
 export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
@@ -152,6 +154,7 @@ export const createGwNamespaceModule = async (
   options: CreateGwNamespaceModuleOptions = {},
 ): Promise<ClusterMeshHonoNamespaceModule> => {
   const nativeMessagesEnabled = options.nativeMessagesEnabled ?? gatewayNativeMessagesEnabled(process.env.LLM_GATEWAY_NATIVE_MESSAGES);
+  logger.info(gatewayStartupRecord(await resolveGatewayPackageVersion(), nativeMessagesEnabled), 'Gateway native startup');
   const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane({ nativeMessages: nativeMessagesEnabled });
   const identity = options.resolveCaller ? undefined : productIdentity();
   const resolveCaller = options.resolveCaller ?? resolveProductCaller(identity!);
