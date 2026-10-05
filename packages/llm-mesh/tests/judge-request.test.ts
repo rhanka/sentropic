@@ -56,6 +56,21 @@ const request = () => ({ schemaVersion: 1,
   criterion: { kind: 'binary', instructions: 'Check supplied state' } });
 
 describe('strict judge request parsing', () => {
+  it.each([{ output: null }, { state: null }, { output: null, state: null }])(
+    'should accept explicit null candidate values without adding absent fields: %j', (inputs) => {
+      const candidate = { ...request(), inputs };
+      expect(parseJudgeRequest(candidate)).toEqual({ ok: true, request: candidate });
+    });
+  it.each([{}, { input: null }, { reference: null }, { output: undefined }, { state: undefined },
+    { output: undefined, state: undefined }, { output: null, state: undefined }, { output: undefined, state: null }])(
+    'should refuse absent candidates or undefined fields rather than treating them as null: %j', (inputs) => {
+      expect(parseJudgeRequest({ ...request(), inputs })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    });
+  it('should refuse an absent or undefined inputs envelope', () => {
+    const { inputs: _inputs, ...candidate } = request();
+    expect(parseJudgeRequest(candidate)).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    expect(parseJudgeRequest({ ...candidate, inputs: undefined })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+  });
   it('should retain significant null inputs and snapshot data without inventing defaults', () => {
     const input = request();
     const result = parseJudgeRequest(input);
