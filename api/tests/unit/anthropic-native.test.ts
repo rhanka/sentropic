@@ -4,6 +4,8 @@ import { nativeObservationUsage } from '../../src/services/llm-runtime/anthropic
 import type { NativeUsageSnapshot } from '@sentropic/llm-mesh';
 import { NativeUsageObserver, runRouteJsonFlow, runRouteStreamFlow } from '@sentropic/llm-gateway';
 import { nativeFrame, nativeHarness, nativeStart } from '../../../packages/llm-gateway/tests/fixtures/native-flow';
+import { finalizeNativeObservation } from '../../../packages/llm-gateway/src/native-lifecycle';
+import { usageCost } from '../../src/services/llm-metering/budget-admission';
 
 const MODEL = 'claude-sonnet-5';
 const subject = { principalRef: 'native-user', ownerScopeRef: 'native-owner' };
@@ -58,6 +60,12 @@ const hostHarness = async (options: { model?: string; chunks?: Uint8Array[]; bod
   return { ...h, record, recordOutcome, close, finalize, runtime, dependencies };
 };
 const consume = async (stream: AsyncIterable<unknown>) => { for await (const _chunk of stream) { /* Drain opaque bytes. */ } };
+const nativeModels = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'];
+const amount = (modelId: string, usage: Parameters<typeof usageCost>[1]) => usageCost({ id: 'quoted-price',
+  providerId: 'anthropic', modelId, input: 1_000_000n, output: 2_000_000n, reasoning: 0n,
+  image: 0n, toolCall: 0n, minCharge: 0n }, usage, { providerId: 'anthropic', modelId, pricingMatch: 'exact' });
+const oneHourStart = { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200,
+  cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 }, output_tokens: 1 };
 
 describe('Anthropic native host port', () => {
   it('observes only the gateway finalized snapshot once with a separate joined call identity', async () => {
@@ -240,5 +248,68 @@ describe('gateway to API finalized observation parity', () => {
     expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
     expect(JSON.stringify(warn.mock.calls)).not.toContain('private');
     expect(warn).toHaveBeenCalledTimes(hook ? 1 : 0);
+  });
+});
+
+describe('L2 cumulative cache parity through the API host', () => {
+  const variants = [
+    { name: 'equal-no-split', delta: { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 } },
+    { name: 'aggregate-only', delta: { cache_creation_input_tokens: 200 } },
+    { name: 'nullable', delta: { input_tokens: 100, cache_read_input_tokens: null, cache_creation_input_tokens: null } },
+    { name: 'all-null', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null } },
+    { name: 'omitted', delta: {} },
+    { name: 'growth', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300 }, growth: true },
+  ];
+  const cases = nativeModels.flatMap(model => variants.flatMap(variant => [false, true].map(interrupted => ({ model, variant, interrupted }))));
+  it.each(cases)('$model $variant.name interrupted=$interrupted', async ({ model, variant, interrupted }) => {
+    const delta = nativeFrame('message_delta', { usage: { ...variant.delta, output_tokens: 500 } });
+    const chunks = [nativeStart(model, oneHourStart), delta, delta, ...(interrupted ? [] : [nativeFrame('message_stop')])];
+    const h = await hostHarness({ model, chunks, allowanceInput: 10_300,
+      requestBody: { messages: [{ role: 'user', content: [{ type: 'text', text: 'opaque', cache_control: { type: 'ephemeral', ttl: '1h' } }] }] } });
+    await consume((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    const snapshot = h.finalize.mock.calls[0]![0]; const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    const fable = model === nativeModels[2], growth = variant.growth === true;
+    const physical = growth ? 10_400 : 10_300;
+    const units = growth ? fable ? 38_000 : 68_000 : fable ? 30_000 : 60_000;
+    expect(snapshot).toMatchObject({ inputTokens: physical, outputTokens: 500, totalTokens: physical + 500,
+      nativeInputUsageValidated: true, nativeInputPriceUnits40: units, estimated: interrupted,
+      finalOutputObserved: !interrupted, rawUsage: { input_tokens: 100, cache_read_input_tokens: 10_000,
+        cache_creation_input_tokens: growth ? 300 : 200, cache_creation: { ephemeral_1h_input_tokens: 200 } } });
+    expect(snapshot.nativeUsageUncertainty).toBe(interrupted ? 'incomplete_output' : undefined);
+    expect(snapshot.nativeCacheWriteSplitReason).toBe(growth ? 'cache_write_split_inferred' : undefined);
+    expect(financial).toMatchObject({ inputTokens: physical, outputTokens: interrupted ? 32_000 : 500,
+      nativeInputPriceUnits40: units, nativeInputUsageSource: snapshot.nativeInputUsageSource, estimated: interrupted });
+    expect(amount(model, financial)).toBe(BigInt(interrupted ? growth ? fable ? 64950 : 65700 : fable ? 64750 : 65500
+      : growth ? fable ? 1950 : 2700 : fable ? 1750 : 2500));
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ usage: { inputTokens: physical, outputTokens: 500,
+      providerRawUsage: { cache_creation: { ephemeral_1h_input_tokens: 200 }, input_usage_validated: true,
+        cache_write_split_reason: snapshot.nativeCacheWriteSplitReason, estimated: interrupted } } });
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.close).toHaveBeenCalledTimes(1); expect(h.recordOutcome).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['resolve', 'reject'] as const)('bounds the gateway helper with API persistence and ignores late %s', async mode => {
+    vi.useFakeTimers();
+    let resolve!: () => void; let reject!: (error: Error) => void;
+    const deferred = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    const { runtime, resolveProviderCredential } = fixture();
+    runtime.nativeMessages.mockImplementation(async payload => { payload.onResponseStarted(); return { kind: 'json', status: 200, body: {}, headers: {} }; });
+    const record = vi.fn(() => deferred);
+    const capability = await createAnthropicNativePort({ modelIds: [MODEL], runtime, record,
+      dependencies: { resolveProviderCredential } }).prepare(subject, undefined, target);
+    await capability!.execute(request());
+    const observer = new NativeUsageObserver(MODEL, true);
+    observer.observeJson({ model: MODEL, usage: { input_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 3 } });
+    const snapshot = observer.snapshot('completed'); const finalize = vi.fn(capability!.finalize!);
+    const results: Awaited<ReturnType<typeof finalizeNativeObservation>>[] = [];
+    void finalizeNativeObservation(finalize, snapshot).then(result => { results.push(result); });
+    await vi.advanceTimersByTimeAsync(999); expect(results).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(results).toEqual([{ kind: 'observation_unavailable', reason: 'hook_timeout' }]);
+    if (mode === 'resolve') resolve(); else reject(new Error('private late failure'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(results).toHaveLength(1); expect(finalize).toHaveBeenCalledExactlyOnceWith(snapshot);
+    expect(record).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+    expect(snapshot).toMatchObject({ estimated: false, termination: 'completed', inputTokens: 2, outputTokens: 3 });
   });
 });
