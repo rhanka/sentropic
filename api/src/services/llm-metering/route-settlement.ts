@@ -11,6 +11,7 @@ import { sql } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
 import type { NativeUsagePricing } from '@sentropic/llm-mesh';
 import type { CallerAuthPort, CostContext, RouteAttemptSettlement, RouteMeteringSink, RouteRequestSettlement } from '@sentropic/llm-gateway';
+import { ensureCheckedGatewayBody, gatewayRequestBodyLimit, isGatewayBodyPath } from '@sentropic/llm-gateway';
 
 import { createId } from '../../utils/id';
 import { outboxWriter } from '../outbox/outbox-writer';
@@ -26,6 +27,16 @@ const modes = new WeakMap<object, 'generate' | 'stream'>();
 export const settlementModeMiddleware = (): MiddlewareHandler => async (context, next) => {
   const headers = context.req.raw.headers;
   headers.delete(SETTLEMENT_MODE_HEADER);
+  if (isGatewayBodyPath(context.req.raw)) {
+    // Also protects standalone hosts whose settlement middleware precedes the shared router.
+    return gatewayRequestBodyLimit()(context, async () => {
+      if (!new URL(context.req.raw.url).pathname.endsWith('/messages/count_tokens')) {
+        const body = (await ensureCheckedGatewayBody(context.req.raw)).body as { stream?: unknown } | null;
+        headers.set(SETTLEMENT_MODE_HEADER, body?.stream === true ? 'stream' : 'generate');
+      }
+      await next();
+    });
+  }
   let stream = false;
   if (context.req.method === 'POST') {
     try {
