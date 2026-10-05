@@ -10,7 +10,7 @@ import {
 } from '@sentropic/cluster-mesh';
 import { createGatewayNamespaceModule } from '@sentropic/cluster-mesh/compose/gateway';
 import type {
-  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink,
+  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink, NativeCountTokensRateLimiter,
 } from '@sentropic/llm-gateway';
 import { gatewayRequestBodyLimit, type RequestBodyLimitOptions } from '@sentropic/llm-gateway';
 import { sql } from 'drizzle-orm';
@@ -125,6 +125,7 @@ export interface CreateGwNamespaceModuleOptions {
   readonly nativeMessagesEnabled?: boolean;
   /** Trusted deterministic limits; absent options use the process-owned shared pool. */
   readonly bodyLimit?: RequestBodyLimitOptions;
+  readonly nativeCountRate?: NativeCountTokensRateLimiter;
   readonly enabled?: boolean;
   readonly authenticate?: MiddlewareHandler;
   /** Verified caller → directory-resolved cost context; undefined refuses (401), a throw is 503. */
@@ -224,7 +225,7 @@ export const createGwNamespaceModule = async (
         });
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
-          nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens,
+          nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens, nativeCountRate: options.nativeCountRate,
           budget: { port: budget, defaultOutputTokens: options.defaultOutputTokens ?? GW_DEFAULT_OUTPUT_TOKENS },
         }));
         return router;
