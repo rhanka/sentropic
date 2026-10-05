@@ -1,6 +1,6 @@
 import type { DecisionRule, Json, JudgeCriterion } from './request.js';
 import { scoreDirections } from './criterion.js';
-import { has, hasOnlyKeys, isBoundedJson, isRecord } from './validation.js';
+import { has, hasOnlyKeys, isBoundedJson, isRecord, isText } from './validation.js';
 
 export type ScoreScale =
   | { kind: 'bounded'; min: number; max: number;
@@ -51,4 +51,37 @@ export function parseJudgeScore(value: unknown): JudgeScore | null {
     || !Number.isFinite(value.normalized.value) || Math.abs(value.normalized.value - position) > 1e-12)) return null;
   return { value: value.value, scale: { ...scale } as ScoreScale, meaning: value.meaning as JudgeScore['meaning'],
     ...(position === undefined ? {} : { normalized: { value: position, transform: 'linear-min-max' as const } }) };
+}
+
+/** A descriptor supplies the documented meaning; this never derives confidence from score. */
+export function parseJudgeConfidence(value: unknown): JudgeVerdict['confidence'] {
+  if (!isBoundedJson(value) || !isRecord(value)
+    || !hasOnlyKeys(value, ['value', 'min', 'max', 'meaning', 'meaningRef', 'origin'])
+    || typeof value.value !== 'number' || typeof value.min !== 'number' || typeof value.max !== 'number'
+    || !Number.isFinite(value.value) || !Number.isFinite(value.min) || !Number.isFinite(value.max)
+    || value.max < value.min || value.value < value.min || value.value > value.max
+    || (value.meaning !== 'provider-confidence' && value.meaning !== 'decision-confidence')
+    || !isText(value.meaningRef) || value.origin !== 'provider') return null;
+  return { value: value.value, min: value.min, max: value.max, meaning: value.meaning,
+    meaningRef: value.meaningRef, origin: 'provider' };
+}
+
+/** Map an exact, descriptor-owned native key set, preserving order and probabilities. */
+export function mapJudgeDistribution(probabilities: unknown,
+  declared: readonly { outcome: string; nativeOutcome: string }[]): JudgeVerdict['distribution'] {
+  if (!isBoundedJson(probabilities) || !isRecord(probabilities) || !declared.length
+    || new Set(declared.map((v) => v.outcome)).size !== declared.length
+    || new Set(declared.map((v) => v.nativeOutcome)).size !== declared.length
+    || Object.keys(probabilities).length !== declared.length) return null;
+  let sum = 0;
+  for (const { outcome, nativeOutcome } of declared) {
+    const probability = probabilities[nativeOutcome];
+    if (!isText(outcome) || !isText(nativeOutcome) || !has(probabilities, nativeOutcome)
+      || typeof probability !== 'number' || !Number.isFinite(probability)
+      || probability < 0 || probability > 1) return null;
+    sum += probability;
+  }
+  if (Math.abs(sum - 1) > 1e-4) return null;
+  return declared.map(({ outcome, nativeOutcome }) => ({ outcome, nativeOutcome,
+    probability: probabilities[nativeOutcome] as number }));
 }
