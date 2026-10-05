@@ -496,6 +496,7 @@ describe('ClaudeProviderRuntime', () => {
       ];
 
       mockAnthropicStream.mockReturnValue({
+        abort: vi.fn(),
         [Symbol.asyncIterator]: async function* () {
           for (const e of events) yield e;
         },

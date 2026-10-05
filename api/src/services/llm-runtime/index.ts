@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { TokenUsage } from '@sentropic/llm-mesh';
+import { requestTooLargeDetail, type TokenUsage } from '@sentropic/llm-mesh';
 import { providerRegistry } from '../provider-registry';
 import { mergeStreamUsage } from '../llm-metering/usage-normalizer';
 import {
@@ -1759,6 +1759,7 @@ export async function* callLLMStream(
         data: {
           message: normalized.message,
           ...(normalized.code ? { code: normalized.code } : {}),
+          ...(requestTooLargeDetail(error) ? { statusCode: 413, retryable: false, ...requestTooLargeDetail(error) } : {}),
         },
       };
       throw error;

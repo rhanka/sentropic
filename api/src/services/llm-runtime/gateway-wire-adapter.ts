@@ -8,6 +8,7 @@ import type {
   VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
 import type OpenAI from 'openai';
+import { requestTooLargeDetail } from '@sentropic/llm-mesh';
 import { toMeshTokenUsage } from '../llm-metering';
 import { isProviderId } from '../provider-runtime';
 import { callLLM, callLLMStream } from './index';
@@ -138,6 +139,7 @@ const mapStreamEvent = (event: { type: string; data: unknown }, providerId: stri
   return { type: 'error', data: {
     providerId: providerId as never,
     message: String(data.message ?? 'provider stream failed'), retryable: false,
+    ...(requestTooLargeDetail(data) ? { code: 'request_too_large', statusCode: 413, ...requestTooLargeDetail(data) } : {}),
   } };
 };
 

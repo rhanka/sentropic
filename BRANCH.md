@@ -357,6 +357,28 @@
   - [x] Row 69b2 — Three-model fractional/unsafe clean/interrupted gateway→host 74,300 full-rate charge, physical 10,300/500 observation and permanent invalid proof; internal nonfinite/unsafe atomic rejection and nullable repeated growth bound; null lease still charges allowance; typecheck/scoped gates.
   - [x] Row 69c — Actual API port→HTTP→gateway six-holder probe proves response-only open commitment and exactly-once abort/error cleanup; regression found early-200 upload error mistaken for completion, now fixed sanitized 503 with reader/lease release; typecheck/scoped gates; no timing/GC assumption.
   - [x] Pass 14 endpoint gate fix — Full endpoints found missing registered `/*`/`count_tokens` paths in GW_PATHS; extend the existing product author fence within approved EX2 and verify root-mount/gw/inventory endpoints. Full suite ran once; scoped regression rerun records resolution.
+  - [x] Row 70 — Canonical exact SDK body measured before invocation, typed terminal 413 and measured upstream size preserved through runtime/wire events; pre/post API typecheck and Claude/runtime scoped gates.
+  - [ ] Row 70a1 — Real SDK fake-fetch generate/stream byte equality and zero-invocation numeric 413 (`claude-provider.test.ts`).
+  - [ ] Row 70a2 — Canonical open-stream measured-N retention until SDK terminal cleanup (`claude-provider.test.ts`).
+  - [ ] Row 71 — Canonical runtime and wire-adapter typed/status-only/upstream 413 regressions (`llm-runtime-stream.test.ts`).
+  - [ ] Row 72 — Product/shared route-plane native feasibility, quote identity and count composition.
+  - [ ] Row 73 — Construction-time OFF switch/shared pool, product auth-before-cap and standalone settlement bounded-read/count skip.
+  - [ ] Row 74 — Product native quote/planner/prepare eligibility (`gateway-route-plane.test.ts`).
+  - [ ] Row 75 — Running-module gateway version resolver and safe startup record.
+  - [ ] Row 76 — Version resolution and exact switch parsing fixtures.
+  - [ ] Row 77 — Product namespace OFF/ON/safeguards/unknown-model fixtures (`cluster-mesh-gw.test.ts`).
+  - [ ] Row 78 — Product count auth/partition/fidelity/no-billing (`gw-count-tokens.test.ts`).
+  - [ ] Row 78a — Distinct principals and shared same-principal count bounds (N6).
+  - [ ] Row 79 — Native ledger observation/financial row joins, idempotency and reader roles (`llm-budget-ledger.test.ts`).
+  - [ ] Row 80 — Cache-heavy exact TTL amounts, inference/unknown split and rounding ledger fixtures.
+  - [ ] Row 81 — Interrupted validated input/output floor and revoked-proof allowance ledger fixtures.
+  - [ ] Row 81a — Mismatch/fallback/iterations selected pinned price and idempotent audit join.
+  - [ ] Row 81b — Physical observation versus financial floor counts/raw U.
+  - [ ] Row 81c — K1/L2 growth/equality/decrease/null and official web-search latest-snapshot amounts.
+  - [ ] Row 81d — K4 output floor, absent/null/empty iterations and K5 terminal parity.
+  - [ ] Row 81e1 — L2 one-hour aggregate repetition/growth/conflict exact clean/interrupted ledger amounts.
+  - [ ] Row 81e2 — N5 malformed one-hour delta permanently revokes proof and charges 74,300.
+  - [ ] Pass 15 boundary — Stop before row 82/operator UAT, no real provider call; conductor owns cross-review.
   - [ ] Before and after EVERY commit: `make typecheck-api` and touched `make test-api-unit SCOPE=tests/unit/<file>` / `make test-api-endpoints SCOPE=tests/api/<file>`; sequential, all three allocated ports, `ENV=test-llm-native-relay` last.
   - [ ] Gateway changes additionally require sequential `make test-llm-gateway`; scope-check before every commit; split rows above 149 changed lines including this checklist.
   - [ ] Pass end: full `make test-api-unit`, full `make test-api-endpoints`, `make down`, clean status and packet report; conductor owns cross-review, no push or real provider calls.
