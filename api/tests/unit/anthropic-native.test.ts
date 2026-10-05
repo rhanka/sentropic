@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAnthropicNativePort, resolveAnthropicNativeAuth } from '../../src/services/llm-runtime/anthropic-native';
 import { nativeObservationUsage } from '../../src/services/llm-runtime/anthropic-native-observation';
 import type { NativeUsageSnapshot } from '@sentropic/llm-mesh';
+import { NativeUsageObserver, runRouteJsonFlow, runRouteStreamFlow } from '@sentropic/llm-gateway';
+import { nativeFrame, nativeHarness, nativeStart } from '../../../packages/llm-gateway/tests/fixtures/native-flow';
 
 const MODEL = 'claude-sonnet-5';
 const subject = { principalRef: 'native-user', ownerScopeRef: 'native-owner' };
@@ -26,6 +28,36 @@ const accountFixture = () => {
   return { dependencies, recordOutcome };
 };
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+/** Actual gateway flows bind the prepared API capability; only provider responses are faked. */
+const hostHarness = async (options: { model?: string; chunks?: Uint8Array[]; body?: Record<string, unknown>;
+  hook?: 'reject' | 'never'; requestBody?: Record<string, unknown>; allowanceInput?: number } = {}) => {
+  const model = options.model ?? MODEL;
+  const { dependencies, recordOutcome } = accountFixture();
+  const record = vi.fn(async () => {
+    if (options.hook === 'reject') throw new Error('private observation failure');
+    if (options.hook === 'never') await new Promise<void>(() => {});
+  });
+  const chunks = options.chunks ?? [nativeStart(model), nativeFrame('message_delta', { usage: { output_tokens: 3 } }),
+    nativeFrame('message_stop')];
+  let index = 0;
+  const close = vi.fn(async () => ({ done: true as const, value: undefined }));
+  const runtime = { nativeMessages: vi.fn(async payload => {
+    payload.onResponseStarted();
+    return payload.stream ? { kind: 'stream' as const, status: 200 as const, headers: {},
+      body: { [Symbol.asyncIterator]: () => ({ next: async () => index < chunks.length
+        ? { done: false as const, value: chunks[index++]! } : { done: true as const, value: undefined }, return: close }) } }
+      : { kind: 'json' as const, status: 200 as const, headers: {}, body: options.body ?? { model,
+        usage: { input_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 3 } } };
+  }), nativeCountTokens: vi.fn() };
+  const port = createAnthropicNativePort({ modelIds: [model], dependencies, runtime, record });
+  const capability = await port.prepare(subject, 'workspace', { providerId: 'anthropic', modelId: model });
+  const finalize = vi.fn(capability!.finalize!);
+  const h = nativeHarness({ model, body: options.requestBody, allowanceInput: options.allowanceInput });
+  h.attempt.nativeMessages = { ...capability!, finalize };
+  return { ...h, record, recordOutcome, close, finalize, runtime, dependencies };
+};
+const consume = async (stream: AsyncIterable<unknown>) => { for await (const _chunk of stream) { /* Drain opaque bytes. */ } };
 
 describe('Anthropic native host port', () => {
   it('observes only the gateway finalized snapshot once with a separate joined call identity', async () => {
@@ -151,5 +183,62 @@ describe('Anthropic native host port', () => {
     expect(JSON.stringify(projected)).not.toMatch(/prompt|private|prose|32000/);
     expect(nativeObservationUsage({ ...snapshot, inputTokens: NaN, outputTokens: undefined, totalTokens: Infinity }))
       .toMatchObject({ inputTokens: undefined, outputTokens: undefined, totalTokens: undefined });
+  });
+});
+
+describe('gateway to API finalized observation parity', () => {
+  it.each(['clean', 'cancel', 'commit', 'eof'] as const)('settles and releases before a never-settling hook: %s', async cause => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const snapshotSpy = vi.spyOn(NativeUsageObserver.prototype, 'snapshot');
+    const h = await hostHarness({ hook: 'never', ...(cause === 'eof' ? { chunks: [nativeStart(MODEL)] } : {}) });
+    if (cause === 'commit') h.attempt.markCommitted.mockRejectedValue(new Error('private commitment failure'));
+    if (cause === 'commit') await expect(runRouteStreamFlow(h.deps, { ...h.request, stream: true })).rejects.toThrow();
+    else {
+      const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+      if (cause === 'cancel') await result.stream.return(undefined);
+      else await consume(result.stream);
+      await result.stream.return(undefined);
+    }
+    const snapshot = h.finalize.mock.calls[0]![0];
+    expect(snapshotSpy).toHaveBeenCalledTimes(1); expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.record).toHaveBeenCalledTimes(1);
+    expect(Object.isFrozen(snapshot)).toBe(true); expect(Object.isFrozen(snapshot.rawUsage)).toBe(true);
+    expect(snapshot).toMatchObject({ inputTokens: 2, outputTokens: cause === 'clean' ? 3 : 1,
+      nativeInputUsageValidated: true, nativeInputUsageSource: 'message_start', // Output-only delta keeps input provenance.
+      estimated: cause !== 'clean', finalOutputObserved: cause === 'clean',
+      termination: { clean: 'completed', cancel: 'cancelled', commit: 'commit_failed', eof: 'missing_message_stop' }[cause] });
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.close).toHaveBeenCalledTimes(1);
+    expect(h.recordOutcome).toHaveBeenCalledTimes(1);
+    const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    expect(financial).toMatchObject({ inputTokens: 2, outputTokens: cause === 'clean' ? 3 : 32_000,
+      nativeInputPriceUnits40: snapshot.nativeInputPriceUnits40, nativeUsageUncertainty: snapshot.nativeUsageUncertainty,
+      nativeInputUsageSource: snapshot.nativeInputUsageSource, estimated: snapshot.estimated });
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ responseId: 'req-native',
+      usage: { inputTokens: 2, outputTokens: snapshot.outputTokens, totalTokens: snapshot.totalTokens,
+        providerRawUsage: { estimated: snapshot.estimated, termination: snapshot.termination,
+          final_output_observed: snapshot.finalOutputObserved, input_usage_source: snapshot.nativeInputUsageSource } } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(warn).toHaveBeenCalledExactlyOnceWith('Native observation unavailable', {
+      requestId: 'req-native', attemptRef: 'attempt', reason: 'hook_timeout' });
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.recordOutcome).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([undefined, 'reject', 'never'] as const)('completes JSON independently of host persistence (%s)', async hook => {
+    vi.useFakeTimers(); const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const snapshotSpy = vi.spyOn(NativeUsageObserver.prototype, 'snapshot');
+    const h = await hostHarness({ hook });
+    expect(await runRouteJsonFlow(h.deps, h.request)).toMatchObject({ status: 200, relay: 'native' });
+    const snapshot = h.finalize.mock.calls[0]![0];
+    expect(snapshotSpy).toHaveBeenCalledTimes(1); expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'success' });
+    expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5,
+      providerRawUsage: { input_usage_source: 'json', termination: 'completed', final_output_observed: true } } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private');
+    expect(warn).toHaveBeenCalledTimes(hook ? 1 : 0);
   });
 });
