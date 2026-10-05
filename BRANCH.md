@@ -105,6 +105,7 @@
   - [x] Gate: scoped contract tests per coherent commit, mesh/gateway typecheck/lint/full suites, authoritative make scope-check before every commit; write .h2a/build/lot1A_report.md and stop for Opus review.
   - [x] 1A validation: make typecheck-llm-mesh lint-llm-mesh and make typecheck-llm-gateway lint-llm-gateway passed; make test-llm-mesh passed 345 tests/35 files (28 new contract tests); make test-llm-gateway passed 389 tests/28 files. All used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge, sequentially.
   - [x] 1A handoff: Opus review received, GO with fixes and no BLOCKER; M1/M2 corrected. Implementation remains unexported; stop before 1B pending the m5 conductor decision, with .h2a/build/lot1B_report.md documenting the review-fix-only range.
+  - [x] 1A review-fix validation: mesh/gateway typecheck and lint passed; full mesh 485 tests/35 files (168 judge tests), full gateway 389 tests/28 files. Sequential Make gates used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge; no 1B acceptance claimed.
 - [ ] **Lot 1B — Chat selection refusal**
   - [ ] Entry gate: record the conductor's Lot 1A m5 null-only candidate decision before continuing; pin the selected behavior in request tests and carry it into 1.05 without producing an empty question.
   - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
