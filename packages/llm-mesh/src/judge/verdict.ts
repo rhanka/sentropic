@@ -48,7 +48,7 @@ export function parseJudgeScore(value: unknown): JudgeScore | null {
   if (has(value, 'normalized') && (!isRecord(value.normalized)
     || !hasOnlyKeys(value.normalized, ['value', 'transform']) || position === undefined
     || value.normalized.transform !== 'linear-min-max' || typeof value.normalized.value !== 'number'
-    || !Number.isFinite(value.normalized.value) || Math.abs(value.normalized.value - position) > 1e-12)) return null;
+    || !Number.isFinite(value.normalized.value) || value.normalized.value !== position)) return null;
   return { value: value.value, scale: { ...scale } as ScoreScale, meaning: value.meaning as JudgeScore['meaning'],
     ...(position === undefined ? {} : { normalized: { value: position, transform: 'linear-min-max' as const } }) };
 }
@@ -102,10 +102,12 @@ export function deriveJudgeDecision(input: { rule?: DecisionRule; score: JudgeSc
   if (!rule) return { ok: true, decision: null };
   if (rule.kind === 'provider') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
   if (rule.kind === 'threshold') {
-    if (score === null || score.scale.kind === 'unknown') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
-    if (parseJudgeScore(score) === null) return { ok: false, code: 'VERDICT_INVALID' };
-    if (rule.value < score.scale.min || rule.value > score.scale.max) return { ok: false, code: 'REQUEST_INVALID' };
-    return { ok: true, decision: { pass: rule.op === 'gte' ? score.value >= rule.value : score.value <= rule.value,
+    if (score === null) return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
+    const checked = parseJudgeScore(score);
+    if (checked === null) return { ok: false, code: 'VERDICT_INVALID' };
+    if (checked.scale.kind === 'unknown') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
+    if (rule.value < checked.scale.min || rule.value > checked.scale.max) return { ok: false, code: 'REQUEST_INVALID' };
+    return { ok: true, decision: { pass: rule.op === 'gte' ? checked.value >= rule.value : checked.value <= rule.value,
       origin: 'threshold', rule: { ...rule } } };
   }
   const declared = input.declaredLabels ?? [];
