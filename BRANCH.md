@@ -82,7 +82,7 @@
   - [x] Inspect existing Make targets; check ports; define the branch test slot, guardrails and file scope.
   - [x] Create the checkbox-only plan from the template; retain reviewed spec as design source without duplicating it into a new tracked spec.
   - [x] Lot gate: C1/C2 PASS; bounded plan commit and `.h2a/build/lot0_report.md` record the preparation boundary; stop before 1.01.
-- [ ] **Lot 1A — Request, verdict and receipt contracts**
+- [x] **Lot 1A — Request, verdict and receipt contracts**
   - [x] 1.01: request.ts strict inputs/criterion bounds; new mesh tests/judge-request.test.ts.
     - [x] 1.01a: request types and bounded JSON/correlation/money primitives; synthetic JSON/coercion/accessor tests.
     - [x] 1.01b: strict criterion/decision validation, duplicate labels/options and finite thresholds; provider cardinality limits remain adapter-owned.
@@ -96,7 +96,9 @@
     - [x] 1.03b: service/connection-failure discriminants, receipt/cost/retention types, unknown/no-dispatch usage and bounded correlation generation/echo.
     - [x] 1.03c: independently reported/missing counters, safe derived total only, invalid usage/count refusal and fresh metadata projections.
   - [x] 1A rejection regressions: hidden sparse-array indices refuse, normalization contradictions never repair, and malformed score scales return VERDICT_INVALID without throwing.
-  - [ ] Gate: scoped contract tests per coherent commit, mesh/gateway typecheck/lint/full suites, authoritative make scope-check before every commit; write .h2a/build/lot1A_report.md and stop for Opus review.
+  - [x] Gate: scoped contract tests per coherent commit, mesh/gateway typecheck/lint/full suites, authoritative make scope-check before every commit; write .h2a/build/lot1A_report.md and stop for Opus review.
+  - [x] 1A validation: make typecheck-llm-mesh lint-llm-mesh and make typecheck-llm-gateway lint-llm-gateway passed; make test-llm-mesh passed 345 tests/35 files (28 new contract tests); make test-llm-gateway passed 389 tests/28 files. All used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge, sequentially.
+  - [x] 1A handoff: implementation remains unexported; no provider activation, versions, tuple or live calls. Stop here and await .h2a/reviews/lot1A_opus_review.md before 1.04a or any other checkpoint.
 - [ ] **Lot 1B — Chat selection refusal**
   - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
   - [ ] 1.04b: model-catalog marked explicit/stored refusal before fallback; update API tests/unit/judge-chat-selection.test.ts.
