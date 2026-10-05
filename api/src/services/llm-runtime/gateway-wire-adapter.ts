@@ -9,7 +9,7 @@ import type {
 } from '@sentropic/llm-mesh';
 import type OpenAI from 'openai';
 import { toMeshTokenUsage } from '../llm-metering';
-import { isProviderId } from '../provider-runtime';
+import { isJudgeOnlyProvider, isProviderId } from '../provider-runtime';
 import { callLLM, callLLMStream } from './index';
 export interface GatewayRuntimeDispatchPort {
   generate(
@@ -91,6 +91,7 @@ const toTools = (request: GenerateRequest): OpenAI.Chat.Completions.ChatCompleti
   }));
 const providerFor = (target: PlannedRouteTarget) => {
   if (!isProviderId(target.providerId)) throw new Error(`unsupported provider: ${target.providerId}`);
+  if (isJudgeOnlyProvider(target.providerId)) throw new Error('Judge-only providers cannot be selected for chat');
   return target.providerId;
 };
 
