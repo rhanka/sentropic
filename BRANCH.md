@@ -69,11 +69,11 @@
 - [x] Lot 1A m2: pin all listed request/verdict/receipt refusal branches, including declared-label checks, schema/evaluator/context/direction, standalone zdr, non-boolean native decision, missing evaluatorCalls and invalid-phase fallback.
 - [x] Lot 1A m6: unsafe JSON keys are __proto__, constructor and prototype at every depth, including evaluated content; tests pin this policy. Canonical MicroUsd has no separate digit ceiling within the whole-request 256 KiB bound; future 1.14 arithmetic uses BigInt, never floating point.
 - [x] Lot 1A m1: type declarations do not qualify criterion-kind, decision-confidence/native-decision or providerRaw enforcement; explicit 1C sub-items below own these remaining invariants.
-- [ ] Lot 1A m5 — conductor decision required: is an output/state candidate containing only null valid significant content, or REQUEST_INVALID? Per the 2026-10-04 instruction, stop before 1B and report the decision request; do not choose locally.
+- [x] Lot 1A m5 — conductor decision, 2026-10-05: JSON null is valid significant candidate content. Output-only null, state-only null and both-null are accepted; an absent candidate or any explicit undefined field is REQUEST_INVALID. Pin the request cases now and encode present null fields explicitly at 1.05.
 - [x] Lot 1B Opus review, 2026-10-05: GO with fixes, no BLOCKER or MAJOR; prior Lot 1A corrections confirmed. This review covers the entry-stop range, not implementation of 1.04a–g.
 - [x] Lot 1B m1: reproduced invalid-phase SETTLEMENT_UNAVAILABLE returning retryable true; unrecognized phases now fail closed with preflight shape, retryable false and no retryAfterMs. The financial-error fallback regression pins both fields.
 - [x] Lot 1B m2: reproduced live score/confidence/usage drift and duplicate descriptor-key reads; all four parsers now validate and return detached snapshotBoundedJson data. Proxy regressions pin score/confidence/distribution/usage; symbol refusal uses the materialized descriptor object from the same ownKeys read as copying.
-- [ ] Lot 1B m3 — conductor process decision: deliver the m5 null-only decision now, or explicitly move that gate to 1C entry before 1.05. The reviewer's valid-null recommendation is non-binding; the existing 1B entry hold stays until a conductor decision is recorded.
+- [x] Lot 1B m3 — conductor delivered the valid-null semantic decision on 2026-10-05; the 1B entry hold is released without relocating the gate. Complete 1.04a–g and stop at .h2a/build/lot1B_impl_report.md for its own implementation review.
 - [x] Lot 1B follow-up stop: only review findings and handoffs recorded; no implementation change or new acceptance tests. Update .h2a/build/lot1B_report.md and stop per the instruction to report required conductor decisions.
 - [x] 2026-10-05 continuation: Lot 1B code findings m1/m2 are now implemented; m3 remains a conductor decision. Rows 1.04a–g are still unimplemented; .h2a/build/lot1C_report.md records corrections and the entry stop, not checkpoint completion.
 - [x] Lot 1C Opus review, 2026-10-05: GO with fixes, no BLOCKER or MAJOR; Lot 1B m1/m2 and the symbol nit accepted. Reviewed range 2ce265e2d..806082dcc covers corrections and the decision stop only; 1B/1C implementation remains unreviewed because it is not started.
@@ -86,6 +86,7 @@
 - [x] Lot 1D m1: review-cycle naming and decision-request wording clarified above; the stop row does not claim checkpoint 1D entry or a ratified decision.
 - [x] Lot 1D m2: Lot 1C m1/m2 Feedback Loop rows now record completed routing; the single 1.07 implementation owner stays unchecked until source/tests land.
 - [x] Review cycle 5 (lot1E_report) stop: record Lot 1D review reconciliation and the unresolved conductor decision in .h2a/build/lot1E_report.md; no new implementation checkpoint is entered.
+- [x] Consolidated review trail: Lot 1E GO accepted 82b2f0937..7669041da; cycle 6 (lot1F_report) was a no-op stop at 7669041da, accepted by Lot 1F GO with no findings. Cycle 7 (lot1G_report) recorded the same decision stop without a commit; the conductor decision above now releases 1B.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -123,7 +124,7 @@
   - [x] 1A handoff: Opus review received, GO with fixes and no BLOCKER; M1/M2 corrected. Implementation remains unexported; stop before 1B pending the m5 conductor decision, with .h2a/build/lot1B_report.md documenting the review-fix-only range.
   - [x] 1A review-fix validation: mesh/gateway typecheck and lint passed; full mesh 485 tests/35 files (168 judge tests), full gateway 389 tests/28 files. Sequential Make gates used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge; no 1B acceptance claimed.
 - [ ] **Lot 1B — Chat selection refusal**
-  - [ ] Entry gate: conductor must resolve Lot 1A m5 or explicitly relocate it to 1C as proposed by Lot 1B m3; do not relocate locally. A resolved semantic decision needs request tests and explicit null encoding/refusal at 1.05.
+  - [x] Entry gate: conductor ratified valid-null semantics on 2026-10-05; request tests pin all three null-only candidates and absent/undefined refusals. The unchecked 1.05 handoff owns explicit null encoding.
     - [ ] Lot 1C pre-stack handoff: before any 1B API stack, refresh onto origin/main and rerun scoped judge tests plus full mesh/gateway suites; recheck ports 9480/5680/1580 and retain REGISTRY=local with no provider keys and the complete port triple/ENV last.
   - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
   - [ ] 1.04b: model-catalog marked explicit/stored refusal before fallback; update API tests/unit/judge-chat-selection.test.ts.
@@ -138,6 +139,7 @@
   - [x] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.
   - [x] Entry-correction validation: mesh typecheck/lint and full 489 tests/35 files passed (172 judge tests); gateway typecheck/lint and full 389 tests/28 files passed. Sequential Make -j1 gates used the complete test-llm-judge port triple; no 1.05–1.18 acceptance claimed.
   - [ ] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; new mesh tests/judge-jev-request.test.ts.
+    - [ ] Conductor m5 decision: encode output-only null, state-only null and both-null explicitly under their respective wrapper fields, preserve absence and field boundaries, and emit a nonempty question; add deterministic codec tests.
   - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
     - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
   - [ ] 1.07: fractional Score and ordered index/label distribution mapping; new mesh tests/judge-jev-score.test.ts.
