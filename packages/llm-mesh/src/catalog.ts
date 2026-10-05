@@ -21,6 +21,7 @@ export interface ProviderDescriptor {
   family: ProviderFamily;
   label: string;
   status: ProviderStatus;
+  judgeOnly?: true;
   capabilities: ProviderCapabilities;
 }
 

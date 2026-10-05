@@ -68,6 +68,10 @@ export const isProviderId = (value: string): value is ProviderId => {
   return providerIds.includes(value as ProviderId);
 };
 
+export const isJudgeOnlyProvider = (value: string): boolean => {
+  return isProviderId(value) && getProviderProfile(value).judgeOnly === true;
+};
+
 const isAvailable = (support: CapabilitySupport): boolean => {
   return support !== 'unsupported';
 };
