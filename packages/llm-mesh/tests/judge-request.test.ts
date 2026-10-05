@@ -17,6 +17,9 @@ describe('judge request JSON boundary', () => {
     expect(isBoundedJson(JSON.parse('{"state":{"__proto__":{}}}'))).toBe(false);
     expect(isBoundedJson({ get output() { throw new Error('must not run'); } })).toBe(false);
     expect(isBoundedJson({ [Symbol('hidden')]: 'value' })).toBe(false);
+    for (const key of ['__proto__', 'constructor', 'prototype']) {
+      expect(isBoundedJson({ output: { [key]: 'Code symbol' } })).toBe(false);
+    }
   });
   it('should bound UTF-8 bytes, canonical money and correlation identifiers', () => {
     expect(isBoundedJson('é', 4)).toBe(true);
@@ -67,14 +70,28 @@ describe('strict judge request parsing', () => {
       expect(parseJudgeRequest({ ...request(), [key]: 'dummy' })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
     }
     expect(parseJudgeRequest({ ...request(), policy: { zdr: true }, fallback: [] })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
+    expect(parseJudgeRequest({ ...request(), policy: { zdr: true } })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
     expect(parseJudgeRequest({ ...request(), inputs: { input: 'No candidate' } }).ok).toBe(false);
     expect(parseJudgeRequest({ ...request(), evaluator: { ...request().evaluator, providerId: 'unknown' } })).toEqual({ ok: false, code: 'PROVIDER_UNKNOWN' });
+  });
+  it.each([
+    { schemaVersion: 2 },
+    { evaluator: { ...request().evaluator, endpoint: 'dummy' } },
+    { inputs: { output: 'Candidate', context: 'not-an-array' } },
+    { criterion: { kind: 'graded', instructions: 'Grade', levels: [{ label: 'a', description: 'A' }] } },
+    { criterion: { kind: 'graded', instructions: 'Grade', direction: 'invalid', levels: [{ label: 'a', description: 'A' }] } },
+    { criterion: { kind: 'choice', instructions: 'Choose', options: [{ id: 'a', description: 'A' }] }, decision: { kind: 'labels', passing: ['b'] } },
+    { criterion: { kind: 'graded', instructions: 'Grade', direction: 'unordered', levels: [{ label: 'a', description: 'A' }] }, decision: { kind: 'labels', passing: ['b'] } },
+    { decision: { kind: 'labels', passing: ['true'] } },
+  ])('should refuse malformed request structure or undeclared labels: %j', (patch) => {
+    expect(parseJudgeRequest({ ...request(), ...patch })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
   });
   it('should reject malformed policy bounds while accepting an explicit zero spend cap', () => {
     for (const policy of [{ timeoutMs: 0 }, { timeoutMs: 60_001 }, { timeoutMs: 1.5 }, { budget: { maxCostMicroUsd: '01' } }, { budget: {} }, { explanation: 'fabricated' }]) {
       expect(parseJudgeRequest({ ...request(), policy }).ok).toBe(false);
     }
     expect(parseJudgeRequest({ ...request(), policy: { budget: { maxCostMicroUsd: '0' }, timeoutMs: 60_000 } }).ok).toBe(true);
+    expect(parseJudgeRequest({ ...request(), policy: { budget: { maxCostMicroUsd: '9'.repeat(256) } } }).ok).toBe(true);
     expect(parseJudgeRequest({ ...request(), raw: { mode: 'allowlisted', maxBytes: 16_385 } }).ok).toBe(false);
   });
   it('should refuse excessive bytes, nesting and cyclic data before serialization', () => {
