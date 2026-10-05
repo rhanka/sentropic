@@ -359,7 +359,7 @@
   - [x] Pass 14 endpoint gate fix — Full endpoints found missing registered `/*`/`count_tokens` paths in GW_PATHS; extend the existing product author fence within approved EX2 and verify root-mount/gw/inventory endpoints. Full suite ran once; scoped regression rerun records resolution.
   - [x] Row 70 — Canonical exact SDK body measured before invocation, typed terminal 413 and measured upstream size preserved through runtime/wire events; pre/post API typecheck and Claude/runtime scoped gates.
   - [x] Row 70a1 — Real SDK 0.78.0 fake-fetch generate/stream byte equality across Unicode/escaping/undefined/stream overwrite and pre-invocation numeric 413; scoped pre/post gates.
-  - [ ] Row 70a2 — Canonical open-stream measured-N retention until SDK terminal cleanup (`claude-provider.test.ts`).
+  - [x] Row 70a2 — Real SDK open-stream counted measured-N retention through first frame, zero only after completion/cancel/error, detached SDK holder and once-only cleanup (`claude-provider.test.ts`); pre/post gates.
   - [ ] Row 71 — Canonical runtime and wire-adapter typed/status-only/upstream 413 regressions (`llm-runtime-stream.test.ts`).
   - [ ] Row 72 — Product/shared route-plane native feasibility, quote identity and count composition.
   - [ ] Row 73 — Construction-time OFF switch/shared pool, product auth-before-cap and standalone settlement bounded-read/count skip.

@@ -361,6 +361,49 @@ describe('ClaudeProviderRuntime', () => {
     expect(mockAnthropicStream).not.toHaveBeenCalled(); expect(upstream).not.toHaveBeenCalled();
   });
 
+  it.each(['complete', 'cancel', 'error'] as const)('canonical_stream_keeps_N_until_sdk_settles: %s', async terminal => {
+    const { default: SDK } = await vi.importActual<typeof import('@anthropic-ai/sdk')>('@anthropic-ai/sdk');
+    let downstream!: ReadableStreamDefaultController<Uint8Array>;
+    let notifyAbort!: () => void;
+    const aborted = new Promise<void>(resolve => { notifyAbort = resolve; });
+    const upstream = vi.fn(async (_url, init: RequestInit) => {
+      init.signal!.addEventListener('abort', notifyAbort, { once: true });
+      return new Response(new ReadableStream<Uint8Array>({
+      start(controller) { downstream = controller; controller.enqueue(new TextEncoder().encode(
+        'event: message_start\ndata: {"type":"message_start","message":{"id":"open","type":"message","role":"assistant","model":"claude-sonnet-5","content":[],"usage":{"input_tokens":1,"output_tokens":0},"stop_reason":null}}\n\n')); },
+    }), { headers: { 'content-type': 'text/event-stream' } });
+    });
+    const sdk = new SDK({ apiKey: 'fixture-key', fetch: upstream, maxRetries: 0 });
+    vi.spyOn(runtime as unknown as { getClient(): Anthropic }, 'getClient').mockReturnValue(sdk);
+    const requestOptions: Anthropic.MessageCreateParams = { model: 'claude-sonnet-5', max_tokens: 1,
+      messages: [{ role: 'user', content: 'retained é body' }] };
+    const measured = prepareClaudeCanonicalBody(requestOptions, true).requestBytes;
+    const probe = vi.fn();
+    const iterator = (await runtime.streamGenerate({ mode: 'messages', requestOptions,
+      canonicalBodyProbe: probe }))[Symbol.asyncIterator]();
+    expect(probe.mock.calls).toEqual([[measured]]);
+    expect((await iterator.next()).done).toBe(false);
+    expect(probe.mock.calls).toEqual([[measured]]); // Open response still owns the full SDK body.
+    if (terminal === 'cancel') {
+      const pending = iterator.return?.();
+      await aborted;
+      expect(probe.mock.calls).toEqual([[measured]]); // Abort requested, SDK still reading.
+      downstream.close();
+      await pending;
+    }
+    else if (terminal === 'error') {
+      downstream.error(new Error('fixture read failure'));
+      await expect(iterator.next()).rejects.toThrow('fixture read failure');
+    } else {
+      downstream.enqueue(new TextEncoder().encode('event: message_stop\ndata: {"type":"message_stop"}\n\n'));
+      downstream.close();
+      while (!(await iterator.next()).done) { /* SDK operation reaches its terminal event. */ }
+    }
+    expect(probe.mock.calls).toEqual([[measured], [0]]);
+    await iterator.return?.();
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
   describe('provider descriptor', () => {
     it('should have correct provider id and label', () => {
       expect(runtime.provider.providerId).toBe('anthropic');
@@ -539,6 +582,7 @@ describe('ClaudeProviderRuntime', () => {
 
       mockAnthropicStream.mockReturnValue({
         abort: vi.fn(),
+        done: vi.fn().mockResolvedValue(undefined),
         [Symbol.asyncIterator]: async function* () {
           for (const e of events) yield e;
         },
