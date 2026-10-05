@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAnthropicNativePort, resolveAnthropicNativeAuth } from '../../src/services/llm-runtime/anthropic-native';
 import { nativeObservationUsage } from '../../src/services/llm-runtime/anthropic-native-observation';
 import type { NativeUsageSnapshot } from '@sentropic/llm-mesh';
-import { NativeUsageObserver, runRouteJsonFlow, runRouteStreamFlow } from '@sentropic/llm-gateway';
+import { NativeSseFramer, NativeUsageObserver, nativeSnapshotUsage, chargeAdmittedAttempts, runRouteJsonFlow, runRouteStreamFlow } from '@sentropic/llm-gateway';
 import { nativeFrame, nativeHarness, nativeStart } from '../../../packages/llm-gateway/tests/fixtures/native-flow';
 import { finalizeNativeObservation } from '../../../packages/llm-gateway/src/native-lifecycle';
 import { usageCost } from '../../src/services/llm-metering/budget-admission';
@@ -33,7 +33,7 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 /** Actual gateway flows bind the prepared API capability; only provider responses are faked. */
 const hostHarness = async (options: { model?: string; chunks?: Uint8Array[]; body?: Record<string, unknown>;
-  hook?: 'reject' | 'never'; requestBody?: Record<string, unknown>; allowanceInput?: number } = {}) => {
+  hook?: 'reject' | 'never'; requestBody?: Record<string, unknown>; allowanceInput?: number; allowanceOutput?: number } = {}) => {
   const model = options.model ?? MODEL;
   const { dependencies, recordOutcome } = accountFixture();
   const record = vi.fn(async () => {
@@ -55,7 +55,7 @@ const hostHarness = async (options: { model?: string; chunks?: Uint8Array[]; bod
   const port = createAnthropicNativePort({ modelIds: [model], dependencies, runtime, record });
   const capability = await port.prepare(subject, 'workspace', { providerId: 'anthropic', modelId: model });
   const finalize = vi.fn(capability!.finalize!);
-  const h = nativeHarness({ model, body: options.requestBody, allowanceInput: options.allowanceInput });
+  const h = nativeHarness({ model, body: options.requestBody, allowanceInput: options.allowanceInput, allowanceOutput: options.allowanceOutput });
   h.attempt.nativeMessages = { ...capability!, finalize };
   return { ...h, record, recordOutcome, close, finalize, runtime, dependencies };
 };
@@ -311,5 +311,62 @@ describe('L2 cumulative cache parity through the API host', () => {
     expect(results).toHaveLength(1); expect(finalize).toHaveBeenCalledExactlyOnceWith(snapshot);
     expect(record).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
     expect(snapshot).toMatchObject({ estimated: false, termination: 'completed', inputTokens: 2, outputTokens: 3 });
+  });
+});
+
+describe('N5 malformed one-hour input never regains pricing proof', () => {
+  const cases = nativeModels.flatMap(model => [false, true].flatMap(interrupted => [10_000.5, Number.MAX_SAFE_INTEGER + 1]
+    .map(bad => ({ model, interrupted, bad }))));
+  it.each(cases)('malformed_one_hour_delta_charges_74300: $model interrupted=$interrupted bad=$bad', async ({ model, interrupted, bad }) => {
+    const h = await hostHarness({ model, allowanceInput: 10_300, chunks: [nativeStart(model, oneHourStart),
+      nativeFrame('message_delta', { usage: { input_tokens: bad, output_tokens: 500 } }),
+      nativeFrame('message_delta', { usage: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 200 } }),
+      ...(interrupted ? [] : [nativeFrame('message_stop')])] });
+    await consume((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    const snapshot = h.finalize.mock.calls[0]![0]; const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    expect(snapshot).toMatchObject({ inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800,
+      estimated: true, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input',
+      rawUsage: { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 } });
+    expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+    expect(financial).toMatchObject({ inputTokens: 10_300, outputTokens: 32_000, estimated: true,
+      nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+    expect(financial.nativeInputPriceUnits40).toBeUndefined(); expect(amount(model, financial)).toBe(74300n);
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ usage: { inputTokens: 10_300, outputTokens: 500,
+      providerRawUsage: { input_usage_validated: false, uncertainty_reason: 'invalid_input', estimated: true } } });
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.recordOutcome).toHaveBeenCalledTimes(1); expect(h.close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(nativeModels.flatMap(model => [NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1].map(bad => ({ model, bad }))))(
+    'rejects internal nonfinite/unsafe numeric updates atomically for $model ($bad)', ({ model, bad }) => {
+      const observer = new NativeUsageObserver(model, false);
+      observer.observeFrame(new NativeSseFramer().push(nativeStart(model, { ...oneHourStart, output_tokens: 500 }))[0]!);
+      observer.accumulator.applyDelta({ input_tokens: bad });
+      const snapshot = observer.snapshot('completed');
+      expect(snapshot).toMatchObject({ inputTokens: 10_300, outputTokens: 500, nativeInputUsageValidated: false,
+        nativeUsageUncertainty: 'invalid_input', estimated: true, rawUsage: { input_tokens: 100 } });
+      const h = nativeHarness({ model, allowanceInput: 10_300 });
+      const candidateRef = 'candidate-0';
+      const project = (value: NativeUsageSnapshot) => chargeAdmittedAttempts({ requestId: 'r', holdRef: 'h',
+        quote: h.deps.routePlanner.quote!({ requestedModel: model, ceiling: { inputTokens: 10_300, outputTokens: 32_000 }, now: new Date() }),
+        dispatched: new Set([candidateRef]) }, [{ candidateRef, providerId: 'anthropic', modelId: model,
+        transportProviderId: 'anthropic', usage: nativeSnapshotUsage(value) }]).attempts[0]!.usage;
+      expect(amount(model, project(snapshot))).toBe(74300n);
+      observer.accumulator.applyDelta({ input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300 });
+      observer.accumulator.applyDelta({ cache_creation_input_tokens: 300 });
+      const grown = observer.snapshot('cancelled');
+      expect(grown).toMatchObject({ inputTokens: 10_400, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+      expect(grown.nativeInputPriceUnits40).toBeUndefined(); expect(amount(model, project(grown))).toBe(74400n);
+    });
+
+  it.each([false, true])('charges a dispatched null account lease at the full allowance without observation (stream=%s)', async stream => {
+    const h = await hostHarness({ allowanceInput: 100, allowanceOutput: 16 });
+    h.dependencies.resolveConnectedClaudeCodeTransport.mockResolvedValue(null);
+    await expect(stream ? runRouteStreamFlow(h.deps, { ...h.request, stream: true }) : runRouteJsonFlow(h.deps, h.request)).rejects.toThrow();
+    expect(h.runtime.nativeMessages).not.toHaveBeenCalled(); expect(h.record).not.toHaveBeenCalled();
+    expect(h.recorder.settlements).toHaveLength(1);
+    const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    expect(financial).toMatchObject({ inputTokens: 100, outputTokens: 16, estimated: true });
+    expect(amount(MODEL, financial)).toBe(132n);
   });
 });
