@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapJudgeDistribution, parseJudgeConfidence, parseJudgeScore } from '../src/judge/verdict.js';
+import { deriveJudgeDecision, hasJudgeVerdictValue, mapJudgeDistribution, parseJudgeConfidence, parseJudgeScore } from '../src/judge/verdict.js';
 
 const grade = (value = 1.25) => ({ value, meaning: 'rubric-grade',
   scale: { kind: 'bounded', min: 0, max: 2, direction: 'higher-is-better' } });
@@ -22,6 +22,34 @@ describe('native judge score semantics', () => {
   it('should preserve valid native values when a scale cannot be normalized', () => {
     expect(parseJudgeScore({ ...grade(0), scale: { ...grade().scale, max: 0 } })?.normalized).toBeUndefined();
     expect(parseJudgeScore({ ...grade(1), scale: { ...grade().scale, min: -Number.MAX_VALUE, max: Number.MAX_VALUE } })?.value).toBe(1);
+  });
+});
+
+describe('explicit judge decision semantics', () => {
+  const input = () => ({ score: parseJudgeScore(grade()), label: null, providerDecision: null });
+  it('should leave probabilities undecided unless an explicit native-unit rule is supplied', () => {
+    expect(deriveJudgeDecision(input())).toEqual({ ok: true, decision: null });
+    expect(deriveJudgeDecision({ ...input(), rule: { kind: 'threshold', field: 'score', op: 'gte', value: 1.5 } }))
+      .toMatchObject({ ok: true, decision: { pass: false, origin: 'threshold' } });
+    expect(deriveJudgeDecision({ ...input(), rule: { kind: 'threshold', field: 'score', op: 'gte', value: 3 } }))
+      .toEqual({ ok: false, code: 'REQUEST_INVALID' });
+  });
+  it('should preserve native false and refuse replacing it or inventing a native boolean', () => {
+    expect(deriveJudgeDecision({ ...input(), providerDecision: false })).toEqual({ ok: true, decision: { pass: false, origin: 'provider' } });
+    expect(deriveJudgeDecision({ ...input(), providerDecision: false, rule: { kind: 'labels', passing: ['yes'] } }).ok).toBe(false);
+    expect(deriveJudgeDecision({ ...input(), rule: { kind: 'provider' } })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
+  });
+  it('should derive label decisions only from declared options', () => {
+    const choice = { ...input(), label: 'b', declaredLabels: ['a', 'b'], rule: { kind: 'labels' as const, passing: ['a'] } };
+    expect(deriveJudgeDecision(choice)).toMatchObject({ ok: true, decision: { pass: false, origin: 'labels' } });
+    expect(deriveJudgeDecision({ ...choice, label: 'unexpected' })).toEqual({ ok: false, code: 'VERDICT_INVALID' });
+    expect(deriveJudgeDecision({ ...choice, rule: { kind: 'labels', passing: ['unknown'] } })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+  });
+  it('should refuse empty evidence while retaining zero scores and negative verdicts', () => {
+    const empty = { score: null, decision: null, label: null };
+    expect(hasJudgeVerdictValue(empty)).toBe(false);
+    expect(hasJudgeVerdictValue({ ...empty, score: parseJudgeScore(grade(0)) })).toBe(true);
+    expect(hasJudgeVerdictValue({ ...empty, decision: { pass: false, origin: 'provider' } })).toBe(true);
   });
 });
 
