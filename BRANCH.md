@@ -132,7 +132,7 @@
   - [x] 1.04a: catalog judgeOnly declaration and profile-derived API predicate before activation; injected marked muse/unknown-ID/unmarked empty local tests passed (2), registry expansion regressions passed (7); isolated API healthy with bindings 9480/1580 and no UI started.
   - [x] 1.04b: model-catalog refuses explicit/stored/inferred marked providers before legacy or empty-inventory fallback; ordinary valid, unknown and local behavior retained; judge-chat-selection passed 11 tests before real activation.
     - [x] Preserve stored judge-only selections in getAISettings before legacy model migration; global/user legacy-model cases prove the actual provider reaches the refusal gate, with no DB or provider dispatch.
-  - [ ] 1.04c: llm-runtime/index.ts marked-provider refusal; new API tests/unit/judge-runtime-selection.test.ts.
+  - [x] 1.04c: runtime refuses explicit/stored marked providers before inference, credential acquisition or dispatch; generate/stream refusal and ordinary/unknown/local selection controls passed 9 tests before activation.
   - [ ] 1.04d: gateway-wire-adapter marked-provider refusal; new API tests/unit/judge-wire-selection.test.ts.
   - [ ] 1.04e: config-product-ai settings refusal; assert existing llm-mesh user-setting refusal in new API tests/api/judge-chat-settings.test.ts.
   - [ ] 1.04f: activate typesafe ProviderId/family, empty chat models, judgeOnly profile; update mesh muse/gcp and API provider-registry-expansion/chat-selection tests; rerun all 1.04 gates plus R API provider-mesh-contract-proof/provider-credentials and mesh local tests; extend scope before editing unlisted regressions.
