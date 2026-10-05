@@ -374,7 +374,7 @@
   - [x] Row 79 — Split 79a/79b: transactional pinned-price/native host/gateway fixture and HTTP row joins, then duplicate/reader-role invariants.
   - [x] Row 79b — Replayed settlement/observation/finalize retain two distinct rows, one debit/outbox/settled hold; role-filtered readers select physical or financial usage separately; scoped pre/post gates.
   - [x] Row 79a — Real Postgres admission/settlement and real observation sink with fake provider; fixture pricing rolls back, cleanup keys observations only; HTTP request-id join, separate callId/null-cost role and pinned financial debit; scoped pre/post gates.
-  - [ ] Row 80 — Cache-heavy exact TTL amounts, inference/unknown split and rounding ledger fixtures.
+  - [x] Row 80 — Three-model mixed/5m/1h/read-only/default-inference pinned amounts and physical observations; unknown one-hour split floors at full rate, bigint rational money rounds once; scoped pre/post gates.
   - [ ] Row 81 — Interrupted validated input/output floor and revoked-proof allowance ledger fixtures.
   - [ ] Row 81a — Mismatch/fallback/iterations selected pinned price and idempotent audit join.
   - [ ] Row 81b — Physical observation versus financial floor counts/raw U.
