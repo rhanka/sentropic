@@ -1,10 +1,11 @@
 /**
- * Gateway route settlement (spec D5 steps 5-7, §12.2): exactly ONE `control.cost_ledger` row per
+ * Gateway route settlement (spec D5 steps 5-7, §12.2): exactly ONE financial `control.cost_ledger` row per
  * settled request, fenced by `idempotency_key = requestId` in the database (never an in-memory
  * flag). One transaction locks the hold, prices every attempt at the quoted pricing versions,
  * inserts the row, settles or keeps the hold, moves reserve to spend, audits overruns and appends
  * the settlement outbox event. No cap predicate: an overrun is charged in full. The observe-only
- * `recordLlmUsage` sink is never wired here. The database handle is injected.
+ * `recordLlmUsage` uses separate call IDs and null hold/cost for observations. Readers select
+ * financial rows by hold_id IS NOT NULL and never sum tokens across both roles. The database is injected.
  */
 import { sql } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
@@ -217,7 +218,7 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
       }
       if (row && row.hold_id === null) {
         // A hold-less row keyed by this server request id (observer redelivery that arrived first):
-        // the settlement is the authority for its request, so it becomes the request's one row.
+        // the settlement is the authority for its request, so it becomes the request's financial row.
         await tx.execute(sql`UPDATE control.cost_ledger SET user_id = ${principal.kind === 'user' ? principal.key : null},
             workspace_id = ${hold.workspaceId}, tenant_id = ${hold.tenantId}, operation = ${settlementOperation(cost)},
             provider_id = ${servedAttempt?.providerId ?? 'none'},
