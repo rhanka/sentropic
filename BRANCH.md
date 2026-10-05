@@ -369,7 +369,7 @@
   - [x] Row 77 — Split 77a/77b: isolated read-only product session/control fixture then OFF/ON/safeguards/unknown-model namespace contracts.
   - [x] Row 77b — Real namespace OFF named safeguards before lookup/admission, version-only canonical, ON extension/credential fidelity, known/unknown/exclusive denial, shared pool/byte cap and partition/readiness; scoped pre/post gates.
   - [x] Row 77a — Real requireAuth with isolated validated-session/workspace seams, read-only cutover, deterministic native/canonical provider and budget fixtures; readiness/auth smoke; scoped pre/post gates.
-  - [ ] Row 78 — Product count auth/partition/fidelity/no-billing (`gw-count-tokens.test.ts`).
+  - [x] Row 78 — Product count real auth/partition, OFF safeguards, exact known/unknown/exclusive denial, extension/header/server-credential fidelity, version/count/error validation and unchanged DB/no lifecycle; trusted rate seam for N6; scoped pre/post gates.
   - [ ] Row 78a — Distinct principals and shared same-principal count bounds (N6).
   - [ ] Row 79 — Native ledger observation/financial row joins, idempotency and reader roles (`llm-budget-ledger.test.ts`).
   - [ ] Row 80 — Cache-heavy exact TTL amounts, inference/unknown split and rounding ledger fixtures.
