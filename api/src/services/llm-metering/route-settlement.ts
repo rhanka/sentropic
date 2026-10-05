@@ -9,12 +9,13 @@
  */
 import { sql } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
+import type { NativeUsagePricing } from '@sentropic/llm-mesh';
 import type { CallerAuthPort, CostContext, RouteAttemptSettlement, RouteMeteringSink, RouteRequestSettlement } from '@sentropic/llm-gateway';
 
 import { createId } from '../../utils/id';
 import { outboxWriter } from '../outbox/outbox-writer';
 import {
-  lockBudgets, modelBucketKey, pgTextArray, priceWeight, principalOf, usageCost, type LedgerDatabase, type LedgerTx, type PricingRow,
+  lockBudgets, modelBucketKey, nativePricingEligible, pgTextArray, priceWeight, principalOf, usageCost, type LedgerDatabase, type LedgerTx, type PricingRow,
 } from './budget-admission';
 
 // --- Operation (generate | stream) of a settled request, carried from ingress to settlement. ---
@@ -57,7 +58,12 @@ const CODE = /^[a-z][a-z0-9-]{0,39}$/;
 const id = (value: unknown): string | undefined => (typeof value === 'string' && ID.test(value) ? value : undefined);
 const count = (value: unknown): number => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0);
 
-export interface LedgerAttempt {
+const UNCERTAINTIES = ['incomplete_input', 'invalid_input', 'cache_write_split_unknown', 'served_model_unverified',
+  'served_model_mismatch', 'input_breakdown_changed', 'incomplete_output', 'invalid_output', 'missing_usage'];
+const source = (value: unknown) => typeof value === 'string' && ['json', 'message_start', 'message_delta'].includes(value) ? value : undefined;
+const reason = (value: unknown) => typeof value === 'string' && UNCERTAINTIES.includes(value) ? value : undefined;
+
+export interface LedgerAttempt extends NativeUsagePricing {
   readonly providerId?: string;
   readonly modelId?: string;
   readonly transportProviderId?: string;
@@ -67,6 +73,7 @@ export interface LedgerAttempt {
   readonly estimated: boolean;
   readonly costMicroUsd: number;
   readonly pricingVersion?: string;
+  readonly nativeSelectedModelId?: string;
 }
 
 /**
@@ -80,6 +87,18 @@ export const redactSettlementAttempt = (attempt: RouteAttemptSettlement, cost: b
     outcome: typeof attempt.outcome === 'string' && CODE.test(attempt.outcome) ? attempt.outcome : undefined,
     inputTokens: count(attempt.usage?.inputTokens), outputTokens: count(attempt.usage?.outputTokens),
     estimated: attempt.usage?.estimated === true, costMicroUsd: Number(cost), pricingVersion: id(pricingVersion),
+    nativeInputPriceUnits40: Number.isSafeInteger(attempt.usage?.nativeInputPriceUnits40)
+      && attempt.usage.nativeInputPriceUnits40! >= 0 ? attempt.usage.nativeInputPriceUnits40 : undefined,
+    nativePricingPolicy: attempt.usage?.nativePricingPolicy === 'anthropic-cache-2026-10-02'
+      ? attempt.usage.nativePricingPolicy : undefined,
+    nativeServedModelId: id(attempt.usage?.nativeServedModelId),
+    nativeSelectedModelId: attempt.usage?.nativeInputUsageValidated !== undefined ? id(attempt.modelId) : undefined,
+    nativeInputUsageValidated: typeof attempt.usage?.nativeInputUsageValidated === 'boolean'
+      ? attempt.usage.nativeInputUsageValidated : undefined,
+    nativeInputUsageSource: source(attempt.usage?.nativeInputUsageSource),
+    nativeUsageUncertainty: reason(attempt.usage?.nativeUsageUncertainty),
+    nativeCacheWriteSplitReason: attempt.usage?.nativeCacheWriteSplitReason === 'cache_write_split_inferred'
+      ? attempt.usage.nativeCacheWriteSplitReason : undefined,
   };
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as unknown as LedgerAttempt;
 };
@@ -162,18 +181,25 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
     const attempts = settlement.attempts.map((attempt) => {
       const exact = pricing.get(modelBucketKey(attempt.providerId, attempt.modelId));
       const price = exact ?? costliest(pricing);
-      const charged = price ? usageCost(price, attempt.usage, { providerId: attempt.providerId, modelId: attempt.modelId,
-        pricingMatch: exact ? 'exact' : 'costliest' }) : 0n;
+      const context = { providerId: attempt.providerId, modelId: attempt.modelId,
+        pricingMatch: exact ? 'exact' as const : 'costliest' as const };
+      const charged = price ? usageCost(price, attempt.usage, context) : 0n;
       if (!price && (attempt.usage.inputTokens > 0 || attempt.usage.outputTokens > 0)) {
         throw new RouteSettlementError('dispatched attempt has no pinned price');
       }
       total += charged;
-      return redactSettlementAttempt(attempt, charged, price?.id);
+      const native = attempt.usage.nativeInputUsageValidated !== undefined || attempt.usage.nativePricingPolicy !== undefined
+        || attempt.usage.nativeInputPriceUnits40 !== undefined;
+      // Financial uncertainty never mutates the gateway's immutable pre-floor snapshot.
+      const usage = native && price && !nativePricingEligible(price, attempt.usage, context)
+        ? { ...attempt.usage, estimated: true, nativeInputPriceUnits40: undefined, nativeInputUsageValidated: false,
+          nativeUsageUncertainty: attempt.usage.nativeUsageUncertainty ?? 'invalid_input' as const } : attempt.usage;
+      return redactSettlementAttempt({ ...attempt, usage }, charged, price?.id);
     });
     const served = [...settlement.attempts].reverse().find((attempt) => attempt.usage.inputTokens > 0
       || attempt.usage.outputTokens > 0) ?? settlement.attempts.at(-1);
     const servedAttempt = served ? attempts[settlement.attempts.indexOf(served)] : undefined;
-    const state = settlement.usage.estimated ? 'estimated' : 'none';
+    const state = settlement.usage.estimated || attempts.some(attempt => attempt.estimated) ? 'estimated' : 'none';
     const values = {
       input: settlement.usage.inputTokens, output: settlement.usage.outputTokens,
       result: RESULT[settlement.outcome], attempts: JSON.stringify(attempts),
@@ -190,7 +216,8 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
         ${values.attempts}::jsonb)
       ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`);
     const auditOverrun = async (charged: bigint): Promise<void> => {
-      if ((settlement.overrun?.length ?? 0) === 0 && charged <= hold.liability) return;
+      const mismatch = attempts.some(attempt => attempt.nativeUsageUncertainty === 'served_model_mismatch');
+      if (!mismatch && (settlement.overrun?.length ?? 0) === 0 && charged <= hold.liability) return;
       await tx.execute(sql`INSERT INTO control.blocked_attempts (id, request_id, tenant_id, workspace_id, principal_kind,
           principal_key, budget_strategy_id, reason, requested_model, hold_id, quote_ref, liability_micro_usd)
         VALUES (${createId()}, ${requestId}, ${hold.tenantId}, ${hold.workspaceId}, ${principal.kind}, ${principal.key},
