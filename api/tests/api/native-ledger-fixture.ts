@@ -15,7 +15,7 @@ export const mixed = { input_tokens: 100, cache_read_input_tokens: 10_000, cache
   cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 }, output_tokens: 20 };
 type Options = { model?: string; served?: string; usage?: Record<string, unknown>; body?: Record<string, unknown>;
   chunks?: Uint8Array[]; allowanceInput?: number; allowanceOutput?: number; inputRate?: number; outputRate?: number;
-  requestBody?: Record<string, unknown>; preFetchFailure?: boolean };
+  requestBody?: Record<string, unknown>; preFetchFailure?: boolean; otherPrice?: { model: string; input: number; output: number } };
 /** Real Postgres admission/settlement; pricing changes roll back, observation cleanup is fixture-keyed only. */
 export const withNativeLedger = async (options: Options, check: (h: Awaited<ReturnType<typeof build>>) => Promise<void>) => {
   const user = `native-ledger-${randomUUID()}`;
@@ -37,6 +37,9 @@ const build = async (options: Options, tx: Parameters<Parameters<typeof db.trans
   await insertModelPricing(tx as unknown as typeof db, { id: pricingId, providerId: 'anthropic', modelId: model,
     inputMicroUsdPerMtok: options.inputRate ?? 1_000_000, outputMicroUsdPerMtok: options.outputRate ?? 2_000_000,
     effectiveFrom: new Date('2099-01-01T00:00:00Z') });
+  if (options.otherPrice) await insertModelPricing(tx as unknown as typeof db, { providerId: 'anthropic',
+    modelId: options.otherPrice.model, inputMicroUsdPerMtok: options.otherPrice.input,
+    outputMicroUsdPerMtok: options.otherPrice.output, effectiveFrom: new Date('2099-01-01T00:00:00Z') });
   await tx.execute(sql`INSERT INTO control.tenant_budget_strategy (id, tenant_id, funding_mode, key_sourcing_mode)
     VALUES (${user}, ${user}, 'tenant_pool', 'platform')`);
   await tx.execute(sql`INSERT INTO control.budgets (id, tenant_id, scope_kind, scope_key, cap_micro_usd, reset_at)
