@@ -4,6 +4,8 @@
  * this module never reads secrets and never echoes raw values in its errors.
  */
 
+import { loadReservationReaperConfig, type ReaperConfig } from '../../../api/src/services/llm-metering/reservation-reaper';
+
 export type HostMode = 'production' | 'development' | 'test';
 
 export interface HostConfig {
@@ -12,6 +14,7 @@ export interface HostConfig {
   readonly host: string;
   /** SIGTERM drain bound for active streams (spec D3: 25 s inside a 40 s pod grace). */
   readonly drainTimeoutMs: number;
+  readonly reaper?: ReaperConfig;
 }
 
 export const PRODUCTION_PORT = 3001;
@@ -69,10 +72,13 @@ const parseHost = (raw: string | undefined, mode: HostMode): string => {
 /** Validate the process environment into a frozen host configuration. */
 export const loadHostConfig = (env: Readonly<Record<string, string | undefined>>): HostConfig => {
   const mode = parseMode(env.NODE_ENV);
+  const reaper = loadReservationReaperConfig(env, true);
+  const configuredReaper = Object.keys(env).some((key) => key.startsWith('LLM_RESERVATION_REAPER_'));
   return Object.freeze({
     mode,
     port: parsePort(env.PORT, mode),
     host: parseHost(env.HOST, mode),
     drainTimeoutMs: DRAIN_TIMEOUT_MS,
+    ...(configuredReaper ? { reaper } : {}),
   });
 };
