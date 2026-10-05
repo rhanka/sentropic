@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
 import {
-  isNativeMessagesTarget, validateNativeModelAllowlist, modelProfiles, providerProfiles, RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
+  EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS, isNativeMessagesTarget, validateNativeModelAllowlist, modelProfiles, providerProfiles, RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
   type RouteQuoteInput, type RouteUsageCeiling, type NativeUsagePricing,
 } from '@sentropic/llm-mesh';
 import { validateNativeInputPriceUnits40 } from '@sentropic/llm-gateway';
@@ -441,6 +441,9 @@ export const withCatalogQuote = (planner: RoutePlanner, options: {
     const count = (value: unknown, min: number) => typeof value === 'number' && Number.isSafeInteger(value) && value >= min;
     if (!(input.now instanceof Date) || Number.isNaN(input.now.getTime()) || !count(ceiling?.inputTokens, 0)
       || !count(ceiling?.outputTokens, 1)) throw new RouteQuoteError('invalid usage ceiling', 'invalid-ceiling');
+    if (input.nativeMessages && Object.hasOwn(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS, input.requestedModel)) {
+      throw new RouteQuoteError('Native Messages target is unavailable', 'native-unavailable');
+    }
     const models = options.catalog.listModels().filter((model) => model.modelId === input.requestedModel);
     if (models.length === 0) throw new RouteQuoteError('Unknown requested model', 'unknown-model');
     const eligible = input.nativeMessages ? models.filter(model => isNativeMessagesTarget(model, nativeModels)) : models;

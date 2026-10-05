@@ -363,7 +363,7 @@
   - [x] Row 71 — Actual canonical runtime/wire-adapter→gateway typed/status/code-cause 413 across both wires and JSON/stream, numeric detail/nonretryability/one-attempt settlement; scoped pre/post gates.
   - [x] Row 72 — Opt-in exact native port/count composition, required target/credential feasibility before bookkeeping, fresh prepared capability and native quote/hash identity; shared standalone defaults remain canonical; scoped pre/post gates.
   - [x] Row 73 — Construction-time exact enabled switch (default OFF), product auth-before-cap/default shared pool/count port wiring; standalone settlement bounded shared result, no clone/double parse/count mode; scoped pre/post gates.
-  - [ ] Row 74 — Product native quote/planner/prepare eligibility (`gateway-route-plane.test.ts`).
+  - [x] Row 74 — `gateway-route-plane-native.test.ts`: OFF/standalone no transport, quote native hash stability, exact known/unknown/exclusive/provider gates before sequence, credential refusal/fresh prepare cleanup, optional canonical fallback and independent count; scoped pre/post gates.
   - [ ] Row 75 — Running-module gateway version resolver and safe startup record.
   - [ ] Row 76 — Version resolution and exact switch parsing fixtures.
   - [ ] Row 77 — Product namespace OFF/ON/safeguards/unknown-model fixtures (`cluster-mesh-gw.test.ts`).
