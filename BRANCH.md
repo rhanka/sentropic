@@ -65,6 +65,8 @@
 - [x] m5: tracked consolidation into SPEC_EVOL_LLM_MESH.md is mandatory before PR/integration, so the ignored design draft is never the sole reviewer reference.
 - [x] m6: host-global harness C1/recorder output is advisory; repository make scope-check C2 is authoritative. Makefile remains forbidden; no new host packages or C1 target.
 - [x] Lot 1A M1/m4: reproduced proxy serialization drift and unbounded shared-reference traversal; copy data descriptors under a byte-derived work budget, serialize once and validate/return the same detached copy.
+- [x] Lot 1A M2/m3: retryability is phase-aware; all settlement-phase errors and financial-authority errors after admission refuse retry hints. Keep advisory retryAfterMs in 0–60,000 ms, matching the maximum deadline; test all 26 codes across five phases and carry this rule into 1.25a docs.
+- [x] Lot 1A m2 (receipt): pin missing evaluatorCalls refusal and invalid-phase fallback alongside the retryability matrix; remaining request/verdict branches are recorded for the next contract test update.
 - [ ] Lot 1A m5 — conductor decision required: is an output/state candidate containing only null valid significant content, or REQUEST_INVALID? Per the 2026-10-04 instruction, stop before 1B and report the decision request; do not choose locally.
 
 ## AI Flaky tests
