@@ -28,7 +28,7 @@ function isJson(value: unknown, depth: number): boolean {
   if (array && Object.keys(descriptors).length !== value.length + 1) return false;
   return Object.entries(descriptors).every(([key, descriptor]) => {
     if (array && key === 'length') return true;
-    if (array && !/^(0|[1-9][0-9]*)$/.test(key)) return false;
+    if (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)) return false;
     return !unsafeKeys.has(key) && descriptor.enumerable === true
       && has(descriptor, 'value') && isJson(descriptor.value, depth + 1);
   });

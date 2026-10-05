@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveJudgeDecision, hasJudgeVerdictValue, mapJudgeDistribution, parseJudgeConfidence, parseJudgeScore } from '../src/judge/verdict.js';
+import type { JudgeScore } from '../src/judge/verdict.js';
 
 const grade = (value = 1.25) => ({ value, meaning: 'rubric-grade',
   scale: { kind: 'bounded', min: 0, max: 2, direction: 'higher-is-better' } });
@@ -18,6 +19,7 @@ describe('native judge score semantics', () => {
     for (const value of [grade(NaN), grade(2.1), { ...grade(), value: true },
       { ...grade(), normalized: { value: 1, transform: 'linear-min-max' } },
       { ...grade(), scale: { ...grade().scale, min: 3 } }]) expect(parseJudgeScore(value)).toBeNull();
+    expect(parseJudgeScore({ ...grade(2), normalized: { value: 1 + 1e-13, transform: 'linear-min-max' } })).toBeNull();
   });
   it('should preserve valid native values when a scale cannot be normalized', () => {
     expect(parseJudgeScore({ ...grade(0), scale: { ...grade().scale, max: 0 } })?.normalized).toBeUndefined();
@@ -33,6 +35,9 @@ describe('explicit judge decision semantics', () => {
       .toMatchObject({ ok: true, decision: { pass: false, origin: 'threshold' } });
     expect(deriveJudgeDecision({ ...input(), rule: { kind: 'threshold', field: 'score', op: 'gte', value: 3 } }))
       .toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    const malformed = { value: 0.5, scale: null, meaning: 'provider-defined' } as unknown as JudgeScore;
+    expect(deriveJudgeDecision({ ...input(), score: malformed, rule: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 } }))
+      .toEqual({ ok: false, code: 'VERDICT_INVALID' });
   });
   it('should preserve native false and refuse replacing it or inventing a native boolean', () => {
     expect(deriveJudgeDecision({ ...input(), providerDecision: false })).toEqual({ ok: true, decision: { pass: false, origin: 'provider' } });
