@@ -9,6 +9,9 @@ describe('judge request JSON boundary', () => {
     for (const value of [NaN, Infinity, undefined, 1n, new Date(), [undefined], Array(1)]) {
       expect(isBoundedJson(value)).toBe(false);
     }
+    const hidden = Array(1);
+    hidden[4_294_967_295] = 'must not disappear';
+    expect(isBoundedJson(hidden)).toBe(false);
   });
   it('should reject unsafe keys and accessors without invoking user code', () => {
     expect(isBoundedJson(JSON.parse('{"state":{"__proto__":{}}}'))).toBe(false);
