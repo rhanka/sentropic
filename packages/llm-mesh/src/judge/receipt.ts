@@ -1,7 +1,7 @@
 import type { JudgeError, JudgeErrorCode } from './errors.js';
 import type { EvaluatorRef, JudgeRequest, MicroUsd } from './request.js';
 import type { JudgeVerdict } from './verdict.js';
-import { isCorrelationId } from './validation.js';
+import { hasOnlyKeys, isBoundedJson, isCorrelationId, isRecord } from './validation.js';
 
 export type TokenCounter =
   | { value: number; source: 'provider' }
@@ -88,4 +88,47 @@ export function resolveJudgeCorrelationId(value: string | undefined,
   generate: () => string = () => globalThis.crypto.randomUUID()): string | null {
   const candidate = value === undefined ? generate() : value;
   return isCorrelationId(candidate) ? candidate : null;
+}
+
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+function isCounter(value: unknown, total: boolean): boolean {
+  return isRecord(value) && hasOnlyKeys(value, ['value', 'source'])
+    && (value.source === 'not-reported' ? value.value === null
+      : (value.source === 'provider' || (total && value.source === 'derived-sum')) && isCount(value.value));
+}
+
+/** Each counter has independent provenance; only a safe, known total can be derived. */
+export function parseJudgeUsage(value: unknown): JudgeUsage | null {
+  if (!isBoundedJson(value) || !isRecord(value) || !hasOnlyKeys(value, ['tokens', 'evaluatorCalls', 'explanations'])
+    || !isRecord(value.tokens) || !hasOnlyKeys(value.tokens, ['input', 'output', 'total'])
+    || !isCounter(value.tokens.input, false) || !isCounter(value.tokens.output, false)
+    || !isCounter(value.tokens.total, true)
+    || (value.evaluatorCalls !== null && !isCount(value.evaluatorCalls))
+    || (value.explanations !== null && !isCount(value.explanations))) return null;
+  const usage = value as unknown as JudgeUsage;
+  const { input, output, total } = usage.tokens;
+  if (total.source === 'derived-sum') {
+    if (input.source !== 'provider' || output.source !== 'provider') return null;
+    const sum = input.value + output.value;
+    if (!isCount(sum) || total.value !== sum) return null;
+  }
+  return { tokens: { input: { ...input }, output: { ...output }, total: { ...total } },
+    evaluatorCalls: usage.evaluatorCalls, explanations: usage.explanations };
+}
+
+export function normalizeJudgeUsage(reported: { inputTokens?: number | null; outputTokens?: number | null;
+  totalTokens?: number | null; evaluatorCalls: number | null; explanations: number | null }): JudgeUsage | null {
+  const counter = (value: number | null | undefined): TokenCounter => value == null
+    ? { value: null, source: 'not-reported' } : { value, source: 'provider' };
+  const input = counter(reported.inputTokens);
+  const output = counter(reported.outputTokens);
+  const total: TotalTokenCounter = reported.totalTokens != null
+    ? { value: reported.totalTokens, source: 'provider' }
+    : input.source === 'provider' && output.source === 'provider'
+      ? { value: input.value + output.value, source: 'derived-sum' }
+      : { value: null, source: 'not-reported' };
+  return parseJudgeUsage({ tokens: { input, output, total }, evaluatorCalls: reported.evaluatorCalls,
+    explanations: reported.explanations });
 }
