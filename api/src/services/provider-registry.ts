@@ -44,8 +44,8 @@ class ProviderRegistry {
     this.cloudCodePa = new CloudCodePaProviderRuntime();
   }
 
-  // Catalog surface: the 8 mesh providers only. `cloudcode-pa` is a transport
-  // provider (no selectable catalog models) and is intentionally excluded.
+  // Chat surface: eight runtimes for nine mesh catalog IDs. TypeSafe is
+  // judge-only; cloudcode-pa is transport-only. Neither is listed for chat.
   listProviders(): ProviderDescriptor[] {
     return [...this.providers.values()].map((runtime) => runtime.provider);
   }

@@ -8,6 +8,21 @@ import { settingsService } from '../../src/services/settings';
 afterEach(() => vi.restoreAllMocks());
 
 describe('judge-only chat selection', () => {
+  it('recognizes real TypeSafe identity without offering chat models or fallback', () => {
+    expect(isProviderId('typesafe')).toBe(true);
+    expect(isJudgeOnlyProvider('typesafe')).toBe(true);
+    expect(mesh.knownModelIdsByProvider.typesafe).toEqual([]);
+    expect(mesh.listModelProfilesByProvider('typesafe')).toEqual([]);
+    expect(mesh.getProviderProfile('typesafe')).toMatchObject({ family: 'typesafe', status: 'planned',
+      capabilities: { judge: { support: 'supported' }, tools: { support: 'unsupported' },
+        streaming: { support: 'unsupported' }, structuredOutput: { support: 'unsupported' },
+        reasoning: { support: 'unsupported' }, modalities: { input: [], output: [] },
+        auth: { tokenSources: ['environment-token'], accountTransports: [] } } });
+    expect(mesh.listProviderProfiles().filter((profile) => profile.judgeOnly).map((profile) => profile.providerId))
+      .toEqual(['typesafe']);
+    expect(() => resolveDefaultSelection({ providerId: 'typesafe', modelId: 'gpt-5.2' }, []))
+      .toThrow('Judge-only providers');
+  });
   it('uses the explicit profile marker before real judge-provider activation', () => {
     expect(isJudgeOnlyProvider('muse')).toBe(false);
     expect(mesh.getProviderProfile('muse').judgeOnly).toBeUndefined();
@@ -42,17 +57,18 @@ describe('judge-only chat selection', () => {
         .toThrow('Judge-only providers cannot be selected for chat');
     });
 
-  it.each([null, 'synthetic-user'])('refuses a stored marked default before legacy migration (%s)', async (userId) => {
+  it.each([[null, 'muse'], ['synthetic-user', 'muse'], [null, 'typesafe'], ['synthetic-user', 'typesafe']] as const)(
+    'refuses a stored marked default before legacy migration (%s, %s)', async (userId, providerId) => {
     const original = mesh.getProviderProfile;
     vi.spyOn(mesh, 'getProviderProfile').mockImplementation((id) => (
       id === 'muse' ? { ...original(id), judgeOnly: true } : original(id)
     ));
     vi.spyOn(settingsService, 'getNumber').mockResolvedValue(10);
     const get = vi.spyOn(settingsService, 'get').mockImplementation(async (key) => (
-      key === 'default_provider_id' ? 'muse' : key === 'default_model' ? 'gpt-5.2' : null
+      key === 'default_provider_id' ? providerId : key === 'default_model' ? 'gpt-5.2' : null
     ));
     expect(await settingsService.getAISettings({ userId })).toMatchObject({
-      defaultProviderId: 'muse', defaultModel: 'gpt-5.2',
+      defaultProviderId: providerId, defaultModel: 'gpt-5.2',
     });
     await expect(getModelCatalogPayload({ userId })).rejects.toThrow('Judge-only providers');
     expect(get).toHaveBeenCalledWith('default_provider_id', { userId, fallbackToGlobal: true });
