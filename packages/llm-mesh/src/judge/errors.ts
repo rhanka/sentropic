@@ -41,14 +41,21 @@ export interface JudgeError {
 export const isJudgeErrorCode = (value: unknown): value is JudgeErrorCode =>
   typeof value === 'string' && has(messages, value);
 
+// Advisory delay ceiling matches the maximum judge request deadline.
+const maxRetryAfterMs = 60_000;
+
 /** Static wording only. Retry hints never authorize replay or evaluator substitution. */
 export function createJudgeError(code: JudgeErrorCode, phase: JudgeError['phase'],
   options: { retryAfterMs?: number } = {}): JudgeError {
   const safeCode = isJudgeErrorCode(code) ? code : 'REQUEST_INVALID';
-  const retryable = ['PROVIDER_UNAVAILABLE', 'RATE_LIMITED', 'PROVIDER_OVERLOADED', 'TIMEOUT',
-    'TRANSPORT_FAILED', 'MESH_UNAVAILABLE', 'BUDGET_UNAVAILABLE', 'SETTLEMENT_UNAVAILABLE', 'RECEIPT_UNAVAILABLE'].includes(safeCode);
+  const safePhase = ['preflight', 'admission', 'dispatch', 'parse', 'settlement'].includes(phase) ? phase : 'preflight';
+  const financialUnavailable = ['BUDGET_UNAVAILABLE', 'SETTLEMENT_UNAVAILABLE', 'RECEIPT_UNAVAILABLE'].includes(safeCode);
+  const retryable = safePhase !== 'settlement' && (financialUnavailable
+    ? safePhase === 'preflight' || safePhase === 'admission'
+    : ['PROVIDER_UNAVAILABLE', 'RATE_LIMITED', 'PROVIDER_OVERLOADED', 'TIMEOUT', 'TRANSPORT_FAILED', 'MESH_UNAVAILABLE'].includes(safeCode));
   const hint = options.retryAfterMs;
   return { code: safeCode, message: messages[safeCode],
-    phase: ['preflight', 'admission', 'dispatch', 'parse', 'settlement'].includes(phase) ? phase : 'preflight', retryable,
-    ...(retryable && typeof hint === 'number' && Number.isSafeInteger(hint) && hint >= 0 ? { retryAfterMs: hint } : {}) };
+    phase: safePhase, retryable,
+    ...(retryable && typeof hint === 'number' && Number.isSafeInteger(hint) && hint >= 0
+      && hint <= maxRetryAfterMs ? { retryAfterMs: hint } : {}) };
 }
