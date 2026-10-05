@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // check-lock-integrity.mjs `registry` against a local fake registry: a package published by this run is
 // retried until visible, then fails; a package not published by this run stays notice-only.
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TRAIN = { '@sentropic/llm-mesh': '0.22.3', '@sentropic/llm-gateway': '0.19.1' } as const;
+const TRAIN = { '@sentropic/llm-mesh': '0.23.0', '@sentropic/llm-gateway': '0.20.0' } as const;
 type Name = keyof typeof TRAIN;
 const url = (name: string, version: string) => `https://registry.npmjs.org/${name}/-/${name.split('/')[1]}-${version}.tgz`;
 const integrity = (name: string) => `sha512-${name}`;
@@ -62,7 +62,7 @@ describe('train lock integrity against the registry', () => {
     visibleFrom = { '@sentropic/llm-mesh': 3, '@sentropic/llm-gateway': 1 };
     const result = await run('@sentropic/llm-mesh', '@sentropic/llm-gateway');
     expect(result.status, result.out).toBe(0);
-    expect(result.out).toContain('[lock] @sentropic/llm-mesh@0.22.3 registry integrity matches the committed lock');
+    expect(result.out).toContain('[lock] @sentropic/llm-mesh@0.23.0 registry integrity matches the committed lock');
     expect(lookups('@sentropic/llm-mesh')).toHaveLength(3);
     expect(new Set(lookups('@sentropic/llm-mesh').map((r) => r.url)).size).toBe(3);
     expect(lookups('@sentropic/llm-mesh').every((r) => r.headers['cache-control'] === 'no-cache')).toBe(true);
@@ -72,7 +72,7 @@ describe('train lock integrity against the registry', () => {
     visibleFrom = { '@sentropic/llm-gateway': 1 };
     const result = await run('@sentropic/llm-mesh', '@sentropic/llm-gateway');
     expect(result.status).toBe(1);
-    expect(result.out).toContain('::error title=Train lock integrity::@sentropic/llm-mesh@0.22.3 was published in this run but is absent from the registry after 4 attempts');
+    expect(result.out).toContain('::error title=Train lock integrity::@sentropic/llm-mesh@0.23.0 was published in this run but is absent from the registry after 4 attempts');
     expect(lookups('@sentropic/llm-mesh')).toHaveLength(4);
   });
 
@@ -80,7 +80,7 @@ describe('train lock integrity against the registry', () => {
     visibleFrom = { '@sentropic/llm-mesh': 1 };
     const result = await run('@sentropic/llm-mesh');
     expect(result.status, result.out).toBe(0);
-    expect(result.out).toContain('::notice title=Train lock integrity::@sentropic/llm-gateway@0.19.1 is not published; nothing to compare');
+    expect(result.out).toContain('::notice title=Train lock integrity::@sentropic/llm-gateway@0.20.0 is not published; nothing to compare');
     expect(lookups('@sentropic/llm-gateway')).toHaveLength(1);
   });
 

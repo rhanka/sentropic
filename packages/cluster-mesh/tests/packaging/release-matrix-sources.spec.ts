@@ -7,9 +7,9 @@ import { expectedSource, siblingIndex, type SiblingIndexEntry } from './helpers.
 // Expected per-package source of the packed release matrix, derived from the siblings index prepare.sh wrote
 // (never from the mere presence of CLUSTER_MESH_SIBLING_RECEIPTS): an empty receipts file or a single sibling
 // leaves the other train packages on the registry.
-const MESH: SiblingIndexEntry = { name: '@sentropic/llm-mesh', version: '0.22.3' };
-const GATEWAY: SiblingIndexEntry = { name: '@sentropic/llm-gateway', version: '0.19.1' };
-const CANDIDATE: SiblingIndexEntry = { name: '@sentropic/cluster-mesh', version: '0.13.0' };
+const MESH: SiblingIndexEntry = { name: '@sentropic/llm-mesh', version: '0.23.0' };
+const GATEWAY: SiblingIndexEntry = { name: '@sentropic/llm-gateway', version: '0.20.0' };
+const CANDIDATE: SiblingIndexEntry = { name: '@sentropic/cluster-mesh', version: '0.14.0' };
 
 let dir: string;
 beforeEach(() => {
@@ -45,6 +45,6 @@ describe('packed release matrix expected sources', () => {
   });
 
   it('should expect the registry for a sibling at another version than the pinned one', () => {
-    expect(sources([{ ...MESH, version: '0.22.4' }, GATEWAY])).toEqual(['registry', 'sibling']);
+    expect(sources([{ ...MESH, version: '0.23.1' }, GATEWAY])).toEqual(['registry', 'sibling']);
   });
 });
