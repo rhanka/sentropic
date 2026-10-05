@@ -376,7 +376,7 @@
   - [x] Row 79a — Real Postgres admission/settlement and real observation sink with fake provider; fixture pricing rolls back, cleanup keys observations only; HTTP request-id join, separate callId/null-cost role and pinned financial debit; scoped pre/post gates.
   - [x] Row 80 — Three-model mixed/5m/1h/read-only/default-inference pinned amounts and physical observations; unknown one-hour split floors at full rate, bigint rational money rounds once; scoped pre/post gates.
   - [x] Row 81 — Three-model mixed/cache-heavy cancel/EOF preserves proven input with output-only floor; exact 34/132 valid/missing/pre-fetch proof and larger provisional output; physical observations/one release retained; scoped pre/post gates.
-  - [ ] Row 81a — Mismatch/fallback/iterations selected pinned price and idempotent audit join.
+  - [x] Row 81a — JSON/SSE Fable↔Opus mismatch, unequal selected/served pinned rates, fallback/substantive iterations and late SSE model conflict force full-rate estimate; one replay-fenced audit joins request_id→financial attempts, opaque evidence stays out; scoped pre/post gates.
   - [ ] Row 81b — Physical observation versus financial floor counts/raw U.
   - [ ] Row 81c — K1/L2 growth/equality/decrease/null and official web-search latest-snapshot amounts.
   - [ ] Row 81d — K4 output floor, absent/null/empty iterations and K5 terminal parity.
