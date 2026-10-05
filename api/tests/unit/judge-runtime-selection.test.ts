@@ -39,6 +39,15 @@ const expectNoDispatch = () => {
 };
 
 describe('judge-only runtime selection', () => {
+  it.each(['explicit', 'stored'])('refuses real TypeSafe without credentials or dispatch (%s)', async (selection) => {
+    vi.mocked(settingsService.getAISettings).mockResolvedValue({ ...defaults, defaultProviderId: 'typesafe' });
+    const options = { messages: [], model: 'gpt-4.1-nano',
+      ...(selection === 'explicit' ? { providerId: 'typesafe' as const } : {}) };
+    await expect(resolveRuntimeSelection(options)).rejects.toThrow('Judge-only providers');
+    await expect(callLLM(options)).rejects.toThrow('Judge-only providers');
+    await expect(callLLMStream(options).next()).rejects.toThrow('Judge-only providers');
+    expectNoDispatch();
+  });
   it.each(['', 'gpt-4.1-nano', 'gpt-5.2'])(
     'refuses an explicit marked provider before defaults or dispatch (%s)', async (model) => {
       const options = { providerId: 'muse' as const, model, messages: [], userId: 'synthetic-user' };

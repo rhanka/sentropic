@@ -1,10 +1,10 @@
-export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local', 'muse'] as const;
+export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local', 'muse', 'typesafe'] as const;
 
 export type ProviderId = (typeof providerIds)[number];
 
 export type ProviderStatus = 'ready' | 'planned';
 
-export type ProviderFamily = 'openai' | 'google' | 'anthropic' | 'mistral' | 'cohere' | 'meta';
+export type ProviderFamily = 'openai' | 'google' | 'anthropic' | 'mistral' | 'cohere' | 'meta' | 'typesafe';
 
 export type ReasoningTier = 'none' | 'light' | 'standard' | 'advanced';
 
@@ -96,6 +96,7 @@ export const knownModelIdsByProvider = {
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],
   local: ['laneformer-2b-it'],
   muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor'],
+  typesafe: [],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 
 export interface ModelReference {

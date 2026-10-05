@@ -23,9 +23,10 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('judge-only gateway wire selection', () => {
-  it.each(['muse', 'unknown-provider'])('refuses unsupported targets before either runtime call (%s)', async (providerId) => {
-    await expect(applicationGatewayRuntime.generate(subject, undefined, target(providerId), request)).rejects.toThrow();
-    await expect(applicationGatewayRuntime.stream(subject, undefined, target(providerId), request)).rejects.toThrow();
+  it.each(['muse', 'typesafe', 'unknown-provider'])('refuses unsupported targets before either runtime call (%s)', async (providerId) => {
+    const error = providerId === 'unknown-provider' ? 'unsupported provider' : 'Judge-only providers';
+    await expect(applicationGatewayRuntime.generate(subject, undefined, target(providerId), request)).rejects.toThrow(error);
+    await expect(applicationGatewayRuntime.stream(subject, undefined, target(providerId), request)).rejects.toThrow(error);
     expect(callLLM).not.toHaveBeenCalled();
     expect(callLLMStream).not.toHaveBeenCalled();
   });
