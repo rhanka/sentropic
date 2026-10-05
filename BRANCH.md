@@ -136,7 +136,7 @@
   - [x] 1.04d: gateway wire adapter rejects marked/unknown targets before generate/stream delegation; openai/local fake dispatch controls passed 4 tests before activation.
   - [x] 1.04e: generic product settings refuse injected marked muse and typesafe/unknown IDs before storage or queue reload; product/user closed enums refuse typesafe; openai/local writes retained; 7 endpoint tests passed before activation, no user-route source edit.
   - [x] 1.04f: typesafe identity/family activated with empty chat inventory, judgeOnly profile and unsupported chat features; still eight adapters/runtimes. Same-commit pinned updates passed: API unit 49/6 files, endpoint 7/1, mesh typecheck/full 501/35 (muse 6, gcp 7, local 6); unlisted API regressions passed unchanged.
-  - [ ] 1.04g: registry type-only optional judge members; new mesh tests/judge-registry.test.ts; regress tests/facade.test.ts.
+  - [x] 1.04g: optional listEvaluators exact-ref inventory and judge verdict/error evidence ports use type-only imports; independent usage/observed identity survive refusal. Judge registry 3 and facade 16 passed; full mesh 504/36 and gateway 389/28 passed with both typecheck/lint; eight default adapters unchanged, no root judge runtime import.
   - [ ] Gate: named API/mesh regressions, mesh/gateway typecheck/lint/full suites, scoped commits; write .h2a/build/lot1B_impl_report.md and stop for the fresh Opus implementation review required by early-review B1.
 - [ ] **Lot 1C — JEV codec, transport and service**
   - [x] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
