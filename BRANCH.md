@@ -371,7 +371,8 @@
   - [x] Row 77a — Real requireAuth with isolated validated-session/workspace seams, read-only cutover, deterministic native/canonical provider and budget fixtures; readiness/auth smoke; scoped pre/post gates.
   - [x] Row 78 — Product count real auth/partition, OFF safeguards, exact known/unknown/exclusive denial, extension/header/server-credential fidelity, version/count/error validation and unchanged DB/no lifecycle; trusted rate seam for N6; scoped pre/post gates.
   - [x] Row 78a — N6 distinct principals have independent rate/concurrency bounds; two sessions of one principal share identity/owner limits; deferred upstream error releases once and deterministic refill restores capacity, no billing lifecycle; scoped pre/post gates.
-  - [ ] Row 79 — Native ledger observation/financial row joins, idempotency and reader roles (`llm-budget-ledger.test.ts`).
+  - [ ] Row 79 — Split 79a/79b: transactional pinned-price/native host/gateway fixture and HTTP row joins, then duplicate/reader-role invariants.
+  - [x] Row 79a — Real Postgres admission/settlement and real observation sink with fake provider; fixture pricing rolls back, cleanup keys observations only; HTTP request-id join, separate callId/null-cost role and pinned financial debit; scoped pre/post gates.
   - [ ] Row 80 — Cache-heavy exact TTL amounts, inference/unknown split and rounding ledger fixtures.
   - [ ] Row 81 — Interrupted validated input/output floor and revoked-proof allowance ledger fixtures.
   - [ ] Row 81a — Mismatch/fallback/iterations selected pinned price and idempotent audit join.
