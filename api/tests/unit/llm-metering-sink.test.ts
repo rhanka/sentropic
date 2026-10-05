@@ -15,6 +15,7 @@ vi.mock('../../src/utils/id', () => ({
 }));
 
 import { costLedger } from '../../src/db/control-schema';
+import { nativeObservationUsage } from '../../src/services/llm-runtime/anthropic-native-observation';
 import { RouteQuoteError, type RoutePlanner } from '@sentropic/llm-mesh';
 
 import {
@@ -95,6 +96,20 @@ describe('recordLlmUsage', () => {
       usageRaw: null,
       costMicroUsd: null,
     }));
+  });
+
+  it('persists a physical native observation with separate request join, null cost and no hold', async () => {
+    const usage = nativeObservationUsage({ inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800,
+      rawUsage: { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 },
+      estimated: true, finalOutputObserved: false, termination: 'cancelled', nativeSelectedModelId: 'claude-sonnet-5',
+      nativeServedModelId: 'claude-sonnet-5', nativeInputUsageValidated: true, nativeInputUsageSource: 'message_start',
+      fallbackPresent: false, iterationsPresent: false });
+    await recordLlmUsage({ callId: 'native-call:separate', responseId: 'gateway-request', operation: 'stream',
+      providerId: 'anthropic', modelId: 'claude-sonnet-5', usage });
+    expect(values.mock.calls[0]![0]).toMatchObject({ idempotencyKey: 'native-call:separate', responseId: 'gateway-request',
+      inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800, costMicroUsd: null,
+      usageRaw: { input_tokens: 100, estimated: true, final_output_observed: false } });
+    expect(values.mock.calls[0]![0]).not.toHaveProperty('holdId');
   });
 });
 
