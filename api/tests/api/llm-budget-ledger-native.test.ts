@@ -18,6 +18,34 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
   });
 });
+it.each([false, true])('keeps physical observation/raw U separate from both financial allowances (stream=%s)', async stream => {
+  const model = MODELS[2]!;
+  await withNativeLedger({ model, served: MODELS[1], chunks: [nativeStart(MODELS[1]!, mixed), nativeFrame('message_stop')],
+    allowanceInput: 20000, allowanceOutput: 32000 }, async h => {
+    await h.run(stream);
+    const obs = await h.observation(), row = await h.financial();
+    expect(obs).toMatchObject({ input_tokens: 10350, output_tokens: 20, total_tokens: 10370, cost_micro_usd: null, hold_id: null });
+    expect(obs.usage_raw).toMatchObject({ input_tokens: 100, cache_read_input_tokens: 10000,
+      cache_creation_input_tokens: 250, cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 },
+      output_tokens: 20, estimated: true });
+    expect(row).toMatchObject({ input_tokens: 20000, output_tokens: 32000 });
+    expect(Number(row.cost_micro_usd)).toBe(84000); expect(row.attempts[0].nativeInputPriceUnits40).toBeUndefined();
+    expect(obs.idempotency_key).not.toBe(row.idempotency_key);
+    expect(JSON.stringify(obs.usage_raw)).not.toContain('32000');
+  });
+});
+it.each([false, true])('persists absent physical input/total as null, never financial floors (stream=%s)', async stream => {
+  const usage = { output_tokens: 20 };
+  await withNativeLedger({ usage, chunks: [nativeStart(MODELS[0]!, usage), nativeFrame('message_stop')],
+    allowanceInput: 100, allowanceOutput: 16 }, async h => {
+    await h.run(stream);
+    const obs = await h.observation(), row = await h.financial();
+    expect(obs).toMatchObject({ input_tokens: null, output_tokens: 20, total_tokens: null });
+    expect(obs.usage_raw.input_tokens).toBeUndefined(); expect(obs.usage_raw.cache_read_input_tokens).toBeUndefined();
+    expect(row).toMatchObject({ input_tokens: 100, output_tokens: 20 });
+    expect(Number(row.cost_micro_usd)).toBe(140); expect(row.attempts[0].estimated).toBe(true);
+  });
+});
 it.each([['claude-fable-5-1', 'claude-opus-5'], ['claude-opus-5', 'claude-fable-5-1']]
   .flatMap(([model, served]) => [false, true].map(stream => [model!, served!, stream] as const)))
 ('retains selected pinned price and one joined mismatch audit (%s → %s, stream=%s)', async (model, served, stream) => {
