@@ -50,7 +50,7 @@ export function createJudgeError(code: JudgeErrorCode, phase: JudgeError['phase'
   const safeCode = isJudgeErrorCode(code) ? code : 'REQUEST_INVALID';
   const safePhase = ['preflight', 'admission', 'dispatch', 'parse', 'settlement'].includes(phase) ? phase : 'preflight';
   const financialUnavailable = ['BUDGET_UNAVAILABLE', 'SETTLEMENT_UNAVAILABLE', 'RECEIPT_UNAVAILABLE'].includes(safeCode);
-  const retryable = safePhase !== 'settlement' && (financialUnavailable
+  const retryable = phase === safePhase && safePhase !== 'settlement' && (financialUnavailable
     ? safePhase === 'preflight' || safePhase === 'admission'
     : ['PROVIDER_UNAVAILABLE', 'RATE_LIMITED', 'PROVIDER_OVERLOADED', 'TIMEOUT', 'TRANSPORT_FAILED', 'MESH_UNAVAILABLE'].includes(safeCode));
   const hint = options.retryAfterMs;

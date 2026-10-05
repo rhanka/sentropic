@@ -46,7 +46,9 @@ describe('sanitized judge errors', () => {
     expect(createJudgeError('dummy-secret-canary' as JudgeErrorCode, 'parse').message).toBe('Invalid judge request.');
     expect(isJudgeErrorCode('constructor')).toBe(false);
     expect(isJudgeErrorCode('SERVED_IDENTITY_MISMATCH')).toBe(true);
-    expect(createJudgeError('BUDGET_UNAVAILABLE', 'invalid' as 'preflight').phase).toBe('preflight');
+    const invalidPhase = createJudgeError('SETTLEMENT_UNAVAILABLE', 'invalid' as 'preflight', { retryAfterMs: 42 });
+    expect(invalidPhase).toMatchObject({ phase: 'preflight', retryable: false });
+    expect(invalidPhase.retryAfterMs).toBeUndefined();
   });
   it('should retain only valid advisory retry hints', () => {
     expect(createJudgeError('RATE_LIMITED', 'dispatch', { retryAfterMs: 42 }).retryAfterMs).toBe(42);
