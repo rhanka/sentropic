@@ -59,7 +59,7 @@ describe('strict judge request parsing', () => {
   it.each([{ output: null }, { state: null }, { output: null, state: null }])(
     'should accept explicit null candidate values without adding absent fields: %j', (inputs) => {
       const candidate = { ...request(), inputs };
-      expect(parseJudgeRequest(candidate)).toEqual({ ok: true, request: candidate });
+      expect(parseJudgeRequest(candidate)).toStrictEqual({ ok: true, request: candidate });
     });
   it.each([{}, { input: null }, { reference: null }, { output: undefined }, { state: undefined },
     { output: undefined, state: undefined }, { output: null, state: undefined }, { output: undefined, state: null }])(

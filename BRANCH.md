@@ -34,6 +34,7 @@
   - [x] `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`, `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`, `packages/cluster-mesh/tests/fixtures/train.ts`, `packages/cluster-mesh/tests/fixtures/package-tree.ts`
   - [x] `packages/cluster-mesh/tests/modules/registry.spec.ts`, `packages/cluster-mesh/tests/modules/topology.spec.ts`, `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
   - [x] `api/src/services/provider-runtime.ts`, `api/src/services/provider-registry.ts`, `api/src/services/model-catalog.ts`, `api/src/services/llm-runtime/index.ts`, `api/src/services/llm-runtime/gateway-wire-adapter.ts`
+  - [x] `api/src/services/settings.ts` (getAISettings marker preservation only: legacy model normalization otherwise erases a stored judge-only provider before 1.04b/c can refuse it)
   - [x] `api/src/routes/namespaces/config-product-ai.ts`
   - [x] `api/tests/unit/judge-*-selection.test.ts`, `api/tests/unit/provider-registry-expansion.test.ts`, `api/tests/api/judge-chat-settings.test.ts`
   - [x] `packages/llm-mesh/README.md`, `packages/cluster-mesh/README.md`, `spec/SPEC_EVOL_LLM_MESH.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (judge semantics only)
@@ -86,7 +87,8 @@
 - [x] Lot 1D m1: review-cycle naming and decision-request wording clarified above; the stop row does not claim checkpoint 1D entry or a ratified decision.
 - [x] Lot 1D m2: Lot 1C m1/m2 Feedback Loop rows now record completed routing; the single 1.07 implementation owner stays unchecked until source/tests land.
 - [x] Review cycle 5 (lot1E_report) stop: record Lot 1D review reconciliation and the unresolved conductor decision in .h2a/build/lot1E_report.md; no new implementation checkpoint is entered.
-- [x] Consolidated review trail: Lot 1E GO accepted 82b2f0937..7669041da; cycle 6 (lot1F_report) was a no-op stop at 7669041da, accepted by Lot 1F GO with no findings. Cycle 7 (lot1G_report) recorded the same decision stop without a commit; the conductor decision above now releases 1B.
+- [x] Consolidated review trail: Lot 1E GO accepted pre-rebase 82b2f0937..7669041da (rebased d4405122a..afa20b1bf); cycle 6 (lot1F_report) was a no-op stop at 7669041da, accepted by Lot 1F GO with no findings. Cycle 7 (lot1G_report) recorded the same decision stop without a commit; the conductor decision above now releases 1B.
+- [x] Lot 1G review: GO with fixes, no BLOCKER/MAJOR; m1 decision provenance is the user's verbatim CONDUCTOR DECISION message dated 2026-10-05, including the explicit undefined clause, quoted in lot1B_impl_report. Track remains conductor-owned; m2 validation and m3 sibling nesting corrected below; nit uses toStrictEqual for absent-field preservation.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -125,9 +127,10 @@
   - [x] 1A review-fix validation: mesh/gateway typecheck and lint passed; full mesh 485 tests/35 files (168 judge tests), full gateway 389 tests/28 files. Sequential Make gates used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge; no 1B acceptance claimed.
 - [ ] **Lot 1B — Chat selection refusal**
   - [x] Entry gate: conductor ratified valid-null semantics on 2026-10-05; request tests pin all three null-only candidates and absent/undefined refusals. The unchecked 1.05 handoff owns explicit null encoding.
-    - [ ] Lot 1C pre-stack handoff: before any 1B API stack, refresh onto origin/main and rerun scoped judge tests plus full mesh/gateway suites; recheck ports 9480/5680/1580 and retain REGISTRY=local with no provider keys and the complete port triple/ENV last.
-  - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
+  - [x] Pre-stack refresh: clean rebase onto origin/main 52c1fdc63c3bfe210a37742242839d0f3e7cf45e; null-decision commit 19cd770f0 became 07a212f8c. Post-rebase judge 184/3 files, full mesh 501/35 files and gateway 389/28 files passed with both typecheck/lint; ports 9480/5680/1580 free before startup; REGISTRY=local, no provider keys, full port triple/ENV last.
+  - [x] 1.04a: catalog judgeOnly declaration and profile-derived API predicate before activation; injected marked muse/unknown-ID/unmarked empty local tests passed (2), registry expansion regressions passed (7); isolated API healthy with bindings 9480/1580 and no UI started.
   - [ ] 1.04b: model-catalog marked explicit/stored refusal before fallback; update API tests/unit/judge-chat-selection.test.ts.
+    - [ ] Preserve stored judge-only selections in getAISettings before legacy model migration; pin global/user defaults with a legacy model so the chat gate receives the actual provider choice.
   - [ ] 1.04c: llm-runtime/index.ts marked-provider refusal; new API tests/unit/judge-runtime-selection.test.ts.
   - [ ] 1.04d: gateway-wire-adapter marked-provider refusal; new API tests/unit/judge-wire-selection.test.ts.
   - [ ] 1.04e: config-product-ai settings refusal; assert existing llm-mesh user-setting refusal in new API tests/api/judge-chat-settings.test.ts.
