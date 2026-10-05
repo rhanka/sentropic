@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { channel } from 'node:diagnostics_channel';
 import { createAnthropicNativePort, resolveAnthropicNativeAuth } from '../../src/services/llm-runtime/anthropic-native';
 import { nativeObservationUsage } from '../../src/services/llm-runtime/anthropic-native-observation';
 import type { NativeUsageSnapshot } from '@sentropic/llm-mesh';
@@ -29,7 +30,7 @@ const accountFixture = () => {
   };
   return { dependencies, recordOutcome };
 };
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 /** Actual gateway flows bind the prepared API capability; only provider responses are faked. */
 const hostHarness = async (options: { model?: string; chunks?: Uint8Array[]; body?: Record<string, unknown>;
@@ -368,5 +369,81 @@ describe('N5 malformed one-hour input never regains pricing proof', () => {
     const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
     expect(financial).toMatchObject({ inputTokens: 100, outputTokens: 16, estimated: true });
     expect(amount(MODEL, financial)).toBe(132n);
+  });
+});
+
+describe('N1 real host-port reference detachment', () => {
+  const holders = () => {
+    const held = new Set<string>(); const released = new Map<string, number>();
+    const probe = (holder: string, retained: boolean) => {
+      if (retained) { expect(held.has(holder)).toBe(false); held.add(holder); }
+      else { expect(held.delete(holder)).toBe(true); released.set(holder, (released.get(holder) ?? 0) + 1); }
+    };
+    const detached = () => {
+      expect(held.size).toBe(0);
+      expect([...released.keys()].sort()).toEqual(['body', 'port-outgoing', 'port-request', 'request', 'serialization', 'upload']);
+      expect([...released.values()]).toEqual([1, 1, 1, 1, 1, 1]);
+    };
+    return { held, probe, detached };
+  };
+
+  it('committed_native_port_retains_response_only', async () => {
+    const references = holders(); const responseClosed = vi.fn(); const record = vi.fn().mockResolvedValue(undefined);
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(nativeStart(MODEL)); }, cancel: responseClosed,
+    }), { headers: { 'content-type': 'text/event-stream' } });
+    vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+      const request = {}; channel('undici:request:create').publish({ request });
+      const reader = (init.body as ReadableStream<Uint8Array>).getReader();
+      try { while (!(await reader.read()).done) { /* Faked provider HTTP drains the actual host upload. */ } }
+      finally { reader.releaseLock(); }
+      channel('undici:request:bodySent').publish({ request });
+      return response;
+    }));
+    const { dependencies, recordOutcome } = accountFixture();
+    const capability = await createAnthropicNativePort({ modelIds: [MODEL], dependencies,
+      bodyProbe: references.probe, record }).prepare(subject, undefined, target);
+    const h = nativeHarness(); h.attempt.nativeMessages = capability!;
+    h.attempt.markCommitted.mockImplementation(async () => { references.detached(); expect(responseClosed).not.toHaveBeenCalled(); });
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+    expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1); references.detached();
+    expect((await result.stream.next()).done).toBe(false); references.detached();
+    expect(responseClosed).not.toHaveBeenCalled(); expect(recordOutcome).not.toHaveBeenCalled();
+    await result.stream.return(undefined); await result.stream.return(undefined);
+    references.detached(); expect(responseClosed).toHaveBeenCalledTimes(1);
+    expect(recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'failed' });
+    expect(record).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+  });
+
+  it.each(['cancel', 'error'] as const)('early response/upload %s detaches actual port holders before rejection', async cause => {
+    const references = holders(); const responseClosed = vi.fn(); const controller = new AbortController();
+    let notifyHeaders!: () => void; let failUpload!: () => Promise<void>;
+    const headers = new Promise<void>(resolve => { notifyHeaders = resolve; });
+    const response = new Response(new ReadableStream({ cancel: responseClosed }));
+    vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+      const request = {}; channel('undici:request:create').publish({ request });
+      const reader = (init.body as ReadableStream<Uint8Array>).getReader();
+      let closing: Promise<void> | undefined;
+      failUpload = () => closing ??= reader.cancel().then(() => {
+        reader.releaseLock(); channel('undici:request:error').publish({ request });
+      });
+      init.signal!.addEventListener('abort', () => { void failUpload(); }, { once: true });
+      notifyHeaders(); return response;
+    }));
+    const { dependencies, recordOutcome } = accountFixture();
+    const capability = await createAnthropicNativePort({ modelIds: [MODEL], dependencies,
+      bodyProbe: references.probe, record: vi.fn() }).prepare(subject, undefined, target);
+    let exposed = false;
+    const pending = capability!.execute({ ...request(), stream: true, signal: controller.signal })
+      .then(value => { exposed = true; return value; }, error => error);
+    await headers; expect([...references.held]).toEqual(['upload']); expect(exposed).toBe(false);
+    if (cause === 'cancel') controller.abort(); else await failUpload();
+    const result = await pending;
+    if (result?.kind === 'stream') await result.body[Symbol.asyncIterator]().return!();
+    expect(result).toBeInstanceOf(Error);
+    if (cause === 'error') expect(result).toMatchObject({ status: 503, code: 'native_protocol_error' });
+    // Transport cancellation completes before the error path returns usable capacity.
+    references.detached(); expect(exposed).toBe(false); expect(responseClosed).toHaveBeenCalledTimes(1);
+    expect(recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'failed' });
   });
 });
