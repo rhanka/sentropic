@@ -30,6 +30,8 @@ export type ClaudeStreamGenerateRequest = {
   credential?: string;
   claudeCodeTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null };
   signal?: AbortSignal;
+  /** Trusted retained-byte instrumentation, never a wire field. */
+  canonicalBodyProbe?: (retainedBytes: number) => void;
 };
 
 const buildClaudeCodeFetch =
@@ -145,7 +147,8 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
       signal: payload.signal,
     });
 
-    return this.toAsyncIterable(stream, requestBytes);
+    payload.canonicalBodyProbe?.(requestBytes);
+    return this.toAsyncIterable(stream, requestBytes, payload.canonicalBodyProbe);
   }
 
   private getClient(
@@ -168,11 +171,17 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
   }
 
   private async *toAsyncIterable(
-    stream: MessageStream,
+    stream: MessageStream | undefined,
     requestBytes: number,
+    bodyProbe?: (retainedBytes: number) => void,
   ): AsyncGenerator<unknown> {
-    try { for await (const event of stream) yield event; }
+    try { for await (const event of stream!) yield event; }
     catch (error) { throw canonicalFailure(error, requestBytes); }
-    finally { stream.abort(); }
+    finally {
+      stream?.abort();
+      await stream?.done().catch(() => undefined);
+      stream = undefined;
+      bodyProbe?.(0);
+    }
   }
 }
