@@ -365,7 +365,7 @@
   - [x] Row 73 — Construction-time exact enabled switch (default OFF), product auth-before-cap/default shared pool/count port wiring; standalone settlement bounded shared result, no clone/double parse/count mode; scoped pre/post gates.
   - [x] Row 74 — `gateway-route-plane-native.test.ts`: OFF/standalone no transport, quote native hash stability, exact known/unknown/exclusive/provider gates before sequence, credential refusal/fresh prepare cleanup, optional canonical fallback and independent count; scoped pre/post gates.
   - [x] Row 75 — API ESM-origin resolution proves the same gateway factory instance, walks its manifest without requiring exported package.json, validates semver and emits only package/version/switch; missing/bundled identity records version_unverified, no workspace fallback; scoped pre/post gates.
-  - [ ] Row 76 — Version resolution and exact switch parsing fixtures.
+  - [x] Row 76 — `gateway-package-version.test.ts`: actual API instance resolves 0.20.0, non-exported manifest walk, semver/name/missing/bundled failures, fixed safe OFF/unverified records and every exact switch variant; scoped pre/post gates.
   - [ ] Row 77 — Product namespace OFF/ON/safeguards/unknown-model fixtures (`cluster-mesh-gw.test.ts`).
   - [ ] Row 78 — Product count auth/partition/fidelity/no-billing (`gw-count-tokens.test.ts`).
   - [ ] Row 78a — Distinct principals and shared same-principal count bounds (N6).
