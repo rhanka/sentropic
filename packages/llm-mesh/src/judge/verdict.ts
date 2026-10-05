@@ -1,5 +1,5 @@
 import type { DecisionRule, Json, JudgeCriterion } from './request.js';
-import { scoreDirections } from './criterion.js';
+import { isJudgeDecisionRule, scoreDirections } from './criterion.js';
 import { has, hasOnlyKeys, isBoundedJson, isRecord, isText } from './validation.js';
 
 export type ScoreScale =
@@ -84,4 +84,43 @@ export function mapJudgeDistribution(probabilities: unknown,
   if (Math.abs(sum - 1) > 1e-4) return null;
   return declared.map(({ outcome, nativeOutcome }) => ({ outcome, nativeOutcome,
     probability: probabilities[nativeOutcome] as number }));
+}
+
+export type JudgeDecisionResult =
+  | { ok: true; decision: JudgeVerdict['decision'] }
+  | { ok: false; code: 'REQUEST_INVALID' | 'CAPABILITY_UNSUPPORTED' | 'VERDICT_INVALID' };
+
+export function deriveJudgeDecision(input: { rule?: DecisionRule; score: JudgeScore | null;
+  label: string | null; providerDecision: boolean | null; declaredLabels?: readonly string[] }): JudgeDecisionResult {
+  const { rule, score, label, providerDecision } = input;
+  if (rule !== undefined && !isJudgeDecisionRule(rule)) return { ok: false, code: 'REQUEST_INVALID' };
+  if (providerDecision !== null) {
+    if (typeof providerDecision !== 'boolean') return { ok: false, code: 'VERDICT_INVALID' };
+    if (rule && rule.kind !== 'provider') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
+    return { ok: true, decision: { pass: providerDecision, origin: 'provider' } };
+  }
+  if (!rule) return { ok: true, decision: null };
+  if (rule.kind === 'provider') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
+  if (rule.kind === 'threshold') {
+    if (score === null || score.scale.kind === 'unknown') return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
+    if (parseJudgeScore(score) === null) return { ok: false, code: 'VERDICT_INVALID' };
+    if (rule.value < score.scale.min || rule.value > score.scale.max) return { ok: false, code: 'REQUEST_INVALID' };
+    return { ok: true, decision: { pass: rule.op === 'gte' ? score.value >= rule.value : score.value <= rule.value,
+      origin: 'threshold', rule: { ...rule } } };
+  }
+  const declared = input.declaredLabels ?? [];
+  if (label === null || !declared.length) return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
+  if (!declared.includes(label)) return { ok: false, code: 'VERDICT_INVALID' };
+  if (!rule.passing.every((v) => declared.includes(v))) return { ok: false, code: 'REQUEST_INVALID' };
+  return { ok: true, decision: { pass: rule.passing.includes(label), origin: 'labels',
+    rule: { kind: 'labels', passing: [...rule.passing] } } };
+}
+
+/** Primary values must be meaningful; false and zero are valid evidence. */
+export function hasJudgeVerdictValue(value: Pick<JudgeVerdict, 'score' | 'decision' | 'label'>): boolean {
+  if (value.score !== null && parseJudgeScore(value.score) === null) return false;
+  if (value.decision !== null && (!isRecord(value.decision) || typeof value.decision.pass !== 'boolean'
+    || !['provider', 'threshold', 'labels'].includes(value.decision.origin))) return false;
+  if (value.label !== null && (!isRecord(value.label) || !isText(value.label.value) || value.label.origin !== 'provider')) return false;
+  return value.score !== null || value.decision !== null || value.label !== null;
 }
