@@ -83,9 +83,10 @@
   - [x] Create the checkbox-only plan from the template; retain reviewed spec as design source without duplicating it into a new tracked spec.
   - [x] Lot gate: C1/C2 PASS; bounded plan commit and `.h2a/build/lot0_report.md` record the preparation boundary; stop before 1.01.
 - [ ] **Lot 1A — Request, verdict and receipt contracts**
-  - [ ] 1.01: request.ts strict inputs/criterion bounds; new mesh tests/judge-request.test.ts.
+  - [x] 1.01: request.ts strict inputs/criterion bounds; new mesh tests/judge-request.test.ts.
     - [x] 1.01a: request types and bounded JSON/correlation/money primitives; synthetic JSON/coercion/accessor tests.
     - [x] 1.01b: strict criterion/decision validation, duplicate labels/options and finite thresholds; provider cardinality limits remain adapter-owned.
+    - [x] 1.01c: strict request/policy parsing, significant-input snapshot, retention-policy refusal and provider distinction; size/depth/fan-out/auth tests.
   - [ ] 1.02: verdict.ts scale/direction/confidence/distributions; new mesh tests/judge-verdict.test.ts.
   - [ ] 1.03: receipt.ts/errors.ts discriminants, independent token provenance, correlation/null counts; new mesh tests/judge-receipt.test.ts.
   - [ ] Gate: scoped contract tests per coherent commit, mesh/gateway typecheck/lint/full suites, authoritative make scope-check before every commit; write .h2a/build/lot1A_report.md and stop for Opus review.
