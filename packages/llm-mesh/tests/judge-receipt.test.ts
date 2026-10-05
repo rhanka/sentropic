@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createJudgeError, isJudgeErrorCode, type JudgeErrorCode } from '../src/judge/errors.js';
-import { resolveJudgeCorrelationId, unreportedJudgeUsage } from '../src/judge/receipt.js';
+import { normalizeJudgeUsage, parseJudgeUsage, resolveJudgeCorrelationId, unreportedJudgeUsage } from '../src/judge/receipt.js';
 
 describe('sanitized judge errors', () => {
   it('should expose a bounded static code/message rather than arbitrary exception content', () => {
@@ -16,6 +16,31 @@ describe('sanitized judge errors', () => {
       expect(createJudgeError('RATE_LIMITED', 'dispatch', { retryAfterMs }).retryAfterMs).toBeUndefined();
     }
     expect(createJudgeError('VERDICT_INVALID', 'parse', { retryAfterMs: 42 }).retryAfterMs).toBeUndefined();
+  });
+});
+
+describe('per-counter judge usage provenance', () => {
+  it('should distinguish reported zero from absent input and preserve independent total provenance', () => {
+    const usage = normalizeJudgeUsage({ outputTokens: 0, totalTokens: 7, evaluatorCalls: 1, explanations: 0 });
+    expect(usage?.tokens).toEqual({ input: { value: null, source: 'not-reported' },
+      output: { value: 0, source: 'provider' }, total: { value: 7, source: 'provider' } });
+    expect(normalizeJudgeUsage({ inputTokens: 2, evaluatorCalls: null, explanations: null })?.tokens.total)
+      .toEqual({ value: null, source: 'not-reported' });
+  });
+  it('should derive total only when both native counters and their sum are safe integers', () => {
+    expect(normalizeJudgeUsage({ inputTokens: 2, outputTokens: 3, evaluatorCalls: 1, explanations: 0 })?.tokens.total)
+      .toEqual({ value: 5, source: 'derived-sum' });
+    expect(normalizeJudgeUsage({ inputTokens: Number.MAX_SAFE_INTEGER, outputTokens: 1, evaluatorCalls: 1, explanations: 0 })).toBeNull();
+    for (const inputTokens of [-1, 0.5, NaN, Infinity]) {
+      expect(normalizeJudgeUsage({ inputTokens, evaluatorCalls: 1, explanations: 0 })).toBeNull();
+    }
+  });
+  it('should refuse forged provenance, malformed counts and contradictory derived sums', () => {
+    const usage = normalizeJudgeUsage({ inputTokens: 2, outputTokens: 3, evaluatorCalls: 1, explanations: 0 })!;
+    expect(parseJudgeUsage({ ...usage, tokens: { ...usage.tokens, input: { value: 2, source: 'derived-sum' } } })).toBeNull();
+    expect(parseJudgeUsage({ ...usage, tokens: { ...usage.tokens, total: { value: 6, source: 'derived-sum' } } })).toBeNull();
+    expect(parseJudgeUsage({ ...usage, tokens: { ...usage.tokens, input: { value: null, source: 'provider' } } })).toBeNull();
+    expect(parseJudgeUsage({ ...usage, evaluatorCalls: -1 })).toBeNull();
   });
 });
 
