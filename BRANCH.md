@@ -375,7 +375,7 @@
   - [x] Row 79b — Replayed settlement/observation/finalize retain two distinct rows, one debit/outbox/settled hold; role-filtered readers select physical or financial usage separately; scoped pre/post gates.
   - [x] Row 79a — Real Postgres admission/settlement and real observation sink with fake provider; fixture pricing rolls back, cleanup keys observations only; HTTP request-id join, separate callId/null-cost role and pinned financial debit; scoped pre/post gates.
   - [x] Row 80 — Three-model mixed/5m/1h/read-only/default-inference pinned amounts and physical observations; unknown one-hour split floors at full rate, bigint rational money rounds once; scoped pre/post gates.
-  - [ ] Row 81 — Interrupted validated input/output floor and revoked-proof allowance ledger fixtures.
+  - [x] Row 81 — Three-model mixed/cache-heavy cancel/EOF preserves proven input with output-only floor; exact 34/132 valid/missing/pre-fetch proof and larger provisional output; physical observations/one release retained; scoped pre/post gates.
   - [ ] Row 81a — Mismatch/fallback/iterations selected pinned price and idempotent audit join.
   - [ ] Row 81b — Physical observation versus financial floor counts/raw U.
   - [ ] Row 81c — K1/L2 growth/equality/decrease/null and official web-search latest-snapshot amounts.
