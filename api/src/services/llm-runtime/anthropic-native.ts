@@ -9,6 +9,8 @@ import { ClaudeProviderRuntime } from '../providers/claude-provider';
 import type { ClaudeNativeRequest } from './anthropic-native-http';
 import type { NativeBodyProbe } from './anthropic-native-transport';
 import { withNativeAccountLease } from './anthropic-native-lease';
+import { createNativeObservation } from './anthropic-native-observation';
+import type { recordLlmUsage } from '../llm-metering/cost-ledger-sink';
 
 export const nativeAuthDependencies = { resolveProviderCredential, getAnthropicTransportMode,
   getPrimaryClaudeCodeAccountTransport, resolveConnectedClaudeCodeTransport };
@@ -43,12 +45,13 @@ export interface AnthropicNativeOptions {
   readonly dependencies?: Partial<NativeAuthDependencies>;
   readonly runtime?: Pick<ClaudeProviderRuntime, 'nativeMessages' | 'nativeCountTokens'>;
   readonly bodyProbe?: NativeBodyProbe;
+  readonly record?: typeof recordLlmUsage;
 }
 
 const executeNativeForAuth = async (request: NativeMessagesRequest | undefined, context: {
   userId: string; workspaceId?: string; modelId: string; auth: AnthropicNativeAuth;
   dependencies: NativeAuthDependencies; runtime: NonNullable<AnthropicNativeOptions['runtime']>;
-  count: boolean; bodyProbe?: NativeBodyProbe;
+  count: boolean; bodyProbe?: NativeBodyProbe; onResponseStarted?: () => void;
 }): Promise<NativeMessagesResult> => {
   const { userId, workspaceId, modelId, auth, dependencies, runtime, count, bodyProbe } = context;
   const signal = request!.signal;
@@ -69,7 +72,8 @@ const executeNativeForAuth = async (request: NativeMessagesRequest | undefined, 
         usage: { inputTokens: 0, outputTokens: 0, estimated: false } });
     }
     signal.throwIfAborted();
-    outgoing = { ...request!, bodyProbe, ...(auth.kind === 'token' ? { credential: auth.credential }
+    outgoing = { ...request!, bodyProbe, onResponseStarted: context.onResponseStarted,
+      ...(auth.kind === 'token' ? { credential: auth.credential }
       : { claudeCodeTransport: { accessToken: lease!.accessToken } }) };
     bodyProbe?.('port-outgoing', true);
     request = undefined; bodyProbe?.('port-request', false);
@@ -89,6 +93,7 @@ export const createAnthropicNativePort = (options: AnthropicNativeOptions = {}):
   const dependencies = { ...nativeAuthDependencies, ...options.dependencies };
   const runtime = options.runtime ?? new ClaudeProviderRuntime();
   const bodyProbe = options.bodyProbe;
+  const record = options.record;
   const authFor = (subject: VerifiedRoutingSubject, workspaceId: string | undefined) =>
     resolveAnthropicNativeAuth(subject.principalRef, workspaceId, dependencies);
   const prepare: AnthropicNativePort['prepare'] = async (subject, workspaceId, target) => {
@@ -96,9 +101,15 @@ export const createAnthropicNativePort = (options: AnthropicNativeOptions = {}):
     const auth = await authFor(subject, workspaceId);
     if (!auth) return undefined;
     const modelId = target.modelId;
+    const observation = createNativeObservation({ userId: subject.principalRef.startsWith('service:') ? undefined : subject.principalRef,
+      workspaceId, credentialSource: auth.source }, record);
     return { contractVersion: 1, protocol: 'anthropic-messages', modelId, apiVersions: ['2023-06-01'], requiredBetas: [],
-      execute: request => executeNativeForAuth(request, { userId: subject.principalRef, workspaceId, modelId,
-        auth, dependencies, runtime, bodyProbe, count: false }),
+      finalize: observation.finalize,
+      execute(request) {
+        observation.bind(request.requestId, request.stream);
+        return executeNativeForAuth(request, { userId: subject.principalRef, workspaceId, modelId,
+          auth, dependencies, runtime, bodyProbe, count: false, onResponseStarted: observation.started });
+      },
     };
   };
   return { modelIds, prepare,

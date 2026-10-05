@@ -18,11 +18,12 @@ const terminal = (message: unknown) => {
 channel('undici:request:bodySent').subscribe(terminal);
 channel('undici:request:error').subscribe(terminal);
 
-export const confirmedNativeFetch = async (url: string, init: RequestInit): Promise<Response> => {
+export const confirmedNativeFetch = async (url: string, init: RequestInit, onResponseStarted?: () => void): Promise<Response> => {
   let done!: () => void;
   const uploaded = new Promise<void>(resolve => { done = resolve; });
   const response = await context.run(done, () => fetch(url, init));
   try {
+    if (response.status === 200) onResponseStarted?.();
     await uploaded;
     init.signal?.throwIfAborted();
     return response;
