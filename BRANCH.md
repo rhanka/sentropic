@@ -70,6 +70,11 @@
 - [x] Lot 1A m6: unsafe JSON keys are __proto__, constructor and prototype at every depth, including evaluated content; tests pin this policy. Canonical MicroUsd has no separate digit ceiling within the whole-request 256 KiB bound; future 1.14 arithmetic uses BigInt, never floating point.
 - [x] Lot 1A m1: type declarations do not qualify criterion-kind, decision-confidence/native-decision or providerRaw enforcement; explicit 1C sub-items below own these remaining invariants.
 - [ ] Lot 1A m5 — conductor decision required: is an output/state candidate containing only null valid significant content, or REQUEST_INVALID? Per the 2026-10-04 instruction, stop before 1B and report the decision request; do not choose locally.
+- [x] Lot 1B Opus review, 2026-10-05: GO with fixes, no BLOCKER or MAJOR; prior Lot 1A corrections confirmed. This review covers the entry-stop range, not implementation of 1.04a–g.
+- [ ] Lot 1B m1: before 1C consumes createJudgeError, an unrecognized runtime phase must fail closed (retryable false and no retryAfterMs); extend the financial-error fallback assertion in tests/judge-receipt.test.ts.
+- [ ] Lot 1B m2: score/confidence/distribution/usage parsers must validate and return the snapshotBoundedJson copy; add Proxy regressions in judge-verdict/judge-receipt tests. Refuse symbols on the materialized descriptor object, using the same ownKeys read as the copy.
+- [ ] Lot 1B m3 — conductor process decision: deliver the m5 null-only decision now, or explicitly move that gate to 1C entry before 1.05. The reviewer's valid-null recommendation is non-binding; the existing 1B entry hold stays until a conductor decision is recorded.
+- [x] Lot 1B follow-up stop: only review findings and handoffs recorded; no implementation change or new acceptance tests. Update .h2a/build/lot1B_report.md and stop per the instruction to report required conductor decisions.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -107,7 +112,7 @@
   - [x] 1A handoff: Opus review received, GO with fixes and no BLOCKER; M1/M2 corrected. Implementation remains unexported; stop before 1B pending the m5 conductor decision, with .h2a/build/lot1B_report.md documenting the review-fix-only range.
   - [x] 1A review-fix validation: mesh/gateway typecheck and lint passed; full mesh 485 tests/35 files (168 judge tests), full gateway 389 tests/28 files. Sequential Make gates used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge; no 1B acceptance claimed.
 - [ ] **Lot 1B — Chat selection refusal**
-  - [ ] Entry gate: record the conductor's Lot 1A m5 null-only candidate decision before continuing; pin the selected behavior in request tests and carry it into 1.05 without producing an empty question.
+  - [ ] Entry gate: conductor must resolve Lot 1A m5 or explicitly relocate it to 1C as proposed by Lot 1B m3; do not relocate locally. A resolved semantic decision needs request tests and explicit null encoding/refusal at 1.05.
   - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
   - [ ] 1.04b: model-catalog marked explicit/stored refusal before fallback; update API tests/unit/judge-chat-selection.test.ts.
   - [ ] 1.04c: llm-runtime/index.ts marked-provider refusal; new API tests/unit/judge-runtime-selection.test.ts.
@@ -117,6 +122,8 @@
   - [ ] 1.04g: registry type-only optional judge members; new mesh tests/judge-registry.test.ts; regress tests/facade.test.ts.
   - [ ] Gate: named API/mesh regressions, mesh/gateway typecheck/lint/full suites, scoped commits; write .h2a/build/lot1B_report.md and stop for Opus review.
 - [ ] **Lot 1C — JEV codec, transport and service**
+  - [ ] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
+  - [ ] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.
   - [ ] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; new mesh tests/judge-jev-request.test.ts.
   - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
     - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
@@ -129,11 +136,13 @@
     - [ ] Lot 1A m1: decision-confidence requires a documented native decision; enforce and test descriptor-owned evidence.
   - [ ] 1.12: service.ts/policy.ts exact revision/input/capability selection; new mesh tests/judge-selection.test.ts.
     - [ ] Lot 1A handoff: validate native thresholds/declared passing labels, including registered criteria, against the pinned descriptor before credential acquisition/egress.
+    - [ ] Lot 1B handoff: keep the validated request service-internal (or freeze it) across admission, encoding and settlement so no caller mutation changes the accepted content.
   - [ ] 1.13: concrete resolved auth and descriptive retention, unsupported retention requests refuse; new mesh tests/judge-policy.test.ts.
   - [ ] 1.14: pricing.ts/budget.ts integer quotes and defensible liability-bound refusal; new mesh tests/judge-budget.test.ts.
   - [ ] 1.15: service admission, awaited durable marker and one dispatch; new mesh tests/judge-dispatch.test.ts.
     - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.
   - [ ] 1.16: settlement/receipt persistence, identity-mismatch usage, charged overrun and no replay; new mesh tests/judge-settlement.test.ts.
+    - [ ] Lot 1B handoff: every post-result failure, including deadline expiry, uses settlement phase; tests assert phase, code and absence of redispatch advice.
   - [ ] 1.17: raw/observation allowlists and content/secret canaries; new mesh tests/judge-privacy.test.ts.
     - [ ] Lot 1A m1: providerRaw validates the 16 KiB byte bound, allowlisted fields and truncated flag; test refusal and truncation.
   - [ ] 1.18: consumer index.ts, trusted host.ts and three export subpaths; new mesh tests/judge-public-surface.test.ts; typecheck-llm-mesh; no version change.
