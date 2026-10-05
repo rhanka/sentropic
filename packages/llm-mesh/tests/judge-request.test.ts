@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isBoundedJson, isCorrelationId, isMicroUsd } from '../src/judge/validation.js';
 import { isJudgeCriterion, isJudgeDecisionRule } from '../src/judge/criterion.js';
+import { parseJudgeRequest } from '../src/judge/request.js';
 
 describe('judge request JSON boundary', () => {
   it('should preserve valid JSON and reject values JSON would silently coerce', () => {
@@ -22,6 +23,44 @@ describe('judge request JSON boundary', () => {
     expect(isCorrelationId('call:one-1.2_3')).toBe(true);
     expect(isCorrelationId('a'.repeat(129))).toBe(false);
     expect(isCorrelationId('line\nbreak')).toBe(false);
+  });
+});
+
+const request = () => ({ schemaVersion: 1,
+  evaluator: { providerId: 'openai', evaluatorId: 'synthetic', revision: 'v1' },
+  inputs: { output: null, state: { text: 'Synthetic content' } },
+  criterion: { kind: 'binary', instructions: 'Check supplied state' } });
+
+describe('strict judge request parsing', () => {
+  it('should retain significant null inputs and snapshot data without inventing defaults', () => {
+    const input = request();
+    const result = parseJudgeRequest(input);
+    input.inputs.state.text = 'Changed';
+    expect(result).toEqual({ ok: true, request: request() });
+  });
+  it('should refuse caller credentials, endpoints, fan-out and tenant selectors', () => {
+    for (const key of ['auth', 'endpoint', 'fallback', 'batch', 'tenantId']) {
+      expect(parseJudgeRequest({ ...request(), [key]: 'dummy' })).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    }
+    expect(parseJudgeRequest({ ...request(), policy: { zdr: true }, fallback: [] })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
+    expect(parseJudgeRequest({ ...request(), inputs: { input: 'No candidate' } }).ok).toBe(false);
+    expect(parseJudgeRequest({ ...request(), evaluator: { ...request().evaluator, providerId: 'unknown' } })).toEqual({ ok: false, code: 'PROVIDER_UNKNOWN' });
+  });
+  it('should reject malformed policy bounds while accepting an explicit zero spend cap', () => {
+    for (const policy of [{ timeoutMs: 0 }, { timeoutMs: 60_001 }, { timeoutMs: 1.5 }, { budget: { maxCostMicroUsd: '01' } }, { budget: {} }, { explanation: 'fabricated' }]) {
+      expect(parseJudgeRequest({ ...request(), policy }).ok).toBe(false);
+    }
+    expect(parseJudgeRequest({ ...request(), policy: { budget: { maxCostMicroUsd: '0' }, timeoutMs: 60_000 } }).ok).toBe(true);
+    expect(parseJudgeRequest({ ...request(), raw: { mode: 'allowlisted', maxBytes: 16_385 } }).ok).toBe(false);
+  });
+  it('should refuse excessive bytes, nesting and cyclic data before serialization', () => {
+    expect(parseJudgeRequest({ ...request(), inputs: { output: 'é'.repeat(131_072) } }).ok).toBe(false);
+    let nested: unknown = null;
+    for (let i = 0; i < 16; i++) nested = [nested];
+    expect(isBoundedJson(nested)).toBe(true);
+    expect(isBoundedJson([nested])).toBe(false);
+    const cyclic: unknown[] = []; cyclic.push(cyclic);
+    expect(isBoundedJson(cyclic)).toBe(false);
   });
 });
 
