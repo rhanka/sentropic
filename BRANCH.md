@@ -89,6 +89,7 @@
 - [x] Review cycle 5 (lot1E_report) stop: record Lot 1D review reconciliation and the unresolved conductor decision in .h2a/build/lot1E_report.md; no new implementation checkpoint is entered.
 - [x] Consolidated review trail: Lot 1E GO accepted pre-rebase 82b2f0937..7669041da (rebased d4405122a..afa20b1bf); cycle 6 (lot1F_report) was a no-op stop at 7669041da, accepted by Lot 1F GO with no findings. Cycle 7 (lot1G_report) recorded the same decision stop without a commit; the conductor decision above now releases 1B.
 - [x] Lot 1G review: GO with fixes, no BLOCKER/MAJOR; m1 decision provenance is the user's verbatim CONDUCTOR DECISION message dated 2026-10-05, including the explicit undefined clause, quoted in lot1B_impl_report. Track remains conductor-owned; m2 validation and m3 sibling nesting corrected below; nit uses toStrictEqual for absent-field preservation.
+- [x] Early lot1B_impl review read a draft before 1.04a was committed: NO-GO B1/M1 require completing and validating 1.04a–g and a fresh implementation review before 1C. MINOR m1 startup evidence is in 1.04a/report, m2 report path corrected, m3 recorded: 1.04a's associated review prerequisites were one 44-line commit; subsequent rows remain separate bounded commits. Pre-spy muse assertions pin the M1 recommendation.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -129,14 +130,14 @@
   - [x] Entry gate: conductor ratified valid-null semantics on 2026-10-05; request tests pin all three null-only candidates and absent/undefined refusals. The unchecked 1.05 handoff owns explicit null encoding.
   - [x] Pre-stack refresh: clean rebase onto origin/main 52c1fdc63c3bfe210a37742242839d0f3e7cf45e; null-decision commit 19cd770f0 became 07a212f8c. Post-rebase judge 184/3 files, full mesh 501/35 files and gateway 389/28 files passed with both typecheck/lint; ports 9480/5680/1580 free before startup; REGISTRY=local, no provider keys, full port triple/ENV last.
   - [x] 1.04a: catalog judgeOnly declaration and profile-derived API predicate before activation; injected marked muse/unknown-ID/unmarked empty local tests passed (2), registry expansion regressions passed (7); isolated API healthy with bindings 9480/1580 and no UI started.
-  - [ ] 1.04b: model-catalog marked explicit/stored refusal before fallback; update API tests/unit/judge-chat-selection.test.ts.
-    - [ ] Preserve stored judge-only selections in getAISettings before legacy model migration; pin global/user defaults with a legacy model so the chat gate receives the actual provider choice.
+  - [x] 1.04b: model-catalog refuses explicit/stored/inferred marked providers before legacy or empty-inventory fallback; ordinary valid, unknown and local behavior retained; judge-chat-selection passed 11 tests before real activation.
+    - [x] Preserve stored judge-only selections in getAISettings before legacy model migration; global/user legacy-model cases prove the actual provider reaches the refusal gate, with no DB or provider dispatch.
   - [ ] 1.04c: llm-runtime/index.ts marked-provider refusal; new API tests/unit/judge-runtime-selection.test.ts.
   - [ ] 1.04d: gateway-wire-adapter marked-provider refusal; new API tests/unit/judge-wire-selection.test.ts.
   - [ ] 1.04e: config-product-ai settings refusal; assert existing llm-mesh user-setting refusal in new API tests/api/judge-chat-settings.test.ts.
   - [ ] 1.04f: activate typesafe ProviderId/family, empty chat models, judgeOnly profile; update mesh muse/gcp and API provider-registry-expansion/chat-selection tests; rerun all 1.04 gates plus R API provider-mesh-contract-proof/provider-credentials and mesh local tests; extend scope before editing unlisted regressions.
   - [ ] 1.04g: registry type-only optional judge members; new mesh tests/judge-registry.test.ts; regress tests/facade.test.ts.
-  - [ ] Gate: named API/mesh regressions, mesh/gateway typecheck/lint/full suites, scoped commits; write .h2a/build/lot1B_report.md and stop for Opus review.
+  - [ ] Gate: named API/mesh regressions, mesh/gateway typecheck/lint/full suites, scoped commits; write .h2a/build/lot1B_impl_report.md and stop for the fresh Opus implementation review required by early-review B1.
 - [ ] **Lot 1C — JEV codec, transport and service**
   - [x] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
   - [x] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.

@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { db } from '../db/client';
 import { settings } from '../db/schema';
 import { normalizeLegacyModelSelection } from './model-selection-legacy';
+import { isJudgeOnlyProvider } from './provider-runtime';
 
 export const CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING = 'connector_accounts_max_per_provider';
 
@@ -244,10 +245,12 @@ export class SettingsService {
       }),
     ]);
 
-    const normalizedSelection = normalizeLegacyModelSelection({
-      providerId: defaultProviderId,
-      modelId: defaultModel,
-    });
+    const normalizedSelection = isJudgeOnlyProvider(defaultProviderId.trim())
+      ? { providerId: defaultProviderId.trim(), modelId: defaultModel }
+      : normalizeLegacyModelSelection({
+        providerId: defaultProviderId,
+        modelId: defaultModel,
+      });
 
     return {
       concurrency,
