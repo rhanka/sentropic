@@ -18,6 +18,56 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
   });
 });
+const growingStart = { input_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0, output_tokens: 1 };
+const growingDelta = { input_tokens: 150, cache_read_input_tokens: 2000, cache_creation_input_tokens: 0, output_tokens: 500 };
+const repetitions = [{}, { input_tokens: 150 }, { input_tokens: null, cache_read_input_tokens: 2000,
+  cache_creation_input_tokens: null }, { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null }];
+it.each(MODELS.flatMap((model, index) => repetitions.flatMap((repeat, variant) => [false, true].map(clean =>
+  [model, index, repeat, variant, clean] as const))))('prices latest cumulative growing input (%s #%s %s #%s clean=%s)', async (model, index, repeat, _variant, clean) => {
+  const chunks = [nativeStart(model, growingStart), nativeFrame('message_delta', { usage: growingDelta }),
+    nativeFrame('message_delta', { usage: { ...repeat, output_tokens: 500 } }), ...(clean ? [nativeFrame('message_stop')] : [])];
+  await withNativeLedger({ model, chunks, allowanceInput: 10000, allowanceOutput: 32000 }, async h => {
+    await h.run(true);
+    const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe((index === 2 ? 200 : 350) + (clean ? 1000 : 64000));
+    expect(row).toMatchObject({ input_tokens: 2150, output_tokens: clean ? 500 : 32000 });
+    expect(row.attempts[0]).toMatchObject({ estimated: !clean, nativeInputUsageValidated: true, nativeInputUsageSource: 'message_delta' });
+    expect(obs).toMatchObject({ input_tokens: 2150, output_tokens: 500, total_tokens: 2650 });
+    expect(obs.usage_raw.final_output_observed).toBe(clean); expect(obs.usage_raw.input_tokens).toBe(150);
+  });
+});
+it.each(['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'])('a later %s decrease permanently revokes growth proof', async field => {
+  const model = MODELS[0]!;
+  const start = { ...growingStart, cache_creation_input_tokens: 10,
+    cache_creation: { ephemeral_5m_input_tokens: 10, ephemeral_1h_input_tokens: 0 } };
+  const delta = { ...growingDelta, cache_creation_input_tokens: 10 };
+  const decreased = { [field]: Number(delta[field as keyof typeof delta]) - 1, output_tokens: 500 };
+  await withNativeLedger({ allowanceInput: 10000, allowanceOutput: 32000, chunks: [nativeStart(model, start),
+    nativeFrame('message_delta', { usage: delta }), nativeFrame('message_delta', { usage: decreased }),
+    nativeFrame('message_delta', { usage: delta }), nativeFrame('message_stop')] }, async h => {
+    await h.run(true); expect(Number((await h.financial()).cost_micro_usd)).toBe(74000);
+    expect((await h.observation()).usage_raw).toMatchObject({ estimated: true, input_usage_validated: false });
+  });
+});
+// Official streaming/WebSearch example, spec §5.4 V-1: fields are exact, tool counters remain opaque.
+const webStart = { input_tokens: 2679, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 3 };
+const webDelta = { input_tokens: 10682, cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+  output_tokens: 510, server_tool_use: { web_search_requests: 1 } };
+it.each(MODELS.flatMap(model => ['clean', 'interrupted', 'decrease'].map(mode => [model, mode] as const)))
+('pins official web-search latest counts and amounts (%s %s)', async (model, mode) => {
+  const chunks = [nativeStart(model, webStart), nativeFrame('message_delta', { usage: webDelta }),
+    ...(mode === 'decrease' ? [nativeFrame('message_delta', { usage: { input_tokens: 10681, output_tokens: 510 } })] : []),
+    ...(mode !== 'interrupted' ? [nativeFrame('message_stop')] : [])];
+  await withNativeLedger({ model, chunks, allowanceInput: 20000, allowanceOutput: 32000 }, async h => {
+    await h.run(true);
+    const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe({ clean: 11702, interrupted: 74682, decrease: 84000 }[mode]);
+    expect(obs).toMatchObject({ input_tokens: 10682, output_tokens: 510, total_tokens: 11192 });
+    expect(obs.usage_raw).toMatchObject({ input_tokens: 10682, estimated: mode !== 'clean',
+      input_usage_validated: mode !== 'decrease', final_output_observed: mode !== 'interrupted' });
+    expect(obs.usage_raw.server_tool_use).toBeUndefined(); expect(row.attempts[0].estimated).toBe(mode !== 'clean');
+  });
+});
 it.each([false, true])('keeps physical observation/raw U separate from both financial allowances (stream=%s)', async stream => {
   const model = MODELS[2]!;
   await withNativeLedger({ model, served: MODELS[1], chunks: [nativeStart(MODELS[1]!, mixed), nativeFrame('message_stop')],
