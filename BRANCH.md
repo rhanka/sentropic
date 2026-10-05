@@ -380,7 +380,7 @@
   - [x] Row 81b — JSON/SSE mismatch observations remain physical 10,350/20/10,370 with raw U=100 while financial input/output floor independently; missing input/total persist null, not allowance values; scoped pre/post gates.
   - [x] Row 81c — Three-model K1 cumulative growth/equal/partial/null/omitted clean/interrupted prices; category decreases never restore proof; exact official WebSearch 2679→10682/O510 yields 11,702/74,682, decrement floors 84,000, raw tool counters stay opaque; scoped pre/post gates.
   - [x] Row 81d — Three-model JSON/SSE absent/null/empty iterations stay measured; substantive/malformed iterations plus mismatch/fallback floor O500→32,000 (64×), charge 74,350 and audit once; cancel/commit failure share one immutable gateway snapshot with DB observation/pre-floor settlement; scoped pre/post gates.
-  - [ ] Row 81e1 — L2 one-hour aggregate repetition/growth/conflict exact clean/interrupted ledger amounts.
+  - [x] Row 81e1 — Three-model one-hour/unknown TTL equal/partial/null/omitted/repeated growth retains raw split and exact clean/interrupted amounts; mixed growth-only 2×, default 1.25×, permanent decrease/split/start conflicts and later explicit split resolution; scoped pre/post gates.
   - [ ] Row 81e2 — N5 malformed one-hour delta permanently revokes proof and charges 74,300.
   - [ ] Pass 15 boundary — Stop before row 82/operator UAT, no real provider call; conductor owns cross-review.
   - [ ] Before and after EVERY commit: `make typecheck-api` and touched `make test-api-unit SCOPE=tests/unit/<file>` / `make test-api-endpoints SCOPE=tests/api/<file>`; sequential, all three allocated ports, `ENV=test-llm-native-relay` last.

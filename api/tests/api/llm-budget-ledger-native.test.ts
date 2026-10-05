@@ -20,6 +20,82 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
   });
 });
+const oneHour = { ...mixed, cache_creation_input_tokens: 200,
+  cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 }, output_tokens: 1 };
+const hourCases = [
+  ['equal', { input_tokens: 100, cache_read_input_tokens: 10000, cache_creation_input_tokens: 200 }, 10300, 1500, 750, false],
+  ['aggregate-only', { cache_creation_input_tokens: 200 }, 10300, 1500, 750, false],
+  ['partial-null', { input_tokens: 100, cache_read_input_tokens: null, cache_creation_input_tokens: null }, 10300, 1500, 750, false],
+  ['all-null', { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null }, 10300, 1500, 750, false],
+  ['omitted', {}, 10300, 1500, 750, false],
+  ['growth', { cache_creation_input_tokens: 300 }, 10400, 1700, 950, true],
+] as const;
+it.each(MODELS.flatMap((model, index) => ['1h', 'unknown'].flatMap(ttl => hourCases.flatMap(
+  ([name, delta, physical, normal, fable, inferred]) => [false, true].map(clean =>
+    [model, index, ttl, name, delta, physical, normal, fable, inferred, clean] as const)))))
+('inherits one-hour split and prices only growth (%s #%s ttl=%s %s %s P%s %s %s inferred=%s clean=%s)',
+async (model, index, ttl, _name, delta, physical, normal, fable, inferred, clean) => {
+  const update = { ...delta, output_tokens: 500 };
+  await withNativeLedger({ model, allowanceInput: 10300, allowanceOutput: 32000,
+    requestBody: { messages: [{ role: 'user', content: [{ type: 'text', text: 'fixture', cache_control: { type: 'ephemeral', ttl } }] }] },
+    chunks: [nativeStart(model, oneHour), nativeFrame('message_delta', { usage: update }),
+      nativeFrame('message_delta', { usage: update }), ...(clean ? [nativeFrame('message_stop')] : [])] }, async h => {
+    await h.run(true);
+    const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe((index === 2 ? fable : normal) + (clean ? 1000 : 64000));
+    expect(row).toMatchObject({ input_tokens: physical, output_tokens: clean ? 500 : 32000 });
+    expect(row.attempts[0]).toMatchObject({ estimated: !clean, nativeInputUsageValidated: true });
+    expect(obs).toMatchObject({ input_tokens: physical, output_tokens: 500, total_tokens: physical + 500 });
+    expect(obs.usage_raw.cache_creation).toEqual({ ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 });
+    expect(obs.usage_raw.cache_creation_input_tokens).toBe(inferred ? 300 : 200);
+    expect(obs.usage_raw.cache_write_split_reason).toBe(inferred ? 'cache_write_split_inferred' : undefined);
+    expect(obs.usage_raw.final_output_observed).toBe(clean);
+  });
+});
+it.each(MODELS.flatMap((model, index) => [false, true].map(clean => [model, index, clean] as const)))
+('preserves mixed prior allocation and weights only +100 at 2× (%s #%s clean=%s)', async (model, index, clean) => {
+  await withNativeLedger({ model, allowanceInput: 10350, allowanceOutput: 32000,
+    requestBody: { system: [{ type: 'text', text: 'fixture', cache_control: { type: 'ephemeral', ttl: '1h' } }] },
+    chunks: [nativeStart(model, { ...mixed, output_tokens: 1 }),
+      nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 350, output_tokens: 500 } }),
+      nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 350, output_tokens: 500 } }),
+      ...(clean ? [nativeFrame('message_stop')] : [])] }, async h => {
+    await h.run(true); expect(Number((await h.financial()).cost_micro_usd)).toBe((index === 2 ? 900 : 1650) + (clean ? 1000 : 64000));
+    expect((await h.observation()).input_tokens).toBe(10450);
+    expect((await h.observation()).usage_raw.cache_creation).toEqual(mixed.cache_creation);
+  });
+});
+it.each(MODELS.map((model, index) => [model, index === 2 ? 1725 : 2475] as const))
+('uses 1.25× default five-minute growth for %s', async (model, expected) => {
+  await withNativeLedger({ model, chunks: [nativeStart(model, { ...oneHour,
+    cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 0 } }),
+    nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 300, output_tokens: 500 } }), nativeFrame('message_stop')] }, async h => {
+    await h.run(true); expect(Number((await h.financial()).cost_micro_usd)).toBe(expected);
+    expect((await h.observation()).usage_raw.input_usage_validated).toBe(true);
+  });
+});
+it.each(['decrease', 'conflicting-split', 'extra-start'])('never restores one-hour proof after %s', async conflict => {
+  const model = MODELS[0]!;
+  const bad = conflict === 'extra-start' ? nativeStart(model, oneHour) : nativeFrame('message_delta', { usage: conflict === 'decrease'
+    ? { cache_creation_input_tokens: 199 } : { cache_creation_input_tokens: 200,
+      cache_creation: { ephemeral_5m_input_tokens: 1, ephemeral_1h_input_tokens: 200 } } });
+  await withNativeLedger({ allowanceInput: 10300, allowanceOutput: 32000, chunks: [nativeStart(model, oneHour), bad,
+    nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 200, output_tokens: 500 } }), nativeFrame('message_stop')] }, async h => {
+    await h.run(true); expect(Number((await h.financial()).cost_micro_usd)).toBe(74300);
+    expect((await h.observation()).usage_raw.input_usage_validated).toBe(false);
+  });
+});
+it('accepts later explicit split against reported TTL counts rather than inferred allocation', async () => {
+  await withNativeLedger({ allowanceInput: 10300, allowanceOutput: 32000,
+    requestBody: { system: [{ type: 'text', text: 'fixture', cache_control: { type: 'ephemeral', ttl: '1h' } }] },
+    chunks: [nativeStart(MODELS[0]!, oneHour), nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 300 } }),
+      nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 300, output_tokens: 500,
+        cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 } } }), nativeFrame('message_stop')] }, async h => {
+    await h.run(true); expect(Number((await h.financial()).cost_micro_usd)).toBe(2625);
+    expect((await h.observation()).usage_raw).toMatchObject({ estimated: false, input_usage_validated: true,
+      cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 } });
+  });
+});
 const iterationCases = [undefined, null, [], [{}], {}, 'fixture-value', 1, true];
 it.each(MODELS.flatMap((model, index) => iterationCases.flatMap((iterations, kind) => [false, true].map(stream =>
   [model, index, iterations, kind, stream] as const))))('applies K4 iterations policy (%s #%s %s #%s stream=%s)', async (model, index, iterations, kind, stream) => {
