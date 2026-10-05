@@ -11,8 +11,9 @@ import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import {
   modelProfiles, providerProfiles, RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
-  type RouteQuoteInput, type RouteUsageCeiling,
+  type RouteQuoteInput, type RouteUsageCeiling, type NativeUsagePricing,
 } from '@sentropic/llm-mesh';
+import { validateNativeInputPriceUnits40 } from '@sentropic/llm-gateway';
 import type {
   BudgetAdmissionDecision, BudgetAdmissionPort, BudgetAdmissionRequest, CallerAuthPort, CostContext,
 } from '@sentropic/llm-gateway';
@@ -72,6 +73,27 @@ export interface AttemptPricingContext {
   readonly pricingMatch: 'exact' | 'costliest';
 }
 
+export interface PricedUsage extends NativeUsagePricing {
+  inputTokens: number; outputTokens: number; imageUnits?: number; toolCalls?: number;
+}
+
+/** Trusted exact pinned identity and gateway proof, never inferred from rates or selected IDs. */
+export const nativePricingEligible = (price: PricingRow, usage: PricedUsage, context?: AttemptPricingContext): boolean => {
+  if (!context || context.pricingMatch !== 'exact' || context.providerId !== 'anthropic'
+    || price.providerId !== context.providerId || price.modelId !== context.modelId
+    || usage.nativeServedModelId !== context.modelId
+    || !validateNativeInputPriceUnits40(usage.inputTokens, usage.nativeInputPriceUnits40,
+      usage.nativeServedModelId, usage.nativePricingPolicy)) return false;
+  // Output uncertainty does not revoke a still-valid input proof (RQ-2).
+  const reason = usage.nativeUsageUncertainty;
+  if (usage.nativeInputUsageValidated === true
+    && ['json', 'message_start', 'message_delta'].includes(usage.nativeInputUsageSource ?? '')
+    && (reason === undefined || reason === 'incomplete_output' || reason === 'invalid_output')) return true;
+  // An unknown TTL split may retain a premium, but can never discount the charged physical floor.
+  return reason === 'cache_write_split_unknown' && usage.nativeInputUsageValidated === false
+    && BigInt(usage.nativeInputPriceUnits40!) >= 40n * BigInt(usage.inputTokens);
+};
+
 /**
  * Liability of one attempt. The candidate carries no reasoning effort, so the output allowance is
  * priced at the maximum of the output and reasoning rates (maximum over effort variants).
@@ -91,13 +113,14 @@ export const attemptLiability = (price: PricingRow, allowance: RouteUsageCeiling
  * via the gateway; this helper adds them only when supplied alongside positive token usage.
  * Product /gw activation restrictions and mesh/gateway follow-ups are in spec §12.8.
  */
-export const usageCost = (price: PricingRow, usage: {
-  inputTokens: number; outputTokens: number; imageUnits?: number; toolCalls?: number;
-}, _context?: AttemptPricingContext): bigint => {
+export const usageCost = (price: PricingRow, usage: PricedUsage, context?: AttemptPricingContext): bigint => {
   if (usage.inputTokens <= 0 && usage.outputTokens <= 0) return 0n;
   const outputRate = price.reasoning > price.output ? price.reasoning : price.output;
   const units = (value: number | undefined) => BigInt(Number.isSafeInteger(value) && value! > 0 ? value! : 0);
-  const total = perMtok(usage.inputTokens, price.input) + perMtok(usage.outputTokens, outputRate)
+  const input = nativePricingEligible(price, usage, context)
+    ? (BigInt(usage.nativeInputPriceUnits40!) * price.input + 39_999_999n) / 40_000_000n
+    : perMtok(usage.inputTokens, price.input);
+  const total = input + perMtok(usage.outputTokens, outputRate)
     + units(usage.imageUnits) * price.image + units(usage.toolCalls) * price.toolCall;
   return total > price.minCharge ? total : price.minCharge;
 };
