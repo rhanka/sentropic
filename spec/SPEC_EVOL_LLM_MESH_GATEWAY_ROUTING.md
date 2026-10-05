@@ -607,6 +607,60 @@ SSE ordering. BR-73 adds an executable Codex/OpenAI adapter; Codex re-enrollment
 creates a descriptor with `targetProviderId='openai'` and
 `transportProviderId='codex'`, without legacy import or normalization.
 
+### 4.12 Native Anthropic feasibility and selection
+
+The gateway package and reference mesh implement this additive contract; API
+native transport/quote wiring and live qualification remain separate build gates.
+`NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS` is currently empty pending qualification.
+Trusted code-only test overrides must name catalogued exact Anthropic models,
+excluding exclusive launch aliases. Beta names and opaque body fields do not
+grant model eligibility or select provider credentials.
+
+`RoutePlanInput.nativeMessages?: true` and the quote field mean **required**
+native execution. Quotes bind that flag in their identity; canonical quote refs
+omit it and remain unchanged. Check unknown models/capabilities first, then
+requested exact-model feasibility before candidates/stickiness. Filter candidates
+by contractVersion=1, anthropic-messages protocol, allowlist and equality to the
+requested model before health suppression/attempt limits. Ineligible sticky
+affinity is ignored without mutating stored state. Known native-denied models
+return `native-unavailable`; genuinely unknown models retain 404, and an already
+empty route retains no-route/enrollment behavior.
+
+Preparation rechecks the fresh descriptor and opaque target. Native capability
+must have matching exact model, supported API versions, valid shape and execute
+function. Required beta declarations are empty; no feature-name permission list
+is introduced. Optional requests can receive a prepared native capability without
+constraining their canonical plan. Gateway rechecks target/version/capability
+after preparation and before marking dispatch; a required-mode refusal records
+no attempted dispatch, releases once and preserves its 400 even if cleanup fails.
+
+Messages classification runs once after ingress/caller authentication, before
+subject construction, quote/admission or plan. Own top-level safeguards counts
+even when null/empty. Effective ceiling is the Anthropic max_tokens projection or
+trusted budget default, a positive safe integer; OpenAI retains its own ceiling
+precedence. The host cannot inject required native through routeInput.
+
+| Request / condition | Selection / result |
+|---|---|
+| Messages without beta/safeguards, including version-only | Canonical. |
+| Beta present, even empty, with feasible model/version/capability/ceiling | Optional native. |
+| Beta-only with unavailable switch/port/eligibility/version/ceiling | Canonical before invocation. |
+| Own top-level safeguards | Required native, quote/plan flag true. |
+| Safeguards with explicit OFF or failed known-model feasibility | 400 native-required naming safeguards. |
+| Required native with unknown feature names/fields | Preserve them; transport exclusions still apply. |
+| Required, no budget, missing/invalid effective ceiling | 400 native-max-tokens-required; budget hosts retain invalid-ceiling 400. |
+| Required prepared capability/model/version missing or changed | Guarded pre-dispatch 400, no attempt charge. |
+| OpenAI without safeguards, even with Anthropic headers | Canonical OpenAI flow. |
+| OpenAI with own safeguards | OpenAI-shaped 400 requiring the Messages endpoint. |
+
+Explicit nativeMessagesEnabled:false refuses safeguards before model lookup;
+classifier refusals create no settlement. Once admitted, plan refusal preserves
+existing hold release/settlement rules. Optional native can fall back canonically
+only before native invocation; subsequent provider errors never reconstruct a
+canonical call. Standalone/shared routers without native capability also return
+the safeguards 400 instead of silently losing the field. Count_tokens has its
+own always-native-when-enabled contract (§5.6), including version-only requests.
+
 ## 5. Gateway execution contract
 
 ### 5.1 Ingress neutrality
@@ -666,6 +720,7 @@ Terminal without fallback:
   unavailability by that adapter;
 - any error after commitment;
 - cancellation;
+- typed/status/code request-too-large, including upstream HTTP 413;
 - account auth failure when strict stickiness forbids another account and no
   same-account equivalent route exists.
 
@@ -683,12 +738,24 @@ and a ledger/settlement or `recordOutcome` failure never replaces the typed/term
 refusal (attempted once, swallowed, original thrown). After response commitment
 the HTTP status is never rewritten.
 
+Request-too-large is terminal on both wires, JSON and pre-commit SSE: HTTP 413,
+Anthropic request_too_large, OpenAI invalid_request_error / request_too_large,
+x-should-retry:false and no Retry-After. Check typed size evidence before broad
+auth/rate/overload heuristics, after cancellation; preserve it through cause
+wrapping and rejected outcomes. Never retry through SDK/account/model/canonical
+fallback or remap it to overload. Numeric wording uses measured UTF-8 bytes and
+trusted limits: exact N exceeds L, or received lower bound "at least N" exceeds L.
+For an upstream rejection with unknown limit or N <= claimed L, state the measured
+size and local 32000000-byte limit while declaring the upstream limit unavailable.
+Missing size evidence remains explicitly unavailable; Content-Length and provider
+prose never supply numeric facts. Late native SSE retains request_too_large and
+the same size policy without rewriting committed HTTP status.
+
 ### 5.4 Wire invariants
 
 - Anthropic ingress returns Anthropic-shaped errors and event order.
 - OpenAI ingress returns OpenAI-shaped errors and event order.
-- No upstream credential, account id, internal provider URL, benchmark artifact
-  or council internals leak into headers/body.
+- No upstream credential, account id, internal provider URL, benchmark artifact or council internals leak into headers/body. Native Anthropic relay exceptions only: (a) success responses forward non-credential, non-hop-by-hop anthropic-* response headers, including anthropic-organization-id, whose disclosure is owner-accepted (R-Q3, 2026-10-02); (b) provider-authored success bodies and SSE bytes are relayed opaquely (Q-G), and bounded request-validation messages are relayed under R-Q5. Credential/session headers and upstream X-Sentropic-* headers remain excluded. Canonical response-header policy is unchanged.
 - Request/cost correlation is stable across attempts, with a separate attempt
   index for audit.
 - Only one financial cost event is emitted per request, aggregating actual or
@@ -713,11 +780,110 @@ buffer the provider response, make an extra provider call or alter route
 selection. If an adapter can provide exact input usage before commitment, exact
 usage takes precedence.
 
-The terminal Anthropic `message_delta.usage` carries output usage only.
+The terminal canonical Anthropic `message_delta.usage` carries output usage only.
 Provider-reported input/output usage remains authoritative for aggregate
 financial settlement and diagnostics; the first-frame estimate is a
 caller-compatibility signal, not a billing record. OpenAI stream usage is
 unchanged.
+
+### 5.6 Native relay, count and usage
+
+This section describes built mesh/gateway contracts. Native API transport,
+pricing/ledger wiring and live gates remain pending; no production enablement is
+claimed. Canonical compaction/egress in §5.5 is unchanged; native usage bytes may
+contain cumulative input extensions and are never reconstructed canonically.
+
+Native Messages preserves nested body identity/unknown fields with a shallow
+copy, overriding only selected model, boolean stream and validated/admitted
+max_tokens. Native JSON success requires kind=json/status=200 and relays the
+parsed object semantically, including safeguard_results. SSE relays original
+bytes/comments/unknown events/line endings with pull backpressure and a 1 MiB
+pending-frame bound. The first complete non-error frame commits once; no retry
+after commitment or rejected commit callback. Late errors are sanitized native
+error frames, close upstream and never manufacture message_stop. Bounded native
+validation messages and terminal request_too_large follow §§5.3–5.4.
+
+Request forwarding starts empty and permits only anthropic-*, x-app and
+x-stainless-* after credential/session/hop-by-hop/Connection/internal exclusions;
+caller user-agent/IP/encoding/authority headers are dropped. Hosts derive transport
+headers/Content-Length from the trusted URL/serialized bytes and set server auth
+last. Native success adds anthropic-* to canonical safe response names, including
+owner-accepted organization disclosure; errors forward no upstream headers.
+Validation 400s are bounded to a 64 KiB UTF-8 error body and a control-stripped
+4096-byte public message. Billing masking precedes truncation/safeguards detection;
+only an owned safeguards request rejecting the exact sent classifier beta gets
+the narrow rewrite. Canonical 400s and other errors keep fixed sanitization.
+
+X-Sentropic-Relay:native is success-only. Native Messages JSON X-Sentropic-Served
+comes only from a safe response ID for one model without fallback/substantive
+iterations; selected identity is never a substitute. A safe mismatch can be
+reported while pricing remains uncertain. Native SSE omits the header because
+late evidence can invalidate identity; no delayed bytes or invented trailers.
+Count omits it. Gateway diagnostics are emitted last and cannot be spoofed.
+
+POST /v1/messages/count_tokens is authenticated, partition-checked and JSON-only.
+Explicit native enabled plus a trusted count port/exact model/version is required;
+OFF/known denial returns 400, unknown catalog models 404. ON is native even without
+beta/safeguards. Forward a shallow copy unchanged, insert no ceiling/stream and
+make one call without retry. Validate input_tokens as a nonnegative safe integer.
+One process limiter keys verified tenant/principal: burst 10, refill 1/second,
+two concurrent calls; 429 has integer Retry-After, cancellation never refunds a
+dispatch token. Evict idle keys after ten minutes excluding live calls; at 10,000
+keys a new key fails closed with 503. Count has no generation plan/admission,
+hold, dispatch marker, financial settlement, usage observation or debit.
+
+All three POST paths share one checked bounded read and one process-owned pool,
+native ON or OFF: L=B=32,000,000 actual bytes by default. Start at zero; check
+N+q <= L, grant q atomically, then retain/copy exact q backing capacity. No
+Content-Length allocation/reservation, geometric slack, oversized backing views,
+raw consolidation, clone or waiting queue. EOF decodes/parses once under exact N.
+Unavailable extension cancels reading, discards partial storage and returns
+retryable pre-parse request-body-capacity 503 with Retry-After:1 and
+x-should-retry:true, without quote/hold/dispatch/financial or observation event.
+Actual oversize has 413 precedence. Concurrent small requests reserve actual
+bytes rather than one full cap each. Transport chunks are the explicit transient
+exception; pool accounting/8x sizing assumptions are not measured memory proof.
+
+N1 retention follows references: native hosts finish/cancel upload and detach
+body/serialized/view holders before exposing commit-ready SSE or completed
+JSON/count. Response iterators/abort/finalize closures retain response state and
+bounded metadata only. Gateway clears cache/body/retry holders before shrinking;
+fetch headers alone cannot prove upload completion. Canonical SDK operations and
+streams keep measured N through retries and terminal cleanup. N2 cleanup detaches
+before once-only release on every post-acquisition refusal, abort/error/timeout,
+completion and never-consumed stream, preserving original refusal/hold rules and
+adding no financial event. Cleanup never waits for observation hooks. N3 storage
+never exceeds granted backing bytes, including forged Content-Length uploads.
+
+The gateway owns one usage fold and freezes one pre-floor terminal snapshot for
+settlement and once-only finalize. Physical P=U+R+aggregate writes; TTL splits are
+not added twice. Policy anthropic-cache-2026-10-02 prices units40 as
+40U+50W5+80W1+4R (Sonnet 5/Opus 5), or 40U+50W5+80W1+R (Fable 5.1). A safe
+matching served model, complete JSON/start proof and bounded integers are required.
+Missing/null/[] iterations are absent; fallback, mismatch or substantive/malformed
+iterations permanently latch served_model_mismatch, disable discounts and use the
+pinned selected model's full physical rate with allowance floors. Iterations are
+never summed or latest-wins; opaque wire data is not persisted usage.
+
+Start-anchored deltas inherit absent/null U/R/aggregate/split. Equal aggregates
+reuse accepted TTL allocation; growth alone uses eligible five-minute weight,
+otherwise 2x with separate cache_write_split_inferred evidence, which alone does
+not prevent measured clean completion. Reported TTL counts remain distinct from
+inference; a later consistent split may resolve allocation. Decrease/conflict or
+fractional/nonfinite/unsafe input atomically rejects the update and permanently
+revokes proof (N5); safe counts remain physical lower-bound evidence, never a
+restored discount. Partial deltas cannot bootstrap a missing start or combine
+conflicting starts/models. Cumulative output is not summed; start output is
+provisional, final delta plus clean message_stop (or successful JSON) is final.
+
+Clean positive measured input/output has no allowance floor. Interrupted SSE
+with usable same-model start-derived input proof preserves latest accepted input
+and floors output only. No-proof cases floor both sides; initial unknown write
+split uses the sourced 2x bound conservatively. Observation counts stay physical
+and pre-floor even if financial output rises from 500 to 32,000. Host pricing must
+validate exact pinned provider/model/served identity, policy and units40 bounds;
+failed validation uses full physical rate. API persistence/audit joins and live
+memory/pricing qualification remain later gates, not inferred from package tests.
 
 ## 6. Compatibility and migration
 

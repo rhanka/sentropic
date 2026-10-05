@@ -5,6 +5,10 @@ import {
   affinityRef, RoutePlanError, SequentialIdFactory,
   routingOwnerRef, subjectRef, type StoredAffinity, type StoredPlan,
 } from './route-planner-state.js';
+import {
+  isNativeMessagesTarget, NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS,
+  validateNativeModelAllowlist,
+} from './native-messages.js';
 import { resolveRequestedTargets, selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
 import { EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS } from './routing-targets.js';
 import type {
@@ -37,6 +41,7 @@ export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
   readonly council?: ModelEquivalenceCouncil;
   readonly profiles?: InMemoryRoutePolicyProfiles;
+  readonly nativeMessagesModelIds?: readonly string[];
   readonly clock?: Clock;
   readonly idFactory?: IdFactory;
   readonly planTtlMs?: number;
@@ -57,6 +62,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
   private readonly council: ModelEquivalenceCouncil;
   private readonly profiles: InMemoryRoutePolicyProfiles;
   private readonly health: InMemoryRouteHealth;
+  private readonly nativeMessagesModelIds: readonly string[];
   private readonly planTtlMs: number;
   private readonly maximumPlanEntries: number;
   private readonly maximumAffinityEntries: number;
@@ -68,6 +74,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     this.council = options.council ?? DEFAULT_MODEL_EQUIVALENCE_COUNCIL;
     this.profiles = options.profiles ?? new InMemoryRoutePolicyProfiles();
     this.health = new InMemoryRouteHealth(this.clock);
+    this.nativeMessagesModelIds = options.nativeMessagesModelIds !== undefined
+      ? validateNativeModelAllowlist(options.nativeMessagesModelIds)
+      : NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS;
     this.planTtlMs = options.planTtlMs ?? 30_000;
     this.maximumPlanEntries = Math.max(1, options.maximumPlanEntries ?? 1_000);
     this.maximumAffinityEntries = Math.max(1, options.maximumAffinityEntries ?? 10_000);
@@ -130,18 +139,53 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     if (selection.kind === 'capabilities-unmet') {
       throw new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet');
     }
+    if (input.nativeMessages === true) {
+      if (
+        Object.hasOwn(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS, input.requestedModel)
+        || !isNativeMessagesTarget({ providerId: 'anthropic', modelId: input.requestedModel }, this.nativeMessagesModelIds)
+      ) {
+        throw new RoutePlanError(
+          'Native Anthropic Messages execution is unavailable for this request',
+          'native-unavailable',
+        );
+      }
+    }
     let candidates = selection.kind === 'candidates' ? [...selection.candidates] : [];
+    if (input.nativeMessages === true) {
+      const hadCandidates = candidates.length > 0;
+      candidates = candidates.filter((candidate) =>
+        candidate.account.nativeMessages?.contractVersion === 1
+        && candidate.account.nativeMessages.protocol === 'anthropic-messages'
+        && isNativeMessagesTarget(candidate.target, this.nativeMessagesModelIds)
+        && candidate.target.modelId === input.requestedModel);
+      if (hadCandidates && candidates.length === 0) {
+        throw new RoutePlanError(
+          'Native Anthropic Messages execution is unavailable for this request',
+          'native-unavailable',
+        );
+      }
+    }
     // With a quote, an affinity to an unquoted target is ignored for selection
     // (for example a sticky model the request no longer asks for).
     // An exclusive alias additionally migrates an incompatible stored affinity
     // (see isExclusiveAliasMismatch): the stale sticky candidate is never
     // emitted, quoted and unquoted alike.
-    if (
+    const stickyAccount = affinity
+      ? accounts.find((entry) => entry.accountRef === affinity.accountRef)
+      : undefined;
+    const isAffinityEligible = Boolean(
       affinity && policy.stickyAccount
       && !isExclusiveAliasMismatch(input.requestedModel, affinity)
       && inQuoteTarget(affinity.target)
-    ) {
-      const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
+      && (!input.nativeMessages || (
+        stickyAccount?.nativeMessages?.contractVersion === 1
+        && stickyAccount.nativeMessages.protocol === 'anthropic-messages'
+        && isNativeMessagesTarget(affinity.target, this.nativeMessagesModelIds)
+        && affinity.target.modelId === input.requestedModel
+      ))
+    );
+    if (affinity && isAffinityEligible) {
+      const account = stickyAccount;
       if (!account || account.readiness !== 'ready') {
         candidates = [];
       } else {
@@ -259,7 +303,11 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     return plan;
   }
   quote(input: RouteQuoteInput): RouteQuote {
-    return quoteRoute(input, { council: this.council, profiles: this.profiles });
+    return quoteRoute(input, {
+      council: this.council,
+      profiles: this.profiles,
+      nativeMessagesModelIds: this.nativeMessagesModelIds,
+    });
   }
   private assertQuoteMatches(input: RoutePlanInput, quote: RouteQuote,
     profileName: string | undefined, profileRevision: string | undefined): void {
@@ -299,6 +347,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       return await prepareStoredRouteAttempt({
         stored, subject, planRef, candidateRef, requestId, attemptIndex,
         directory: this.options.directory, clock: this.clock,
+        isNativeTarget: (target) => isNativeMessagesTarget(target, this.nativeMessagesModelIds),
         onOutcome: (activePlan, candidate, failure) => {
           this.health.record(candidate, failure, activePlan.policy);
           const terminalCandidate = activePlan.candidates.at(-1) === candidate;

@@ -21,7 +21,7 @@
  * provider failure settles with failure/estimated usage and does NOT retry.
  */
 
-import type { AccountTransportOutcome } from '@sentropic/llm-mesh';
+import type { AccountTransportOutcome, NativeUsagePricing } from '@sentropic/llm-mesh';
 
 import type { GatewayConfig } from './config.js';
 import type { CostContext } from './ports/cost-context.js';
@@ -36,15 +36,16 @@ import type {
   ProviderResponseHeaders,
 } from './ports/dispatch.js';
 import type { PoolSelection, PoolSelectionRequest } from './ports/pool.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { ProviderRateLimitError } from './internal/provider-rate-limit-error.js';
+import type { CheckedGatewayBody } from './request-body-retention.js';
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
 
 /**
  * Normalized usage the settle hook records. `estimated` is true when the
  * provider did not report usage (spec §5 never-zero -> estimate).
  */
-export interface SettleUsage {
+export interface SettleUsage extends NativeUsagePricing {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly estimated: boolean;
@@ -102,6 +103,8 @@ export interface GatewayFlowDeps {
 
 /** Inputs the router hands the flow per request. */
 export interface GatewayFlowRequest {
+  /** Router-owned reference/lease lifecycle; trusted pre-parsers share this owner. */
+  readonly bodyLease?: CheckedGatewayBody;
   readonly authContext: CallerAuthRequestContext;
   readonly wire: GatewayWire;
   readonly headers: Readonly<Record<string, string>>;
@@ -310,9 +313,18 @@ export const runJsonFlow = async (
     let response: GatewayDispatchResponse;
     try {
       response = await deps.config.dispatch.dispatch(dispatchRequest);
-    } catch {
-      await settle(deps, request, prepared, 'failed', undefined);
-      throw new GatewayError('pooled-account-unavailable', 'dispatch failed', undefined, prepared.target);
+    } catch (error) {
+      const tooLarge = gatewayRequestTooLargeError(error, prepared.target);
+      try { await settle(deps, request, prepared, 'failed', undefined); }
+      catch (callbackError) { if (!tooLarge) throw callbackError; }
+      throw tooLarge ?? new GatewayError('pooled-account-unavailable', 'dispatch failed', undefined, prepared.target);
+    }
+
+    const tooLarge = gatewayRequestTooLargeError(response, prepared.target);
+    if (tooLarge) {
+      try { await settle(deps, request, prepared, 'failed', extractUsage(request.wire, response.body)); }
+      catch { /* Preserve the terminal numeric refusal. */ }
+      throw tooLarge;
     }
 
     const ok = response.status >= 200 && response.status < 300;
@@ -355,11 +367,13 @@ export const runJsonFlow = async (
  * here — `runStreamFlow` rejects with a provider-shaped `GatewayError` instead
  * (#6), so the router can return a real HTTP error, never an empty 200.
  */
+export interface GatewayNativeStreamBytes { readonly bytes: Uint8Array; }
 export interface GatewayStreamResult {
+  readonly relay?: 'native';
   readonly headers?: ProviderResponseHeaders;
   /** Gateway-resolved provider and model that received the request. */
   readonly servedTarget: ResolvedTarget;
-  readonly stream: AsyncGenerator<GatewayDispatchStreamEvent, void, unknown>;
+  readonly stream: AsyncGenerator<GatewayDispatchStreamEvent | GatewayNativeStreamBytes, void, unknown>;
 }
 
 /**
@@ -417,7 +431,8 @@ export const runStreamFlow = async (
       break; // Success — first byte received (or empty stream)
     } catch (error) {
       // Pre-first-byte failure: check if it's a 429 for retry.
-      if (error instanceof ProviderRateLimitError && attempt < maxRetries) {
+      const tooLarge = gatewayRequestTooLargeError(error, prepared.target);
+      if (!tooLarge && error instanceof ProviderRateLimitError && attempt < maxRetries) {
         // Clean up the failed stream iterator to release transport resources.
         await iterator?.return?.();
         await settle(deps, request, prepared, 'rate_limited', undefined, error.retryAfterMs);
@@ -429,6 +444,7 @@ export const runStreamFlow = async (
         }
       }
       const unknownModel = isUnknownModelStreamOpenError(error);
+      if (tooLarge) { try { await iterator?.return?.(); } catch { /* Refusal wins. */ } }
       try {
         await settle(deps, request, prepared, 'failed', undefined);
       } catch {
@@ -436,6 +452,7 @@ export const runStreamFlow = async (
         // mapper would turn the settle error into overloaded_error. One
         // attempt, swallowed, never exposed; the terminal refusal wins.
       }
+      if (tooLarge) throw tooLarge;
       if (unknownModel) {
         throw new GatewayError('unknown-model', 'unknown model', undefined, prepared.target);
       }
@@ -448,6 +465,22 @@ export const runStreamFlow = async (
   let usage: SettleUsage | undefined = firstResult!.done
     ? undefined
     : extractUsageFromFrame(request.wire, firstResult!.value.raw);
+  let finished = false;
+  let closing: Promise<void> | undefined;
+  const close = () => closing ??= Promise.resolve().then(async () => {
+    const current = iterator;
+    iterator = undefined;
+    dispatchStream = undefined;
+    try { await current?.return?.(); }
+    finally { request.bodyLease?.release(); }
+  });
+  const finish = async (failed: boolean) => {
+    if (finished) return;
+    finished = true;
+    // Capture estimation while request references remain; cleanup never waits on the sink.
+    const done = settle(deps, request, prepared, failed ? 'failed' : 'success', usage);
+    await Promise.all([done, close()]);
+  };
 
   const stream = (async function* (): AsyncGenerator<
     GatewayDispatchStreamEvent,
@@ -473,12 +506,14 @@ export const runStreamFlow = async (
       // error event. The gateway synthesizes NO terminator (B3).
       failed = true;
     } finally {
-      await settle(deps, request, prepared, failed ? 'failed' : 'success', usage);
+      await finish(failed);
     }
   })();
+  const originalReturn = stream.return.bind(stream);
+  stream.return = async value => { await finish(true); return originalReturn(value); };
 
   return {
-    ...(dispatchStream.headers ? { headers: dispatchStream.headers } : {}),
+    ...(dispatchStream?.headers ? { headers: dispatchStream.headers } : {}),
     servedTarget: prepared.target,
     stream,
   };

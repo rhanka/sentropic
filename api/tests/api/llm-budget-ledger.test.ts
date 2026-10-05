@@ -263,6 +263,30 @@ describe('route settlement: one ledger row per settled request', () => {
     for (const leak of ['secret', 'candidate', 'raw', 'text']) expect(stored).not.toContain(leak);
   });
 
+  it('audits a native mismatch below liability once and preserves only closed evidence', async () => {
+    await seedTenant();
+    const requestId = `native-mismatch-${run}`;
+    const holdRef = await admitted(requestId);
+    await admission.markDispatched(holdRef, 0);
+    const entry = attempt('cheap', 3, 4, { usage: { inputTokens: 3, outputTokens: 4, estimated: true,
+      nativeServedModelId: 'claude-opus-5', nativeInputUsageValidated: false,
+      nativeInputUsageSource: 'message_start', nativeUsageUncertainty: 'served_model_mismatch',
+      nativeInputPriceUnits40: 0, nativePricingPolicy: 'anthropic-cache-2026-10-02',
+      iterations: [{ secret: 'provider prose' }], fallback_credit_token: 'private-token' } });
+    await settle(requestId, holdRef, [entry]);
+    await settle(requestId, holdRef, [entry]);
+    const [row] = await ledger(requestId);
+    expect(num(row!.cost_micro_usd)).toBe(11); // 3 input + 4 output at the pinned 2x rate.
+    expect(row!.attempts).toEqual([expect.objectContaining({ nativeSelectedModelId: 'cheap',
+      nativeServedModelId: 'claude-opus-5', nativeUsageUncertainty: 'served_model_mismatch',
+      nativeInputUsageValidated: false, nativeInputUsageSource: 'message_start', estimated: true })]);
+    const stored = JSON.stringify(row!.attempts);
+    expect(stored).not.toMatch(/nativeInputPriceUnits40|iterations|secret|private-token|fallback_credit_token/);
+    expect(await rows(sql`SELECT reason, hold_id, quote_ref, liability_micro_usd FROM control.blocked_attempts
+      WHERE request_id = ${requestId}`)).toEqual([{ reason: 'overrun', hold_id: holdRef,
+      quote_ref: `quote_${run}`, liability_micro_usd: '11' }]);
+  });
+
   it('releases only never-dispatched holds, idempotently, and never frees a dispatched hold', async () => {
     await seedTenant();
     const released = await admitted(`s5a-${run}`);

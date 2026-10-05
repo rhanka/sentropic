@@ -42,6 +42,7 @@ const REQUEST_ID_HEADER = 'x-sentropic-request-id';
 const FROZEN_ROUTES = [
   { method: 'POST', path: '/v1/messages', wire: 'anthropic-messages' },
   { method: 'POST', path: '/v1/chat/completions', wire: 'openai-chat-completions' },
+  { method: 'POST', path: '/v1/messages/count_tokens', wire: 'anthropic-messages' },
   { method: 'GET', path: '/v1/models' },
   { method: 'GET', path: '/healthz' },
   { method: 'GET', path: '/readyz' },
@@ -102,6 +103,36 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
     openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
+  'request-too-large': {
+    anthropic: { status: 413, type: 'request_too_large',
+      message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+    openai: { status: 413, type: 'invalid_request_error', code: 'request_too_large',
+      message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+  },
+  'request-body-capacity': {
+    anthropic: { status: 503, type: 'api_error',
+      message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+    openai: { status: 503, type: 'api_error', code: 'request_body_capacity',
+      message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+  },
+  'native-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires the Anthropic Messages endpoint.' },
+  },
+  'native-max-tokens-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards requires a positive integer max_tokens.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires a positive integer max_tokens.' },
+  },
+  'native-unavailable': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires the Anthropic Messages endpoint.' },
+  },
   'unknown-model': {
     anthropic: { status: 404, type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
     openai: { status: 404, type: 'invalid_request_error', message: 'Unknown model: "no-such-model"', code: 'model_not_found' },
@@ -150,10 +181,11 @@ const actualRouterRoutes = (app: { routes: { method: string; path: string }[] })
 describe('BR-46 v1 wire contract snapshot — route inventory', () => {
   it('freezes the exact v1 route inventory + methods (spec §3)', () => {
     // The inventory itself is the snapshot: count + each (method, path) pair.
-    expect(FROZEN_ROUTES).toHaveLength(5);
+    expect(FROZEN_ROUTES).toHaveLength(6);
     expect(FROZEN_ROUTES.map((r) => `${r.method} ${r.path}`)).toEqual([
       'POST /v1/messages',
       'POST /v1/chat/completions',
+      'POST /v1/messages/count_tokens',
       'GET /v1/models',
       'GET /healthz',
       'GET /readyz',

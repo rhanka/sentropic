@@ -118,6 +118,7 @@ is contextually typed and compiles without the annotation.
 | Route | Wire |
 | --- | --- | --- |
 | `POST /v1/messages` | Anthropic Messages, JSON or SSE |
+| `POST /v1/messages/count_tokens` | Native Anthropic token estimate, JSON only |
 | `POST /v1/chat/completions` | OpenAI Chat Completions, JSON or SSE |
 | `GET /v1/models` | caller/pool-filtered discovery |
 | `GET /healthz` | liveness |
@@ -127,6 +128,95 @@ The gateway does not replace either compatible endpoint with `/v1/responses`.
 Codex Responses and Cloud Code wire conversion are runtime responsibilities in
 mesh. Reasoning, images, tools/results, usage, finish status, allowed provider
 headers, and provider-shaped errors are preserved through the canonical form.
+
+## Native Anthropic relay (unreleased 0.20.0)
+
+The package implements native selection, relay, counting and usage contracts.
+API transport/pricing wiring and live qualification remain later integration
+gates. The compiled native model allowlist is currently empty; trusted test hosts
+can supply validated exact Anthropic model IDs. An enabled switch alone does not
+make an unqualified model eligible or supply a missing native port.
+
+For routed Messages, own top-level `safeguards` (including null) requires native
+execution. `anthropic-beta` presence, including an empty value, selects optional
+native; version-only requests remain canonical. Selection runs once after caller
+authentication and before quote/admission. A trusted `nativeMessagesEnabled:
+false` returns safeguards 400 before model lookup; optional traffic stays
+canonical. With native available, the prepared exact model and supported version
+must match. Optional fallback is allowed only before invocation. Required native
+without a port, supported capability or valid ceiling returns 400; standalone
+routers also refuse safeguards instead of silently discarding it. OpenAI ingress
+with safeguards returns an OpenAI-shaped 400 naming the Messages endpoint.
+
+Native Messages shallow-copies the body and preserves unknown fields and nested
+references. Only selected `model`, boolean `stream` and validated/admitted
+`max_tokens` are set; malformed supplied ceilings are rejected. Auth, ownership,
+partition and upstream URL come from trusted ports, never opaque body fields.
+
+Caller request headers forward only non-credential, non-hop-by-hop `anthropic-*`,
+`x-app` and `x-stainless-*`. Drop caller user-agent, sessions, internal
+`X-Sentropic-*` and Connection-nominated headers. Hosts recompute transport
+headers and attach server credentials last. Native success extends canonical
+safe response headers with `anthropic-*`, including owner-accepted disclosure of
+`anthropic-organization-id` (R-Q3). Errors never copy upstream headers.
+
+Successful native JSON preserves provider fields; SSE preserves bytes, comments,
+unknown events and line endings, with bounded 1 MiB frames and no synthetic stop.
+Success sets `X-Sentropic-Relay: native` and the server request ID. Messages JSON
+sets `X-Sentropic-Served` only from a safe response model identifying one served
+model without fallback/substantive iterations; never substitute the selected
+model. Native SSE and count omit that header. Canonical served headers are
+unchanged. Native validation 400s retain recognized type/message within a 64 KiB
+error-body bound after control stripping and a 4096-byte UTF-8 message cap.
+Billing-state text is masked; only the sent classifier-beta refusal receives the
+narrow safeguards rewrite. Other errors retain fixed sanitized envelopes.
+
+Count requires `nativeMessagesEnabled: true`, an authenticated/partition-checked
+caller and `nativeCountTokens` port. OFF returns 400; ON uses native even without
+beta/safeguards, with exact model/version eligibility and no generation ceiling.
+It shallow-copies every field unchanged, adds neither `stream` nor `max_tokens`,
+and makes one JSON call without retry. The shared process limiter uses verified
+(tenant, principal): burst 10, refill 1/second, two concurrent calls, ten-minute
+idle eviction excluding live calls, and 10,000 keys. Excess returns 429 with
+integer Retry-After; a full map refuses a new key with 503. Cancellation does not
+refund a dispatched token. Count creates no hold, financial settlement, usage
+observation or debit; `input_tokens` estimates prospective input.
+
+All three POST paths share a 32,000,000-byte ingress cap and one default
+32,000,000-byte process body pool, including native OFF. Check actual N+q against
+the cap, grant q bytes, then allocate exact chunk storage. Content-Length never
+sizes allocations/reservations or establishes N; EOF decodes/parses once without
+a Request clone or duplicate raw consolidation. Concurrent small bodies reserve
+their actual bytes, with no semaphore or waiting queue. Unavailable capacity
+returns pre-parse 503 `request-body-capacity`, `Retry-After: 1`,
+`x-should-retry: true`; actual oversize takes precedence as terminal 413 with
+`x-should-retry: false`. Anthropic uses `request_too_large`; OpenAI uses
+`invalid_request_error` / `request_too_large`. Numeric messages distinguish exact
+bytes, received lower bounds and unknown upstream rejecting limits.
+
+Lease shrink follows detached references. Native hosts must finish/cancel upload
+and drop body/serialized holders before returning commit-ready SSE or completed
+JSON/count; gateway drops its own cache/body/retry holders before releasing N.
+Open native responses can then admit more small bodies. Canonical SDK operations
+and streams retain N through retries and terminal cleanup. Every post-acquisition
+refusal, abort, error and unconsumed-stream cleanup releases once, independently
+of observation hooks. Byte accounting and the assumed 8x representation allowance
+are not a measured process-memory guarantee; host memory qualification is pending.
+
+Usage counts physical U+R+aggregate writes once. Policy
+`anthropic-cache-2026-10-02` uses full-rate uncached input, reads 0.1x for Sonnet 5/
+Opus 5 or 0.025x for Fable 5.1, and writes 1.25x/2x for five-minute/one-hour TTLs.
+Start-anchored cumulative deltas inherit absent/null categories and unchanged
+splits. Only aggregate growth gets inferred five-minute pricing when eligible,
+otherwise the 2x bound with separate inference evidence. Decreases, conflicts or
+malformed input permanently revoke proof. Missing/null/[] iterations are absent;
+fallback, mismatch or substantive/malformed iterations latch uncertainty and
+disable discounts. Clean measured completion has no output allowance floor;
+interrupted streams with usable same-model input proof floor output only.
+No-proof usage floors both sides; unknown initial write splits use the sourced
+2x bound conservatively. Observations stay physical/pre-floor. Pinned selected
+prices and opaque feature/fallback costs retain uncertainty until integration and
+qualification prove them; caller fields never supply pricing authority.
 
 ## Routing integration
 

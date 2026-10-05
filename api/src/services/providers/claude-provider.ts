@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream';
+import { RequestTooLargeError, requestTooLargeDetail, normalizeProviderError } from '@sentropic/llm-mesh';
+import { GATEWAY_MAX_REQUEST_BODY_BYTES } from '@sentropic/llm-gateway';
 import { env } from '../../config/env';
+import { executeClaudeNative, type ClaudeNativeRequest, type ClaudeNativeCountRequest } from '../llm-runtime/anthropic-native-http';
 import type {
   CredentialValidationResult,
   ModelCatalogEntry,
@@ -27,6 +30,8 @@ export type ClaudeStreamGenerateRequest = {
   credential?: string;
   claudeCodeTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null };
   signal?: AbortSignal;
+  /** Trusted retained-byte instrumentation, never a wire field. */
+  canonicalBodyProbe?: (retainedBytes: number) => void;
 };
 
 const buildClaudeCodeFetch =
@@ -38,6 +43,23 @@ const buildClaudeCodeFetch =
     headers.set('authorization', `Bearer ${transport.accessToken}`);
     return fetch(input, { ...init, headers });
   };
+
+/** SDK 0.78.0 serializes JSON with JSON.stringify; measure before any SDK operation. */
+export const prepareClaudeCanonicalBody = (options: Anthropic.MessageCreateParams, stream: boolean) => {
+  const body = { ...options, stream };
+  const requestBytes = Buffer.byteLength(JSON.stringify(body), 'utf8');
+  if (requestBytes > GATEWAY_MAX_REQUEST_BODY_BYTES) {
+    throw new RequestTooLargeError({ requestBytes, limitBytes: GATEWAY_MAX_REQUEST_BODY_BYTES, source: 'gateway' });
+  }
+  return { body, requestBytes };
+};
+
+const canonicalFailure = (error: unknown, requestBytes: number): unknown => {
+  const detail = requestTooLargeDetail(error);
+  return detail ? { ...normalizeProviderError('anthropic', error),
+    requestSize: detail.requestSize ?? { requestBytes, limitBytes: GATEWAY_MAX_REQUEST_BODY_BYTES, source: 'upstream' },
+  } : error;
+};
 
 export class ClaudeProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
@@ -53,6 +75,15 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
     return listRuntimeModelsByProvider('anthropic');
   }
 
+  nativeMessages(request: ClaudeNativeRequest) {
+    return executeClaudeNative({ ...request, credential: request.credential || env.ANTHROPIC_API_KEY });
+  }
+
+  nativeCountTokens(request: ClaudeNativeCountRequest) {
+    return executeClaudeNative({ ...request, stream: false, finalize: undefined, onResponseStarted: undefined,
+      credential: request.credential || env.ANTHROPIC_API_KEY }, 'count_tokens');
+  }
+
   validateCredential(credential?: string): CredentialValidationResult {
     const apiKey = credential || env.ANTHROPIC_API_KEY;
     if (!apiKey || apiKey.trim().length === 0) {
@@ -66,6 +97,7 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
   }
 
   normalizeError(error: unknown): NormalizedProviderError {
+    if (requestTooLargeDetail(error)) return normalizeProviderError('anthropic', error);
     const record = error as Record<string, unknown> | null;
     const message =
       (record && typeof record.message === 'string' && record.message) ||
@@ -96,11 +128,11 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
       throw new Error('ClaudeProviderRuntime.generate: unsupported mode');
     }
 
+    const { body, requestBytes } = prepareClaudeCanonicalBody(payload.requestOptions, false);
     const client = this.getClient(payload.credential, payload.claudeCodeTransport);
-    return await client.messages.create(
-      { ...payload.requestOptions, stream: false },
-      { signal: payload.signal },
-    );
+    try {
+      return await client.messages.create(body as Anthropic.MessageCreateParamsNonStreaming, { signal: payload.signal });
+    } catch (error) { throw canonicalFailure(error, requestBytes); }
   }
 
   async streamGenerate(request: unknown): Promise<AsyncIterable<unknown>> {
@@ -109,12 +141,14 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
       throw new Error('ClaudeProviderRuntime.streamGenerate: unsupported mode');
     }
 
+    const { body, requestBytes } = prepareClaudeCanonicalBody(payload.requestOptions, true);
     const client = this.getClient(payload.credential, payload.claudeCodeTransport);
-    const stream = client.messages.stream(payload.requestOptions, {
+    const stream = client.messages.stream(body, {
       signal: payload.signal,
     });
 
-    return this.toAsyncIterable(stream);
+    payload.canonicalBodyProbe?.(requestBytes);
+    return this.toAsyncIterable(stream, requestBytes, payload.canonicalBodyProbe);
   }
 
   private getClient(
@@ -137,10 +171,17 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
   }
 
   private async *toAsyncIterable(
-    stream: MessageStream,
+    stream: MessageStream | undefined,
+    requestBytes: number,
+    bodyProbe?: (retainedBytes: number) => void,
   ): AsyncGenerator<unknown> {
-    for await (const event of stream) {
-      yield event;
+    try { for await (const event of stream!) yield event; }
+    catch (error) { throw canonicalFailure(error, requestBytes); }
+    finally {
+      stream?.abort();
+      await stream?.done().catch(() => undefined);
+      stream = undefined;
+      bodyProbe?.(0);
     }
   }
 }

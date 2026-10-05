@@ -1,0 +1,449 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { channel } from 'node:diagnostics_channel';
+import { createAnthropicNativePort, resolveAnthropicNativeAuth } from '../../src/services/llm-runtime/anthropic-native';
+import { nativeObservationUsage } from '../../src/services/llm-runtime/anthropic-native-observation';
+import type { NativeUsageSnapshot } from '@sentropic/llm-mesh';
+import { NativeSseFramer, NativeUsageObserver, nativeSnapshotUsage, chargeAdmittedAttempts, runRouteJsonFlow, runRouteStreamFlow } from '@sentropic/llm-gateway';
+import { nativeFrame, nativeHarness, nativeStart } from '../../../packages/llm-gateway/tests/fixtures/native-flow';
+import { finalizeNativeObservation } from '../../../packages/llm-gateway/src/native-lifecycle';
+import { usageCost } from '../../src/services/llm-metering/budget-admission';
+
+const MODEL = 'claude-sonnet-5';
+const subject = { principalRef: 'native-user', ownerScopeRef: 'native-owner' };
+const target = { providerId: 'anthropic', modelId: MODEL };
+const request = () => ({ body: { model: MODEL, messages: [] }, stream: false, requestId: 'gateway-request',
+  signal: new AbortController().signal, headers: { anthropicVersion: '2023-06-01', forwarded: {} } });
+const fixture = () => {
+  const runtime = { nativeMessages: vi.fn().mockResolvedValue({ kind: 'json', status: 200, body: {}, headers: {} }),
+    nativeCountTokens: vi.fn().mockResolvedValue({ kind: 'json', status: 200, body: { input_tokens: 1 }, headers: {} }) };
+  const resolveProviderCredential = vi.fn().mockResolvedValue({ providerId: 'anthropic', credential: 'server-key', source: 'environment' });
+  const port = createAnthropicNativePort({ modelIds: [MODEL], runtime, dependencies: { resolveProviderCredential } });
+  return { port, runtime, resolveProviderCredential };
+};
+const accountFixture = () => {
+  const recordOutcome = vi.fn().mockResolvedValue(undefined);
+  const dependencies = {
+    resolveProviderCredential: vi.fn().mockResolvedValue({ providerId: 'anthropic', credential: null, source: 'none' }),
+    getAnthropicTransportMode: vi.fn().mockResolvedValue('claude-code'),
+    getPrimaryClaudeCodeAccountTransport: vi.fn().mockResolvedValue({ status: 'active' }),
+    resolveConnectedClaudeCodeTransport: vi.fn().mockResolvedValue({ accessToken: 'leased-bearer', recordOutcome }),
+  };
+  return { dependencies, recordOutcome };
+};
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+/** Actual gateway flows bind the prepared API capability; only provider responses are faked. */
+const hostHarness = async (options: { model?: string; chunks?: Uint8Array[]; body?: Record<string, unknown>;
+  hook?: 'reject' | 'never'; requestBody?: Record<string, unknown>; allowanceInput?: number; allowanceOutput?: number } = {}) => {
+  const model = options.model ?? MODEL;
+  const { dependencies, recordOutcome } = accountFixture();
+  const record = vi.fn(async () => {
+    if (options.hook === 'reject') throw new Error('private observation failure');
+    if (options.hook === 'never') await new Promise<void>(() => {});
+  });
+  const chunks = options.chunks ?? [nativeStart(model), nativeFrame('message_delta', { usage: { output_tokens: 3 } }),
+    nativeFrame('message_stop')];
+  let index = 0;
+  const close = vi.fn(async () => ({ done: true as const, value: undefined }));
+  const runtime = { nativeMessages: vi.fn(async payload => {
+    payload.onResponseStarted();
+    return payload.stream ? { kind: 'stream' as const, status: 200 as const, headers: {},
+      body: { [Symbol.asyncIterator]: () => ({ next: async () => index < chunks.length
+        ? { done: false as const, value: chunks[index++]! } : { done: true as const, value: undefined }, return: close }) } }
+      : { kind: 'json' as const, status: 200 as const, headers: {}, body: options.body ?? { model,
+        usage: { input_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 3 } } };
+  }), nativeCountTokens: vi.fn() };
+  const port = createAnthropicNativePort({ modelIds: [model], dependencies, runtime, record });
+  const capability = await port.prepare(subject, 'workspace', { providerId: 'anthropic', modelId: model });
+  const finalize = vi.fn(capability!.finalize!);
+  const h = nativeHarness({ model, body: options.requestBody, allowanceInput: options.allowanceInput, allowanceOutput: options.allowanceOutput });
+  h.attempt.nativeMessages = { ...capability!, finalize };
+  return { ...h, record, recordOutcome, close, finalize, runtime, dependencies };
+};
+const consume = async (stream: AsyncIterable<unknown>) => { for await (const _chunk of stream) { /* Drain opaque bytes. */ } };
+const nativeModels = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'];
+const amount = (modelId: string, usage: Parameters<typeof usageCost>[1]) => usageCost({ id: 'quoted-price',
+  providerId: 'anthropic', modelId, input: 1_000_000n, output: 2_000_000n, reasoning: 0n,
+  image: 0n, toolCall: 0n, minCharge: 0n }, usage, { providerId: 'anthropic', modelId, pricingMatch: 'exact' });
+const oneHourStart = { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200,
+  cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 }, output_tokens: 1 };
+
+describe('Anthropic native host port', () => {
+  it('observes only the gateway finalized snapshot once with a separate joined call identity', async () => {
+    const { runtime, resolveProviderCredential } = fixture();
+    const record = vi.fn().mockResolvedValue(undefined);
+    runtime.nativeMessages.mockImplementation(async payload => {
+      payload.onResponseStarted();
+      return { kind: 'json', status: 200, body: {}, headers: {} };
+    });
+    const port = createAnthropicNativePort({ modelIds: [MODEL], runtime, record, dependencies: { resolveProviderCredential } });
+    const native = await port.prepare(subject, 'workspace', target);
+    await native!.execute(request());
+    expect(record).not.toHaveBeenCalled();
+    const snapshot: NativeUsageSnapshot = Object.freeze({ inputTokens: 10_300, outputTokens: 20, totalTokens: 10_320,
+      rawUsage: Object.freeze({ input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 }),
+      estimated: false, finalOutputObserved: true, termination: 'completed', nativeSelectedModelId: MODEL,
+      nativeServedModelId: MODEL, nativeInputUsageValidated: true, nativeInputUsageSource: 'json',
+      fallbackPresent: false, iterationsPresent: false });
+    await native!.finalize!(snapshot);
+    await native!.finalize!(snapshot);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record.mock.calls[0]![0]).toMatchObject({ responseId: 'gateway-request', providerId: 'anthropic', modelId: MODEL,
+      userId: 'native-user', workspaceId: 'workspace', credentialSource: 'environment', operation: 'generate',
+      usage: { inputTokens: 10_300, outputTokens: 20, providerRawUsage: { input_tokens: 100, input_usage_validated: true } } });
+    expect(record.mock.calls[0]![0].callId).not.toBe('gateway-request');
+  });
+
+  it('prepares exact native and count capabilities without account acquisition or caller credentials', async () => {
+    const { port, runtime, resolveProviderCredential } = fixture();
+    const native = await port.prepare(subject, 'workspace', target);
+    expect(native).toMatchObject({ contractVersion: 1, modelId: MODEL, requiredBetas: [], apiVersions: ['2023-06-01'] });
+    await native!.execute(request());
+    const count = await port.countTokens.prepare(subject, { modelId: MODEL, workspaceId: 'workspace', signal: request().signal });
+    await count!.execute(request());
+    expect(runtime.nativeMessages).toHaveBeenCalledTimes(1);
+    expect(runtime.nativeCountTokens).toHaveBeenCalledTimes(1);
+    expect(runtime.nativeMessages.mock.calls[0]![0].credential).toBe('server-key');
+    expect(resolveProviderCredential.mock.calls[0]![0]).toEqual({ providerId: 'anthropic', userId: 'native-user', workspaceId: 'workspace' });
+  });
+
+  it('denies a different provider before credential resolution and rejects invalid allowlists', async () => {
+    const { port, resolveProviderCredential } = fixture();
+    expect(await port.prepare(subject, undefined, { ...target, providerId: 'openai' })).toBeUndefined();
+    expect(resolveProviderCredential).not.toHaveBeenCalled();
+    expect(() => createAnthropicNativePort({ modelIds: ['not-a-catalog-model'] })).toThrow();
+  });
+
+  it.each(['environment', 'user_byok', 'workspace_key'] as const)('uses trusted %s before account transport', async source => {
+    const { dependencies } = accountFixture();
+    dependencies.resolveProviderCredential.mockResolvedValue({ providerId: 'anthropic', credential: 'trusted-key', source });
+    expect(await resolveAnthropicNativeAuth('u', 'w', dependencies)).toEqual({ kind: 'token', credential: 'trusted-key', source });
+    expect(dependencies.resolveProviderCredential).toHaveBeenCalledWith({ providerId: 'anthropic', userId: 'u', workspaceId: 'w' });
+    expect(dependencies.getAnthropicTransportMode).not.toHaveBeenCalled();
+    expect(dependencies.resolveConnectedClaudeCodeTransport).not.toHaveBeenCalled();
+  });
+
+  it.each(['active', 'cooldown', 'disabled'] as const)('advertises only eligible account status %s without acquiring', async status => {
+    const { dependencies } = accountFixture();
+    dependencies.getPrimaryClaudeCodeAccountTransport.mockResolvedValue({ status });
+    const port = createAnthropicNativePort({ modelIds: [MODEL], dependencies });
+    expect(await port.available(subject, 'workspace', target)).toBe(status !== 'disabled');
+    expect(dependencies.resolveConnectedClaudeCodeTransport).not.toHaveBeenCalled();
+    dependencies.getAnthropicTransportMode.mockResolvedValue('antigravity');
+    expect(await port.available(subject, 'workspace', target)).toBe(false);
+  });
+
+  it.each([false, true])('acquires only at execute and releases JSON/count exactly once (count=%s)', async count => {
+    const { dependencies, recordOutcome } = accountFixture();
+    const { runtime } = fixture();
+    const record = vi.fn();
+    const port = createAnthropicNativePort({ modelIds: [MODEL], dependencies, runtime, record });
+    const capability = count ? await port.countTokens.prepare(subject, { modelId: MODEL, signal: request().signal })
+      : await port.prepare(subject, 'workspace', target);
+    expect(dependencies.resolveConnectedClaudeCodeTransport).not.toHaveBeenCalled();
+    await capability!.execute({ ...request(), body: { model: MODEL, credential: 'caller-key', accessToken: 'caller-bearer' } });
+    expect(dependencies.resolveConnectedClaudeCodeTransport).toHaveBeenCalledTimes(1);
+    expect(recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'success' });
+    const called = count ? runtime.nativeCountTokens : runtime.nativeMessages;
+    expect(called.mock.calls[0]![0]).toMatchObject({ claudeCodeTransport: { accessToken: 'leased-bearer' } });
+    expect(called.mock.calls[0]![0].credential).toBeUndefined();
+    if (!count) await (capability as Awaited<ReturnType<typeof port.prepare>>)!.finalize!({} as NativeUsageSnapshot);
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('null lease returns zero operational usage without dispatch/observation (count=%s)', async count => {
+    const { dependencies } = accountFixture();
+    dependencies.resolveConnectedClaudeCodeTransport.mockResolvedValue(null);
+    const { runtime } = fixture(); const record = vi.fn();
+    const port = createAnthropicNativePort({ modelIds: [MODEL], dependencies, runtime, record });
+    const capability = count ? await port.countTokens.prepare(subject, { modelId: MODEL, signal: request().signal })
+      : await port.prepare(subject, undefined, target);
+    await expect(capability!.execute(request())).rejects.toMatchObject({ status: 503, code: 'account_unavailable',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: false } });
+    expect(runtime.nativeMessages).not.toHaveBeenCalled(); expect(runtime.nativeCountTokens).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('releases an unconsumed response on abort once even when reader/outcome cleanup rejects', async () => {
+    const { dependencies, recordOutcome } = accountFixture();
+    recordOutcome.mockRejectedValue(new Error('private failure'));
+    const close = vi.fn().mockRejectedValue(new Error('reader failure'));
+    const runtime = { nativeMessages: vi.fn().mockResolvedValue({ kind: 'stream', status: 200, headers: {},
+      body: { [Symbol.asyncIterator]: () => ({ next: vi.fn(), return: close }) } }), nativeCountTokens: vi.fn() };
+    const port = createAnthropicNativePort({ modelIds: [MODEL], dependencies, runtime });
+    const controller = new AbortController(); const capability = await port.prepare(subject, undefined, target);
+    const result = await capability!.execute({ ...request(), stream: true, signal: controller.signal });
+    controller.abort();
+    if (result.kind !== 'stream') throw new Error('expected stream');
+    await result.body[Symbol.asyncIterator]().return!();
+    expect(close).toHaveBeenCalledTimes(1); expect(recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'failed' });
+  });
+
+  it('projects only safe physical/raw counts and fixed snapshot fields, never allowances or opaque objects', () => {
+    const snapshot = { inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800, estimated: true,
+      finalOutputObserved: false, termination: 'cancelled', nativeSelectedModelId: MODEL,
+      nativeServedModelId: 'private@example.com', nativeUsageUncertainty: 'invalid_input', nativeInputUsageValidated: false,
+      fallbackPresent: false, iterationsPresent: true, secret: 'prompt', rawUsage: { input_tokens: 100,
+        cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200, output_tokens: 500,
+        iterations: ['private-token'], extra: 'provider prose', cache_creation: { ephemeral_1h_input_tokens: 200 } } } as NativeUsageSnapshot;
+    const projected = nativeObservationUsage(snapshot);
+    expect(projected).toMatchObject({ inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800,
+      providerRawUsage: { native_served_model_id: 'unknown', uncertainty_reason: 'invalid_input', input_usage_validated: false } });
+    expect(JSON.stringify(projected)).not.toMatch(/prompt|private|prose|32000/);
+    expect(nativeObservationUsage({ ...snapshot, inputTokens: NaN, outputTokens: undefined, totalTokens: Infinity }))
+      .toMatchObject({ inputTokens: undefined, outputTokens: undefined, totalTokens: undefined });
+  });
+});
+
+describe('gateway to API finalized observation parity', () => {
+  it.each(['clean', 'cancel', 'commit', 'eof'] as const)('settles and releases before a never-settling hook: %s', async cause => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const snapshotSpy = vi.spyOn(NativeUsageObserver.prototype, 'snapshot');
+    const h = await hostHarness({ hook: 'never', ...(cause === 'eof' ? { chunks: [nativeStart(MODEL)] } : {}) });
+    if (cause === 'commit') h.attempt.markCommitted.mockRejectedValue(new Error('private commitment failure'));
+    if (cause === 'commit') await expect(runRouteStreamFlow(h.deps, { ...h.request, stream: true })).rejects.toThrow();
+    else {
+      const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+      if (cause === 'cancel') await result.stream.return(undefined);
+      else await consume(result.stream);
+      await result.stream.return(undefined);
+    }
+    const snapshot = h.finalize.mock.calls[0]![0];
+    expect(snapshotSpy).toHaveBeenCalledTimes(1); expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.record).toHaveBeenCalledTimes(1);
+    expect(Object.isFrozen(snapshot)).toBe(true); expect(Object.isFrozen(snapshot.rawUsage)).toBe(true);
+    expect(snapshot).toMatchObject({ inputTokens: 2, outputTokens: cause === 'clean' ? 3 : 1,
+      nativeInputUsageValidated: true, nativeInputUsageSource: 'message_start', // Output-only delta keeps input provenance.
+      estimated: cause !== 'clean', finalOutputObserved: cause === 'clean',
+      termination: { clean: 'completed', cancel: 'cancelled', commit: 'commit_failed', eof: 'missing_message_stop' }[cause] });
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.close).toHaveBeenCalledTimes(1);
+    expect(h.recordOutcome).toHaveBeenCalledTimes(1);
+    const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    expect(financial).toMatchObject({ inputTokens: 2, outputTokens: cause === 'clean' ? 3 : 32_000,
+      nativeInputPriceUnits40: snapshot.nativeInputPriceUnits40, nativeUsageUncertainty: snapshot.nativeUsageUncertainty,
+      nativeInputUsageSource: snapshot.nativeInputUsageSource, estimated: snapshot.estimated });
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ responseId: 'req-native',
+      usage: { inputTokens: 2, outputTokens: snapshot.outputTokens, totalTokens: snapshot.totalTokens,
+        providerRawUsage: { estimated: snapshot.estimated, termination: snapshot.termination,
+          final_output_observed: snapshot.finalOutputObserved, input_usage_source: snapshot.nativeInputUsageSource } } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(warn).toHaveBeenCalledExactlyOnceWith('Native observation unavailable', {
+      requestId: 'req-native', attemptRef: 'attempt', reason: 'hook_timeout' });
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.recordOutcome).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([undefined, 'reject', 'never'] as const)('completes JSON independently of host persistence (%s)', async hook => {
+    vi.useFakeTimers(); const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const snapshotSpy = vi.spyOn(NativeUsageObserver.prototype, 'snapshot');
+    const h = await hostHarness({ hook });
+    expect(await runRouteJsonFlow(h.deps, h.request)).toMatchObject({ status: 200, relay: 'native' });
+    const snapshot = h.finalize.mock.calls[0]![0];
+    expect(snapshotSpy).toHaveBeenCalledTimes(1); expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'success' });
+    expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5,
+      providerRawUsage: { input_usage_source: 'json', termination: 'completed', final_output_observed: true } } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private');
+    expect(warn).toHaveBeenCalledTimes(hook ? 1 : 0);
+  });
+});
+
+describe('L2 cumulative cache parity through the API host', () => {
+  const variants = [
+    { name: 'equal-no-split', delta: { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 } },
+    { name: 'aggregate-only', delta: { cache_creation_input_tokens: 200 } },
+    { name: 'nullable', delta: { input_tokens: 100, cache_read_input_tokens: null, cache_creation_input_tokens: null } },
+    { name: 'all-null', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null } },
+    { name: 'omitted', delta: {} },
+    { name: 'growth', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300 }, growth: true },
+  ];
+  const cases = nativeModels.flatMap(model => variants.flatMap(variant => [false, true].map(interrupted => ({ model, variant, interrupted }))));
+  it.each(cases)('$model $variant.name interrupted=$interrupted', async ({ model, variant, interrupted }) => {
+    const delta = nativeFrame('message_delta', { usage: { ...variant.delta, output_tokens: 500 } });
+    const chunks = [nativeStart(model, oneHourStart), delta, delta, ...(interrupted ? [] : [nativeFrame('message_stop')])];
+    const h = await hostHarness({ model, chunks, allowanceInput: 10_300,
+      requestBody: { messages: [{ role: 'user', content: [{ type: 'text', text: 'opaque', cache_control: { type: 'ephemeral', ttl: '1h' } }] }] } });
+    await consume((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    const snapshot = h.finalize.mock.calls[0]![0]; const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    const fable = model === nativeModels[2], growth = variant.growth === true;
+    const physical = growth ? 10_400 : 10_300;
+    const units = growth ? fable ? 38_000 : 68_000 : fable ? 30_000 : 60_000;
+    expect(snapshot).toMatchObject({ inputTokens: physical, outputTokens: 500, totalTokens: physical + 500,
+      nativeInputUsageValidated: true, nativeInputPriceUnits40: units, estimated: interrupted,
+      finalOutputObserved: !interrupted, rawUsage: { input_tokens: 100, cache_read_input_tokens: 10_000,
+        cache_creation_input_tokens: growth ? 300 : 200, cache_creation: { ephemeral_1h_input_tokens: 200 } } });
+    expect(snapshot.nativeUsageUncertainty).toBe(interrupted ? 'incomplete_output' : undefined);
+    expect(snapshot.nativeCacheWriteSplitReason).toBe(growth ? 'cache_write_split_inferred' : undefined);
+    expect(financial).toMatchObject({ inputTokens: physical, outputTokens: interrupted ? 32_000 : 500,
+      nativeInputPriceUnits40: units, nativeInputUsageSource: snapshot.nativeInputUsageSource, estimated: interrupted });
+    expect(amount(model, financial)).toBe(BigInt(interrupted ? growth ? fable ? 64950 : 65700 : fable ? 64750 : 65500
+      : growth ? fable ? 1950 : 2700 : fable ? 1750 : 2500));
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ usage: { inputTokens: physical, outputTokens: 500,
+      providerRawUsage: { cache_creation: { ephemeral_1h_input_tokens: 200 }, input_usage_validated: true,
+        cache_write_split_reason: snapshot.nativeCacheWriteSplitReason, estimated: interrupted } } });
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.close).toHaveBeenCalledTimes(1); expect(h.recordOutcome).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['resolve', 'reject'] as const)('bounds the gateway helper with API persistence and ignores late %s', async mode => {
+    vi.useFakeTimers();
+    let resolve!: () => void; let reject!: (error: Error) => void;
+    const deferred = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    const { runtime, resolveProviderCredential } = fixture();
+    runtime.nativeMessages.mockImplementation(async payload => { payload.onResponseStarted(); return { kind: 'json', status: 200, body: {}, headers: {} }; });
+    const record = vi.fn(() => deferred);
+    const capability = await createAnthropicNativePort({ modelIds: [MODEL], runtime, record,
+      dependencies: { resolveProviderCredential } }).prepare(subject, undefined, target);
+    await capability!.execute(request());
+    const observer = new NativeUsageObserver(MODEL, true);
+    observer.observeJson({ model: MODEL, usage: { input_tokens: 2, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 3 } });
+    const snapshot = observer.snapshot('completed'); const finalize = vi.fn(capability!.finalize!);
+    const results: Awaited<ReturnType<typeof finalizeNativeObservation>>[] = [];
+    void finalizeNativeObservation(finalize, snapshot).then(result => { results.push(result); });
+    await vi.advanceTimersByTimeAsync(999); expect(results).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(results).toEqual([{ kind: 'observation_unavailable', reason: 'hook_timeout' }]);
+    if (mode === 'resolve') resolve(); else reject(new Error('private late failure'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(results).toHaveLength(1); expect(finalize).toHaveBeenCalledExactlyOnceWith(snapshot);
+    expect(record).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+    expect(snapshot).toMatchObject({ estimated: false, termination: 'completed', inputTokens: 2, outputTokens: 3 });
+  });
+});
+
+describe('N5 malformed one-hour input never regains pricing proof', () => {
+  const cases = nativeModels.flatMap(model => [false, true].flatMap(interrupted => [10_000.5, Number.MAX_SAFE_INTEGER + 1]
+    .map(bad => ({ model, interrupted, bad }))));
+  it.each(cases)('malformed_one_hour_delta_charges_74300: $model interrupted=$interrupted bad=$bad', async ({ model, interrupted, bad }) => {
+    const h = await hostHarness({ model, allowanceInput: 10_300, chunks: [nativeStart(model, oneHourStart),
+      nativeFrame('message_delta', { usage: { input_tokens: bad, output_tokens: 500 } }),
+      nativeFrame('message_delta', { usage: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 200 } }),
+      ...(interrupted ? [] : [nativeFrame('message_stop')])] });
+    await consume((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    const snapshot = h.finalize.mock.calls[0]![0]; const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    expect(snapshot).toMatchObject({ inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800,
+      estimated: true, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input',
+      rawUsage: { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 } });
+    expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+    expect(financial).toMatchObject({ inputTokens: 10_300, outputTokens: 32_000, estimated: true,
+      nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+    expect(financial.nativeInputPriceUnits40).toBeUndefined(); expect(amount(model, financial)).toBe(74300n);
+    expect(h.record.mock.calls[0]![0]).toMatchObject({ usage: { inputTokens: 10_300, outputTokens: 500,
+      providerRawUsage: { input_usage_validated: false, uncertainty_reason: 'invalid_input', estimated: true } } });
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.recordOutcome).toHaveBeenCalledTimes(1); expect(h.close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(nativeModels.flatMap(model => [NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1].map(bad => ({ model, bad }))))(
+    'rejects internal nonfinite/unsafe numeric updates atomically for $model ($bad)', ({ model, bad }) => {
+      const observer = new NativeUsageObserver(model, false);
+      observer.observeFrame(new NativeSseFramer().push(nativeStart(model, { ...oneHourStart, output_tokens: 500 }))[0]!);
+      observer.accumulator.applyDelta({ input_tokens: bad });
+      const snapshot = observer.snapshot('completed');
+      expect(snapshot).toMatchObject({ inputTokens: 10_300, outputTokens: 500, nativeInputUsageValidated: false,
+        nativeUsageUncertainty: 'invalid_input', estimated: true, rawUsage: { input_tokens: 100 } });
+      const h = nativeHarness({ model, allowanceInput: 10_300 });
+      const candidateRef = 'candidate-0';
+      const project = (value: NativeUsageSnapshot) => chargeAdmittedAttempts({ requestId: 'r', holdRef: 'h',
+        quote: h.deps.routePlanner.quote!({ requestedModel: model, ceiling: { inputTokens: 10_300, outputTokens: 32_000 }, now: new Date() }),
+        dispatched: new Set([candidateRef]) }, [{ candidateRef, providerId: 'anthropic', modelId: model,
+        transportProviderId: 'anthropic', usage: nativeSnapshotUsage(value) }]).attempts[0]!.usage;
+      expect(amount(model, project(snapshot))).toBe(74300n);
+      observer.accumulator.applyDelta({ input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300 });
+      observer.accumulator.applyDelta({ cache_creation_input_tokens: 300 });
+      const grown = observer.snapshot('cancelled');
+      expect(grown).toMatchObject({ inputTokens: 10_400, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+      expect(grown.nativeInputPriceUnits40).toBeUndefined(); expect(amount(model, project(grown))).toBe(74400n);
+    });
+
+  it.each([false, true])('charges a dispatched null account lease at the full allowance without observation (stream=%s)', async stream => {
+    const h = await hostHarness({ allowanceInput: 100, allowanceOutput: 16 });
+    h.dependencies.resolveConnectedClaudeCodeTransport.mockResolvedValue(null);
+    await expect(stream ? runRouteStreamFlow(h.deps, { ...h.request, stream: true }) : runRouteJsonFlow(h.deps, h.request)).rejects.toThrow();
+    expect(h.runtime.nativeMessages).not.toHaveBeenCalled(); expect(h.record).not.toHaveBeenCalled();
+    expect(h.recorder.settlements).toHaveLength(1);
+    const financial = h.recorder.settlements[0]!.attempts[0]!.usage;
+    expect(financial).toMatchObject({ inputTokens: 100, outputTokens: 16, estimated: true });
+    expect(amount(MODEL, financial)).toBe(132n);
+  });
+});
+
+describe('N1 real host-port reference detachment', () => {
+  const holders = () => {
+    const held = new Set<string>(); const released = new Map<string, number>();
+    const probe = (holder: string, retained: boolean) => {
+      if (retained) { expect(held.has(holder)).toBe(false); held.add(holder); }
+      else { expect(held.delete(holder)).toBe(true); released.set(holder, (released.get(holder) ?? 0) + 1); }
+    };
+    const detached = () => {
+      expect(held.size).toBe(0);
+      expect([...released.keys()].sort()).toEqual(['body', 'port-outgoing', 'port-request', 'request', 'serialization', 'upload']);
+      expect([...released.values()]).toEqual([1, 1, 1, 1, 1, 1]);
+    };
+    return { held, probe, detached };
+  };
+
+  it('committed_native_port_retains_response_only', async () => {
+    const references = holders(); const responseClosed = vi.fn(); const record = vi.fn().mockResolvedValue(undefined);
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(nativeStart(MODEL)); }, cancel: responseClosed,
+    }), { headers: { 'content-type': 'text/event-stream' } });
+    vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+      const request = {}; channel('undici:request:create').publish({ request });
+      const reader = (init.body as ReadableStream<Uint8Array>).getReader();
+      try { while (!(await reader.read()).done) { /* Faked provider HTTP drains the actual host upload. */ } }
+      finally { reader.releaseLock(); }
+      channel('undici:request:bodySent').publish({ request });
+      return response;
+    }));
+    const { dependencies, recordOutcome } = accountFixture();
+    const capability = await createAnthropicNativePort({ modelIds: [MODEL], dependencies,
+      bodyProbe: references.probe, record }).prepare(subject, undefined, target);
+    const h = nativeHarness(); h.attempt.nativeMessages = capability!;
+    h.attempt.markCommitted.mockImplementation(async () => { references.detached(); expect(responseClosed).not.toHaveBeenCalled(); });
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+    expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1); references.detached();
+    expect((await result.stream.next()).done).toBe(false); references.detached();
+    expect(responseClosed).not.toHaveBeenCalled(); expect(recordOutcome).not.toHaveBeenCalled();
+    await result.stream.return(undefined); await result.stream.return(undefined);
+    references.detached(); expect(responseClosed).toHaveBeenCalledTimes(1);
+    expect(recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'failed' });
+    expect(record).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+  });
+
+  it.each(['cancel', 'error'] as const)('early response/upload %s detaches actual port holders before rejection', async cause => {
+    const references = holders(); const responseClosed = vi.fn(); const controller = new AbortController();
+    let notifyHeaders!: () => void; let failUpload!: () => Promise<void>;
+    const headers = new Promise<void>(resolve => { notifyHeaders = resolve; });
+    const response = new Response(new ReadableStream({ cancel: responseClosed }));
+    vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+      const request = {}; channel('undici:request:create').publish({ request });
+      const reader = (init.body as ReadableStream<Uint8Array>).getReader();
+      let closing: Promise<void> | undefined;
+      failUpload = () => closing ??= reader.cancel().then(() => {
+        reader.releaseLock(); channel('undici:request:error').publish({ request });
+      });
+      init.signal!.addEventListener('abort', () => { void failUpload(); }, { once: true });
+      notifyHeaders(); return response;
+    }));
+    const { dependencies, recordOutcome } = accountFixture();
+    const capability = await createAnthropicNativePort({ modelIds: [MODEL], dependencies,
+      bodyProbe: references.probe, record: vi.fn() }).prepare(subject, undefined, target);
+    let exposed = false;
+    const pending = capability!.execute({ ...request(), stream: true, signal: controller.signal })
+      .then(value => { exposed = true; return value; }, error => error);
+    await headers; expect([...references.held]).toEqual(['upload']); expect(exposed).toBe(false);
+    if (cause === 'cancel') controller.abort(); else await failUpload();
+    const result = await pending;
+    if (result?.kind === 'stream') await result.body[Symbol.asyncIterator]().return!();
+    expect(result).toBeInstanceOf(Error);
+    if (cause === 'error') expect(result).toMatchObject({ status: 503, code: 'native_protocol_error' });
+    // Transport cancellation completes before the error path returns usable capacity.
+    references.detached(); expect(exposed).toBe(false); expect(responseClosed).toHaveBeenCalledTimes(1);
+    expect(recordOutcome).toHaveBeenCalledExactlyOnceWith({ status: 'failed' });
+  });
+});

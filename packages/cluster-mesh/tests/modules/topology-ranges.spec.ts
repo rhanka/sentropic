@@ -14,7 +14,7 @@ beforeEach(() => {
 
 /** cluster-mesh installed under `<at>`; returns the guard input for one family. */
 function cluster(at: string) {
-  const dir = tree.install(at, { name: '@sentropic/cluster-mesh', version: '0.13.0' });
+  const dir = tree.install(at, { name: '@sentropic/cluster-mesh', version: '0.14.0' });
   const self: ClusterMeshInstanceEntry = { token: Symbol('self'), moduleUrl: pathToFileURL(join(dir, 'dist/modules/topology.js')).href };
   const anchorDir = tree.dir(`${at}/node_modules/@sentropic/cluster-mesh/dist/modules`);
   return (family: ClusterMeshLeafFamily) => () => inspectTopology({ anchorDir, instances: [self], strict: false, family });
@@ -45,7 +45,7 @@ describe('automatic leaf guard ranges', () => {
     const error = refusal(guard('llm-mesh'));
     expect(error).toMatchObject({ code: 'cluster_mesh_topology_invalid', reason: 'incompatible_version', paths: [meshDir] });
     expect(error.message).toBe('Cluster Mesh topology is invalid (incompatible_version): installed @sentropic/llm-mesh@0.21.2'
-      + ` at ${meshDir} does not satisfy the required range ">=0.22.0 <0.23.0"`);
+      + ` at ${meshDir} does not satisfy the required range ">=0.22.0 <0.24.0"`);
     expect(refusal(guard('gateway'))).toMatchObject({ reason: 'incompatible_version', paths: [meshDir] });
   });
 
@@ -87,15 +87,23 @@ describe('automatic leaf guard ranges', () => {
     expect(guard('gateway')).not.toThrow();
   });
 
-  it('should refuse prerelease versions and ignore build metadata like npm', () => {
+  it('should refuse upper boundaries and prereleases and ignore build metadata like npm', () => {
     const guard = cluster('app');
-    for (const version of ['0.22.1-rc.0', '0.23.0-beta.1', '0.22.1-rc.0+build.1', '0.21.2+build.1']) {
+    for (const version of ['0.22.1-rc.0', '0.23.0-beta.1', '0.22.1-rc.0+build.1', '0.21.2+build.1', '0.24.0']) {
       tree.install('app', fakeMesh('mesh', version));
       expect(refusal(guard('llm-mesh')).message, version).toContain(`installed @sentropic/llm-mesh@${version}`);
     }
-    for (const version of ['0.22.0+build.1', '0.22.9']) {
+    for (const version of ['0.22.0+build.1', '0.22.9', '0.23.0+build.1', '0.23.9']) {
       tree.install('app', fakeMesh('mesh', version));
       expect(guard('llm-mesh'), version).not.toThrow();
+    }
+    for (const version of ['0.19.1', '0.20.0+build.1', '0.20.9']) {
+      tree.install('app', fakeGateway('gw', version));
+      expect(guard('gateway'), version).not.toThrow();
+    }
+    for (const version of ['0.18.0', '0.20.1-rc.0', '0.21.0']) {
+      tree.install('app', fakeGateway('gw', version));
+      expect(refusal(guard('gateway')).message, version).toContain(`installed @sentropic/llm-gateway@${version}`);
     }
   });
 

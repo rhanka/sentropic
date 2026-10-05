@@ -20,7 +20,22 @@
 
 import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
+import * as mesh from '@sentropic/llm-mesh';
+import type { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import { requestTooLargeDetail, type RequestSizeDetail } from '@sentropic/llm-mesh';
+import { requestTooLargeMessage } from '../request-too-large.js';
+import { NativeSseUpstreamError } from '../native-stream-errors.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
+import {
+  isProcessedNativeValidationDetail,
+  NATIVE_BILLING_MASKED_MESSAGE,
+  parseNativeErrorDetail,
+} from '../native-errors.js';
+
+export interface NativeValidationPublicDetail {
+  readonly type: string;
+  readonly message: string;
+}
 
 export interface ProviderShapedError {
   readonly status: number;
@@ -43,6 +58,11 @@ export type GatewayFailureKind =
   | 'upstream-auth-failed'
   | 'upstream-rate-limited'
   | 'bad-request'
+  | 'request-too-large'
+  | 'request-body-capacity'
+  | 'native-required'
+  | 'native-max-tokens-required'
+  | 'native-unavailable'
   | 'unknown-model'
   | 'no-route'
   | 'cross-user-disabled';
@@ -56,6 +76,9 @@ export class GatewayError extends Error {
     readonly retryAfterSeconds?: number,
     /** Present only after a provider/model has been selected for dispatch. */
     readonly servedTarget?: ResolvedTarget,
+    /** Public validation detail for native 400 fidelity; excluded from logs/ledgers. */
+    readonly validation?: NativeValidationPublicDetail,
+    readonly requestSize?: RequestSizeDetail,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -109,6 +132,24 @@ const unknownModelMessage = (requestedModel?: string): string =>
 const noRouteMessage = (requestedModel?: string): string =>
   requestedModel ? `No route available for model: ${JSON.stringify(requestedModel)}` : 'No route available';
 
+const isNativeMessagesUpstreamError = (error: unknown): error is NativeMessagesUpstreamError => {
+  const ctor = (mesh as { NativeMessagesUpstreamError?: abstract new (...args: any[]) => any }).NativeMessagesUpstreamError;
+  return typeof ctor === 'function' && error instanceof ctor;
+};
+
+const extractNativeValidationDetail = (error: NativeMessagesUpstreamError): NativeValidationPublicDetail | undefined => {
+  let detail = error.validation;
+  if (!detail || typeof detail !== 'object' || typeof detail.message !== 'string') return undefined;
+  if (!isProcessedNativeValidationDetail(detail)) {
+    try {
+      detail = parseNativeErrorDetail(JSON.stringify({ error: { type: detail.type, message: detail.message } }), 400);
+    } catch { return undefined; }
+  }
+  if (detail.message === NATIVE_BILLING_MASKED_MESSAGE) return detail;
+  if (error.type !== 'invalid_request_error' || detail.type !== 'invalid_request_error') return undefined;
+  return detail;
+};
+
 /**
  * Map an internal failure class to a provider-shaped error for the wire. The
  * CLIENT-FACING message is a fixed, pool-internal-free string per class; the
@@ -119,11 +160,37 @@ export const mapGatewayError = (
   kind: GatewayFailureKind,
   retryAfterSeconds?: number,
   requestedModel?: string,
+  validation?: NativeValidationPublicDetail,
+  requestSize?: RequestSizeDetail,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
-
   switch (kind) {
+    case 'request-body-capacity': {
+      const message = 'Gateway request body capacity is temporarily exhausted; retry later.';
+      const headers = { 'Retry-After': '1', 'x-should-retry': 'true' };
+      return anthropic ? anthropicError(503, 'api_error', message, headers)
+        : openAiError(503, 'api_error', message, 'request_body_capacity', headers);
+    }
+    case 'request-too-large': {
+      const message = requestTooLargeMessage(requestSize);
+      const headers = { 'x-should-retry': 'false' };
+      return anthropic ? anthropicError(413, 'request_too_large', message, headers)
+        : openAiError(413, 'invalid_request_error', message, 'request_too_large', headers);
+    }
+    case 'native-required':
+    case 'native-unavailable': {
+      const message = anthropic
+        ? 'safeguards is not supported by this gateway route; retry without safeguards.'
+        : 'safeguards requires the Anthropic Messages endpoint.';
+      return anthropic ? anthropicError(400, 'invalid_request_error', message)
+        : openAiError(400, 'invalid_request_error', message, 'invalid_request');
+    }
+    case 'native-max-tokens-required': {
+      const message = 'safeguards requires a positive integer max_tokens.';
+      return anthropic ? anthropicError(400, 'invalid_request_error', message)
+        : openAiError(400, 'invalid_request_error', message, 'invalid_request');
+    }
     case 'caller-auth-failed':
       return anthropic
         ? anthropicError(401, 'authentication_error', 'authentication failed')
@@ -192,7 +259,32 @@ export const toProviderShapedError = (
   requestedModel?: string,
 ): ProviderShapedError => {
   if (error instanceof GatewayError) {
-    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel);
+    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, error.validation, error.requestSize);
+  }
+  const tooLarge = requestTooLargeDetail(error);
+  if (tooLarge) return mapGatewayError(wire, 'request-too-large', undefined, requestedModel, undefined, tooLarge.requestSize);
+  if (isNativeMessagesUpstreamError(error)) {
+    if (error instanceof NativeSseUpstreamError && (error.status === 500 || error.status === 529)) {
+      return wire === 'anthropic-messages'
+        ? anthropicError(error.status, error.status === 500 ? 'api_error' : 'overloaded_error', 'upstream request failed')
+        : openAiError(error.status, 'server_error', 'upstream request failed');
+    }
+    if (error.status === 400) {
+      const detail = extractNativeValidationDetail(error);
+      if (detail) {
+        return wire === 'anthropic-messages'
+          ? anthropicError(400, detail.type, detail.message)
+          : openAiError(400, detail.type, detail.message, 'invalid_request');
+      }
+      return mapGatewayError(wire, 'bad-request');
+    }
+    if (error.status === 401 || error.status === 403 || error.type === 'authentication_error') {
+      return mapGatewayError(wire, 'upstream-auth-failed');
+    }
+    if (error.code === 'native_protocol_error') return anthropicError(503, 'api_error', 'upstream protocol failure');
+    if (error.status === 404) return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
+    if (error.status === 429) return mapGatewayError(wire, 'upstream-rate-limited',
+      error.retryAfterMs === undefined ? undefined : error.retryAfterMs / 1000);
   }
   const diagnostic = error && typeof error === 'object'
     ? (error as { diagnostic?: {
@@ -215,6 +307,9 @@ export const toProviderShapedError = (
   if (isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')) {
     return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
   }
+  if (isRoutePlanError(error, 'native-unavailable') || isRouteQuoteError(error, 'native-unavailable')) {
+    return mapGatewayError(wire, 'native-unavailable');
+  }
   // BR-REL-Q7: every known-model no-route without an enrollment diagnostic
   // (checked above) becomes the non-retryable 503. The enrollment-action
   // branch stays unchanged.
@@ -232,6 +327,13 @@ export const toProviderShapedError = (
   return wire === 'anthropic-messages'
     ? anthropicError(503, 'overloaded_error', 'service temporarily unavailable')
     : openAiError(503, 'rate_limit_error', 'service temporarily unavailable', 'overloaded');
+};
+
+/** Preserve the numeric refusal through operational/financial callback failures. */
+export const gatewayRequestTooLargeError = (error: unknown, target?: ResolvedTarget): GatewayError | undefined => {
+  const detail = requestTooLargeDetail(error);
+  return detail ? new GatewayError('request-too-large', 'Request body is too large', undefined,
+    target, undefined, detail.requestSize) : undefined;
 };
 
 /** Map a gateway condition to a provider-shaped error for the given wire (spec §3b). */

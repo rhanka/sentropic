@@ -49,19 +49,19 @@ describe('gateway static leaves', () => {
     expect(session.AuthHonoVerifyToken).toBe(sessionProvider.AuthHonoVerifyToken);
     const snapshot = await modules.probe();
     for (const id of ['gateway', 'gateway/auth', 'gateway/auth-hono'] as const) {
-      expect(snapshot[id]).toMatchObject({ availability: 'available', state: 'loaded', installedVersion: '0.19.1' });
+      expect(snapshot[id]).toMatchObject({ availability: 'available', state: 'loaded', installedVersion: '0.20.0' });
     }
   });
 
-  it('should carry the 0.19 budget admission and 0.22 quote surfaces of the new-minor tuple', async () => {
+  it('should carry budget admission and quote surfaces through the native relay tuple', async () => {
     expect(gatewayLeaf.BudgetConfigurationError).toBe(gatewayProvider.BudgetConfigurationError);
     expect(gatewayLeaf.MAX_BUDGET_RETRY_AFTER_SECONDS).toBe(60);
     expect(meshLeaf.quoteRoute).toBe(meshProvider.quoteRoute);
     const report = verifyClusterMeshTopology({ require: ['llm-mesh', 'gateway'] });
-    expect(report.gateway).toMatchObject({ version: '0.19.1' });
+    expect(report.gateway).toMatchObject({ version: '0.20.0' });
     expect(report.gateway?.llmMesh?.path).toBe(report.llmMesh?.path);
     const snapshot = await createClusterMeshModules().probe();
-    expect(snapshot['llm-mesh']).toMatchObject({ state: 'installed', installedVersion: '0.22.3' });
-    expect(snapshot.gateway).toMatchObject({ state: 'installed', installedVersion: '0.19.1' });
+    expect(snapshot['llm-mesh']).toMatchObject({ state: 'installed', installedVersion: '0.23.0' });
+    expect(snapshot.gateway).toMatchObject({ state: 'installed', installedVersion: '0.20.0' });
   });
 });

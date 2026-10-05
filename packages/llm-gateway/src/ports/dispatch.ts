@@ -12,7 +12,14 @@
  */
 
 import type { SecretAuthMaterial } from '@sentropic/llm-mesh';
+import type { RequestSizeDetail } from '@sentropic/llm-mesh';
 import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult } from '@sentropic/llm-mesh';
+import type { NativeMessagesRequest, NativeMessagesResult, PreparedNativeMessages } from '@sentropic/llm-mesh';
+
+export interface NativeAttemptDispatchRequest {
+  readonly capability: PreparedNativeMessages;
+  readonly request: NativeMessagesRequest;
+}
 
 export interface RouteAttemptDispatchRequest {
   readonly attempt: Pick<PreparedRouteAttempt, 'generate' | 'stream'>;
@@ -21,6 +28,7 @@ export interface RouteAttemptDispatchRequest {
 export interface RouteAttemptDispatchPort {
   generate(input: RouteAttemptDispatchRequest): Promise<GenerateResponse>;
   stream(input: RouteAttemptDispatchRequest): Promise<StreamResult>;
+  nativeMessages?(input: NativeAttemptDispatchRequest): Promise<NativeMessagesResult>;
 }
 
 export type GatewayWire = 'anthropic-messages' | 'openai-chat-completions';
@@ -56,6 +64,8 @@ export type ProviderResponseHeaders = Readonly<Record<string, string>>;
 
 /** Non-stream provider-native response, passed through verbatim. */
 export interface GatewayDispatchResponse {
+  /** Trusted transport measurement for terminal numeric 413; never caller-derived. */
+  readonly requestSize?: RequestSizeDetail;
   readonly status: number;
   readonly body: unknown;
   /** Provider response headers (lowercased). The router forwards the allowlist (#4). */

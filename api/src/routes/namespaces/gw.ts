@@ -10,12 +10,14 @@ import {
 } from '@sentropic/cluster-mesh';
 import { createGatewayNamespaceModule } from '@sentropic/cluster-mesh/compose/gateway';
 import type {
-  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink,
+  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink, NativeCountTokensRateLimiter,
 } from '@sentropic/llm-gateway';
+import { gatewayRequestBodyLimit, type RequestBodyLimitOptions } from '@sentropic/llm-gateway';
 import { sql } from 'drizzle-orm';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { db } from '../../db/client';
+import { logger } from '../../logger';
 import { requireAuth, type AuthUser } from '../../middleware/auth';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { createLlmCallerIdentity, type LlmCallerIdentity } from '../../services/llm-identity/caller-auth';
@@ -25,10 +27,13 @@ import {
   withSettlementMode, type RoutePartitionConfig, type RoutePartitionRevision, type RoutePartitionSource,
 } from '../../services/llm-metering';
 import { createApplicationGatewayRoutePlane } from '../../services/llm-runtime/gateway-route-plane';
+import { gatewayNativeMessagesEnabled } from '../../services/llm-runtime/gateway-native-config';
+import { gatewayStartupRecord, resolveGatewayPackageVersion } from '../../services/llm-runtime/gateway-package-version';
 
 export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
-  '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/chat/completions',
+  // Gateway 0.20 registers the global body-cap middleware and count endpoint.
+  '/*', '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/messages/count_tokens', '/v1/chat/completions',
 ] as const;
 /** Default reserved output ceiling for a request without max tokens (the Claude code default). */
 export const GW_DEFAULT_OUTPUT_TOKENS = 4_096;
@@ -117,6 +122,10 @@ const refused = (what: string) => async (): Promise<never> => {
 type Probed<T> = T & { probe?(): Promise<boolean> };
 
 export interface CreateGwNamespaceModuleOptions {
+  readonly nativeMessagesEnabled?: boolean;
+  /** Trusted deterministic limits; absent options use the process-owned shared pool. */
+  readonly bodyLimit?: RequestBodyLimitOptions;
+  readonly nativeCountRate?: NativeCountTokensRateLimiter;
   readonly enabled?: boolean;
   readonly authenticate?: MiddlewareHandler;
   /** Verified caller → directory-resolved cost context; undefined refuses (401), a throw is 503. */
@@ -145,7 +154,9 @@ const unavailableGwModule = (): ClusterMeshHonoNamespaceModule => ({
 export const createGwNamespaceModule = async (
   options: CreateGwNamespaceModuleOptions = {},
 ): Promise<ClusterMeshHonoNamespaceModule> => {
-  const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane();
+  const nativeMessagesEnabled = options.nativeMessagesEnabled ?? gatewayNativeMessagesEnabled(process.env.LLM_GATEWAY_NATIVE_MESSAGES);
+  logger.info(gatewayStartupRecord(await resolveGatewayPackageVersion(), nativeMessagesEnabled), 'Gateway native startup');
+  const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane({ nativeMessages: nativeMessagesEnabled });
   const identity = options.resolveCaller ? undefined : productIdentity();
   const resolveCaller = options.resolveCaller ?? resolveProductCaller(identity!);
   const ownerRef = `product-api:${control.runtime.generation.generationId}`;
@@ -195,6 +206,7 @@ export const createGwNamespaceModule = async (
         const router = new Hono();
         applyAuthorFence(router);
         router.use('/v1/*', options.authenticate ?? requireAuth);
+        router.use('/v1/*', gatewayRequestBodyLimit(options.bodyLimit));
         router.use('/v1/*', settlementModeMiddleware());
         router.use('/v1/*', async (context, next) => {
           const token = crypto.randomUUID();
@@ -213,6 +225,7 @@ export const createGwNamespaceModule = async (
         });
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
+          nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens, nativeCountRate: options.nativeCountRate,
           budget: { port: budget, defaultOutputTokens: options.defaultOutputTokens ?? GW_DEFAULT_OUTPUT_TOKENS },
         }));
         return router;

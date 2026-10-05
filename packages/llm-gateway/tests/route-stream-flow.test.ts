@@ -6,6 +6,12 @@ import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import { parseSse } from '../src/wire.js';
+import { nativeHarness, nativeStreamHarness, nativeFrame, nativeStart, sendNative, nativeAmount } from './fixtures/native-flow.js';
+import { CACHE_START, NATIVE_MODELS } from './fixtures/native-usage.js';
+import * as nativeUsage from '../src/native-usage.js';
+import * as nativeLife from '../src/native-lifecycle.js';
+import { concatBytes } from '../src/native-sse.js';
+import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import {
   NOW_MS, answerStream, budgetConfig, quotingPlanner, recordingBudget, streamAttempt, type BudgetRecorder,
 } from './fixtures/budget.js';
@@ -55,9 +61,9 @@ const attempt = (events: () => AsyncIterable<StreamEvent>, hooks: string[]): Pre
   async releaseCancelled() { hooks.push('cancelled'); },
 });
 
-const collect = async (stream: AsyncIterable<{ raw: string }>) => {
+const collect = async (stream: AsyncIterable<{ raw: string } | { bytes: Uint8Array }>) => {
   let raw = '';
-  for await (const frame of stream) raw += frame.raw;
+  for await (const frame of stream) raw += 'bytes' in frame ? new TextDecoder().decode(frame.bytes) : frame.raw;
   return raw;
 };
 
@@ -219,7 +225,7 @@ describe('route stream flow', () => {
     }, hooks);
     const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request);
     let raw = '';
-    await expect((async () => { for await (const frame of result.stream) raw += frame.raw; })())
+    await expect((async () => { for await (const frame of result.stream) raw += 'bytes' in frame ? new TextDecoder().decode(frame.bytes) : frame.raw; })())
       .rejects.toThrow('ledger failure');
     expect(raw).not.toContain('[DONE]');
     expect(raw).not.toContain('"finish_reason":"stop"');
@@ -460,6 +466,476 @@ describe('route stream flow', () => {
     expect(settlements[0]).toMatchObject({
       outcome: 'cancelled', attempts: [{ outcome: 'cancelled' }],
     });
+  });
+});
+
+describe('native stream commitment and cancellation', () => {
+  it('relays exact comment/unknown/UTF-8/CRLF bytes and native SSE headers', async () => {
+    const comment = new TextEncoder().encode(': ready\r\n\r\n');
+    const future = new TextEncoder().encode('event: future\ndata: {"text":"é💡"}\n\n');
+    const h = nativeStreamHarness([comment, nativeStart('claude-sonnet-5'), future,
+      nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop')]);
+    const response = await sendNative(h, true);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    expect(response.headers.get('x-sentropic-served')).toBeNull();
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
+    expect(response.headers.get('cache-control')).toBe('no-cache');
+    const raw = new TextDecoder().decode(await response.arrayBuffer());
+    expect(raw).toBe(new TextDecoder().decode(comment) + new TextDecoder().decode(nativeStart(h.model))
+      + new TextDecoder().decode(future) + new TextDecoder().decode(nativeFrame('message_delta', { usage: { output_tokens: 3 } }))
+      + new TextDecoder().decode(nativeFrame('message_stop')));
+    expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.snapshots[0]).toMatchObject({ estimated: false, finalOutputObserved: true, termination: 'completed' });
+  });
+  it('claims one failed snapshot when markCommitted rejects after a valid start', async () => {
+    const h = nativeStreamHarness([nativeStart('claude-sonnet-5')]);
+    h.attempt.markCommitted.mockRejectedValue(Error('commit failed'));
+    await expect(runRouteStreamFlow(h.deps, { ...h.request, stream: true })).rejects.toThrow();
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(h.snapshots[0]).toMatchObject({ termination: 'commit_failed', inputTokens: 2,
+      outputTokens: 1, nativeInputUsageValidated: true, finalOutputObserved: false, estimated: true });
+    expect(h.recorder.settlements[0]!.attempts[0]!.usage).toMatchObject({ inputTokens: 2, outputTokens: 32_000, estimated: true });
+    expect(h.attempt.recordOutcome).toHaveBeenCalledTimes(1);
+  });
+  it('cancels an exposed but never-consumed stream once', async () => {
+    const h = nativeStreamHarness([nativeStart('claude-sonnet-5')]);
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+    await result.stream.return(undefined); await result.stream.return(undefined);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.attempt.releaseCancelled).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.snapshots[0]).toMatchObject({ termination: 'cancelled', finalOutputObserved: false });
+  });
+  it('settles and closes once when caller cancellation interrupts a pending read', async () => {
+    const controller = new AbortController(); const closed = vi.fn(async () => ({ done: true as const, value: undefined }));
+    let reads = 0;
+    const h = nativeHarness({ execute: async () => ({ kind: 'stream', status: 200, headers: {}, body: {
+      [Symbol.asyncIterator]: () => ({ next: () => ++reads === 1
+        ? Promise.resolve({ done: false as const, value: nativeStart('claude-sonnet-5') })
+        : new Promise<IteratorResult<Uint8Array>>(() => {}), return: closed }),
+    } }) });
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true, signal: controller.signal });
+    await result.stream.next(); const pending = result.stream.next();
+    await Promise.resolve(); controller.abort();
+    await expect(pending).resolves.toMatchObject({ done: true });
+    await result.stream.return(undefined);
+    expect(closed).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(h.attempt.releaseCancelled).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it.each([false, true])('requires a final delta before clean stop establishes measured output: delta=%s', async delta => {
+    const h = nativeStreamHarness([nativeStart('claude-sonnet-5'),
+      ...(delta ? [nativeFrame('message_delta', { usage: { output_tokens: 3 } })] : []), nativeFrame('message_stop')]);
+    const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+    await collect(result.stream);
+    expect(h.snapshots[0]).toMatchObject({ finalOutputObserved: delta, estimated: !delta, outputTokens: delta ? 3 : 1 });
+    expect(h.recorder.settlements[0]!.usage.outputTokens).toBe(delta ? 3 : 32_000);
+  });
+});
+
+describe('native cumulative input and pinned stream amounts', () => {
+  const start = { input_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0, output_tokens: 1 };
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].map(clean => ({ model, clean }))))(
+    'prices K1 growth once without a clean output floor: $model clean=$clean', async ({ model, clean }) => {
+      const h = nativeStreamHarness([nativeStart(model, start), nativeFrame('message_delta', { usage: {
+        input_tokens: 150, cache_read_input_tokens: 2000, cache_creation_input_tokens: 0, output_tokens: 500 } }),
+        ...(clean ? [nativeFrame('message_stop')] : [])], { model });
+      const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+      await collect(result.stream);
+      const fable = model === NATIVE_MODELS[2];
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean ? fable ? 1200 : 1350 : fable ? 64_200 : 64_350);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 2150, outputTokens: 500, totalTokens: 2650,
+        nativeInputUsageValidated: true, nativeInputUsageSource: 'message_delta', finalOutputObserved: clean, estimated: !clean });
+      expect(h.recorder.settlements[0]!.usage.outputTokens).toBe(clean ? 500 : 32_000);
+    });
+  it.each([{ input_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0 },
+    { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null }, {},
+    { input_tokens: 100, cache_read_input_tokens: null }, { cache_read_input_tokens: 1000 }])(
+    'keeps equal/absent/nullable cumulative categories without revoking proof: %j', async delta => {
+      const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], start),
+        nativeFrame('message_delta', { usage: { ...delta, output_tokens: 500 } }), nativeFrame('message_stop')]);
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 1100, nativeInputUsageValidated: true, estimated: false });
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(1200);
+    });
+  it.each([{ input_tokens: 99 }, { cache_read_input_tokens: 999 }, { input_tokens: 0 }])(
+    'permanently revokes decreased input even after later growth: %j', async decrease => {
+      const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], start), nativeFrame('message_delta', { usage: decrease }),
+        nativeFrame('message_delta', { usage: { input_tokens: 150, cache_read_input_tokens: 2000, output_tokens: 500 } }),
+        nativeFrame('message_stop')]);
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(h.snapshots[0]).toMatchObject({ nativeInputUsageValidated: false, estimated: true,
+        nativeUsageUncertainty: 'input_breakdown_changed', outputTokens: 500 });
+      expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_000);
+    });
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].map(clean => ({ model, clean }))))(
+    'pins official V-1 cumulative usage: $model clean=$clean', async ({ model, clean }) => {
+      const h = nativeStreamHarness([nativeStart(model, { input_tokens: 2679, cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0, output_tokens: 3 }), nativeFrame('message_delta', { usage: {
+          input_tokens: 10_682, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 510,
+          server_tool_use: { web_search_requests: 1 } } }), ...(clean ? [nativeFrame('message_stop')] : [])],
+      { model, allowanceInput: 20_000 });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean ? 11_702 : 74_682);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_682, outputTokens: 510, totalTokens: 11_192,
+        nativeInputUsageValidated: true, finalOutputObserved: clean, estimated: !clean });
+      expect(JSON.stringify(h.snapshots)).not.toContain('server_tool_use');
+    });
+});
+
+describe('native served-model and substantive-iterations latches', () => {
+  const mixed = { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 250,
+    cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 }, output_tokens: 1 };
+  it.each(NATIVE_MODELS.flatMap(model => [undefined, null, [], [{}], {}, 'malformed', 0, false].map(iterations => ({ model, iterations }))))(
+    'uses the shared empty-iterations predicate and realistic floor: $model iterations=$iterations', async ({ model, iterations }) => {
+      const h = nativeStreamHarness([nativeStart(model, mixed), nativeFrame('message_delta', {
+        usage: { output_tokens: 500, iterations } }), nativeFrame('message_delta', { usage: { iterations: [] } }),
+        nativeFrame('message_stop')], { model });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      const latched = iterations != null && (!Array.isArray(iterations) || iterations.length > 0);
+      const snapshot = h.snapshots[0]!;
+      expect(snapshot).toMatchObject({ inputTokens: 10_350, outputTokens: 500, totalTokens: 10_850,
+        iterationsPresent: latched, nativeInputUsageValidated: !latched, estimated: latched, finalOutputObserved: true });
+      const charged = h.recorder.settlements[0]!.attempts[0]!.usage;
+      expect(nativeAmount(charged)).toBe(latched ? 74_350 : model === NATIVE_MODELS[2] ? 1700 : 2450);
+      expect(charged.outputTokens).toBe(latched ? 32_000 : 500);
+      if (latched) {
+        expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+        expect(snapshot.nativeUsageUncertainty).toBe('served_model_mismatch');
+        expect(charged.outputTokens / snapshot.outputTokens!).toBe(64);
+      } else expect(snapshot.nativeUsageUncertainty).toBeUndefined();
+      expect(JSON.stringify(snapshot.rawUsage)).not.toContain('iterations');
+    });
+  it.each(NATIVE_MODELS.flatMap(model => ['mismatch', 'fallback', 'iterations'].map(cause => ({ model, cause }))))(
+    'keeps a late latch after valid input even if later evidence looks normal: $model $cause', async ({ model, cause }) => {
+      const other = model === NATIVE_MODELS[2] ? NATIVE_MODELS[1] : NATIVE_MODELS[2];
+      const trigger = cause === 'mismatch' ? nativeStart(other, mixed)
+        : cause === 'fallback' ? nativeFrame('content_block_start', { content_block: { type: 'fallback', fallback_credit_token: 'opaque' } })
+          : nativeFrame('message_delta', { usage: { iterations: [{ input_tokens: 999_999, output_tokens: 999_999 }] } });
+      const h = nativeStreamHarness([nativeStart(model, mixed), trigger,
+        ...(cause === 'mismatch' ? [nativeStart(model, mixed)] : []),
+        nativeFrame('message_delta', { usage: { output_tokens: 500, iterations: null } }), nativeFrame('message_stop')], { model });
+      const wire = await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(wire).toContain(new TextDecoder().decode(trigger));
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_350, outputTokens: 500, nativeInputUsageValidated: false,
+        nativeUsageUncertainty: 'served_model_mismatch', estimated: true });
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_350);
+      expect(JSON.stringify(h.snapshots)).not.toContain('fallback_credit_token');
+      expect(JSON.stringify(h.snapshots)).not.toContain('999999');
+      expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    });
+});
+
+describe('native finalize parity and independent cleanup', () => {
+  it.each(['clean', 'cancel', 'commit', 'eof', 'overflow', 'reader', 'upstream'] as const)(
+    'shares one snapshot and releases the reader/lease seam before a never-settling hook: %s', async cause => {
+      vi.useFakeTimers();
+      const snapshotSpy = vi.spyOn(nativeUsage.NativeUsageObserver.prototype, 'snapshot');
+      const projectionSpy = vi.spyOn(nativeUsage, 'nativeSnapshotUsage');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const leaseReleased = vi.fn();
+      const closed = vi.fn(async () => { leaseReleased(); return { done: true as const, value: undefined }; });
+      try {
+        const chunks = [nativeStart(NATIVE_MODELS[0])];
+        if (cause === 'clean') chunks.push(nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop'));
+        if (cause === 'overflow') chunks.push(new Uint8Array(1_048_577).fill(65));
+        if (cause === 'upstream') chunks.push(nativeFrame('error', { error: { type: 'rate_limit_error', message: 'secret' } }));
+        let index = 0;
+        const h = nativeHarness({ finalize: () => new Promise<void>(() => {}), execute: async () => ({
+          kind: 'stream', status: 200, headers: {}, body: { [Symbol.asyncIterator]: () => ({
+            next: async () => {
+              if (index < chunks.length) return { done: false as const, value: chunks[index++]! };
+              if (cause === 'reader') throw Error('private reader failure');
+              return { done: true as const, value: undefined };
+            }, return: closed,
+          }) },
+        }) });
+        if (cause === 'commit') h.attempt.markCommitted.mockRejectedValue(Error('private commit failure'));
+        if (cause === 'commit') await expect(runRouteStreamFlow(h.deps, { ...h.request, stream: true })).rejects.toThrow();
+        else {
+          const result = await runRouteStreamFlow(h.deps, { ...h.request, stream: true });
+          if (cause === 'cancel') await result.stream.return(undefined);
+          else await collect(result.stream);
+          await result.stream.return(undefined);
+        }
+        const snapshot = h.finalize.mock.calls[0]![0]!;
+        expect(h.finalize).toHaveBeenCalledTimes(1); expect(snapshotSpy).toHaveBeenCalledTimes(1);
+        expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+        expect(projectionSpy).toHaveBeenCalledExactlyOnceWith(snapshot);
+        expect(Object.isFrozen(snapshot)).toBe(true); expect(Object.isFrozen(snapshot.rawUsage)).toBe(true);
+        expect(h.recorder.settlements).toHaveLength(1);
+        expect(closed).toHaveBeenCalledTimes(1); expect(leaseReleased).toHaveBeenCalledTimes(1);
+        expect(h.recorder.settlements[0]!.attempts[0]!.usage).toMatchObject({
+          inputTokens: snapshot.inputTokens, outputTokens: cause === 'clean' ? snapshot.outputTokens : 32_000,
+          estimated: snapshot.estimated, nativeInputUsageSource: snapshot.nativeInputUsageSource,
+          nativeUsageUncertainty: snapshot.nativeUsageUncertainty,
+        });
+        expect(vi.getTimerCount()).toBe(1);
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(h.recorder.settlements).toHaveLength(1); expect(leaseReleased).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledExactlyOnceWith('Native observation unavailable', {
+          requestId: 'req-native', attemptRef: 'attempt', reason: 'hook_timeout' });
+      } finally { snapshotSpy.mockRestore(); projectionSpy.mockRestore(); warn.mockRestore(); vi.useRealTimers(); }
+    });
+  it.each(['reject', 'throw', 'never'] as const)('completes JSON accounting independently of observation: %s', async mode => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const snapshotSpy = vi.spyOn(nativeUsage.NativeUsageObserver.prototype, 'snapshot');
+    const projectionSpy = vi.spyOn(nativeUsage, 'nativeSnapshotUsage');
+    try {
+      const h = nativeHarness({ finalize: () => {
+        if (mode === 'throw') throw Error('private hook failure');
+        return mode === 'reject' ? Promise.reject(Error('private hook failure')) : new Promise<void>(() => {});
+      } });
+      await expect(runRouteJsonFlow(h.deps, h.request)).resolves.toMatchObject({ status: 200, relay: 'native' });
+      const snapshot = h.finalize.mock.calls[0]![0]!;
+      expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+      expect(projectionSpy).toHaveBeenCalledExactlyOnceWith(snapshot);
+      expect(h.attempt.complete).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('private hook failure');
+    } finally { warn.mockRestore(); snapshotSpy.mockRestore(); projectionSpy.mockRestore(); vi.useRealTimers(); }
+  });
+});
+
+describe('SDK-shaped one-hour cache deltas and pinned amounts', () => {
+  const cases = [
+    { name: 'equal-no-split', delta: { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 200 }, growth: false },
+    { name: 'aggregate-only', delta: { cache_creation_input_tokens: 200 }, growth: false },
+    { name: 'nullable', delta: { input_tokens: 100, cache_read_input_tokens: null, cache_creation_input_tokens: null }, growth: false },
+    { name: 'all-null', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: null }, growth: false },
+    { name: 'omitted', delta: {}, growth: false },
+    { name: 'growth', delta: { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300 }, growth: true },
+  ];
+  const matrix = NATIVE_MODELS.flatMap(model => [false, true].flatMap(clean => ['1h', 'unknown'].flatMap(ttl =>
+    cases.map(test => ({ model, clean, ttl, ...test })))));
+  it.each(matrix)('inherits/reprices only growth: $model $name ttl=$ttl clean=$clean', async ({ model, clean, ttl, delta, growth }) => {
+    const h = nativeStreamHarness([nativeStart(model, CACHE_START),
+      nativeFrame('message_delta', { usage: { ...delta, output_tokens: 500 } }),
+      nativeFrame('message_delta', { usage: delta }), ...(clean ? [nativeFrame('message_stop')] : [])], {
+      model, allowanceInput: 10_300, body: { system: [{ type: 'text', text: 'cached', cache_control: { type: 'ephemeral', ttl } }] },
+    });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    const fable = model === NATIVE_MODELS[2];
+    const expected = growth ? clean ? fable ? 1950 : 2700 : fable ? 64_950 : 65_700
+      : clean ? fable ? 1750 : 2500 : fable ? 64_750 : 65_500;
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(expected);
+    expect(h.snapshots[0]).toMatchObject({ inputTokens: growth ? 10_400 : 10_300, outputTokens: 500,
+      totalTokens: growth ? 10_900 : 10_800, nativeInputUsageValidated: true, estimated: !clean, finalOutputObserved: clean,
+      rawUsage: { cache_creation_input_tokens: growth ? 300 : 200,
+        cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } } });
+    expect(h.snapshots[0]!.nativeInputPriceUnits40).toBe(growth ? fable ? 38_000 : 68_000 : fable ? 30_000 : 60_000);
+    expect(h.snapshots[0]!.nativeCacheWriteSplitReason).toBe(growth ? 'cache_write_split_inferred' : undefined);
+    expect(h.snapshots[0]!.nativeUsageUncertainty).toBe(clean ? undefined : 'incomplete_output');
+  });
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].map(clean => ({ model, clean }))))(
+    'preserves mixed prior allocation and prices only +100 at 2x: $model clean=$clean', async ({ model, clean }) => {
+      const h = nativeStreamHarness([nativeStart(model, { ...CACHE_START, cache_creation_input_tokens: 250,
+        cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 } }),
+        nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 350, output_tokens: 500 } }),
+        ...(clean ? [nativeFrame('message_stop')] : [])], { model,
+        body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(clean
+        ? model === NATIVE_MODELS[2] ? 1900 : 2650 : model === NATIVE_MODELS[2] ? 64_900 : 65_650);
+      expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_450, outputTokens: 500,
+        rawUsage: { cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 } } });
+    });
+  it.each(NATIVE_MODELS)('keeps eligible default-TTL growth at 1.25x: %s', async model => {
+    const h = nativeStreamHarness([nativeStart(model, { ...CACHE_START,
+      cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 0 } }),
+      nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 300, output_tokens: 500 } }),
+      nativeFrame('message_stop')], { model });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(model === NATIVE_MODELS[2] ? 1725 : 2475);
+    expect(h.snapshots[0]!.nativeCacheWriteSplitReason).toBeUndefined();
+  });
+  it.each([{ cache_creation_input_tokens: 199 }, { cache_creation_input_tokens: 199,
+    cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 199 } },
+    { cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 201 } }])(
+    'revokes a supplied aggregate/split decrease or conflict permanently: %j', async delta => {
+      const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], CACHE_START), nativeFrame('message_delta', { usage: delta }),
+        nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 200, output_tokens: 500 } }), nativeFrame('message_stop')],
+      { allowanceInput: 10_300, body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(h.snapshots[0]).toMatchObject({ nativeInputUsageValidated: false, estimated: true, inputTokens: 10_300 });
+      expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+      expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_300);
+    });
+});
+
+describe('typed native finalize timeout and late results', () => {
+  it.each(['resolve', 'reject'] as const)('ignores late %s after the exact 1000-ms bound without repeating lifecycle work', async mode => {
+    vi.useFakeTimers();
+    const factory = vi.spyOn(nativeLife, 'nativeLifecycle');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const closed = vi.fn(async () => ({ done: true as const, value: undefined }));
+    let resolve!: () => void; let reject!: (error: Error) => void;
+    const deferred = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    try {
+      const chunks = [nativeStart(NATIVE_MODELS[0]), nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop')];
+      let index = 0;
+      const h = nativeHarness({ finalize: () => deferred, execute: async () => ({ kind: 'stream', status: 200, headers: {},
+        body: { [Symbol.asyncIterator]: () => ({ next: async () => index < chunks.length
+          ? { done: false as const, value: chunks[index++]! } : { done: true as const, value: undefined }, return: closed }) } }) });
+      await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      const lifecycle = factory.mock.results[0]!.value as ReturnType<typeof nativeLife.nativeLifecycle>;
+      const snapshot = lifecycle.snapshot;
+      const results: nativeLife.NativeFinalizeResult[] = [];
+      void lifecycle.observation!.then(value => { results.push(value); });
+      expect(h.recorder.settlements).toHaveLength(1); expect(closed).toHaveBeenCalledTimes(1);
+      expect(h.attempt.complete).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(999); expect(results).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(results).toEqual([{ kind: 'observation_unavailable', reason: 'hook_timeout' }]);
+      expect(vi.getTimerCount()).toBe(0);
+      if (mode === 'resolve') resolve(); else reject(Error('private late failure'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lifecycle.finish('cancelled')).toBe(snapshot);
+      expect(lifecycle.snapshot).toBe(h.finalize.mock.calls[0]![0]);
+      expect(results).toHaveLength(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+      expect(h.attempt.complete).toHaveBeenCalledTimes(1); expect(closed).toHaveBeenCalledTimes(1);
+      expect(h.recorder.settlements).toHaveLength(1);
+      expect(warn).toHaveBeenCalledTimes(1); expect(JSON.stringify(warn.mock.calls)).not.toContain('private late failure');
+    } finally { factory.mockRestore(); warn.mockRestore(); vi.useRealTimers(); }
+  });
+  it.each(['absent', 'completed', 'throw', 'reject'] as const)('returns a closed typed result and clears its timer: %s', async mode => {
+    vi.useFakeTimers();
+    try {
+      const snapshot = new nativeUsage.NativeUsageObserver(NATIVE_MODELS[0]).snapshot('protocol_error');
+      const hook = mode === 'absent' ? undefined : () => {
+        if (mode === 'throw') throw Error('private hook failure');
+        return mode === 'reject' ? Promise.reject(Error('private hook failure')) : Promise.resolve();
+      };
+      const result = await nativeLife.finalizeNativeObservation(hook, snapshot);
+      expect(result).toEqual(mode === 'absent' || mode === 'completed' ? { kind: mode }
+        : { kind: 'observation_unavailable', reason: 'hook_error' });
+      expect(vi.getTimerCount()).toBe(0); expect(snapshot.termination).toBe('protocol_error');
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('N5 malformed native input and physical lower bounds', () => {
+  it.each(NATIVE_MODELS.flatMap(model => [false, true].flatMap(clean => ['10000.5', '9e400', '9007199254740992'].map(value => ({ model, clean, value })))))(
+    'malformed_one_hour_delta_charges_74300: $model clean=$clean input=$value', async ({ model, clean, value }) => {
+      const malformed = new TextEncoder().encode('event: message_delta\ndata: {"type":"message_delta","usage":{'
+        + `"input_tokens":${value},"cache_read_input_tokens":10000,"cache_creation_input_tokens":200,"output_tokens":500}}\n\n`);
+      const h = nativeStreamHarness([nativeStart(model, CACHE_START), malformed,
+        ...(clean ? [nativeFrame('message_stop')] : [])], { model, allowanceInput: 10_300,
+        body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+      const wire = await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+      expect(wire).toContain(new TextDecoder().decode(malformed));
+      const snapshot = h.snapshots[0]!;
+      expect(snapshot).toMatchObject({ inputTokens: 10_300, outputTokens: 500, totalTokens: 10_800,
+        nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input', estimated: true,
+        finalOutputObserved: clean, rawUsage: { input_tokens: 100, cache_creation_input_tokens: 200 } });
+      expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+      const charged = h.recorder.settlements[0]!.attempts[0]!.usage;
+      expect(charged).toMatchObject({ inputTokens: 10_300, outputTokens: 32_000, estimated: true });
+      expect(nativeAmount(charged)).toBe(74_300);
+      expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    });
+  it('never restores malformed pricing proof after later safe cumulative growth', async () => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], CACHE_START),
+      nativeFrame('message_delta', { usage: { input_tokens: 10_000.5, output_tokens: 500 } }),
+      nativeFrame('message_delta', { usage: { input_tokens: 101, output_tokens: 500 } }), nativeFrame('message_stop')],
+    { allowanceInput: 20_000 });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_301, outputTokens: 500, nativeInputUsageValidated: false,
+      nativeUsageUncertainty: 'invalid_input', estimated: true });
+    expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(84_000);
+  });
+  it('advances a latched nullable physical lower bound once and rejects malformed/decreasing candidates', async () => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0], CACHE_START),
+      nativeFrame('message_delta', { usage: { iterations: [{}], output_tokens: 500 } }),
+      ...[300, 300, 299, 300.5].map(aggregate => nativeFrame('message_delta', { usage: {
+        input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: aggregate } })), nativeFrame('message_stop')],
+    { allowanceInput: 10_300, body: { future: { cache_control: { type: 'ephemeral', ttl: '1h' } } } });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(h.snapshots[0]).toMatchObject({ inputTokens: 10_400, outputTokens: 500, nativeInputUsageValidated: false,
+      nativeUsageUncertainty: 'served_model_mismatch', estimated: true });
+    expect(h.snapshots[0]!.nativeInputPriceUnits40).toBeUndefined();
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(74_400);
+  });
+});
+
+describe('native safeguards, errors, EOF and overflow', () => {
+  it('relays opaque delta safeguard_results unchanged across every single-byte split', async () => {
+    const results = { future: { unicode: 'é💡', nested: [null, false, { kept: 7 }] } };
+    const delta = nativeFrame('message_delta', { delta: { safeguard_results: results }, usage: { output_tokens: 3 } });
+    const bytes = concatBytes([nativeStart(NATIVE_MODELS[0]), delta, nativeFrame('message_stop')]);
+    const h = nativeStreamHarness(Array.from(bytes, (_, index) => bytes.subarray(index, index + 1)));
+    const wire = await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(wire).toBe(new TextDecoder().decode(bytes));
+    expect(h.snapshots[0]).toMatchObject({ estimated: false, finalOutputObserved: true });
+    expect(JSON.stringify(h.snapshots)).not.toContain('safeguard_results');
+  });
+  const types = [ ['invalid_request_error', 400], ['authentication_error', 401], ['permission_error', 401],
+    ['not_found_error', 404], ['request_too_large', 413], ['rate_limit_error', 429], ['api_error', 500], ['overloaded_error', 529] ] as const;
+  it.each(types)('maps pre-commit %s to HTTP %s with one estimated settlement', async (type, status) => {
+    const h = nativeStreamHarness([nativeFrame('error', { error: { type, message: 'future_field: invalid value' }, secret: 'hidden' })]);
+    const response = await sendNative(h, true);
+    expect(response.status).toBe(status); expect(response.headers.get('x-sentropic-relay')).toBeNull();
+    expect(h.attempt.markCommitted).not.toHaveBeenCalled(); expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.recorder.settlements[0]!.usage).toMatchObject({ inputTokens: 10_000, outputTokens: 32_000, estimated: true });
+    expect(h.snapshots[0]).toMatchObject({ termination: 'upstream_error', finalOutputObserved: false, estimated: true });
+  });
+  it.each(types)('keeps committed HTTP 200 and sanitized late %s without a terminator', async (type) => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0]), nativeFrame('error', {
+      error: { type, message: 'future_field: invalid value' }, secret: 'hidden' })]);
+    const response = await sendNative(h, true);
+    const wire = await response.text();
+    expect(response.status).toBe(200); expect(wire).toContain(`"type":"${type}"`);
+    expect(wire).not.toContain('hidden'); expect(wire).not.toContain('message_stop');
+    if (type === 'invalid_request_error') expect(wire).toContain('future_field: invalid value');
+    else expect(wire).not.toContain('future_field: invalid value');
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+    expect(h.recorder.settlements[0]!.attempts[0]!.usage).toMatchObject({ inputTokens: 2, outputTokens: 32_000, estimated: true });
+  });
+  it.each(['empty', 'partial', 'overflow'] as const)('rejects %s before a complete frame without commitment', async cause => {
+    const chunks = cause === 'empty' ? [] : [cause === 'partial' ? new TextEncoder().encode('data: partial')
+      : new Uint8Array(1_048_577).fill(65)];
+    const h = nativeStreamHarness(chunks);
+    const response = await sendNative(h, true);
+    expect(response.status).toBe(503); expect(h.attempt.markCommitted).not.toHaveBeenCalled();
+    expect(response.headers.get('x-sentropic-served')).toBeNull();
+    expect(h.execute).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it.each(['eof', 'overflow', 'unknown'] as const)('emits one fixed api_error after commitment on %s', async cause => {
+    const start = nativeStart(NATIVE_MODELS[0]);
+    const chunks = cause === 'eof' ? [start] : cause === 'overflow'
+      ? [concatBytes([start, new Uint8Array(1_048_577).fill(65)])]
+      : [start, nativeFrame('error', { error: { type: 'unknown_type', message: 'hidden' } })];
+    const h = nativeStreamHarness(chunks);
+    const response = await sendNative(h, true);
+    const wire = await response.text();
+    expect(response.status).toBe(200); expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1);
+    expect(wire).toContain('"type":"api_error","message":"stream failed after commitment"');
+    expect(wire.match(/event: error/g)).toHaveLength(1); expect(wire).not.toContain('message_stop');
+    expect(nativeAmount(h.recorder.settlements[0]!.attempts[0]!.usage)).toBe(64_002);
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it('retries a pre-commit rate error on an already-planned native candidate and settles once', async () => {
+    const h = nativeStreamHarness([nativeStart(NATIVE_MODELS[0]), nativeFrame('message_delta', { usage: { output_tokens: 3 } }), nativeFrame('message_stop')]);
+    const plan = h.deps.routePlanner.plan;
+    h.deps.routePlanner.plan = async (...args) => {
+      const value = await plan(...args);
+      return { ...value, candidateRefs: ['candidate-0', 'candidate-1'],
+        diagnostics: [value.diagnostics[0]!, { ...value.diagnostics[0]!, candidateRef: 'candidate-1' }] };
+    };
+    h.deps.routePlanner.prepareAttempt = async () => h.attempt;
+    h.execute.mockResolvedValueOnce({ kind: 'stream', status: 200, headers: {},
+      body: (async function* () { yield nativeFrame('error', { error: { type: 'rate_limit_error', message: 'hidden' } }); })() });
+    await collect((await runRouteStreamFlow(h.deps, { ...h.request, stream: true })).stream);
+    expect(h.execute).toHaveBeenCalledTimes(2); expect(h.attempt.generate).not.toHaveBeenCalled();
+    expect(h.finalize).toHaveBeenCalledTimes(2); expect(h.attempt.markCommitted).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.recorder.settlements[0]!.attempts).toHaveLength(2);
   });
 });
 

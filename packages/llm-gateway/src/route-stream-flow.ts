@@ -1,15 +1,20 @@
-import type { PreparedRouteAttempt, StreamEvent, RouteFailureClassification } from '@sentropic/llm-mesh';
+import type { NativeMessagesRequest, PreparedRouteAttempt, StreamEvent, RouteFailureClassification } from '@sentropic/llm-mesh';
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, routeUsage,
-  settleRouteRequest, terminalGatewayError,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, routeUsage,
+  settleRouteRequest, terminalGatewayError, retainRouteBody,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 import type { GatewayDispatchStreamEvent } from './ports/dispatch.js';
+import { assertNativeMessagesResult, buildNativeMessagesRequest, NativeAttemptRefusal, nativeResponseReader, prepareNativeMessages } from './route-native.js';
+import { dispatchNativeMessages } from './route-attempt-dispatch.js';
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import { NativeUsageObserver, nativeDefaultTtlEligible } from './native-usage.js';
+import { nativeStreamExecution, nativeStreamTermination } from './route-native-stream.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown): SettleUsage | undefined => {
@@ -38,6 +43,7 @@ const trackedExecution = (input: {
   const { attempt, iterator, prepared, request, target } = input;
   const signal = request.signal ?? request.authContext.signal;
   let terminal: RouteFailureClassification['reason'] | undefined;
+  let refusal: GatewayError | undefined;
   let finishing: Promise<void> | undefined;
   let closing: Promise<unknown> | undefined;
   let outputCharacters = 0;
@@ -45,7 +51,8 @@ const trackedExecution = (input: {
   let priming = true;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
   const isCancelled = () => terminal === 'cancelled';
-  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
+  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.())
+    .catch(() => undefined).finally(() => request.bodyLease?.release());
   const usage = (): SettleUsage => reported ?? ({
     inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
     outputTokens: Math.min(1_000_000, Math.ceil(outputCharacters / 4)), estimated: true,
@@ -103,7 +110,8 @@ const trackedExecution = (input: {
       if (terminal) throw error; // callback failure: never record/settle again
       reported = errorUsage(error) ?? reported;
       const classification = classifyRouteError(error, signal?.aborted);
-      await finish(classification);
+      refusal = gatewayRequestTooLargeError(error, target);
+      try { await finish(classification); } catch (callbackError) { if (!refusal) throw callbackError; }
       if (classification.reason !== 'cancelled') yield { type: 'error', data: {
         providerId: target.providerId as never,
         message: 'stream failed after commitment', retryable: false,
@@ -145,7 +153,8 @@ const trackedExecution = (input: {
     priming = false;
     if (input.first.type === 'done') await finish({ reason: 'success', retryable: false, healthScope: 'route' });
   };
-  return { encoded, expose, commit, get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
+  return { encoded, expose, commit, get refusal() { return refusal; },
+    get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
 };
 
 export const runRouteStreamFlow = async (
@@ -153,9 +162,11 @@ export const runRouteStreamFlow = async (
   request: GatewayFlowRequest,
 ): Promise<GatewayStreamResult> => {
   const prepared = await prepareRouteFlow(deps, request);
+  retainRouteBody(prepared, request);
   const attempts: RouteAttemptSettlement[] = [];
   const signal = request.signal ?? request.authContext.signal;
   let settled = false;
+  let nativeInvoked = false;
   const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
     if (settled) return;
     settled = true;
@@ -169,6 +180,8 @@ export const runRouteStreamFlow = async (
     let committed = false;
     let invoked = false;
     let execution: ReturnType<typeof trackedExecution> | undefined;
+    let nativeExecution: ReturnType<typeof nativeStreamExecution> | undefined;
+    let committingNative = false;
     try {
       signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
@@ -176,8 +189,37 @@ export const runRouteStreamFlow = async (
       );
       const preparedAttempt = attempt;
       signal?.throwIfAborted();
+      const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
+      if (nativeInvoked && !native) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
+      signal?.throwIfAborted();
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
+      if (native) {
+        const controller = new AbortController();
+        let nativeRequest: NativeMessagesRequest | undefined = buildNativeMessagesRequest(prepared, request, native, controller.signal);
+        nativeExecution = nativeStreamExecution({ attempt: preparedAttempt, controller, signal,
+          requestId: nativeRequest.requestId, finalize: nativeRequest.finalize,
+          observer: new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body)),
+          target: servedTargetFor(diagnostic), candidateRef, attempts, settle,
+          features: { requestSafeguards: Object.hasOwn(nativeRequest.body, 'safeguards'),
+            sentBetas: [nativeRequest.headers.forwarded['anthropic-beta'] ?? ''] } });
+        nativeInvoked = true;
+        const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
+        // N1: execute has finished/cancelled upload and exposes response-only host state.
+        nativeRequest = undefined;
+        const reader = nativeResponseReader(result);
+        if (reader) nativeExecution.attach(reader, result.requestSize);
+        assertNativeMessagesResult(result, 'stream');
+        if (result.kind !== 'stream') throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
+        await nativeExecution.prime();
+        committed = true;
+        committingNative = true;
+        await preparedAttempt.markCommitted();
+        signal?.throwIfAborted();
+        request.bodyLease?.detach();
+        return { relay: 'native', servedTarget: servedTargetFor(diagnostic), headers: result.headers,
+          stream: nativeExecution.expose() };
+      }
       const source = await (deps.dispatch ?? defaultDispatch).stream({ attempt: preparedAttempt, request: {
         ...prepared.canonical.request,
         ...(signal ? { signal } : {}),
@@ -208,7 +250,7 @@ export const runRouteStreamFlow = async (
       const buffered: GatewayDispatchStreamEvent[] = [];
       do {
         const frame = await execution.encoded.next();
-        if (execution.terminal) throw terminalGatewayError(
+        if (execution.terminal) throw execution.refusal ?? terminalGatewayError(
           { reason: execution.terminal, retryable: false, healthScope: 'route' },
           servedTargetFor(diagnostic), 'stream failed before commitment');
         if (frame.done || typeof frame.value.raw !== 'string' || !frame.value.raw) throw Error('empty encoded stream');
@@ -220,12 +262,25 @@ export const runRouteStreamFlow = async (
       await execution.commit();
       return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(buffered) };
     } catch (error) {
+      if (nativeExecution) {
+        const classification = classifyRouteError(error, signal?.aborted);
+        const termination = signal?.aborted ? 'cancelled' : committingNative ? 'commit_failed'
+          : nativeStreamTermination(error);
+        await Promise.allSettled([nativeExecution.finish(classification, termination, false), nativeExecution.close()]);
+        if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
+        try { await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed'); } catch { /* Original refusal wins. */ }
+        throw gatewayRequestTooLargeError(error)
+          ?? (error instanceof NativeMessagesUpstreamError ? error : new NativeMessagesUpstreamError({ status: 503 }));
+      }
       if (execution?.terminal) {
         try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
-        throw error;
+        throw execution.refusal ?? error;
       }
       if (error instanceof BudgetDispatchMarkError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
+      }
+      if (error instanceof NativeAttemptRefusal) {
+        throw await refuseNativeAttempt(attempt, () => settle('failed'));
       }
       try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
       const classification = classifyRouteError(error, signal?.aborted);
@@ -240,7 +295,7 @@ export const runRouteStreamFlow = async (
         outcome: classification.reason, usage,
       });
       const terminal = () => terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned streams failed',
+        classification, servedTargetFor(diagnostic), 'all planned streams failed', error,
       );
       try {
         if (attempt) {

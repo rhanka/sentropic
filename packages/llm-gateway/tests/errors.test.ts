@@ -7,10 +7,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
 import {
   GatewayError,
   mapGatewayError,
+  NATIVE_BILLING_MASKED_MESSAGE,
+  parseNativeErrorDetail,
+  sanitizeNativeErrorMessage,
   toProviderShapedError,
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
@@ -403,5 +406,148 @@ describe('error mapping through the router (integration)', () => {
     expect(text).not.toContain('no_account');
     expect(text).not.toContain('lease');
     expect(text).not.toContain('reservation');
+  });
+
+  it('maps native-unavailable and structural refusals to safeguards 400 on both wires', () => {
+    for (const error of [
+      new GatewayError('native-unavailable', 'native route unavailable'),
+      new RoutePlanError('native unavailable', 'native-unavailable'),
+      new RouteQuoteError('native unavailable', 'native-unavailable'),
+    ]) {
+      const a = toProviderShapedError('anthropic-messages', error);
+      expect(a.status).toBe(400);
+      expect(a.body).toEqual({
+        type: 'error', error: { type: 'invalid_request_error',
+          message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+      });
+      const o = toProviderShapedError('openai-chat-completions', error);
+      expect(o.status).toBe(400);
+      expect(o.body).toEqual({
+        error: { type: 'invalid_request_error', code: 'invalid_request',
+          message: 'safeguards requires the Anthropic Messages endpoint.' },
+      });
+    }
+  });
+
+  it('maps typed native validation public detail without leaking internal error message', () => {
+    const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
+    const upstreamError = new NativeMessagesUpstreamError({
+      status: 400,
+      type: 'invalid_request_error',
+      validation: detail,
+    });
+
+    const a = toProviderShapedError('anthropic-messages', upstreamError);
+    expect(a.status).toBe(400);
+    expect(a.body).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'provider validation failure' } });
+
+    const o = toProviderShapedError('openai-chat-completions', upstreamError);
+    expect(o.status).toBe(400);
+    expect(o.body).toEqual({ error: { type: 'invalid_request_error', message: 'provider validation failure', code: 'invalid_request' } });
+  });
+
+  it('restricts public validation relay to trusted native-validation 400 errors and retains fixed mappings', () => {
+    const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
+    const forged = { name: 'NativeMessagesUpstreamError', status: 400, type: 'invalid_request_error', validation: detail };
+    const genericBadRequest = new GatewayError('bad-request', 'secret log', undefined, undefined, detail);
+    const absentType = new NativeMessagesUpstreamError({ status: 400, validation: detail });
+    const longEmoji = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: '😀'.repeat(2048) } });
+    const controlError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: 'invalid\u0000 value' } });
+    const malformedBilling = new NativeMessagesUpstreamError({ status: 400, validation: { type: 'invalid_request_error', message: 'Your credit balance is too low.' } });
+    const upstream500 = new NativeMessagesUpstreamError({ status: 500, type: 'api_error', validation: detail });
+    const authError = new GatewayError('caller-auth-failed', 'internal auth failure', undefined, undefined, detail);
+    const upstream401 = new NativeMessagesUpstreamError({ status: 401, type: 'authentication_error', validation: detail });
+
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const arbMapped = toProviderShapedError(wire, forged);
+      expect(arbMapped.status).toBe(503);
+      expect(JSON.stringify(arbMapped)).not.toContain('provider validation failure');
+
+      const gwMapped = toProviderShapedError(wire, genericBadRequest);
+      expect(gwMapped.status).toBe(400);
+      expect(JSON.stringify(gwMapped)).not.toContain('provider validation failure');
+      expect(JSON.stringify(gwMapped)).toContain('invalid request');
+
+      const absentMapped = toProviderShapedError(wire, absentType);
+      expect(absentMapped.status).toBe(400);
+      expect(JSON.stringify(absentMapped)).not.toContain('provider validation failure');
+      expect(JSON.stringify(absentMapped)).toContain('invalid request');
+
+      const emojiMapped = toProviderShapedError(wire, longEmoji);
+      expect(emojiMapped.status).toBe(400);
+      const emojiMsg = (emojiMapped.body as { error: { message: string } }).error.message;
+      expect(new TextEncoder().encode(emojiMsg).length).toBeLessThanOrEqual(4096);
+
+      const ctrlMapped = toProviderShapedError(wire, controlError);
+      expect(ctrlMapped.status).toBe(400);
+      const ctrlMsg = (ctrlMapped.body as { error: { message: string } }).error.message;
+      expect(ctrlMsg).toBe('invalid value');
+      expect(ctrlMsg).not.toContain('\u0000');
+
+      const billMapped = toProviderShapedError(wire, malformedBilling);
+      expect(billMapped.status).toBe(400);
+      expect(JSON.stringify(billMapped)).toContain(NATIVE_BILLING_MASKED_MESSAGE);
+
+      expect(toProviderShapedError(wire, upstream500).status).toBe(503);
+      expect(toProviderShapedError(wire, authError).status).toBe(401);
+      expect(toProviderShapedError(wire, upstream401).status).toBe(401);
+    }
+  });
+
+  it('should mask billing when a processed marker is forged or parser values are changed on both wires', () => {
+    const billing = 'Your credit balance is too low. Organization account 123.';
+    const parsed = parseNativeErrorDetail(JSON.stringify({ error: {
+      type: 'invalid_request_error', message: 'max_tokens: invalid value',
+    } }), 400);
+    const forged = { type: 'invalid_request_error', message: billing,
+      [Symbol.for('@sentropic/llm-gateway/native-validation-processed')]: true };
+    // Mutation must fail; a changed copy must be processed again.
+    const mutated = Reflect.set(parsed, 'message', billing);
+    const changed = { ...parsed, message: billing };
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      for (const validation of [forged, changed, ...(mutated ? [parsed] : [])]) {
+        const mapped = toProviderShapedError(wire, new NativeMessagesUpstreamError({
+          status: 400, type: 'invalid_request_error', validation,
+        }));
+        expect((mapped.body as { error: { message: string } }).error.message).toBe(NATIVE_BILLING_MASKED_MESSAGE);
+      }
+    }
+    expect(mutated).toBe(false);
+    expect(Reflect.set(parsed, 'type', 'api_error')).toBe(false);
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+
+  it('should apply the bounded policy to unprocessed oversize detail on both wires', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, new NativeMessagesUpstreamError({
+        status: 400, type: 'invalid_request_error', validation: {
+          type: 'invalid_request_error', message: 'x'.repeat(65_537),
+        },
+      }));
+      expect((mapped.body as { error: { message: string } }).error.message).toBe('invalid request');
+    }
+  });
+
+  it('preserves non-billing dated feature error through parser, native error, and wire mappers after truncation', () => {
+    const message = 'billing-' + 'a'.repeat(4200) + '-2026-06-01: invalid value';
+    const validation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message } }), 400);
+    const upstreamError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation });
+    const expected = sanitizeNativeErrorMessage(message);
+
+    const billingMessage = 'billing-' + 'a'.repeat(4200) + '-2026-06-01: invalid value. Your credit balance is too low.';
+    const billingValidation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message: billingMessage } }), 400);
+    const billingError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: billingValidation });
+
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, upstreamError);
+      expect(mapped.status).toBe(400);
+      const publicMsg = (mapped.body as { error: { message: string } }).error.message;
+      expect(publicMsg).toBe(expected);
+      expect(publicMsg).not.toBe(NATIVE_BILLING_MASKED_MESSAGE);
+
+      const billMapped = toProviderShapedError(wire, billingError);
+      expect(billMapped.status).toBe(400);
+      expect((billMapped.body as { error: { message: string } }).error.message).toBe(NATIVE_BILLING_MASKED_MESSAGE);
+    }
   });
 });
