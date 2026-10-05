@@ -1,4 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { RequestTooLargeError } from '@sentropic/llm-mesh';
+import { createGatewayRouter } from '@sentropic/llm-gateway';
+import { nativeHarness } from '../../../packages/llm-gateway/tests/fixtures/native-flow';
 
 // ---------------------------------------------------------------------------
 // Shared mock setup — isolate stream normalization logic from all SDKs
@@ -2058,6 +2061,48 @@ describe('LLM stream event normalization', () => {
       ),
     ).rejects.toThrow('Image input is unsupported for cohere:command-a-03-2025');
     expect(streamGenerate).not.toHaveBeenCalled();
+  });
+
+  it.each(['typed', 'status', 'code'] as const)('preserves canonical %s M6 across runtime events and both wires', async kind => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const { applicationGatewayRuntime } = await import('../../src/services/llm-runtime/gateway-wire-adapter');
+    const provider = providerRegistry.requireProvider('anthropic');
+    const size = { requestBytes: 32_000_007, limitBytes: 32_000_000, source: 'gateway' as const };
+    const error = kind === 'typed' ? new RequestTooLargeError(size)
+      : kind === 'status' ? { status: 413, message: 'overload must not win', requestSize: size }
+      : { cause: { code: 'request_too_large', requestSize: size }, message: 'rate limit must not win' };
+    const generate = vi.spyOn(provider, 'generate').mockRejectedValue(error);
+    const stream = vi.spyOn(provider, 'streamGenerate').mockRejectedValue(error);
+    const subject = { principalRef: 'user-1', ownerScopeRef: 'workspace-1:user-1' };
+    const target = { requestedModel: 'claude-sonnet-5', providerId: 'anthropic', modelId: 'claude-sonnet-5',
+      transportProviderId: 'application-runtime', reason: 'exact' as const };
+    try {
+      for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+        for (const streaming of [false, true]) {
+          const h = nativeHarness();
+          delete (h.attempt as { nativeMessages?: unknown }).nativeMessages;
+          h.attempt.generate = request => applicationGatewayRuntime.generate(subject, undefined, target, request);
+          h.attempt.stream = request => applicationGatewayRuntime.stream(subject, undefined, target, request);
+          const router = createGatewayRouter({ config: h.deps.config, routePlanner: h.deps.routePlanner,
+            routeMetering: h.deps.metering, budget: h.deps.budget });
+          const response = await router.request(wire === 'anthropic-messages' ? '/v1/messages' : '/v1/chat/completions', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model: target.modelId, max_tokens: 1, stream: streaming,
+              messages: [{ role: 'user', content: 'tiny ingress, larger outbound fixture' }] }),
+          });
+          expect(response.status).toBe(413);
+          expect(response.headers.get('x-should-retry')).toBe('false');
+          expect(response.headers.has('retry-after')).toBe(false);
+          expect(await response.json()).toMatchObject({ error: {
+            ...(wire === 'anthropic-messages' ? { type: 'request_too_large' } : { code: 'request_too_large' }),
+            message: 'Request size 32000007 bytes exceeds limit 32000000 bytes.',
+          } });
+          expect(h.recorder.settlements).toHaveLength(1);
+          expect(h.recorder.settlements[0]!.attempts).toHaveLength(1);
+        }
+      }
+      expect(generate).toHaveBeenCalledTimes(2); expect(stream).toHaveBeenCalledTimes(2);
+    } finally { generate.mockRestore(); stream.mockRestore(); }
   });
 
   it('delegates one canonical gateway stream to the current provider egress', async () => {
