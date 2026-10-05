@@ -360,7 +360,7 @@
   - [x] Row 70 — Canonical exact SDK body measured before invocation, typed terminal 413 and measured upstream size preserved through runtime/wire events; pre/post API typecheck and Claude/runtime scoped gates.
   - [x] Row 70a1 — Real SDK 0.78.0 fake-fetch generate/stream byte equality across Unicode/escaping/undefined/stream overwrite and pre-invocation numeric 413; scoped pre/post gates.
   - [x] Row 70a2 — Real SDK open-stream counted measured-N retention through first frame, zero only after completion/cancel/error, detached SDK holder and once-only cleanup (`claude-provider.test.ts`); pre/post gates.
-  - [ ] Row 71 — Canonical runtime and wire-adapter typed/status-only/upstream 413 regressions (`llm-runtime-stream.test.ts`).
+  - [x] Row 71 — Actual canonical runtime/wire-adapter→gateway typed/status/code-cause 413 across both wires and JSON/stream, numeric detail/nonretryability/one-attempt settlement; scoped pre/post gates.
   - [ ] Row 72 — Product/shared route-plane native feasibility, quote identity and count composition.
   - [ ] Row 73 — Construction-time OFF switch/shared pool, product auth-before-cap and standalone settlement bounded-read/count skip.
   - [ ] Row 74 — Product native quote/planner/prepare eligibility (`gateway-route-plane.test.ts`).
