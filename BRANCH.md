@@ -92,6 +92,7 @@
     - [x] 1.02b: closed native-confidence semantics and exact ordered native-key/label distributions; invalid probabilities refuse without repair.
     - [x] 1.02c: explicit native-unit threshold/declared-label decisions, native boolean authority and nonempty primary evidence; negative verdicts remain valid.
   - [ ] 1.03: receipt.ts/errors.ts discriminants, independent token provenance, correlation/null counts; new mesh tests/judge-receipt.test.ts.
+    - [x] 1.03a: complete closed error vocabulary, static sanitized messages and bounded advisory retry hints; no raw causes or replay behavior.
   - [ ] Gate: scoped contract tests per coherent commit, mesh/gateway typecheck/lint/full suites, authoritative make scope-check before every commit; write .h2a/build/lot1A_report.md and stop for Opus review.
 - [ ] **Lot 1B — Chat selection refusal**
   - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
