@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { recordLlmUsage } from '../../src/services/llm-metering';
 import { sql } from 'drizzle-orm';
-import { withNativeLedger } from './native-ledger-fixture';
+import { withNativeLedger, MODELS, mixed } from './native-ledger-fixture';
 it('joins opaque HTTP response, physical observation and exactly one priced financial row by server request ID', async () => {
   await withNativeLedger({}, async h => {
     const response = await h.router.request('/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -16,6 +16,45 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
     expect(financial.pricing_version).toBe(h.pricingId);
     expect(await h.rows(sql`SELECT reserved_micro_usd, spent_micro_usd FROM control.budgets WHERE tenant_id = ${h.cost.tenantId}`))
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
+  });
+});
+const cacheCases = [
+  ['mixed', mixed, [1490, 1490, 740]],
+  ['five-minute', { ...mixed, cache_creation_input_tokens: 200,
+    cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 0 } }, [1390, 1390, 640]],
+  ['one-hour', { ...mixed, cache_creation_input_tokens: 200,
+    cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } }, [1540, 1540, 790]],
+  ['read-only', { ...mixed, input_tokens: 50, cache_read_input_tokens: 150000, cache_creation_input_tokens: 0,
+    cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 0 } }, [15090, 15090, 3840]],
+  ['default-inferred', { ...mixed, cache_creation: undefined }, [1453, 1453, 703]],
+] as const;
+it.each(MODELS.flatMap((model, index) => cacheCases.map(([name, usage, amounts]) => [model, name, usage, amounts[index]] as const)))
+('prices %s %s with sourced ratios at pinned rates', async (model, _name, usage, expected) => {
+  await withNativeLedger({ model, usage, allowanceInput: 200000 }, async h => {
+    await h.run();
+    const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe(expected); expect(row.pricing_version).toBe(h.pricingId);
+    expect(row.attempts[0].estimated).toBe(false); expect(obs.usage_raw.estimated).toBe(false);
+    expect(obs.usage_raw.input_tokens).toBe(usage.input_tokens);
+    expect(obs.input_tokens).toBe(usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens);
+    expect(obs.output_tokens).toBe(20); expect(await h.audit()).toEqual([]);
+  });
+});
+it.each(MODELS)('does not discount unknown one-hour split for %s', async model => {
+  await withNativeLedger({ model, usage: { ...mixed, cache_creation: undefined }, allowanceInput: 10350,
+    requestBody: { messages: [{ role: 'user', content: [{ type: 'text', text: 'fixture', cache_control: { type: 'ephemeral', ttl: '1h' } }] }] } }, async h => {
+    await h.run();
+    const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe(74350); expect(row.attempts[0].estimated).toBe(true);
+    expect(obs.input_tokens).toBe(10350); expect(obs.usage_raw.uncertainty_reason).toBe('cache_write_split_unknown');
+    expect(obs.usage_raw.cache_creation).toBeUndefined();
+  });
+});
+it('rounds money once after rational input multiplication, never each write token', async () => {
+  await withNativeLedger({ usage: { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 2,
+    cache_creation: { ephemeral_5m_input_tokens: 2, ephemeral_1h_input_tokens: 0 }, output_tokens: 1 } }, async h => {
+    await h.run(); expect(Number((await h.financial()).cost_micro_usd)).toBe(5);
+    expect((await h.observation()).input_tokens).toBe(2);
   });
 });
 it('fences duplicate financial settlement and observation replay while role readers never sum both', async () => {
