@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
 import {
-  modelProfiles, providerProfiles, RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
+  isNativeMessagesTarget, validateNativeModelAllowlist, modelProfiles, providerProfiles, RoutePlanError, RouteQuoteError, type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
   type RouteQuoteInput, type RouteUsageCeiling, type NativeUsagePricing,
 } from '@sentropic/llm-mesh';
 import { validateNativeInputPriceUnits40 } from '@sentropic/llm-gateway';
@@ -429,11 +429,13 @@ export const mayUseUnenforcedTransport = (providerId: string, transportProviderI
  * `plan({ quote })` refuses (`quote-mismatch`) any target the quote did not cover.
  */
 export const withCatalogQuote = (planner: RoutePlanner, options: {
+  readonly nativeMessagesModelIds?: readonly string[];
   readonly catalog: { listModels(): readonly { readonly modelId: string; readonly providerId: string }[] };
   readonly councilRevision: string;
   /** Transport pinned by the catalog entry, when known (undefined: any enrolled transport). */
   readonly transportFor?: (model: { readonly modelId: string; readonly providerId: string }) => string | undefined;
 }): RoutePlanner => {
+  const nativeModels = validateNativeModelAllowlist(options.nativeMessagesModelIds ?? []);
   const quote = (input: RouteQuoteInput): RouteQuote => {
     const { ceiling } = input;
     const count = (value: unknown, min: number) => typeof value === 'number' && Number.isSafeInteger(value) && value >= min;
@@ -441,7 +443,9 @@ export const withCatalogQuote = (planner: RoutePlanner, options: {
       || !count(ceiling?.outputTokens, 1)) throw new RouteQuoteError('invalid usage ceiling', 'invalid-ceiling');
     const models = options.catalog.listModels().filter((model) => model.modelId === input.requestedModel);
     if (models.length === 0) throw new RouteQuoteError('Unknown requested model', 'unknown-model');
-    const candidates: QuotedRouteCandidate[] = models.map((model) => ({
+    const eligible = input.nativeMessages ? models.filter(model => isNativeMessagesTarget(model, nativeModels)) : models;
+    if (!eligible.length) throw new RouteQuoteError('Native Messages target is unavailable', 'native-unavailable');
+    const candidates: QuotedRouteCandidate[] = eligible.map((model) => ({
       providerId: model.providerId, modelId: model.modelId, reason: 'exact',
       allowance: { ...ceiling }, outputCeilingEnforced: !mayUseUnenforcedTransport(model.providerId, options.transportFor?.(model)),
     }));
@@ -449,7 +453,7 @@ export const withCatalogQuote = (planner: RoutePlanner, options: {
       requestedModel: input.requestedModel, candidates, maxAttempts: 1, quotedAt: input.now.toISOString(),
       policyRevision: 'default', councilRevision: options.councilRevision,
     };
-    return { quoteRef: `quote_${quoteHash(body).slice(0, 32)}`, ...body };
+    return { quoteRef: `quote_${quoteHash({ ...body, ...(input.nativeMessages ? { nativeMessages: true } : {}) }).slice(0, 32)}`, ...body };
   };
   return {
     ...planner,

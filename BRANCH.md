@@ -361,7 +361,7 @@
   - [x] Row 70a1 — Real SDK 0.78.0 fake-fetch generate/stream byte equality across Unicode/escaping/undefined/stream overwrite and pre-invocation numeric 413; scoped pre/post gates.
   - [x] Row 70a2 — Real SDK open-stream counted measured-N retention through first frame, zero only after completion/cancel/error, detached SDK holder and once-only cleanup (`claude-provider.test.ts`); pre/post gates.
   - [x] Row 71 — Actual canonical runtime/wire-adapter→gateway typed/status/code-cause 413 across both wires and JSON/stream, numeric detail/nonretryability/one-attempt settlement; scoped pre/post gates.
-  - [ ] Row 72 — Product/shared route-plane native feasibility, quote identity and count composition.
+  - [x] Row 72 — Opt-in exact native port/count composition, required target/credential feasibility before bookkeeping, fresh prepared capability and native quote/hash identity; shared standalone defaults remain canonical; scoped pre/post gates.
   - [ ] Row 73 — Construction-time OFF switch/shared pool, product auth-before-cap and standalone settlement bounded-read/count skip.
   - [ ] Row 74 — Product native quote/planner/prepare eligibility (`gateway-route-plane.test.ts`).
   - [ ] Row 75 — Running-module gateway version resolver and safe startup record.
