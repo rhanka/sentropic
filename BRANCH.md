@@ -350,7 +350,7 @@
   - [x] Row 67a — Database provider/model price identity and exact-pinned versus costliest provenance; canonical amounts unchanged; typecheck PASS, sink unit 8 passed / 0 failed, ledger endpoints 36 passed / 0 failed.
   - [x] Row 68 — Exact provider/model/pinned provenance, sourced policy and safe bigint bounds gate rational input costs; output-only uncertainty preserves proof, unknown TTL cannot discount; canonical cost preserved; typecheck/sink/ledger gates.
   - [x] Row 68a — Closed safe native attempt pricing/served/proof/reason fields; rejected detail retains full-rate estimated financial uncertainty; mismatch forces one fenced transactional audit even below liability; typecheck/sink/ledger gates.
-  - [ ] Row 68b — `api/tests/unit/llm-budget-admission-native.test.ts`: exact amounts, wrong/missing identity, costliest fallback and unsafe bounds.
+  - [x] Row 68b — `llm-budget-admission-native.test.ts`: three-model exact/interrupted/L2/N5 amounts, missing/wrong identity, costliest provenance, unsafe/inclusive bigint bounds, rational rounding, unknown-TTL premiums and closed audit redaction; typecheck/scoped gates.
   - [ ] Row 69 — `api/tests/unit/anthropic-native.test.ts`: credential precedence, account/null lease, observation identity, physical/raw projections, count without observation.
   - [ ] Row 69a — Same file: gateway JSON/stream/cancel/commit-failure parity, rejecting/never-settling hooks, independent settlement/reader/lease cleanup.
   - [ ] Row 69b1 — Same file: L2 one-hour repeat/growth/nullable parity and bounded-finalize timeout/late completion.
