@@ -13,7 +13,7 @@ import type {
   StreamResult,
   VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
-import { isNativeMessagesTarget, RoutePlanError } from '@sentropic/llm-mesh';
+import { EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS, isNativeMessagesTarget, RoutePlanError } from '@sentropic/llm-mesh';
 import type { AnthropicNativePort } from './anthropic-native';
 
 export interface GatewayRouteIntentEvidence {
@@ -114,6 +114,9 @@ export const createGatewayRoutePlane = (ports: GatewayRoutePlanePorts): {
   };
   const validateRequired = (input: RoutePlanInput) => {
     if (!input.nativeMessages) return;
+    if (Object.hasOwn(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS, input.requestedModel)) {
+      throw new RoutePlanError('Native Messages target is unavailable', 'native-unavailable');
+    }
     const models = ports.catalog.listModels().filter(model => model.modelId === input.requestedModel);
     if (!models.length) throw new RoutePlanError('Unknown requested model', 'unknown-model');
     if (!models.some(model => isNativeMessagesTarget(model, ports.nativeMessages?.modelIds ?? []))) {
