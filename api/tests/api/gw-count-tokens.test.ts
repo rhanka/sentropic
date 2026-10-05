@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import { NativeCountTokensRateLimiter } from '@sentropic/llm-gateway';
 import { db } from '../../src/db/client';
 import { routePartitionHash } from '../../src/services/llm-metering';
 import { gwNativeFixture, message } from './gw-native-fixture';
@@ -33,6 +34,48 @@ it('authenticates and checks partition before counting; no generation or billing
   expect((await h.post(message, {}, path)).status).toBe(401);
   h.partition.hash = 'stale'; expect((await h.post(message, {}, path, 'b')).status).toBe(503);
   expect(h.runtime.nativeCountTokens).toHaveBeenCalledOnce();
+});
+it('distinct_principals_have_independent_count_limits', async () => {
+  const rate = new NativeCountTokensRateLimiter({ capacity: 1, maxInFlight: 1, now: () => 0 });
+  const h = await gwNativeFixture(true, { nativeCountRate: rate });
+  expect(h.users[0]).not.toBe(h.users[1]);
+  expect((await h.post(message, {}, path, 'a')).status).toBe(200);
+  const blocked = await h.post(message, {}, path, 'a');
+  expect(blocked.status).toBe(429); expect(blocked.headers.get('retry-after')).toBe('1');
+  expect((await h.post(message, {}, path, 'b')).status).toBe(200);
+  expect(h.runtime.nativeCountTokens).toHaveBeenCalledTimes(2);
+  const identities = h.caller.mock.results.map(result => result.value.principalId);
+  expect(new Set(identities).size).toBe(2);
+});
+it('second_session_same_principal_shares_count_limits', async () => {
+  const rate = new NativeCountTokensRateLimiter({ capacity: 1, maxInFlight: 1, now: () => 0 });
+  const h = await gwNativeFixture(true, { nativeCountRate: rate });
+  expect((await h.post(message, {}, path, 'a')).status).toBe(200);
+  expect((await h.post(message, {}, path, 'a2')).status).toBe(429);
+  expect(h.caller.mock.results[0]!.value.principalId).toBe(h.caller.mock.results[1]!.value.principalId);
+  expect(h.caller.mock.results[0]!.value.ownerScopeRef).toBe(h.caller.mock.results[1]!.value.ownerScopeRef);
+  expect(h.runtime.nativeCountTokens).toHaveBeenCalledOnce();
+});
+it('releases concurrent count slots after error and refills without generation lifecycle', async () => {
+  let now = 0;
+  const rate = new NativeCountTokensRateLimiter({ capacity: 2, maxInFlight: 1, now: () => now });
+  const h = await gwNativeFixture(true, { nativeCountRate: rate });
+  let started!: () => void, reject!: (error: unknown) => void;
+  const start = new Promise<void>(resolve => { started = resolve; });
+  h.runtime.nativeCountTokens.mockImplementationOnce(() => {
+    started(); return new Promise((_resolve, fail) => { reject = fail; });
+  });
+  const pending = h.post(message, {}, path);
+  await start;
+  expect((await h.post(message, {}, path, 'a2')).status).toBe(429);
+  expect((await h.post(message, {}, path, 'b')).status).toBe(200);
+  reject(new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' }));
+  expect((await pending).status).toBe(503);
+  expect((await h.post(message, {}, path, 'a2')).status).toBe(200);
+  expect((await h.post(message, {}, path)).status).toBe(429);
+  now = 1000;
+  expect((await h.post(message, {}, path)).status).toBe(200);
+  expect(h.budget.admit).not.toHaveBeenCalled(); expect(h.settlement.settleRoute).not.toHaveBeenCalled();
 });
 it.each([false, true])('OFF refusal names safeguards when present (%s)', async safeguards => {
   const h = await gwNativeFixture(false);
