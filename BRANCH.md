@@ -352,7 +352,7 @@
   - [x] Row 68a — Closed safe native attempt pricing/served/proof/reason fields; rejected detail retains full-rate estimated financial uncertainty; mismatch forces one fenced transactional audit even below liability; typecheck/sink/ledger gates.
   - [x] Row 68b — `llm-budget-admission-native.test.ts`: three-model exact/interrupted/L2/N5 amounts, missing/wrong identity, costliest provenance, unsafe/inclusive bigint bounds, rational rounding, unknown-TTL premiums and closed audit redaction; typecheck/scoped gates.
   - [x] Row 69 — Trusted token/account precedence, active/cooldown advertisement without acquisition, execute-time/null leases, JSON/count/abort cleanup, no count/failed-start observation, closed physical/raw projection and distinct null-cost/no-hold sink join; typecheck/scoped gates.
-  - [ ] Row 69a — Same file: gateway JSON/stream/cancel/commit-failure parity, rejecting/never-settling hooks, independent settlement/reader/lease cleanup.
+  - [x] Row 69a — Actual exported gateway flows use prepared API/account capability; immutable one-snapshot parity across JSON/stream/EOF/cancel/commit failure, rejecting/never-settling host writes; one settlement and independent response/lease closure; fixed timeout diagnostics; typecheck/scoped gates.
   - [ ] Row 69b1 — Same file: L2 one-hour repeat/growth/nullable parity and bounded-finalize timeout/late completion.
   - [ ] Row 69b2 — Same file: malformed delta permanently loses proof and charges 74,300 micro-USD (N5).
   - [ ] Row 69c — Same file: real host-port closure retains response only while stream stays open (N1).
