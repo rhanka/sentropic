@@ -4,7 +4,7 @@
 - [ ] Deliver spec_v8 plus its N1–N7 addendum: opaque native Messages, count_tokens and joined usage observation with one financial settlement.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/llm-gateway-native-relay`, branch `feat/llm-gateway-native-relay`, rebased base `12be48eeb`; mechanical branch check passed.
+- [x] Worktree `tmp/llm-gateway-native-relay`, branch `feat/llm-gateway-native-relay`, rebased base `52c1fdc63`; mechanical branch check passed.
 - [x] Implementer pass 01: rows 0a, 0b, 1, 1a, 2, 3 in order; conductor `s-conductor` owns later passes and review.
 - [x] Make-only, Docker-first; English text; no Python, real provider calls, push, merge or publication.
 - [x] Every commit is one row or declared split, at most 149 additions plus deletions including this file; selective staging and scope-check before commit.
@@ -57,6 +57,12 @@
   - `packages/cluster-mesh/tests/packaging/skew-invariants.ts` (BR-REL-EX3, T2b)
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts` (BR-REL-EX3, T2b)
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts` (BR-REL-EX3, T2b)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-REL-EX3, T3a)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-REL-EX3, interim T3)
+  - `packages/cluster-mesh/tests/packaging/lock-integrity.spec.ts` (BR-REL-EX3, T3a)
+  - `packages/cluster-mesh/tests/packaging/lock-integrity-registry.spec.ts` (BR-REL-EX3, T3a)
+  - `packages/cluster-mesh/tests/packaging/release-matrix-sources.spec.ts` (BR-REL-EX3, T3a)
+  - `packages/cluster-mesh/tests/packaging/siblings.spec.ts` (BR-REL-EX3, T3a)
   - `packages/cluster-mesh/CHANGELOG.md` (BR-REL-EX3, T2c)
   - `packages/cluster-mesh/README.md` (BR-REL-EX3, T2c)
   - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
@@ -120,6 +126,8 @@
 - [x] Exception process: declare ID, rationale, impact and rollback below before touching conditional paths; undeclared scope stops the pass.
 
 ## Feedback Loop
+- [x] Post-rebase gateway loader retry — First full run: 1117 passed, 3 skipped, two auth suites failed to resolve `@sentropic/mcp-auth/hono`; unchanged-source focused rerun 23/0 and full rerun 1143/0. No reproducible source defect; initial failure retained in the packet report.
+- [x] Post-rebase API setup — Unset REGISTRY caused an invalid image reference before tsc; `REGISTRY=local` restored local preparation. Full API typecheck and suites passed without source edits; K2 applies only to future operator-UAT rows 82–83.
 - [x] Row 65a2 JSON cleanup — Deterministic fake-response repro: 39 passed / 2 failed; `Response.json()` kept its reader locked after timeout. Explicit JSON-reader ownership restores cancellation/release for Messages and count without timeout changes; both permanent regressions retained.
 - [x] Row 58 green-commit decision — Conductor approved moving minimal literal updates for exactly seven failed cluster assertions from rows 59–60 into T1; includes the remaining version pins within those same cases. Keep T1 <=149 changed lines including this file; all remaining T2 expectations stay in rows 59–60.
 - [x] Pass 11 P2 — v8-addendum review MINOR applied before row 43: N3 storage is incremental after granted actual chunk bytes; Content-Length never sizes storage/reservations, raw backing capacity never exceeds grants and EOF performs no duplicate raw consolidation.
@@ -388,3 +396,10 @@
   - [ ] Pass end: full `make test-api-unit`, full `make test-api-endpoints`, `make down`, clean status and packet report; conductor owns cross-review, no push or real provider calls.
 - [ ] Stage 5 — Operator setup, HTTP-only qualification and OFF/ON client gates: rows 82a–83b plus 82c.
 - [ ] Stage 6 — Qualified default list, final train packing, Ffinal/Ufinal evidence and release handoff: rows 84–87.
+  - [x] Row 85 checklist before implementation — Conductor authorizes T3a plus interim lock only; rows 82, 83, 84 and final 86 remain untouched; no push, publication, provider call or local Gemini launch.
+  - [x] Post-rebase gates on 52c1fdc63 — All four typechecks PASS; full mesh 385/0, gateway 1143/0, cluster 404/0 (34 skipped), API unit 1210/0 (2 skipped), API endpoints 1245/0; sequential Docker targets.
+  - [ ] Row 85 — Train literals in `lock-integrity.spec.ts`, `lock-integrity-registry.spec.ts`, `release-matrix-sources.spec.ts`, `siblings.spec.ts` and selected manifest: mesh 0.23.0 / gateway 0.20.0 / cluster 0.14.0; retain old-tuple refusal coverage.
+  - [ ] Interim selected-lock refresh — Fresh `pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh`, then packaging.mk `refresh-lazy-package-lock` with current receipts; no handwritten real integrity.
+  - [x] Ordering — interim selected-lock refresh; final T3b (row 86) is redone LAST after row 84, conductor decision.
+  - [ ] Row 85 gates — Cluster typecheck/full tests, packaging.mk `test-lazy-package` with current sibling receipts, scope-check, selective staging and Make commit; <=149 changed lines including this plan, stop/report generated-lock size if exceeded.
+  - [ ] Handoff — Packet SHAs/line counts/full-suite counts, clean status, `make down`; Gemini cross-review stays conductor-owned.
