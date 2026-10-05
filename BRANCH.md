@@ -379,7 +379,7 @@
   - [x] Row 81a — JSON/SSE Fable↔Opus mismatch, unequal selected/served pinned rates, fallback/substantive iterations and late SSE model conflict force full-rate estimate; one replay-fenced audit joins request_id→financial attempts, opaque evidence stays out; scoped pre/post gates.
   - [x] Row 81b — JSON/SSE mismatch observations remain physical 10,350/20/10,370 with raw U=100 while financial input/output floor independently; missing input/total persist null, not allowance values; scoped pre/post gates.
   - [x] Row 81c — Three-model K1 cumulative growth/equal/partial/null/omitted clean/interrupted prices; category decreases never restore proof; exact official WebSearch 2679→10682/O510 yields 11,702/74,682, decrement floors 84,000, raw tool counters stay opaque; scoped pre/post gates.
-  - [ ] Row 81d — K4 output floor, absent/null/empty iterations and K5 terminal parity.
+  - [x] Row 81d — Three-model JSON/SSE absent/null/empty iterations stay measured; substantive/malformed iterations plus mismatch/fallback floor O500→32,000 (64×), charge 74,350 and audit once; cancel/commit failure share one immutable gateway snapshot with DB observation/pre-floor settlement; scoped pre/post gates.
   - [ ] Row 81e1 — L2 one-hour aggregate repetition/growth/conflict exact clean/interrupted ledger amounts.
   - [ ] Row 81e2 — N5 malformed one-hour delta permanently revokes proof and charges 74,300.
   - [ ] Pass 15 boundary — Stop before row 82/operator UAT, no real provider call; conductor owns cross-review.
