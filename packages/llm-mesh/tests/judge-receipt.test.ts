@@ -2,17 +2,56 @@ import { describe, expect, it } from 'vitest';
 import { createJudgeError, isJudgeErrorCode, type JudgeErrorCode } from '../src/judge/errors.js';
 import { normalizeJudgeUsage, parseJudgeUsage, resolveJudgeCorrelationId, unreportedJudgeUsage } from '../src/judge/receipt.js';
 
+const phases = ['preflight', 'admission', 'dispatch', 'parse', 'settlement'] as const;
+const retryability: readonly [JudgeErrorCode, readonly boolean[]][] = [
+  ['REQUEST_INVALID', [false, false, false, false, false]],
+  ['PROVIDER_UNKNOWN', [false, false, false, false, false]],
+  ['EVALUATOR_UNKNOWN', [false, false, false, false, false]],
+  ['CAPABILITY_UNSUPPORTED', [false, false, false, false, false]],
+  ['PROVIDER_UNAVAILABLE', [true, true, true, true, false]],
+  ['REVISION_MISMATCH', [false, false, false, false, false]],
+  ['CREDENTIAL_MISSING', [false, false, false, false, false]],
+  ['AUTHENTICATION_FAILED', [false, false, false, false, false]],
+  ['AUTHORIZATION_DENIED', [false, false, false, false, false]],
+  ['PRICING_UNAVAILABLE', [false, false, false, false, false]],
+  ['BUDGET_BOUND_UNAVAILABLE', [false, false, false, false, false]],
+  ['BUDGET_EXHAUSTED', [false, false, false, false, false]],
+  ['BUDGET_UNAVAILABLE', [true, true, false, false, false]],
+  ['SETTLEMENT_UNAVAILABLE', [true, true, false, false, false]],
+  ['RATE_LIMITED', [true, true, true, true, false]],
+  ['PROVIDER_OVERLOADED', [true, true, true, true, false]],
+  ['PROVIDER_REJECTED', [false, false, false, false, false]],
+  ['TIMEOUT', [true, true, true, true, false]],
+  ['CANCELLED', [false, false, false, false, false]],
+  ['TRANSPORT_FAILED', [true, true, true, true, false]],
+  ['VERDICT_INVALID', [false, false, false, false, false]],
+  ['SERVED_IDENTITY_MISMATCH', [false, false, false, false, false]],
+  ['USAGE_INVALID', [false, false, false, false, false]],
+  ['RESPONSE_TOO_LARGE', [false, false, false, false, false]],
+  ['RECEIPT_UNAVAILABLE', [true, true, false, false, false]],
+  ['MESH_UNAVAILABLE', [true, true, true, true, false]],
+];
+
 describe('sanitized judge errors', () => {
+  it.each(retryability.flatMap(([code, expected]) => phases.map((phase, index) =>
+    ({ code, phase, retryable: expected[index] }))))('should report retryable=$retryable for $code in $phase',
+  ({ code, phase, retryable }) => {
+    const error = createJudgeError(code, phase, { retryAfterMs: 60_000 });
+    expect(error).toMatchObject({ code, phase, retryable });
+    expect(error.retryAfterMs).toBe(retryable ? 60_000 : undefined);
+  });
   it('should expose a bounded static code/message rather than arbitrary exception content', () => {
     const error = createJudgeError('CREDENTIAL_MISSING', 'preflight');
     expect(error).toEqual({ code: 'CREDENTIAL_MISSING', message: 'Judge credential is missing.', phase: 'preflight', retryable: false });
     expect(createJudgeError('dummy-secret-canary' as JudgeErrorCode, 'parse').message).toBe('Invalid judge request.');
     expect(isJudgeErrorCode('constructor')).toBe(false);
     expect(isJudgeErrorCode('SERVED_IDENTITY_MISMATCH')).toBe(true);
+    expect(createJudgeError('BUDGET_UNAVAILABLE', 'invalid' as 'preflight').phase).toBe('preflight');
   });
   it('should retain only valid advisory retry hints', () => {
     expect(createJudgeError('RATE_LIMITED', 'dispatch', { retryAfterMs: 42 }).retryAfterMs).toBe(42);
-    for (const retryAfterMs of [-1, NaN, Infinity, 1.5]) {
+    expect(createJudgeError('RATE_LIMITED', 'dispatch', { retryAfterMs: 60_000 }).retryAfterMs).toBe(60_000);
+    for (const retryAfterMs of [-1, NaN, Infinity, 1.5, 60_001]) {
       expect(createJudgeError('RATE_LIMITED', 'dispatch', { retryAfterMs }).retryAfterMs).toBeUndefined();
     }
     expect(createJudgeError('VERDICT_INVALID', 'parse', { retryAfterMs: 42 }).retryAfterMs).toBeUndefined();
@@ -41,6 +80,8 @@ describe('per-counter judge usage provenance', () => {
     expect(parseJudgeUsage({ ...usage, tokens: { ...usage.tokens, total: { value: 6, source: 'derived-sum' } } })).toBeNull();
     expect(parseJudgeUsage({ ...usage, tokens: { ...usage.tokens, input: { value: null, source: 'provider' } } })).toBeNull();
     expect(parseJudgeUsage({ ...usage, evaluatorCalls: -1 })).toBeNull();
+    const { evaluatorCalls: _calls, ...missingCalls } = usage;
+    expect(parseJudgeUsage(missingCalls)).toBeNull();
   });
 });
 
