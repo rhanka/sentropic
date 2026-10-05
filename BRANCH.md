@@ -64,6 +64,8 @@
 - [x] m4: test-llm-judge replaces spec slot-0 test-llm-judge-int throughout this execution and the future host runbook; cleanup always includes the complete port triple and ENV.
 - [x] m5: tracked consolidation into SPEC_EVOL_LLM_MESH.md is mandatory before PR/integration, so the ignored design draft is never the sole reviewer reference.
 - [x] m6: host-global harness C1/recorder output is advisory; repository make scope-check C2 is authoritative. Makefile remains forbidden; no new host packages or C1 target.
+- [x] Lot 1A M1/m4: reproduced proxy serialization drift and unbounded shared-reference traversal; copy data descriptors under a byte-derived work budget, serialize once and validate/return the same detached copy.
+- [ ] Lot 1A m5 — conductor decision required: is an output/state candidate containing only null valid significant content, or REQUEST_INVALID? Per the 2026-10-04 instruction, stop before 1B and report the decision request; do not choose locally.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
