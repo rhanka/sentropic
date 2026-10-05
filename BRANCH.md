@@ -8,7 +8,7 @@
 - [x] Work only in `/home/antoinefa/src/sentropic/tmp/llm-judge`, branch `feat/llm-judge`; root dev/UAT remains untouched.
 - [x] Baseline rebased onto origin/main `12be48eeb566439b9f455b106c7928065511aa7f` on 2026-10-04; mesh/gateway/cluster remain 0.22.3/0.19.1/0.13.0.
 - [x] Build brief supersedes the spec's early-code prohibition: code/tests may proceed before PR #633 lands; TUPLE, migration generation and release qualification remain gated.
-- [x] Make-only, Docker-first, no native package manager/Python; one Docker build at a time; every Make invocation ends with ENV.
+- [x] Make-only, Docker-first, no native package manager/Python; one Docker build at a time, Make uses -j1 after the OOM report; every Make invocation ends with ENV.
 - [x] Never ENV=dev; never make clean-all; all new code, comments, commits and Markdown text are in English.
 - [x] Tracked judge design/docs consolidation is a prerequisite before any PR or integration; the ignored draft is a local execution input only.
 - [x] Integration test slot: API_PORT=9480, UI_PORT=5680, MAILDEV_UI_PORT=1580, ENV=test-llm-judge; ports absent from `ss -ltn` at kickoff, recheck before stack creation.
@@ -71,7 +71,7 @@
 - [x] Lot 1A m1: type declarations do not qualify criterion-kind, decision-confidence/native-decision or providerRaw enforcement; explicit 1C sub-items below own these remaining invariants.
 - [ ] Lot 1A m5 — conductor decision required: is an output/state candidate containing only null valid significant content, or REQUEST_INVALID? Per the 2026-10-04 instruction, stop before 1B and report the decision request; do not choose locally.
 - [x] Lot 1B Opus review, 2026-10-05: GO with fixes, no BLOCKER or MAJOR; prior Lot 1A corrections confirmed. This review covers the entry-stop range, not implementation of 1.04a–g.
-- [ ] Lot 1B m1: before 1C consumes createJudgeError, an unrecognized runtime phase must fail closed (retryable false and no retryAfterMs); extend the financial-error fallback assertion in tests/judge-receipt.test.ts.
+- [x] Lot 1B m1: reproduced invalid-phase SETTLEMENT_UNAVAILABLE returning retryable true; unrecognized phases now fail closed with preflight shape, retryable false and no retryAfterMs. The financial-error fallback regression pins both fields.
 - [ ] Lot 1B m2: score/confidence/distribution/usage parsers must validate and return the snapshotBoundedJson copy; add Proxy regressions in judge-verdict/judge-receipt tests. Refuse symbols on the materialized descriptor object, using the same ownKeys read as the copy.
 - [ ] Lot 1B m3 — conductor process decision: deliver the m5 null-only decision now, or explicitly move that gate to 1C entry before 1.05. The reviewer's valid-null recommendation is non-binding; the existing 1B entry hold stays until a conductor decision is recorded.
 - [x] Lot 1B follow-up stop: only review findings and handoffs recorded; no implementation change or new acceptance tests. Update .h2a/build/lot1B_report.md and stop per the instruction to report required conductor decisions.
@@ -122,7 +122,7 @@
   - [ ] 1.04g: registry type-only optional judge members; new mesh tests/judge-registry.test.ts; regress tests/facade.test.ts.
   - [ ] Gate: named API/mesh regressions, mesh/gateway typecheck/lint/full suites, scoped commits; write .h2a/build/lot1B_report.md and stop for Opus review.
 - [ ] **Lot 1C — JEV codec, transport and service**
-  - [ ] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
+  - [x] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
   - [ ] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.
   - [ ] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; new mesh tests/judge-jev-request.test.ts.
   - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
