@@ -19,7 +19,7 @@ import {
   resolveConnectedMistralVibeTransport,
   type AntigravityFallbackRoute,
 } from '../provider-connections';
-import { isProviderId, type ProviderId } from '../provider-runtime';
+import { isJudgeOnlyProvider, isProviderId, type ProviderId } from '../provider-runtime';
 import { parseGcpModelId } from '../providers/gcp-provider';
 import { CLOUDCODE_PA_PROVIDER_ID } from '../providers/cloudcode-pa-provider';
 import { settingsService } from '../settings';
@@ -113,11 +113,17 @@ export const resolveRuntimeSelection = async (input: {
   model?: string | null;
   userId?: string | null;
 }): Promise<RuntimeSelection> => {
+  if (isJudgeOnlyProvider(input.providerId ?? '')) {
+    throw new Error('Judge-only providers cannot be selected for chat');
+  }
   const [aiSettings, models] = await Promise.all([
     settingsService.getAISettings({ userId: input.userId ?? null }),
     Promise.resolve(providerRegistry.listModels()),
   ]);
 
+  if (!isProviderId(input.providerId ?? '') && isJudgeOnlyProvider(aiSettings.defaultProviderId)) {
+    throw new Error('Judge-only providers cannot be selected for chat');
+  }
   const requestedModel = (input.model ?? '').trim() || aiSettings.defaultModel;
   const inferredProvider = inferProviderFromModelIdWithLegacy(
     models.map((entry) => ({
