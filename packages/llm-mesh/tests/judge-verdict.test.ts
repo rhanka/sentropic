@@ -43,6 +43,8 @@ describe('explicit judge decision semantics', () => {
     expect(deriveJudgeDecision({ ...input(), providerDecision: false })).toEqual({ ok: true, decision: { pass: false, origin: 'provider' } });
     expect(deriveJudgeDecision({ ...input(), providerDecision: false, rule: { kind: 'labels', passing: ['yes'] } }).ok).toBe(false);
     expect(deriveJudgeDecision({ ...input(), rule: { kind: 'provider' } })).toEqual({ ok: false, code: 'CAPABILITY_UNSUPPORTED' });
+    expect(deriveJudgeDecision({ ...input(), providerDecision: 'false' as unknown as boolean, rule: { kind: 'provider' } }))
+      .toEqual({ ok: false, code: 'VERDICT_INVALID' });
   });
   it('should derive label decisions only from declared options', () => {
     const choice = { ...input(), label: 'b', declaredLabels: ['a', 'b'], rule: { kind: 'labels' as const, passing: ['a'] } };
