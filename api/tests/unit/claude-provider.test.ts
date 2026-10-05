@@ -29,7 +29,8 @@ vi.mock('../../src/config/env', () => ({
   },
 }));
 
-import { ClaudeProviderRuntime } from '../../src/services/providers/claude-provider';
+import { ClaudeProviderRuntime, prepareClaudeCanonicalBody } from '../../src/services/providers/claude-provider';
+import type Anthropic from '@anthropic-ai/sdk';
 import { nativeReadiness } from '../../src/services/llm-runtime/anthropic-native-readiness';
 import { nativeResponseBytes } from '../../src/services/llm-runtime/anthropic-native-transport';
 
@@ -317,6 +318,47 @@ describe('ClaudeProviderRuntime', () => {
       server.closeAllConnections();
       await new Promise<void>(resolve => server.close(() => resolve()));
     }
+  });
+
+  it.each([false, true])('matches SDK 0.78.0 outbound bytes with stream=%s', async stream => {
+    const { default: SDK } = await vi.importActual<typeof import('@anthropic-ai/sdk')>('@anthropic-ai/sdk');
+    const start = { type: 'message_start', message: { id: 'sdk-fixture', type: 'message', role: 'assistant',
+      model: 'claude-sonnet-5', content: [], usage: { input_tokens: 1, output_tokens: 0 }, stop_reason: null } };
+    const events = [start, { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } },
+      { type: 'message_stop' }];
+    let captured = '';
+    const upstream = vi.fn(async (_url, init: RequestInit) => {
+      captured = String(init.body);
+      return stream ? new Response(events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''),
+        { headers: { 'content-type': 'text/event-stream' } }) : Response.json(start.message);
+    });
+    const sdk = new SDK({ apiKey: 'fixture-key', fetch: upstream, maxRetries: 0 });
+    vi.spyOn(runtime as unknown as { getClient(): Anthropic }, 'getClient').mockReturnValue(sdk);
+    const requestOptions: Anthropic.MessageCreateParams = { model: 'claude-sonnet-5', max_tokens: 1,
+      messages: [{ role: 'user', content: 'é 😀 "quoted" \\ slash\nline' }], temperature: undefined, stream: !stream };
+    const measured = prepareClaudeCanonicalBody(requestOptions, stream);
+    const invoke = vi.spyOn(sdk.messages, stream ? 'stream' : 'create');
+    if (stream) { for await (const _event of await runtime.streamGenerate({ mode: 'messages', requestOptions })) { /* Drain fake SSE. */ } }
+    else await runtime.generate({ mode: 'messages', requestOptions });
+    expect(captured).toBe(JSON.stringify(measured.body));
+    expect(Buffer.byteLength(captured)).toBe(measured.requestBytes);
+    expect(JSON.parse(captured).stream).toBe(stream);
+    expect(JSON.parse(captured)).not.toHaveProperty('temperature');
+    expect(invoke).toHaveBeenCalledOnce(); expect(upstream).toHaveBeenCalledOnce();
+  });
+
+  it.each(['generate', 'streamGenerate'] as const)('rejects %s oversize before SDK construction or invocation', async method => {
+    const requestOptions = { model: 'claude-sonnet-5', max_tokens: 1,
+      messages: [{ role: 'user', content: 'é'.repeat(16_000_000) }], stream: false };
+    const expected = Buffer.byteLength(JSON.stringify({ ...requestOptions, stream: method === 'streamGenerate' }));
+    const upstream = vi.fn(); vi.stubGlobal('fetch', upstream);
+    const error = await runtime[method]({ mode: 'messages', requestOptions }).catch(value => value);
+    expect(error).toMatchObject({ status: 413, code: 'request_too_large', requestSize: {
+      requestBytes: expected, limitBytes: 32_000_000, source: 'gateway' } });
+    expect(runtime.normalizeError(error)).toMatchObject({ statusCode: 413, code: 'request_too_large', retryable: false,
+      requestSize: { requestBytes: expected, limitBytes: 32_000_000 } });
+    expect(mockAnthropicConstructor).not.toHaveBeenCalled(); expect(mockAnthropicCreate).not.toHaveBeenCalled();
+    expect(mockAnthropicStream).not.toHaveBeenCalled(); expect(upstream).not.toHaveBeenCalled();
   });
 
   describe('provider descriptor', () => {
