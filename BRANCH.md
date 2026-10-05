@@ -88,6 +88,7 @@
     - [x] 1.01b: strict criterion/decision validation, duplicate labels/options and finite thresholds; provider cardinality limits remain adapter-owned.
     - [x] 1.01c: strict request/policy parsing, significant-input snapshot, retention-policy refusal and provider distinction; size/depth/fan-out/auth tests.
   - [ ] 1.02: verdict.ts scale/direction/confidence/distributions; new mesh tests/judge-verdict.test.ts.
+    - [x] 1.02a: native verdict types and strict scale parsing; fractional/risk/unknown scores retained without clamping or invented certainty.
   - [ ] 1.03: receipt.ts/errors.ts discriminants, independent token provenance, correlation/null counts; new mesh tests/judge-receipt.test.ts.
   - [ ] Gate: scoped contract tests per coherent commit, mesh/gateway typecheck/lint/full suites, authoritative make scope-check before every commit; write .h2a/build/lot1A_report.md and stop for Opus review.
 - [ ] **Lot 1B — Chat selection refusal**
