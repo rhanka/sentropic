@@ -28,7 +28,8 @@ import { createApplicationGatewayRoutePlane } from '../../services/llm-runtime/g
 
 export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
-  '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/chat/completions',
+  // Gateway 0.20 registers the global body-cap middleware and count endpoint.
+  '/*', '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/messages/count_tokens', '/v1/chat/completions',
 ] as const;
 /** Default reserved output ceiling for a request without max tokens (the Claude code default). */
 export const GW_DEFAULT_OUTPUT_TOKENS = 4_096;
