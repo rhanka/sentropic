@@ -27,6 +27,16 @@ describe('judge request JSON boundary', () => {
     expect(isCorrelationId('a'.repeat(129))).toBe(false);
     expect(isCorrelationId('line\nbreak')).toBe(false);
   });
+  it('should bound work when shared references expand into a larger JSON tree', () => {
+    let visits = 0;
+    const leaf = new Proxy({ text: 'Synthetic' }, {
+      ownKeys(target) { visits++; return Reflect.ownKeys(target); },
+    });
+    let graph: unknown = leaf;
+    for (let i = 0; i < 10; i++) graph = [graph, graph];
+    expect(isBoundedJson(graph, 32)).toBe(false);
+    expect(visits).toBeLessThanOrEqual(32);
+  });
 });
 
 const request = () => ({ schemaVersion: 1,
@@ -40,6 +50,17 @@ describe('strict judge request parsing', () => {
     const result = parseJudgeRequest(input);
     input.inputs.state.text = 'Changed';
     expect(result).toEqual({ ok: true, request: request() });
+  });
+  it('should return only validated content when a proxy changes later serialization', () => {
+    let serializations = 0;
+    const candidate = new Proxy(request(), {
+      get(target, key, receiver) {
+        if (key === 'toJSON') return () => ++serializations === 1 ? target
+          : { ...target, endpoint: 'https://synthetic.invalid' };
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    expect(parseJudgeRequest(candidate)).toEqual({ ok: true, request: request() });
   });
   it('should refuse caller credentials, endpoints, fan-out and tenant selectors', () => {
     for (const key of ['auth', 'endpoint', 'fallback', 'batch', 'tenantId']) {
