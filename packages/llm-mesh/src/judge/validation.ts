@@ -25,11 +25,12 @@ function copyJson(value: unknown, depth: number, budget: { remaining: number }):
   }
   if (value === null || typeof value === 'boolean') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value !== 'object' || Object.getOwnPropertySymbols(value).length) throw new Error('Invalid JSON.');
+  if (typeof value !== 'object') throw new Error('Invalid JSON.');
   const array = Array.isArray(value);
   const proto = Object.getPrototypeOf(value);
   if (proto !== (array ? Array.prototype : Object.prototype) && proto !== null) throw new Error('Invalid JSON.');
   const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Object.getOwnPropertySymbols(descriptors).length) throw new Error('Invalid JSON.');
   const length = descriptors.length?.value;
   if (array && (!Number.isSafeInteger(length) || length < 0
     || Object.keys(descriptors).length !== length + 1)) throw new Error('Invalid JSON.');

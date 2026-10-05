@@ -1,6 +1,6 @@
 import type { DecisionRule, Json, JudgeCriterion } from './request.js';
 import { isJudgeDecisionRule, scoreDirections } from './criterion.js';
-import { has, hasOnlyKeys, isBoundedJson, isRecord, isText } from './validation.js';
+import { has, hasOnlyKeys, isRecord, isText, snapshotBoundedJson } from './validation.js';
 
 export type ScoreScale =
   | { kind: 'bounded'; min: number; max: number;
@@ -28,8 +28,11 @@ export interface JudgeVerdict {
 }
 
 /** Preserve native values and direction; normalization is relative position, not accuracy. */
-export function parseJudgeScore(value: unknown): JudgeScore | null {
-  if (!isBoundedJson(value) || !isRecord(value) || !hasOnlyKeys(value, ['value', 'scale', 'meaning', 'normalized'])
+export function parseJudgeScore(candidate: unknown): JudgeScore | null {
+  const snapshot = snapshotBoundedJson(candidate);
+  if (!snapshot.ok) return null;
+  const value = snapshot.value;
+  if (!isRecord(value) || !hasOnlyKeys(value, ['value', 'scale', 'meaning', 'normalized'])
     || typeof value.value !== 'number' || !Number.isFinite(value.value) || !isRecord(value.scale)
     || !['rubric-grade', 'probability-true', 'support', 'provider-defined'].some((v) => v === value.meaning)) return null;
   const scale = value.scale;
@@ -54,8 +57,11 @@ export function parseJudgeScore(value: unknown): JudgeScore | null {
 }
 
 /** A descriptor supplies the documented meaning; this never derives confidence from score. */
-export function parseJudgeConfidence(value: unknown): JudgeVerdict['confidence'] {
-  if (!isBoundedJson(value) || !isRecord(value)
+export function parseJudgeConfidence(candidate: unknown): JudgeVerdict['confidence'] {
+  const snapshot = snapshotBoundedJson(candidate);
+  if (!snapshot.ok) return null;
+  const value = snapshot.value;
+  if (!isRecord(value)
     || !hasOnlyKeys(value, ['value', 'min', 'max', 'meaning', 'meaningRef', 'origin'])
     || typeof value.value !== 'number' || typeof value.min !== 'number' || typeof value.max !== 'number'
     || !Number.isFinite(value.value) || !Number.isFinite(value.min) || !Number.isFinite(value.max)
@@ -67,9 +73,12 @@ export function parseJudgeConfidence(value: unknown): JudgeVerdict['confidence']
 }
 
 /** Map an exact, descriptor-owned native key set, preserving order and probabilities. */
-export function mapJudgeDistribution(probabilities: unknown,
+export function mapJudgeDistribution(candidate: unknown,
   declared: readonly { outcome: string; nativeOutcome: string }[]): JudgeVerdict['distribution'] {
-  if (!isBoundedJson(probabilities) || !isRecord(probabilities) || !declared.length
+  const snapshot = snapshotBoundedJson(candidate);
+  if (!snapshot.ok) return null;
+  const probabilities = snapshot.value;
+  if (!isRecord(probabilities) || !declared.length
     || new Set(declared.map((v) => v.outcome)).size !== declared.length
     || new Set(declared.map((v) => v.nativeOutcome)).size !== declared.length
     || Object.keys(probabilities).length !== declared.length) return null;

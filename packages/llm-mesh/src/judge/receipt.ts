@@ -1,7 +1,7 @@
 import type { JudgeError, JudgeErrorCode } from './errors.js';
 import type { EvaluatorRef, JudgeRequest, MicroUsd } from './request.js';
 import type { JudgeVerdict } from './verdict.js';
-import { hasOnlyKeys, isBoundedJson, isCorrelationId, isRecord } from './validation.js';
+import { hasOnlyKeys, isCorrelationId, isRecord, snapshotBoundedJson } from './validation.js';
 
 export type TokenCounter =
   | { value: number; source: 'provider' }
@@ -100,8 +100,11 @@ function isCounter(value: unknown, total: boolean): boolean {
 }
 
 /** Each counter has independent provenance; only a safe, known total can be derived. */
-export function parseJudgeUsage(value: unknown): JudgeUsage | null {
-  if (!isBoundedJson(value) || !isRecord(value) || !hasOnlyKeys(value, ['tokens', 'evaluatorCalls', 'explanations'])
+export function parseJudgeUsage(candidate: unknown): JudgeUsage | null {
+  const snapshot = snapshotBoundedJson(candidate);
+  if (!snapshot.ok) return null;
+  const value = snapshot.value;
+  if (!isRecord(value) || !hasOnlyKeys(value, ['tokens', 'evaluatorCalls', 'explanations'])
     || !isRecord(value.tokens) || !hasOnlyKeys(value.tokens, ['input', 'output', 'total'])
     || !isCounter(value.tokens.input, false) || !isCounter(value.tokens.output, false)
     || !isCounter(value.tokens.total, true)

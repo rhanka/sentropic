@@ -5,7 +5,20 @@ import type { JudgeScore } from '../src/judge/verdict.js';
 const grade = (value = 1.25) => ({ value, meaning: 'rubric-grade',
   scale: { kind: 'bounded', min: 0, max: 2, direction: 'higher-is-better' } });
 
+const drift = <T extends object>(target: T, field: string) => {
+  let reads = 0;
+  return new Proxy(target, {
+    get(object, key, receiver) {
+      if (key === field && ++reads > 1) return 999;
+      return Reflect.get(object, key, receiver);
+    },
+  });
+};
+
 describe('native judge score semantics', () => {
+  it('should return the validated score when live property reads change later', () => {
+    expect(parseJudgeScore(drift(grade(), 'value'))?.value).toBe(1.25);
+  });
   it('should retain fractional grades and avoid reversing lower-is-better scores', () => {
     expect(parseJudgeScore(grade())?.value).toBe(1.25);
     expect(parseJudgeScore(grade())?.normalized?.value).toBe(0.625);
@@ -61,6 +74,14 @@ describe('explicit judge decision semantics', () => {
 });
 
 describe('judge confidence and distribution semantics', () => {
+  it('should retain validated confidence and probabilities despite later live property drift', () => {
+    const confidence = { value: 0.8, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'descriptor:v1', origin: 'provider' };
+    expect(parseJudgeConfidence(drift(confidence, 'value'))).toEqual(confidence);
+    expect(mapJudgeDistribution(drift({ '0': 0.6, '1': 0.4 }, '0'), outcomes)).toEqual([
+      { outcome: 'Unsupported', nativeOutcome: '0', probability: 0.6 },
+      { outcome: 'Supported', nativeOutcome: '1', probability: 0.4 },
+    ]);
+  });
   it('should require documented native confidence rather than treating a score as confidence', () => {
     const confidence = { value: 0.8, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'descriptor:v1', origin: 'provider' };
     expect(parseJudgeConfidence(confidence)).toEqual(confidence);
