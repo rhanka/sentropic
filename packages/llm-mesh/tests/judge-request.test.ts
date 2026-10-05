@@ -30,6 +30,14 @@ describe('judge request JSON boundary', () => {
     expect(isCorrelationId('a'.repeat(129))).toBe(false);
     expect(isCorrelationId('line\nbreak')).toBe(false);
   });
+  it('should copy and inspect symbols from one descriptor-key snapshot', () => {
+    let reads = 0;
+    const value = new Proxy({ output: null }, {
+      ownKeys(target) { reads++; return Reflect.ownKeys(target); },
+    });
+    expect(isBoundedJson(value)).toBe(true);
+    expect(reads).toBe(1);
+  });
   it('should bound work when shared references expand into a larger JSON tree', () => {
     let visits = 0;
     const leaf = new Proxy({ text: 'Synthetic' }, {

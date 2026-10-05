@@ -61,6 +61,17 @@ describe('sanitized judge errors', () => {
 });
 
 describe('per-counter judge usage provenance', () => {
+  it('should settle from the validated usage snapshot despite later live counter drift', () => {
+    const usage = normalizeJudgeUsage({ inputTokens: 2, outputTokens: 3, evaluatorCalls: 1, explanations: 0 })!;
+    let reads = 0;
+    const candidate = new Proxy(usage, {
+      get(target, key, receiver) {
+        if (key === 'evaluatorCalls' && ++reads > 1) return -1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    expect(parseJudgeUsage(candidate)).toEqual(usage);
+  });
   it('should distinguish reported zero from absent input and preserve independent total provenance', () => {
     const usage = normalizeJudgeUsage({ outputTokens: 0, totalTokens: 7, evaluatorCalls: 1, explanations: 0 });
     expect(usage?.tokens).toEqual({ input: { value: null, source: 'not-reported' },

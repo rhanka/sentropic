@@ -72,9 +72,10 @@
 - [ ] Lot 1A m5 — conductor decision required: is an output/state candidate containing only null valid significant content, or REQUEST_INVALID? Per the 2026-10-04 instruction, stop before 1B and report the decision request; do not choose locally.
 - [x] Lot 1B Opus review, 2026-10-05: GO with fixes, no BLOCKER or MAJOR; prior Lot 1A corrections confirmed. This review covers the entry-stop range, not implementation of 1.04a–g.
 - [x] Lot 1B m1: reproduced invalid-phase SETTLEMENT_UNAVAILABLE returning retryable true; unrecognized phases now fail closed with preflight shape, retryable false and no retryAfterMs. The financial-error fallback regression pins both fields.
-- [ ] Lot 1B m2: score/confidence/distribution/usage parsers must validate and return the snapshotBoundedJson copy; add Proxy regressions in judge-verdict/judge-receipt tests. Refuse symbols on the materialized descriptor object, using the same ownKeys read as the copy.
+- [x] Lot 1B m2: reproduced live score/confidence/usage drift and duplicate descriptor-key reads; all four parsers now validate and return detached snapshotBoundedJson data. Proxy regressions pin score/confidence/distribution/usage; symbol refusal uses the materialized descriptor object from the same ownKeys read as copying.
 - [ ] Lot 1B m3 — conductor process decision: deliver the m5 null-only decision now, or explicitly move that gate to 1C entry before 1.05. The reviewer's valid-null recommendation is non-binding; the existing 1B entry hold stays until a conductor decision is recorded.
 - [x] Lot 1B follow-up stop: only review findings and handoffs recorded; no implementation change or new acceptance tests. Update .h2a/build/lot1B_report.md and stop per the instruction to report required conductor decisions.
+- [x] 2026-10-05 continuation: Lot 1B code findings m1/m2 are now implemented; m3 remains a conductor decision. Rows 1.04a–g are still unimplemented; .h2a/build/lot1C_report.md records corrections and the entry stop, not checkpoint completion.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -123,7 +124,8 @@
   - [ ] Gate: named API/mesh regressions, mesh/gateway typecheck/lint/full suites, scoped commits; write .h2a/build/lot1B_report.md and stop for Opus review.
 - [ ] **Lot 1C — JEV codec, transport and service**
   - [x] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
-  - [ ] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.
+  - [x] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.
+  - [x] Entry-correction validation: mesh typecheck/lint and full 489 tests/35 files passed (172 judge tests); gateway typecheck/lint and full 389 tests/28 files passed. Sequential Make -j1 gates used the complete test-llm-judge port triple; no 1.05–1.18 acceptance claimed.
   - [ ] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; new mesh tests/judge-jev-request.test.ts.
   - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
     - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
