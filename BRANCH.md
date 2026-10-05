@@ -66,7 +66,9 @@
 - [x] m6: host-global harness C1/recorder output is advisory; repository make scope-check C2 is authoritative. Makefile remains forbidden; no new host packages or C1 target.
 - [x] Lot 1A M1/m4: reproduced proxy serialization drift and unbounded shared-reference traversal; copy data descriptors under a byte-derived work budget, serialize once and validate/return the same detached copy.
 - [x] Lot 1A M2/m3: retryability is phase-aware; all settlement-phase errors and financial-authority errors after admission refuse retry hints. Keep advisory retryAfterMs in 0–60,000 ms, matching the maximum deadline; test all 26 codes across five phases and carry this rule into 1.25a docs.
-- [x] Lot 1A m2 (receipt): pin missing evaluatorCalls refusal and invalid-phase fallback alongside the retryability matrix; remaining request/verdict branches are recorded for the next contract test update.
+- [x] Lot 1A m2: pin all listed request/verdict/receipt refusal branches, including declared-label checks, schema/evaluator/context/direction, standalone zdr, non-boolean native decision, missing evaluatorCalls and invalid-phase fallback.
+- [x] Lot 1A m6: unsafe JSON keys are __proto__, constructor and prototype at every depth, including evaluated content; tests pin this policy. Canonical MicroUsd has no separate digit ceiling within the whole-request 256 KiB bound; future 1.14 arithmetic uses BigInt, never floating point.
+- [x] Lot 1A m1: type declarations do not qualify criterion-kind, decision-confidence/native-decision or providerRaw enforcement; explicit 1C sub-items below own these remaining invariants.
 - [ ] Lot 1A m5 — conductor decision required: is an output/state candidate containing only null valid significant content, or REQUEST_INVALID? Per the 2026-10-04 instruction, stop before 1B and report the decision request; do not choose locally.
 
 ## AI Flaky tests
@@ -102,8 +104,9 @@
   - [x] 1A rejection regressions: hidden sparse-array indices refuse, normalization contradictions never repair, and malformed score scales return VERDICT_INVALID without throwing.
   - [x] Gate: scoped contract tests per coherent commit, mesh/gateway typecheck/lint/full suites, authoritative make scope-check before every commit; write .h2a/build/lot1A_report.md and stop for Opus review.
   - [x] 1A validation: make typecheck-llm-mesh lint-llm-mesh and make typecheck-llm-gateway lint-llm-gateway passed; make test-llm-mesh passed 345 tests/35 files (28 new contract tests); make test-llm-gateway passed 389 tests/28 files. All used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge, sequentially.
-  - [x] 1A handoff: implementation remains unexported; no provider activation, versions, tuple or live calls. Stop here and await .h2a/reviews/lot1A_opus_review.md before 1.04a or any other checkpoint.
+  - [x] 1A handoff: Opus review received, GO with fixes and no BLOCKER; M1/M2 corrected. Implementation remains unexported; stop before 1B pending the m5 conductor decision, with .h2a/build/lot1B_report.md documenting the review-fix-only range.
 - [ ] **Lot 1B — Chat selection refusal**
+  - [ ] Entry gate: record the conductor's Lot 1A m5 null-only candidate decision before continuing; pin the selected behavior in request tests and carry it into 1.05 without producing an empty question.
   - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
   - [ ] 1.04b: model-catalog marked explicit/stored refusal before fallback; update API tests/unit/judge-chat-selection.test.ts.
   - [ ] 1.04c: llm-runtime/index.ts marked-provider refusal; new API tests/unit/judge-runtime-selection.test.ts.
@@ -115,17 +118,23 @@
 - [ ] **Lot 1C — JEV codec, transport and service**
   - [ ] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; new mesh tests/judge-jev-request.test.ts.
   - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
+    - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
   - [ ] 1.07: fractional Score and ordered index/label distribution mapping; new mesh tests/judge-jev-score.test.ts.
+    - [ ] Lot 1A handoff: unqualified probability-true direction is unordered in the pinned JEV descriptor/adapter; test this without restricting generic score parsing.
   - [ ] 1.08: jev-response.ts exact qualified served IDs and independently validated usage on identity mismatch; new mesh tests/judge-jev-usage.test.ts.
   - [ ] 1.09: transport/jev.ts injected fetch, fixed endpoint/bearer, single send, bounded responses and no redirects; new mesh tests/transport/jev.test.ts.
   - [ ] 1.10: transport deadline/cancellation/status mapping without retry; new mesh tests/transport/jev-failure.test.ts.
   - [ ] 1.11: adapter.ts JevAdapter descriptor discovery and no chat execution; new mesh tests/judge-adapter.test.ts.
+    - [ ] Lot 1A m1: decision-confidence requires a documented native decision; enforce and test descriptor-owned evidence.
   - [ ] 1.12: service.ts/policy.ts exact revision/input/capability selection; new mesh tests/judge-selection.test.ts.
+    - [ ] Lot 1A handoff: validate native thresholds/declared passing labels, including registered criteria, against the pinned descriptor before credential acquisition/egress.
   - [ ] 1.13: concrete resolved auth and descriptive retention, unsupported retention requests refuse; new mesh tests/judge-policy.test.ts.
   - [ ] 1.14: pricing.ts/budget.ts integer quotes and defensible liability-bound refusal; new mesh tests/judge-budget.test.ts.
   - [ ] 1.15: service admission, awaited durable marker and one dispatch; new mesh tests/judge-dispatch.test.ts.
+    - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.
   - [ ] 1.16: settlement/receipt persistence, identity-mismatch usage, charged overrun and no replay; new mesh tests/judge-settlement.test.ts.
   - [ ] 1.17: raw/observation allowlists and content/secret canaries; new mesh tests/judge-privacy.test.ts.
+    - [ ] Lot 1A m1: providerRaw validates the 16 KiB byte bound, allowlisted fields and truncated flag; test refusal and truncation.
   - [ ] 1.18: consumer index.ts, trusted host.ts and three export subpaths; new mesh tests/judge-public-surface.test.ts; typecheck-llm-mesh; no version change.
   - [ ] Gate: named fake-only codec/transport/service/privacy tests, mesh/gateway typecheck/lint/full suites; write .h2a/build/lot1C_report.md and stop for Opus review.
 - [ ] **Lot 1D — Remote client, cluster surface and public docs**
@@ -135,6 +144,7 @@
   - [ ] 1.22: compose/llm-mesh optional host judge input, disabled path acquires nothing; new cluster tests/judge-compose.spec.ts.
   - [ ] 1.23: public-port receipt correlation/generation-policy refusal; new cluster tests/judge-receipts.spec.ts.
   - [ ] 1.25a…: bounded public consumer/host examples, normalization/privacy/failure semantics and tracked architecture consolidation; regress mesh tests/judge-public-surface.test.ts.
+    - [ ] Carry Lot 1A phase-aware retryability, 60-second advisory hint ceiling, unsafe-key set, MicroUsd digit policy and the eventual m5 null-only decision into tracked docs.
   - [ ] Per-row gate: run each named mesh/cluster file separately with `make test-llm-mesh`/`make test-cluster-mesh SCOPE=<package-relative-path> API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge`.
   - [ ] API gate when needed: `make up-api-test REGISTRY=local API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge`, then scoped test-api-unit/test-api-endpoints in that slot; `make down API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge` afterward.
   - [ ] Gate: sequential mesh/gateway/cluster typecheck/lint/full affected suites and named API regressions; scope-check before each commit; write .h2a/build/lot1D_report.md and stop for Opus review.
