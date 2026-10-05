@@ -77,10 +77,15 @@
 - [x] Lot 1B follow-up stop: only review findings and handoffs recorded; no implementation change or new acceptance tests. Update .h2a/build/lot1B_report.md and stop per the instruction to report required conductor decisions.
 - [x] 2026-10-05 continuation: Lot 1B code findings m1/m2 are now implemented; m3 remains a conductor decision. Rows 1.04a–g are still unimplemented; .h2a/build/lot1C_report.md records corrections and the entry stop, not checkpoint completion.
 - [x] Lot 1C Opus review, 2026-10-05: GO with fixes, no BLOCKER or MAJOR; Lot 1B m1/m2 and the symbol nit accepted. Reviewed range 2ce265e2d..806082dcc covers corrections and the decision stop only; 1B/1C implementation remains unreviewed because it is not started.
-- [ ] Lot 1C m1: mapJudgeDistribution must copy the descriptor-owned declared outcome table once, validate that local table and build returned entries inside the validation loop from local bindings. Add a declared-outcome getter drift regression in judge-verdict.test.ts with 1.06/1.07.
-- [ ] Lot 1C m2: split confidence and distribution Proxy drift assertions into independent tests in judge-verdict.test.ts, with m1 above; observe each regression independently. The previous combined test's red count does not demonstrate the distribution assertion on its own.
+- [x] Lot 1C m1 routed to the unchecked 1.07 sub-item: copy the declared outcome table once and build returned entries inside validation from local bindings; add a declared-outcome getter drift regression in judge-verdict.test.ts. Routing is complete; implementation is pending.
+- [x] Lot 1C m2 routed to the same unchecked 1.07 sub-item: split confidence/distribution Proxy tests and observe each regression independently. The previous combined red count does not demonstrate distribution independently; test work is pending.
 - [x] Lot 1C handoffs: literal service phases, strict remote wire errors, validated inputs to decision helpers and baseline refresh before any 1B API stack are owned by the unchecked sub-items below.
-- [x] Lot 1D entry stop: Lot 1C review still requires the m3/m5 conductor decision; no semantic choice or gate relocation is delivered. Record findings and the decision in .h2a/build/lot1D_report.md and stop; 1B, 1C and 1D implementation remain unchecked.
+- [x] Review cycle 4 (lot1D_report) stop: Lot 1C review still requires the m3/m5 conductor decision; no semantic choice or gate relocation is delivered. Findings and the decision request are recorded in .h2a/build/lot1D_report.md; checkpoints 1B/1C remain unstarted and 1D is not entered.
+- [x] Report naming: lot1X_report filenames count review cycles independently of implementation checkpoints 1A–1D; checkpoint completion is defined by the Plan / Todo gate rows. No checkpoint 1E is defined.
+- [x] Lot 1D Opus review, 2026-10-05: GO, no BLOCKER or MAJOR; reviewed documentation-only range 806082dcc..82b2f0937. The conductor note confirms m3/m5 remains the only gate and another builder launch without a decision cannot advance implementation.
+- [x] Lot 1D m1: review-cycle naming and decision-request wording clarified above; the stop row does not claim checkpoint 1D entry or a ratified decision.
+- [x] Lot 1D m2: Lot 1C m1/m2 Feedback Loop rows now record completed routing; the single 1.07 implementation owner stays unchecked until source/tests land.
+- [x] Review cycle 5 (lot1E_report) stop: record Lot 1D review reconciliation and the unresolved conductor decision in .h2a/build/lot1E_report.md; no new implementation checkpoint is entered.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
