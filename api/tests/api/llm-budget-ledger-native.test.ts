@@ -1,7 +1,9 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import { NativeUsageObserver } from '@sentropic/llm-gateway';
 import { recordLlmUsage } from '../../src/services/llm-metering';
 import { sql } from 'drizzle-orm';
 import { withNativeLedger, MODELS, mixed, nativeStart, nativeFrame } from './native-ledger-fixture';
+afterEach(() => vi.restoreAllMocks());
 it('joins opaque HTTP response, physical observation and exactly one priced financial row by server request ID', async () => {
   await withNativeLedger({}, async h => {
     const response = await h.router.request('/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -16,6 +18,56 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
     expect(financial.pricing_version).toBe(h.pricingId);
     expect(await h.rows(sql`SELECT reserved_micro_usd, spent_micro_usd FROM control.budgets WHERE tenant_id = ${h.cost.tenantId}`))
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
+  });
+});
+const iterationCases = [undefined, null, [], [{}], {}, 'fixture-value', 1, true];
+it.each(MODELS.flatMap((model, index) => iterationCases.flatMap((iterations, kind) => [false, true].map(stream =>
+  [model, index, iterations, kind, stream] as const))))('applies K4 iterations policy (%s #%s %s #%s stream=%s)', async (model, index, iterations, kind, stream) => {
+  const usage = { ...mixed, output_tokens: 500, ...(kind === 0 ? {} : { iterations }) };
+  await withNativeLedger({ model, usage, chunks: [nativeStart(model, usage),
+    nativeFrame('message_delta', { usage: { output_tokens: 500 } }), nativeFrame('message_stop')],
+    allowanceInput: 10350, allowanceOutput: 32000 }, async h => {
+    await h.run(stream);
+    const row = await h.financial(), obs = await h.observation(), latch = kind >= 3;
+    expect(Number(row.cost_micro_usd)).toBe(latch ? 74350 : index === 2 ? 1700 : 2450);
+    expect(row.output_tokens).toBe(latch ? 32000 : 500); expect(row.attempts[0].estimated).toBe(latch);
+    expect(obs.output_tokens).toBe(500); expect(obs.usage_raw.iterations_present).toBe(latch);
+    expect(obs.usage_raw.iterations).toBeUndefined(); expect(await h.audit()).toHaveLength(latch ? 1 : 0);
+    if (latch) expect(row.output_tokens / obs.output_tokens).toBe(64);
+  });
+});
+it.each(['mismatch', 'fallback'].flatMap(kind => [false, true].map(stream => [kind, stream] as const)))
+('pins realistic 64× output floor for %s (stream=%s)', async (kind, stream) => {
+  const model = MODELS[0]!, served = kind === 'mismatch' ? MODELS[1]! : model;
+  const usage = { ...mixed, output_tokens: 500 };
+  const fallback = { type: 'fallback', token: 'fixture-private' };
+  await withNativeLedger({ served, usage, body: kind === 'fallback' ? { content: [fallback] } : {},
+    chunks: [nativeStart(served, usage), ...(kind === 'fallback' ? [nativeFrame('content_block_start', { content_block: fallback })] : []),
+      nativeFrame('message_stop')], allowanceInput: 10350, allowanceOutput: 32000 }, async h => {
+    await h.run(stream); expect(Number((await h.financial()).cost_micro_usd)).toBe(74350);
+    expect((await h.financial()).output_tokens).toBe(32000); expect((await h.observation()).output_tokens).toBe(500);
+    expect(await h.audit()).toHaveLength(1);
+  });
+});
+it.each(['cancel', 'commit-failure'] as const)('hands one immutable terminal snapshot to DB observation and settlement on %s', async terminal => {
+  const snapshotSpy = vi.spyOn(NativeUsageObserver.prototype, 'snapshot');
+  await withNativeLedger({ allowanceInput: 20000, allowanceOutput: 32000,
+    chunks: [nativeStart(MODELS[0]!, { ...mixed, output_tokens: 500 }), nativeFrame('message_stop')] }, async h => {
+    await h.run(true, terminal);
+    const snapshot = h.snapshots[0]!, obs = await h.observation(), row = await h.financial();
+    expect(snapshotSpy).toHaveBeenCalledOnce(); expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+    expect(Object.isFrozen(snapshot)).toBe(true); expect(Object.isFrozen(snapshot.rawUsage)).toBe(true);
+    expect(h.record).toHaveBeenCalledOnce(); expect(h.settled).toHaveLength(1); expect(h.close).toHaveBeenCalledOnce();
+    expect(snapshot.termination).toBe(terminal === 'cancel' ? 'cancelled' : 'commit_failed');
+    expect(obs).toMatchObject({ input_tokens: snapshot.inputTokens, output_tokens: snapshot.outputTokens, total_tokens: snapshot.totalTokens });
+    expect(obs.usage_raw).toMatchObject({ estimated: snapshot.estimated, termination: snapshot.termination,
+      final_output_observed: snapshot.finalOutputObserved, input_usage_validated: snapshot.nativeInputUsageValidated,
+      input_usage_source: snapshot.nativeInputUsageSource });
+    expect(row.attempts[0].nativeInputPriceUnits40).toBe(snapshot.nativeInputPriceUnits40);
+    expect(row).toMatchObject({ input_tokens: 10350, output_tokens: 32000 });
+    expect(Number(row.cost_micro_usd)).toBe(65450); expect(obs.output_tokens).toBe(500);
+    await h.settlement.settleRoute(h.settled[0]!); await h.attempt.nativeMessages!.finalize!(snapshot);
+    expect(await h.ledger()).toHaveLength(2); expect(h.record).toHaveBeenCalledOnce();
   });
 });
 const growingStart = { input_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0, output_tokens: 1 };
