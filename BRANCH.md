@@ -347,7 +347,7 @@
   - [x] Row 66a split — Trusted auth resolver and response-only account lease lifecycle; typecheck PASS, Claude tests 45 passed / 0 failed; 66b attaches capabilities and execute-time acquisition.
   - [x] Row 66b split — Exact allowlist/version/model, independent count, execute-time acquisition/null lease and detached port holders; corrected token-mode lease initialization before commit; typecheck PASS, tests 47 passed / 0 failed.
   - [x] Row 67 — Attempt-bound body-free finalize, physical/raw closed snapshot projection and distinct callId/requestId join; header-start precedes upload wait; typecheck PASS, scoped tests 56 passed / 0 failed; gateway owns K5/L4.
-  - [ ] Row 67a — `budget-admission.ts`, `route-settlement.ts`: pricing provider/model identity and pinned-versus-costliest provenance.
+  - [x] Row 67a — Database provider/model price identity and exact-pinned versus costliest provenance; canonical amounts unchanged; typecheck PASS, sink unit 8 passed / 0 failed, ledger endpoints 36 passed / 0 failed.
   - [ ] Row 68 — Native rational usageCost identity/policy/model/bounds guards; canonical cost preserved.
   - [ ] Row 68a — Closed native attempt audit fields; mismatch triggers one transactional overrun-style audit.
   - [ ] Row 68b — `api/tests/unit/llm-budget-admission-native.test.ts`: exact amounts, wrong/missing identity, costliest fallback and unsafe bounds.

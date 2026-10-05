@@ -111,6 +111,7 @@ const pinnedPricing = async (tx: LedgerTx, ids: readonly string[]): Promise<Map<
     FROM control.model_pricing WHERE id = ANY(${pgTextArray(ids)})`)).rows as Array<Record<string, unknown>>;
   const big = (value: unknown) => (value === null || value === undefined ? 0n : BigInt(value as string));
   return new Map(rows.map((row) => [modelBucketKey(String(row.provider_id), String(row.model_id)), {
+    providerId: String(row.provider_id), modelId: String(row.model_id),
     id: String(row.id), input: big(row.input_micro_usd_per_mtok), output: big(row.output_micro_usd_per_mtok),
     reasoning: big(row.reasoning_micro_usd_per_mtok), image: big(row.image_micro_usd_per_unit),
     toolCall: big(row.tool_call_micro_usd_per_unit), minCharge: big(row.min_charge_micro_usd),
@@ -158,8 +159,10 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
     const pricing = await pinnedPricing(tx, hold.pricingVersions);
     let total = 0n;
     const attempts = settlement.attempts.map((attempt) => {
-      const price = pricing.get(modelBucketKey(attempt.providerId, attempt.modelId)) ?? costliest(pricing);
-      const charged = price ? usageCost(price, attempt.usage) : 0n;
+      const exact = pricing.get(modelBucketKey(attempt.providerId, attempt.modelId));
+      const price = exact ?? costliest(pricing);
+      const charged = price ? usageCost(price, attempt.usage, { providerId: attempt.providerId, modelId: attempt.modelId,
+        pricingMatch: exact ? 'exact' : 'costliest' }) : 0n;
       if (!price && (attempt.usage.inputTokens > 0 || attempt.usage.outputTokens > 0)) {
         throw new RouteSettlementError('dispatched attempt has no pinned price');
       }
