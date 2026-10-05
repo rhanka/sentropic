@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { providerRegistry } from '../../src/services/provider-registry';
-import { providerIds } from '../../src/services/provider-runtime';
+import { isJudgeOnlyProvider, providerIds } from '../../src/services/provider-runtime';
 
 describe('ProviderRegistry expansion', () => {
   it('should list all 8 providers', () => {
@@ -21,13 +21,13 @@ describe('ProviderRegistry expansion', () => {
 
   it('should have all provider IDs in the providerIds constant', () => {
     expect(providerIds).toEqual(
-      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local', 'muse']),
+      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local', 'muse', 'typesafe']),
     );
-    expect(providerIds).toHaveLength(8);
+    expect(providerIds).toHaveLength(9);
   });
 
   it('should resolve each provider via getProvider', () => {
-    for (const id of providerIds) {
+    for (const id of providerIds.filter((id) => !isJudgeOnlyProvider(id))) {
       const provider = providerRegistry.getProvider(id);
       expect(provider).not.toBeNull();
       expect(provider!.provider.providerId).toBe(id);
@@ -35,7 +35,7 @@ describe('ProviderRegistry expansion', () => {
   });
 
   it('should resolve each provider via requireProvider', () => {
-    for (const id of providerIds) {
+    for (const id of providerIds.filter((id) => !isJudgeOnlyProvider(id))) {
       expect(() => providerRegistry.requireProvider(id)).not.toThrow();
     }
   });
@@ -44,6 +44,13 @@ describe('ProviderRegistry expansion', () => {
     expect(() =>
       providerRegistry.requireProvider('unknown' as never),
     ).toThrow('Provider not found');
+  });
+
+  it('keeps a known judge provider outside chat runtime registration and model inventory', () => {
+    expect(providerRegistry.getProvider('typesafe')).toBeNull();
+    expect(() => providerRegistry.requireProvider('typesafe')).toThrow('Provider not found');
+    expect(providerRegistry.listModels().some((model) => model.providerId === 'typesafe')).toBe(false);
+    expect(providerRegistry.listProviders().some((provider) => provider.providerId === 'typesafe')).toBe(false);
   });
 
   it('should list models from all serving providers (muse lists since its S4 upstream transport landed)', () => {
