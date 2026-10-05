@@ -76,6 +76,11 @@
 - [ ] Lot 1B m3 — conductor process decision: deliver the m5 null-only decision now, or explicitly move that gate to 1C entry before 1.05. The reviewer's valid-null recommendation is non-binding; the existing 1B entry hold stays until a conductor decision is recorded.
 - [x] Lot 1B follow-up stop: only review findings and handoffs recorded; no implementation change or new acceptance tests. Update .h2a/build/lot1B_report.md and stop per the instruction to report required conductor decisions.
 - [x] 2026-10-05 continuation: Lot 1B code findings m1/m2 are now implemented; m3 remains a conductor decision. Rows 1.04a–g are still unimplemented; .h2a/build/lot1C_report.md records corrections and the entry stop, not checkpoint completion.
+- [x] Lot 1C Opus review, 2026-10-05: GO with fixes, no BLOCKER or MAJOR; Lot 1B m1/m2 and the symbol nit accepted. Reviewed range 2ce265e2d..806082dcc covers corrections and the decision stop only; 1B/1C implementation remains unreviewed because it is not started.
+- [ ] Lot 1C m1: mapJudgeDistribution must copy the descriptor-owned declared outcome table once, validate that local table and build returned entries inside the validation loop from local bindings. Add a declared-outcome getter drift regression in judge-verdict.test.ts with 1.06/1.07.
+- [ ] Lot 1C m2: split confidence and distribution Proxy drift assertions into independent tests in judge-verdict.test.ts, with m1 above; observe each regression independently. The previous combined test's red count does not demonstrate the distribution assertion on its own.
+- [x] Lot 1C handoffs: literal service phases, strict remote wire errors, validated inputs to decision helpers and baseline refresh before any 1B API stack are owned by the unchecked sub-items below.
+- [x] Lot 1D entry stop: Lot 1C review still requires the m3/m5 conductor decision; no semantic choice or gate relocation is delivered. Record findings and the decision in .h2a/build/lot1D_report.md and stop; 1B, 1C and 1D implementation remain unchecked.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -114,6 +119,7 @@
   - [x] 1A review-fix validation: mesh/gateway typecheck and lint passed; full mesh 485 tests/35 files (168 judge tests), full gateway 389 tests/28 files. Sequential Make gates used API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge; no 1B acceptance claimed.
 - [ ] **Lot 1B — Chat selection refusal**
   - [ ] Entry gate: conductor must resolve Lot 1A m5 or explicitly relocate it to 1C as proposed by Lot 1B m3; do not relocate locally. A resolved semantic decision needs request tests and explicit null encoding/refusal at 1.05.
+    - [ ] Lot 1C pre-stack handoff: before any 1B API stack, refresh onto origin/main and rerun scoped judge tests plus full mesh/gateway suites; recheck ports 9480/5680/1580 and retain REGISTRY=local with no provider keys and the complete port triple/ENV last.
   - [ ] 1.04a: catalog judgeOnly declaration and API provider-runtime predicate before activation; new API tests/unit/judge-chat-selection.test.ts; regress provider-registry-expansion.test.ts and unmarked local.
   - [ ] 1.04b: model-catalog marked explicit/stored refusal before fallback; update API tests/unit/judge-chat-selection.test.ts.
   - [ ] 1.04c: llm-runtime/index.ts marked-provider refusal; new API tests/unit/judge-runtime-selection.test.ts.
@@ -131,11 +137,13 @@
     - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
   - [ ] 1.07: fractional Score and ordered index/label distribution mapping; new mesh tests/judge-jev-score.test.ts.
     - [ ] Lot 1A handoff: unqualified probability-true direction is unordered in the pinned JEV descriptor/adapter; test this without restricting generic score parsing.
+    - [ ] Lot 1C m1/m2: copy declared distribution outcomes once and return entries built during validation; add a getter drift regression and separate confidence/distribution Proxy tests in judge-verdict.test.ts before adapter consumption.
   - [ ] 1.08: jev-response.ts exact qualified served IDs and independently validated usage on identity mismatch; new mesh tests/judge-jev-usage.test.ts.
   - [ ] 1.09: transport/jev.ts injected fetch, fixed endpoint/bearer, single send, bounded responses and no redirects; new mesh tests/transport/jev.test.ts.
   - [ ] 1.10: transport deadline/cancellation/status mapping without retry; new mesh tests/transport/jev-failure.test.ts.
   - [ ] 1.11: adapter.ts JevAdapter descriptor discovery and no chat execution; new mesh tests/judge-adapter.test.ts.
     - [ ] Lot 1A m1: decision-confidence requires a documented native decision; enforce and test descriptor-owned evidence.
+    - [ ] Lot 1C handoff: decision helpers consume only validated request/parser outputs; build the verdict envelope from these outputs rather than returning the live object checked by hasJudgeVerdictValue.
   - [ ] 1.12: service.ts/policy.ts exact revision/input/capability selection; new mesh tests/judge-selection.test.ts.
     - [ ] Lot 1A handoff: validate native thresholds/declared passing labels, including registered criteria, against the pinned descriptor before credential acquisition/egress.
     - [ ] Lot 1B handoff: keep the validated request service-internal (or freeze it) across admission, encoding and settlement so no caller mutation changes the accepted content.
@@ -145,12 +153,14 @@
     - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.
   - [ ] 1.16: settlement/receipt persistence, identity-mismatch usage, charged overrun and no replay; new mesh tests/judge-settlement.test.ts.
     - [ ] Lot 1B handoff: every post-result failure, including deadline expiry, uses settlement phase; tests assert phase, code and absence of redispatch advice.
+    - [ ] Lot 1C handoff: 1.15/1.16 pass only literal error phases; sanitized preflight must never stand in for a post-result phase or establish zero attempts/spend.
   - [ ] 1.17: raw/observation allowlists and content/secret canaries; new mesh tests/judge-privacy.test.ts.
     - [ ] Lot 1A m1: providerRaw validates the 16 KiB byte bound, allowlisted fields and truncated flag; test refusal and truncation.
   - [ ] 1.18: consumer index.ts, trusted host.ts and three export subpaths; new mesh tests/judge-public-surface.test.ts; typecheck-llm-mesh; no version change.
   - [ ] Gate: named fake-only codec/transport/service/privacy tests, mesh/gateway typecheck/lint/full suites; write .h2a/build/lot1C_report.md and stop for Opus review.
 - [ ] **Lot 1D — Remote client, cluster surface and public docs**
   - [ ] 2.09 prerequisite: client.ts authenticated mesh-only caller, correlation, bounded envelopes, receipt-null connection failure and no retry; new mesh tests/judge-client.test.ts; update public-surface test.
+    - [ ] Lot 1C handoff: unknown wire error code or phase is an invalid mesh response; return typed MESH_UNAVAILABLE/TRANSPORT_FAILED connection failure with callStatus unknown, never coerce through createJudgeError into preflight/not-sent/zero spend. Pin both refusals in judge-client.test.ts.
   - [ ] 1.20a–c: three separate cluster module/catalog commits after client exists; update tests/modules/capabilities.spec.ts and new/update tests/modules/judge-loading.spec.ts for each.
   - [ ] 1.21a–c: three separate cluster leaf/typed-loader/export commits; update tests/integrations/llm-surface.spec.ts and tests/modules/judge-loading.spec.ts for each; retain existing ranges.
   - [ ] 1.22: compose/llm-mesh optional host judge input, disabled path acquires nothing; new cluster tests/judge-compose.spec.ts.
