@@ -1,0 +1,421 @@
+# Feature: Cowork remote MCP — owner control of a Windows workstation (BR-41d)
+
+## Objective
+- [ ] Let the owner control their own Windows workstation from claude.ai and Claude Code through a dedicated MCP endpoint `https://sentropic.sent-tech.ca/api/v1/cowork-mcp` (owner OAuth login): screen capture, mouse/keyboard input, two-way file transfer of 64 MB and more (chunked), and shell/exec under a local allow-list policy.
+- [ ] Implement the owner-approved decision dossier r2 (`.h2a/inputs/cowork-remote-dossier-r2.json`, decisions D1–D8, steps 0–7) without redesign: build and targeted tests in this branch, a brief preprod smoke after merge, then a one-week prod pilot under local policy plus server activation.
+
+## Scope / Guardrails
+- [ ] Branch `feat/cowork-remote-mcp`, worktree `/home/antoinefa/src/sentropic/tmp/cowork-remote-mcp`, base `origin/main` 52c1fdc63; run `git -C /home/antoinefa/src/sentropic/tmp/cowork-remote-mcp branch --show-current` before any work and before every commit.
+- [ ] Design sources (git-ignored, French): `.h2a/inputs/cowork-remote-dossier-r2.json`, `cowork-remote-author-notes-r2.md`, `existing-state-cowork.md`, `r1_fable_review.md`, `r1_astra_review.md`; planning notes in `.h2a/plan/design_notes.md`.
+- [ ] The committed English contract `spec/SPEC_EVOL_COWORK_REMOTE_MCP.md` (Lot 0) is the single source of truth for wire contracts, limits, states and the pilot runbook; code and tests follow it.
+- [ ] Owner decisions BR41d-D1..D8 are fixed (D7/D8 answered 2026-10-06 via `.h2a/inputs/owner-answers-r2.json`, s-conductor relay); no redesign; any deviation or gap is raised in `## Feedback Loop`, never applied silently.
+- [ ] Make-only and Docker-first; no native npm/node on host; no Python anywhere (code, scripts, CI, k8s jobs, images).
+- [ ] Test env `ENV=test-cowork-remote-mcp` on slot nn=97/0: `API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585`; E2E env `ENV=e2e-cowork-remote-mcp` on slot nn=97/1: `API_PORT=9486 UI_PORT=5686 MAILDEV_UI_PORT=1586`; always pass `REGISTRY=local` and all three ports; `ENV` is always the last argument.
+- [ ] Never `ENV=dev` for tests, never root ports 8787/5173/1080, never `make clean-all`; `make ps` on the branch env before starting a stack (empty or owned by this branch).
+- [ ] One migration max: `api/drizzle/control/0009_cowork_remote.sql` in the control stream (BR41d-EX1); public stream `api/drizzle/*.sql` and `api/src/db/schema.ts` untouched.
+- [ ] Commits atomic, under 150 changed lines and at most 15 files (generated drizzle snapshot and the initial BRANCH.md commit excepted, BR41d-A1); selective `git add <files>`; `git add` and `make commit MSG="type: description"` in separate calls; no attribution trailer; BRANCH.md checkboxes updated inside each commit.
+- [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` before each commit; `make down REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` at the end of each lot.
+- [ ] Each lot ends with a reviewer pass (independent agent) and a report per `rules/subagents.md` (Done, Checks, Feedback Loop, Risks, Scope adherence, Read set); findings become `## Feedback Loop` items before the next lot starts.
+- [ ] Project skills: `scope-check` before commits, `lot-gate` at each lot end, `branch-close` in Lot 9; dependency changes only through `make install-ui NPM_LIB=<lib> ... ENV=test-cowork-remote-mcp` and `make lock-root ENV=test-cowork-remote-mcp`.
+- [ ] No PR, merge, publication or deploy before Lot 9; branch push only before a UAT checkpoint; every prod action is done by an authorized operator with explicit owner approval.
+- [ ] Prod manifests are not changed by this branch; prod promotion goes through a separate reviewed promotion change (Lot 10, BR41d-Q3).
+- [ ] Never change the product `OAUTH_ISSUER_URL`, the `/mcp` `MCP_RESOURCE_URI`, `OAUTH_ACCESS_TOKEN_TTL_SEC`, nginx, or the global cowork-desktop download channel; the existing `/api/v1/mcp` module stays untouched.
+- [ ] Branch `feat/cowork-connector-host-mvp` (5fd595ddd, rewritten history) is never merged, rebased in or cherry-picked; only its contracts may inform this code.
+- [ ] New code, comments, docs and commit messages in English; UI strings through `ui/src/locales/en.json` and `ui/src/locales/fr.json`; French strings follow the owner vocabulary rule (factual status terms only).
+
+## Security Invariants (MANDATORY)
+- [ ] INV-01 Owner-only: every MCP request needs a JWT with `aud` equal to the exact `COWORK_MCP_RESOURCE_URI` (no trailing slash), scope `cowork:control`, `sub` equal to `COWORK_OWNER_SUB`, `client_id` equal to `COWORK_MCP_CLIENT_ID`; any mismatch is 401/403 (proof: `api/tests/api/cowork-mcp-admission.test.ts`).
+- [ ] INV-02 Revocation-aware admission: after JWT verification, fresh reads of token meta (present, unexpired), revocation (`isTokenRevoked=false`), client row (`allowedScopes` has `cowork:control`, `resourceIndicators` has the resource) and owner (`account_status=active`, `disabled_at` null); any store failure denies; no positive cache for admissions (proof: admission and stop tests).
+- [ ] INV-03 Fail-closed config: flag not `true` or any required value missing or invalid gives 404 on every Cowork route and starts no Cowork scheduler or watchdog (proof: `api/tests/unit/cowork-remote-config.test.ts`, protocol test).
+- [ ] INV-04 Seven-day activation: `activationExpiresAt = activatedAt + 604800 s`, immutable UTC; every admission, poll, permit and chunk evaluates min(activation, credential, registration, lease, local policy end); DB unavailable or timestamps inconsistent denies; refusal at J+7 even with the flag true (proof: `api/tests/api/cowork-activation.test.ts`).
+- [ ] INV-05 Tier isolation: preprod tokens, clients, keys and resources are never admitted in prod and the reverse (proof: wrong audience and issuer cases in the admission test).
+- [ ] INV-06 Credential families separated: the gateway secret is refused by product routes, by device approve, by the IdP session resolver and by the MCP endpoint; OAuth bearers are refused by gateway routes; the exchanged product session and its refresh are revoked in the exchange transaction before the response; the exchange is one-time (proof: `api/tests/api/cowork-device-exchange.test.ts`).
+- [ ] INV-07 Ownership checks on every gateway request: owner, device key `device:<sessionId>`, generation, active credential hash, `policyRev` and effective expiry on each poll, claim, permit, result and chunk; an opaque id never authorizes by itself (proof: `api/tests/api/cowork-broker-gateway.test.ts`).
+- [ ] INV-08 Single device: no `deviceId` in tool arguments; the server resolves the unique armed device of the owner; a second device is refused; replacement only by an explicit owner portal action that revokes the previous credential and generation (proof: exchange and broker tests).
+- [ ] INV-09 Prepare before effect: `action_prepare` has no effect and returns an opaque `operationId` (TTL 5 min, bounded by token `exp` and policy) with arguments sealed by an HMAC digest keyed by `COWORK_OPERATION_HMAC_KEY` (never a bare hash); modified arguments are rejected; the same `operationId` returns the same status or receipt; scope is tier + owner + clientId + device + policyRev; JSON-RPC ids are never keys (proof: `api/tests/unit/cowork-operation-digest.test.ts`, `api/tests/api/cowork-broker-mcp.test.ts`).
+- [ ] INV-10 No replay: unknown or expired ids never execute; a crash between effect and receipt is `indeterminate`; no automatic retry; new writes are refused while an indeterminate effect is unresolved locally; an API restart cancels unclaimed jobs and never replays payloads (payloads live in RAM only); a late ACK opens no grant; no late content after revocation; an OAuth reconnection never reopens an operation of an expired `jti`; no exactly-once claim (proof: broker tests, `packages/cowork-desktop/tests/remote-ledger.spec.ts`).
+- [ ] INV-11 Permit fencing: one action in flight; claim lease 30 s bound to generation + nonce; permit valid 2 s and issued only after fresh revocation, stop and activation reads; the agent checks epochs, deadline and Windows session, then durably marks `executing` before the primitive; lease renewal never re-runs a primitive (proof: broker tests, `packages/cowork-desktop/tests/remote-loop.spec.ts`).
+- [ ] INV-12 Three distinct stops: OAuth revocation closes the jobs and transfers of that `jti` without waiting for `exp`; `notifications/cancelled` is ignored with 202 and `action_cancel(operationId)` cancels within its scope; Cowork stop `POST /api/v1/cowork-control/stop` (owner cookie + anti-CSRF + strict Origin) durably disables activation and grants, increments the epoch and cancels permits; watchdog every 5 s; a ConfigMap change alone is not a kill switch (proof: `api/tests/api/cowork-stop.test.ts`).
+- [ ] INV-13 Local policy before every effect: distinct capabilities (capture, keyboard/mouse, file in, file out, shell/exec), none enabled implicitly; durations entered, until lock, or unlimited with explicit confirmation; unlimited never extends the 7-day pilot (proof: `packages/cowork-desktop/tests/policy-evaluate.spec.ts`, Windows UAT A).
+- [ ] INV-14 Self-protection: no tool can read-to-modify, accept or arm a policy; while the local policy surface is open, remote claims pause, the agent input injection is disabled, exec children are blocked and injected input events are rejected; if the surface cannot be protected the agent stays disarmed (proof: `packages/cowork-desktop/tests/policy-surface.spec.ts`, Windows UAT A).
+- [ ] INV-15 Disarm events: lock, logoff, restart and user switch disarm; re-arming needs a local action and keeps the chosen duration; any scope or YOLO change is a new revision needing a new local acceptance (proof: `packages/cowork-desktop/tests/stop-controller.spec.ts`, Windows UAT A).
+- [ ] INV-16 Acceptance trace: policyId, revision, ownerSub, Windows SID, device, tier, local actor, acceptedAt UTC, canonical scope, ruleSetDigest, durationMode, expiresAt or null, pilotExpiresAt, revokedAt and reason, epochs; the server keeps only the canonical redacted scope and digest, no secrets and no raw paths (proof: `api/tests/api/cowork-policy-registry.test.ts`).
+- [ ] INV-17 Inert by default: the default CLI run never polls jobs; the remote loop needs the explicit `remote` mode + local arming + server admission; published npm and UI exe code stays inert (proof: `packages/cowork-desktop/tests/remote-inert.spec.ts`).
+- [ ] INV-18 Local kill switch: global hotkey and notification-area button, independent of focus and outside the exec loop (reserved screen corner if the hook is unavailable; Ctrl+C console fallback only); kills the process tree, releases keys and buttons in `finally`, notifies the server best effort; network loss forbids any next effect (proof: stop-controller tests, Windows UAT A).
+- [ ] INV-19 Shell allow-list: named rule (ruleId + version), absolute canonical executable with expected hash or signer, typed argv (literals and anchored patterns, max length), no implicit shell, cwd inside an approved root without reparse points, rebuilt minimal environment, secrets by local reference only; rule and file re-evaluated just before spawn; PowerShell/cmd only through immutable hashed local scripts with typed parameters; `-Command`, `-EncodedCommand` and free metacharacters refused; rules authored only on the local surface (proof: `packages/cowork-desktop/tests/exec-rules.spec.ts`, `exec-script-rules.spec.ts`, Windows UAT B).
+- [ ] INV-20 Process bounds: timeout default 10 s, max 20 s; stdout+stderr at most 16 KiB UTF-8 with announced truncation; Job Object kill-on-close, no detached child, stdin closed, environment not inherited, no elevation; timeout or stop kills the tree and returns a receipt that can state a partial effect (proof: `packages/cowork-desktop/tests/exec-runner.spec.ts`, Windows UAT B).
+- [ ] INV-21 YOLO: visible "Allow everything (YOLO) — not recommended", never default, explicit local activation with a risk recap and a dedicated audit event; it removes only the allow-list (timeouts, caps, kill, identity and 7-day end stay); no silent policy exemption for a refused command (proof: `packages/cowork-desktop/tests/policy-yolo.spec.ts`).
+- [ ] INV-22 Audit without secrets: operationId, ruleId/version, executable or script identity hash, schema-allowed non-sensitive params, cwdRef/envKeyRefs, policyRev, actor, times, duration, exitCode, byte counts, timeout/truncation flags; never raw command, argv, cwd, env, stdout/stderr, images, typed text, file names, paths, tokens or bare hashes of low-entropy text; YOLO rows carry the executable and `raw-command-redacted`; HTTP paths carry opaque ids only; secrets only in headers; error traces redacted (proof: `api/tests/api/cowork-audit.test.ts` with log capture).
+- [ ] INV-23 Audit durability: the audit table is append-only (UPDATE refused, DELETE only by the TTL purge 7 days after close); an audit write failure blocks new admissions (proof: `api/tests/api/cowork-remote-schema.test.ts`, audit test).
+- [ ] INV-24 No bytes through MCP: MCP carries metadata, short UTF-8 text at most 32 KiB (only if the BR41d-Q5 measurement allows) and reduced images; binary bytes only through the authenticated portal HTTP and the gateway; no binary chunk tool; no implicit access to Claude attachments (proof: `api/tests/api/cowork-files-mcp.test.ts`).
+- [ ] INV-25 Chunk integrity: HTTP chunks of 256 KiB; SHA-256 per chunk, per 64 MiB segment and per logical file; index, offset, size and hash sealed in the manifest; out-of-range index, conflicting duplicate, hole and wrong final size refused; same index and hash is idempotent; ACK only after durable write plus manifest transaction; `completed` only after the destination ACK; a lost ACK stays pending, never a second publication (proof: `api/tests/api/cowork-files-staging.test.ts`, `packages/cowork-desktop/tests/file-incoming.spec.ts`).
+- [ ] INV-26 File limits: segment threshold 67108864 bytes; logical file at most 1 GiB (refused above); owner quota 2 GiB; one active transfer per direction; space reserved before start on Windows and API; global disk cap; chunks only in the private staging volume, never under a UI static directory; TTL 24 h bounded by activation; purge after ACK, abort, stop, revocation or TTL at least every minute (proof: staging test).
+- [ ] INV-27 Path policy: local Incoming/Outgoing roots and opaque handles; absolute, UNC, traversal, ADS, reserved names, symlinks, junctions and reparse points refused; final path revalidated after open; `.part` with a user ACL; flush then atomic rename without overwrite; `Zone.Identifier` set before publication in Incoming; never auto-open or execute (proof: `packages/cowork-desktop/tests/file-paths.spec.ts`, Windows UAT C).
+- [ ] INV-28 Inert portal responses: `Content-Disposition: attachment` with a neutralized name (CR/LF refused, `filename*` encoded), `Content-Type: application/octet-stream`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`; no preview under the product origin; file name and type never drive headers; portal mutations need owner cookie + anti-CSRF token + strict Origin (sibling `*.sent-tech.ca` origins are same-site, so SameSite=Lax alone is not enough); a transfer id alone grants nothing (proof: `api/tests/security/cowork-portal-boundaries.test.ts`).
+- [ ] INV-29 Transfer revalidation: every chunk or read revalidates owner, device, grant and active `jti`; OAuth expiry suspends the transfer; resume only after re-login plus an explicit local rebind to the new `jti` with hash revalidation; never action reactivation (proof: staging and `packages/cowork-desktop/tests/file-outgoing.spec.ts`).
+- [ ] INV-30 Edge bounds without nginx change: long-poll 25 s, MCP response at most 35 s (otherwise `pending` + `action_status`), chunk request at most 20 s with a body under 512 KiB; no `Access-Control-Allow-Origin: *` added by Cowork code, and the header inherited from nginx never replaces Origin/CSRF checks (proof: protocol and gateway tests, Lot 10 smoke measurement).
+- [ ] INV-31 Claude-side pilot settings (not server-attestable): connector tools on "Needs approval", never "Always allow"; dedicated conversation without other write or emit connectors; checked by the owner at activation (proof: Lot 10 activation checklist).
+
+## Branch Scope Boundaries (MANDATORY)
+- [ ] **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `spec/SPEC_EVOL_COWORK_REMOTE_MCP.md`
+  - `spec/SPEC_COWORK.md` (one pointer line to the new spec)
+  - `api/src/app.ts` (direct mounts of the three Cowork routers only)
+  - `api/src/index.ts` (Cowork watchdog and purge scheduler wiring only)
+  - `api/src/config/env.ts` (optional COWORK keys only)
+  - `api/src/routes/cowork-mcp.ts`
+  - `api/src/routes/cowork-devices.ts`
+  - `api/src/routes/cowork-control.ts`
+  - `api/src/services/cowork-remote/**`
+  - `api/tests/unit/cowork-*.test.ts`
+  - `api/tests/api/cowork-*.test.ts`
+  - `api/tests/security/cowork-*.test.ts`
+  - `api/tests/utils/cowork-*.ts`
+  - `packages/cowork-desktop/src/**`
+  - `packages/cowork-desktop/tests/**`
+  - `packages/cowork-desktop/README.md`
+  - `packages/cowork-desktop/packaging/**` (only to embed the native helper in the single exe)
+  - `ui/src/routes/cowork/**`
+  - `ui/src/lib/services/cowork-remote.ts`
+  - `ui/src/lib/utils/cowork-remote-*.ts`
+  - `ui/src/locales/en.json`
+  - `ui/src/locales/fr.json`
+  - `ui/tests/utils/cowork-remote-*.test.ts`
+  - `e2e/tests/02-cowork-remote-portal.spec.ts`
+- [ ] **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `.github/workflows/**`
+  - `plan/**`
+  - `PLAN.md`
+  - `TODO.md`
+  - `api/drizzle/*.sql`
+  - `api/src/db/schema.ts`
+  - `api/src/routes/namespaces/**`
+  - `api/src/middleware/**`
+  - `api/src/services/session-manager.ts`
+  - `packages/auth-hono/**`
+  - `packages/mcp-auth/**`
+  - `packages/oauth-verify/**`
+  - `packages/cluster-mesh/**`
+  - `packages/cowork-bridge/**`
+  - `packages/mcp-platform/**`
+  - `packages/chat-ui/**`
+  - `ui/nginx/**`
+  - `ui/src/routes/settings/**`
+  - `ui/src/routes/auth/**`
+  - `ui/static/cowork-desktop/**`
+  - `deploy/k8s/base/**`
+  - `deploy/k8s/overlays/prod/**`
+  - `apps/**`
+- [ ] **Conditional Paths (allowed only with explicit exception)**:
+  - `api/src/db/control-schema.ts` (BR41d-EX1)
+  - `api/drizzle/control/0009_cowork_remote.sql` (BR41d-EX1)
+  - `api/drizzle/control/meta/_journal.json` (BR41d-EX1)
+  - `api/drizzle/control/meta/0009_snapshot.json` (BR41d-EX1, generated)
+  - `deploy/k8s/overlays/preprod/kustomization.yaml` (BR41d-EX2)
+  - `deploy/k8s/overlays/preprod/patch-api-config.yaml` (BR41d-EX2)
+  - `deploy/k8s/overlays/preprod/cowork-staging-pvc.yaml` (BR41d-EX2, new)
+  - `deploy/k8s/overlays/preprod/patch-api-cowork.yaml` (BR41d-EX2, new)
+  - `deploy/k8s/README.md` (BR41d-EX2)
+  - `packages/cowork-desktop/package.json` (BR41d-EX3)
+  - `ui/package.json` (BR41d-EX3)
+  - `ui/package-lock.json` (BR41d-EX3, refreshed through Make only)
+  - `package-lock.json` (BR41d-EX3, refreshed through Make only)
+- [ ] **Exception process**: declare `BR41d-EXn` in `## Feedback Loop` with reason, impact and rollback before touching a conditional path; conductor acknowledgement recorded before first use.
+
+## Feedback Loop
+- [x] BR41d-D1 | acknowledge | Owner: owner | D1=B: real workstation under a local policy accepted on Windows; per-capability scope; duration entered, until lock, or unlimited (traced, revocable); arming separate from acceptance; lock/restart disarms; explicit derogations to benchmark guardrails §3/4/5/6/7 accepted (non-isolated host, hostile input, no final sensitive-action validation or DLP).
+- [x] BR41d-D2 | acknowledge | Owner: owner | D2=A amended: screen, input, files AND shell/exec under a local allow-list; YOLO present, explicit, not recommended, off by default; GUI and YOLO are not a general anti-execution boundary.
+- [x] BR41d-D3 | acknowledge | Owner: owner | D3=B: 64 MB and more; 256 KiB HTTP chunks, 64 MiB segments, logical file at most 1 GiB, owner quota 2 GiB; bytes through the authenticated portal, MCP controls ids and receipts only.
+- [x] BR41d-D4 | acknowledge | Owner: owner | D4=A: dedicated transitional `/api/v1/cowork-mcp` first; move under `/api/v1/mcp` when the cluster-mesh registry takes over (follow-up, see Deferred); reuse `device:<sessionId>`, no second device registry.
+- [x] BR41d-D5 | acknowledge | Owner: owner | D5=B: brief preprod smoke (5–10 min, no qualification campaign) then manual prod promotion as fast as possible; negative tests stay in the build lots.
+- [x] BR41d-D6 | acknowledge | Owner: owner | D6 by note (no option ticked): pilot activation lasts 7 days (604800 s, checked per request); RAM gateway secret, unsigned binary and non-sealed audit are debt bounded to that week.
+- [x] BR41d-D7 | acknowledge | Owner: owner via `.h2a/inputs/owner-answers-r2.json` (2026-10-06, s-conductor relay) | D7=A: owner personal workstation; owner holds authority over the device and data, accepts the policy in person at arming, and keeps the Windows session open.
+- [x] BR41d-D8 | acknowledge | Owner: owner via `.h2a/inputs/owner-answers-r2.json` (2026-10-06, s-conductor relay) | D8=A: full pilot engaged (steps 0–7); dossier estimate 14–23.5 h effort + 45–120 min pipeline + 35–60 min owner/operator gestures; estimate, not commitment.
+- [ ] BR41d-EX1 | attention | Owner: conductor | Control-stream migration `0009_cowork_remote` + `control-schema.ts` + journal + generated snapshot. Reason: durable activation, device credential, exchange, policy registry, operations/receipts, audit and file manifest state required by the dossier. Impact: one additive control migration (new tables + audit append-only trigger, no change to existing tables), applied at API boot in preprod after merge and in prod at the next API start (BR41d-A6). Rollback: flag off, keep additive tables, purge rows by TTL; no destructive down-migration.
+- [ ] BR41d-EX2 | attention | Owner: conductor | Preprod overlay only: COWORK keys in `patch-api-config.yaml`, new RWO PVC `cowork-staging-pvc.yaml`, new `patch-api-cowork.yaml` (staging volume mount + optional `envFrom` secretRef `sentropic-cowork`, applied as a JSON6902 add so existing `envFrom` entries stay), `kustomization.yaml` entries, `deploy/k8s/README.md` operator section. Reason: config, private durable staging, operator runbook. Impact: preprod API pod depends on PVC binding (BR41d-Q2); prod untouched by this branch. Rollback: revert overlay commit, delete PVC after purge.
+- [ ] BR41d-EX3 | attention | Owner: conductor | Manifests and lockfiles: `packages/cowork-desktop/package.json` (replace `file:` dependencies with plain semver ranges, bump 0.2.0 to 0.3.0, optional image library per BR41d-Q8; root lock via `make lock-root`), `ui/package.json` + `ui/package-lock.json` (incremental SHA-256 library per BR41d-Q9 via `make install-ui`), root `package-lock.json`; never edited by hand. Reason: the CI manifest guard blocks a changed package with `file:` dependencies; browser-side logical-file hashing. Impact: published manifest and lockfile churn. Rollback: revert the manifest and lock commits.
+- [ ] BR41d-Q1 | attention | Owner: owner + conductor | Blocks: Windows UAT A/B/C end-to-end parts | Can the owner Windows workstation reach this branch test stack (LAN or tunnel to `API_PORT=9485`) with `SENTROPIC_API_BASE_URL`? Default if unanswered: pre-merge Windows checks run locally only (`sentropic-cowork doctor`, policy surface, exec runner, path policy); end-to-end Windows checks run on preprod after merge in a no-merge window, which is longer than the D5 5–10 min smoke and needs owner acknowledgement.
+- [ ] BR41d-Q2 | blocked | Owner: operator (poc-k8s) | Blocks: Commit 6.3 and merge | Confirm `sentropic-preprod` ResourceQuota and default StorageClass allow one extra RWO PVC (proposed 4Gi, with a global staging cap of 3 GiB above the 2 GiB owner quota); same check for `sentropic` before Lot 10 promotion. Default if unanswered: Commit 6.3 not merged; any alternative staging substrate needs an owner decision (not applied by default).
+- [ ] BR41d-Q3 | attention | Owner: owner + operator | Blocks: Lot 10 promotion | Prod promotion mechanics. Default: a separate deploy-only branch `chore/cowork-remote-prod-promotion` (own BRANCH.md) adding prod overlay COWORK config, staging PVC + mount, and API/IdP + UI digest pins; reviewed PR diff is the preview; owner approves merge (also approves prod migration 0009 and the product-wide Recreate restart); operator runs `make k8s-deploy`. Alternative for the owner: uncommitted local overlay edit at promotion, recorded in Track (faster, less traceable).
+- [ ] BR41d-Q4 | attention | Owner: implementation | Blocks: Lot 10 smoke | Exact MCP Origin and Host allow-lists per tier. Default: absent Origin accepted, `https://claude.ai` accepted if present, any other Origin 403; allowed Host = tier host only; adjust after the first observed preprod requests.
+- [ ] BR41d-Q5 | attention | Owner: owner | Blocks: Lot 10 smoke | Client budgets (claude.ai about 150000 characters per tool result; Claude Code `MAX_MCP_OUTPUT_TOKENS` 25000, warning 10000) for 32 KiB text and about 100 KB image are unverified. Default: caps configurable (`COWORK_MCP_MAX_TEXT_BYTES=32768`, `COWORK_CAPTURE_TARGET_BYTES=102400`), measured at the preprod smoke on both clients and lowered by config if needed; short-text file tools stay disabled unless 32 KiB passes on both clients.
+- [ ] BR41d-Q6 | attention | Owner: operator | Blocks: Lot 10 | Per-tier values kept outside git in the optional Secret `sentropic-cowork`: `COWORK_OWNER_SUB` (owner userId observed in that tier), `COWORK_MCP_CLIENT_ID` (static client of that tier), `COWORK_OPERATION_HMAC_KEY` (32 random bytes, rotated at each pilot start and on suspicion; rotation invalidates pending prepares without enabling replay). Default: absent values keep Cowork disabled (404).
+- [ ] BR41d-Q7 | attention | Owner: owner | Blocks: Claude Code use in the pilot | Claude Code loads claude.ai connectors only with a claude.ai subscription login (not an API key). Default: pilot validated on claude.ai web; Claude Code use confirmed by the owner at activation.
+- [ ] BR41d-Q8 | attention | Owner: implementation | Blocks: Commit 3.7 | Capture encoder: prefer `jimp`/`jpeg-js`/`pngjs` already locked as transitive dependencies of `@nut-tree-fork/nut-js`, declared explicitly as optional dependencies at the locked versions (BR41d-EX3), over any new dependency; must run inside the `@yao-pkg/pkg` single exe; SCA clean.
+- [ ] BR41d-Q9 | attention | Owner: implementation | Blocks: Commit 5.10 | WebCrypto has no incremental SHA-256 for a 1 GiB logical file. Default: add `@noble/hashes` (pinned) to the UI through `make install-ui` (BR41d-EX3); a vendored hash implementation is not used.
+- [ ] BR41d-Q10 | attention | Owner: owner | Blocks: Lot 9 merge | Merge publishes `@sentropic/cowork-desktop` 0.3.0 on npm (irreversible) and rebuilds the UI image exe served by the global release channel; both contain inert remote code (INV-17). Owner sign-off required before merge.
+- [ ] BR41d-Q11 | attention | Owner: conductor | Blocks: Lot 9 | `PLAN.md` routes "Cowork backend tool-driving split" to BR-54 and does not list BR-41d; registration in `PLAN.md`/`TODO.md` and Track import of this BRANCH.md are conductor actions (single writer).
+- [ ] BR41d-Q12 | attention | Owner: conductor | Blocks: Lot 9 | Main CI at base 52c1fdc63 was reported red by review; Lot 0 verified 2026-10-06: run 37253129272 on headSha 52c1fdc63 concluded failure (`test-e2e (group-e, 05 07)` and `deploy-preprod` failed); the branch rebases onto a green main before the PR.
+- [ ] BR41d-Q13 | attention | Owner: owner + conductor | Blocks: Lot 10 smoke | Discovery fallback: if claude.ai pre-probes the canonical PRM URL (`/.well-known/oauth-protected-resource/api/v1/cowork-mcp`) instead of following the announced `resource_metadata`, serving the canonical URL needs an nginx change or an API root route (both forbidden paths). Default: the smoke fails and the fix goes through a new PR; any other fallback is an owner/conductor decision recorded before the smoke, never pilot improvisation.
+- [ ] BR41d-A1 | attention | Owner: conductor | The initial BRANCH.md commit and the generated `0009_snapshot.json` are exempt from the 150-line budget; every other commit stays under 150 lines (split when larger).
+- [ ] BR41d-A2 | attention | Owner: conductor | Audit append-only realization: the repository has no DB role separation precedent; INV-23 is enforced by a trigger in migration 0009 (UPDATE refused; DELETE only for rows closed more than 7 days); a separate DB role stays a follow-up.
+- [ ] BR41d-A3 | attention | Owner: conductor | `oauth_clients` has no active/disabled column; "client active" = row present + `allowedScopes` contains `cowork:control` + `resourceIndicators` contains the resource; client revocation = re-run `api/src/scripts/oauth-register-client.ts` without `cowork:control` or delete the row (operator runbook). Registration runs outside the pruned API image (bare `tsx` is absent there): the executable path (kubectl Job, toolbox container with checkout + DB tunnel, or other) is proven no later than Lot 6 with the exact command in `deploy/k8s/README.md` and the spec runbook; else a blocking Lot 10 question is raised before merge.
+- [ ] BR41d-A4 | attention | Owner: conductor | Activation and device binding: activation is created in the owner portal for an already paired `device:<sessionId>`; the agent keeps its fresh product session in RAM and retries the exchange (bounded wait) until the activation exists; a second device is refused; replacement only through the portal "replace device" action.
+- [ ] BR41d-A5 | attention | Owner: conductor | Wire contract ownership: the API owns zod schemas (`api/src/services/cowork-remote/contract.ts`), the agent mirrors types (`packages/cowork-desktop/src/remote/contract.ts`), both test against the spec examples; no new API dependency on `@sentropic/cowork-bridge` and no change to that package.
+- [ ] BR41d-A6 | attention | Owner: owner | Prod manifests use `:main` with `imagePullPolicy: Always`: after merge, any unrelated prod API restart loads this code (inert: no prod config, no Secret) and applies additive control migration 0009. Owner acknowledgement recorded with BR41d-Q10.
+- [ ] BR41d-A7 | attention | Owner: implementation | Windows native mechanisms (global hotkey, notification-area icon, session lock/logoff/user-switch events, monitor DPI/bounds, foreground identity, injected-input rejection, Job Object kill-on-close, ACLs, ADS, reparse detection, local policy surface technology) are chosen in Lot 0 desk research and confirmed by `sentropic-cowork doctor` in Commit 3.1; constraints: no Python, no new unsigned third-party native binary unless recorded here, embedded helper hash-pinned.
+- [ ] BR41d-A8 | attention | Owner: conductor | E2E env cannot set COWORK keys without editing forbidden `docker-compose*.yml`; E2E covers the disabled-by-default state only; enabled flows are covered by API endpoint tests (env set in-process), UI TS tests and the preprod smoke.
+- [ ] BR41d-A9 | attention | Owner: conductor | `spec/BRANCH_SPEC_EVOL.md` on main belongs to another branch; this branch uses `spec/SPEC_EVOL_COWORK_REMOTE_MCP.md` as a standalone spec.
+- [ ] BR41d-A10 | attention | Owner: conductor | The preprod overlay sets `COWORK_REMOTE_ENABLED: "true"` in git so the smoke needs no manifest change; Cowork stays 404 there until the operator-authored Secret `sentropic-cowork` holds owner, client and HMAC values (INV-03); the code default stays disabled and the prod overlay is unchanged by this branch.
+- [ ] BR41d-A11 | attention | Owner: conductor | Test env is `ENV=test-cowork-remote` per the conductor lot prompt (the plan wrote `test-cowork-remote-mcp`); same slot-97 ports (API 9485, UI 5685, Maildev 1585); all `make` invocations use the conductor value with `ENV` last.
+
+## AI Flaky tests
+- [ ] No AI-generation path is changed; the existing allowlist applies (`make test-api-ai`, AI E2E specs) and runs only in Lot 9.
+- [ ] Any flaky run is accepted only under the template rule (non-systematic, same commit and command); record command, failing file and signature here; owner sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch**: one implementation agent executes lots in order on this branch; an independent reviewer checks each lot; no cherry-pick (rebase only).
+- [x] Rationale: single need (one pilot capability) and one PR; lots are sequentially dependent (contract, admission, broker, policy, effects, files, diffusion); the prod promotion is a separate later deploy-only change (BR41d-Q3).
+
+## UAT Management (in orchestration context)
+- [ ] Windows UAT checkpoints sit inside Lots 3, 4, 5 and 7; the owner runs them on the real workstation with an out-of-band unsigned build from `make package-desktop-windows REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`, its SHA-256 and commit SHA recorded here.
+- [ ] Web portal UAT follows the template flow: push the branch, run UAT from the root workspace with `ENV=dev` and dev-only COWORK values in the root `.env` (owner gesture), then switch back to `tmp/cowork-remote-mcp`.
+- [ ] No Chrome plugin or VSCode plugin surface is changed.
+
+## Plan / Todo (lot-based)
+- [ ] **Lot 0 — Baseline, measurements and implementation contract (dossier step 0)**
+  - [ ] Budget: 45–75 min effort; owner/operator 5–10 min (Windows access to `https://preprod.sentropic.sent-tech.ca`, availability windows).
+  - [ ] Verify branch, `git -C /home/antoinefa/src/sentropic/tmp/cowork-remote-mcp merge-base --is-ancestor 52c1fdc63 HEAD`, clean tree.
+  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `rules/architecture.md`, `plan/BRANCH_TEMPLATE.md`, `spec/SPEC_COWORK.md`, `spec/SPEC_COWORK_41B_FIXES.md`, `.h2a/plan/design_notes.md`, all `.h2a/inputs/*`.
+  - [ ] Check main CI read-only (`gh run list --branch main --workflow CI --limit 5`); record the result in BR41d-Q12.
+  - [ ] Owner confirms the workstation reaches `https://preprod.sentropic.sent-tech.ca` (agent traffic goes to the product origin only); if not, record a blocker for the Lot 10 smoke, never a simulated success.
+  - [ ] Port ownership: `make ps REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` and `make ps REGISTRY=local API_PORT=9486 UI_PORT=5686 MAILDEV_UI_PORT=1586 ENV=e2e-cowork-remote-mcp` are empty; `make ps-all ENV=test-cowork-remote-mcp` shows no other project on ports 9485–9486, 5685–5686, 1585–1586.
+  - [ ] Make targets used: `scope-check`, `up-api-test`, `typecheck-api`, `lint-api`, `test-api-unit`, `test-api-endpoints`, `test-api-security`, `typecheck-ui`, `lint-ui`, `test-ui`, `typecheck-cowork-desktop`, `test-cowork-desktop`, `build-cowork-desktop`, `pack-cowork-desktop`, `package-desktop-windows`, `db-generate-control`, `test-idp-sync-selftest` (offline overlay render), `build-api`, `build-ui-image`, `test-e2e`, `exec-api`, `logs-api`, `ps`, `down`, `commit`.
+  - [ ] After `make up-api-test REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`, confirm the locked SDK (1.30.0) exposes `WebStandardStreamableHTTPServerTransport` via `make exec-api CMD='node -e "import(\"@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js\").then((m) => console.log(typeof m.WebStandardStreamableHTTPServerTransport))"' REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote` (expect `function`).
+  - [ ] Desk research of Windows native mechanisms and capture encoder; record candidates in BR41d-A7 and BR41d-Q8.
+  - [ ] Commit 0.1 — `docs: add cowork remote MCP branch plan` (BRANCH.md only, BR41d-A1).
+  - [ ] Commit 0.2 — `docs: add cowork remote MCP contract (MCP, OAuth, identity)`: `spec/SPEC_EVOL_COWORK_REMOTE_MCP.md` part A (actors, D1–D8, config keys with fail-closed rules, tool catalog with JSON schemas and limits, 401/PRM, admission, exchange).
+  - [ ] Commit 0.3 — `docs: add cowork remote broker, policy and shell contract`: part B (operation states, prepare/claim/lease/permit/result/status/cancel, stops, policy record, shell rules, audit fields).
+  - [ ] Commit 0.4 — `docs: add cowork remote files and pilot runbook contract`: part C (chunk/segment/manifest states, portal headers, path policy, deploy keys, Lot 10 runbook: smoke, promotion, activation, pilot week, stop, rollback, J+7 closure).
+  - [ ] Lot gate:
+    - [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] Reviewer pass: every D1–D8 contract and INV-01..INV-31 traceable in the spec.
+
+- [ ] **Lot 1 — Dedicated MCP endpoint, OAuth discovery and revocation-aware admission (dossier step 1)**
+  - [ ] Budget: 60–100 min effort; operator static-client gesture deferred to Lot 10.
+  - [ ] Commit 1.1 — `feat(api): add fail-closed cowork remote config`: `api/src/config/env.ts` (optional `COWORK_REMOTE_ENABLED`, `COWORK_MCP_RESOURCE_URI`, `COWORK_MCP_AUTHORIZATION_SERVER_URL`, `COWORK_MCP_ALLOWED_SCOPE`, `COWORK_OWNER_SUB`, `COWORK_MCP_CLIENT_ID`, `COWORK_OPERATION_HMAC_KEY`, `COWORK_MCP_ALLOWED_ORIGINS`, `COWORK_MCP_MAX_TEXT_BYTES`, `COWORK_CAPTURE_TARGET_BYTES`, `COWORK_FILE_*` with dossier defaults), `api/src/services/cowork-remote/config.ts` (resolved per request from `process.env` like `isEnabled()` in `api/src/routes/namespaces/mcp.ts:30`, so tests can toggle it).
+  - [ ] Commit 1.2 — `feat(api): mount cowork-mcp with prefixed PRM and 401 challenge`: `api/src/routes/cowork-mcp.ts` (disabled → 404 everywhere; `createMcpAuth` with resource, AS, `fromJwksPort(createJwksAdapter())`, `scopesSupported: ['cowork:control']`; `mcpAuthRoutes` mounted under the prefix to serve `/api/v1/cowork-mcp/.well-known/oauth-protected-resource`; 401 built with `buildWwwAuthenticate`: `Bearer resource_metadata="<prefixed PRM URL>", scope="cowork:control"`; GET/DELETE 405; body limit; strict JSON), `api/src/app.ts` (one `app.route` next to the direct mount at `api/src/app.ts:431`). Only `mcp.verify` + manual 401 via `buildWwwAuthenticate` (never `requireMcpAuth`/`mcp.challenge()`, which point at the canonical PRM URL); the extra canonical/legacy routes `mcpAuthRoutes` registers under the prefix are inoperative behind Hono and are not tested as served.
+  - [ ] Commit 1.3 — `feat(api): add revocation-aware cowork admission`: `api/src/services/cowork-remote/admission.ts` (INV-01, INV-02, INV-05 via `createOauthStateStoreAdapter()` `findTokenMeta`, `isTokenRevoked`, `findClient`, owner lookup; returns `{tier, ownerSub, clientId, jti, exp}`; store error denies with 503, never 401 (mapping pinned in the spec).
+  - [ ] Commit 1.4 — `feat(api): serve stateless MCP over streamable HTTP`: `api/src/services/cowork-remote/mcp-server.ts` (SDK `McpServer` + `WebStandardStreamableHTTPServerTransport`, `sessionIdGenerator: undefined`, `enableJsonResponse: true`, `allowedHosts`/`allowedOrigins` per BR41d-Q4, per-request instance; `initialize` negotiation; `notifications/initialized` and `notifications/cancelled` → 202 without body; `tools/list` empty until Lot 2; `ping`).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api lint-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **API tests**
+      - [ ] New `api/tests/unit/cowork-remote-config.test.ts`: disabled by default; each missing or invalid value disables; trailing slash refused; HMAC key under 32 bytes refused; tier from resource host.
+      - [ ] New `api/tests/api/cowork-mcp-protocol.test.ts`: disabled → 404 on POST, PRM and GET; enabled without token → 401 with the exact `WWW-Authenticate`; PRM JSON exact (`resource`, `authorization_servers`, `scopes_supported`); GET 405; `initialize`; 202 notifications; `tools/list`; malformed JSON → parse error; oversized body → 413; foreign Origin → 403; unknown Host → 403.
+      - [ ] New `api/tests/api/cowork-mcp-admission.test.ts` (tokens minted as in `api/tests/api/mcp-resource-server.test.ts`): valid; wrong `aud`; preprod issuer in prod config; wrong `sub`; wrong `client_id`; missing scope → 403 `insufficient_scope`; revoked `jti` → 401 before `exp`; token meta absent; client scope removed; owner disabled; store throws → 503 deny; `saveTokenMeta` inserted in setup for the valid case (minted JWTs alone have no `oauth_tokens` row).
+      - [ ] Keep green `api/tests/api/mcp-resource-server.test.ts`, `api/tests/api/cluster-mesh-namespace-inventory.test.ts`, `api/tests/api/auth/oauth-revoke-introspect.test.ts`.
+      - [ ] Scoped runs: `make up-api-test REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; `make test-api-unit SCOPE=tests/unit/cowork-remote-config.test.ts REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; `make test-api-endpoints SCOPE=tests/api/cowork-mcp-protocol.test.ts REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; same for `tests/api/cowork-mcp-admission.test.ts`.
+      - [ ] Sub-lot gate: `make test-api-unit test-api-endpoints REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] `make logs-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` shows no runtime error and no secret, path or command in log lines
+    - [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; reviewer pass; `make down REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+
+- [ ] **Lot 2 — Control schema, device exchange, broker, receipts and owner control portal (dossier step 2)**
+  - [ ] Budget: 120–180 min effort; owner pairing gesture folded into Windows UAT A or Lot 10.
+  - [ ] BR41d-EX1 acknowledged before Commit 2.1.
+  - [ ] Commit 2.1 — `feat(api): add cowork control-schema tables (activation, credentials, operations)`: `api/src/db/control-schema.ts` (`cowork_remote_activations`, `cowork_remote_device_credentials`, `cowork_remote_exchanges`, `cowork_remote_operations`; no FK to public tables; soft owner ids; soft key to `control.cluster_mesh_registrations` `device:<sessionId>`).
+  - [ ] Commit 2.2 — `feat(api): add cowork control-schema tables (policy, audit, files)`: `api/src/db/control-schema.ts` (`cowork_remote_policy_events`, `cowork_remote_audit`, `cowork_file_manifests`, `cowork_file_chunks`; TTL indexes on close timestamps).
+  - [ ] Commit 2.3 — `feat(api): add control migration 0009_cowork_remote`: `make db-generate-control REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`, rename to `0009_cowork_remote.sql` and update the journal tag (content unchanged), append the audit append-only trigger (BR41d-A2); review SQL by hand.
+  - [ ] Commit 2.4 — `feat(api): add owner activation and status routes`: `api/src/routes/cowork-control.ts` (`GET /api/v1/cowork-control/status`, `GET /api/v1/cowork-control/csrf`, `POST /api/v1/cowork-control/activation`, `POST /api/v1/cowork-control/activation/replace-device`; owner cookie session + anti-CSRF token in header + strict Origin), `api/src/services/cowork-remote/activation.ts`, `api/src/services/cowork-remote/csrf.ts`, `api/src/app.ts` mount.
+  - [ ] Commit 2.5 — `feat(api): add one-time device credential exchange`: `api/src/routes/cowork-devices.ts` (`POST /api/v1/cowork-devices/exchange`), `api/src/services/cowork-remote/device-credentials.ts` (single transaction: product session valid, owner allowed, activation enabled and bound to this `device:<sessionId>`, registration active; 32-byte random secret, SHA-256 hash stored, generation, `exp = min(registration, activation)`; exchange marked consumed; `user_sessions` row deleted before the response), gateway auth through `X-Cowork-Device-Key` (never URL), `api/src/app.ts` mount.
+  - [ ] Commit 2.6 — `feat(api): add cowork operation model and HMAC digest`: `api/src/services/cowork-remote/operations.ts`, `api/src/services/cowork-remote/contract.ts` (states `prepared`, `queued`, `executing`, `completed`, `denied`, `cancelled`, `indeterminate`; canonical JSON digest; opaque 128-bit ids).
+  - [ ] Commit 2.7 — `feat(api): add durable operation store with RAM payloads`: `api/src/services/cowork-remote/operation-store.ts` (receipts and tombstones kept 7 days after close; payload map in RAM; boot marks unclaimed jobs cancelled and engaged ones indeterminate).
+  - [ ] Commit 2.8 — `feat(api): add broker claim and lease`: `api/src/services/cowork-remote/broker.ts` (`CoworkBroker` port independent of HTTP: prepare, dispatch, poll, claim, permit, result, status, cancel); `GET /api/v1/cowork-devices/jobs/next` long-poll at most 25 s, atomic claim, lease 30 s + generation + nonce.
+  - [ ] Commit 2.9 — `feat(api): add permit and result gateway routes`: `POST /api/v1/cowork-devices/jobs/:jobId/permit` (2 s, fresh revocation/stop/activation reads), `POST /api/v1/cowork-devices/jobs/:jobId/result` (receipt; late ACK appended without new grant; no late content after revocation).
+  - [ ] Commit 2.10 — `feat(api): expose action_prepare, action_status and action_cancel`: `api/src/services/cowork-remote/mcp-tools.ts` (no `deviceId` argument; unique armed device resolved server-side; response at most 35 s, else `pending`).
+  - [ ] Commit 2.11 — `feat(api): add durable cowork stop and 5 s watchdog`: `POST /api/v1/cowork-control/stop` in `api/src/routes/cowork-control.ts`, `api/src/services/cowork-remote/watchdog.ts` (5 s sweep of revoked `jti`, stop and expiry; daily purge of receipts, tombstones and audit rows closed more than 7 days), `api/src/index.ts` (start only when config is enabled).
+  - [ ] Commit 2.12 — `feat(cowork-desktop): add fail-closed remote mode and credential exchange`: `packages/cowork-desktop/src/remote/contract.ts`, `src/remote/gateway-client.ts`, `src/remote/exchange.ts` (fresh device-code pairing in RAM, bounded wait for activation, purge of the old Cowork credential in `auth.json` with local notice), `src/cli/remote.ts`, `src/cli/run.ts` (dispatch `remote`; default run unchanged).
+  - [ ] Commit 2.13 — `feat(cowork-desktop): add poll, permit loop and local ledger`: `src/remote/loop.ts` (25 s poll, one in flight, 2 s permit, durable `executing` mark, 5 s watchdog, network loss blocks next effect; every job denied with `policy_not_armed` until Lot 3), `src/remote/ledger.ts` (user-ACL file; indeterminate blocks new writes).
+  - [ ] Commit 2.14 — `feat(ui): add owner cowork control portal`: `ui/src/routes/cowork/remote/+page.svelte` (status, activation with visible UTC end date, replace device, stop), `ui/src/lib/services/cowork-remote.ts`, `ui/src/locales/en.json`, `ui/src/locales/fr.json`.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api lint-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` + `make typecheck-ui lint-ui REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` + `make typecheck-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **API tests**
+      - [ ] New `api/tests/api/cowork-remote-schema.test.ts`: tables exist; audit UPDATE refused; early DELETE refused; TTL DELETE allowed.
+      - [ ] New `api/tests/api/cowork-activation.test.ts`: non-owner refused; missing or forged CSRF → 403; foreign Origin → 403; second activation refused; replace-device revokes previous generation; J+7 boundary refused even with flag true.
+      - [ ] New `api/tests/api/cowork-device-exchange.test.ts`: happy path; replay refused; old session and refresh invalid; gateway secret refused on a product route, on device approve and by the IdP session resolver; OAuth bearer refused on gateway routes; no activation → refused; second device → refused.
+      - [ ] New `api/tests/unit/cowork-operation-digest.test.ts` and `api/tests/unit/cowork-operation-state.test.ts`: canonicalization, HMAC not bare hash, legal transitions only.
+      - [ ] New `api/tests/api/cowork-operation-store.test.ts`: receipts durable; restart cancels unclaimed and marks engaged indeterminate; payload never persisted.
+      - [ ] New `api/tests/api/cowork-broker-gateway.test.ts`: per-call ownership checks (owner, device, generation, secret, policyRev); one in flight; lease expiry; long-poll returns within 25 s; permit after stop or revoked `jti` refused.
+      - [ ] New `api/tests/api/cowork-broker-mcp.test.ts`: retry with a new JSON-RPC id and same `operationId` → same receipt; two clients with the same JSON-RPC id isolated; modified args rejected; unknown or expired id never executes; cross-client cancel refused; restart without replay; late ACK without grant.
+      - [ ] New `api/tests/api/cowork-stop.test.ts`: revoke `jti` during a wait, then permit, new call and chunk placeholder refused before `exp`; stop → poll and permit refused, epoch incremented; watchdog closes pending queues within 5 s.
+      - [ ] Keep green `api/tests/api/auth-device-code.spec.ts`, `api/tests/unit/device-route.test.ts`, `api/tests/unit/cluster-mesh-postgres-runtime.test.ts`.
+      - [ ] Scoped runs per file with `make test-api-endpoints SCOPE=tests/api/<file> REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` and `make test-api-unit SCOPE=tests/unit/<file> REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+      - [ ] Sub-lot gate: `make test-api-unit test-api-endpoints REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **cowork-desktop tests**
+      - [ ] New `packages/cowork-desktop/tests/remote-exchange.spec.ts`, `remote-inert.spec.ts`, `remote-loop.spec.ts`, `remote-ledger.spec.ts` (fake fetch, fake clock).
+      - [ ] Keep green `packages/cowork-desktop/tests/device-code-client.spec.ts`, `file-store.spec.ts`, `registry-client.spec.ts`, `cowork-runner.spec.ts`.
+      - [ ] Sub-lot gate: `make test-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] New `ui/tests/utils/cowork-remote-api.test.ts`: CSRF header, `credentials: 'include'`, error mapping, UTC end date formatting.
+      - [ ] Sub-lot gate: `make test-ui SCOPE=tests/utils/cowork-remote-api.test.ts REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] `make logs-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` shows no runtime error and no secret, path or command in log lines
+    - [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; reviewer pass; `make down REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+
+- [ ] **Lot 3 — Local policy, arming, local stop, capture and input (dossier step 3)**
+  - [ ] Budget: 120–210 min effort; Windows user 5–10 min (acceptance and demonstration).
+  - [ ] Commit 3.1 — `feat(cowork-desktop): add Windows native helper and doctor self-check`: `src/native/windows-helper.ts` (+ embedded helper per BR41d-A7, hash-pinned), `src/cli/doctor.ts` (local only, no network; redacted report of hotkey, tray, session events, monitor bounds and DPI, foreground identity, Job Object kill on a harmless child, ACL, ADS, junction detection, injected-input flag).
+  - [ ] Commit 3.2 — `feat(cowork-desktop): add local policy model and evaluation`: `src/policy/model.ts`, `src/policy/evaluate.ts` (capabilities; duration modes; effective end = min(local end, pilot end); revisions; YOLO shell-only flag).
+  - [ ] Commit 3.3 — `feat(cowork-desktop): persist policy acceptance records`: `src/policy/store.ts` (user-ACL file; INV-16 fields; full local detail encrypted when a user-scoped facility is available), `src/remote/policy-sync.ts` (canonical redacted scope + digest).
+  - [ ] Commit 3.4 — `feat(api): register canonical policy scope`: `POST /api/v1/cowork-devices/policy` in `api/src/routes/cowork-devices.ts`, `api/src/services/cowork-remote/policy-registry.ts` (stores redacted scope + digest; capability prefilter for MCP tools).
+  - [ ] Commit 3.5 — `feat(cowork-desktop): add protected local policy surface`: `src/policy/surface.ts` (+ helper surface assets; split if over 150 lines): Windows user and SID, Sentropic owner, device, tier, Claude origin, data destination, pilot end date; per-capability checkboxes; roots, quotas, rules view; approval mode per capability (under policy after acceptance, or local confirmation per action as a restriction, unanswered prompt = deny); Refuse, Save without arming, Accept and arm; unlimited needs explicit confirmation with "revocable, pilot until …" recap; INV-14 protections.
+  - [ ] Commit 3.6 — `feat(cowork-desktop): add local stop controller and disarm events`: `src/remote/stop-controller.ts` (INV-15, INV-18; permanent armed indicator with Revoke and Stop in the notification area; best-effort server stop notification).
+  - [ ] Commit 3.7 — `feat(cowork-desktop): encode reduced captures with geometry metadata`: `src/capability/capture-encoder.ts`, `src/capability/windows-provider.ts` (real dimensions instead of 0, primary screen), `src/capability/types.ts` (target about 100 KB, hard cap 256 KiB; `{captureId, imageWidth, imageHeight, screenWidth, screenHeight, originX, originY, scaleX, scaleY, dpi, capturedAt}`); optional dependency per BR41d-Q8 (BR41d-EX3, ack before first use; `make lock-root ENV=test-cowork-remote` if `package.json` changes).
+  - [ ] Commit 3.8 — `feat(cowork-desktop): map input from image space with bounded typing`: `src/tools/input-action.ts` (`captureId` required; `x_phys = originX + round(x_image * scaleX)`, same for y, bounds check; refuse capture older than 5 s or focus/DPI/resolution change; typing at most 128 characters or the measured lower bound; no automatic split or replay; release keys and buttons in `finally`).
+  - [ ] Commit 3.9 — `feat(api): expose screen_capture and input_action`: `api/src/services/cowork-remote/mcp-tools.ts` (image content with declared MIME + metadata text; input arguments sealed at prepare; capability prefilter).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api lint-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` + `make typecheck-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **API tests**
+      - [ ] New `api/tests/api/cowork-policy-registry.test.ts`: redacted scope only; digest bound to `policyRev`; capability not armed → denied receipt.
+      - [ ] New `api/tests/api/cowork-capture-input.test.ts` (fake agent on gateway routes): capture returns image + metadata; stale `captureId` → denied; input not armed → denied.
+      - [ ] Sub-lot gate: `make test-api-unit test-api-endpoints REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **cowork-desktop tests**
+      - [ ] New `packages/cowork-desktop/tests/native-helper.spec.ts` (framing with a fake process, never spawned on Linux), `policy-model.spec.ts`, `policy-evaluate.spec.ts`, `policy-store.spec.ts`, `policy-surface.spec.ts` (no tool path reaches accept or arm), `stop-controller.spec.ts`, `capture-encoder.spec.ts`, `input-action.spec.ts`.
+      - [ ] Update `packages/cowork-desktop/tests/tools.spec.ts` for the image-space input contract.
+      - [ ] Sub-lot gate: `make test-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] Windows UAT A (owner on the real workstation, out-of-band build, SHA-256 recorded):
+      - [ ] `sentropic-cowork doctor` report recorded (redacted); any failed mechanism raised in `## Feedback Loop`.
+      - [ ] Policy surface: limited and unlimited (explicit confirmation) acceptance; trace fields visible; Save without arming; Refuse.
+      - [ ] Self-protection: surface open pauses remote claims; an injected click on Accept is rejected.
+      - [ ] Stop hotkey works while another application has focus; tray Stop works; lock disarms; unlock requires re-arm.
+      - [ ] Capture at 100 % and 150 % DPI; the click lands on the intended control; stale capture refused.
+      - [ ] Typing cadence measured: 128 characters within 5 s, or the lower bound recorded.
+      - [ ] If BR41d-Q1 allows: pairing, portal activation, exchange, capture and click against the branch stack through a scripted MCP client.
+    - [ ] `make logs-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` shows no runtime error and no secret, path or command in log lines
+    - [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; reviewer pass; `make down REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+
+- [ ] **Lot 4 — Shell/exec under the local allow-list (dossier step 4)**
+  - [ ] Budget: 90–150 min effort; Windows user 5–10 min (initial list).
+  - [ ] Commit 4.1 — `feat(cowork-desktop): add exec rule model and matcher`: `src/exec/rules.ts`, `src/exec/match.ts` (INV-19 pure part).
+  - [ ] Commit 4.2 — `feat(cowork-desktop): add hashed script rules for PowerShell and cmd`: `src/exec/script-rules.ts` (`-NoProfile -NonInteractive -File <verified script>`; refuse `-Command`, `-EncodedCommand`, free `/c` strings and metacharacters outside an explicit general rule; initial examples `hostname.exe` without arguments and one verified PowerShell script).
+  - [ ] Commit 4.3 — `feat(cowork-desktop): add bounded process runner`: `src/exec/runner.ts` (INV-20; rule and file hash re-evaluated just before spawn; output hash omitted when a secret is possible; receipt with `partialEffect`).
+  - [ ] Commit 4.4 — `feat(cowork-desktop): add YOLO mode and local rules editor`: `src/policy/surface.ts`, `src/policy/model.ts` (INV-21; the risk recap states that YOLO audit cannot reconstruct commands; rules never prefilled from model suggestions).
+  - [ ] Commit 4.5 — `feat(api): expose shell_exec with redacted audit`: `api/src/services/cowork-remote/mcp-tools.ts`, `api/src/services/cowork-remote/audit.ts` (INV-22, INV-23; wires the audit-health signal consulted by admission — an audit write failure blocks new admissions; capture/input/files audit coverage stated here, else Lot 2 operation receipts stand in outside exec).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api lint-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` + `make typecheck-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **API tests**
+      - [ ] New `api/tests/api/cowork-shell-exec.test.ts`: sealed args; denied receipt for unknown rule; 35 s pending path; receipt with exit code, bytes and truncation flags.
+      - [ ] New `api/tests/api/cowork-audit.test.ts`: no raw argv, cwd, env, stdout or file names in audit rows or captured logs; YOLO masking; audit write failure blocks new admission.
+      - [ ] Sub-lot gate: `make test-api-unit test-api-endpoints REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **cowork-desktop tests**
+      - [ ] New `packages/cowork-desktop/tests/exec-rules.spec.ts` (argv injection, unanchored pattern, cwd traversal and reparse, env injection, secret never in arguments), `exec-script-rules.spec.ts` (script swapped after acceptance refused), `exec-runner.spec.ts` (fake spawner: timeout kill, truncation, stop kill, stdin closed, env rebuilt), `policy-yolo.spec.ts`.
+      - [ ] Sub-lot gate: `make test-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] Windows UAT B (owner):
+      - [ ] Initial allow-list authored locally (`hostname.exe`, one verified PowerShell script) and accepted.
+      - [ ] Diverted argv, cwd and env refused; script modified after acceptance refused.
+      - [ ] 20 s timeout kills the whole tree (no child left); output over 16 KiB truncated and flagged; detached child prevented.
+      - [ ] YOLO activation shows the recap and produces the dedicated audit event.
+      - [ ] Stop during exec kills the tree; measured delay recorded (objective 5 s or less).
+    - [ ] `make logs-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` shows no runtime error and no secret, path or command in log lines
+    - [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; reviewer pass; `make down REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+
+- [ ] **Lot 5 — Files 64 MB+: staging, gateway chunks, owner portal, path policy (dossier step 5)**
+  - [ ] Budget: 180–300 min effort; owner 5–10 min (real 64 MB+ sample).
+  - [ ] Commit 5.1 — `feat(api): add cowork file manifest, quotas and states`: `api/src/services/cowork-remote/file-staging.ts` (`CoworkFileStaging` port: begin, chunk, commit, status, abort, rebind; INV-25, INV-26, INV-29; never named TransferStore, since `/transfers` is the archive namespace).
+  - [ ] Commit 5.2 — `feat(api): store chunks durably in the private staging dir`: `api/src/services/cowork-remote/file-chunk-store.ts` (write, fsync, manifest transaction, then ACK; streaming hashes, never a whole file in memory; disk-full explicit error), purge scheduler at least every minute in `api/src/index.ts`.
+  - [ ] Commit 5.3 — `feat(api): add gateway chunk routes`: `PUT` and `GET /api/v1/cowork-devices/transfers/:transferId/chunks/:index` in `api/src/routes/cowork-devices.ts` (opaque ids; body under 512 KiB; at most 20 s).
+  - [ ] Commit 5.4 — `feat(api): add portal file routes with inert downloads`: `api/src/routes/cowork-control.ts` (upload chunk, manifest/status, download chunk), `api/src/services/cowork-remote/download-headers.ts` (INV-28).
+  - [ ] Commit 5.5 — `feat(api): expose file control tools`: `api/src/services/cowork-remote/mcp-tools.ts` (`file_begin`, `file_status`, `file_commit` idempotent, `file_abort`, `file_list_outgoing` with opaque handles and sizes; portal link with opaque transfer id; `file_text_get`/`file_text_put` behind a disabled-by-default config key, enabled only if BR41d-Q5 allows).
+  - [ ] Commit 5.6 — `feat(cowork-desktop): add Windows path policy`: `src/files/path-policy.ts` (INV-27 checks behind an fs adapter).
+  - [ ] Commit 5.7 — `feat(cowork-desktop): receive incoming transfers safely`: `src/files/incoming.ts` (`.part` with user ACL, chunk/segment/file hashes, flush, atomic rename without overwrite, `Zone.Identifier` before publication, ACK; never open or execute).
+  - [ ] Commit 5.8 — `feat(cowork-desktop): send outgoing transfers with resume and rebind`: `src/files/outgoing.ts` (source hashes; resume from status bitmap; restart needs re-pair, explicit local rebind and hash revalidation).
+  - [ ] Commit 5.9 — `feat(cowork-desktop): add segment reassembly utility`: `src/cli/reassemble.ts` (`sentropic-cowork reassemble <dir>` verifies segment and logical SHA-256, refuses overwrite).
+  - [ ] Commit 5.10 — `feat(ui): add portal upload with chunk hashing`: `ui/src/routes/cowork/remote/transfers/[transferId]/+page.svelte`, `ui/src/lib/utils/cowork-remote-chunking.ts` (256 KiB slices, per-chunk SHA-256 via WebCrypto, incremental logical SHA-256 per BR41d-Q9, resume from bitmap); dependency added in a separate commit with `make install-ui NPM_LIB=@noble/hashes REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote` (BR41d-EX3, ack before first use; after `make up-ui ... ENV=test-cowork-remote`; then `make lock-root ENV=test-cowork-remote`).
+  - [ ] Commit 5.11 — `feat(ui): add streaming or segmented portal download`: `ui/src/lib/utils/cowork-remote-download.ts` (streaming to file when available, else Blob segments of at most 64 MiB plus reassembly instructions; logical SHA verified before receipt; never a 1 GiB Blob; visible capability explanation), `ui/src/locales/en.json`, `ui/src/locales/fr.json` (split if over 150 lines).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api lint-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` + `make typecheck-ui lint-ui REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` + `make typecheck-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **API tests**
+      - [ ] New `api/tests/unit/cowork-file-manifest.test.ts`: segment math (67108864), 1 GiB refusal, quota, one active transfer per direction, TTL bounded by activation.
+      - [ ] New `api/tests/api/cowork-files-staging.test.ts`: corrupt, repeated and conflicting chunks; holes; wrong final size; quota and disk cap; restart keeps chunks; purge after ACK, abort, stop and TTL; OAuth expiry suspends; rebind needs a new `jti`.
+      - [ ] New `api/tests/api/cowork-files-gateway.test.ts`: per-chunk owner/device/grant/`jti` checks; body size and time bounds.
+      - [ ] New `api/tests/api/cowork-files-mcp.test.ts`: no binary chunk tool in `tools/list`; `completed` only after destination ACK; lost ACK stays pending without second publication.
+      - [ ] New `api/tests/security/cowork-portal-boundaries.test.ts`: HTML and SVG served as attachment, octet-stream, nosniff, no-store; CRLF name refused or neutralized; `filename*` encoding; transfer id alone → refused; foreign Origin or missing CSRF → 403.
+      - [ ] Scoped security run: `make test-api-security SCOPE=tests/security/cowork-portal-boundaries.test.ts REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+      - [ ] Sub-lot gate: `make test-api-unit test-api-endpoints test-api-security REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **cowork-desktop tests**
+      - [ ] New `packages/cowork-desktop/tests/file-paths.spec.ts` (absolute, UNC, traversal, ADS, reserved names, symlink, junction, check/open substitution), `file-incoming.spec.ts`, `file-outgoing.spec.ts`, `reassemble.spec.ts`.
+      - [ ] Sub-lot gate: `make test-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] New `ui/tests/utils/cowork-remote-chunking.test.ts` (slicing, per-chunk hashes, incremental logical hash against known vectors, resume plan) and `ui/tests/utils/cowork-remote-download.test.ts` (capability detection, 64 MiB segmentation, hash check before receipt).
+      - [ ] Sub-lot gate: `make test-ui REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+    - [ ] Windows UAT C (owner):
+      - [ ] 64 MB binary in both directions; hashes equal (`Get-FileHash` and the browser receipt).
+      - [ ] 130 MiB file with a network interruption, then resume; agent restart, then re-pair and explicit rebind.
+      - [ ] `Zone.Identifier` present on the Incoming file; no automatic open.
+      - [ ] Junction, ADS and reserved-name targets refused; over-quota and over-1 GiB messages shown.
+    - [ ] `make logs-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` shows no runtime error and no secret, path or command in log lines
+    - [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; reviewer pass; `make down REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+
+- [ ] **Lot 6 — Diffusion readiness and preprod configuration (dossier step 6, pre-merge part)**
+  - [ ] Budget: 75–135 min effort together with Lot 10; operator 5 min at promotion.
+  - [ ] BR41d-EX2 and BR41d-EX3 acknowledged; BR41d-Q2 answered before Commit 6.3.
+  - [ ] Commit 6.1 — `chore(cowork-desktop): publish with semver dependencies and bump to 0.3.0`: `packages/cowork-desktop/package.json` (replace `file:../cowork-bridge` and `file:../chat-ui` with plain ranges resolving to published versions; version greater than the npm published one), root `package-lock.json` refreshed with `make lock-root ENV=test-cowork-remote`; exact resolved versions recorded with API-compat confirmation (or pack + clean-container install check).
+  - [ ] Commit 6.2 — `test(cowork-desktop): prove remote code stays inert by default`: extend `packages/cowork-desktop/tests/remote-inert.spec.ts` (default run, `--help`, `doctor` and `reassemble` never call gateway job routes; exec and file modules unreachable without an armed policy; `remote` without admission stays idle).
+  - [ ] Commit 6.3 — `feat(deploy): add preprod cowork config and private staging volume`: `deploy/k8s/overlays/preprod/patch-api-config.yaml` (COWORK non-secret keys with preprod host values, `COWORK_REMOTE_ENABLED: "true"` and staging dir `/var/lib/sentropic/cowork-staging`; fail-closed until the Secret exists), `deploy/k8s/overlays/preprod/cowork-staging-pvc.yaml`, `deploy/k8s/overlays/preprod/patch-api-cowork.yaml`, `deploy/k8s/overlays/preprod/kustomization.yaml`.
+  - [ ] Commit 6.4 — `docs(deploy): add cowork pilot operator section`: `deploy/k8s/README.md` (optional Secret `sentropic-cowork` per namespace with rotation cycle and documented storage, static client registration through the executable path proven here (never bare `tsx` in the pruned API pod — kubectl Job, toolbox container with checkout + DB tunnel, or other — exact command recorded), PVC and quota check, stop and rollback pointers to the spec runbook).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cowork-desktop test-cowork-desktop build-cowork-desktop pack-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` (packed-manifest guard passes without `file:` dependencies)
+    - [ ] Offline overlay render: `make test-idp-sync-selftest ENV=test-cowork-remote-mcp`
+    - [ ] `make package-desktop-windows REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; record exe SHA-256 and commit SHA here.
+    - [ ] `make scope-check API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`; reviewer pass
+
+- [ ] **Lot 7 — Consolidated UAT (dossier step 7, pre-merge part)**
+  - [ ] Budget: part of the 150–260 min step 7 estimate.
+  - [ ] Windows recipe at the final branch HEAD with a fresh out-of-band build (SHA-256 recorded):
+    - [ ] Identity and revocation: wrong owner, device, audience or tier refused; revoke `jti` during a wait, then permit, new call and chunk refused before `exp`; expiry and J+7 refusal (automated proof referenced).
+    - [ ] Effects: effect then lost response gives `indeterminate`; retry with a new JSON-RPC id and the same `operationId`; two clients; cross cancel; restart without replay; late ACK.
+    - [ ] Policy: limited and unlimited acceptance and revocation; synthetic modification impossible; lock and user switch disarm; YOLO explicit.
+    - [ ] Shell negatives, capture at 100/150 % DPI, files at 64 MB and 130 MiB both ways with interruption and rebind, junction refusal, `Zone.Identifier`.
+    - [ ] Portal download of HTML and SVG files is an inert attachment with an intact hash.
+  - [ ] Web portal UAT (root workspace, `ENV=dev`, template flow):
+    - [ ] Activation shows the UTC end date; replace device; stop.
+    - [ ] Transfer page upload and download of a small file; FR and EN strings.
+    - [ ] Non-regression: settings, pairing page and download card unchanged.
+  - [ ] Commit 7.1 — `test(e2e): cover the disabled-by-default cowork portal`: new `e2e/tests/02-cowork-remote-portal.spec.ts` (portal route shows no control and API Cowork routes return 404; BR41d-A8); prepare `make build-api build-ui-image REGISTRY=local API_PORT=9486 UI_PORT=5686 MAILDEV_UI_PORT=1586 ENV=e2e-cowork-remote-mcp`; scoped `make test-e2e E2E_SPEC=tests/02-cowork-remote-portal.spec.ts REGISTRY=local API_PORT=9486 UI_PORT=5686 MAILDEV_UI_PORT=1586 ENV=e2e-cowork-remote-mcp`.
+
+- [ ] **Lot 8 — Docs consolidation**
+  - [ ] Update `spec/SPEC_EVOL_COWORK_REMOTE_MCP.md` to as-built (measured values, BR41d-A items, final tool schemas), kept as a standalone spec.
+  - [ ] Add one pointer line in `spec/SPEC_COWORK.md`; update `packages/cowork-desktop/README.md` (remote mode, `doctor`, `reassemble`, inert default, pilot debt).
+  - [ ] Mirror the Lot 10 checklist into the spec runbook and ask the conductor to mirror it into Track before BRANCH.md removal.
+
+- [ ] **Lot 9 — Final validation**
+  - [ ] Typecheck and lint: `make typecheck-api lint-api typecheck-ui lint-ui typecheck-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+  - [ ] Retest API: `make test-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+  - [ ] Retest UI: `make test-ui REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+  - [ ] Retest cowork-desktop: `make test-cowork-desktop build-cowork-desktop pack-cowork-desktop REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
+  - [ ] Retest E2E after `make build-api build-ui-image REGISTRY=local API_PORT=9486 UI_PORT=5686 MAILDEV_UI_PORT=1586 ENV=e2e-cowork-remote-mcp`, one clean run per CI lane: `make clean test-e2e REGISTRY=local API_PORT=9486 UI_PORT=5686 MAILDEV_UI_PORT=1586 E2E_GROUPS="00 02 06 10" ENV=e2e-cowork-remote-mcp`, then `E2E_GROUPS="01 04"`, `E2E_GROUPS="03"`, `E2E_GROUPS="08 09"`, `E2E_GROUPS="05 07"` with the same ports and env.
+  - [ ] Retest AI flaky tests under the acceptance rule; record signatures; owner sign-off if any is accepted.
+  - [ ] Version bump verified after the last rebase: `@sentropic/cowork-desktop` 0.3.0 strictly greater than the npm published version (registry lookup inside a container or the pack guard; CI `enforce-package-bump` and `validate-publishable-manifests`).
+  - [ ] Rebase onto a green `origin/main` (BR41d-Q12); rerun scoped gates after rebase.
+  - [ ] `make logs-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp` clean before handoff.
+  - [ ] Every `## Feedback Loop` item closed or deferred with owner and date.
+  - [ ] Owner sign-off recorded for BR41d-Q10 and BR41d-A6 (npm and UI exe publication of inert code; additive migration reaching prod on the next prod restart).
+  - [ ] Final gate step 1: push with `git push origin feat/cowork-remote-mcp` (never `--set-upstream`); create the PR with this BRANCH.md as body; post a 3–6 step plan as the first PR comment.
+  - [ ] Final gate step 2: CI green on the PR, monitored with `gh`; blockers resolved (any failure is a branch problem).
+  - [ ] Final gate step 3: UAT and CI both OK, Lot 10 mirrored (Lot 8), commit removal of BRANCH.md, push, merge with owner approval.
+  - [ ] Cleanup: `make down` and `make ps` empty for both branch envs.
+
+- [ ] **Lot 10 — Post-merge pilot path: preprod smoke, prod promotion, one-week pilot, closure (executed after BRANCH.md removal; tracked in the spec runbook and Track)**
+  - [ ] Main CI and publications green at the merge SHA; `deploy-preprod` green; preprod rollout SHA observed equal to the merge SHA (a red run is a failure, not a smoke).
+  - [ ] Operator, preprod: create Secret `sentropic-cowork` in `sentropic-preprod` (BR41d-Q6); register the static client in the preprod DB with `api/src/scripts/oauth-register-client.ts` through the Lot 6 proven path (BR41d-A3, never bare `tsx` in the API pod) (`OAUTH_CLIENT_TOKEN_AUTH=none`, `OAUTH_CLIENT_REDIRECT_URIS=https://claude.ai/api/mcp/auth_callback`, `OAUTH_CLIENT_SCOPES=cowork:control`, `OAUTH_CLIENT_RESOURCE_INDICATORS=https://preprod.sentropic.sent-tech.ca/api/v1/cowork-mcp`); restart the preprod API; public 401 and PRM checked.
+  - [ ] Owner, preprod: custom connector in claude.ai with the static client id; tools on "Needs approval"; dedicated conversation (INV-31); Claude Code per BR41d-Q7.
+  - [ ] Smoke 5–10 min in a conductor-enforced no-merge window, agent started with `SENTROPIC_API_BASE_URL=https://preprod.sentropic.sent-tech.ca/api/v1`: 401/PRM, connector login succeeding via the announced `resource_metadata` (PRM URL used recorded), capture, click, allow-listed exec, representative transfer, stop, SHA and config check; measure 32 KiB text and about 100 KB image on both clients (BR41d-Q5); long-poll and response latency under 50 s; nginx temp cleanup.
+  - [ ] A failed smoke stops the path: fix through a new PR, then repeat; owner sign-off on smoke results before promotion.
+  - [ ] Prod promotion per BR41d-Q3: capture current live API, IdP and UI image digests and rendered configs (backup); pins = API+IdP qualified digest and UI qualified digest from the merge SHA; prod COWORK config + staging PVC + Secret `sentropic-cowork` in `sentropic`; prod quota checked (BR41d-Q2); preview reviewed; owner approves the prod migration 0009 and the product-wide Recreate restart; operator runs `make k8s-deploy` with the prod `KUBECONFIG` and `ENV` last; rollouts and served digests observed; prod static client registered through the Lot 6 proven path; public 401 and PRM checked.
+  - [ ] Pilot binary delivered out-of-band to the owner only: exe built from the merge SHA, SHA-256 and provenance recorded in Track; global release channel and prerelease setting unchanged.
+  - [ ] Activation (owner present at the workstation): fresh RAM pairing; portal activation (record `activatedAt` and `activationExpiresAt` UTC in Track with the local acceptor identity, authority over the device and data, and preprod access per BR41d-D7); local policy acceptance and arming; prod connector with "Needs approval"; grouped prod demonstrations (capture and click, allow-listed exec, 64 MB+ transfer both ways, local stop and portal stop).
+  - [ ] Pilot week: Reconnect/re-login about every 60 min as needed (no refresh grant, TTL unchanged); agent restart means re-pair, portal replace device and local re-arm; daily check of audit counts and staging purge.
+  - [ ] Emergency stop at any time: local hotkey or tray plus `POST /api/v1/cowork-control/stop` from the portal; verify permit, poll and chunk refusals and killed children; a ConfigMap change alone is not a kill switch.
+  - [ ] J+7 closure: refusal observed at J+7 with the flag still true; then `COWORK_REMOTE_ENABLED=false` and API restart; revoke gateway credential and `device:<sessionId>` registration, pilot `jti` tokens, `cowork:control` on the static client (BR41d-A3); remove the claude.ai connector; list and revoke owner sessions created during the window; purge staging on server and Windows; keep audit until its TTL.
+  - [ ] Rollback (any time): flag false and API restart; restore the saved API, IdP and UI digests and configs; keep the additive migration and receipts; purge staging and pilot credentials; verify no admission after restart and at J+7; the npm 0.3.0 version stays published; Windows effects, delivered copies and conversation content persist.
+
+## Deferred to BR-XX (follow-up branches; BR number and owner to be assigned by the conductor)
+- [ ] Move the Cowork tools under `/api/v1/mcp` when the cluster-mesh registry/supervisor owns presence, grants and dispatch (D4): new audience and scopes, owner reconnect, drain, explicit rebind, revoke the dedicated client and audience, close `cowork-mcp`.
+- [ ] OAuth `refresh_token` grant with rotation (removes hourly Reconnect).
+- [ ] Code signing of the Windows binary, DPAPI/credential vault, attested device identity.
+- [ ] External sealed audit and a separate DB role for audit purge (BR41d-A2).
+- [ ] Sandbox/DLP, fleet support, multi-monitor, nginx dedicated Cowork locations (only if smoke measurements show retention or SSE needs).
+- [ ] Programmatic Claude Code transfer with a one-time transfer token (dossier variant C, excluded from the pilot).
+- [ ] Product refresh-token rewrite defect kept out of the pilot path (`packages/cowork-bridge/src/auth/session-auth.ts:148-167`).
