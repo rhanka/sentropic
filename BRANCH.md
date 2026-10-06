@@ -188,7 +188,8 @@
   - [ ] After `make up-api-test REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`, confirm the locked SDK (1.30.0) exposes `WebStandardStreamableHTTPServerTransport` via `make exec-api CMD='node -e "import(\"@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js\").then((m) => console.log(typeof m.WebStandardStreamableHTTPServerTransport))"' REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote` (expect `function`).
   - [ ] Desk research of Windows native mechanisms and capture encoder; record candidates in BR41d-A7 and BR41d-Q8.
   - [ ] Commit 0.1 — `docs: add cowork remote MCP branch plan` (BRANCH.md only, BR41d-A1).
-  - [ ] Commit 0.2 — `docs: add cowork remote MCP contract (MCP, OAuth, identity)`: `spec/SPEC_EVOL_COWORK_REMOTE_MCP.md` part A (actors, D1–D8, config keys with fail-closed rules, tool catalog with JSON schemas and limits, 401/PRM, admission, exchange).
+  - [ ] Commit 0.2 — `docs: add cowork remote MCP contract (MCP, OAuth, identity)`: `spec/SPEC_EVOL_COWORK_REMOTE_MCP.md` part A1 (actors, D1–D8, config keys with fail-closed rules, 401/PRM, admission).
+- [ ] Commit 0.2b — `docs: add cowork remote exchange, tool catalog and Windows baseline`: part A2 (one-time exchange, tool catalog with JSON schemas and limits, Windows native baseline).
   - [ ] Commit 0.3 — `docs: add cowork remote broker, policy and shell contract`: part B (operation states, prepare/claim/lease/permit/result/status/cancel, stops, policy record, shell rules, audit fields).
   - [ ] Commit 0.4 — `docs: add cowork remote files and pilot runbook contract`: part C (chunk/segment/manifest states, portal headers, path policy, deploy keys, Lot 10 runbook: smoke, promotion, activation, pilot week, stop, rollback, J+7 closure).
   - [ ] Lot gate:
