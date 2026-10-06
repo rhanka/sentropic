@@ -7,6 +7,7 @@ import { freezeJudgeData, parseEvaluatorDescriptor } from './descriptor-validati
 import { validateJevPolicy } from './policy.js';
 import type { JudgeHostPolicy } from './policy.js';
 import { isRecord, snapshotBoundedJson } from './validation.js';
+import type { AuthResolution, AuthResolver } from '../auth.js';
 
 export interface JudgeSelectionOptions {
   registry: ProviderRegistry;
@@ -38,4 +39,23 @@ export async function preflightJudgeRequest(candidate: unknown, options: JudgeSe
     const code = validateJevPolicy(request, descriptor, options.policy);
     return code ? { ok: false, code } : { ok: true, request, descriptor, adapter };
   } catch { return { ok: false, code: 'PROVIDER_UNAVAILABLE' }; }
+}
+
+export type JudgeAuthResolution = { ok: true; auth: AuthResolution } | { ok: false; code: 'CREDENTIAL_MISSING' };
+/** Host custody only: no request credential, caller-selected owner or key fallback. */
+export async function resolveJudgeAuth(descriptor: EvaluatorDescriptor, resolver: AuthResolver): Promise<JudgeAuthResolution> {
+  try {
+    const snapshot = snapshotBoundedJson(await resolver({ providerId: descriptor.evaluator.providerId,
+      modelId: descriptor.wireModel, preferredSources: ['environment-token'] }));
+    if (!snapshot.ok || !isRecord(snapshot.value) || !isRecord(snapshot.value.material) || !isRecord(snapshot.value.descriptor)) {
+      return { ok: false, code: 'CREDENTIAL_MISSING' };
+    }
+    const { material, descriptor: authDescriptor } = snapshot.value;
+    if (material.type !== 'environment-token' || material.envVar !== 'JEV_API_KEY'
+      || authDescriptor.sourceType !== 'environment-token' || typeof material.token !== 'string'
+      || !material.token.trim() || material.token !== material.token.trim() || /[\r\n]/.test(material.token)) {
+      return { ok: false, code: 'CREDENTIAL_MISSING' };
+    }
+    return { ok: true, auth: freezeJudgeData(snapshot.value as unknown as AuthResolution) };
+  } catch { return { ok: false, code: 'CREDENTIAL_MISSING' }; }
 }
