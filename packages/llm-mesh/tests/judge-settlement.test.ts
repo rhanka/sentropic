@@ -4,6 +4,12 @@ import { createJudgeError } from '../src/judge/errors.js';
 import { judgeRequest, judgeServiceFixture, jevResponse, judgePrice } from './judge-fixtures.js';
 
 describe('durable judge settlement without re-evaluation', () => {
+  it('refuses missing provider usage and retains the reserve with unknown counters', async () => {
+    const f = judgeServiceFixture();
+    f.transport.send.mockResolvedValueOnce({ ok: true, body: { ...jevResponse(), usage: null } });
+    expect(await createJudgeService(f.options).judge(judgeRequest())).toMatchObject({ error: { code: 'USAGE_INVALID' },
+      receipt: { attempts: 1, usage: { tokens: { input: { value: null } } }, cost: { amountMicroUsd: '2753' }, budget: { state: 'pending-reconciliation' } } });
+  });
   it.each([{ body: { ...jevResponse(), model: 'other-model' }, code: 'SERVED_IDENTITY_MISMATCH' },
     { body: jevResponse({ noul: 4 }), code: 'VERDICT_INVALID' }])('settles independent usage after $code', async ({ body, code }) => {
     const f = judgeServiceFixture();
