@@ -206,6 +206,7 @@
   - [ ] Commit 1.5 — `test(api): add cowork MCP test fixtures`: `api/tests/utils/cowork-fixtures.ts` (env toggle, JWT mint, `saveTokenMeta`, client row, owner user).
   - [ ] Commit 1.6 — `test(api): add cowork MCP protocol tests`: `api/tests/api/cowork-mcp-protocol.test.ts` (404/401/PRM/405/initialize/202/tools-list/parse/413/Origin/Host).
   - [ ] Commit 1.7 — `test(api): add cowork MCP admission tests`: `api/tests/api/cowork-mcp-admission.test.ts` (valid + wrong aud/issuer/sub/client/scope/revoked/meta/client/owner/store cases).
+  - [ ] Commit 1.8 — `test(api): add cowork remote config unit tests`: `api/tests/unit/cowork-remote-config.test.ts` (default-off, per-value fail-closed, tiers, HMAC length, numbers, staging/file-text flags).
   - [ ] Lot gate:
     - [ ] `make typecheck-api lint-api REGISTRY=local API_PORT=9485 UI_PORT=5685 MAILDEV_UI_PORT=1585 ENV=test-cowork-remote-mcp`
     - [ ] **API tests**
