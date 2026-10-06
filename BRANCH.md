@@ -178,6 +178,7 @@
     - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.
   - [ ] 1.16: settlement/receipt persistence, identity-mismatch usage, charged overrun and no replay; new mesh tests/judge-settlement.test.ts.
     - [x] Internal adapter-result boundary reconstructs validated JEV native semantics and retains independent usage; live or contradictory envelopes cannot establish a verdict or expose raw exception text.
+    - [x] Dispatch/settlement scaffold invokes once, prices independent usage at the pinned row and awaits atomic settlement plus metadata receipt acknowledgement. Its durable disable implementation belongs to the future host lot; only test ports model that contract here.
     - [ ] Lot 1B handoff: every post-result failure, including deadline expiry, uses settlement phase; tests assert phase, code and absence of redispatch advice.
     - [ ] Lot 1C handoff: 1.15/1.16 pass only literal error phases; sanitized preflight must never stand in for a post-result phase or establish zero attempts/spend.
   - [ ] 1.17: raw/observation allowlists and content/secret canaries; new mesh tests/judge-privacy.test.ts.
