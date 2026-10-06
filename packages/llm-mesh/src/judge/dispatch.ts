@@ -14,6 +14,7 @@ import { freezeJudgeData } from './descriptor-validation.js';
 export async function dispatchJudge(execution: JudgeExecution, selection: Extract<JudgeSelection, { ok: true }>,
   admitted: Extract<AdmittedJudge, { ok: true }>, options: JudgeServiceOptions) {
   const receipt = execution.receipt;
+  execution.phase = 'dispatch';
   receipt.attempts = 1;
   receipt.dispatch = 'started';
   receipt.usage = unreportedJudgeUsage('unknown');
@@ -24,6 +25,7 @@ export async function dispatchJudge(execution: JudgeExecution, selection: Extrac
   catch { candidate = { ok: false, error: createJudgeError('TRANSPORT_FAILED', 'dispatch'),
     usage: unreportedJudgeUsage('unknown'), servedEvaluator: null, servedModelId: null }; }
   const material = getSecretAuthMaterial(admitted.auth);
+  execution.phase = 'settlement';
   const secret = material?.type === 'environment-token' ? material.token! : '';
   const result = parseJudgeAdapterResult(candidate, request, selection.descriptor, secret);
   receipt.dispatch = result.ok || result.error.phase === 'parse' ? 'completed' : 'unknown';
