@@ -169,7 +169,7 @@
   - [x] 1.12: service/policy preflight pins registry identity/revision and local codec/capability limits; judge-selection passed 11 tests, including property-order independence and no egress on refusal.
     - [x] Lot 1A handoff: native thresholds and registered passing labels validated against the pinned resolved criterion before credentials; unsupported explanations/native decisions/raw requests refuse.
     - [x] Lot 1B handoff: significant-input snapshots detached and frozen before the first configuration await; caller mutation regression pins accepted content.
-  - [ ] 1.13: concrete resolved auth and descriptive retention, unsupported retention requests refuse; new mesh tests/judge-policy.test.ts.
+  - [x] 1.13: concrete frozen environment-only auth resolution has no caller key/owner fallback; unknown retention permits normal preflight and unsupported retention requests refuse. Judge-policy passed 9 tests, including missing bytes and sanitized resolver exceptions.
   - [ ] 1.14: pricing.ts/budget.ts integer quotes and defensible liability-bound refusal; new mesh tests/judge-budget.test.ts.
   - [ ] 1.15: service admission, awaited durable marker and one dispatch; new mesh tests/judge-dispatch.test.ts.
     - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.
