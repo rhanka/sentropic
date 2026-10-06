@@ -36,7 +36,22 @@ export function decodeJevVerdict(candidate: unknown, request: JudgeRequest, desc
     label = { value: selected.outcome, origin: 'provider' };
     confidence = parseJudgeConfidence({ value: answer.confidence, ...descriptor.confidence, origin: 'provider' });
     if (!confidence || confidence.meaning !== 'provider-confidence') return invalid;
-  } else return { ok: false, code: 'CAPABILITY_UNSUPPORTED' };
+  } else {
+    if (!hasOnlyKeys(answer, ['score', 'probabilities', 'legend', 'confidence']) || !isRecord(answer.legend)
+      || Object.keys(answer.legend).length !== criterion.levels.length) return invalid;
+    const outcomes = criterion.levels.map((level, index) => ({ outcome: level.label, nativeOutcome: String(index) }));
+    const legend = answer.legend;
+    if (!outcomes.every((entry, index) => legend[entry.nativeOutcome] === criterion.levels[index].description)) return invalid;
+    distribution = mapJudgeDistribution(answer.probabilities, outcomes);
+    score = parseJudgeScore({ value: answer.score, meaning: 'rubric-grade',
+      scale: { kind: 'bounded', min: 0, max: criterion.levels.length - 1, direction: criterion.direction } });
+    confidence = parseJudgeConfidence({ value: answer.confidence, ...descriptor.confidence, origin: 'provider' });
+    if (!distribution || !score || !confidence || confidence.meaning !== 'provider-confidence') return invalid;
+    const weighted = distribution.reduce((sum, entry, index) => sum + index * entry.probability, 0);
+    if (Math.abs(weighted - score.value) > descriptor.probabilityTolerance) return invalid;
+  }
+  if (distribution && Math.abs(distribution.reduce((sum, entry) => sum + entry.probability, 0) - 1)
+    > descriptor.probabilityTolerance) return invalid;
   const decision = deriveJudgeDecision({ rule: encoded.request.decision, score, label: label?.value ?? null,
     providerDecision: null, declaredLabels });
   if (!decision.ok) return decision;
