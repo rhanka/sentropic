@@ -28,6 +28,18 @@
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
     },
+    "./judge": {
+      "types": "./dist/judge/index.d.ts",
+      "import": "./dist/judge/index.js"
+    },
+    "./judge/host": {
+      "types": "./dist/judge/host.d.ts",
+      "import": "./dist/judge/host.js"
+    },
+    "./transport/jev": {
+      "types": "./dist/transport/jev.d.ts",
+      "import": "./dist/transport/jev.js"
+    },
     "./transport/cloud-code": {
       "types": "./dist/transport/cloud-code-transport.d.ts",
       "import": "./dist/transport/cloud-code-transport.js"
