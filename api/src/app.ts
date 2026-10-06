@@ -87,6 +87,7 @@ import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
 import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
 import { clusterMeshLiveQualificationRouter } from './routes/cluster-mesh-live-qualification';
+import { coworkMcpRouter } from './routes/cowork-mcp';
 
 const authPlugin = productAuthPlugin();
 
@@ -428,6 +429,8 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
   '/session': '/auth',
   ...ROOT_MOUNT_REMAPS,
 } as const;
+// Cowork remote MCP (BR-41d): dedicated endpoint beside the cluster-mesh mounts.
+app.route('/api/v1/cowork-mcp', coworkMcpRouter);
 app.route('/api/v1/cluster-mesh/qualification', clusterMeshLiveQualificationRouter);
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
