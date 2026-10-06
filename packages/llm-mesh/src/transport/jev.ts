@@ -16,16 +16,41 @@ export function createJevTransport(options: JevTransportOptions): JevTransport {
   const cap = options.maxResponseBytes ?? JUDGE_MAX_JSON_BYTES;
   if (!Number.isSafeInteger(cap) || cap < 1 || cap > JUDGE_MAX_JSON_BYTES) throw new Error('Invalid JEV response bound.');
   return { async send(bodyJson, token, call = {}) {
-    if (!token.trim() || /[\r\n]/.test(token)) return { ok: false, error: createJudgeError('CREDENTIAL_MISSING', 'preflight') };
+    if (!token.trim() || token !== token.trim() || /[\r\n]/.test(token)) return { ok: false, error: createJudgeError('CREDENTIAL_MISSING', 'preflight') };
     if (call.signal?.aborted) return { ok: false, error: createJudgeError('CANCELLED', 'dispatch') };
+    const timeoutMs = call.timeoutMs ?? 10_000;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+      return { ok: false, error: createJudgeError('REQUEST_INVALID', 'preflight') };
+    }
+    const controller = new AbortController();
+    let timedOut = false;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let onAbort!: () => void;
+    const aborted = new Promise<JevTransportResult>((resolve) => {
+      onAbort = () => {
+        void reader?.cancel().catch(() => {});
+        resolve({ ok: false, error: createJudgeError(timedOut ? 'TIMEOUT' : 'CANCELLED', 'dispatch') });
+      };
+      controller.signal.addEventListener('abort', onAbort, { once: true });
+    });
+    const cancel = () => controller.abort();
+    call.signal?.addEventListener('abort', cancel, { once: true });
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+    const run = async (): Promise<JevTransportResult> => {
     try {
       const response = await options.fetch(JEV_ENDPOINT, { method: 'POST', redirect: 'manual',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json' },
-        body: bodyJson, signal: call.signal });
+        body: bodyJson, signal: controller.signal });
+      if (controller.signal.aborted) { void response.body?.cancel().catch(() => {}); return await aborted; }
       if (response.redirected || (response.status >= 300 && response.status < 400)) {
         return { ok: false, error: createJudgeError('PROVIDER_REJECTED', 'dispatch') };
       }
-      if (response.status !== 200) return { ok: false, error: createJudgeError('PROVIDER_UNAVAILABLE', 'dispatch') };
+      if (response.status !== 200) {
+        const code = response.status === 401 ? 'AUTHENTICATION_FAILED' : response.status === 422 ? 'PROVIDER_REJECTED'
+          : response.status === 429 ? 'RATE_LIMITED' : response.status === 529 ? 'PROVIDER_OVERLOADED'
+          : response.status >= 500 ? 'PROVIDER_UNAVAILABLE' : 'PROVIDER_REJECTED';
+        return { ok: false, error: createJudgeError(code, 'dispatch') };
+      }
       if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
         return { ok: false, error: createJudgeError('VERDICT_INVALID', 'parse') };
       }
@@ -33,7 +58,7 @@ export function createJevTransport(options: JevTransportOptions): JevTransport {
       if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > cap)) {
         return { ok: false, error: createJudgeError('RESPONSE_TOO_LARGE', 'parse') };
       }
-      const reader = response.body?.getReader();
+      reader = response.body?.getReader();
       if (!reader) return { ok: false, error: createJudgeError('VERDICT_INVALID', 'parse') };
       const buffer = new Uint8Array(cap);
       let size = 0;
@@ -47,7 +72,7 @@ export function createJevTransport(options: JevTransportOptions): JevTransport {
           }
           buffer.set(chunk.value, size); size += chunk.value.byteLength;
         }
-      } finally { reader.releaseLock(); }
+      } finally { reader.releaseLock(); reader = undefined; }
       let parsed: unknown;
       try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, size))); }
       catch { return { ok: false, error: createJudgeError('VERDICT_INVALID', 'parse') }; }
@@ -56,7 +81,13 @@ export function createJevTransport(options: JevTransportOptions): JevTransport {
       const id = sanitizeJevId(response.headers.get('x-typesafe-request-id'));
       return { ok: true, body: snapshot.value, ...(id && !id.includes(token) ? { providerRequestId: id } : {}) };
     } catch {
-      return { ok: false, error: createJudgeError(call.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED', 'dispatch') };
+      return { ok: false, error: createJudgeError(timedOut ? 'TIMEOUT' : controller.signal.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED', 'dispatch') };
+    }
+    };
+    try { return await Promise.race([run(), aborted]); }
+    finally {
+      clearTimeout(timer); call.signal?.removeEventListener('abort', cancel);
+      controller.signal.removeEventListener('abort', onAbort);
     }
   } };
 }
