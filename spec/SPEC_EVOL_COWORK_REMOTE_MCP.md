@@ -273,3 +273,117 @@ their operation receipts; exec rows follow the field rule above. Durability:
 the audit table is append-only (UPDATE refused, DELETE only by the TTL purge 7
 days after close, enforced by trigger — BR41d-A2); an audit write failure
 blocks new admissions via the audit-health signal consulted by admission.
+
+## C1. File transfers 64 MB+ (INV-25, INV-26, INV-29)
+
+256 KiB HTTP chunks; 64 MiB segments (threshold 67108864 bytes); logical file
+max 1 GiB (refused above); owner quota 2 GiB; one active transfer per
+direction; space reserved before start on Windows and API; global disk cap.
+SHA-256 per chunk, per segment and per logical file; index, offset, size and
+hash sealed in the manifest. Manifest states:
+`begin → receiving/sending → verifying → completed | aborted`. Refused:
+out-of-range index, conflicting duplicate, hole, wrong final size. Same index
++ hash is idempotent. ACK only after durable write (write, fsync, manifest
+transaction); `completed` only after the destination ACK; a lost ACK stays
+pending, never a second publication. Chunks live only in the private staging
+volume (`COWORK_FILE_STAGING_DIR`), never under a UI static directory,
+streamed with incremental hashes (never a whole file in memory); disk-full is
+an explicit error. TTL 24 h bounded by activation; purge after ACK, abort,
+stop, revocation or TTL at least every minute. Every chunk/read revalidates
+owner, device, grant and active `jti`; OAuth expiry suspends the transfer;
+resume needs re-login plus an explicit local rebind to the new `jti` with hash
+revalidation, never action reactivation. Chunk requests: max 20 s, body under
+512 KiB (INV-30).
+
+## C2. Portal with inert downloads (INV-28)
+
+Upload chunk, manifest/status, download chunk under
+`/api/v1/cowork-control/*` (owner cookie + anti-CSRF token + strict Origin; a
+transfer id alone grants nothing). Downloads: `Content-Disposition:
+attachment` with a neutralized name (CR/LF refused, `filename*` encoded),
+`Content-Type: application/octet-stream`, `X-Content-Type-Options: nosniff`,
+`Cache-Control: no-store`; no preview under the product origin; file name and
+type never drive headers.
+
+## C3. Path policy (INV-27)
+
+Local Incoming/Outgoing roots and opaque handles. Refused: absolute paths,
+UNC, traversal, ADS, reserved names, symlinks, junctions, reparse points.
+Final path revalidated after open; `.part` with a user ACL; flush then atomic
+rename without overwrite; `Zone.Identifier` set before publication in
+Incoming; never auto-open or execute.
+
+## C4. Deploy keys and registration path (BR41d-A3, Q2, Q6)
+
+Per-tier values live outside git in the optional Secret `sentropic-cowork`:
+`COWORK_OWNER_SUB` (owner userId observed in that tier), `COWORK_MCP_CLIENT_ID`
+(static client of that tier), `COWORK_OPERATION_HMAC_KEY` (32 random bytes,
+rotated at each pilot start and on suspicion). Absent values keep Cowork
+disabled (404). Static client registration (`OAUTH_CLIENT_TOKEN_AUTH=none`,
+redirect `https://claude.ai/api/mcp/auth_callback`, scope `cowork:control`,
+resource indicator = tier resource) runs through the executable path proven no
+later than Lot 6 (never bare `tsx` in the pruned API pod); the exact command
+is recorded in `deploy/k8s/README.md` and here. Preprod overlay additionally
+sets non-secret COWORK keys with preprod host values, `COWORK_REMOTE_ENABLED:
+"true"` in git (fail-closed until the Secret exists), one RWO staging PVC
+(4 Gi proposed; global staging cap 3 GiB above the 2 GiB owner quota —
+BR41d-Q2 confirms quota + StorageClass in `sentropic-preprod` and
+`sentropic`), and the staging volume mount. Prod overlay is untouched by this
+work; promotion is a separate reviewed change (BR41d-Q3). Prod manifests use
+`:main` with `imagePullPolicy: Always`: after merge, any unrelated prod API
+restart loads this code (inert without prod config/Secret) and applies
+additive control migration 0009 (BR41d-A6).
+
+## C5. Lot 10 runbook (post-merge pilot path)
+
+1. Main CI + publications green at the merge SHA; `deploy-preprod` green;
+   preprod rollout SHA equals the merge SHA.
+2. Operator (preprod): create Secret `sentropic-cowork`; register the static
+   client through the proven path; restart the preprod API; check public 401
+   and PRM.
+3. Owner: custom connector in claude.ai with the static client id; tools on
+   "Needs approval"; dedicated conversation (INV-31); Claude Code per
+   BR41d-Q7.
+4. Smoke 5–10 min in a conductor-enforced no-merge window
+   (`SENTROPIC_API_BASE_URL=https://preprod.sentropic.sent-tech.ca/api/v1`):
+   401/PRM, connector login via the announced `resource_metadata` (URL
+   recorded), capture, click, allow-listed exec, representative transfer, stop,
+   SHA + config check; measure 32 KiB text and ~100 KB image on both clients
+   (BR41d-Q5; lower the caps by config if needed); long-poll and response
+   latency under 50 s. A failed smoke stops the path: fix through a new PR,
+   repeat, owner sign-off before promotion.
+5. Prod promotion per BR41d-Q3 (backup digests + rendered configs; pins =
+   qualified API+IdP and UI digests of the merge SHA; prod COWORK config +
+   staging PVC + Secret; quota checked; preview reviewed; owner approves the
+   0009 migration and the product-wide Recreate restart; operator runs
+   `make k8s-deploy`; rollouts + served digests observed; prod client
+   registered; public 401 + PRM checked).
+6. Pilot binary out-of-band to the owner only (exe from the merge SHA, SHA-256
+   + provenance in Track; release channel unchanged).
+7. Activation (owner at the workstation): fresh RAM pairing; portal activation
+   (`activatedAt`/`activationExpiresAt` UTC + local acceptor identity,
+   authority, preprod access in Track); local acceptance + arming; grouped
+   demos (capture/click, allow-listed exec, 64 MB+ both ways, local + portal
+   stop).
+8. Pilot week: re-login ~hourly as needed (no refresh grant); agent restart =
+   re-pair + replace device + re-arm; daily audit + purge check.
+9. Emergency stop any time: local hotkey/tray + portal stop; verify permit,
+   poll and chunk refusals and killed children.
+10. J+7 closure: refusal observed at J+7 with the flag still true; then
+    `COWORK_REMOTE_ENABLED=false` + API restart; revoke gateway credential,
+    `device:<sessionId>` registration, pilot `jti` tokens,
+    `cowork:control` on the static client; remove the connector; list + revoke
+    pilot owner sessions; purge staging server + Windows; keep audit to TTL.
+11. Rollback any time: flag false + restart; restore saved digests + configs;
+    keep the additive migration + receipts; purge staging + pilot credentials;
+    verify no admission after restart and at J+7 (npm 0.3.0 stays published;
+    Windows effects, delivered copies and conversation content persist).
+
+## C6. Invariant traceability
+
+INV-01 A5 · INV-02 A5 · INV-03 A3 · INV-04 A2/C5 · INV-05 A1/A5 · INV-06 A6 ·
+INV-07 B2 · INV-08 A7 · INV-09 B1 · INV-10 B1 · INV-11 B2 · INV-12 B3 ·
+INV-13 B4 · INV-14 B4/A8 · INV-15 B3 · INV-16 B4 · INV-17 A8 (proof Lot 6) ·
+INV-18 B3/A8 · INV-19 B5 · INV-20 B5 · INV-21 B5/B4 · INV-22 B6 · INV-23 B6 ·
+INV-24 A7 · INV-25 C1 · INV-26 C1 · INV-27 C3 · INV-28 C2 · INV-29 C1 ·
+INV-30 A7/B2/C1 · INV-31 A1/C5. D1–D8: A2.
