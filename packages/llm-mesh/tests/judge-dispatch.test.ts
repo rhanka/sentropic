@@ -1,8 +1,52 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createJudgeService } from '../src/judge/service.js';
-import { judgeRequest, judgeServiceFixture } from './judge-fixtures.js';
+import { judgeRequest, judgeServiceFixture, judgePrice } from './judge-fixtures.js';
 
 describe('judge admission and exactly one dispatch', () => {
+  it.each(['descriptor', 'price'] as const)('checks expiry after %s resolution before acquiring credentials', async (stage) => {
+    const f = judgeServiceFixture();
+    if (stage === 'descriptor') f.options.resolveEvaluator = async () => { f.state.now = 10001; return f.descriptor; };
+    else f.options.resolvePrice = async () => { f.state.now = 10001; return judgePrice(); };
+    expect(await createJudgeService(f.options).judge(judgeRequest())).toMatchObject({ error: { code: 'TIMEOUT', phase: 'admission' }, receipt: { attempts: 0 } });
+    expect(f.options.resolveAuth).not.toHaveBeenCalled();
+    expect(f.budget.admit).not.toHaveBeenCalled();
+  });
+  it('checks the reduced host deadline again after durable marking', async () => {
+    const f = judgeServiceFixture();
+    f.budget.markDispatched.mockImplementationOnce(async () => { f.state.now = 51; return { ok: true }; });
+    expect(await createJudgeService({ ...f.options, policy: { timeoutMs: 50 } }).judge(judgeRequest()))
+      .toMatchObject({ error: { code: 'TIMEOUT', phase: 'dispatch' }, receipt: { attempts: 0, budget: { state: 'released' } } });
+    expect(f.budget.release).toHaveBeenCalledOnce();
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it('rechecks verified authority after marking before any send', async () => {
+    const f = judgeServiceFixture();
+    f.options.authorize = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    expect(await createJudgeService(f.options).judge(judgeRequest())).toMatchObject({ error: { code: 'AUTHORIZATION_DENIED', phase: 'dispatch' } });
+    expect(f.budget.release).toHaveBeenCalledOnce();
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it.each([true, false])('releases a refused marker only with explicit unsent proof (%s)', async (provenUnsent) => {
+    const f = judgeServiceFixture();
+    f.budget.markDispatched.mockResolvedValueOnce({ ok: false, code: 'PROVIDER_UNAVAILABLE', provenUnsent });
+    const result = await createJudgeService(f.options).judge(judgeRequest());
+    expect(result.receipt.budget.state).toBe(provenUnsent ? 'released' : 'pending-reconciliation');
+    expect(f.budget.release).toHaveBeenCalledTimes(provenUnsent ? 1 : 0);
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it('retains ambiguous admission liability and refuses pre-aborted work before configuration I/O', async () => {
+    const f = judgeServiceFixture();
+    f.budget.admit.mockRejectedValueOnce(new Error('ambiguous durable hold'));
+    expect(await createJudgeService(f.options).judge(judgeRequest())).toMatchObject({ error: { code: 'BUDGET_UNAVAILABLE', retryable: false },
+      receipt: { attempts: 0, budget: { state: 'pending-reconciliation' }, cost: { amountMicroUsd: '2753' } } });
+    const controller = new AbortController();
+    controller.abort();
+    vi.mocked(f.options.resolveAuth).mockClear();
+    expect(await createJudgeService(f.options).judge(judgeRequest(), { signal: controller.signal })).toMatchObject({ error: { code: 'CANCELLED', phase: 'preflight' } });
+    expect(f.options.resolveAuth).not.toHaveBeenCalled();
+    expect(f.budget.release).not.toHaveBeenCalled();
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
   it('constructs without I/O and awaits the durable marker before sending', async () => {
     const f = judgeServiceFixture();
     let acknowledge!: () => void;
