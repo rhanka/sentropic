@@ -1,8 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createJudgeService } from '../src/judge/service.js';
-import { judgeRequest, judgeServiceFixture, judgePrice } from './judge-fixtures.js';
+import { judgeRequest, judgeServiceFixture, judgePrice, jevResponse } from './judge-fixtures.js';
 
 describe('judge admission and exactly one dispatch', () => {
+  it.each(['auth', 'admit', 'mark', 'provider', 'settle', 'receipt'] as const)('bounds a stalled %s port without losing late accounting', async (stage) => {
+    vi.useFakeTimers();
+    const f = judgeServiceFixture();
+    let acknowledge!: () => void;
+    const gate = new Promise<void>((resolve) => { acknowledge = resolve; });
+    if (stage === 'auth') {
+      const original = f.options.resolveAuth;
+      f.options.resolveAuth = async (request) => { await gate; return original(request); };
+    } else if (stage === 'admit') f.budget.admit.mockImplementationOnce(async (input) => { await gate; return { ok: true, holdId: input.callId }; });
+    else if (stage === 'mark') f.budget.markDispatched.mockImplementationOnce(async () => { await gate; return { ok: true }; });
+    else if (stage === 'provider') f.transport.send.mockImplementationOnce(async () => { await gate; return { ok: true, body: jevResponse() }; });
+    else if (stage === 'settle') f.budget.settle.mockImplementationOnce(async () => { await gate; });
+    else vi.mocked(f.options.receipts.persist).mockImplementationOnce(async () => { await gate; });
+    const controller = new AbortController();
+    let received: unknown;
+    const pending = createJudgeService(f.options).judge(judgeRequest(), { signal: controller.signal }).then((result) => { received = result; return result; });
+    try {
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(received).toMatchObject({ ok: false, error: { code: 'TIMEOUT' } });
+      if (stage !== 'auth') expect(received).toMatchObject({ receipt: { budget: { state: 'pending-reconciliation' } } });
+      if (stage === 'settle' || stage === 'receipt') expect(received).toMatchObject({ error: { phase: 'settlement', retryable: false }, receipt: { attempts: 1 } });
+      else if (stage === 'provider') expect(received).toMatchObject({ error: { phase: 'dispatch', retryable: false }, receipt: { attempts: 1, dispatch: 'unknown' } });
+      else expect(f.transport.send).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      controller.abort(); acknowledge();
+      await pending;
+      await vi.advanceTimersByTimeAsync(0);
+      vi.useRealTimers();
+    }
+    expect(f.transport.send).toHaveBeenCalledTimes(['provider', 'settle', 'receipt'].includes(stage) ? 1 : 0);
+    if (stage === 'admit' || stage === 'mark') expect(f.budget.release).toHaveBeenCalledOnce();
+    if (stage === 'provider') expect(f.state.ledger).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error' }]);
+  });
   it.each(['descriptor', 'price'] as const)('checks expiry after %s resolution before acquiring credentials', async (stage) => {
     const f = judgeServiceFixture();
     if (stage === 'descriptor') f.options.resolveEvaluator = async () => { f.state.now = 10001; return f.descriptor; };
@@ -87,13 +121,15 @@ describe('judge admission and exactly one dispatch', () => {
     expect(f.options.resolveAuth).not.toHaveBeenCalled();
     expect(f.budget.admit).not.toHaveBeenCalled();
   });
-  it('releases only proven-unsent cancellation after admission', async () => {
+  it('holds cancellation during admission pending until late unsent proof releases the hold', async () => {
     const f = judgeServiceFixture();
     const controller = new AbortController();
     f.budget.admit.mockImplementationOnce(async (input) => { controller.abort(); return { ok: true, holdId: input.callId }; });
-    expect(await createJudgeService(f.options).judge(judgeRequest(), { signal: controller.signal }))
-      .toMatchObject({ error: { code: 'CANCELLED', phase: 'dispatch' }, receipt: { attempts: 0, budget: { state: 'released' } } });
-    expect(f.budget.release).toHaveBeenCalledOnce();
+    const result = await createJudgeService(f.options).judge(judgeRequest(), { signal: controller.signal });
+    expect(result).toMatchObject({ error: { code: 'CANCELLED', phase: 'admission', retryable: false },
+      receipt: { attempts: 0, budget: { state: 'pending-reconciliation' } } });
+    await vi.waitFor(() => expect(f.budget.release).toHaveBeenCalledOnce());
+    expect(result.receipt.budget.state).toBe('pending-reconciliation');
     expect(f.transport.send).not.toHaveBeenCalled();
   });
   it.each([() => 'invalid id', () => { throw new Error('private exception'); }])('returns mandatory safe metadata for invalid generated IDs', async (generateId) => {

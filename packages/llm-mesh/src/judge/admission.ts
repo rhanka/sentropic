@@ -31,6 +31,7 @@ export async function releaseUnsentJudge(execution: JudgeExecution, options: Jud
 export async function admitJudge(execution: JudgeExecution, selection: Extract<JudgeSelection, { ok: true }>,
   options: JudgeServiceOptions): Promise<AdmittedJudge> {
   const failed = (error: JudgeError): AdmittedJudge => ({ ok: false, error });
+  execution.phase = 'admission';
   let expired = judgeInterruption(execution, 'admission');
   if (expired) return failed(expired);
   if (!await judgeAuthority(options, selection)) return failed(createJudgeError('AUTHORIZATION_DENIED', 'preflight'));
@@ -43,29 +44,33 @@ export async function admitJudge(execution: JudgeExecution, selection: Extract<J
   if (expired) return failed(expired);
   const quoted = quoteJudge(selection.request, selection.descriptor, candidate, options.policy?.maxCostMicroUsd);
   if (!quoted.ok) return failed(createJudgeError(quoted.code, 'admission'));
+  execution.phase = 'preflight';
   const resolved = await resolveJudgeAuth(selection.descriptor, options.resolveAuth);
   if (!resolved.ok) return failed(createJudgeError(resolved.code, 'preflight'));
   const interrupted = judgeInterruption(execution, 'admission');
   if (interrupted) return failed(interrupted);
   const { quote } = quoted;
+  execution.phase = 'admission';
+  // Expose pending liability before awaiting admission: a late durable hold may exist.
+  execution.receipt.budget = { state: 'pending-reconciliation', reservedMicroUsd: quote.reservedMicroUsd, overrun: false };
+  execution.receipt.cost = priceJudgeUsage(unreportedJudgeUsage('unknown'), quote).cost;
   const deadlineAt = execution.clock.wall() + Math.max(0, execution.deadline - execution.clock.monotonic());
   let holdId: string;
   try {
     const admitted = await options.budget.admit({ callId: execution.receipt.callId, correlationId: execution.receipt.correlationId,
       evaluator: { ...selection.descriptor.evaluator }, quote, deadlineAt });
     if (!admitted.ok) {
+      execution.receipt.budget = { state: 'not-admitted', overrun: false };
+      execution.receipt.cost = { status: 'not-incurred', amountMicroUsd: '0', source: 'no-dispatch' };
       const code = ['BUDGET_EXHAUSTED', 'PROVIDER_UNAVAILABLE'].some((v) => v === admitted.code) ? admitted.code : 'BUDGET_UNAVAILABLE';
       return failed(createJudgeError(code, 'admission'));
     }
     holdId = admitted.holdId;
     if (!isCorrelationId(holdId)) throw new Error('Invalid hold acknowledgement.');
   } catch {
-    execution.receipt.budget = { state: 'pending-reconciliation', reservedMicroUsd: quote.reservedMicroUsd, overrun: false };
-    execution.receipt.cost = priceJudgeUsage(unreportedJudgeUsage('unknown'), quote).cost;
     return failed(createJudgeError('BUDGET_UNAVAILABLE', 'dispatch'));
   }
-  execution.receipt.budget = { state: 'pending-reconciliation', reservedMicroUsd: quote.reservedMicroUsd, overrun: false };
-  execution.receipt.cost = priceJudgeUsage(unreportedJudgeUsage('unknown'), quote).cost;
+  execution.phase = 'dispatch';
   let stopped = judgeInterruption(execution, 'dispatch');
   if (!stopped && !await judgeAuthority(options, selection)) stopped = createJudgeError('AUTHORIZATION_DENIED', 'dispatch');
   stopped ??= judgeInterruption(execution, 'dispatch');

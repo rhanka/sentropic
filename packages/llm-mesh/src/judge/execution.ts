@@ -55,6 +55,7 @@ export function closeJudgeReceipt(execution: JudgeExecution, error?: JudgeError)
 export function copyJudgeReceipt(receipt: JudgeReceipt): JudgeReceipt { return freezeJudgeData(structuredClone(receipt)); }
 export async function persistJudgeResult(execution: JudgeExecution, sink: JudgeReceiptSink,
   error?: JudgeError, verdict?: JudgeVerdict): Promise<JudgeResult> {
+  execution.phase = 'settlement';
   closeJudgeReceipt(execution, error);
   try { await sink.persist(copyJudgeReceipt(execution.receipt)); }
   catch { error = createJudgeError('RECEIPT_UNAVAILABLE', 'settlement'); }
