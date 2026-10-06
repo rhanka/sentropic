@@ -116,3 +116,60 @@ the scope is missing). Any store exception → `503
 Claude into a reconnect loop). Method errors after admission → JSON-RPC errors.
 No positive admission cache: revocation, client and owner are read fresh on
 every admission; the 60 s JWKS key-material cache is not an admission cache.
+
+## A6. One-time device credential exchange (INV-06)
+
+Fresh RAM device-code pairing yields a full product session, which is NOT a
+device-limited credential. `POST /api/v1/cowork-devices/exchange` converts it,
+in ONE transaction: product session valid → owner allowed → activation enabled
+and bound to this `device:<sessionId>` → registration active. Effects: 32
+random bytes generated (gateway secret); its SHA-256 hex stored with a
+generation and `exp = min(registration, activation)`; the exchange marked
+consumed; the `user_sessions` row deleted (session AND refresh revoked) BEFORE
+the response. The secret is returned once; loss or failure means a new
+pairing, never a product-session fallback. Gateway auth uses
+`X-Cowork-Device-Key: <base64url of the 32 bytes>` (never URL); the gateway
+secret is refused by product routes, device approve, the IdP session resolver
+and the MCP endpoint, and OAuth bearers are refused by gateway routes. The
+gateway secret lives in agent RAM only (pilot debt, bounded to the week).
+
+## A7. MCP tool catalog (target state; Lot 1 serves `tools/list` empty)
+
+No `deviceId` argument anywhere (INV-08): the server resolves the unique armed
+device of the owner; a second device is refused. MCP carries metadata, short
+UTF-8 text (max `COWORK_MCP_MAX_TEXT_BYTES`) and reduced images only (INV-24);
+binary bytes travel the portal/gateway only. Slow effects answer `pending` +
+`action_status` when the 35 s MCP bound would be exceeded (INV-30).
+
+| Tool | Arguments | Returns | Limit notes |
+| --- | --- | --- | --- |
+| `screen_capture` | `{region?: {x_image,y_image,w,h}, scale?: 1\|2}` | `{captureId, mime, data_base64, imageWidth, imageHeight, screenWidth, screenHeight, originX, originY, scaleX, scaleY, dpi, capturedAt}` | Target ~100 KB, hard cap 256 KiB (Lot 3 geometry) |
+| `action_prepare` | `{tool: string, arguments: object}` | `{operationId, status: prepared, expiresAt}` | No effect; args sealed by HMAC digest (B1) |
+| `input_action` | `{operationId}` (sealed `{captureId, x_image, y_image, kind, text?, key?}`) | receipt or `pending` | Capture max 5 s old; typing max 128 chars (Lot 3) |
+| `shell_exec` | `{operationId}` (sealed `{ruleId, ruleVersion, argv[], cwdRef, envKeys[]}`) | receipt `{exitCode, bytesOut, truncated, timeout, partialEffect}` | Allow-list rule only; 10 s default / 20 s max; 16 KiB out (Lot 4) |
+| `action_status` | `{operationId}` | `{status, receipt?}` | Same receipt for the same id (B1) |
+| `action_cancel` | `{operationId}` | `{status: cancelled}` | Within its scope only (B3) |
+| `file_begin` | `{direction, nameRef, sizeBytes, sha256, chunkHashes[]}` | `{transferId, chunkSize, manifest}` | 1 GiB file / 2 GiB quota / one active per direction (C1) |
+| `file_status` | `{transferId}` | `{state, bitmap, receivedBytes}` | Resume from bitmap (C1) |
+| `file_commit` | `{transferId}` | `{state: completed}` | Only after destination ACK (C1) |
+| `file_abort` | `{transferId}` | `{state: aborted}` | Purge follows (C1) |
+| `file_list_outgoing` | `{}` | `[{handle, sizeBytes}]` | Opaque handles + sizes (C1) |
+| `file_text_get` / `file_text_put` | `{handle, offset?, length?}` / `{handle, text}` | `{text}` / `{receivedBytes}` | Behind `COWORK_FILE_TEXT_ENABLED=false` until BR41d-Q5 passes |
+
+## A8. Windows native baseline (desk research, Lot 0; confirmed by `doctor` 3.1)
+
+Constraint: no new unsigned third-party native binary unless recorded in
+BR41d-A7; OS built-ins (`query session`, `taskkill /T /F`, `icacls`,
+`fsutil`) and node built-ins need no exception. Guaranteed baseline (pure JS +
+in-closure natives `screenshot-desktop@1.15.4`, `@nut-tree-fork/nut-js@4.2.6`
+with `jimp@0.22.10` for the Lot 3 encoder): screen-corner presence poll +
+tray-equivalent console surface + Ctrl+C fallback for the kill switch;
+`query session` polling for lock/logoff/user-switch disarm; nut-js screen
+bounds/DPI and active-window identity; `taskkill` tree-kill baseline under the
+Job Object objective; path-policy refusal of `:`/ADS/traversal by name rule.
+A `RegisterHotKey`/`LLMHF_INJECTED`/Job-Object helper is adopted only if a
+source-built path exists; if the policy surface cannot be protected the agent
+stays disarmed (INV-14). Capture encoder preference: `jimp` (already in the
+exe closure via nut-js, declared explicit optional at the locked version) over
+`jpeg-js@0.4.4` / `pngjs@6.0.0`; must run inside the `@yao-pkg/pkg` single exe
+with a clean SCA (BR41d-Q8).
