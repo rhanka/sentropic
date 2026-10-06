@@ -160,7 +160,7 @@
     - [x] Lot 1A handoff: JEV Noul probability-true direction is unordered, pinned by binary tests; generic score parsing is unchanged.
     - [x] Lot 1C m1/m2: declared outcomes copied once, returned entries built during validation; getter refusal invokes no accessor, declaration drift is pinned and confidence/distribution Proxy regressions are separate. Judge-verdict passed 15 tests before adapter consumption.
   - [x] 1.08: exact qualified served IDs and independently validated usage retained on mismatch/malformed verdict; bounded sanitized IDs and safe derived totals. Judge-jev-usage passed 12 tests; mesh typecheck passed before transport work.
-  - [ ] 1.09: transport/jev.ts injected fetch, fixed endpoint/bearer, single send, bounded responses and no redirects; new mesh tests/transport/jev.test.ts.
+  - [x] 1.09: injected fetch, fixed endpoint/bearer, one send, byte-bounded streamed JSON and redirect refusal; transport/jev passed 12 tests without real network I/O.
   - [ ] 1.10: transport deadline/cancellation/status mapping without retry; new mesh tests/transport/jev-failure.test.ts.
   - [ ] 1.11: adapter.ts JevAdapter descriptor discovery and no chat execution; new mesh tests/judge-adapter.test.ts.
     - [ ] Lot 1A m1: decision-confidence requires a documented native decision; enforce and test descriptor-owned evidence.
