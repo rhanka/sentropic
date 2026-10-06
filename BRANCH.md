@@ -183,8 +183,8 @@
     - [x] Lot 1C handoff: lifecycle calls use literal phases; dispatch/parse/settlement evidence preserves one attempt and liability rather than falling back to preflight zero-cost metadata.
   - [x] 1.17: judge-privacy passed 8 tests for two-party raw permission, native-only bounded data, unchanged typed evidence, malformed raw refusal and content/credential/exception canaries across admission, settlement and neutral receipts. No content observation port exists.
     - [x] Lot 1A m1: raw is optional, native-only and detached; byte counts, the 16 KiB ceiling, caller reduction, whole-field truncation and boolean truncated are enforced independently of the typed verdict.
-  - [ ] 1.18: consumer index.ts, trusted host.ts and three export subpaths; new mesh tests/judge-public-surface.test.ts; typecheck-llm-mesh; no version change.
-    - [ ] Implementation m3: ./judge exports EvaluatorRef, JudgeRequest and JudgeAdapterResult referenced by root ProviderAdapter; public-surface assertions pin these types before any release.
+  - [x] 1.18: consumer contracts, trusted host and transport subpaths are built; judge-public-surface passed 3 tests, including external strict TypeScript compilation without skipLibCheck and compiled runtime isolation. Versions unchanged; mesh build/typecheck passed.
+    - [x] Implementation m3: consumer ./judge explicitly exports EvaluatorRef, JudgeRequest and JudgeAdapterResult; an external TypeScript consumer compiles the root ProviderAdapter relationship through the actual package export map. Host factories/private modules stay outside that consumer surface.
   - [ ] Gate: named fake-only codec/transport/service/privacy tests, mesh/gateway typecheck/lint/full suites; checkpoint committed before writing .h2a/build/lot1C_impl_report.md as FINAL; stop for conductor-arranged Opus review.
 - [ ] **Lot 1D — Remote client, cluster surface and public docs**
   - [ ] 2.09 prerequisite: client.ts authenticated mesh-only caller, correlation, bounded envelopes, receipt-null connection failure and no retry; new mesh tests/judge-client.test.ts; update public-surface test.
