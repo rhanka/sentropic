@@ -198,6 +198,23 @@ const envSchema = z.object({
   // STREAM_RETENTION_DAYS: events older than this are deleted in batches.
   STREAM_RETENTION_DAYS: z.coerce.number().optional(),
 
+  // Cowork remote MCP (BR-41d) — optional keys; absence keeps Cowork disabled.
+  // Every key is also read from process.env at request time so tests can
+  // toggle the config in-process (same pattern as MCP_RESOURCE_SERVER_ENABLED).
+  COWORK_REMOTE_ENABLED: z.string().optional(),
+  COWORK_MCP_RESOURCE_URI: z.string().optional(),
+  COWORK_MCP_AUTHORIZATION_SERVER_URL: z.string().optional(),
+  COWORK_MCP_ALLOWED_SCOPE: z.string().optional(),
+  COWORK_OWNER_SUB: z.string().optional(),
+  COWORK_MCP_CLIENT_ID: z.string().optional(),
+  COWORK_OPERATION_HMAC_KEY: z.string().optional(),
+  COWORK_MCP_ALLOWED_ORIGINS: z.string().optional(),
+  COWORK_MCP_MAX_TEXT_BYTES: z.coerce.number().optional(),
+  COWORK_CAPTURE_TARGET_BYTES: z.coerce.number().optional(),
+  COWORK_FILE_STAGING_DIR: z.string().optional(),
+  COWORK_FILE_TEXT_ENABLED: z.string().optional(),
+  COWORK_MCP_BODY_LIMIT_BYTES: z.coerce.number().optional(),
+
   // ARCH-11 G1b (spec §4.3) — tenant-resolution rollout mode for the product path.
   //   'alias'  = pure legacy (`tenantId := workspaceId`); no resolveTenant call, zero cost.
   //   'shadow' = compute resolveTenant alongside the legacy alias, emit divergence/total
