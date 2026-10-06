@@ -16,6 +16,7 @@ import { admitJudge } from './admission.js';
 import { dispatchJudge } from './dispatch.js';
 import { hasOnlyKeys } from './validation.js';
 import { isMicroUsd } from './pricing.js';
+import { runWithJudgeDeadline } from './deadline.js';
 
 export interface JudgeSelectionOptions {
   registry: ProviderRegistry;
@@ -83,15 +84,17 @@ export function createJudgeService(supplied: JudgeServiceOptions): JudgeClient {
   return { async judge(candidate, callOptions) {
     const execution = beginJudgeExecution(candidate, { clock: options.clock, generateId: options.generateId,
       timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
-    if (execution.idError) return persistJudgeResult(execution, options.receipts, createJudgeError('MESH_UNAVAILABLE', 'preflight'));
-    const interrupted = judgeInterruption(execution, 'preflight');
-    if (interrupted) return persistJudgeResult(execution, options.receipts, interrupted);
-    const selection = await preflightJudgeRequest(candidate, options);
-    if (!selection.ok) return persistJudgeResult(execution, options.receipts, createJudgeError(selection.code, 'preflight'));
-    execution.receipt.evaluator = { ...selection.descriptor.evaluator };
-    execution.receipt.retention = structuredClone(selection.descriptor.retention);
-    const admitted = await admitJudge(execution, selection, options);
-    if (!admitted.ok) return persistJudgeResult(execution, options.receipts, admitted.error);
-    return dispatchJudge(execution, selection, admitted, options);
+    return runWithJudgeDeadline(execution, async () => {
+      if (execution.idError) return persistJudgeResult(execution, options.receipts, createJudgeError('MESH_UNAVAILABLE', 'preflight'));
+      const interrupted = judgeInterruption(execution, 'preflight');
+      if (interrupted) return persistJudgeResult(execution, options.receipts, interrupted);
+      const selection = await preflightJudgeRequest(candidate, options);
+      if (!selection.ok) return persistJudgeResult(execution, options.receipts, createJudgeError(selection.code, 'preflight'));
+      execution.receipt.evaluator = { ...selection.descriptor.evaluator };
+      execution.receipt.retention = structuredClone(selection.descriptor.retention);
+      const admitted = await admitJudge(execution, selection, options);
+      if (!admitted.ok) return persistJudgeResult(execution, options.receipts, admitted.error);
+      return dispatchJudge(execution, selection, admitted, options);
+    });
   } };
 }
