@@ -25,6 +25,7 @@
   - [x] `packages/llm-mesh/src/judge/**`, `packages/llm-mesh/src/transport/jev.ts`
   - [x] `packages/llm-mesh/src/providers.ts`, `packages/llm-mesh/src/capabilities.ts`, `packages/llm-mesh/src/catalog.ts`, `packages/llm-mesh/src/registry.ts`
   - [x] `packages/llm-mesh/tests/judge-*.test.ts`, `packages/llm-mesh/tests/transport/jev*.test.ts`, `packages/llm-mesh/tests/muse.test.ts`, `packages/llm-mesh/tests/gcp.test.ts`
+  - [x] `packages/llm-mesh/tests/judge-fixtures.ts` (shared synthetic descriptors/requests; no live qualification or credentials)
   - [x] `packages/llm-mesh/package.json` (judge export-map additions only; no version/dependency changes)
   - [x] `packages/cluster-mesh/src/modules/contracts.ts`, `packages/cluster-mesh/src/modules/catalog.ts`, `packages/cluster-mesh/src/compose/llm-mesh.ts`
   - [x] `packages/cluster-mesh/src/integrations/llm-mesh/judge.ts`, `packages/cluster-mesh/src/integrations/llm-mesh/judge/**`, `packages/cluster-mesh/src/integrations/llm-mesh/transport/jev.ts`
@@ -90,6 +91,11 @@
 - [x] Consolidated review trail: Lot 1E GO accepted pre-rebase 82b2f0937..7669041da (rebased d4405122a..afa20b1bf); cycle 6 (lot1F_report) was a no-op stop at 7669041da, accepted by Lot 1F GO with no findings. Cycle 7 (lot1G_report) recorded the same decision stop without a commit; the conductor decision above now releases 1B.
 - [x] Lot 1G review: GO with fixes, no BLOCKER/MAJOR; m1 decision provenance is the user's verbatim CONDUCTOR DECISION message dated 2026-10-05, including the explicit undefined clause, quoted in lot1B_impl_report. Track remains conductor-owned; m2 validation and m3 sibling nesting corrected below; nit uses toStrictEqual for absent-field preservation.
 - [x] Early lot1B_impl review read a draft before 1.04a was committed: NO-GO B1/M1 require completing and validating 1.04a–g and a fresh implementation review before 1C. MINOR m1 startup evidence is in 1.04a/report, m2 report path corrected, m3 recorded: 1.04a's associated review prerequisites were one 44-line commit; subsequent rows remain separate bounded commits. Pre-spy muse assertions pin the M1 recommendation.
+- [x] Final lot1B_impl Opus review of f69702b37: GO with fixes, no BLOCKER/MAJOR; this resume authorizes checkpoint 1C after the minor fixes below.
+- [x] Implementation m1 policy (conductor-revisable): stored judge-only defaults fail closed on catalog/settings reads, chat selection and even explicit ordinary-model inference. Global repair uses generic admin PUT /ai-settings/default_provider_id followed by catalog GET; endpoint regression owns this recovery sequence.
+- [x] Implementation m1 operational limitation: out-of-band user-scoped judge-only defaults require operator repair. Runbook: identify the affected user's default_provider_id setting through existing restricted DB administration, replace only that scoped value with an ordinary provider (or remove that override to inherit a valid global default), then verify that user's catalog GET. Never substitute a provider during judge/chat execution; conductor may authorize a separate user-repair route refinement.
+- [x] Implementation m2 deviation: temporary unlocked Rollup fetch/symlink and -o prepare-node-workspace bypass were used to diagnose the incomplete generated graph in 1B; the subsequent lockfile npm ci superseded them. This checkpoint restores through prepare-node-workspace only, never an ad-hoc package fetch or prerequisite bypass; unresolved graph defects go in the conductor report.
+- [x] Resume environment evidence: generated-dependency EACCES was cleared by clean-node-modules; normal up-api-test then failed the image audit on critical proxy-addr GHSA-jqcg-44mw-7w3h. No dependency/allowlist bypass. Existing up-api-test-ci used the 1B lockfile-prepared local/sentropic-api:9a8b8a image with ignored, read-only current-source mounts; toolbox runtime checks and all eight judge-chat-settings endpoint tests passed. This is source-test evidence, not rebuilt-image/security qualification; the audit defect remains a conductor release/environment handoff.
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -141,11 +147,12 @@
   - [x] Final stack/cleanup: sequential cached up-api-test after dependency restoration passed; API healthy on 9480, maildev on 1580, no UI; logs-api showed health 200 responses. make down removed only test-llm-judge containers/network, retained volumes; make ps empty and ss confirmed all three ports free.
   - [x] Gate: named API/mesh regressions and mesh/gateway typecheck/lint/full suites passed; seven bounded 1.04a–g commits in spec order, each with authoritative C2 PASS. Final completion evidence goes to .h2a/build/lot1B_impl_report.md; stop for the fresh Opus implementation review required by early-review B1.
 - [ ] **Lot 1C — JEV codec, transport and service**
-  - [ ] Entry gate: receive the fresh Opus review of the completed lot1B_impl_report and resolve its BLOCKER/MAJOR findings before implementing 1.05–1.18; the early draft NO-GO does not accept checkpoint 1B.
+  - [x] Entry gate: fresh final lot1B_impl Opus review is GO with fixes; no BLOCKER/MAJOR. Minor policy/process fixes are recorded above; m3 is assigned to 1.18, and global recovery is pinned before dependent implementation.
   - [x] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
   - [x] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.
   - [x] Entry-correction validation: mesh typecheck/lint and full 489 tests/35 files passed (172 judge tests); gateway typecheck/lint and full 389 tests/28 files passed. Sequential Make -j1 gates used the complete test-llm-judge port triple; no 1.05–1.18 acceptance claimed.
   - [ ] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; new mesh tests/judge-jev-request.test.ts.
+    - [ ] 1.05a: descriptor and shared synthetic fixtures; production served IDs empty and JEV-BOUND-01 remains unqualified.
     - [ ] Conductor m5 decision: encode output-only null, state-only null and both-null explicitly under their respective wrapper fields, preserve absence and field boundaries, and emit a nonempty question; add deterministic codec tests.
   - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
     - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
@@ -171,7 +178,8 @@
   - [ ] 1.17: raw/observation allowlists and content/secret canaries; new mesh tests/judge-privacy.test.ts.
     - [ ] Lot 1A m1: providerRaw validates the 16 KiB byte bound, allowlisted fields and truncated flag; test refusal and truncation.
   - [ ] 1.18: consumer index.ts, trusted host.ts and three export subpaths; new mesh tests/judge-public-surface.test.ts; typecheck-llm-mesh; no version change.
-  - [ ] Gate: named fake-only codec/transport/service/privacy tests, mesh/gateway typecheck/lint/full suites; write .h2a/build/lot1C_report.md and stop for Opus review.
+    - [ ] Implementation m3: ./judge exports EvaluatorRef, JudgeRequest and JudgeAdapterResult referenced by root ProviderAdapter; public-surface assertions pin these types before any release.
+  - [ ] Gate: named fake-only codec/transport/service/privacy tests, mesh/gateway typecheck/lint/full suites; checkpoint committed before writing .h2a/build/lot1C_impl_report.md as FINAL; stop for conductor-arranged Opus review.
 - [ ] **Lot 1D — Remote client, cluster surface and public docs**
   - [ ] 2.09 prerequisite: client.ts authenticated mesh-only caller, correlation, bounded envelopes, receipt-null connection failure and no retry; new mesh tests/judge-client.test.ts; update public-surface test.
     - [ ] Lot 1C handoff: unknown wire error code or phase is an invalid mesh response; return typed MESH_UNAVAILABLE/TRANSPORT_FAILED connection failure with callStatus unknown, never coerce through createJudgeError into preflight/not-sent/zero spend. Pin both refusals in judge-client.test.ts.
