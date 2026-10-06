@@ -151,9 +151,9 @@
   - [x] Lot 1B m1 prerequisite: fail closed on unknown error phases and pin retryable false/no hint in tests/judge-receipt.test.ts before dependent service work.
   - [x] Lot 1B m2 prerequisite: use validated snapshots in parseJudgeScore/parseJudgeConfidence/mapJudgeDistribution/parseJudgeUsage and materialized-descriptor symbol checks; run judge-request/judge-verdict/judge-receipt tests before dependent adapter/settlement work.
   - [x] Entry-correction validation: mesh typecheck/lint and full 489 tests/35 files passed (172 judge tests); gateway typecheck/lint and full 389 tests/28 files passed. Sequential Make -j1 gates used the complete test-llm-judge port triple; no 1.05–1.18 acceptance claimed.
-  - [ ] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; new mesh tests/judge-jev-request.test.ts.
+  - [x] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; judge-jev-request passed 9 tests, including numeric choice-key wire ordering.
     - [x] 1.05a: descriptor and shared synthetic fixtures; production served IDs empty and JEV-BOUND-01 remains unqualified; judge-jev-request descriptor tests passed 2/1.
-    - [ ] Conductor m5 decision: encode output-only null, state-only null and both-null explicitly under their respective wrapper fields, preserve absence and field boundaries, and emit a nonempty question; add deterministic codec tests.
+    - [x] Conductor m5 decision: output-only null, state-only null and both-null explicitly encoded under their wrapper fields; absence/field boundaries preserved and one nonempty question tested.
   - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
     - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
   - [ ] 1.07: fractional Score and ordered index/label distribution mapping; new mesh tests/judge-jev-score.test.ts.
