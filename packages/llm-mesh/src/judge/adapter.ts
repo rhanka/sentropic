@@ -17,6 +17,7 @@ import { decodeJevResponse } from './jev-response.js';
 import { createJudgeError, isJudgeErrorCode } from './errors.js';
 import { unreportedJudgeUsage } from './receipt.js';
 import { isRecord, snapshotBoundedJson } from './validation.js';
+import { makeJevProviderRaw } from './raw.js';
 
 /** Adapter evidence stays available when verdict validation fails after dispatch. */
 interface JudgeAdapterEvidence {
@@ -75,7 +76,12 @@ export class JevAdapter implements ProviderAdapter {
     const body = snapshot.ok ? snapshot.value : null;
     if (isRecord(body) && typeof body.model === 'string' && body.model.includes(auth.token)) body.model = null;
     const requestId = result.providerRequestId?.includes(auth.token) ? undefined : result.providerRequestId;
-    return decodeJevResponse(body, encoded.request, this.descriptor, requestId);
+    const decoded = decodeJevResponse(body, encoded.request, this.descriptor, requestId);
+    if (decoded.ok && isRecord(body) && isRecord(body.answers)) {
+      const raw = makeJevProviderRaw(body.answers.verdict, encoded.request);
+      if (raw) decoded.verdict.providerRaw = raw;
+    }
+    return decoded;
   }
 }
 export const createJevAdapter = (options: JevAdapterOptions): JevAdapter => new JevAdapter(options);
