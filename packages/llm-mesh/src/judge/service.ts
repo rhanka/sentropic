@@ -8,6 +8,14 @@ import { validateJevPolicy } from './policy.js';
 import type { JudgeHostPolicy } from './policy.js';
 import { isRecord, snapshotBoundedJson } from './validation.js';
 import type { AuthResolution, AuthResolver } from '../auth.js';
+import type { JudgeClient } from './receipt.js';
+import type { JudgeServiceOptions } from './host-options.js';
+import { beginJudgeExecution, judgeInterruption, persistJudgeResult } from './execution.js';
+import { createJudgeError } from './errors.js';
+import { admitJudge } from './admission.js';
+import { dispatchJudge } from './dispatch.js';
+import { hasOnlyKeys } from './validation.js';
+import { isMicroUsd } from './pricing.js';
 
 export interface JudgeSelectionOptions {
   registry: ProviderRegistry;
@@ -58,4 +66,32 @@ export async function resolveJudgeAuth(descriptor: EvaluatorDescriptor, resolver
     }
     return { ok: true, auth: freezeJudgeData(snapshot.value as unknown as AuthResolution) };
   } catch { return { ok: false, code: 'CREDENTIAL_MISSING' }; }
+}
+
+/** Trusted composition only. Construction performs no discovery, key resolution or I/O. */
+export function createJudgeService(supplied: JudgeServiceOptions): JudgeClient {
+  const policy = snapshotBoundedJson(supplied.policy ?? {});
+  if (!supplied.registry || ![supplied.resolveEvaluator, supplied.resolveAuth, supplied.resolvePrice, supplied.authorize,
+    supplied.budget?.admit, supplied.budget?.markDispatched, supplied.budget?.release, supplied.budget?.settle,
+    supplied.receipts?.persist].every((port) => typeof port === 'function') || !policy.ok || !isRecord(policy.value)
+    || !hasOnlyKeys(policy.value, ['timeoutMs', 'maxCostMicroUsd', 'allowRaw'])
+    || (policy.value.timeoutMs !== undefined && (!Number.isSafeInteger(policy.value.timeoutMs)
+      || typeof policy.value.timeoutMs !== 'number' || policy.value.timeoutMs < 1 || policy.value.timeoutMs > 60000))
+    || (policy.value.maxCostMicroUsd !== undefined && !isMicroUsd(policy.value.maxCostMicroUsd))
+    || (policy.value.allowRaw !== undefined && typeof policy.value.allowRaw !== 'boolean')) throw new Error('Invalid judge host configuration.');
+  const options = { ...supplied, policy: freezeJudgeData(policy.value as JudgeHostPolicy) };
+  return { async judge(candidate, callOptions) {
+    const execution = beginJudgeExecution(candidate, { clock: options.clock, generateId: options.generateId,
+      timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
+    if (execution.idError) return persistJudgeResult(execution, options.receipts, createJudgeError('MESH_UNAVAILABLE', 'preflight'));
+    const interrupted = judgeInterruption(execution, 'preflight');
+    if (interrupted) return persistJudgeResult(execution, options.receipts, interrupted);
+    const selection = await preflightJudgeRequest(candidate, options);
+    if (!selection.ok) return persistJudgeResult(execution, options.receipts, createJudgeError(selection.code, 'preflight'));
+    execution.receipt.evaluator = { ...selection.descriptor.evaluator };
+    execution.receipt.retention = structuredClone(selection.descriptor.retention);
+    const admitted = await admitJudge(execution, selection, options);
+    if (!admitted.ok) return persistJudgeResult(execution, options.receipts, admitted.error);
+    return dispatchJudge(execution, selection, admitted, options);
+  } };
 }
