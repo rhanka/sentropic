@@ -172,10 +172,10 @@
   - [x] 1.13: concrete frozen environment-only auth resolution has no caller key/owner fallback; unknown retention permits normal preflight and unsupported retention requests refuse. Judge-policy passed 9 tests, including missing bytes and sanitized resolver exceptions.
   - [x] 1.14: pricing.ts/budget.ts immutable integer quotes and required durable host authority; judge-budget passed 3 tests. No library-local production balance or price store.
     - [x] Integer price-row projection pins the effective model and revision; BigInt reserve/usage arithmetic, minimums, stricter caps and unqualified bound refusal are tested without provider calls.
-  - [ ] 1.15: service admission, awaited durable marker and one dispatch; new mesh tests/judge-dispatch.test.ts.
+  - [x] 1.15: explicit host factory requires authority and durable ports; judge-dispatch passed 9 tests for awaited markers, distinct admission failures, safe unsent cancellation, mandatory IDs and non-deduplicating correlation.
     - [x] Internal lifecycle scaffold owns IDs, one shared deadline and detached metadata-only receipt copies; host options require verified authority and durable ports. Public factory exposure waits for completed dispatch/settlement gates.
     - [x] Admission scaffold pins price/auth before reserve, awaits the durable disable-aware marker and rechecks authority/deadline; only proven-unsent work can release a hold. Ambiguous acknowledgements retain liability by callId.
-    - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.
+    - [x] Lot 1A handoff: invalid/thrown ID generation returns typed MESH_UNAVAILABLE with safe mandatory IDs and no dispatch; remote-client repetition remains assigned to 2.09.
   - [ ] 1.16: settlement/receipt persistence, identity-mismatch usage, charged overrun and no replay; new mesh tests/judge-settlement.test.ts.
     - [x] Internal adapter-result boundary reconstructs validated JEV native semantics and retains independent usage; live or contradictory envelopes cannot establish a verdict or expose raw exception text.
     - [x] Dispatch/settlement scaffold invokes once, prices independent usage at the pinned row and awaits atomic settlement plus metadata receipt acknowledgement. Its durable disable implementation belongs to the future host lot; only test ports model that contract here.
