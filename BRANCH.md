@@ -176,11 +176,11 @@
     - [x] Internal lifecycle scaffold owns IDs, one shared deadline and detached metadata-only receipt copies; host options require verified authority and durable ports. Public factory exposure waits for completed dispatch/settlement gates.
     - [x] Admission scaffold pins price/auth before reserve, awaits the durable disable-aware marker and rechecks authority/deadline; only proven-unsent work can release a hold. Ambiguous acknowledgements retain liability by callId.
     - [x] Lot 1A handoff: invalid/thrown ID generation returns typed MESH_UNAVAILABLE with safe mandatory IDs and no dispatch; remote-client repetition remains assigned to 2.09.
-  - [ ] 1.16: settlement/receipt persistence, identity-mismatch usage, charged overrun and no replay; new mesh tests/judge-settlement.test.ts.
+  - [x] 1.16: judge-settlement passed 13 tests for independent usage, price applicability/pinning, reserve liability, charged overrun plus durable-port restart disable, acknowledgement failures and all post-result deadline phases; no provider replay.
     - [x] Internal adapter-result boundary reconstructs validated JEV native semantics and retains independent usage; live or contradictory envelopes cannot establish a verdict or expose raw exception text.
     - [x] Dispatch/settlement scaffold invokes once, prices independent usage at the pinned row and awaits atomic settlement plus metadata receipt acknowledgement. Its durable disable implementation belongs to the future host lot; only test ports model that contract here.
-    - [ ] Lot 1B handoff: every post-result failure, including deadline expiry, uses settlement phase; tests assert phase, code and absence of redispatch advice.
-    - [ ] Lot 1C handoff: 1.15/1.16 pass only literal error phases; sanitized preflight must never stand in for a post-result phase or establish zero attempts/spend.
+    - [x] Lot 1B handoff: expiry after provider result, settlement or receipt acknowledgement uses literal settlement phase with retryable false and no retry hint; independent parse errors retain their own code and usage.
+    - [x] Lot 1C handoff: lifecycle calls use literal phases; dispatch/parse/settlement evidence preserves one attempt and liability rather than falling back to preflight zero-cost metadata.
   - [ ] 1.17: raw/observation allowlists and content/secret canaries; new mesh tests/judge-privacy.test.ts.
     - [ ] Lot 1A m1: providerRaw validates the 16 KiB byte bound, allowlisted fields and truncated flag; test refusal and truncation.
   - [ ] 1.18: consumer index.ts, trusted host.ts and three export subpaths; new mesh tests/judge-public-surface.test.ts; typecheck-llm-mesh; no version change.
