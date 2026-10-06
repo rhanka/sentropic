@@ -166,9 +166,9 @@
     - [x] 1.11a: detached frozen descriptor validation refuses aliases, unqualified accepted IDs, missing evidence, coercion and undocumented native-decision/confidence semantics; judge-adapter descriptor 8 tests and mesh typecheck passed.
     - [x] Lot 1A m1: JEV declares no native decision; descriptor validation refuses native-decision claims and decision-confidence. Tests pin descriptor-owned semantics.
     - [x] Lot 1C handoff: decision helpers consume validated encoding/native-parser snapshots and build fresh envelopes; no live object is returned after a presence-only check.
-  - [ ] 1.12: service.ts/policy.ts exact revision/input/capability selection; new mesh tests/judge-selection.test.ts.
-    - [ ] Lot 1A handoff: validate native thresholds/declared passing labels, including registered criteria, against the pinned descriptor before credential acquisition/egress.
-    - [ ] Lot 1B handoff: keep the validated request service-internal (or freeze it) across admission, encoding and settlement so no caller mutation changes the accepted content.
+  - [x] 1.12: service/policy preflight pins registry identity/revision and local codec/capability limits; judge-selection passed 11 tests, including property-order independence and no egress on refusal.
+    - [x] Lot 1A handoff: native thresholds and registered passing labels validated against the pinned resolved criterion before credentials; unsupported explanations/native decisions/raw requests refuse.
+    - [x] Lot 1B handoff: significant-input snapshots detached and frozen before the first configuration await; caller mutation regression pins accepted content.
   - [ ] 1.13: concrete resolved auth and descriptive retention, unsupported retention requests refuse; new mesh tests/judge-policy.test.ts.
   - [ ] 1.14: pricing.ts/budget.ts integer quotes and defensible liability-bound refusal; new mesh tests/judge-budget.test.ts.
   - [ ] 1.15: service admission, awaited durable marker and one dispatch; new mesh tests/judge-dispatch.test.ts.
