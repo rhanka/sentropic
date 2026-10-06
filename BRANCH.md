@@ -163,6 +163,7 @@
   - [x] 1.09: injected fetch, fixed endpoint/bearer, one send, byte-bounded streamed JSON and redirect refusal; transport/jev passed 12 tests without real network I/O.
   - [x] 1.10: whole fetch/body deadline, caller cancellation, documented status mapping and sanitized network failures; transport/jev-failure passed 9 tests, including stalled-body cancellation and no retry hints from undocumented headers.
   - [ ] 1.11: adapter.ts JevAdapter descriptor discovery and no chat execution; new mesh tests/judge-adapter.test.ts.
+    - [x] 1.11a: detached frozen descriptor validation refuses aliases, unqualified accepted IDs, missing evidence, coercion and undocumented native-decision/confidence semantics; judge-adapter descriptor 8 tests and mesh typecheck passed.
     - [ ] Lot 1A m1: decision-confidence requires a documented native decision; enforce and test descriptor-owned evidence.
     - [ ] Lot 1C handoff: decision helpers consume only validated request/parser outputs; build the verdict envelope from these outputs rather than returning the live object checked by hasJudgeVerdictValue.
   - [ ] 1.12: service.ts/policy.ts exact revision/input/capability selection; new mesh tests/judge-selection.test.ts.
