@@ -174,6 +174,7 @@
     - [x] Integer price-row projection pins the effective model and revision; BigInt reserve/usage arithmetic, minimums, stricter caps and unqualified bound refusal are tested without provider calls.
   - [ ] 1.15: service admission, awaited durable marker and one dispatch; new mesh tests/judge-dispatch.test.ts.
     - [x] Internal lifecycle scaffold owns IDs, one shared deadline and detached metadata-only receipt copies; host options require verified authority and durable ports. Public factory exposure waits for completed dispatch/settlement gates.
+    - [x] Admission scaffold pins price/auth before reserve, awaits the durable disable-aware marker and rechecks authority/deadline; only proven-unsent work can release a hold. Ambiguous acknowledgements retain liability by callId.
     - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.
   - [ ] 1.16: settlement/receipt persistence, identity-mismatch usage, charged overrun and no replay; new mesh tests/judge-settlement.test.ts.
     - [ ] Lot 1B handoff: every post-result failure, including deadline expiry, uses settlement phase; tests assert phase, code and absence of redispatch advice.
