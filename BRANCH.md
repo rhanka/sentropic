@@ -162,10 +162,10 @@
   - [x] 1.08: exact qualified served IDs and independently validated usage retained on mismatch/malformed verdict; bounded sanitized IDs and safe derived totals. Judge-jev-usage passed 12 tests; mesh typecheck passed before transport work.
   - [x] 1.09: injected fetch, fixed endpoint/bearer, one send, byte-bounded streamed JSON and redirect refusal; transport/jev passed 12 tests without real network I/O.
   - [x] 1.10: whole fetch/body deadline, caller cancellation, documented status mapping and sanitized network failures; transport/jev-failure passed 9 tests, including stalled-body cancellation and no retry hints from undocumented headers.
-  - [ ] 1.11: adapter.ts JevAdapter descriptor discovery and no chat execution; new mesh tests/judge-adapter.test.ts.
+  - [x] 1.11: explicit JevAdapter discovery, unresolved/environment-only auth refusal, no chat execution/default registration, detached validated response envelopes; judge-adapter passed 14 tests with negative verdict, unqualified refusal and transport/credential canaries.
     - [x] 1.11a: detached frozen descriptor validation refuses aliases, unqualified accepted IDs, missing evidence, coercion and undocumented native-decision/confidence semantics; judge-adapter descriptor 8 tests and mesh typecheck passed.
-    - [ ] Lot 1A m1: decision-confidence requires a documented native decision; enforce and test descriptor-owned evidence.
-    - [ ] Lot 1C handoff: decision helpers consume only validated request/parser outputs; build the verdict envelope from these outputs rather than returning the live object checked by hasJudgeVerdictValue.
+    - [x] Lot 1A m1: JEV declares no native decision; descriptor validation refuses native-decision claims and decision-confidence. Tests pin descriptor-owned semantics.
+    - [x] Lot 1C handoff: decision helpers consume validated encoding/native-parser snapshots and build fresh envelopes; no live object is returned after a presence-only check.
   - [ ] 1.12: service.ts/policy.ts exact revision/input/capability selection; new mesh tests/judge-selection.test.ts.
     - [ ] Lot 1A handoff: validate native thresholds/declared passing labels, including registered criteria, against the pinned descriptor before credential acquisition/egress.
     - [ ] Lot 1B handoff: keep the validated request service-internal (or freeze it) across admission, encoding and settlement so no caller mutation changes the accepted content.
