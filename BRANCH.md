@@ -181,8 +181,8 @@
     - [x] Dispatch/settlement scaffold invokes once, prices independent usage at the pinned row and awaits atomic settlement plus metadata receipt acknowledgement. Its durable disable implementation belongs to the future host lot; only test ports model that contract here.
     - [x] Lot 1B handoff: expiry after provider result, settlement or receipt acknowledgement uses literal settlement phase with retryable false and no retry hint; independent parse errors retain their own code and usage.
     - [x] Lot 1C handoff: lifecycle calls use literal phases; dispatch/parse/settlement evidence preserves one attempt and liability rather than falling back to preflight zero-cost metadata.
-  - [ ] 1.17: raw/observation allowlists and content/secret canaries; new mesh tests/judge-privacy.test.ts.
-    - [ ] Lot 1A m1: providerRaw validates the 16 KiB byte bound, allowlisted fields and truncated flag; test refusal and truncation.
+  - [x] 1.17: judge-privacy passed 8 tests for two-party raw permission, native-only bounded data, unchanged typed evidence, malformed raw refusal and content/credential/exception canaries across admission, settlement and neutral receipts. No content observation port exists.
+    - [x] Lot 1A m1: raw is optional, native-only and detached; byte counts, the 16 KiB ceiling, caller reduction, whole-field truncation and boolean truncated are enforced independently of the typed verdict.
   - [ ] 1.18: consumer index.ts, trusted host.ts and three export subpaths; new mesh tests/judge-public-surface.test.ts; typecheck-llm-mesh; no version change.
     - [ ] Implementation m3: ./judge exports EvaluatorRef, JudgeRequest and JudgeAdapterResult referenced by root ProviderAdapter; public-surface assertions pin these types before any release.
   - [ ] Gate: named fake-only codec/transport/service/privacy tests, mesh/gateway typecheck/lint/full suites; checkpoint committed before writing .h2a/build/lot1C_impl_report.md as FINAL; stop for conductor-arranged Opus review.

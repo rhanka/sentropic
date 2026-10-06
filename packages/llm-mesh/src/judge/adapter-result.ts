@@ -7,6 +7,7 @@ import { encodeJevRequest } from './jev-codec.js';
 import { decodeJevVerdict } from './jev-verdict.js';
 import { sanitizeJevId } from './jev-response.js';
 import { isRecord, snapshotBoundedJson } from './validation.js';
+import { parseJevProviderRaw } from './raw.js';
 
 /** Rebuild the JEV verdict from native evidence, never return a live plugin envelope. */
 export function parseJudgeAdapterResult(candidate: unknown, request: JudgeRequest,
@@ -40,7 +41,7 @@ export function parseJudgeAdapterResult(candidate: unknown, request: JudgeReques
     native = isRecord(verdict.score) ? { noul: verdict.score.value } : null;
   } else {
     if (!Array.isArray(verdict.distribution)) return failed('VERDICT_INVALID');
-    const probabilities: Record<string, unknown> = {};
+    const probabilities: Record<string, unknown> = Object.create(null);
     for (const item of verdict.distribution) {
       if (!isRecord(item) || typeof item.nativeOutcome !== 'string') return failed('VERDICT_INVALID');
       probabilities[item.nativeOutcome] = item.probability;
@@ -53,7 +54,13 @@ export function parseJudgeAdapterResult(candidate: unknown, request: JudgeReques
   }
   const decoded = decodeJevVerdict(native, request, descriptor);
   // Compare detached data structurally, so property insertion order has no authority.
-  if (!decoded.ok || !sameJson(verdict, decoded.verdict)) return failed('VERDICT_INVALID');
+  const { providerRaw, ...typed } = verdict;
+  if (!decoded.ok || !sameJson(typed, decoded.verdict)) return failed('VERDICT_INVALID');
+  if (Object.hasOwn(verdict, 'providerRaw')) {
+    const raw = parseJevProviderRaw(providerRaw, native, request);
+    if (!raw) return failed('VERDICT_INVALID');
+    decoded.verdict.providerRaw = raw;
+  }
   return { ok: true, verdict: decoded.verdict, ...evidence };
 }
 
