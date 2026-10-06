@@ -154,8 +154,8 @@
   - [x] 1.05: jev-codec.ts/jev-descriptor.ts bounded single-question encoding, unqualified identity/billing evidence; judge-jev-request passed 9 tests, including numeric choice-key wire ordering.
     - [x] 1.05a: descriptor and shared synthetic fixtures; production served IDs empty and JEV-BOUND-01 remains unqualified; judge-jev-request descriptor tests passed 2/1.
     - [x] Conductor m5 decision: output-only null, state-only null and both-null explicitly encoded under their wrapper fields; absence/field boundaries preserved and one nonempty question tested.
-  - [ ] 1.06: jev-verdict.ts exact Noul/Choice answers; new mesh tests/judge-jev-binary-choice.test.ts.
-    - [ ] Lot 1A m1: enforce non-registered requested/resolved criterion-kind equality and descriptor-owned resolved kind for registered criteria; test both.
+  - [x] 1.06: jev-verdict.ts exact Noul/Choice answers; judge-jev-binary-choice passed 11 tests; zero/negative evidence and declared-order argmax ties retained without invented confidence.
+    - [x] Lot 1A m1: requested/resolved kinds are built from validated request/descriptor resolution; registered resolution and mismatched native primitive refusals tested.
   - [ ] 1.07: fractional Score and ordered index/label distribution mapping; new mesh tests/judge-jev-score.test.ts.
     - [ ] Lot 1A handoff: unqualified probability-true direction is unordered in the pinned JEV descriptor/adapter; test this without restricting generic score parsing.
     - [ ] Lot 1C m1/m2: copy declared distribution outcomes once and return entries built during validation; add a getter drift regression and separate confidence/distribution Proxy tests in judge-verdict.test.ts before adapter consumption.
