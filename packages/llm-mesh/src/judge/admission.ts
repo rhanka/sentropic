@@ -31,10 +31,16 @@ export async function releaseUnsentJudge(execution: JudgeExecution, options: Jud
 export async function admitJudge(execution: JudgeExecution, selection: Extract<JudgeSelection, { ok: true }>,
   options: JudgeServiceOptions): Promise<AdmittedJudge> {
   const failed = (error: JudgeError): AdmittedJudge => ({ ok: false, error });
+  let expired = judgeInterruption(execution, 'admission');
+  if (expired) return failed(expired);
   if (!await judgeAuthority(options, selection)) return failed(createJudgeError('AUTHORIZATION_DENIED', 'preflight'));
+  expired = judgeInterruption(execution, 'admission');
+  if (expired) return failed(expired);
   let candidate: unknown;
   try { candidate = await options.resolvePrice({ providerId: 'typesafe', modelId: selection.descriptor.wireModel }); }
   catch { return failed(createJudgeError('PRICING_UNAVAILABLE', 'admission')); }
+  expired = judgeInterruption(execution, 'admission');
+  if (expired) return failed(expired);
   const quoted = quoteJudge(selection.request, selection.descriptor, candidate, options.policy?.maxCostMicroUsd);
   if (!quoted.ok) return failed(createJudgeError(quoted.code, 'admission'));
   const resolved = await resolveJudgeAuth(selection.descriptor, options.resolveAuth);
