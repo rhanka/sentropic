@@ -74,13 +74,23 @@ describe('explicit judge decision semantics', () => {
 });
 
 describe('judge confidence and distribution semantics', () => {
-  it('should retain validated confidence and probabilities despite later live property drift', () => {
+  it('should retain validated confidence despite later live property drift', () => {
     const confidence = { value: 0.8, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'descriptor:v1', origin: 'provider' };
     expect(parseJudgeConfidence(drift(confidence, 'value'))).toEqual(confidence);
+  });
+  it('should retain validated probabilities despite later live property drift', () => {
     expect(mapJudgeDistribution(drift({ '0': 0.6, '1': 0.4 }, '0'), outcomes)).toEqual([
       { outcome: 'Unsupported', nativeOutcome: '0', probability: 0.6 },
       { outcome: 'Supported', nativeOutcome: '1', probability: 0.4 },
     ]);
+  });
+  it('should snapshot the declared outcome table and refuse accessors without invoking them', () => {
+    const declared = [drift({ outcome: 'Unsupported', nativeOutcome: '0' }, 'outcome'), outcomes[1]];
+    expect(mapJudgeDistribution({ '0': 0.6, '1': 0.4 }, declared)?.[0].outcome).toBe('Unsupported');
+    let reads = 0;
+    const getter = { get outcome() { reads++; return reads === 1 ? 'Unsupported' : 'drift'; }, nativeOutcome: '0' };
+    expect(mapJudgeDistribution({ '0': 0.6, '1': 0.4 }, [getter, outcomes[1]])).toBeNull();
+    expect(reads).toBe(0);
   });
   it('should require documented native confidence rather than treating a score as confidence', () => {
     const confidence = { value: 0.8, min: 0, max: 1, meaning: 'provider-confidence', meaningRef: 'descriptor:v1', origin: 'provider' };
