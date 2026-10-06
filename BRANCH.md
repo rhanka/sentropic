@@ -170,7 +170,7 @@
     - [x] Lot 1A handoff: native thresholds and registered passing labels validated against the pinned resolved criterion before credentials; unsupported explanations/native decisions/raw requests refuse.
     - [x] Lot 1B handoff: significant-input snapshots detached and frozen before the first configuration await; caller mutation regression pins accepted content.
   - [x] 1.13: concrete frozen environment-only auth resolution has no caller key/owner fallback; unknown retention permits normal preflight and unsupported retention requests refuse. Judge-policy passed 9 tests, including missing bytes and sanitized resolver exceptions.
-  - [ ] 1.14: pricing.ts/budget.ts integer quotes and defensible liability-bound refusal; new mesh tests/judge-budget.test.ts.
+  - [x] 1.14: pricing.ts/budget.ts immutable integer quotes and required durable host authority; judge-budget passed 3 tests. No library-local production balance or price store.
     - [x] Integer price-row projection pins the effective model and revision; BigInt reserve/usage arithmetic, minimums, stricter caps and unqualified bound refusal are tested without provider calls.
   - [ ] 1.15: service admission, awaited durable marker and one dispatch; new mesh tests/judge-dispatch.test.ts.
     - [ ] Lot 1A handoff: invalid generated correlation maps to a typed internal failure, never omitted metadata; repeat in the remote-client tests at 2.09.

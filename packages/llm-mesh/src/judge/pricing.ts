@@ -28,7 +28,7 @@ export function quoteJudge(request: JudgeRequest, descriptor: EvaluatorDescripto
   // JEV has no qualified output liability bound. A nonzero output rate cannot be reserved.
   if (descriptor.qualification.billingBound !== 'qualified' || price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
   const reserve = minimum(ceilRate(descriptor.maxBillableInputTokens, price.inputMicroUsdPerMtok), price);
-  const caps = [hostCap, request.policy?.budget?.maxCostMicroUsd].filter((v) => v !== undefined);
+  const caps = [hostCap, request.policy?.budget?.maxCostMicroUsd].filter((v): v is string => v !== undefined);
   if (caps.some((cap) => !isMicroUsd(cap))) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   if (caps.some((cap) => reserve > BigInt(cap))) return { ok: false, code: 'BUDGET_EXHAUSTED' };
   return { ok: true, quote: freezeJudgeData({ price, reservedMicroUsd: reserve.toString() }) };
