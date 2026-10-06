@@ -11,6 +11,7 @@ import type { JudgeReceiptSink } from './budget.js';
 export interface JudgeClock { wall(): number; monotonic(): number }
 export interface JudgeExecution {
   receipt: JudgeReceipt; clock: JudgeClock; start: number; deadline: number; signal?: AbortSignal; idError: boolean;
+  phase: JudgeError['phase']; expired: boolean;
 }
 export const defaultJudgeClock: JudgeClock = { wall: () => Date.now(), monotonic: () => performance.now() };
 
@@ -34,11 +35,11 @@ export function beginJudgeExecution(candidate: unknown, options: { clock?: Judge
     retention: { status: 'not-evaluated', basis: 'none', evidenceRefs: [], retentionDays: null },
     budget: { state: 'not-admitted', overrun: false }, outcome: 'error' };
   const timeout = Math.min(parsed.ok ? parsed.request.policy?.timeoutMs ?? 10000 : 10000, options.timeoutMs ?? 60000);
-  return { receipt, clock, start, deadline: start + timeout, signal: options.signal, idError };
+  return { receipt, clock, start, deadline: start + timeout, signal: options.signal, idError, phase: 'preflight', expired: false };
 }
 
 export function judgeInterruption(execution: JudgeExecution, phase: JudgeError['phase']): JudgeError | null {
-  return execution.signal?.aborted ? createJudgeError('CANCELLED', phase)
+  return execution.expired ? createJudgeError('TIMEOUT', phase) : execution.signal?.aborted ? createJudgeError('CANCELLED', phase)
     : execution.clock.monotonic() >= execution.deadline ? createJudgeError('TIMEOUT', phase) : null;
 }
 export function closeJudgeReceipt(execution: JudgeExecution, error?: JudgeError): void {
