@@ -158,7 +158,7 @@
     - [x] Lot 1A m1: requested/resolved kinds are built from validated request/descriptor resolution; registered resolution and mismatched native primitive refusals tested.
   - [ ] 1.07: fractional Score and ordered index/label distribution mapping; new mesh tests/judge-jev-score.test.ts.
     - [ ] Lot 1A handoff: unqualified probability-true direction is unordered in the pinned JEV descriptor/adapter; test this without restricting generic score parsing.
-    - [ ] Lot 1C m1/m2: copy declared distribution outcomes once and return entries built during validation; add a getter drift regression and separate confidence/distribution Proxy tests in judge-verdict.test.ts before adapter consumption.
+    - [x] Lot 1C m1/m2: declared outcomes copied once, returned entries built during validation; getter refusal invokes no accessor, declaration drift is pinned and confidence/distribution Proxy regressions are separate. Judge-verdict passed 15 tests before adapter consumption.
   - [ ] 1.08: jev-response.ts exact qualified served IDs and independently validated usage on identity mismatch; new mesh tests/judge-jev-usage.test.ts.
   - [ ] 1.09: transport/jev.ts injected fetch, fixed endpoint/bearer, single send, bounded responses and no redirects; new mesh tests/transport/jev.test.ts.
   - [ ] 1.10: transport deadline/cancellation/status mapping without retry; new mesh tests/transport/jev-failure.test.ts.

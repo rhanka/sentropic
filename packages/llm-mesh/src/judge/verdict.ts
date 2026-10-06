@@ -76,23 +76,29 @@ export function parseJudgeConfidence(candidate: unknown): JudgeVerdict['confiden
 export function mapJudgeDistribution(candidate: unknown,
   declared: readonly { outcome: string; nativeOutcome: string }[]): JudgeVerdict['distribution'] {
   const snapshot = snapshotBoundedJson(candidate);
-  if (!snapshot.ok) return null;
+  const outcomeSnapshot = snapshotBoundedJson(declared);
+  if (!snapshot.ok || !outcomeSnapshot.ok || !Array.isArray(outcomeSnapshot.value)) return null;
   const probabilities = snapshot.value;
-  if (!isRecord(probabilities) || !declared.length
-    || new Set(declared.map((v) => v.outcome)).size !== declared.length
-    || new Set(declared.map((v) => v.nativeOutcome)).size !== declared.length
-    || Object.keys(probabilities).length !== declared.length) return null;
+  const outcomes = outcomeSnapshot.value;
+  if (!isRecord(probabilities) || !outcomes.length || Object.keys(probabilities).length !== outcomes.length) return null;
   let sum = 0;
-  for (const { outcome, nativeOutcome } of declared) {
+  const outcomeIds = new Set<string>();
+  const nativeIds = new Set<string>();
+  const entries: NonNullable<JudgeVerdict['distribution']>[number][] = [];
+  for (const item of outcomes) {
+    if (!isRecord(item) || !hasOnlyKeys(item, ['outcome', 'nativeOutcome'])) return null;
+    const { outcome, nativeOutcome } = item;
+    if (!isText(outcome) || !isText(nativeOutcome) || outcomeIds.has(outcome) || nativeIds.has(nativeOutcome)) return null;
     const probability = probabilities[nativeOutcome];
-    if (!isText(outcome) || !isText(nativeOutcome) || !has(probabilities, nativeOutcome)
+    if (!has(probabilities, nativeOutcome)
       || typeof probability !== 'number' || !Number.isFinite(probability)
       || probability < 0 || probability > 1) return null;
     sum += probability;
+    outcomeIds.add(outcome); nativeIds.add(nativeOutcome);
+    entries.push({ outcome, nativeOutcome, probability });
   }
   if (Math.abs(sum - 1) > 1e-4) return null;
-  return declared.map(({ outcome, nativeOutcome }) => ({ outcome, nativeOutcome,
-    probability: probabilities[nativeOutcome] as number }));
+  return entries;
 }
 
 export type JudgeDecisionResult =
