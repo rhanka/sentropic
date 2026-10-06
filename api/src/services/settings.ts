@@ -245,6 +245,7 @@ export class SettingsService {
       }),
     ]);
 
+    // Preserve both stored values so legacy model migration cannot erase the refusal marker.
     const normalizedSelection = isJudgeOnlyProvider(defaultProviderId.trim())
       ? { providerId: defaultProviderId.trim(), modelId: defaultModel }
       : normalizeLegacyModelSelection({

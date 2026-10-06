@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as mesh from '../src/index.js';
 import type { ProviderAdapter } from '../src/index.js';
+// Keep judge imports type-only: throwing mocks below guard root runtime isolation.
 import type { JudgeAdapterResult } from '../src/judge/adapter.js';
 import type { EvaluatorRef, JudgeRequest } from '../src/judge/request.js';
 
