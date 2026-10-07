@@ -61,10 +61,10 @@
 - [ ] No web/Chrome/VSCode UI edits or UI-specific UAT for this package-only branch.
 
 ## Build Steps (M0-M6)
-- [ ] M0 — Branch plan commit
-- [ ] M1 — Standard routes for opus-5.5 and sonnet-5.5 families in routing-targets
-- [ ] M2 — Codex slot remap (sol-6.1 at +1) across families
-- [ ] M3 — Medium/low variants plus muse coverage on every row
+- [x] M0 — Branch plan commit
+- [x] M1 — Standard routes for opus-5.5 and sonnet-5.5 families in routing-targets
+- [x] M2 — Codex slot remap (sol-6.1 at +1) across families
+- [x] M3 — Medium/low variants plus muse coverage on every row
 - [ ] M4 — Remove exclusive alias and exclusive-only guards (selection, planner, quote)
 - [ ] M5 — Council metadata, spec contract, CHANGELOG, version bump
 - [ ] M6 — Gateway dep bump and release-train pins
@@ -75,13 +75,13 @@
   - [x] Reserve unique environment and three ports (verified free with `ss -ltn`).
   - [x] Record base SHA and port allocation in BRANCH.md.
 - [ ] **Lot 1 — Route target remap**
-  - [ ] Move the opus-5.5 family to STANDARD_ROUTE_DEFINITIONS (base/high/xhigh/max/medium/low).
-  - [ ] Add the sonnet-5.5 family (base/high/xhigh/max/medium/low).
-  - [ ] Remap codex slots to sol-6.1 at +1 except opus-5.5-max and fable-5.1 (astra).
-  - [ ] Add medium/low variants on opus-5, opus-4-8, sonnet-5, fable-5, fable-5-1.
-  - [ ] Extend MUSE_ROUTE_EFFORT to every row (+1 rule; keep existing values).
+  - [x] Move the opus-5.5 family to STANDARD_ROUTE_DEFINITIONS (base/high/xhigh/max/medium/low).
+  - [x] Add the sonnet-5.5 family (base/high/xhigh/max/medium/low).
+  - [x] Remap codex slots to sol-6.1 at +1 except opus-5.5-max and fable-5.1 (astra).
+  - [x] Add medium/low variants on opus-5, opus-4-8, sonnet-5, fable-5, fable-5-1.
+  - [x] Extend MUSE_ROUTE_EFFORT to every row (+1 rule; keep existing values).
   - [ ] Remove EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS and exclusive-only branches.
-  - [ ] Tests in `packages/llm-mesh/tests/routing-targets.test.ts`: full matrix incl. medium/low, any-account coverage per transport.
+  - [x] Tests in `packages/llm-mesh/tests/routing-targets.test.ts`: full matrix incl. medium/low, any-account coverage per transport.
   - [ ] Tests in `packages/llm-mesh/tests/route-selection.test.ts`: standard guards without exclusivity.
   - [ ] Tests in `packages/llm-mesh/tests/route-planner.test.ts`: no-route only when zero accounts; affinity without exclusive target.
   - [ ] Tests in `packages/llm-mesh/tests/budget-quote.test.ts`: multi-candidate quotes for the 5.5 families.
