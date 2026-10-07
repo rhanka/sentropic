@@ -308,60 +308,101 @@ describe('canonical model targets', () => {
     }
   });
 
-  it('ensures every launch alias has a faithful Anthropic transport target', () => {
+  it('ensures every launch alias except the 5.5 families has a faithful Anthropic transport target', () => {
     for (const definition of STANDARD_ROUTE_DEFINITIONS) {
       const candidates = resolveCandidates(definition.requestedId);
       const faithfulTarget = faithfulAnthropicTargetFromCandidates(candidates);
-      expect(faithfulTarget).toBeDefined();
-      expect(faithfulTarget).toMatchObject({
-        providerId: 'anthropic',
-        transportProviderId: 'claude-code',
-      });
+      if (definition.requestedId === 'claude-opus-5-5'
+        || definition.requestedId.startsWith('claude-opus-5-5-')
+        || definition.requestedId === 'claude-sonnet-5-5'
+        || definition.requestedId.startsWith('claude-sonnet-5-5-')) {
+        expect(faithfulTarget).toBeUndefined();
+      } else {
+        expect(faithfulTarget).toBeDefined();
+        expect(faithfulTarget).toMatchObject({
+          providerId: 'anthropic',
+          transportProviderId: 'claude-code',
+        });
+      }
+    }
+  });
+
+  it('serves every launch alias from any single enrolled transport', () => {
+    for (const definition of STANDARD_ROUTE_DEFINITIONS) {
+      const transports = resolveCandidates(definition.requestedId)
+        .map((candidate) => candidate.transportProviderId);
+      expect(transports).toContain('muse');
+      expect(transports).toContain('codex');
+      expect(transports).toContain('cloud-code');
     }
   });
 
   it('preserves effort and never uses Flash Lite for standard aliases', () => {
     for (const [alias, primaryTarget] of Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS)) {
       const candidates = resolveCandidates(alias);
-      const faithfulCandidate = candidates.find(
-        (candidate) => candidate.transportProviderId === 'claude-code',
-      );
-      expect(faithfulCandidate?.effort).toBe(primaryTarget.effort);
+      expect(candidates[0]?.effort).toBe(primaryTarget.effort);
       expect(candidates.map((candidate) => candidate.model))
         .not.toContain('gemini-3.1-flash-lite');
     }
   });
 
-  it('routes every Fable 5 and 5.1 fallback through the GA models', () => {
-    for (const model of ['claude-fable-5', 'claude-fable-5-1']) {
-      for (const effort of [undefined, 'high', 'xhigh', 'max'] as const) {
-        const alias = effort ? `${model}-${effort}` : model;
-        const candidates = resolveCandidates(alias);
-        expect(candidates[1]).toEqual({
-          providerId: 'muse', transportProviderId: 'muse',
-          model: 'muse-spark-1.3-contributor', effort: 'max',
-        });
-        expect(candidates[2]).toEqual({
-          providerId: 'openai', transportProviderId: 'codex',
-          model: 'gpt-6-astra', ...(effort ? { effort } : {}),
-        });
-        expect(candidates[3]).toEqual({
-          providerId: 'gemini', transportProviderId: 'cloud-code',
-          model: 'gemini-3.8-flash', effort: 'high',
-        });
-      }
+  it('routes every Fable 5.1 fallback through Astra with inherited effort', () => {
+    const museEffort: Readonly<Record<string, string>> = {
+      base: 'max', high: 'max', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
+    };
+    for (const [suffix, muse] of Object.entries(museEffort)) {
+      const alias = suffix === 'base' ? 'claude-fable-5-1' : `claude-fable-5-1-${suffix}`;
+      const candidates = resolveCandidates(alias);
+      expect(candidates[1]).toEqual({
+        providerId: 'muse', transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor', effort: muse,
+      });
+      expect(candidates[2]).toEqual({
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-6-astra', ...(suffix === 'base' ? {} : { effort: suffix }),
+      });
+      expect(candidates[3]).toEqual({
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-3.8-flash', effort: 'high',
+      });
     }
   });
 
-  it('routes Opus 5 base through Sol and high/xhigh through Astra medium', () => {
-    expect(resolveCandidates('claude-opus-5')[1]).toEqual({
-      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-sol',
-    });
-    for (const effort of ['high', 'xhigh'] as const) {
-      const candidates = resolveCandidates(`claude-opus-5-${effort}`);
+  it('routes every Fable 5 fallback through Sol 6.1 at +1 effort', () => {
+    const plusOne: Readonly<Record<string, string>> = {
+      base: 'high', high: 'xhigh', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
+    };
+    const museEffort: Readonly<Record<string, string>> = {
+      base: 'max', high: 'max', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
+    };
+    for (const [suffix, codexEffort] of Object.entries(plusOne)) {
+      const alias = suffix === 'base' ? 'claude-fable-5' : `claude-fable-5-${suffix}`;
+      const candidates = resolveCandidates(alias);
+      expect(candidates[1]).toEqual({
+        providerId: 'muse', transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor', effort: museEffort[suffix],
+      });
       expect(candidates[2]).toEqual({
         providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-6-astra', effort: 'medium',
+        model: 'gpt-6.1-sol', effort: codexEffort,
+      });
+      expect(candidates[3]).toEqual({
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-3.8-flash', effort: 'high',
+      });
+    }
+  });
+
+  it('routes Opus 5 base through Sol 6.1 high and high/xhigh at +1 rung', () => {
+    expect(resolveCandidates('claude-opus-5')[2]).toEqual({
+      providerId: 'openai', transportProviderId: 'codex',
+      model: 'gpt-6.1-sol', effort: 'high',
+    });
+    for (const [suffix, codexEffort] of [['high', 'xhigh'], ['xhigh', 'max']] as const) {
+      const candidates = resolveCandidates(`claude-opus-5-${suffix}`);
+      expect(candidates[2]).toEqual({
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-6.1-sol', effort: codexEffort,
       });
       expect(candidates[3]).toEqual({
         providerId: 'gemini', transportProviderId: 'cloud-code',
