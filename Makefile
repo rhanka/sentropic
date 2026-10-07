@@ -436,6 +436,33 @@ lock-api: ## Update API package-lock.json using Node container (sync deps)
 	@echo "🔒 Updating API package-lock.json..."
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm install --package-lock-only"
 
+# BRPA-EX1 (fix/proxy-addr-cve): one-off proxy-addr 2.0.7 -> 2.0.8 lock bump
+# without the compose stack. lock-api needs a running api service, but the api
+# image build itself fails its audit gate until the lock is fixed
+# (chicken-and-egg), and an empty REGISTRY env also breaks `up-api-test`
+# image refs (needs REGISTRY=local).
+# A full npm regen is currently IMPOSSIBLE, proven in throwaway /tmp probes
+# and on this tree: any `npm install`/`update` re-resolution aborts with
+# ERESOLVE (registry @sentropic/llm-gateway@0.19.1 peerOptional jose@^5.10.0
+# vs top-level jose@6.2.3 required by api + MCP SDK 1.30.0) — with AND
+# without this branch's override change, so pre-existing on main. Bare
+# `npm install --package-lock-only` additionally ignores changed overrides in
+# workspace context ("up to date", keeps 2.0.7).
+# The 2.0.8 delta is exactly 3 lines per lock (version/resolved/integrity;
+# deps forwarded@0.2.0 + ipaddr.js@1.9.1 and engines are unchanged, integrity
+# pinned from the registry), so this target applies that pinned bump with sed
+# and verifies it. Full npm regen stays blocked until the llm-gateway/jose
+# peer clash is fixed on its own branch.
+PROXY_ADDR_OLD_INTEGRITY := sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==
+PROXY_ADDR_NEW_INTEGRITY := sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==
+.PHONY: lock-api-direct
+lock-api-direct: ## Bump proxy-addr 2.0.7 -> 2.0.8 in api + root locks (pinned, no stack)
+	@echo "🔒 Bumping proxy-addr to 2.0.8 in api/package-lock.json + package-lock.json..."
+	sed -i '/"node_modules\/proxy-addr": {/,/^    },/ { s/"version": "2\.0\.7"/"version": "2.0.8"/; s|proxy-addr-2\.0\.7\.tgz|proxy-addr-2.0.8.tgz|; s|$(PROXY_ADDR_OLD_INTEGRITY)|$(PROXY_ADDR_NEW_INTEGRITY)|; }' api/package-lock.json package-lock.json
+	@for f in api/package-lock.json package-lock.json; do test $$(sed -n '/"node_modules\/proxy-addr": {/,/^    },/p' $$f | grep -c '"version": "2.0.8"') -eq 1 || (echo "❌ proxy-addr 2.0.8 missing in $$f" && exit 1); done
+	@! grep -q 'proxy-addr-2\.0\.7\.tgz' api/package-lock.json package-lock.json || (echo "❌ stale proxy-addr 2.0.7 reference remains" && exit 1)
+	@echo "✅ proxy-addr 2.0.8 in both locks"
+
 .PHONY: lock-root
 lock-root: ## Update root package-lock.json using Node container (workspace root)
 	@echo "🔒 Updating root package-lock.json..."
