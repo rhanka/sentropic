@@ -449,7 +449,7 @@ describe('opaque route planner', () => {
     }
   });
 
-  it('migrates a stale affinity on commit-then-success', async () => {
+  it('keeps the stale affinity without migration on commit-then-success', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -461,7 +461,7 @@ describe('opaque route planner', () => {
       {
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -488,27 +488,23 @@ describe('opaque route planner', () => {
       .toBe('anthropic');
     await attempt.complete();
 
-    const migrated = planner.describeAffinity(routingSubject(), 'stale-commit-success');
-    expect(migrated).toMatchObject({
-      revision: 2, diagnosticAccountRef: 'codex-redacted', promoted: false,
+    const kept = planner.describeAffinity(routingSubject(), 'stale-commit-success');
+    expect(kept).toMatchObject({
+      revision: 1, diagnosticAccountRef: 'anthropic-redacted',
     });
-    expect(migrated?.target).toMatchObject({
-      requestedModel: 'claude-opus-5-5',
-      providerId: 'openai', modelId: 'gpt-6-astra', transportProviderId: 'codex',
+    expect(kept?.target).toMatchObject({
+      providerId: 'anthropic', modelId: 'claude-opus-5',
+      transportProviderId: 'claude-code',
     });
-    expect(events).toContainEqual(expect.objectContaining({
-      operation: 'rebind', cacheContinuityRisk: true,
-    }));
+    expect(events).toEqual([]);
   });
 
-  it('promotes a same-account model switch without account-scoped cache risk', async () => {
-    // Limitation: `cacheContinuityRisk` is account-scoped, so a same-account
-    // model switch to Astra reports no risk.
+  it('keeps the sticky model without promotion on a same-account switch', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6-sol', 'gpt-6-astra'],
+      supportedModelIds: ['gpt-6-sol', 'gpt-6.1-sol'],
       enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
@@ -527,34 +523,32 @@ describe('opaque route planner', () => {
       requestedModel: 'claude-opus-5-5', affinityKey: 'same-account',
     });
     expect(fresh.diagnostics[0]).toMatchObject({
-      actualModelId: 'gpt-6-astra', reason: 'alias',
+      actualModelId: 'gpt-6-sol', reason: 'sticky',
     });
     await (await planner.prepareAttempt(
       routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
     )).complete();
 
     expect(planner.describeAffinity(routingSubject(), 'same-account')).toMatchObject({
-      revision: 2, diagnosticAccountRef: 'codex-redacted', promoted: true,
+      revision: 1, diagnosticAccountRef: 'codex-redacted',
     });
-    expect(events).toContainEqual(expect.objectContaining({
-      operation: 'promote', cacheContinuityRisk: false,
-    }));
+    expect(events).toEqual([]);
   });
 
   it.each(['route', 'account', 'transport', 'provider-model'] as const)(
-    'returns no-route when the sole Astra is suppressed at %s scope',
+    'falls back to another provider when Sol is suppressed at %s scope',
     async (healthScope) => {
       const directory = new FakeRouteDirectory([
         {
           accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
           targetProviderId: 'openai', transportProviderId: 'codex',
-          supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
           readiness: 'ready', revision: 'r1',
         },
         {
           accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
           targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-          supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
           readiness: 'ready', revision: 'r1',
         },
       ]);
@@ -562,23 +556,35 @@ describe('opaque route planner', () => {
       const first = await planner.plan(routingSubject(), {
         requestedModel: 'claude-opus-5-5',
       });
+      expect(first.diagnostics[0]).toMatchObject({ actualModelId: 'gpt-6.1-sol' });
       await (await planner.prepareAttempt(
         routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
       )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope });
 
-      // Another provider is never chosen for the exclusive alias.
+      // The suppressed Sol route yields to the healthy Flash route.
+      const fallback = await planner.plan(routingSubject(), {
+        requestedModel: 'claude-opus-5-5',
+      });
+      expect(fallback.diagnostics[0]).toMatchObject({
+        actualProviderId: 'gemini', actualModelId: 'gemini-3.8-flash', reason: 'alias',
+      });
+      await (await planner.prepareAttempt(
+        routingSubject(), fallback.planRef, fallback.candidateRefs[0]!, 'req-2', 0,
+      )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope });
+
+      // No-route only when every route is suppressed.
       await expect(planner.plan(routingSubject(), {
         requestedModel: 'claude-opus-5-5',
       })).rejects.toMatchObject({ code: 'no-route' });
     },
   );
 
-  it('serves Astra again after the suppression TTL expires', async () => {
+  it('serves Sol 6.1 again after the suppression TTL expires', async () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
     const planner = new InMemoryRoutePlanner({
@@ -600,22 +606,22 @@ describe('opaque route planner', () => {
       requestedModel: 'claude-opus-5-5',
     });
     expect(retried.diagnostics[0]).toMatchObject({
-      actualProviderId: 'openai', actualModelId: 'gpt-6-astra', reason: 'alias',
+      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
     });
   });
 
-  it('keeps a compatible sticky Astra without rotating to a second account', async () => {
+  it('keeps a compatible sticky Sol without rotating to a second account', async () => {
     const directory = new FakeRouteDirectory([
       {
         accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
       {
         accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -636,19 +642,19 @@ describe('opaque route planner', () => {
     });
   });
 
-  it('serves only Astra on permitted rotation without rebinding the affinity', async () => {
+  it('serves only Sol on permitted rotation without rebinding the affinity', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
         accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
       {
         accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -960,7 +966,7 @@ describe('opaque route planner', () => {
     expect(String((error as Error).message)).toContain('muse reauthenticate required');
   });
 
-  it('identifies unknown models and unavailable Astra with distinct names and codes', async () => {
+  it('identifies unknown models and empty pools with distinct names and codes', async () => {
     const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory() });
     const directory = new FakeRouteDirectory([]);
     const empty = new InMemoryRoutePlanner({ directory });
@@ -985,12 +991,12 @@ describe('opaque route planner', () => {
     expect(directory.prepared).toHaveLength(0);
   });
 
-  it('keeps the requested alias and Astra triple in success diagnostics', async () => {
+  it('keeps the requested alias and Sol triple in success diagnostics', async () => {
     const planner = new InMemoryRoutePlanner({
       directory: new FakeRouteDirectory([{
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       }]),
     });
@@ -1003,14 +1009,14 @@ describe('opaque route planner', () => {
       diagnosticAccountRef: 'codex-redacted',
       requestedModel: 'claude-opus-5-5',
       actualProviderId: 'openai',
-      actualModelId: 'gpt-6-astra',
+      actualModelId: 'gpt-6.1-sol',
       actualTransportProviderId: 'codex',
       reason: 'alias',
       cacheContinuityRisk: false,
     }]);
   });
 
-  it('binds the alias no-route diagnostic to the codex transport', async () => {
+  it('binds the alias no-route diagnostic to any requested transport', async () => {
     const codexReauth = {
       code: 'reauth-required' as const, transportProviderId: 'codex',
       message: 'codex reauthenticate required',
@@ -1027,7 +1033,7 @@ describe('opaque route planner', () => {
     expect((codexError as { code?: string }).code).toBe('no-route');
     expect(String((codexError as Error).message)).toContain('codex reauthenticate required');
 
-    // An unrelated muse diagnostic is never surfaced for the alias.
+    // Muse is a requested transport for the alias, so its diagnostic surfaces.
     const museReauth = {
       code: 'reauth-required' as const, transportProviderId: 'muse',
       message: 'muse reauthenticate required',
@@ -1042,17 +1048,16 @@ describe('opaque route planner', () => {
         (error: unknown) => error,
       );
     expect((museError as { code?: string }).code).toBe('no-route');
-    expect(String((museError as Error).message)).toBe('No eligible route');
+    expect(String((museError as Error).message)).toContain('muse reauthenticate required');
   });
 
-  it('lists ready Astra inventory without the exclusive alias', async () => {
+  it('lists ready inventory including an advertised alias', async () => {
     const planner = new InMemoryRoutePlanner({
       directory: new FakeRouteDirectory([
         {
           accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
           targetProviderId: 'openai', transportProviderId: 'codex',
-          // An explicit inventory advertising the alias never leaks it.
-          supportedModelIds: ['gpt-6-astra', 'claude-opus-5-5'],
+          supportedModelIds: ['gpt-6.1-sol', 'claude-opus-5-5'],
           enrollmentCompletedAt: '2026-08-01T00:00:00Z',
           readiness: 'ready', revision: 'r1',
         },
@@ -1067,8 +1072,9 @@ describe('opaque route planner', () => {
     });
 
     expect(await planner.listModels(routingSubject())).toEqual([
+      { modelId: 'claude-opus-5-5', providerId: 'openai' },
       { modelId: 'gemini-3.8-flash', providerId: 'gemini' },
-      { modelId: 'gpt-6-astra', providerId: 'openai' },
+      { modelId: 'gpt-6.1-sol', providerId: 'openai' },
     ]);
     const empty = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory([]) });
     expect(await empty.listModels(routingSubject())).toEqual([]);
