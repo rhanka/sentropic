@@ -6,7 +6,6 @@ import {
   STANDARD_ROUTE_DEFINITIONS,
   CANONICAL_TARGET_MAPPINGS,
   describeCanonicalTargetRoutes,
-  EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS,
   LAUNCH_ALIAS_TARGET_MAPPINGS,
   LAUNCH_ALIAS_ROUTE_MAPPINGS,
   resolveTargetCapabilitySource,
@@ -34,24 +33,54 @@ describe('canonical model targets', () => {
     expect(resolve('gpt-6-terra')).toBeUndefined();
     expect(resolveCandidates('gpt-6-terra')).toEqual([]);
     expect(describeCanonicalTargetRoutes().some(({ model }) => model === 'gpt-6-terra')).toBe(false);
-    expect(resolveCandidates('claude-opus-4-8')[1]).toEqual({
+    expect(resolveCandidates('gpt-5.6-terra')).toEqual([{
       providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
-    });
+    }]);
   });
 
   it.each([
-    ['claude-sonnet-5', undefined],
-    ['claude-sonnet-5-xhigh', 'xhigh'],
-    ['claude-sonnet-4-6', undefined],
-  ])('routes %s through GPT-6 Luna with preserved effort', (alias, effort) => {
+    ['claude-opus-5', 'high'],
+    ['claude-opus-5-high', 'xhigh'],
+    ['claude-opus-5-xhigh', 'max'],
+    ['claude-opus-5-max', 'max'],
+    ['claude-opus-5-medium', 'high'],
+    ['claude-opus-5-low', 'medium'],
+    ['claude-opus-4-8', 'high'],
+    ['claude-opus-4-8-xhigh', 'max'],
+    ['claude-opus-4-8-max', 'max'],
+    ['claude-opus-4-8-medium', 'high'],
+    ['claude-opus-4-8-low', 'medium'],
+    ['claude-sonnet-5', 'high'],
+    ['claude-sonnet-5-xhigh', 'max'],
+    ['claude-sonnet-5-medium', 'high'],
+    ['claude-sonnet-5-low', 'medium'],
+    ['claude-sonnet-4-6', 'high'],
+    ['claude-fable-5', 'high'],
+    ['claude-fable-5-high', 'xhigh'],
+    ['claude-fable-5-xhigh', 'max'],
+    ['claude-fable-5-max', 'max'],
+    ['claude-fable-5-medium', 'high'],
+    ['claude-fable-5-low', 'medium'],
+    ['claude-opus-5-5', 'high'],
+    ['claude-opus-5-5-high', 'xhigh'],
+    ['claude-opus-5-5-xhigh', 'max'],
+    ['claude-opus-5-5-medium', 'high'],
+    ['claude-opus-5-5-low', 'medium'],
+    ['claude-sonnet-5-5', 'high'],
+    ['claude-sonnet-5-5-high', 'xhigh'],
+    ['claude-sonnet-5-5-xhigh', 'max'],
+    ['claude-sonnet-5-5-max', 'max'],
+    ['claude-sonnet-5-5-medium', 'high'],
+    ['claude-sonnet-5-5-low', 'medium'],
+  ])('routes %s through GPT-6.1 Sol at +1 effort rung', (alias, effort) => {
     expect(resolveCandidates(alias!).filter(({ transportProviderId }) => transportProviderId === 'codex'))
       .toEqual([{
-        providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-luna',
-        ...(effort ? { effort } : {}),
+        providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol',
+        effort,
       }]);
   });
   const faithfulClaudeModel = (requestedId: string): string =>
-    requestedId.replace(/-(?:high|xhigh|max)$/, '');
+    requestedId.replace(/-(?:high|xhigh|max|medium|low)$/, '');
   const hasModelProfile = (providerId: string, model: string): boolean =>
     modelProfiles.some((candidate) =>
       candidate.providerId === providerId && candidate.modelId === model);
@@ -130,6 +159,18 @@ describe('canonical model targets', () => {
       model: 'claude-sonnet-5',
       effort: 'xhigh',
     });
+    expect(resolve('claude-opus-5-medium')).toEqual({
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-opus-5',
+      effort: 'medium',
+    });
+    expect(resolve('claude-fable-5-1-low')).toEqual({
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-fable-5-1',
+      effort: 'low',
+    });
   });
 
   it('exposes RATIFICATION PENDING Codex and Cloud Code candidates for launch aliases', () => {
@@ -149,8 +190,8 @@ describe('canonical model targets', () => {
       {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-6-astra',
-        effort: 'medium',
+        model: 'gpt-6.1-sol',
+        effort: 'max',
       },
       {
         providerId: 'gemini',
@@ -172,9 +213,16 @@ describe('canonical model targets', () => {
         model: 'claude-sonnet-5',
       },
       {
+        providerId: 'muse',
+        transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor',
+        effort: 'high',
+      },
+      {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-6-luna',
+        model: 'gpt-6.1-sol',
+        effort: 'high',
       },
       {
         providerId: 'gemini',
@@ -198,7 +246,8 @@ describe('canonical model targets', () => {
       {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-6-astra',
+        model: 'gpt-6.1-sol',
+        effort: 'high',
       },
       {
         providerId: 'gemini',
@@ -219,13 +268,19 @@ describe('canonical model targets', () => {
   it('keeps faithful Anthropic routes only when profile-backed and keeps canonical alias kind', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
-      'claude-opus-5-max',
+      'claude-opus-5-max', 'claude-opus-5-medium', 'claude-opus-5-low',
       'claude-opus-4-8', 'claude-opus-4-8-xhigh', 'claude-opus-4-8-max',
-      'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
+      'claude-opus-4-8-medium', 'claude-opus-4-8-low',
+      'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-5-medium',
+      'claude-sonnet-5-low', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
-      'claude-fable-5-max',
+      'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
       'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
-      'claude-fable-5-1-max',
+      'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
+      'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
+      'claude-opus-5-5-max', 'claude-opus-5-5-medium', 'claude-opus-5-5-low',
+      'claude-sonnet-5-5', 'claude-sonnet-5-5-high', 'claude-sonnet-5-5-xhigh',
+      'claude-sonnet-5-5-max', 'claude-sonnet-5-5-medium', 'claude-sonnet-5-5-low',
     ];
 
     const descriptions = describeCanonicalTargetRoutes();
