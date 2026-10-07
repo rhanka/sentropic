@@ -32,6 +32,15 @@ export const knownModelIds = [
   'claude-fable-5-1',
   'mistral-small-2603',
   'magistral-medium-2509',
+  // Mistral Large 4 ("Le Chonk", public preview 2026-10-06): 1.05T MoE, 52B
+  // active, natively multimodal, 1M context. Served on api.mistral.ai via the
+  // `mistral-vibe` account transport (plan-billed key) or MISTRAL_API_KEY.
+  'mistral-large-4',
+  // Z.ai GLM 5.3: third-party open-weight model hosted by Mistral (EU,
+  // served without Mistral modifications), long-horizon coding/agentic.
+  // Mistral wire id is `zai-glm-5-3` — NOT the bare Z.ai `glm-5.3`, keeping
+  // the catalog key identical to the serving wire model.
+  'zai-glm-5-3',
   'command-a-03-2025',
   'command-a-reasoning-08-2025',
   // GCP (Model Garden) catalog keys use the `{publisher}/{model}@gcp` scheme so
@@ -82,7 +91,7 @@ export const knownModelIdsByProvider = {
   ],
   gemini: ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
   anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-fable-5', 'claude-fable-5-1'],
-  mistral: ['mistral-small-2603', 'magistral-medium-2509'],
+  mistral: ['mistral-small-2603', 'magistral-medium-2509', 'mistral-large-4', 'zai-glm-5-3'],
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],
   local: ['laneformer-2b-it'],
