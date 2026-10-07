@@ -35,6 +35,11 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - Declare exception ID `BR77-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- `attention`: Lot 4 (api wiring) intentionally NOT started yet — seams located for the next session:
+  - `api/src/services/llm-account-transports.ts`: mirror `acquireMuseAccountTransport` (~line 2263) with `parseMistralVibeTokenSecret` (plain bearer-key secret, `refreshTokenIfNeeded` returns null — no refresh grant) + `MISTRAL_VIBE_{TARGET,TRANSPORT}_PROVIDER_ID` consts.
+  - `api/src/services/provider-connections.ts`: add `resolveConnectedMistralVibeTransport` next to `resolveConnectedClaudeCodeTransport` (~line 364).
+  - `api/src/services/llm-runtime/index.ts`: mirror the claude-code generate-site acquisition (`credentialResolution.source === 'none'` guard, ~line 1117) and stream-site (~line 1404) for `selection.providerId === 'mistral'`; pass `authOverride: createMistralVibeAccountAuthInput(transport)` (to add in `mesh-dispatch.ts` next to `createCodexAccountAuthInput`).
+  - Enrollment HTTP routes (facade `enroll('mistral-vibe', …)` + poll) + settings surface + api tests still to wire.
 - `attention`: Mistral Vibe OAuth flow facts (console.mistral.ai/api/vibe/sign-in PKCE S256 + poll_url + exchange → long-lived api_key, no refresh token) verified 2026-10-07 from the Vibe CLI-mirroring oh-my-pi PR #13875 and Mistral docs; wire endpoints must be re-validated live at UAT.
 - `attention`: `zai-glm-5-3` is the Mistral-hosted third-party model id (docs.mistral.ai/models/zai-glm-5-3); text-only input, reasoning_effort low/high/max.
 
@@ -72,5 +77,5 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - [ ] Gate: `make typecheck-api`, `make test-api ENV=test-mistral-vibe-glm53`.
 - [ ] **Lot 5 — Docs + semver + final validation**
   - [ ] Spec sync (`spec/` routing + accounts sections) if required by consumers.
-  - [ ] Semver bumps: `packages/llm-mesh`, `packages/llm-gateway` (publish mesh before gateway).
+  - [x] Semver bumps: `@sentropic/llm-mesh` 0.22.3 → 0.23.0; gateway dependency → `^0.23.0` (publish mesh before gateway).
   - [ ] `make scope-check` before each commit; final typecheck/lint/test pass; PR created with this file as body.
