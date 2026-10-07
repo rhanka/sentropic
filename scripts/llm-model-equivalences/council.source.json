@@ -1,9 +1,9 @@
 {
-  "revision": "2026-10-01.1",
+  "revision": "2026-10-07.1",
   "expiresAt": "2027-03-03T00:00:00.000Z",
   "reason": "No pinned benchmark evidence authorizes automatic substitution.",
   "reviewer": "GPT-6.1 Sol catalog owner directive",
-  "provenance": "feat/llm-mesh-gpt-6-1-sol owner task; inherited capabilities unverified; no benchmark evidence",
+  "provenance": "feat/llm-mesh-mistral-vibe-glm53 owner task; inherited capabilities unverified; no benchmark evidence",
   "excludedModelKeys": [
     "anthropic:claude-fable-5",
     "anthropic:claude-fable-5-1",
@@ -33,6 +33,8 @@
     "openai:gpt-6-sol",
     "openai:gpt-6.1-sol",
     "muse:muse-spark-1.3",
-    "muse:muse-spark-1.3-contributor"
+    "muse:muse-spark-1.3-contributor",
+    "mistral:mistral-large-4",
+    "mistral:zai-glm-5-3"
   ]
 }
