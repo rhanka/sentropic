@@ -15,6 +15,7 @@ import { CloudCodeEnrollmentProvider } from '../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../enrollment/codex.js';
 import { MuseEnrollmentProvider } from '../enrollment/muse.js';
 import { MuseCodeEnrollmentProvider } from '../enrollment/muse-code.js';
+import { MistralVibeEnrollmentProvider } from '../enrollment/mistral-vibe.js';
 import { EncryptedFileKeyring } from '../node/keyring/encrypted-file-keyring.js';
 import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
 import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
@@ -165,6 +166,7 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     ['claude-code', new ClaudeCodeEnrollmentProvider()],
     ['muse', new MuseEnrollmentProvider()],
     ['muse-code', new MuseCodeEnrollmentProvider()],
+    ['mistral-vibe', new MistralVibeEnrollmentProvider()],
   ]);
 
   const service = new LocalAccountTransportService(
