@@ -258,20 +258,34 @@ describe('pure route quote', () => {
     expect(caught).toMatchObject({ name: 'RouteQuoteError', code: 'unknown-model' });
   });
 
-  it('quotes the exclusive alias as a single unenforced Astra candidate', async () => {
+  it('quotes the 5.5 alias as standard candidates with codex unenforced', async () => {
     const directory = new SpyDirectory(new FakeRouteDirectory([]));
     const planner = new InMemoryRoutePlanner({ directory, clock: fixedClock });
     const quote = planner.quote(quoteInput('claude-opus-5-5'));
 
     expect(directory.calls).toEqual([]);
     expect(quote.requestedModel).toBe('claude-opus-5-5');
-    expect(quote.candidates).toEqual([{
-      providerId: 'openai', modelId: 'gpt-6-astra', transportProviderId: 'codex',
-      reason: 'alias',
-      allowance: { inputTokens: 1_000, outputTokens: 100_000 },
-      // The codex transport omits the output ceiling: enforced is false.
-      outputCeilingEnforced: false,
-    }]);
+    expect(quote.candidates).toEqual([
+      {
+        providerId: 'muse', modelId: 'muse-spark-1.3-contributor',
+        transportProviderId: 'muse', reason: 'alias',
+        allowance: { inputTokens: 1_000, outputTokens: 100_000 },
+        outputCeilingEnforced: true,
+      },
+      {
+        providerId: 'openai', modelId: 'gpt-6.1-sol', transportProviderId: 'codex',
+        reason: 'alias',
+        allowance: { inputTokens: 1_000, outputTokens: 100_000 },
+        // The codex transport omits the output ceiling: enforced is false.
+        outputCeilingEnforced: false,
+      },
+      {
+        providerId: 'gemini', modelId: 'gemini-3.8-flash',
+        transportProviderId: 'cloud-code', reason: 'alias',
+        allowance: { inputTokens: 1_000, outputTokens: 65_536 },
+        outputCeilingEnforced: true,
+      },
+    ]);
 
     // An empty-directory plan on that valid quote reports no-route, not unknown-model.
     const failure = await planner.plan(routingSubject(), {
@@ -283,14 +297,14 @@ describe('pure route quote', () => {
     expect(failure).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
   });
 
-  it('keeps the exclusive alias quote on Astra despite overrides and equivalents', () => {
+  it('honors overrides and council equivalents for the 5.5 alias quote', () => {
     const council = {
       ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       groups: [{
-        id: 'astra-fixture', intent: 'general' as const, expiresAt: '2027-01-01T00:00:00Z',
+        id: 'sol-fixture', intent: 'general' as const, expiresAt: '2027-01-01T00:00:00Z',
         evidence,
         members: [
-          { providerId: 'openai', modelId: 'gpt-6-astra', rank: 1, requiredCapabilities: [] },
+          { providerId: 'openai', modelId: 'gpt-6.1-sol', rank: 1, requiredCapabilities: [] },
           { providerId: 'openai', modelId: 'gpt-6-luna', rank: 2, requiredCapabilities: [] },
         ],
       }],
@@ -298,18 +312,19 @@ describe('pure route quote', () => {
     const conflicting = [{
       providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
     }];
-    for (const extra of [
-      { targetCandidatesOverride: conflicting, policyOverride: { allowEquivalentModels: false } },
-      {},
-    ]) {
-      const quote = quoteRoute(quoteInput('claude-opus-5-5', extra), { council });
-      expect(quote.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
-        .toEqual(['openai/gpt-6-astra']);
-    }
-    // Note: the all-model matrix below auto-picks the alias through
-    // CANONICAL_TARGET_ROUTE_MAPPINGS keys, but it cannot pin exclusivity:
-    // SUPERSET_COUNCIL carries no Astra group, so the property holds with or
-    // without the council guard. These injected-group cases are the real pins.
+    const overridden = quoteRoute(quoteInput('claude-opus-5-5', {
+      targetCandidatesOverride: conflicting, policyOverride: { allowEquivalentModels: false },
+    }), { council });
+    expect(overridden.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
+      .toEqual(['gemini/gemini-3.8-flash']);
+    const expanded = quoteRoute(quoteInput('claude-opus-5-5'), { council });
+    expect(expanded.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
+      .toEqual([
+        'muse/muse-spark-1.3-contributor',
+        'openai/gpt-6.1-sol',
+        'gemini/gemini-3.8-flash',
+        'openai/gpt-6-luna',
+      ]);
   });
 
   it('covers every alias plan diagnostic with its quote', async () => {

@@ -17,16 +17,22 @@ describe('model equivalence council', () => {
     )).not.toThrow();
   });
 
-  it('derives the exclusive alias to Astra without a profile or exclusion', () => {
-    expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.aliases.find(
-      (entry) => entry.alias === 'claude-opus-5-5',
-    )).toEqual({
-      alias: 'claude-opus-5-5', providerId: 'openai', modelId: 'gpt-6-astra',
-      transportProviderId: 'codex',
-    });
-    expect(modelProfiles.some((profile) => profile.modelId === 'claude-opus-5-5')).toBe(false);
-    expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map((entry) => entry.modelId))
-      .not.toContain('claude-opus-5-5');
+  it('derives the 5.5 aliases to their first standard target without a profile or exclusion', () => {
+    for (const [alias, effort] of [
+      ['claude-opus-5-5', 'high'],
+      ['claude-opus-5-5-max', 'max'],
+      ['claude-sonnet-5-5', 'high'],
+    ] as const) {
+      expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.aliases.find(
+        (entry) => entry.alias === alias,
+      )).toEqual({
+        alias, providerId: 'muse', modelId: 'muse-spark-1.3-contributor',
+        transportProviderId: 'muse', effort,
+      });
+      expect(modelProfiles.some((profile) => profile.modelId === alias)).toBe(false);
+      expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map((entry) => entry.modelId))
+        .not.toContain(alias);
+    }
     expect(() => validateEquivalenceCouncil(
       DEFAULT_MODEL_EQUIVALENCE_COUNCIL, modelProfiles, now,
     )).not.toThrow();
