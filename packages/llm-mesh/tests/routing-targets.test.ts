@@ -291,8 +291,8 @@ describe('canonical model targets', () => {
         providerId: 'anthropic',
         transportProviderId: 'claude-code',
       } : {
-        providerId: 'openai',
-        transportProviderId: 'codex',
+        providerId: candidates[0]!.providerId,
+        transportProviderId: candidates[0]!.transportProviderId,
       };
       const expectedPrimaryModel = candidates[0]?.model ?? '';
       expect(candidates[0]).toMatchObject(expectedPrimary);
@@ -370,7 +370,7 @@ describe('canonical model targets', () => {
     }
   });
 
-  it('routes new Opus max aliases through Astra high with a muse max candidate', () => {
+  it('routes Opus max aliases through Sol 6.1 max with a muse max candidate', () => {
     for (const model of ['claude-opus-5', 'claude-opus-4-8']) {
       const candidates = resolveCandidates(`${model}-max`);
       expect(candidates).toEqual([
@@ -384,7 +384,7 @@ describe('canonical model targets', () => {
         },
         {
           providerId: 'openai', transportProviderId: 'codex',
-          model: 'gpt-6-astra', effort: 'high',
+          model: 'gpt-6.1-sol', effort: 'max',
         },
         {
           providerId: 'gemini', transportProviderId: 'cloud-code',
@@ -427,13 +427,19 @@ describe('canonical model targets', () => {
   it('routes every Claude tier to 3.8 Flash on the Cloud Code transport', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
-      'claude-opus-5-max',
+      'claude-opus-5-max', 'claude-opus-5-medium', 'claude-opus-5-low',
       'claude-opus-4-8', 'claude-opus-4-8-xhigh', 'claude-opus-4-8-max',
-      'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
+      'claude-opus-4-8-medium', 'claude-opus-4-8-low',
+      'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-5-medium',
+      'claude-sonnet-5-low', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
-      'claude-fable-5-max',
+      'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
       'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
-      'claude-fable-5-1-max',
+      'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
+      'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
+      'claude-opus-5-5-max', 'claude-opus-5-5-medium', 'claude-opus-5-5-low',
+      'claude-sonnet-5-5', 'claude-sonnet-5-5-high', 'claude-sonnet-5-5-xhigh',
+      'claude-sonnet-5-5-max', 'claude-sonnet-5-5-medium', 'claude-sonnet-5-5-low',
     ];
 
     for (const alias of aliases) {
@@ -486,9 +492,10 @@ describe('canonical model targets', () => {
     const last = createCanonicalTargetCandidatesResolver({ musePosition: 'claude-last' });
     expect(last('claude-opus-5-xhigh').map((target) => target.transportProviderId))
       .toEqual(['codex', 'muse', 'cloud-code', 'claude-code', 'mistral-vibe']);
-    // Aliases without a muse candidate keep codex/cloud/claude order.
+    // Every launch alias carries a muse candidate, so claude-last always
+    // orders codex, muse, cloud, then faithful claude (mistral-vibe last).
     expect(last('claude-sonnet-5').map((target) => target.transportProviderId))
-      .toEqual(['codex', 'cloud-code', 'claude-code']);
+      .toEqual(['codex', 'muse', 'cloud-code', 'claude-code']);
   });
 
   it('keeps legacy Gemini capability aliases on 3.7 instead of 3.5', () => {
