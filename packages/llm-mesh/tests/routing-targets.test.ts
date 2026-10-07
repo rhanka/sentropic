@@ -561,21 +561,87 @@ describe('canonical model targets', () => {
     );
   });
 
-  it('routes claude-opus-5-5 exclusively to Astra on every muse position', () => {
-    const astra = {
-      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
+  it('routes claude-opus-5-5 through muse, Sol 6.1 and Flash without a faithful target', () => {
+    const muse = {
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-spark-1.3-contributor', effort: 'high',
     };
-    expect(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS['claude-opus-5-5']).toEqual(astra);
-    for (const musePosition of ['off', 'after-claude', 'first', 'claude-last'] as const) {
-      const candidates = createCanonicalTargetCandidatesResolver({ musePosition })('claude-opus-5-5');
-      expect(candidates).toEqual([astra]);
-      expect(candidates.map((candidate) => candidate.providerId))
-        .toEqual(['openai']);
-    }
-    expect(resolve('claude-opus-5-5')).toEqual(astra);
-    expect(resolveCandidates('claude-opus-5-5')).toEqual([astra]);
+    const codex = {
+      providerId: 'openai', transportProviderId: 'codex',
+      model: 'gpt-6.1-sol', effort: 'high',
+    };
+    const cloud = {
+      providerId: 'gemini', transportProviderId: 'cloud-code',
+      model: 'gemini-3.8-flash', effort: 'high',
+    };
+    expect(resolve('claude-opus-5-5')).toEqual(muse);
+    expect(resolveCandidates('claude-opus-5-5')).toEqual([muse, codex, cloud]);
     expect(describeCanonicalTargetRoutes().filter((route) => route.requestedId === 'claude-opus-5-5'))
-      .toEqual([{ requestedId: 'claude-opus-5-5', ...astra, kind: 'alias' }]);
+      .toEqual([
+        { requestedId: 'claude-opus-5-5', ...muse, kind: 'alias' },
+        { requestedId: 'claude-opus-5-5', ...codex, kind: 'alias' },
+        { requestedId: 'claude-opus-5-5', ...cloud, kind: 'alias' },
+      ]);
+  });
+
+  it('routes claude-opus-5-5-max through Astra max with a muse max candidate', () => {
+    expect(resolveCandidates('claude-opus-5-5-max')).toEqual([
+      {
+        providerId: 'muse', transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor', effort: 'max',
+      },
+      {
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-6-astra', effort: 'max',
+      },
+      {
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-3.8-flash', effort: 'high',
+      },
+    ]);
+  });
+
+  it('routes the sonnet-5-5 family through Sol 6.1 at +1 effort without a faithful target', () => {
+    const plusOne: Readonly<Record<string, string>> = {
+      base: 'high', high: 'xhigh', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
+    };
+    for (const [suffix, effort] of Object.entries(plusOne)) {
+      const alias = suffix === 'base' ? 'claude-sonnet-5-5' : `claude-sonnet-5-5-${suffix}`;
+      expect(resolveCandidates(alias)).toEqual([
+        {
+          providerId: 'muse', transportProviderId: 'muse',
+          model: 'muse-spark-1.3-contributor', effort,
+        },
+        {
+          providerId: 'openai', transportProviderId: 'codex',
+          model: 'gpt-6.1-sol', effort,
+        },
+        {
+          providerId: 'gemini', transportProviderId: 'cloud-code',
+          model: 'gemini-3.8-flash', effort: 'high',
+        },
+      ]);
+    }
+    expect(resolve('claude-sonnet-5-5-max')).toEqual({
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-spark-1.3-contributor', effort: 'max',
+    });
+  });
+
+  it('keeps all three fallback transports for the 5.5 families on every muse position', () => {
+    for (const musePosition of ['off', 'after-claude', 'first', 'claude-last'] as const) {
+      const resolveAt = createCanonicalTargetCandidatesResolver({ musePosition });
+      for (const alias of ['claude-opus-5-5', 'claude-sonnet-5-5-max']) {
+        const transports = resolveAt(alias).map((candidate) => candidate.transportProviderId);
+        if (musePosition === 'off') {
+          expect(transports).toEqual(['codex', 'cloud-code']);
+        } else {
+          expect(transports).toContain('muse');
+          expect(transports).toContain('codex');
+          expect(transports).toContain('cloud-code');
+        }
+      }
+    }
   });
 
   it('keeps CANONICAL_TARGET_MAPPINGS aligned with the selection-first target for each model', () => {
