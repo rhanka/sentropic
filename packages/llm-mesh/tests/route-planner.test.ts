@@ -131,7 +131,7 @@ describe('opaque route planner', () => {
     }));
   });
 
-  it('plans fresh Astra for the exclusive alias despite a stale incompatible affinity', async () => {
+  it('serves the stale sticky target without mutating stored state on model switch', async () => {
     const directory = new FakeRouteDirectory([
       {
         accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
@@ -142,7 +142,7 @@ describe('opaque route planner', () => {
       {
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -162,14 +162,14 @@ describe('opaque route planner', () => {
     expect(fresh.diagnostics).toHaveLength(1);
     expect(fresh.diagnostics[0]).toMatchObject({
       requestedModel: 'claude-opus-5-5',
-      actualProviderId: 'openai', actualModelId: 'gpt-6-astra',
-      actualTransportProviderId: 'codex', reason: 'alias',
-      cacheContinuityRisk: true,
+      actualProviderId: 'anthropic', actualModelId: 'claude-opus-5',
+      actualTransportProviderId: 'claude-code', reason: 'sticky',
+      cacheContinuityRisk: false,
     });
     // Plan time never mutates stored state.
     expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
 
-    // The quoted path behaves the same.
+    // The quoted path ignores the unquoted sticky target and plans fresh.
     const quote = planner.quote({
       requestedModel: 'claude-opus-5-5',
       ceiling: { inputTokens: 1_000, outputTokens: 1_000 },
@@ -179,23 +179,23 @@ describe('opaque route planner', () => {
       requestedModel: 'claude-opus-5-5', affinityKey: 'switch', quote,
     });
     expect(pinned.diagnostics[0]).toMatchObject({
-      actualProviderId: 'openai', actualModelId: 'gpt-6-astra', reason: 'alias',
+      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
     });
     expect(planner.describeAffinity(routingSubject(), 'switch')).toEqual(before);
   });
 
-  it('keeps a compatible Astra affinity closed under a violating explicit restriction', async () => {
+  it('serves the sticky affinity when it conflicts with an explicit restriction', async () => {
     const directory = new FakeRouteDirectory([
       {
         accountRef: 'codex-a', diagnosticAccountRef: 'acct_a',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
       {
         accountRef: 'codex-b', diagnosticAccountRef: 'acct_b',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -209,19 +209,22 @@ describe('opaque route planner', () => {
     )).complete();
     const before = planner.describeAffinity(routingSubject(), 'pinned');
 
-    await expect(planner.plan(routingSubject(), {
+    const conflicting = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5', affinityKey: 'pinned',
       explicit: { diagnosticAccountRef: 'acct_b' },
-    })).rejects.toMatchObject({ code: 'no-route' });
+    });
+    expect(conflicting.diagnostics[0]).toMatchObject({
+      diagnosticAccountRef: 'acct_a', actualModelId: 'gpt-6.1-sol', reason: 'sticky',
+    });
     expect(planner.describeAffinity(routingSubject(), 'pinned')).toEqual(before);
     expect(directory.prepared).toHaveLength(1);
   });
 
-  it('fails closed when a compatible Astra affinity loses its advertised model', async () => {
+  it('serves the sticky target when the account stops advertising the model', async () => {
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
     const planner = new InMemoryRoutePlanner({ directory });
@@ -233,21 +236,24 @@ describe('opaque route planner', () => {
     )).complete();
     const before = planner.describeAffinity(routingSubject(), 'astra-eligibility');
 
-    // The account stays ready but no longer advertises Astra.
+    // The account stays ready but no longer advertises Sol.
     directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
 
-    await expect(planner.plan(routingSubject(), {
+    const sticky = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility',
-    })).rejects.toMatchObject({ code: 'no-route' });
+    });
+    expect(sticky.diagnostics[0]).toMatchObject({
+      actualModelId: 'gpt-6.1-sol', reason: 'sticky',
+    });
     expect(planner.describeAffinity(routingSubject(), 'astra-eligibility')).toEqual(before);
     expect(directory.prepared).toHaveLength(1);
   });
 
-  it('fails closed with a quote when a compatible Astra affinity loses its advertised model', async () => {
+  it('serves the quoted sticky target when the account stops advertising the model', async () => {
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
     const planner = new InMemoryRoutePlanner({ directory });
@@ -264,17 +270,20 @@ describe('opaque route planner', () => {
       now: new Date(),
     });
 
-    // The account stays ready but no longer advertises Astra.
+    // The account stays ready but no longer advertises Sol.
     directory.accounts[0] = { ...directory.accounts[0]!, supportedModelIds: [] };
 
-    await expect(planner.plan(routingSubject(), {
+    const sticky = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5', affinityKey: 'astra-eligibility-quoted', quote,
-    })).rejects.toMatchObject({ code: 'no-route' });
+    });
+    expect(sticky.diagnostics[0]).toMatchObject({
+      actualModelId: 'gpt-6.1-sol', reason: 'sticky',
+    });
     expect(planner.describeAffinity(routingSubject(), 'astra-eligibility-quoted')).toEqual(before);
     expect(directory.prepared).toHaveLength(1);
   });
 
-  it('rebinds a stale affinity to Astra on exclusive alias success', async () => {
+  it('keeps the stale affinity without migration on standard alias success', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -286,7 +295,7 @@ describe('opaque route planner', () => {
       {
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -304,30 +313,31 @@ describe('opaque route planner', () => {
     const fresh = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
     });
+    expect(fresh.diagnostics[0]).toMatchObject({
+      reason: 'sticky', actualModelId: 'claude-opus-5',
+    });
     await (await planner.prepareAttempt(
       routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
     )).complete();
 
-    const migrated = planner.describeAffinity(routingSubject(), 'migrate');
-    expect(migrated).toMatchObject({
-      revision: 2, diagnosticAccountRef: 'codex-redacted', promoted: false,
+    const kept = planner.describeAffinity(routingSubject(), 'migrate');
+    expect(kept).toMatchObject({
+      revision: 1, diagnosticAccountRef: 'anthropic-redacted',
     });
-    expect(migrated?.target).toMatchObject({
-      requestedModel: 'claude-opus-5-5',
-      providerId: 'openai', modelId: 'gpt-6-astra', transportProviderId: 'codex',
+    expect(kept?.target).toMatchObject({
+      providerId: 'anthropic', modelId: 'claude-opus-5',
+      transportProviderId: 'claude-code',
     });
-    expect(events).toContainEqual(expect.objectContaining({
-      operation: 'rebind', cacheContinuityRisk: true,
-    }));
+    expect(events).toEqual([]);
     const sticky = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5', affinityKey: 'migrate',
     });
     expect(sticky.diagnostics[0]).toMatchObject({
-      reason: 'sticky', actualModelId: 'gpt-6-astra',
+      reason: 'sticky', actualModelId: 'claude-opus-5',
     });
   });
 
-  it('leaves a stale affinity untouched when the exclusive alias plan fails', async () => {
+  it('leaves a stale affinity untouched when the standard alias plan fails', async () => {
     const directory = new FakeRouteDirectory([
       {
         accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
@@ -338,7 +348,7 @@ describe('opaque route planner', () => {
       {
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -373,7 +383,7 @@ describe('opaque route planner', () => {
         {
           accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
           targetProviderId: 'openai', transportProviderId: 'codex',
-          supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
           readiness: 'ready', revision: 'r1',
         },
       ]);
@@ -404,7 +414,7 @@ describe('opaque route planner', () => {
       await failedAttempt.recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
       expect(planner.describeAffinity(routingSubject(), 'stale-commit-fail')).toEqual(beforeFail);
 
-      // The route-scoped failure suppresses the sole Astra route, so a new
+      // The route-scoped failure suppresses the sticky route, so a new
       // alias plan on the same planner fails closed while the stale affinity
       // stays untouched.
       await expect(planner.plan(routingSubject(), {
