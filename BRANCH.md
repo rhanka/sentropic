@@ -53,11 +53,11 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - [x] `auth.ts`: `accountTransportProviderIds` + `executableAccountTransportProviderIds` += `mistral-vibe`.
   - [x] Tests: `packages/llm-mesh/tests` (auth, facade/catalog consumers).
   - [x] Gate: `make typecheck-llm-mesh`, `make test-llm-mesh ENV=test-mistral-vibe-glm53`.
-- [ ] **Lot 2 — Mistral Vibe native OAuth enrollment (mesh)**
-  - [ ] `enrollment/contracts.ts`: providerId union += `mistral-vibe`.
-  - [ ] `enrollment/mistral-vibe.ts`: sign-in PKCE S256 start (POST /api/vibe/sign-in), poll (GET poll_url), exchange (POST /vibe/sign-in/{process_id}/exchange) → PreparedCredential; refresh = reauth (no refresh token).
-  - [ ] `enrollment/index.ts` export.
-  - [ ] Tests: new `tests/enrollment/mistral-vibe.test.ts` (start/poll/exchange/expiry/denied).
+- [x] **Lot 2 — Mistral Vibe native OAuth enrollment (mesh)**
+  - [x] `enrollment/contracts.ts`: providerId union += `mistral-vibe`.
+  - [x] `enrollment/mistral-vibe.ts`: sign-in PKCE S256 start (POST /api/vibe/sign-in), poll (GET poll_url), exchange (POST /vibe/sign-in/{process_id}/exchange) → PreparedCredential; refresh = reauth (no refresh token).
+  - [x] `enrollment/index.ts` export.
+  - [x] Tests: new `tests/enrollment/mistral-vibe.test.ts` (start/poll/exchange/expiry/denied).
   - [ ] Gate: `make typecheck-llm-mesh`, `make test-llm-mesh ENV=test-mistral-vibe-glm53`.
 - [ ] **Lot 3 — Routing + gateway mapping**
   - [ ] `routing-targets.ts`: faithful `DEFAULT_TARGET_MAPPINGS` entries for `mistral-large-4` and `zai-glm-5-3` (transport `mistral-vibe`); `GLM_ROUTE_EFFORT` map + `glmTarget` insertion as supplemental fallback (after codex + cloud-code) for opus + fable-5-1 aliases.
