@@ -59,10 +59,10 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - [x] `enrollment/index.ts` export.
   - [x] Tests: new `tests/enrollment/mistral-vibe.test.ts` (start/poll/exchange/expiry/denied).
   - [ ] Gate: `make typecheck-llm-mesh`, `make test-llm-mesh ENV=test-mistral-vibe-glm53`.
-- [ ] **Lot 3 — Routing + gateway mapping**
-  - [ ] `routing-targets.ts`: faithful `DEFAULT_TARGET_MAPPINGS` entries for `mistral-large-4` and `zai-glm-5-3` (transport `mistral-vibe`); `GLM_ROUTE_EFFORT` map + `glmTarget` insertion as supplemental fallback (after codex + cloud-code) for opus + fable-5-1 aliases.
-  - [ ] Generated council: refresh exclusions for the two new models.
-  - [ ] Tests: `routing-targets.test.ts`, gateway `target.test.ts` / contract snapshots.
+- [x] **Lot 3 — Routing + gateway mapping**
+  - [x] `routing-targets.ts`: faithful `DEFAULT_TARGET_MAPPINGS` entries for `mistral-large-4` and `zai-glm-5-3` (transport `mistral-vibe`); `GLM_ROUTE_EFFORT` map + `glmTarget` insertion as supplemental fallback (after codex + cloud-code) for opus + fable-5-1 aliases.
+  - [x] Generated council: refresh exclusions for the two new models.
+  - [x] Tests: `routing-targets.test.ts`, gateway `target.test.ts` / contract snapshots.
   - [ ] Gate: `make typecheck-llm-mesh`, `make typecheck-llm-gateway`, `make test-llm-mesh ENV=test-mistral-vibe-glm53`.
 - [ ] **Lot 4 — Api account transport wiring**
   - [ ] `api/src/services/llm-account-transports.ts`: `acquireMistralVibeAccountTransport` + token secret parse (no refresh; reauth on auth_failed).
