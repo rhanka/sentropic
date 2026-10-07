@@ -19,6 +19,7 @@ The jose clash (registry llm-gateway@0.19.1 peerOptional jose@^5.10.0 vs top-lev
   - `packages/llm-gateway/package.json` (jose peer widen + 0.19.1 -> 0.19.2)
   - `api/package.json` (SDK `^1.29.0` -> `^1.31.0`; proxy-addr override kept)
   - `package-lock.json` (root; Dockerfile + SCA gate + audit gate resolve from it)
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (owner-authorized pin update: 3 assertions track the workspace gateway 0.19.1 -> 0.19.2; committed packaging fixtures pinning published 0.19.1 stay)
   - `BRANCH.md`
   - `.h2a/build/fix_report.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -67,6 +68,7 @@ The jose clash (registry llm-gateway@0.19.1 peerOptional jose@^5.10.0 vs top-lev
   - [x] `make typecheck` exit 0 (with `API_IMAGE_REF=` prefix — see acknowledge).
   - [x] `make lint` exit 0 (0 errors / 207 pre-existing warnings, baseline-identical).
   - [x] `make test-llm-gateway`: 28 files / 389 tests passed. `make test-llm-mesh`: 317 tests passed.
+  - [x] `make test-cluster-mesh`: 53 files / 394 tests passed (5 packaging files skipped by design) after updating the 3 workspace-version assertions in `gateway-surface.spec.ts` to 0.19.2 (the suite symlinks the workspace gateway; the old 0.19.1 pins failed).
   - [x] `test-lazy-package` (bare): fails only on unpublished 0.19.2 ETARGET (see attention); committed fixtures untouched.
   - [ ] Final production rebuild + stack smoke (`/api/v1/health`, runtime versions) + `make down ENV=test-proxy-addr` after push (tag/receipt realignment).
 - [ ] **Lot 4 — Docs & delivery**
