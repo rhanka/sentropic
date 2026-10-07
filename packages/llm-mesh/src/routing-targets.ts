@@ -78,6 +78,14 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gpt-5.6-terra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
   },
+  // Mistral Vibe faithful routes: both models are served on api.mistral.ai by
+  // the plan-billed `mistral-vibe` account transport.
+  'mistral-large-4': {
+    providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-large-4',
+  },
+  'zai-glm-5-3': {
+    providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'zai-glm-5-3',
+  },
 };
 
 export interface StandardRouteDefinition {
@@ -118,6 +126,30 @@ export const MUSE_ROUTE_EFFORT: Readonly<Record<string, string>> = {
 export type MusePosition = 'off' | 'after-claude' | 'first' | 'claude-last';
 
 export const DEFAULT_MUSE_POSITION: MusePosition = 'after-claude';
+
+/**
+ * GLM 5.3 supplemental fallback effort per launch alias (owner decision
+ * 2026-10-07, Artificial Analysis Intelligence Index: GLM-5.3 (Max) = 45 =
+ * Claude Opus 5 (Medium)). The GLM candidate always mirrors the measured
+ * GLM-5.3 (Max) configuration, so every mapped alias gets effort `max`.
+ * Aliases absent from this map get no GLM candidate. The candidate is the
+ * LAST fallback, after Codex and Cloud Code (mistral-vibe transport).
+ */
+export const GLM_ROUTE_EFFORT: Readonly<Record<string, string>> = {
+  'claude-opus-5': 'max',
+  'claude-opus-5-high': 'max',
+  'claude-opus-5-xhigh': 'max',
+  'claude-opus-5-max': 'max',
+  'claude-opus-4-8': 'max',
+  'claude-opus-4-8-xhigh': 'max',
+  'claude-opus-4-8-max': 'max',
+  'claude-fable-5-1': 'max',
+  'claude-fable-5-1-high': 'max',
+  'claude-fable-5-1-xhigh': 'max',
+  'claude-fable-5-1-max': 'max',
+};
+
+export const GLM_FALLBACK_MODEL = 'zai-glm-5-3';
 
 export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   { requestedId: 'claude-opus-5', codexModel: 'gpt-6-sol', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
@@ -230,6 +262,15 @@ const museTarget = (requestedId: string): TargetMapping | undefined => {
   return hasModelProfile(candidate) ? candidate : undefined;
 };
 
+const glmTarget = (requestedId: string): TargetMapping | undefined => {
+  const effort = GLM_ROUTE_EFFORT[requestedId];
+  if (!effort) return undefined;
+  const candidate: TargetMapping = {
+    providerId: 'mistral', transportProviderId: 'mistral-vibe', model: GLM_FALLBACK_MODEL, effort,
+  };
+  return hasModelProfile(candidate) ? candidate : undefined;
+};
+
 /**
  * A launch alias is an explicit user-facing routing contract, not benchmark
  * equivalence evidence. A known Claude id must reach its Anthropic target
@@ -250,6 +291,9 @@ const launchAliasTargetsFor = (
     ...(cloudEffort ? { effort: cloudEffort } : {}),
   };
   const museCandidate = musePosition === 'off' ? undefined : museTarget(requestedId);
+  // GLM 5.3 supplemental fallback: always LAST in the candidate chain, after
+  // Codex and Cloud Code, in every musePosition ordering.
+  const glmCandidate = glmTarget(requestedId);
 
   if (musePosition === 'first' && museCandidate) {
     return [
@@ -257,6 +301,7 @@ const launchAliasTargetsFor = (
       ...(faithfulTarget ? [faithfulTarget] : []),
       codexCandidate,
       cloudCandidate,
+      ...(glmCandidate ? [glmCandidate] : []),
     ];
   }
   if (musePosition === 'claude-last') {
@@ -265,6 +310,7 @@ const launchAliasTargetsFor = (
       ...(museCandidate ? [museCandidate] : []),
       cloudCandidate,
       ...(faithfulTarget ? [faithfulTarget] : []),
+      ...(glmCandidate ? [glmCandidate] : []),
     ];
   }
   return [
@@ -272,6 +318,7 @@ const launchAliasTargetsFor = (
     ...(museCandidate ? [museCandidate] : []),
     codexCandidate,
     cloudCandidate,
+    ...(glmCandidate ? [glmCandidate] : []),
   ];
 };
 

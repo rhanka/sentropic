@@ -158,6 +158,12 @@ describe('canonical model targets', () => {
         model: 'gemini-3.8-flash',
         effort: 'high',
       },
+      {
+        providerId: 'mistral',
+        transportProviderId: 'mistral-vibe',
+        model: 'zai-glm-5-3',
+        effort: 'max',
+      },
     ]);
     expect(resolveCandidates('claude-sonnet-4-6')).toEqual([
       {
@@ -329,7 +335,37 @@ describe('canonical model targets', () => {
           providerId: 'gemini', transportProviderId: 'cloud-code',
           model: 'gemini-3.8-flash', effort: 'high',
         },
+        {
+          providerId: 'mistral', transportProviderId: 'mistral-vibe',
+          model: 'zai-glm-5-3', effort: 'max',
+        },
       ]);
+    }
+  });
+
+  it('maps the GLM 5.3 supplemental fallback onto Opus and Fable 5.1 only', () => {
+    for (const alias of [
+      'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh', 'claude-opus-5-max',
+      'claude-opus-4-8', 'claude-opus-4-8-xhigh', 'claude-opus-4-8-max',
+      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
+      'claude-fable-5-1-max',
+    ]) {
+      const glm = resolveCandidates(alias)
+        .filter((target) => target.transportProviderId === 'mistral-vibe');
+      expect(glm, alias).toEqual([{
+        providerId: 'mistral', transportProviderId: 'mistral-vibe',
+        model: 'zai-glm-5-3', effort: 'max',
+      }]);
+      // The GLM candidate is always the last fallback in the chain.
+      expect(resolveCandidates(alias).at(-1)!.transportProviderId, alias)
+        .toBe('mistral-vibe');
+    }
+    // Sonnet and Fable 5 aliases stay out of the GLM map (owner decision).
+    for (const alias of ['claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-fable-5']) {
+      expect(
+        resolveCandidates(alias).some((target) => target.transportProviderId === 'mistral-vibe'),
+        alias,
+      ).toBe(false);
     }
   });
 
@@ -380,21 +416,21 @@ describe('canonical model targets', () => {
   it('honors the musePosition integrator option (off | after-claude | first)', () => {
     const off = createCanonicalTargetCandidatesResolver({ musePosition: 'off' });
     expect(off('claude-opus-5-xhigh').map((target) => target.transportProviderId))
-      .toEqual(['claude-code', 'codex', 'cloud-code']);
+      .toEqual(['claude-code', 'codex', 'cloud-code', 'mistral-vibe']);
 
     const first = createCanonicalTargetCandidatesResolver({ musePosition: 'first' });
     expect(first('claude-opus-5-xhigh').map((target) => target.transportProviderId))
-      .toEqual(['muse', 'claude-code', 'codex', 'cloud-code']);
+      .toEqual(['muse', 'claude-code', 'codex', 'cloud-code', 'mistral-vibe']);
 
     const afterClaude = createCanonicalTargetCandidatesResolver({ musePosition: 'after-claude' });
     expect(afterClaude('claude-opus-5-xhigh').map((target) => target.transportProviderId))
-      .toEqual(['claude-code', 'muse', 'codex', 'cloud-code']);
+      .toEqual(['claude-code', 'muse', 'codex', 'cloud-code', 'mistral-vibe']);
   });
 
   it('supports the claude-last order (codex, muse, cloud, claude)', () => {
     const last = createCanonicalTargetCandidatesResolver({ musePosition: 'claude-last' });
     expect(last('claude-opus-5-xhigh').map((target) => target.transportProviderId))
-      .toEqual(['codex', 'muse', 'cloud-code', 'claude-code']);
+      .toEqual(['codex', 'muse', 'cloud-code', 'claude-code', 'mistral-vibe']);
     // Aliases without a muse candidate keep codex/cloud/claude order.
     expect(last('claude-sonnet-5').map((target) => target.transportProviderId))
       .toEqual(['codex', 'cloud-code', 'claude-code']);
