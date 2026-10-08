@@ -15,7 +15,8 @@
     "fast-uri": "^3.1.7",
     "ip-address": "^10.3.1",
     "brace-expansion": "^2.1.7",
-    "js-yaml": "^3.15.2"
+    "js-yaml": "^3.15.2",
+    "proxy-addr": "^2.0.8"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -66,7 +67,7 @@
     "@aws-sdk/client-s3": "^3.980.0",
     "@hono/node-server": "^1.19.15",
     "@hono/zod-validator": "^0.7.6",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@sentropic/auth-client": "file:../packages/auth-client",
     "@sentropic/auth-hono": "file:../packages/auth-hono",
     "@sentropic/chat-server": "file:../packages/chat-server",
