@@ -71,6 +71,14 @@ const supportedModelIdsForAccount = (
     .map((profile) => profile.modelId);
 };
 
+// Poll-completing enrollment providers map to the serving transport pair
+// (target, transport) their minted credentials authenticate: codex device
+// flow serves openai/codex; the Mistral Vibe sign-in serves mistral/mistral-vibe.
+const POLL_ENROLLMENT_SERVING_IDS: Readonly<Record<string, readonly [string, string]>> = {
+  codex: ['openai', 'codex'],
+  'mistral-vibe': ['mistral', 'mistral-vibe'],
+};
+
 export class LocalAccountTransportService {
   private static readonly accountIndexKey = 'sentropic-llm-mesh:accounts:index';
   private readonly coordinator: InMemoryAccountTransportCoordinator;
@@ -79,6 +87,8 @@ export class LocalAccountTransportService {
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
   private readonly accountRemovalBarrierRefs = new Map<string, string>();
   private readonly claimedOwnerScopes = new Map<string, string>();
+  /** enrollmentId → providerId, so poll completion reaches the owning provider. */
+  private readonly enrollmentProviders = new Map<string, string>();
   private routeAttemptSequence = 0;
 
   constructor(
@@ -96,7 +106,9 @@ export class LocalAccountTransportService {
     if (!provider) {
       throw new Error(`Enrollment provider '${providerId}' not registered`);
     }
-    return provider.start(input);
+    const session = await provider.start(input);
+    this.enrollmentProviders.set(session.enrollmentId, providerId);
+    return session;
   }
 
   async waitForCallback(enrollmentId: string): Promise<EnrollmentCompletion> {
@@ -165,10 +177,15 @@ export class LocalAccountTransportService {
   }
 
   async pollForCompletion(enrollmentId: string): Promise<EnrollmentCompletion> {
-    const provider = this.providers.get('codex');
+    // Route the poll to the provider that owns the session: enroll() records
+    // it, and codex stays the fallback for legacy in-flight sessions.
+    const providerId = this.enrollmentProviders.get(enrollmentId) ?? 'codex';
+    const provider = this.providers.get(providerId);
     if (!provider?.pollForCompletion) {
       throw new Error("No enrollment provider with 'pollForCompletion' registered");
     }
+    const [targetProviderId, transportProviderId] =
+      POLL_ENROLLMENT_SERVING_IDS[providerId] ?? ['openai', 'codex'];
     const res = await provider.pollForCompletion(enrollmentId);
     if (res.credential) {
       const removalBarrierRef = await this.removalBarrierForEnrollment(
@@ -181,8 +198,8 @@ export class LocalAccountTransportService {
         accountId: res.accountId,
         ownerScopeRef: res.ownerScope,
         accountLabel: res.label,
-        targetProviderId: 'openai',
-        transportProviderId: 'codex',
+        targetProviderId,
+        transportProviderId,
         accessToken: res.credential.accessToken,
         refreshToken: res.credential.refreshToken,
         expiresAt: res.credential.expiresAt,
@@ -199,7 +216,7 @@ export class LocalAccountTransportService {
         {
           accountId: res.accountId,
           accountLabel: res.label,
-          providerId: 'codex',
+          providerId: transportProviderId,
           status: 'active',
           createdAt: now,
           updatedAt: now,
