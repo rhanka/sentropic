@@ -47,7 +47,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.23.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.24.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
@@ -67,7 +67,7 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.23.0', '0.23.0'],
+    ['0.24.0', '0.24.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
@@ -184,10 +184,11 @@ describe('module registry', () => {
 
 describe('release range check', () => {
   it.each([
-    ['0.22.0', '>=0.22.0 <0.23.0', true],
-    ['0.22.9', '>=0.22.0 <0.23.0', true],
-    ['0.23.0', '>=0.22.0 <0.23.0', false],
-    ['0.21.2', '>=0.22.0 <0.23.0', false],
+    ['0.22.0', '>=0.22.0 <0.24.0', true],
+    ['0.22.9', '>=0.22.0 <0.24.0', true],
+    ['0.23.0', '>=0.22.0 <0.24.0', true],
+    ['0.24.0', '>=0.22.0 <0.24.0', false],
+    ['0.21.2', '>=0.22.0 <0.24.0', false],
     ['5.10.3', '^5.10.0', true],
     ['6.0.0', '^5.10.0', false],
     ['0.15.4', '^0.15.0', true],

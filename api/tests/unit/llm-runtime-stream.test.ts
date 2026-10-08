@@ -1469,6 +1469,8 @@ function addSharedNormalizerFixture(
 }
 
 addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
+addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-large-4', 'Mistral Large 4');
+addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'zai-glm-5-3', 'GLM 5.3 (Mistral)');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Astra');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-sol', 'GPT-6 Sol');
 addTransportEquivalentFixture('openai', 'gpt-6-sol', 'gpt-6.1-sol', 'GPT-6.1 Sol');

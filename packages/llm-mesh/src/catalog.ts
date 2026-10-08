@@ -177,6 +177,7 @@ export const providerProfiles = {
     capabilities: capabilities({
       reasoningTier: 'advanced',
       structuredOutputLevel: 'json-schema',
+      accountTransports: ['mistral-vibe'],
     }),
   },
   cohere: {
@@ -469,6 +470,39 @@ export const modelProfiles = [
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('mistral', 'advanced'),
+  },
+  // Mistral Large 4 ("Le Chonk", public preview 2026-10-06): natively
+  // multimodal flagship MoE (1.05T total / 52B active, 1.6B vision encoder),
+  // 1M-token context. Structured Outputs + Function Calling on the Mistral
+  // API. Reachable via the `mistral-vibe` account transport (plan-billed) or
+  // a direct MISTRAL_API_KEY.
+  {
+    providerId: 'mistral',
+    modelId: 'mistral-large-4',
+    label: 'Mistral Large 4',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('mistral', 'advanced', { vision: true }),
+      contextWindowTokens: 1_000_000,
+    },
+  },
+  // Z.ai GLM 5.3 hosted by Mistral: third-party open-weight coding model
+  // (EU-hosted, served without Mistral modifications), text-only input,
+  // always-on reasoning with low/high/max efforts, 1M context and 128K
+  // max output. Structured Outputs + Function Calling on the Mistral API;
+  // same `mistral-vibe` account transport as the native fleet.
+  {
+    providerId: 'mistral',
+    modelId: 'zai-glm-5-3',
+    label: 'GLM 5.3 (Mistral)',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured'],
+    capabilities: {
+      ...modelCapabilities('mistral', 'advanced'),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 131_072,
+    },
   },
   {
     providerId: 'cohere',

@@ -23,7 +23,7 @@ export type EnrollmentSession =
 // State persisted server-side / sentropic-side — NOT exported via facade to h2a
 export interface EnrollmentState {
   enrollmentId: string;
-  providerId: 'cloud-code' | 'codex' | 'claude-code' | 'muse';
+  providerId: 'cloud-code' | 'codex' | 'claude-code' | 'muse' | 'mistral-vibe';
   ownerScope: string;
   pkceVerifier: string;
   pkceState: string;

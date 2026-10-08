@@ -19,6 +19,10 @@ export const accountTransportProviderIds = [
   'antigravity',
   // Muse: Meta Muse CLI login imported from the local CLI store (BR75).
   'muse',
+  // Mistral Vibe: native browser sign-in on console.mistral.ai (PKCE S256
+  // sign-in process) minting a long-lived API key billed against the
+  // signed-in plan's Vibe Code quota. Serves the mistral provider fleet.
+  'mistral-vibe',
 ] as const;
 
 export type AccountTransportProviderId = (typeof accountTransportProviderIds)[number];
@@ -163,6 +167,7 @@ export const executableAccountTransportProviderIds = [
   'claude-code',
   'antigravity',
   'muse',
+  'mistral-vibe',
 ] as const satisfies readonly AccountTransportProviderId[];
 
 export const getSecretAuthMaterial = (
