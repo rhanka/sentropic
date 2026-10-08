@@ -33,6 +33,6 @@
   - [x] Regression test: mistral-vibe enrollment completes through the facade, codex never polled, account acquirable via mistral/mistral-vibe.
   - [x] `make typecheck-llm-mesh` + `make test-llm-mesh`: 325/325.
   - [x] llm-mesh 0.23.1 + root lockfile version field.
-- [ ] **Lot 2 — Train fixture + CI**
-  - [ ] Selected train fixture lock refreshed to llm-mesh 0.23.1.
+- [x] **Lot 2 — Train fixture + CI**
+  - [x] Selected train fixture lock refreshed to llm-mesh 0.23.1.
   - [ ] CI green (49 checks), then merge.
