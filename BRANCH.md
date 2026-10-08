@@ -69,8 +69,8 @@
 - [x] M2 — Codex slot remap (sol-6.1 at +1) across families
 - [x] M3 — Medium/low variants plus muse coverage on every row
 - [x] M4 — Remove exclusive alias and exclusive-only guards (selection, planner, quote)
-- [ ] M5 — Council metadata, spec contract, CHANGELOG, version bump
-- [ ] M6 — Gateway dep bump and release-train pins
+- [x] M5 — Council metadata, spec contract, CHANGELOG, version bump
+- [x] M6 — Gateway dep bump and release-train pins
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and isolation**
@@ -95,11 +95,11 @@
   - [x] Lot gate: `make build-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (pass).
   - [x] Lot gate: `make scope-check API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (PASS C2).
 - [ ] **Lot 2 — Docs, version and release train**
-  - [ ] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` (route contract plus index scores v4.3.2).
-  - [ ] Update `packages/llm-mesh/CHANGELOG.md` Unreleased.
-  - [ ] Registry pre-check then bump `packages/llm-mesh/package.json`.
-  - [ ] Bump the llm-mesh dependency of `@sentropic/llm-gateway` if the range requires it; cluster-mesh pins via BR-C55-EXn if needed.
-  - [ ] Lot gate: package gates plus scope-check with the Lot 1 mapping.
+  - [x] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` (route contract plus index scores v4.3.2).
+  - [x] Update `packages/llm-mesh/CHANGELOG.md` (0.22.4 entry; no Unreleased section in this file).
+  - [x] Registry pre-check (local 0.22.3, registry 0.22.3) then bump `packages/llm-mesh/package.json` to 0.22.4 (patch keeps `^0.22.0` and `<0.23.0` ranges; no gateway dep bump needed).
+  - [x] Cluster-mesh pins to 0.22.4 via BR-C55-EX2 (replicates 2247b06b6); root lock entry via BR-C55-EX3 (`make lock-root`); gateway target matrix via BR-C55-EX1 (tests only).
+  - [x] Lot gate: cluster-mesh packaging (29 passed) plus integrations (31 passed) with the Lot 1 mapping.
 - [ ] **Lot 3 — Final validation**
   - [ ] `make test-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
   - [ ] `make typecheck-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.

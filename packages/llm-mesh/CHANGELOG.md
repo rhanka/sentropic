@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.22.4
+
+- Replace the exclusive `claude-opus-5-5` alias with standard multi-candidate
+  routes for the `claude-opus-5-5` and `claude-sonnet-5-5` families
+  (base/high/xhigh/max/medium/low): Muse contributor first, then Codex, then
+  Cloud Code. Every launch alias now carries all three fallback transports,
+  so any single enrolled transport serves any requested id.
+- Codex slot policy: `gpt-6-astra` only for `claude-opus-5-5-max` and the
+  `claude-fable-5-1` family, otherwise `gpt-6.1-sol` at +1 effort rung;
+  the Muse candidate follows the same +1 rule. Serving choices grounded on
+  Artificial Analysis Intelligence Index v4.3.2.
+- Remove the exclusive-alias guards: owner-scoped overrides and council
+  equivalents apply to every alias, stale affinities are served sticky
+  without migration, and `no-route` is returned only when no candidate
+  transport holds a usable account.
+- Patch release preserves the gateway and cluster-mesh 0.22.x dependency ranges.
+
 ## 0.22.3
 
 - Add `gpt-6.1-sol` to the OpenAI catalog and provider registrations with a
