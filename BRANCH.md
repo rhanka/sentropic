@@ -22,6 +22,7 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - `api/src/**`
   - `api/tests/**`
   - `packages/cluster-mesh/package.json` (peer range widening for the llm-mesh 0.23.0 bump)
+  - `packages/cluster-mesh/src/**` + `packages/cluster-mesh/tests/**` (LLM_MESH_RANGE widening to `>=0.22.0 <0.24.0` in `src/modules/catalog.ts` + test expectations and selected-train fixture)
   - `scripts/llm-model-equivalences/**` (council source, via `make refresh-llm-model-equivalences`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
