@@ -135,6 +135,78 @@ describe('LocalAccountTransportService', () => {
     expect(acquisition.material.accountId).toBe('acct_codex_1');
   });
 
+  it('routes poll completion to the owning provider (mistral-vibe serving pair)', async () => {
+    const keyring = new InMemoryKeyring();
+    // A codex provider that MUST NOT be polled: the enrollment belongs to
+    // mistral-vibe, and the legacy codex-first routing used to throw
+    // "Enrollment session ... not found" for it.
+    const codexProvider = {
+      async start() { throw new Error('codex must not be polled'); },
+      async complete() { throw new Error('codex must not be polled'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('codex must not be polled'); },
+      async pollForCompletion() { throw new Error('codex must not be polled'); },
+    } satisfies EnrollmentProvider;
+    const mistralVibeProvider = {
+      async start() {
+        return {
+          kind: 'authorization-url',
+          enrollmentId: 'enr_mistral_vibe_1',
+          url: 'https://console.mistral.ai/api/vibe/sign-in/proc_1',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        };
+      },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() {
+        return {
+          accountId: 'acct_mistral_vibe_1',
+          label: 'Mistral Vibe account',
+          ownerScope: 'tenant-1:user-1',
+          credential: {
+            accountId: 'acct_mistral_vibe_1',
+            accessToken: 'vibe-key',
+            authClientConfigVersion: 'v1.0.0',
+          },
+          metadata: {},
+        };
+      },
+    } satisfies EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string;
+        label: string;
+        ownerScope: string;
+        credential: PreparedCredential;
+        metadata: Record<string, unknown>;
+      }>;
+    };
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map([['codex', codexProvider], ['mistral-vibe', mistralVibeProvider]]),
+      { async resolveConfig() { return {}; } },
+    );
+
+    const session = await service.enroll('mistral-vibe', {
+      configRef: '',
+      mode: 'cli',
+      redirectUri: 'http://127.0.0.1:0/callback',
+      ownerScope: 'tenant-1:user-1',
+    });
+    const completion = await service.pollForCompletion(session.enrollmentId);
+    expect(completion.accountId).toBe('acct_mistral_vibe_1');
+
+    const acquisition = await service.acquire({
+      targetProviderId: 'mistral',
+      transportProviderId: 'mistral-vibe',
+      ownerScopeRef: 'tenant-1:user-1',
+    });
+    expect(acquisition.material).toMatchObject({
+      accountId: 'acct_mistral_vibe_1',
+      accessToken: 'vibe-key',
+    });
+  });
+
   it('advertises only verified executable Cloud Code models when enrollment has no inventory', async () => {
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
