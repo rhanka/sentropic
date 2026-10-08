@@ -101,11 +101,12 @@
   - [x] Cluster-mesh pins to 0.22.4 via BR-C55-EX2 (replicates 2247b06b6); root lock entry via BR-C55-EX3 (`make lock-root`); gateway target matrix via BR-C55-EX1 (tests only).
   - [x] Lot gate: cluster-mesh packaging (29 passed) plus integrations (31 passed) with the Lot 1 mapping.
 - [ ] **Lot 3 — Final validation**
-  - [ ] `make test-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
-  - [ ] `make typecheck-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
-  - [ ] `make build-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
-  - [ ] `make scope-check API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
-  - [ ] `make down API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`; report local checks separately from CI.
+  - [x] `make test-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (32 files, 352 tests passed).
+  - [x] `make test-llm-gateway API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (28 files, 390 tests passed).
+  - [x] `make typecheck-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (pass).
+  - [x] `make build-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (pass).
+  - [x] `make scope-check API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (PASS C2).
+  - [x] `make down API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`; local checks reported separately from CI (CI not run yet).
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
