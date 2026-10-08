@@ -16,6 +16,7 @@ import {
   resolveAntigravityFallbackTransport,
   resolveConnectedClaudeCodeTransport,
   resolveConnectedCodexTransport,
+  resolveConnectedMistralVibeTransport,
   type AntigravityFallbackRoute,
 } from '../provider-connections';
 import { isProviderId, type ProviderId } from '../provider-runtime';
@@ -27,6 +28,7 @@ import { env } from '../../config/env';
 import {
   createClaudeCodeAccountAuthInput,
   createCodexAccountAuthInput,
+  createMistralVibeAccountAuthInput,
   dispatchMeshGenerateRaw,
   dispatchMeshStreamRaw,
 } from './mesh-dispatch';
@@ -1201,12 +1203,30 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   if (selection.providerId === 'mistral') {
     const mistralMessages = buildMistralMessages(messages);
     const mistralTools = buildMistralTools(filteredTools, normalizedToolChoice);
-    const raw = await dispatchMeshGenerateRaw<unknown>({
-      providerId: selection.providerId,
-      model: selection.model,
-      credentialResolution,
-      userId,
-      workspaceId,
+    // Mistral Vibe account transport: fallback auth when no other credential
+    // resolved (env key / BYOK / workspace keep precedence).
+    const mistralVibeTransport =
+      typeof userId === 'string' &&
+      userId.trim().length > 0 &&
+      credentialResolution.source === 'none'
+        ? await resolveConnectedMistralVibeTransport(userId, {
+            workspaceId,
+            modelId: selection.model,
+            requestId: createId(),
+          })
+        : null;
+    let mistralVibeOutcome: AccountTransportOutcome = { status: 'success' };
+    let raw: unknown;
+    try {
+      raw = await dispatchMeshGenerateRaw<unknown>({
+        providerId: selection.providerId,
+        model: selection.model,
+        credentialResolution,
+        authOverride: mistralVibeTransport
+          ? createMistralVibeAccountAuthInput(mistralVibeTransport)
+          : undefined,
+        userId,
+        workspaceId,
       messages,
       tools: filteredTools,
       toolChoice: normalizedToolChoice,
@@ -1228,6 +1248,19 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
         },
       },
     });
+    } catch (error) {
+      mistralVibeOutcome = mapAccountTransportErrorOutcome(error);
+      throw error;
+    } finally {
+      if (mistralVibeTransport) {
+        await mistralVibeTransport.recordOutcome(mistralVibeOutcome).catch((error) => {
+          console.warn(
+            '[llm-runtime] Failed to record Mistral Vibe account transport outcome',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      }
+    }
 
     const text = extractMistralText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -1770,6 +1803,20 @@ export async function* callLLMStream(
     const mistralMessages = buildMistralMessages(messages);
     const mistralTools = buildMistralTools(filteredTools, normalizedToolChoice);
 
+    // Mistral Vibe account transport: fallback auth when no other credential
+    // resolved (env key / BYOK / workspace keep precedence).
+    const mistralVibeTransport =
+      typeof userId === 'string' &&
+      userId.trim().length > 0 &&
+      credentialResolution.source === 'none'
+        ? await resolveConnectedMistralVibeTransport(userId, {
+            workspaceId,
+            modelId: selectedModel,
+            requestId: createId(),
+          })
+        : null;
+    let mistralVibeOutcome: AccountTransportOutcome = { status: 'success' };
+
     // Handle rawInput: reconstruct assistant toolCalls + tool results (camelCase for Mistral SDK)
     if (Array.isArray(rawInput) && rawInput.length > 0) {
       // 1) Collect function_call items → assistant message with toolCalls
@@ -1823,6 +1870,9 @@ export async function* callLLMStream(
         providerId: selection.providerId,
         model: selectedModel,
         credentialResolution,
+        authOverride: mistralVibeTransport
+          ? createMistralVibeAccountAuthInput(mistralVibeTransport)
+          : undefined,
         userId,
         workspaceId,
         messages,
@@ -1859,6 +1909,7 @@ export async function* callLLMStream(
 
       for await (const chunk of stream) {
         if (signal?.aborted) {
+          mistralVibeOutcome = { status: 'failed', errorMessage: 'Stream aborted' };
           yield { type: 'error', data: { message: 'Stream aborted' } };
           return;
         }
@@ -1948,6 +1999,7 @@ export async function* callLLMStream(
       yield { type: 'done', data: streamUsage ? { usage: streamUsage } : {} };
       return;
     } catch (error) {
+      mistralVibeOutcome = mapAccountTransportErrorOutcome(error);
       const normalized = normalizeProviderError(selection.providerId, error);
       yield {
         type: 'error',
@@ -1957,6 +2009,15 @@ export async function* callLLMStream(
         },
       };
       throw error;
+    } finally {
+      if (mistralVibeTransport) {
+        await mistralVibeTransport.recordOutcome(mistralVibeOutcome).catch((error) => {
+          console.warn(
+            '[llm-runtime] Failed to record Mistral Vibe account transport outcome',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      }
     }
   }
 

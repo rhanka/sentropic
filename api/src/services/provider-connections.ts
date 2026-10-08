@@ -13,6 +13,7 @@ import {
 import {
   acquireAntigravityAccountTransport,
   acquireClaudeCodeAccountTransport,
+  acquireMistralVibeAccountTransport,
   acquireOpenAICodexAccountTransport,
   disconnectAntigravityAccountTransports,
   disconnectClaudeCodeAccountTransports,
@@ -29,6 +30,7 @@ import {
   type AntigravityAccountTransportAcquisition,
   type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
+  type MistralVibeAccountTransportAcquisition,
   type LlmAccountTransportPublic,
 } from './llm-account-transports';
 import {
@@ -374,6 +376,24 @@ export const resolveConnectedClaudeCodeTransport = async (
     userId,
     workspaceId: options.workspaceId,
     modelId: normalizeOptionalText(options.modelId) ?? 'claude-sonnet-5',
+    affinityKey: options.affinityKey,
+    requestId: options.requestId,
+  });
+};
+
+export const resolveConnectedMistralVibeTransport = async (
+  userId: string,
+  options: {
+    workspaceId?: string | null;
+    modelId?: string | null;
+    affinityKey?: string | null;
+    requestId?: string | null;
+  } = {},
+): Promise<MistralVibeAccountTransportAcquisition | null> => {
+  return acquireMistralVibeAccountTransport({
+    userId,
+    workspaceId: options.workspaceId,
+    modelId: normalizeOptionalText(options.modelId) ?? 'mistral-large-4',
     affinityKey: options.affinityKey,
     requestId: options.requestId,
   });
