@@ -44,7 +44,7 @@ describe('launch-alias target-map', () => {
 
   it('routes the Fable 5 and 5.1 launch aliases to Anthropic at high/xhigh/max', () => {
     for (const model of ['claude-fable-5', 'claude-fable-5-1']) {
-      for (const effort of ['high', 'xhigh', 'max'] as const) {
+      for (const effort of ['high', 'xhigh', 'max', 'medium', 'low'] as const) {
         expect(resolve(`${model}-${effort}`)).toEqual({
           providerId: 'anthropic', transportProviderId: 'claude-code', model, effort,
         });
@@ -161,8 +161,8 @@ describe('describeTargetRoutes (discovery)', () => {
       {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-6-astra',
-        effort: 'medium',
+        model: 'gpt-6.1-sol',
+        effort: 'max',
       },
       {
         providerId: 'gemini',
@@ -237,22 +237,67 @@ describe('describeTargetRoutes (discovery)', () => {
       model: 'zai-glm-5-3', effort: 'max',
     });
     const cases: ReadonlyArray<readonly [string, unknown[]]> = [
-      ['claude-fable-5', [Muse('max'), Codex('gpt-6-astra'), Cloud()]],
-      ['claude-fable-5-high', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
-      ['claude-fable-5-xhigh', [Muse('max'), Codex('gpt-6-astra', 'xhigh'), Cloud()]],
-      ['claude-fable-5-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
+      ['claude-fable-5', [Muse('max'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-fable-5-high', [Muse('max'), Codex('gpt-6.1-sol', 'xhigh'), Cloud()]],
+      ['claude-fable-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
+      ['claude-fable-5-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
+      ['claude-fable-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-fable-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
       ['claude-fable-5-1-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud(), Glm()]],
-      ['claude-opus-5', [Codex('gpt-6-sol'), Cloud(), Glm()]],
-      ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud(), Glm()]],
-      ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud(), Glm()]],
-      ['claude-opus-5-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud(), Glm()]],
-      ['claude-opus-4-8', [Codex('gpt-5.6-terra'), Cloud(), Glm()]],
-      ['claude-opus-4-8-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud(), Glm()]],
-      ['claude-opus-4-8-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud(), Glm()]],
-      ['claude-sonnet-5', [Codex('gpt-6-luna'), Cloud()]],
+      ['claude-fable-5-1-medium', [Muse('high'), Codex('gpt-6-astra', 'medium'), Cloud()]],
+      ['claude-fable-5-1-low', [Muse('medium'), Codex('gpt-6-astra', 'low'), Cloud()]],
+      ['claude-opus-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm()]],
+      ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud(), Glm()]],
+      ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm()]],
+      ['claude-opus-5-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm()]],
+      ['claude-opus-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-opus-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
+      ['claude-opus-4-8', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm()]],
+      ['claude-opus-4-8-xhigh', [Muse('xhigh'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm()]],
+      ['claude-opus-4-8-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm()]],
+      ['claude-opus-4-8-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-opus-4-8-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
+      ['claude-sonnet-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-sonnet-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
+      ['claude-sonnet-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-sonnet-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
+      ['claude-sonnet-4-6', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
     ];
     for (const [alias, expected] of cases) {
       expect(resolveCandidates(alias).slice(1)).toEqual(expected);
+    }
+  });
+
+  it('exports the 5.5 families with muse first and no faithful target', () => {
+    const resolveCandidates = createCanonicalTargetCandidatesResolver();
+    const Muse = (effort: string) => ({
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-spark-1.3-contributor', effort,
+    });
+    const Codex = (model: string, effort?: string) => ({
+      providerId: 'openai', transportProviderId: 'codex', model,
+      ...(effort ? { effort } : {}),
+    });
+    const Cloud = () => ({
+      providerId: 'gemini', transportProviderId: 'cloud-code',
+      model: 'gemini-3.8-flash', effort: 'high',
+    });
+    const cases: ReadonlyArray<readonly [string, unknown[]]> = [
+      ['claude-opus-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-opus-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud()]],
+      ['claude-opus-5-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
+      ['claude-opus-5-5-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
+      ['claude-opus-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
+      ['claude-sonnet-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-sonnet-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud()]],
+      ['claude-sonnet-5-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
+      ['claude-sonnet-5-5-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
+      ['claude-sonnet-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
+      ['claude-sonnet-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
+    ];
+    for (const [alias, expected] of cases) {
+      expect(resolveCandidates(alias)).toEqual(expected);
     }
   });
 
