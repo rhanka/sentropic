@@ -72,7 +72,12 @@ describe('llm-mesh model projections', () => {
       'claude-opus-5',
       'claude-sonnet-5',
     ]);
-    expect(modelsByProvider('mistral')).toEqual(['magistral-medium-2509', 'mistral-small-2603']);
+    expect(modelsByProvider('mistral')).toEqual([
+      'magistral-medium-2509',
+      'mistral-large-4',
+      'mistral-small-2603',
+      'zai-glm-5-3',
+    ]);
     expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-08-2025']);
     expect(modelsByProvider('gcp')).toEqual([
       'anthropic/claude-opus-4-6@gcp',

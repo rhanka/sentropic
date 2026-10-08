@@ -538,9 +538,13 @@ const parseMistralVibeTokenSecret = (
   }
 };
 
-// The minted Vibe key carries no refresh grant: an expired key means reauth.
-const refreshMistralVibeTokenIfNeeded = async (): Promise<MistralVibeTokenSecretPayload | null> =>
-  null;
+// The minted Vibe key is long-lived and carries no refresh grant: hand back
+// the stored token while it is still valid; an expired key surfaces reauth.
+const refreshMistralVibeTokenIfNeeded = async (input: {
+  token: MistralVibeTokenSecretPayload;
+}): Promise<MistralVibeTokenSecretPayload | null> => {
+  return isTokenExpiring(input.token.expiresAt) ? null : input.token;
+};
 
 const buildMistralVibeTokenPayload = (input: {
   accessToken: string;
