@@ -50,6 +50,7 @@ export type LlmAccountTransportAcquisition = {
 export type CodexAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type ClaudeCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type MuseAccountTransportAcquisition = LlmAccountTransportAcquisition;
+export type MistralVibeAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type AntigravityAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type GeminiCodeAssistAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type CloudCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
@@ -124,6 +125,17 @@ export type MuseTokenSecretPayload = {
   accountEmail: string | null;
 };
 
+// Mistral Vibe sign-in mints a long-lived, plan-billed Mistral API key (no
+// refresh grant — see packages/llm-mesh enrollment/mistral-vibe.ts).
+export type MistralVibeTokenSecretPayload = {
+  accessToken: string;
+  refreshToken: null;
+  tokenType: 'bearer';
+  obtainedAt: string;
+  expiresAt: string | null;
+  source: 'vibe-sign-in';
+};
+
 export type GeminiCodeAssistTokenSecretPayload = {
   accessToken: string;
   refreshToken: string | null;
@@ -176,6 +188,8 @@ const CLOUD_CODE_TRANSPORT_PROVIDER_ID = 'cloud-code';
 
 const MUSE_TARGET_PROVIDER_ID = 'muse';
 const MUSE_TRANSPORT_PROVIDER_ID = 'muse';
+const MISTRAL_VIBE_TARGET_PROVIDER_ID = 'mistral';
+const MISTRAL_VIBE_TRANSPORT_PROVIDER_ID = 'mistral-vibe';
 const RESERVATION_TTL_MS = 5 * 60 * 1000;
 export const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 
@@ -501,6 +515,48 @@ const parseMuseTokenSecret = (
     return null;
   }
 };
+
+const parseMistralVibeTokenSecret = (
+  value: string | null | undefined,
+): MistralVibeTokenSecretPayload | null => {
+  const decrypted = decryptSecretOrNull(value);
+  if (!decrypted) return null;
+  try {
+    const parsed = JSON.parse(decrypted) as Partial<MistralVibeTokenSecretPayload> | null;
+    const accessToken = normalizeOptionalText(parsed?.accessToken);
+    if (!parsed || !accessToken) return null;
+    return {
+      accessToken,
+      refreshToken: null,
+      tokenType: 'bearer',
+      obtainedAt: normalizeOptionalText(parsed.obtainedAt) ?? new Date().toISOString(),
+      expiresAt: normalizeOptionalText(parsed.expiresAt),
+      source: 'vibe-sign-in',
+    };
+  } catch {
+    return null;
+  }
+};
+
+// The minted Vibe key is long-lived and carries no refresh grant: hand back
+// the stored token while it is still valid; an expired key surfaces reauth.
+const refreshMistralVibeTokenIfNeeded = async (input: {
+  token: MistralVibeTokenSecretPayload;
+}): Promise<MistralVibeTokenSecretPayload | null> => {
+  return isTokenExpiring(input.token.expiresAt) ? null : input.token;
+};
+
+const buildMistralVibeTokenPayload = (input: {
+  accessToken: string;
+  expiresAt?: string | null;
+}): MistralVibeTokenSecretPayload => ({
+  accessToken: input.accessToken,
+  refreshToken: null,
+  tokenType: 'bearer',
+  obtainedAt: new Date().toISOString(),
+  expiresAt: input.expiresAt ?? null,
+  source: 'vibe-sign-in',
+});
 
 const buildCloudCodeTokenPayload = (input: {
   accessToken: string;
@@ -857,6 +913,149 @@ export const storeMuseAccountTransport = async (input: {
   `);
 
   return getPrimaryMuseAccountTransport({ ownerUserId });
+};
+
+export const storeMistralVibeAccountTransport = async (input: {
+  ownerUserId: string;
+  externalAccountId: string;
+  accountLabel?: string | null;
+  accessToken: string;
+  expiresAt?: string | null;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  const accessToken = normalizeOptionalText(input.accessToken);
+  const externalAccountId = normalizeOptionalText(input.externalAccountId);
+  if (!ownerUserId || !accessToken || !externalAccountId) return null;
+
+  const token = buildMistralVibeTokenPayload({
+    accessToken,
+    expiresAt: input.expiresAt ?? null,
+  });
+  const now = new Date();
+  const accountId = createId();
+  const tokenSecret = encryptSecret(JSON.stringify(token));
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+
+  await db.run(sql`
+    INSERT INTO llm_provider_accounts (
+      id,
+      owner_user_id,
+      scope,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id,
+      account_label,
+      status,
+      token_secret,
+      token_expires_at,
+      connected_at,
+      disconnected_at,
+      last_error,
+      metadata,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${accountId},
+      ${ownerUserId},
+      'user',
+      ${MISTRAL_VIBE_TARGET_PROVIDER_ID},
+      ${MISTRAL_VIBE_TRANSPORT_PROVIDER_ID},
+      ${externalAccountId},
+      ${accountLabel},
+      'active',
+      ${tokenSecret},
+      ${token.expiresAt ? new Date(token.expiresAt) : null},
+      ${now},
+      NULL,
+      NULL,
+      ${JSON.stringify({ source: token.source })}::jsonb,
+      ${now},
+      ${now}
+    )
+    ON CONFLICT (
+      owner_user_id,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id
+    )
+    WHERE external_account_id IS NOT NULL
+    DO UPDATE SET
+      account_label = COALESCE(EXCLUDED.account_label, llm_provider_accounts.account_label),
+      status = 'active',
+      token_secret = EXCLUDED.token_secret,
+      token_expires_at = EXCLUDED.token_expires_at,
+      connected_at = EXCLUDED.connected_at,
+      disconnected_at = NULL,
+      last_error = NULL,
+      metadata = EXCLUDED.metadata,
+      updated_at = EXCLUDED.updated_at
+  `);
+
+  return getPrimaryMistralVibeAccountTransport({ ownerUserId });
+};
+
+export const getPrimaryMistralVibeAccountTransport = async (input: {
+  ownerUserId: string;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return null;
+  const rows = await db.all(sql`
+    SELECT
+      id,
+      target_provider_id as "targetProviderId",
+      transport_provider_id as "transportProviderId",
+      external_account_id as "externalAccountId",
+      account_label as "accountLabel",
+      status,
+      connected_at as "connectedAt",
+      disconnected_at as "disconnectedAt",
+      token_expires_at as "tokenExpiresAt",
+      last_error as "lastError",
+      updated_at as "updatedAt"
+    FROM llm_provider_accounts
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${MISTRAL_VIBE_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${MISTRAL_VIBE_TRANSPORT_PROVIDER_ID}
+      AND status <> 'disconnected'
+    ORDER BY
+      CASE status
+        WHEN 'active' THEN 0
+        WHEN 'cooldown' THEN 1
+        WHEN 'reauth_required' THEN 2
+        ELSE 3
+      END,
+      connected_at DESC NULLS LAST,
+      updated_at DESC NULLS LAST
+    LIMIT 1
+  `) as Array<{
+    id: string;
+    targetProviderId: string;
+    transportProviderId: string;
+    externalAccountId: string | null;
+    accountLabel: string | null;
+    status: LlmAccountTransportStatus;
+    connectedAt: Date | string | null;
+    disconnectedAt: Date | string | null;
+    tokenExpiresAt: Date | string | null;
+    lastError: string | null;
+    updatedAt: Date | string | null;
+  }>;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    targetProviderId: row.targetProviderId,
+    transportProviderId: row.transportProviderId,
+    externalAccountId: row.externalAccountId,
+    accountLabel: row.accountLabel,
+    status: row.status,
+    connectedAt: toIso(row.connectedAt),
+    disconnectedAt: toIso(row.disconnectedAt),
+    tokenExpiresAt: toIso(row.tokenExpiresAt),
+    lastError: row.lastError,
+    updatedAt: toIso(row.updatedAt),
+  };
 };
 
 export const getPrimaryMuseAccountTransport = async (input: {
@@ -2272,6 +2471,25 @@ export const acquireMuseAccountTransport = async (input: {
     refreshTokenIfNeeded: refreshMuseTokenIfNeeded,
     invalidTokenMessage: 'Muse account token secret is missing or invalid.',
     reauthMessage: 'Muse account requires reauthentication.',
+  });
+
+export const acquireMistralVibeAccountTransport = async (input: {
+  userId: string;
+  workspaceId?: string | null;
+  modelId: string;
+  affinityKey?: string | null;
+  requestId?: string | null;
+}): Promise<MistralVibeAccountTransportAcquisition | null> =>
+  acquireDbAccountTransport({
+    ...input,
+    targetProviderId: MISTRAL_VIBE_TARGET_PROVIDER_ID,
+    transportProviderId: MISTRAL_VIBE_TRANSPORT_PROVIDER_ID,
+    defaultModelId: 'mistral-large-4',
+    stableSessionPrefix: 'mistral_vibe',
+    parseTokenSecret: parseMistralVibeTokenSecret,
+    refreshTokenIfNeeded: refreshMistralVibeTokenIfNeeded,
+    invalidTokenMessage: 'Mistral Vibe account token secret is missing or invalid.',
+    reauthMessage: 'Mistral Vibe account requires reauthentication.',
   });
 
 export const acquireCloudCodeAccountTransport = async (input: {

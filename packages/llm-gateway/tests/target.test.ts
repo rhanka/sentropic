@@ -170,6 +170,12 @@ describe('describeTargetRoutes (discovery)', () => {
         model: 'gemini-3.8-flash',
         effort: 'high',
       },
+      {
+        providerId: 'mistral',
+        transportProviderId: 'mistral-vibe',
+        model: 'zai-glm-5-3',
+        effort: 'max',
+      },
     ]);
     expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-fable-5-1-max']).toEqual([
       MERGED['claude-fable-5-1-max'],
@@ -184,6 +190,10 @@ describe('describeTargetRoutes (discovery)', () => {
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
         model: 'gemini-3.8-flash', effort: 'high',
+      },
+      {
+        providerId: 'mistral', transportProviderId: 'mistral-vibe',
+        model: 'zai-glm-5-3', effort: 'max',
       },
     ]);
     expect(describeCanonicalTargetRoutes()).toHaveLength(
@@ -200,7 +210,7 @@ describe('describeTargetRoutes (discovery)', () => {
     const resolveCandidates = createCanonicalTargetCandidatesResolver();
     expect(resolveCandidates('claude-opus-5-xhigh').map(
       (target) => target.transportProviderId,
-    )).toEqual(['claude-code', 'muse', 'codex', 'cloud-code']);
+    )).toEqual(['claude-code', 'muse', 'codex', 'cloud-code', 'mistral-vibe']);
     expect(resolveCandidates('claude-fable-5-1-max')[2]).toMatchObject({
       transportProviderId: 'codex', model: 'gpt-6-astra', effort: 'max',
     });
@@ -220,19 +230,25 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash', effort: 'high',
     });
+    // GLM 5.3 supplemental fallback (owner decision 2026-10-07): appended
+    // after Codex and Cloud Code for the Opus and Fable 5.1 aliases only.
+    const Glm = () => ({
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'zai-glm-5-3', effort: 'max',
+    });
     const cases: ReadonlyArray<readonly [string, unknown[]]> = [
       ['claude-fable-5', [Muse('max'), Codex('gpt-6-astra'), Cloud()]],
       ['claude-fable-5-high', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
       ['claude-fable-5-xhigh', [Muse('max'), Codex('gpt-6-astra', 'xhigh'), Cloud()]],
       ['claude-fable-5-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
-      ['claude-fable-5-1-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
-      ['claude-opus-5', [Codex('gpt-6-sol'), Cloud()]],
-      ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
-      ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
-      ['claude-opus-5-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
-      ['claude-opus-4-8', [Codex('gpt-5.6-terra'), Cloud()]],
-      ['claude-opus-4-8-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
-      ['claude-opus-4-8-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
+      ['claude-fable-5-1-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud(), Glm()]],
+      ['claude-opus-5', [Codex('gpt-6-sol'), Cloud(), Glm()]],
+      ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud(), Glm()]],
+      ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud(), Glm()]],
+      ['claude-opus-5-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud(), Glm()]],
+      ['claude-opus-4-8', [Codex('gpt-5.6-terra'), Cloud(), Glm()]],
+      ['claude-opus-4-8-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud(), Glm()]],
+      ['claude-opus-4-8-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud(), Glm()]],
       ['claude-sonnet-5', [Codex('gpt-6-luna'), Cloud()]],
     ];
     for (const [alias, expected] of cases) {
