@@ -8,7 +8,7 @@ import {
 
 export const LLM_MESH_PACKAGE = '@sentropic/llm-mesh';
 export const LLM_GATEWAY_PACKAGE = '@sentropic/llm-gateway';
-export const LLM_MESH_RANGE = '>=0.22.0 <0.23.0';
+export const LLM_MESH_RANGE = '>=0.22.0 <0.24.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.20.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';

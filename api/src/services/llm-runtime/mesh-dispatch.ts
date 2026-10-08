@@ -508,6 +508,23 @@ export const createCodexAccountAuthInput = (
   },
 });
 
+// Mistral Vibe sign-in mints a long-lived plan-billed API key (no refresh
+// token); the transport carries it as the bearer for api.mistral.ai.
+export const createMistralVibeAccountAuthInput = (
+  transport: { accessToken: string; accountId?: string | null; accountLabel?: string | null; stableSessionId?: string | null },
+): SecretAuthMaterial => ({
+  type: 'account-transport',
+  provider: 'mistral-vibe',
+  accessToken: transport.accessToken,
+  accountId: transport.accountId ?? null,
+  ...(transport.accountLabel ? { accountLabel: transport.accountLabel } : {}),
+  descriptor: {
+    metadata: {
+      transportSessionId: transport.stableSessionId ?? null,
+    },
+  },
+});
+
 export const createClaudeCodeAccountAuthInput = (
   transport: {
     accessToken: string;

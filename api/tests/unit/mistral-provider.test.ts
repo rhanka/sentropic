@@ -73,7 +73,7 @@ describe('MistralProviderRuntime', () => {
   describe('listModels', () => {
     it('should return Mistral model catalog entries', () => {
       const models = runtime.listModels();
-      expect(models).toHaveLength(2);
+      expect(models).toHaveLength(4);
 
       const mistralSmall = models.find((m) => m.modelId === 'mistral-small-2603');
       expect(mistralSmall).toBeDefined();
@@ -84,6 +84,14 @@ describe('MistralProviderRuntime', () => {
       const large = models.find((m) => m.modelId === 'magistral-medium-2509');
       expect(large).toBeDefined();
       expect(large!.reasoningTier).toBe('advanced');
+
+      const large4 = models.find((m) => m.modelId === 'mistral-large-4');
+      expect(large4).toBeDefined();
+      expect(large4!.reasoningTier).toBe('advanced');
+
+      const glm = models.find((m) => m.modelId === 'zai-glm-5-3');
+      expect(glm).toBeDefined();
+      expect(glm!.reasoningTier).toBe('advanced');
     });
   });
 
