@@ -25,7 +25,7 @@ const UNPUBLISHED = {
 const ENTRIES = ['llm-mesh', 'gateway'];
 const topology = {
   code: 'cluster_mesh_topology_invalid', reason: 'incompatible_version',
-  message: 'installed @sentropic/llm-mesh@0.21.2 at /x/node_modules/@sentropic/llm-mesh does not satisfy the required range ">=0.22.0 <0.23.0"',
+  message: 'installed @sentropic/llm-mesh@0.21.2 at /x/node_modules/@sentropic/llm-mesh does not satisfy the required range ">=0.22.0 <0.24.0"',
 };
 const REFUSED: Probe = {
   preflight: topology,
