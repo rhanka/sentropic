@@ -21,6 +21,7 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - `packages/llm-gateway/package.json`
   - `api/src/**`
   - `api/tests/**`
+  - `packages/cluster-mesh/package.json` (peer range widening for the llm-mesh 0.23.0 bump)
   - `scripts/llm-model-equivalences/**` (council source, via `make refresh-llm-model-equivalences`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -35,12 +36,15 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - Declare exception ID `BR77-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- BR77-EX1 (conditional path `package-lock.json`): required by the `@sentropic/llm-mesh` 0.22.3→0.23.0 semver bump — root lockfile regenerated via `npm install --package-lock-only`. Impact: version/range fields only (mesh 0.23.0, cluster-mesh 0.13.1 peer range, gateway dep). Rollback: `git checkout package-lock.json` and re-run `make lock-api`.
 - `attention`: Lot 4 (api wiring) intentionally NOT started yet — seams located for the next session:
   - `api/src/services/llm-account-transports.ts`: mirror `acquireMuseAccountTransport` (~line 2263) with `parseMistralVibeTokenSecret` (plain bearer-key secret, `refreshTokenIfNeeded` returns null — no refresh grant) + `MISTRAL_VIBE_{TARGET,TRANSPORT}_PROVIDER_ID` consts.
   - `api/src/services/provider-connections.ts`: add `resolveConnectedMistralVibeTransport` next to `resolveConnectedClaudeCodeTransport` (~line 364).
   - `api/src/services/llm-runtime/index.ts`: mirror the claude-code generate-site acquisition (`credentialResolution.source === 'none'` guard, ~line 1117) and stream-site (~line 1404) for `selection.providerId === 'mistral'`; pass `authOverride: createMistralVibeAccountAuthInput(transport)` (to add in `mesh-dispatch.ts` next to `createCodexAccountAuthInput`).
   - Enrollment HTTP routes (facade `enroll('mistral-vibe', …)` + poll) + settings surface + api tests still to wire.
 - `attention`: Mistral Vibe OAuth flow facts (console.mistral.ai/api/vibe/sign-in PKCE S256 + poll_url + exchange → long-lived api_key, no refresh token) verified 2026-10-07 from the Vibe CLI-mirroring oh-my-pi PR #13875 and Mistral docs; wire endpoints must be re-validated live at UAT.
+- `attention` (env): `make typecheck-api` is blocked on this branch by the PRE-EXISTING SCA audit-gate failure in the api image build (proxy-addr GHSA-jqcg-44mw-7w3h critical + @modelcontextprotocol/sdk GHSA-6qxp-vccf-f47h high — unallowlisted on origin/main; fixed by open PR #643 `fix/proxy-addr-cve`, unmerged). Any branch touching `api/src` invalidates the cached image and re-runs the gate. API typecheck was validated standalone instead: `npm ci` (api lockfile) + `npm run typecheck` in node:24 → 0 errors, against the workspace `@sentropic/llm-mesh@0.23.0` (dist built by prepare-node-workspace). Full test campaign deferred to branch CI per owner direction.
+- `attention`: semver consumers synchronized for the 0.23.0 bump: cluster-mesh peer range `>=0.22.0 <0.24.0` + version 0.13.1, gateway dep `^0.23.0`, root package-lock.json regenerated via `npm install --package-lock-only` (ERESOLVE otherwise).
 - `attention`: `zai-glm-5-3` is the Mistral-hosted third-party model id (docs.mistral.ai/models/zai-glm-5-3); text-only input, reasoning_effort low/high/max.
 
 ## Orchestration Mode (AI-selected)
@@ -70,9 +74,10 @@ Add Mistral Large 4 and Mistral-hosted Z.ai GLM 5.3 to the llm-mesh catalog, ser
   - [x] Tests: `routing-targets.test.ts`, gateway `target.test.ts` / contract snapshots.
   - [ ] Gate: `make typecheck-llm-mesh`, `make typecheck-llm-gateway`, `make test-llm-mesh ENV=test-mistral-vibe-glm53`.
 - [ ] **Lot 4 — Api account transport wiring**
-  - [ ] `api/src/services/llm-account-transports.ts`: `acquireMistralVibeAccountTransport` + token secret parse (no refresh; reauth on auth_failed).
-  - [ ] `api/src/services/llm-runtime`: mistral dispatch authOverride via mistral-vibe account when `mistral-large-4`/`zai-glm-5-3` (env key stays fallback).
-  - [ ] `api/src/services/provider-connections.ts` + settings routes: enrollment start/poll/exchange endpoints.
+  - [x] `api/src/services/llm-account-transports.ts`: `acquireMistralVibeAccountTransport` + `parseMistralVibeTokenSecret` (no refresh; reauth on expiry) + `storeMistralVibeAccountTransport` + `getPrimaryMistralVibeAccountTransport`.
+  - [x] `api/src/services/llm-runtime`: mistral dispatch authOverride via mistral-vibe account at both the generate and stream sites, guarded by `credentialResolution.source === 'none'` (env key / BYOK / workspace keep precedence), with full outcome accounting (abort → failed, catch → mapAccountTransportErrorOutcome, finally → recordOutcome).
+  - [x] `api/src/services/provider-connections.ts`: `resolveConnectedMistralVibeTransport`; `api/src/services/llm-runtime/mesh-dispatch.ts`: `createMistralVibeAccountAuthInput`.
+  - [ ] Enrollment HTTP routes (`mistral:start|import|disconnect` in `llm-mesh-enrollment*.ts`) + settings provider card: FOLLOW-UP — blueprint is the muse vertical (startMuseEnrollment/importMuseEnrollment/disconnectMuseEnrollment + toMuseProviderState); note muse itself is absent from `listProviderConnections`, so the Mistral card upgrade is a product decision.
   - [ ] Tests: api unit tests for acquisition + dispatch auth selection.
   - [ ] Gate: `make typecheck-api`, `make test-api ENV=test-mistral-vibe-glm53`.
 - [ ] **Lot 5 — Docs + semver + final validation**
