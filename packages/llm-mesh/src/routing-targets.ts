@@ -373,28 +373,14 @@ const launchAliasTargetsFor = (
   ];
 };
 
-/**
- * Exclusive launch aliases: none. The former `claude-opus-5-5` exclusive
- * alias is a standard multi-candidate route now (BR-C55), so every
- * requested id stays servable from any single enrolled transport. The
- * export and its guards are removed once dependents stop importing it.
- */
-export const EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS = defineLaunchAliases([]);
-
 const buildLaunchAliasRouteMappings = (
   musePosition: MusePosition = DEFAULT_MUSE_POSITION,
-): Readonly<Record<string, readonly TargetMapping[]>> => ({
-  ...Object.fromEntries(
-    STANDARD_ROUTE_DEFINITIONS.map((definition) => [
-      definition.requestedId,
-      launchAliasTargetsFor(definition, musePosition),
-    ]),
-  ),
-  ...Object.fromEntries(
-    Object.entries(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS)
-      .map(([alias, target]) => [alias, [target]]),
-  ),
-});
+): Readonly<Record<string, readonly TargetMapping[]>> => Object.fromEntries(
+  STANDARD_ROUTE_DEFINITIONS.map((definition) => [
+    definition.requestedId,
+    launchAliasTargetsFor(definition, musePosition),
+  ]),
+);
 
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
