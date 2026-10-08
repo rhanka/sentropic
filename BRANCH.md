@@ -65,7 +65,7 @@
 - [x] M1 — Standard routes for opus-5.5 and sonnet-5.5 families in routing-targets
 - [x] M2 — Codex slot remap (sol-6.1 at +1) across families
 - [x] M3 — Medium/low variants plus muse coverage on every row
-- [ ] M4 — Remove exclusive alias and exclusive-only guards (selection, planner, quote)
+- [x] M4 — Remove exclusive alias and exclusive-only guards (selection, planner, quote)
 - [ ] M5 — Council metadata, spec contract, CHANGELOG, version bump
 - [ ] M6 — Gateway dep bump and release-train pins
 
@@ -80,16 +80,17 @@
   - [x] Remap codex slots to sol-6.1 at +1 except opus-5.5-max and fable-5.1 (astra).
   - [x] Add medium/low variants on opus-5, opus-4-8, sonnet-5, fable-5, fable-5-1.
   - [x] Extend MUSE_ROUTE_EFFORT to every row (+1 rule; keep existing values).
-  - [ ] Remove EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS and exclusive-only branches.
+  - [x] Remove EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS and exclusive-only branches.
   - [x] Tests in `packages/llm-mesh/tests/routing-targets.test.ts`: full matrix incl. medium/low, any-account coverage per transport.
-  - [ ] Tests in `packages/llm-mesh/tests/route-selection.test.ts`: standard guards without exclusivity.
-  - [ ] Tests in `packages/llm-mesh/tests/route-planner.test.ts`: no-route only when zero accounts; affinity without exclusive target.
-  - [ ] Tests in `packages/llm-mesh/tests/budget-quote.test.ts`: multi-candidate quotes for the 5.5 families.
-  - [ ] Tests in `packages/llm-mesh/tests/equivalence-council.test.ts`: alias metadata for new aliases.
-  - [ ] Lot gate: `make test-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
-  - [ ] Lot gate: `make typecheck-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
-  - [ ] Lot gate: `make build-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
-  - [ ] Lot gate: `make scope-check API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap`.
+  - [x] Tests in `packages/llm-mesh/tests/route-selection.test.ts`: standard guards without exclusivity.
+  - [x] Tests in `packages/llm-mesh/tests/route-planner.test.ts`: no-route only when zero accounts; affinity without exclusive target.
+  - [x] Tests in `packages/llm-mesh/tests/budget-quote.test.ts`: multi-candidate quotes for the 5.5 families.
+  - [x] Tests in `packages/llm-mesh/tests/equivalence-council.test.ts`: alias metadata for new aliases.
+  - [x] Tests in `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`: standard alias effort semantics.
+  - [x] Lot gate: `make test-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (32 files, 352 tests passed).
+  - [x] Lot gate: `make typecheck-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (pass).
+  - [x] Lot gate: `make build-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (pass).
+  - [x] Lot gate: `make scope-check API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (PASS C2).
 - [ ] **Lot 2 — Docs, version and release train**
   - [ ] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` (route contract plus index scores v4.3.2).
   - [ ] Update `packages/llm-mesh/CHANGELOG.md` Unreleased.
