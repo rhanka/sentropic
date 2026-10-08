@@ -33,7 +33,7 @@
     "@tsconfig/svelte": "^5.0.0",
     "@types/d3": "^7.4.3",
     "@types/dompurify": "^3.0.5",
-    "@types/node": "^20.14.2",
+    "@types/node": "^22.12.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "dompurify": "^3.4.14",
@@ -50,7 +50,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^7.3.5",
-    "vitest": "^3.2.6"
+    "vitest": "^5.0.3"
   },
   "overrides": {
     "brace-expansion@<2": "1.1.21",
