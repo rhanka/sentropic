@@ -11,6 +11,8 @@ import {
   InMemoryRoutePlanner,
   InMemoryRoutePolicyProfiles,
   modelProfiles,
+  MistralAdapter,
+  MistralRuntimeClient,
   MuseAdapter,
   MuseRuntimeClient,
   OpenAIAdapter,
@@ -78,7 +80,7 @@ export type Checks = [
 export const values = [
   CloudCodeRuntimeClient, CodexRuntimeClient, createProviderRegistry, DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
   DEFAULT_ROUTE_POLICY, GeminiAdapter, InMemoryRoutePlanner, InMemoryRoutePolicyProfiles, modelProfiles,
-  MuseAdapter, MuseRuntimeClient, OpenAIAdapter, RoutePlanError, validateEquivalenceCouncil, validateRoutePolicy,
+  MuseAdapter, MuseRuntimeClient, MistralAdapter, MistralRuntimeClient, OpenAIAdapter, RoutePlanError, validateEquivalenceCouncil, validateRoutePolicy,
   InMemoryKeyring, CloudCodeProviderAdapter, stubGatewayConfig, ServiceAuthVerifyToken, AuthHonoVerifyToken,
 ];
 

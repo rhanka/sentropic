@@ -24,5 +24,6 @@ export * from './transport/codex-runtime-client.js';
 export * from './transport/codex-runtime-wire.js';
 export * from './transport/cloud-code-runtime-client.js';
 export * from './transport/muse-runtime-client.js';
+export * from './transport/mistral-runtime-client.js';
 export * from './streaming.js';
 export * from './tools.js';
