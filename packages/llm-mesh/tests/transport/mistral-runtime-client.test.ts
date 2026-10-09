@@ -93,6 +93,28 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     expect(Object.keys(headers).some((key) => key.includes('session'))).toBe(false);
   });
 
+  it('strips gateway ingress metadata from the wire (Mistral 422s extra message inputs)', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: 'hi' } }],
+    }), { status: 200 }));
+    const client = new MistralRuntimeClient({ fetch: fetchFn });
+
+    await client.generate({
+      ...request,
+      messages: [
+        {
+          role: 'user' as const,
+          content: 'hello',
+          metadata: { ingress: { role: 'user', content: 'hello' } },
+        },
+      ],
+    }, auth);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    const body = JSON.parse(String(init.body));
+    expect(body.messages).toEqual([{ role: 'user', content: 'hello' }]);
+  });
+
   it('never accepts an absent executable mistral token', async () => {
     const fetchFn = vi.fn(async () => new Response('{}', { status: 200 }));
     const client = new MistralRuntimeClient({ fetch: fetchFn });
