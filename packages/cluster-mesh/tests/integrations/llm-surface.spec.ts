@@ -34,7 +34,7 @@ describe('llm-mesh static leaves', () => {
 
   it('should expose the measured h2a values synchronously', () => {
     for (const name of [
-      'CloudCodeRuntimeClient', 'CodexRuntimeClient', 'GeminiAdapter', 'MuseAdapter', 'MuseRuntimeClient',
+      'CloudCodeRuntimeClient', 'CodexRuntimeClient', 'GeminiAdapter', 'MistralAdapter', 'MistralRuntimeClient', 'MuseAdapter', 'MuseRuntimeClient',
       'OpenAIAdapter', 'createLlmMesh', 'createProviderRegistry', 'modelProfiles', 'validateEquivalenceCouncil',
       'validateRoutePolicy', 'DEFAULT_MODEL_EQUIVALENCE_COUNCIL', 'DEFAULT_ROUTE_POLICY',
       'InMemoryRoutePolicyProfiles', 'InMemoryRoutePlanner', 'RoutePlanError',
