@@ -118,7 +118,7 @@
     "hono": "^4.10.7"
   },
   "peerDependencies": {
-    "@sentropic/llm-mesh": ">=0.22.0 <0.24.0",
+    "@sentropic/llm-mesh": ">=0.22.0 <0.25.0",
     "@sentropic/llm-gateway": ">=0.19.0 <0.20.0",
     "@sentropic/mcp-auth": ">=0.2.1 <0.3.0",
     "@sentropic/auth-hono": "^0.15.0",
