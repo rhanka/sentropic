@@ -5,7 +5,7 @@
 - Codex slot policy: `gpt-6-astra` only for `claude-opus-5-5-max` and the `claude-fable-5-1` family, otherwise `gpt-6.1-sol` at +1 effort rung; serving choices grounded on Artificial Analysis Intelligence Index v4.3.2.
 
 ## Scope / Guardrails
-- Base: `origin/main` at `52c1fdc63`; branch `feat/llm-mesh-claude55-remap`; worktree `tmp/llm-mesh-claude55-remap`.
+- Base: `origin/main` at `4515cc4c2` (rebased 2026-10-08 from `52c1fdc63`); branch `feat/llm-mesh-claude55-remap`; worktree `tmp/llm-mesh-claude55-remap`.
 - Make-only and Docker-first. Never use the root checkout or `ENV=dev` for development/testing.
 - Dedicated test mapping: `ENV=test-llm-claude55-remap`, `API_PORT=9487`, `UI_PORT=5687`, `MAILDEV_UI_PORT=1587`, with `ENV` last on each Make invocation.
 - No real provider tokens, publication, push or merge in this branch without the owner.
@@ -29,25 +29,29 @@
   - `packages/llm-gateway/src/**` (mesh package owns route targets; gateway only consumes)
   - `packages/llm-mesh/src/adapter-auth.ts` (owned by another lane)
   - `.github/**`, `PLAN.md`
-- **Conditional Paths (require an approved BR-C55-EXn before any change)**:
-  - `package-lock.json` (BR-C55-EXn) only for workspace version entries refreshed through `make lock-root`.
-  - `packages/cluster-mesh/tests/**` (BR-C55-EXn) only for llm-mesh installed-version pins (precedent PR #625 EX4/EX5).
-  - `scripts/llm-model-equivalences/council.source.json` and its generated output (BR-C55-EXn) only if alias metadata requires a council source change.
+- **Conditional Paths (require an approved BR55-EXn before any change)**:
+  - `package-lock.json` (BR55-EX3) only for the `packages/llm-mesh` version entry refreshed through `make lock-root`.
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR55-EX2) only for mesh installedVersion pins.
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (BR55-EX2) only for mesh installedVersion pins.
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR55-EX2) only for the frozen selected lock regenerated via `refresh-lazy-package-lock` with packed sibling receipts.
+  - `packages/llm-gateway/tests/target.test.ts` (BR55-EX1) only for test expectations mirroring the mesh matrix (no src).
+  - `scripts/llm-model-equivalences/council.source.json` and its generated output (no exception granted) — untouched.
 - **Exception process**:
   - Record ID, evidence, reason, impact, rollback and decision in `## Feedback Loop` before touching any conditional path.
 
 ## Feedback Loop
-- [x] BR-C55-Q1: Origin of the Astra exclusivity: BRANCH.md-only attestation ("owner decision relayed by sentropic-46"), no independent trace (`.h2a/negotiations` empty, no other mention). Owner states "astra systematique" meant codex-slot-only, never astra instead of muse. Status: resolved by owner 2026-10-07; exclusivity removed.
-- [x] BR-C55-Q2: Codex policy: astra for opus-5.5-max plus fable-5.1 family, else gpt-6.1-sol at +1 rung (base→high, high→xhigh, xhigh→max, max→max by clamp, medium→high, low→medium). Status: decided by owner 2026-10-07.
-- [x] BR-C55-Q3: Muse tier contributor (BR75-Q3 default); muse effort follows the same +1 rule. Status: approved via mapping table 2026-10-07.
-- [x] BR-C55-Q4: Medium/low variants added on opus-5.5, sonnet-5.5, opus-5, opus-4-8, sonnet-5, fable-5, fable-5-1; sonnet-4-6 keeps base only (succession alias). Status: approved 2026-10-07.
-- [x] BR-C55-Q5: Any single enrolled account must serve any requested id; `no-route` survives only when zero candidate transports hold an account. Status: owner exigence 2026-10-07.
-- [ ] BR-C55-R1: Index gaps (opus-4-8, fable-5, luna, terra scores unknown; sol-6.1 effort basis presumed max; per-effort curves unknown) and partial coverage (muse-max 48 and astra-max 53 below opus-5.5-max 58; sol-6.1 52 below sonnet-5.5-max 56) — review checkpoint, not blocking.
-- [x] BR-C55-R2: Review gemini-3.8-flash-high (AGY run-once, plan mode, 2026-10-08): NO BLOCKING FINDINGS. One minor noted (`canonicalTargetMappingsFor` drops bare-model lookups for non-default musePosition) is pre-existing code untouched by this branch — no action here.
-- [ ] BR-C55-R3: CI `audit-gate` fails on PR #644 (typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca) with unallowlisted HIGH/CRITICAL advisories (`@modelcontextprotocol/sdk` GHSA-6qxp-vccf-f47h, `proxy-addr` GHSA-jqcg-44mw-7w3h) published after main's last green run (2026-10-07T11:19Z). Branch diff touches no dependency — pre-existing, out of scope. Merge blocked until owner routes it (separate security lane or allowlist exception).
-- [x] BR-C55-EX1: Paths `packages/llm-gateway/tests/target.test.ts` only (test expectations, no src). Evidence: gateway target-map is a direct re-export of mesh routing-targets, so the mesh remap changes gateway-resolved candidates. Reason: gateway CI runs target.test.ts against the workspace mesh. Impact: test literals only. Rollback: revert with the mesh remap. Decision: conductor, mechanical consequence of Lot 1.
-- [x] BR-C55-EX2: Paths `packages/cluster-mesh/tests/integrations/{gateway-surface,llm-surface}.spec.ts` and `packages/cluster-mesh/tests/packaging/**` (mesh 0.22.3 to 0.22.4 pins only, replicating commit 2247b06b6 file-for-file). Evidence: release-train gates pin the mesh sibling version. Reason: mesh version bump. Impact: version literals and fixture lock only. Rollback: revert with the version bump. Decision: conductor, mechanical consequence of the mesh release.
-- [x] BR-C55-EX3: Path `package-lock.json`, `packages/llm-mesh` version entry only, refreshed through `make lock-root`. Evidence: train lock-sync gate requires the root lockfile to match the package bump. Reason: mesh 0.22.4 bump. Impact: version field only. Rollback: revert with the version bump. Decision: conductor, mechanical consequence of the mesh release.
+- [x] BR55-Q1: Origin of the Astra exclusivity: BRANCH.md-only attestation ("owner decision relayed by sentropic-46"), no independent trace (`.h2a/negotiations` empty, no other mention). Owner states "astra systematique" meant codex-slot-only, never astra instead of muse. Status: resolved by owner 2026-10-07; exclusivity removed.
+- [x] BR55-Q2: Codex policy: astra for opus-5.5-max plus fable-5.1 family, else gpt-6.1-sol at +1 rung (base→high, high→xhigh, xhigh→max, max→max by clamp, medium→high, low→medium). Status: decided by owner 2026-10-07.
+- [x] BR55-Q3: Muse tier contributor (BR75-Q3 default); muse effort follows the same +1 rule. Status: approved via mapping table 2026-10-07.
+- [x] BR55-Q4: Medium/low variants added on opus-5.5, sonnet-5.5, opus-5, opus-4-8, sonnet-5, fable-5, fable-5-1; sonnet-4-6 keeps base only (succession alias). Status: approved 2026-10-07.
+- [x] BR55-Q5: Any single enrolled account must serve any requested id; `no-route` survives only when zero candidate transports hold an account. Status: owner exigence 2026-10-07.
+- [ ] BR55-R1: Index gaps (opus-4-8, fable-5, luna, terra scores unknown; sol-6.1 effort basis presumed max; per-effort curves unknown) and partial coverage (muse-max 48 and astra-max 53 below opus-5.5-max 58; sol-6.1 52 below sonnet-5.5-max 56) — review checkpoint, not blocking.
+- [x] BR55-R2: Review gemini-3.8-flash-high (AGY run-once, plan mode, 2026-10-08): NO BLOCKING FINDINGS. One minor noted (`canonicalTargetMappingsFor` drops bare-model lookups for non-default musePosition) is pre-existing code untouched by this branch — no action here.
+- [ ] BR55-R3: CI `audit-gate` fails on PR #644 (typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca) with unallowlisted HIGH/CRITICAL advisories (`@modelcontextprotocol/sdk` GHSA-6qxp-vccf-f47h, `proxy-addr` GHSA-jqcg-44mw-7w3h) published after main's last green run (2026-10-07T11:19Z). Branch diff touches no dependency — pre-existing, out of scope. Merge blocked until owner routes it (separate security lane or allowlist exception).
+- [x] BR55-R4: Rebased onto `origin/main` at `4515cc4c2` (2026-10-08): base now carries Mistral Vibe transport, GLM 5.3 fallback, mesh 0.23.1 and gateway 0.19.3. Conflicts resolved (GLM block kept, gateway matrix keeps Glm entries on mapped aliases, package.json takes 0.23.1); obsolete 0.22.4 pins commits skipped and redone for 0.23.2. Mesh suite green post-rebase (33 files, 360 tests) with GLM entries where mapped.
+- [x] BR55-EX1: Paths `packages/llm-gateway/tests/target.test.ts` only (test expectations, no src). Evidence: gateway target-map is a direct re-export of mesh routing-targets, so the mesh remap changes gateway-resolved candidates. Reason: gateway CI runs target.test.ts against the workspace mesh. Impact: test literals only. Rollback: revert with the mesh remap. Decision: conductor, mechanical consequence of Lot 1.
+- [x] BR55-EX2: Paths `packages/cluster-mesh/tests/integrations/{gateway-surface,llm-surface}.spec.ts` (mesh installedVersion pins) and `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (frozen selected lock, regenerated via `refresh-lazy-package-lock` with packed sibling receipts). Evidence: release-train gates pin the mesh sibling version. Reason: mesh version bump. Impact: version literals and fixture lock only. Rollback: revert with the version bump. Decision: conductor, mechanical consequence of the mesh release.
+- [x] BR55-EX3: Path `package-lock.json`, `packages/llm-mesh` version entry only, refreshed through `make lock-root`. Evidence: train lock-sync gate requires the root lockfile to match the package bump. Reason: mesh 0.22.4 bump. Impact: version field only. Rollback: revert with the version bump. Decision: conductor, mechanical consequence of the mesh release.
 
 ## AI Flaky tests
 - [ ] Only provider/network nondeterminism with a passing rerun on the same commit may be proposed for explicit owner sign-off; no timeout increases.
@@ -99,8 +103,8 @@
 - [ ] **Lot 2 — Docs, version and release train**
   - [x] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` (route contract plus index scores v4.3.2).
   - [x] Update `packages/llm-mesh/CHANGELOG.md` (0.22.4 entry; no Unreleased section in this file).
-  - [x] Registry pre-check (local 0.22.3, registry 0.22.3) then bump `packages/llm-mesh/package.json` to 0.22.4 (patch keeps `^0.22.0` and `<0.23.0` ranges; no gateway dep bump needed).
-  - [x] Cluster-mesh pins to 0.22.4 via BR-C55-EX2 (replicates 2247b06b6); root lock entry via BR-C55-EX3 (`make lock-root`); gateway target matrix via BR-C55-EX1 (tests only).
+  - [x] Registry pre-check (local 0.23.1, registry 0.23.1) then bump `packages/llm-mesh/package.json` to 0.23.2 (patch keeps the `^0.23.0` gateway range; no gateway dep bump needed).
+  - [x] Cluster-mesh pins to 0.23.2 via BR55-EX2 (integrations pins plus regenerated selected fixture lock); root lock entry via BR55-EX3 (`make lock-root`); gateway target matrix via BR55-EX1 (tests only).
   - [x] Lot gate: cluster-mesh packaging (29 passed) plus integrations (31 passed) with the Lot 1 mapping.
 - [ ] **Lot 3 — Final validation**
   - [x] `make test-llm-mesh API_PORT=9487 UI_PORT=5687 MAILDEV_UI_PORT=1587 ENV=test-llm-claude55-remap` (32 files, 352 tests passed).

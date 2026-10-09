@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.22.4
+## 0.23.2
 
 - Replace the exclusive `claude-opus-5-5` alias with standard multi-candidate
   routes for the `claude-opus-5-5` and `claude-sonnet-5-5` families
@@ -15,7 +15,7 @@
   equivalents apply to every alias, stale affinities are served sticky
   without migration, and `no-route` is returned only when no candidate
   transport holds a usable account.
-- Patch release preserves the gateway and cluster-mesh 0.22.x dependency ranges.
+- Patch release preserves the gateway and cluster-mesh 0.23.x dependency ranges.
 
 ## 0.22.3
 
