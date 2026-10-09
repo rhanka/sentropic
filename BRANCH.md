@@ -71,11 +71,11 @@ Add the mesh-side Mistral upstream transport (MistralRuntimeClient) serving the 
   - [x] `packages/cluster-mesh/tests/fixtures/types/llm-consumer.ts` compile fixture lists both.
   - [x] Lot gate: `make test-cluster-mesh SCOPE=tests/integrations/llm-surface.spec.ts` + `make typecheck-cluster-mesh`
 - [ ] **Lot 4 — Release train surfaces for mesh 0.24.0**
-  - [ ] Widen `LLM_MESH_RANGE` to `>=0.22.0 <0.25.0` (catalog.ts, cluster-mesh package.json peer range, modules/packaging tests)
-  - [ ] Pin mesh `installedVersion` `0.24.0` in cluster-mesh tuple surfaces (gateway-surface, llm-surface)
-  - [ ] Sync gateway mesh dependency range to `^0.24.0` (no gateway version bump)
-  - [ ] `make lock-root` (root package-lock llm-mesh/gateway entries)
-  - [ ] Regenerate the frozen selected train lock via `refresh-lazy-package-lock` with packed sibling receipts
+  - [x] Widen `LLM_MESH_RANGE` to `>=0.22.0 <0.25.0` (catalog.ts, cluster-mesh package.json peer range, modules/packaging tests)
+  - [x] Pin mesh `installedVersion` `0.24.0` in cluster-mesh tuple surfaces (gateway-surface, llm-surface)
+  - [x] Sync gateway mesh dependency range to `^0.24.0` and bump llm-gateway to 0.19.4 (BLOCK candidate, 0.19.3 already published)
+  - [x] `make lock-root` (root package-lock llm-mesh/gateway entries)
+  - [x] Regenerate the frozen selected train lock via `refresh-lazy-package-lock` with packed sibling receipts
   - [ ] Lot gate: `make typecheck-cluster-mesh` + scoped `make test-cluster-mesh`
 - [ ] **Lot 5 — Final validation**
   - [x] Typecheck & lint
