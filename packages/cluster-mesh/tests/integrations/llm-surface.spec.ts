@@ -34,7 +34,7 @@ describe('llm-mesh static leaves', () => {
 
   it('should expose the measured h2a values synchronously', () => {
     for (const name of [
-      'CloudCodeRuntimeClient', 'CodexRuntimeClient', 'GeminiAdapter', 'MuseAdapter', 'MuseRuntimeClient',
+      'CloudCodeRuntimeClient', 'CodexRuntimeClient', 'GeminiAdapter', 'MistralAdapter', 'MistralRuntimeClient', 'MuseAdapter', 'MuseRuntimeClient',
       'OpenAIAdapter', 'createLlmMesh', 'createProviderRegistry', 'modelProfiles', 'validateEquivalenceCouncil',
       'validateRoutePolicy', 'DEFAULT_MODEL_EQUIVALENCE_COUNCIL', 'DEFAULT_ROUTE_POLICY',
       'InMemoryRoutePolicyProfiles', 'InMemoryRoutePlanner', 'RoutePlanError',
@@ -59,7 +59,7 @@ describe('llm-mesh static leaves', () => {
     expect(Object.keys(enrollment)).toEqual(Object.keys(enrollmentProvider));
     expect(node.InMemoryKeyring).toBe(nodeProvider.InMemoryKeyring);
     expect(cloudCode.CloudCodeProviderAdapter).toBe(cloudCodeProvider.CloudCodeProviderAdapter);
-    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: '0.23.1' });
+    expect(modules.snapshot()['llm-mesh']).toMatchObject({ state: 'loaded', installedVersion: '0.24.0' });
   });
 
   it('should pass the explicit topology preflight for the workspace tree', () => {
