@@ -63,7 +63,7 @@ const TOPOLOGY = { code: 'cluster_mesh_topology_invalid', reason: 'incompatible_
 export function runtimeRefusalViolations(probe: Probe, entries: readonly string[], tuple: SkewTuple): string[] {
   const out: string[] = [];
   const named = new RegExp(`installed @sentropic/llm-mesh@${tuple.mesh.source.replace(/^\^|\$$/gu, '')} at \\S+ `
-    + 'does not satisfy the required range ">=0\\.22\\.0 <0\\.24\\.0"', 'u');
+    + 'does not satisfy the required range ">=0\\.22\\.0 <0\\.25\\.0"', 'u');
   const topology = (label: string, value: Refusal | string | undefined): void => {
     if (typeof value !== 'object' || value.code !== TOPOLOGY.code || value.reason !== TOPOLOGY.reason
       || !named.test(value.message ?? '')) out.push(`${label} not refused with incompatible_version: ${JSON.stringify(value)}`);
