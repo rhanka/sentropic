@@ -108,15 +108,42 @@ export const MUSE_ROUTE_EFFORT: Readonly<Record<string, string>> = {
   'claude-fable-5-high': 'max',
   'claude-fable-5-xhigh': 'max',
   'claude-fable-5-max': 'max',
+  'claude-fable-5-medium': 'high',
+  'claude-fable-5-low': 'medium',
   'claude-fable-5-1': 'max',
   'claude-fable-5-1-high': 'max',
   'claude-fable-5-1-xhigh': 'max',
   'claude-fable-5-1-max': 'max',
+  'claude-fable-5-1-medium': 'high',
+  'claude-fable-5-1-low': 'medium',
+  'claude-opus-5': 'high',
   'claude-opus-5-high': 'xhigh',
   'claude-opus-5-xhigh': 'xhigh',
   'claude-opus-5-max': 'max',
+  'claude-opus-5-medium': 'high',
+  'claude-opus-5-low': 'medium',
+  'claude-opus-4-8': 'high',
   'claude-opus-4-8-xhigh': 'xhigh',
   'claude-opus-4-8-max': 'max',
+  'claude-opus-4-8-medium': 'high',
+  'claude-opus-4-8-low': 'medium',
+  'claude-sonnet-5': 'high',
+  'claude-sonnet-5-xhigh': 'max',
+  'claude-sonnet-5-medium': 'high',
+  'claude-sonnet-5-low': 'medium',
+  'claude-sonnet-4-6': 'high',
+  'claude-opus-5-5': 'high',
+  'claude-opus-5-5-high': 'xhigh',
+  'claude-opus-5-5-xhigh': 'max',
+  'claude-opus-5-5-max': 'max',
+  'claude-opus-5-5-medium': 'high',
+  'claude-opus-5-5-low': 'medium',
+  'claude-sonnet-5-5': 'high',
+  'claude-sonnet-5-5-high': 'xhigh',
+  'claude-sonnet-5-5-xhigh': 'max',
+  'claude-sonnet-5-5-max': 'max',
+  'claude-sonnet-5-5-medium': 'high',
+  'claude-sonnet-5-5-low': 'medium',
 };
 
 /**
@@ -128,10 +155,12 @@ export type MusePosition = 'off' | 'after-claude' | 'first' | 'claude-last';
 export const DEFAULT_MUSE_POSITION: MusePosition = 'after-claude';
 
 /**
- * GLM 5.3 supplemental fallback effort per launch alias (owner decision
- * 2026-10-07, Artificial Analysis Intelligence Index: GLM-5.3 (Max) = 45 =
- * Claude Opus 5 (Medium)). The GLM candidate always mirrors the measured
- * GLM-5.3 (Max) configuration, so every mapped alias gets effort `max`.
+ * GLM 5.3 supplemental fallback effort per launch alias (owner decisions
+ * 2026-10-07 and 2026-10-08, Artificial Analysis Intelligence Index:
+ * GLM-5.3 (Max) = 45 = Claude Opus 5 (Medium)). The Claude 5.5 and Fable 5.1
+ * families mirror the requested effort at +1 rung on the native low/high/max
+ * ladder (base/low/medium -> high; high/xhigh/max -> max); the Opus 5 and
+ * Opus 4.8 families keep the measured GLM-5.3 (Max) configuration.
  * Aliases absent from this map get no GLM candidate. The candidate is the
  * LAST fallback, after Codex and Cloud Code (mistral-vibe transport).
  */
@@ -143,7 +172,24 @@ export const GLM_ROUTE_EFFORT: Readonly<Record<string, string>> = {
   'claude-opus-4-8': 'max',
   'claude-opus-4-8-xhigh': 'max',
   'claude-opus-4-8-max': 'max',
-  'claude-fable-5-1': 'max',
+  // Claude 5.5 and Fable 5.1 families (owner decision 2026-10-08): GLM 5.3
+  // mirrors the requested effort at +1 rung on its native low/high/max
+  // ladder (base/low/medium -> high; high/xhigh/max -> max).
+  'claude-opus-5-5': 'high',
+  'claude-opus-5-5-low': 'high',
+  'claude-opus-5-5-medium': 'high',
+  'claude-opus-5-5-high': 'max',
+  'claude-opus-5-5-xhigh': 'max',
+  'claude-opus-5-5-max': 'max',
+  'claude-sonnet-5-5': 'high',
+  'claude-sonnet-5-5-low': 'high',
+  'claude-sonnet-5-5-medium': 'high',
+  'claude-sonnet-5-5-high': 'max',
+  'claude-sonnet-5-5-xhigh': 'max',
+  'claude-sonnet-5-5-max': 'max',
+  'claude-fable-5-1': 'high',
+  'claude-fable-5-1-low': 'high',
+  'claude-fable-5-1-medium': 'high',
   'claude-fable-5-1-high': 'max',
   'claude-fable-5-1-xhigh': 'max',
   'claude-fable-5-1-max': 'max',
@@ -151,26 +197,50 @@ export const GLM_ROUTE_EFFORT: Readonly<Record<string, string>> = {
 
 export const GLM_FALLBACK_MODEL = 'zai-glm-5-3';
 
+// Codex slot policy (BR-C55): GPT-6 Astra serves only claude-opus-5-5-max
+// and the claude-fable-5-1 family; every other row serves GPT-6.1 Sol at
+// +1 effort rung. Fable 5.1 keeps Astra with inherited effort.
 export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
-  { requestedId: 'claude-opus-5', codexModel: 'gpt-6-sol', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-4-8', codexModel: 'gpt-5.6-terra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-4-8-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-4-8-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5', codexModel: 'gpt-6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-xhigh', codexModel: 'gpt-6-luna', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-4-6', codexModel: 'gpt-6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
-  // GA switch applied: Fable 5 and 5.1 now use GPT-6 Astra.
-  { requestedId: 'claude-fable-5', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-4-6', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-1', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-1-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-1-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-1-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-medium', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-low', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'low', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
 ];
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
@@ -199,7 +269,7 @@ const claudeTarget = (model: string, effort?: string): TargetMapping => ({
 });
 
 const faithfulClaudeModel = (requestedId: string): string =>
-  requestedId.replace(/-(?:high|xhigh|max)$/, '');
+  requestedId.replace(/-(?:high|xhigh|max|medium|low)$/, '');
 
 const CLOUD_CODE_CAPABILITY_SOURCE_BY_MODEL: Readonly<
   Record<string, readonly [string, string]>
@@ -322,39 +392,14 @@ const launchAliasTargetsFor = (
   ];
 };
 
-/**
- * Exclusive launch aliases: the requested id always serves its single target.
- * `claude-opus-5-5` routes every request to `openai / gpt-6-astra / codex`
- * with no effort override and no Anthropic, Gemini or Muse candidate.
- * Exclusive aliases stay outside STANDARD_ROUTE_DEFINITIONS (whose schema
- * requires a Cloud candidate) and merge into every per-position rebuild, so
- * no musePosition variant can drop them. Selection guards in
- * route-selection keep overrides and council equivalents from replacing the
- * single target; the planner migrates incompatible sticky affinity to it.
- */
-export const EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS = defineLaunchAliases([
-  {
-    alias: 'claude-opus-5-5',
-    providerId: 'openai',
-    transportProviderId: 'codex',
-    model: 'gpt-6-astra',
-  },
-]);
-
 const buildLaunchAliasRouteMappings = (
   musePosition: MusePosition = DEFAULT_MUSE_POSITION,
-): Readonly<Record<string, readonly TargetMapping[]>> => ({
-  ...Object.fromEntries(
-    STANDARD_ROUTE_DEFINITIONS.map((definition) => [
-      definition.requestedId,
-      launchAliasTargetsFor(definition, musePosition),
-    ]),
-  ),
-  ...Object.fromEntries(
-    Object.entries(EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS)
-      .map(([alias, target]) => [alias, [target]]),
-  ),
-});
+): Readonly<Record<string, readonly TargetMapping[]>> => Object.fromEntries(
+  STANDARD_ROUTE_DEFINITIONS.map((definition) => [
+    definition.requestedId,
+    launchAliasTargetsFor(definition, musePosition),
+  ]),
+);
 
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>

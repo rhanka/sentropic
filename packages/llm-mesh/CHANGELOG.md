@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.24.1
+
+- Replace the exclusive `claude-opus-5-5` alias with standard multi-candidate
+  routes for the `claude-opus-5-5` and `claude-sonnet-5-5` families
+  (base/high/xhigh/max/medium/low): Muse contributor first, then Codex, then
+  Cloud Code. Every launch alias now carries all three fallback transports,
+  so any single enrolled transport serves any requested id.
+- Codex slot policy: `gpt-6-astra` only for `claude-opus-5-5-max` and the
+  `claude-fable-5-1` family, otherwise `gpt-6.1-sol` at +1 effort rung;
+  the Muse candidate follows the same +1 rule. Serving choices grounded on
+  Artificial Analysis Intelligence Index v4.3.2.
+- Remove the exclusive-alias guards: owner-scoped overrides and council
+  equivalents apply to every alias, stale affinities are served sticky
+  without migration, and `no-route` is returned only when no candidate
+  transport holds a usable account.
+- GLM 5.3 supplemental fallback (owner decision 2026-10-08): the Claude 5.5
+  families and the Fable 5.1 family gain the `zai-glm-5-3` candidate as the
+  last fallback, mirroring the requested effort at +1 rung on the native
+  low/high/max ladder (base/low/medium -> high, high/xhigh/max -> max);
+  Opus 5 and Opus 4.8 keep the measured GLM-5.3 (Max) configuration.
+- Patch release keeps the gateway `^0.24.0` and cluster-mesh
+  `>=0.22.0 <0.25.0` dependency ranges (retargeted onto the 0.24.0 base).
+
 ## 0.22.3
 
 - Add `gpt-6.1-sol` to the OpenAI catalog and provider registrations with a

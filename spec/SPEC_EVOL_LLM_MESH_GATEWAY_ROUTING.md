@@ -127,6 +127,24 @@ h2a then integrates the exact candidate locally and performs functional UAT.
 The Sentropic PR merges only after h2a UAT and CI are green. npm publication is
 performed only by merge-triggered CD.
 
+### D8 — GLM 5.3 supplemental fallback
+
+A fourth supplemental fallback candidate, `zai-glm-5-3` served over the
+`mistral-vibe` account transport, is appended LAST to every mapped launch
+alias (after Muse, Codex and Cloud Code). Owner decisions 2026-10-07 and
+2026-10-08, grounded on the Artificial Analysis Intelligence Index v4.3.2
+(GLM-5.3 (Max) = 45 = Claude Opus 5 (Medium)):
+
+- The Opus 5 and Opus 4.8 families keep the measured GLM-5.3 (Max)
+  configuration: effort `max` on every rung.
+- The Claude 5.5 families (opus and sonnet, base/low/medium/high/xhigh/max)
+  and the Fable 5.1 family mirror the requested effort at +1 rung on the
+  GLM native low/high/max ladder: base/low/medium map to `high`,
+  high/xhigh/max map to `max`.
+- Sonnet 5 and Fable 5 (non-5.1) aliases stay out of the GLM map.
+- Aliases absent from the map get no GLM candidate; no alias loses its
+  Anthropic-first route.
+
 ## 3. Hard architecture boundary
 
 ```text
@@ -282,13 +300,20 @@ equivalence fallback is enabled for a group, its evidence must be fresh and its
 required capabilities must be satisfied. Stale evidence fails closed for
 automatic substitution while exact requested routes remain usable.
 
-Exclusive launch alias `claude-opus-5-5` is an exception to the
-provider-faithful rule above: it always serves `openai / gpt-6-astra / codex`
-with no effort override and no Anthropic, Gemini or Muse candidate. It takes
-precedence over `targetCandidatesOverride`, never expands through council
-equivalents, and stays hidden from model inventory. Per-request explicit
-restrictions still apply as restrictions and may yield `no-route` when Astra
-is unavailable or excluded.
+The `claude-opus-5-5` and `claude-sonnet-5-5` families are standard
+multi-candidate launch aliases (base/high/xhigh/max/medium/low): Muse
+contributor first, then Codex, then Cloud Code, with no Anthropic faithful
+target (no catalog profile exists for either family). Every launch alias
+carries Muse, Codex and Cloud Code candidates, so any single enrolled
+transport serves any requested id; `no-route` is returned only when no
+candidate transport holds a usable account. The Codex slot serves
+`gpt-6-astra` only for `claude-opus-5-5-max` and the `claude-fable-5-1`
+family, otherwise `gpt-6.1-sol` at +1 effort rung (base to high, high to
+xhigh, xhigh to max, max to max by clamp, medium to high, low to medium);
+the Muse candidate follows the same +1 rule. Serving choices are grounded
+on Artificial Analysis Intelligence Index v4.3.2 (opus-5.5-max 58,
+sonnet-5.5-max 56, astra-max 53, fable-5.1-max 53, sol-6.1 52, opus-5-max 51,
+muse-1.3-max 48, flash-3.8-high 41).
 
 The first implementation ships a conservative coding council using only
 existing ratified aliases plus benchmark evidence available in the repository.
@@ -489,17 +514,12 @@ account by default. Cross-account rebind requires `rotateEquivalentAccounts`
 or an explicit audited reset/rebind. `auth_failed` invalidates the account and
 does not trigger another model on the same invalid credential.
 
-Exception for the exclusive alias: an established affinity follows an
-explicit switch to `claude-opus-5-5` (owner "follow the /model"). At plan
-time a provider/model/transport-incompatible stored affinity is treated as
-absent — the plan serves fresh Astra and never emits the stale sticky
-candidate, quoted and unquoted alike, without mutating stored state. A later
-success overwrites the stale entry with the served Astra account
-and target through the audited rebind/promote path (`cacheContinuityRisk` on
-account change); a failure or cancellation leaves the stale affinity untouched. A compatible
-Astra affinity that violates a per-request explicit restriction still yields
-`no-route` with the affinity untouched. `cacheContinuityRisk` stays
-account-scoped: a same-account model switch reports no risk.
+No per-alias affinity exception remains: a stored affinity incompatible
+with the requested alias is served as the sticky candidate without mutating
+stored state, and a later success never migrates it (callers own the affinity
+lifecycle across `/model` switches). A quoted plan ignores an unquoted sticky
+target and plans fresh. `cacheContinuityRisk` stays account-scoped: a
+same-account model switch reports no risk.
 
 ### 4.9 Health and negative cache
 
