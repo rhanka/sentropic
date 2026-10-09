@@ -439,18 +439,23 @@ describe('canonical model targets', () => {
     }
   });
 
-  it('maps the GLM 5.3 supplemental fallback onto Opus and Fable 5.1 only', () => {
-    for (const alias of [
-      'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh', 'claude-opus-5-max',
-      'claude-opus-4-8', 'claude-opus-4-8-xhigh', 'claude-opus-4-8-max',
-      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
-      'claude-fable-5-1-max',
-    ]) {
+  it('maps the GLM 5.3 supplemental fallback onto Opus, Claude 5.5 and Fable 5.1 families', () => {
+    const glmEffort: Readonly<Record<string, string>> = {
+      'claude-opus-5': 'max', 'claude-opus-5-high': 'max', 'claude-opus-5-xhigh': 'max', 'claude-opus-5-max': 'max',
+      'claude-opus-4-8': 'max', 'claude-opus-4-8-xhigh': 'max', 'claude-opus-4-8-max': 'max',
+      'claude-opus-5-5': 'high', 'claude-opus-5-5-low': 'high', 'claude-opus-5-5-medium': 'high',
+      'claude-opus-5-5-high': 'max', 'claude-opus-5-5-xhigh': 'max', 'claude-opus-5-5-max': 'max',
+      'claude-sonnet-5-5': 'high', 'claude-sonnet-5-5-low': 'high', 'claude-sonnet-5-5-medium': 'high',
+      'claude-sonnet-5-5-high': 'max', 'claude-sonnet-5-5-xhigh': 'max', 'claude-sonnet-5-5-max': 'max',
+      'claude-fable-5-1': 'high', 'claude-fable-5-1-low': 'high', 'claude-fable-5-1-medium': 'high',
+      'claude-fable-5-1-high': 'max', 'claude-fable-5-1-xhigh': 'max', 'claude-fable-5-1-max': 'max',
+    };
+    for (const [alias, effort] of Object.entries(glmEffort)) {
       const glm = resolveCandidates(alias)
         .filter((target) => target.transportProviderId === 'mistral-vibe');
       expect(glm, alias).toEqual([{
         providerId: 'mistral', transportProviderId: 'mistral-vibe',
-        model: 'zai-glm-5-3', effort: 'max',
+        model: 'zai-glm-5-3', effort,
       }]);
       // The GLM candidate is always the last fallback in the chain.
       expect(resolveCandidates(alias).at(-1)!.transportProviderId, alias)
@@ -574,13 +579,18 @@ describe('canonical model targets', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash', effort: 'high',
     };
+    const glm = {
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'zai-glm-5-3', effort: 'high',
+    };
     expect(resolve('claude-opus-5-5')).toEqual(muse);
-    expect(resolveCandidates('claude-opus-5-5')).toEqual([muse, codex, cloud]);
+    expect(resolveCandidates('claude-opus-5-5')).toEqual([muse, codex, cloud, glm]);
     expect(describeCanonicalTargetRoutes().filter((route) => route.requestedId === 'claude-opus-5-5'))
       .toEqual([
         { requestedId: 'claude-opus-5-5', ...muse, kind: 'alias' },
         { requestedId: 'claude-opus-5-5', ...codex, kind: 'alias' },
         { requestedId: 'claude-opus-5-5', ...cloud, kind: 'alias' },
+        { requestedId: 'claude-opus-5-5', ...glm, kind: 'alias' },
       ]);
   });
 
@@ -598,6 +608,10 @@ describe('canonical model targets', () => {
         providerId: 'gemini', transportProviderId: 'cloud-code',
         model: 'gemini-3.8-flash', effort: 'high',
       },
+      {
+        providerId: 'mistral', transportProviderId: 'mistral-vibe',
+        model: 'zai-glm-5-3', effort: 'max',
+      },
     ]);
   });
 
@@ -607,6 +621,7 @@ describe('canonical model targets', () => {
     };
     for (const [suffix, effort] of Object.entries(plusOne)) {
       const alias = suffix === 'base' ? 'claude-sonnet-5-5' : `claude-sonnet-5-5-${suffix}`;
+      const glmEffort = suffix === 'high' || suffix === 'xhigh' || suffix === 'max' ? 'max' : 'high';
       expect(resolveCandidates(alias)).toEqual([
         {
           providerId: 'muse', transportProviderId: 'muse',
@@ -620,6 +635,10 @@ describe('canonical model targets', () => {
           providerId: 'gemini', transportProviderId: 'cloud-code',
           model: 'gemini-3.8-flash', effort: 'high',
         },
+        {
+          providerId: 'mistral', transportProviderId: 'mistral-vibe',
+          model: 'zai-glm-5-3', effort: glmEffort,
+        },
       ]);
     }
     expect(resolve('claude-sonnet-5-5-max')).toEqual({
@@ -628,17 +647,18 @@ describe('canonical model targets', () => {
     });
   });
 
-  it('keeps all three fallback transports for the 5.5 families on every muse position', () => {
+  it('keeps all four fallback transports for the 5.5 families on every muse position', () => {
     for (const musePosition of ['off', 'after-claude', 'first', 'claude-last'] as const) {
       const resolveAt = createCanonicalTargetCandidatesResolver({ musePosition });
       for (const alias of ['claude-opus-5-5', 'claude-sonnet-5-5-max']) {
         const transports = resolveAt(alias).map((candidate) => candidate.transportProviderId);
         if (musePosition === 'off') {
-          expect(transports).toEqual(['codex', 'cloud-code']);
+          expect(transports).toEqual(['codex', 'cloud-code', 'mistral-vibe']);
         } else {
           expect(transports).toContain('muse');
           expect(transports).toContain('codex');
           expect(transports).toContain('cloud-code');
+          expect(transports).toContain('mistral-vibe');
         }
       }
     }

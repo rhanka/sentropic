@@ -285,6 +285,12 @@ describe('pure route quote', () => {
         allowance: { inputTokens: 1_000, outputTokens: 65_536 },
         outputCeilingEnforced: true,
       },
+      {
+        providerId: 'mistral', modelId: 'zai-glm-5-3',
+        transportProviderId: 'mistral-vibe', reason: 'alias',
+        allowance: { inputTokens: 1_000, outputTokens: 100_000 },
+        outputCeilingEnforced: true,
+      },
     ]);
 
     // An empty-directory plan on that valid quote reports no-route, not unknown-model.
@@ -323,6 +329,7 @@ describe('pure route quote', () => {
         'muse/muse-spark-1.3-contributor',
         'openai/gpt-6.1-sol',
         'gemini/gemini-3.8-flash',
+        'mistral/zai-glm-5-3',
         'openai/gpt-6-luna',
       ]);
   });

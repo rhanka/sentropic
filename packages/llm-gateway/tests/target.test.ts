@@ -230,11 +230,12 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash', effort: 'high',
     });
-    // GLM 5.3 supplemental fallback (owner decision 2026-10-07): appended
-    // after Codex and Cloud Code for the Opus and Fable 5.1 aliases only.
-    const Glm = () => ({
+    // GLM 5.3 supplemental fallback (owner decisions 2026-10-07 and
+    // 2026-10-08): appended after Codex and Cloud Code for the Opus, Claude
+    // 5.5 and Fable 5.1 aliases, at +1 rung on the low/high/max ladder.
+    const Glm = (effort = 'max') => ({
       providerId: 'mistral', transportProviderId: 'mistral-vibe',
-      model: 'zai-glm-5-3', effort: 'max',
+      model: 'zai-glm-5-3', effort,
     });
     const cases: ReadonlyArray<readonly [string, unknown[]]> = [
       ['claude-fable-5', [Muse('max'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
@@ -244,8 +245,8 @@ describe('describeTargetRoutes (discovery)', () => {
       ['claude-fable-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
       ['claude-fable-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
       ['claude-fable-5-1-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud(), Glm()]],
-      ['claude-fable-5-1-medium', [Muse('high'), Codex('gpt-6-astra', 'medium'), Cloud()]],
-      ['claude-fable-5-1-low', [Muse('medium'), Codex('gpt-6-astra', 'low'), Cloud()]],
+      ['claude-fable-5-1-medium', [Muse('high'), Codex('gpt-6-astra', 'medium'), Cloud(), Glm('high')]],
+      ['claude-fable-5-1-low', [Muse('medium'), Codex('gpt-6-astra', 'low'), Cloud(), Glm('high')]],
       ['claude-opus-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm()]],
       ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud(), Glm()]],
       ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm()]],
@@ -282,19 +283,25 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash', effort: 'high',
     });
+    // GLM 5.3 supplemental fallback (owner decision 2026-10-08): last fallback
+    // for the Claude 5.5 families at +1 rung on the low/high/max ladder.
+    const Glm = (effort: string) => ({
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'zai-glm-5-3', effort,
+    });
     const cases: ReadonlyArray<readonly [string, unknown[]]> = [
-      ['claude-opus-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
-      ['claude-opus-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud()]],
-      ['claude-opus-5-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
-      ['claude-opus-5-5-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
-      ['claude-opus-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
-      ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
-      ['claude-sonnet-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
-      ['claude-sonnet-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud()]],
-      ['claude-sonnet-5-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
-      ['claude-sonnet-5-5-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
-      ['claude-sonnet-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
-      ['claude-sonnet-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
+      ['claude-opus-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm('high')]],
+      ['claude-opus-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud(), Glm('max')]],
+      ['claude-opus-5-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm('max')]],
+      ['claude-opus-5-5-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud(), Glm('max')]],
+      ['claude-opus-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm('high')]],
+      ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud(), Glm('high')]],
+      ['claude-sonnet-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm('high')]],
+      ['claude-sonnet-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Cloud(), Glm('max')]],
+      ['claude-sonnet-5-5-xhigh', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm('max')]],
+      ['claude-sonnet-5-5-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud(), Glm('max')]],
+      ['claude-sonnet-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm('high')]],
+      ['claude-sonnet-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud(), Glm('high')]],
     ];
     for (const [alias, expected] of cases) {
       expect(resolveCandidates(alias)).toEqual(expected);

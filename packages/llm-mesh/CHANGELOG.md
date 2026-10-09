@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.23.2
+## 0.24.1
 
 - Replace the exclusive `claude-opus-5-5` alias with standard multi-candidate
   routes for the `claude-opus-5-5` and `claude-sonnet-5-5` families
@@ -15,7 +15,13 @@
   equivalents apply to every alias, stale affinities are served sticky
   without migration, and `no-route` is returned only when no candidate
   transport holds a usable account.
-- Patch release preserves the gateway and cluster-mesh 0.23.x dependency ranges.
+- GLM 5.3 supplemental fallback (owner decision 2026-10-08): the Claude 5.5
+  families and the Fable 5.1 family gain the `zai-glm-5-3` candidate as the
+  last fallback, mirroring the requested effort at +1 rung on the native
+  low/high/max ladder (base/low/medium -> high, high/xhigh/max -> max);
+  Opus 5 and Opus 4.8 keep the measured GLM-5.3 (Max) configuration.
+- Patch release keeps the gateway `^0.24.0` and cluster-mesh
+  `>=0.22.0 <0.25.0` dependency ranges (retargeted onto the 0.24.0 base).
 
 ## 0.22.3
 

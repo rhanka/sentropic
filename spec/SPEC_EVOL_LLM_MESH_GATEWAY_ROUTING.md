@@ -127,6 +127,24 @@ h2a then integrates the exact candidate locally and performs functional UAT.
 The Sentropic PR merges only after h2a UAT and CI are green. npm publication is
 performed only by merge-triggered CD.
 
+### D8 — GLM 5.3 supplemental fallback
+
+A fourth supplemental fallback candidate, `zai-glm-5-3` served over the
+`mistral-vibe` account transport, is appended LAST to every mapped launch
+alias (after Muse, Codex and Cloud Code). Owner decisions 2026-10-07 and
+2026-10-08, grounded on the Artificial Analysis Intelligence Index v4.3.2
+(GLM-5.3 (Max) = 45 = Claude Opus 5 (Medium)):
+
+- The Opus 5 and Opus 4.8 families keep the measured GLM-5.3 (Max)
+  configuration: effort `max` on every rung.
+- The Claude 5.5 families (opus and sonnet, base/low/medium/high/xhigh/max)
+  and the Fable 5.1 family mirror the requested effort at +1 rung on the
+  GLM native low/high/max ladder: base/low/medium map to `high`,
+  high/xhigh/max map to `max`.
+- Sonnet 5 and Fable 5 (non-5.1) aliases stay out of the GLM map.
+- Aliases absent from the map get no GLM candidate; no alias loses its
+  Anthropic-first route.
+
 ## 3. Hard architecture boundary
 
 ```text
