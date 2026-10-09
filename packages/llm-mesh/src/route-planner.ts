@@ -6,7 +6,6 @@ import {
   routingOwnerRef, subjectRef, type StoredAffinity, type StoredPlan,
 } from './route-planner-state.js';
 import { resolveRequestedTargets, selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
-import { EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS } from './routing-targets.js';
 import type {
   AccountDirectoryPort, AffinityDescription, Clock, IdFactory, PreparedRouteAttempt,
   AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
@@ -14,24 +13,6 @@ import type {
 } from './routing-contracts.js';
 import { computeRouteQuoteRef, isQuotedRouteTarget, quoteRoute, resolveQuotePolicy } from './route-quote.js';
 import { InMemoryRoutePolicyProfiles, resolveRouteStrategy } from './routing-policy.js';
-/**
- * Exclusive-alias migration (owner "follow the /model"): a stored affinity
- * whose provider, model or transport differs from the exclusive target is
- * treated as absent at plan time, so a `/model` switch plans fresh Astra and
- * never emits the stale sticky candidate. Stored state is never mutated here;
- * a later success rebinds it (see bind), a failure leaves it untouched.
- * Quoted and unquoted plans behave the same.
- */
-const isExclusiveAliasMismatch = (
-  requestedModel: string,
-  affinity: StoredAffinity | undefined,
-): boolean => {
-  const exclusive = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[requestedModel];
-  return Boolean(exclusive && affinity
-    && (affinity.target.providerId !== exclusive.providerId
-      || affinity.target.modelId !== exclusive.model
-      || affinity.target.transportProviderId !== exclusive.transportProviderId));
-};
 
 export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
@@ -84,8 +65,6 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     for (const account of accounts) {
       if (account.readiness !== 'ready') continue;
       for (const modelId of account.supportedModelIds) {
-        // Exclusive launch aliases are request contracts, not inventory models.
-        if (EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[modelId]) continue;
         const key = `${account.targetProviderId}\u001f${modelId}`;
         inventory.set(key, { modelId, providerId: account.targetProviderId });
       }
@@ -133,12 +112,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     let candidates = selection.kind === 'candidates' ? [...selection.candidates] : [];
     // With a quote, an affinity to an unquoted target is ignored for selection
     // (for example a sticky model the request no longer asks for).
-    // An exclusive alias additionally migrates an incompatible stored affinity
-    // (see isExclusiveAliasMismatch): the stale sticky candidate is never
-    // emitted, quoted and unquoted alike.
     if (
       affinity && policy.stickyAccount
-      && !isExclusiveAliasMismatch(input.requestedModel, affinity)
       && inQuoteTarget(affinity.target)
     ) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
@@ -151,36 +126,13 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         const rotated = policy.rotateEquivalentAccounts
           ? candidates.filter((candidate) => candidate.account.accountRef !== affinity.accountRef)
           : [];
-        const exclusiveAlias = EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[input.requestedModel];
-        const eligibleSticky = candidates.find((candidate) =>
-          candidate.account.accountRef === affinity.accountRef
-          && this.isAffinityTarget(candidate, affinity));
-        // An exclusive alias builds its sticky target from the current
-        // resolved Astra candidate, so a stored effort override from another
-        // alias never leaks into this request; account stickiness is kept.
         const sticky: RankedRouteCandidate = {
           account,
-          target: exclusiveAlias && eligibleSticky
-            ? {
-              requestedModel: input.requestedModel,
-              providerId: eligibleSticky.target.providerId,
-              modelId: eligibleSticky.target.modelId,
-              transportProviderId: eligibleSticky.target.transportProviderId,
-              reason: 'sticky',
-            }
-            : { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
+          target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
         };
-        // An exclusive alias serves a compatible affinity only when its
-        // account still resolves an eligible Astra candidate (same account,
-        // Astra target, account ready, Astra advertised/allowed): otherwise
-        // the plan fails closed with `no-route` (owner Q6) instead of
-        // serving the stale sticky candidate, regardless of `explicit`.
-        const exclusiveBlocked = Boolean(exclusiveAlias && !eligibleSticky);
-        candidates = exclusiveBlocked
-          ? []
-          : this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
-            .filter((candidate) => !this.health.isSuppressed(candidate))
-            .slice(0, policy.maxAttempts);
+        candidates = this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
+          .filter((candidate) => !this.health.isSuppressed(candidate))
+          .slice(0, policy.maxAttempts);
       }
     } else {
       candidates = this.keepQuoted(candidates, inQuote)
@@ -304,7 +256,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           const terminalCandidate = activePlan.candidates.at(-1) === candidate;
           if (!failure.retryable || terminalCandidate) this.releaseRoundRobin(activePlan);
         },
-        onCommitted: (activePlan, candidate) => this.bind(activePlan, candidate, true),
+        onCommitted: (activePlan, candidate) => this.bind(activePlan, candidate),
         onSuccess: (activePlan, candidate) => {
           this.health.clear(candidate);
           this.bind(activePlan, candidate);
@@ -377,24 +329,11 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     return next;
   }
 
-  private bind(stored: StoredPlan, candidate: RankedRouteCandidate, isCommit = false): void {
+  private bind(stored: StoredPlan, candidate: RankedRouteCandidate): void {
     this.commitRoundRobin(stored);
     if (!stored.affinityRef) return;
     const current = this.affinities.get(stored.affinityRef);
-    // Exclusive-alias migration (owner "follow the /model"): a success on
-    // the exclusive alias overwrites a stale incompatible affinity with the
-    // served Astra account and target through the existing audited
-    // rebind/promote path below (`cacheContinuityRisk` on account change).
-    // A commit (first validated frame) must not migrate, so a later stream
-    // failure or cancellation leaves the stale affinity untouched.
-    const exclusiveMigration = Boolean(
-      EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS[candidate.target.requestedModel] && current
-        && (current.target.providerId !== candidate.target.providerId
-          || current.target.modelId !== candidate.target.modelId
-          || current.target.transportProviderId !== candidate.target.transportProviderId),
-    );
-    if (isCommit && exclusiveMigration) return;
-    if (current && stored.policy.fallbackMode !== 'one-way' && !exclusiveMigration) return;
+    if (current && stored.policy.fallbackMode !== 'one-way') return;
     if (current?.target.providerId === candidate.target.providerId
       && current.target.modelId === candidate.target.modelId
       && current.target.transportProviderId === candidate.target.transportProviderId) return;

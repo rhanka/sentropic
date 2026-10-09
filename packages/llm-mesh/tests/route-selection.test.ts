@@ -67,7 +67,7 @@ describe('route candidate selection', () => {
         diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai',
         transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'],
+        supportedModelIds: ['gpt-6.1-sol'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const,
         revision: 'r1',
@@ -129,7 +129,7 @@ describe('route candidate selection', () => {
         diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai',
         transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-luna'],
+        supportedModelIds: ['gpt-6.1-sol'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready',
         revision: 'r1',
@@ -138,7 +138,7 @@ describe('route candidate selection', () => {
 
     expect(selection.kind).toBe('candidates');
     expect(selection.candidates[0]).toMatchObject({
-      target: { providerId: 'openai', modelId: 'gpt-6-luna' },
+      target: { providerId: 'openai', modelId: 'gpt-6.1-sol' },
     });
   });
 
@@ -371,7 +371,7 @@ describe('route candidate selection', () => {
     }
   });
 
-  it('serves only Astra for claude-opus-5-5 with every provider ready', () => {
+  it('serves muse first for claude-opus-5-5 with every provider ready', () => {
     const readyAccounts = [
       {
         accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
@@ -395,13 +395,13 @@ describe('route candidate selection', () => {
       {
         accountRef: 'codex-old', diagnosticAccountRef: 'codex_old',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {
         accountRef: 'codex-new', diagnosticAccountRef: 'codex_new',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
     ];
@@ -415,24 +415,22 @@ describe('route candidate selection', () => {
       accounts: readyAccounts,
     }));
 
-    expect(candidates).toHaveLength(2);
-    for (const candidate of candidates) {
-      expect(candidate.target).toMatchObject({
-        requestedModel: 'claude-opus-5-5',
-        providerId: 'openai', modelId: 'gpt-6-astra',
-        transportProviderId: 'codex', reason: 'alias',
-      });
-    }
+    expect(candidates).toHaveLength(3);
+    expect(candidates[0]?.target).toMatchObject({
+      requestedModel: 'claude-opus-5-5',
+      providerId: 'muse', modelId: 'muse-spark-1.3-contributor',
+      transportProviderId: 'muse', reason: 'alias',
+    });
     expect(candidates.map((candidate) => candidate.account.diagnosticAccountRef))
-      .toEqual(['codex_new', 'codex_old']);
+      .toEqual(['muse-redacted', 'cloud-redacted', 'codex_new']);
   });
 
-  it('ignores a conflicting override for the exclusive alias but honors it elsewhere', () => {
+  it('honors a conflicting override for the standard alias', () => {
     const overrideAccounts = [
       {
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {
@@ -445,13 +443,14 @@ describe('route candidate selection', () => {
     const conflicting = [{
       providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
     }];
-    const guarded = candidatesOf(selectRouteCandidates({
+    const overridden = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-opus-5-5', targetCandidatesOverride: conflicting },
       policy: DEFAULT_ROUTE_POLICY,
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: overrideAccounts,
     }));
-    expect(guarded.map((candidate) => candidate.target.modelId)).toEqual(['gpt-6-astra']);
+    expect(overridden.map((candidate) => candidate.target.modelId))
+      .toEqual(['gemini-3.8-flash']);
 
     const control = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash', targetCandidatesOverride: conflicting },
@@ -462,51 +461,57 @@ describe('route candidate selection', () => {
     expect(control.map((candidate) => candidate.target.modelId)).toContain('gemini-3.8-flash');
   });
 
-  it('never expands the exclusive alias through council equivalents', () => {
+  it('expands the standard alias through council equivalents', () => {
     const council = {
       ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       groups: [{
-        id: 'astra-fixture', intent: 'general' as const, expiresAt: '2027-01-01T00:00:00Z',
+        id: 'sol-fixture', intent: 'general' as const, expiresAt: '2027-01-01T00:00:00Z',
         evidence: [{
           suite: 'fixture', artifact: 'fixture.json', measuredAt: '2026-08-01T00:00:00Z',
           dimensions: { quality: 'equivalent' },
         }],
         members: [
-          { providerId: 'openai', modelId: 'gpt-6-astra', rank: 1, requiredCapabilities: [] },
+          { providerId: 'openai', modelId: 'gpt-6.1-sol', rank: 1, requiredCapabilities: [] },
           { providerId: 'openai', modelId: 'gpt-6-luna', rank: 2, requiredCapabilities: [] },
         ],
       }],
     };
     const councilAccounts = [
       {
-        accountRef: 'codex-astra', diagnosticAccountRef: 'astra-redacted',
+        accountRef: 'codex-sol', diagnosticAccountRef: 'sol-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra', 'gpt-6-luna'],
+        supportedModelIds: ['gpt-6.1-sol', 'gpt-6-luna'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
     ];
-    const guarded = candidatesOf(selectRouteCandidates({
+    const expanded = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-opus-5-5' },
       policy: DEFAULT_ROUTE_POLICY, council, accounts: councilAccounts,
     }));
-    expect(guarded.map((candidate) => candidate.target.modelId)).toEqual(['gpt-6-astra']);
+    expect(expanded.map((candidate) => candidate.target.modelId))
+      .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
 
     const control = candidatesOf(selectRouteCandidates({
-      request: { requestedModel: 'gpt-6-astra' },
+      request: { requestedModel: 'gpt-6.1-sol' },
       policy: DEFAULT_ROUTE_POLICY, council, accounts: councilAccounts,
     }));
     expect(control.map((candidate) => candidate.target.modelId))
-      .toEqual(['gpt-6-astra', 'gpt-6-luna']);
+      .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
   });
 
-  it('fails closed when Astra is unavailable for the exclusive alias', () => {
-    const astraReady = {
+  it('selects any available transport for the standard alias', () => {
+    const solReady = {
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready' as 'ready' | 'disabled' | 'cooldown' | 'reauth-required',
       revision: 'r1',
+    };
+    const cloudReady = {
+      ...solReady, accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+      targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+      supportedModelIds: ['gemini-3.8-flash'],
     };
     const selectAlias = (
       extra: {
@@ -516,7 +521,7 @@ describe('route candidate selection', () => {
           readonly diagnosticAccountRef?: string;
         };
       } = {},
-      aliasAccounts = [astraReady],
+      aliasAccounts = [solReady, cloudReady],
     ) =>
       selectRouteCandidates({
         request: { requestedModel: 'claude-opus-5-5', ...extra },
@@ -526,66 +531,88 @@ describe('route candidate selection', () => {
       });
 
     expect(selectAlias({}, [])).toMatchObject({ kind: 'no-eligible-account' });
-    expect(selectAlias({}, [{
-      ...astraReady, targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-      supportedModelIds: ['gemini-3.8-flash'],
-    }])).toMatchObject({ kind: 'no-eligible-account' });
+    const cloudOnly = selectAlias({}, [cloudReady]);
+    expect(cloudOnly.kind).toBe('candidates');
+    if (cloudOnly.kind === 'candidates') {
+      expect(cloudOnly.candidates.map((candidate) => candidate.target.transportProviderId))
+        .toEqual(['cloud-code']);
+    }
     for (const readiness of ['disabled', 'cooldown', 'reauth-required'] as const) {
-      expect(selectAlias({}, [{ ...astraReady, readiness }]))
+      expect(selectAlias({}, [{ ...solReady, readiness }]))
         .toMatchObject({ kind: 'no-eligible-account' });
     }
     expect(selectAlias({ explicit: { providerId: 'anthropic' } }))
       .toMatchObject({ kind: 'no-eligible-account' });
-    expect(selectAlias({ explicit: { transportProviderId: 'cloud-code' } }))
-      .toMatchObject({ kind: 'no-eligible-account' });
+    const cloudExplicit = selectAlias({ explicit: { transportProviderId: 'cloud-code' } });
+    expect(cloudExplicit.kind).toBe('candidates');
     expect(selectAlias(
       { explicit: { diagnosticAccountRef: 'codex-redacted' } },
-      [astraReady, { ...astraReady, accountRef: 'codex-2', diagnosticAccountRef: 'codex_2' }],
+      [solReady, { ...solReady, accountRef: 'codex-2', diagnosticAccountRef: 'codex_2' }],
     )).toMatchObject({ kind: 'candidates' });
   });
 
-  it('keeps only Astra accounts under alias policies, capabilities and restrictions', () => {
-    const pair = (ref: string, at: string) => ({
-      accountRef: ref, diagnosticAccountRef: ref,
-      targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: at,
-      readiness: 'ready' as const, revision: 'r1',
-    });
-    const duo = [pair('codex_old', '2026-08-01T00:00:00Z'), pair('codex_new', '2026-08-02T00:00:00Z')];
+  it('serves every transport for the alias under policies, capabilities and restrictions', () => {
+    const trio = [
+      {
+        accountRef: 'muse-internal', diagnosticAccountRef: 'muse-redacted',
+        targetProviderId: 'muse', transportProviderId: 'muse',
+        supportedModelIds: ['muse-spark-1.3-contributor'],
+        enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+        targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+        supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+    ];
 
     expect(candidatesOf(selectRouteCandidates({
       request: {
         requestedModel: 'claude-opus-5-5',
-        requiredCapabilities: ['tools', 'streaming', 'input:image'],
-        explicit: { diagnosticAccountRef: 'codex_new' },
+        requiredCapabilities: ['tools', 'streaming'],
+        explicit: { diagnosticAccountRef: 'muse-redacted' },
       },
       policy: DEFAULT_ROUTE_POLICY,
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
-      accounts: duo,
-    })).map((candidate) => candidate.target.providerId)).toEqual(['openai']);
+      accounts: trio,
+    })).map((candidate) => candidate.target.transportProviderId)).toEqual(['muse']);
     expect(selectRouteCandidates({
       request: {
-        requestedModel: 'claude-opus-5-5', requiredCapabilities: ['input:audio'],
+        requestedModel: 'claude-opus-5-5',
+        requiredCapabilities: [{ capability: 'contextWindowTokens', minimum: 999_999_999 }],
       },
       policy: DEFAULT_ROUTE_POLICY,
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
-      accounts: duo,
+      accounts: trio,
     })).toMatchObject({ kind: 'capabilities-unmet' });
-    for (const policy of [{
-      ...DEFAULT_ROUTE_POLICY,
-      strategy: { kind: 'ordered' as const, preferences: [{ transportProviderId: 'codex' }] },
-    }, {
-      ...DEFAULT_ROUTE_POLICY,
-      strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
-    }]) {
-      const ordered = candidatesOf(selectRouteCandidates({
-        request: { requestedModel: 'claude-opus-5-5' },
-        policy, council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL, accounts: duo,
-      }));
-      expect(ordered).toHaveLength(2);
-      expect(ordered.map((candidate) => candidate.target.providerId))
-        .toEqual(['openai', 'openai']);
-    }
+    const ordered = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-5-5' },
+      policy: {
+        ...DEFAULT_ROUTE_POLICY,
+        strategy: { kind: 'ordered' as const, preferences: [{ transportProviderId: 'codex' }] },
+      },
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL, accounts: trio,
+    }));
+    expect(ordered[0]?.target.transportProviderId).toBe('codex');
+    const roundRobin = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-5-5' },
+      policy: {
+        ...DEFAULT_ROUTE_POLICY,
+        strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
+      },
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL, accounts: trio,
+    }));
+    expect(roundRobin).toHaveLength(3);
+    expect(roundRobin.map((candidate) => candidate.target.transportProviderId).sort())
+      .toEqual(['cloud-code', 'codex', 'muse']);
   });
 
   it('distinguishes unknown ids, unmet capabilities, and no eligible account', () => {
