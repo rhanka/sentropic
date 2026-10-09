@@ -41,7 +41,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/llm-mesh": "^0.23.0",
+    "@sentropic/llm-mesh": "^0.24.0",
     "hono": "^4.10.7"
   },
   "peerDependencies": {
