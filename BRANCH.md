@@ -25,12 +25,20 @@ Add the mesh-side Mistral upstream transport (MistralRuntimeClient) serving the 
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+  - `packages/cluster-mesh/src/modules/catalog.ts`, `packages/cluster-mesh/package.json`, `packages/cluster-mesh/tests/modules/**`, `packages/cluster-mesh/tests/packaging/**` (BR24-EX1)
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (BR24-EX2)
+  - `package-lock.json` (BR24-EX3, llm-mesh/gateway entries via `make lock-root`)
+  - `packages/llm-gateway/package.json` (BR24-EX4, llm-mesh dependency range only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional or forbidden path.
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [x] `attention`: measured live 422 extra_forbidden on body.messages[0].user.metadata (Mistral rejects mesh-internal ingress metadata) — resolved by toWireMessage projection, regression test added.
+- [x] BR24-EX1: Paths `packages/cluster-mesh/src/modules/catalog.ts`, `packages/cluster-mesh/package.json` (peer range), `tests/modules/registry.spec.ts`, `tests/modules/topology-ranges.spec.ts`, `tests/packaging/optional-install.spec.ts`, `tests/packaging/skew-invariants.{ts,spec.ts}`. Evidence: LLM_MESH_RANGE `>=0.22.0 <0.24.0` rejects the new mesh 0.24.0. Reason: mesh 0.24.0 minor bump. Impact: range literal `<0.25.0` + boundary test rows. Rollback: revert with the range widening. Decision: mechanical consequence of the mesh bump (mirror of 368add5b7).
+- [x] BR24-EX2: Path `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (mesh installedVersion pin `0.23.1` -> `0.24.0`). Evidence: release-train gates pin the mesh sibling version. Reason: mesh 0.24.0 bump. Impact: version literal only. Rollback: revert with the version bump. Decision: mechanical consequence of the mesh release (mirror of bd7f3444f).
+- [x] BR24-EX3: Path `package-lock.json`, llm-mesh/gateway entries only, refreshed through `make lock-root`. Evidence: train lock-sync gate requires the root lockfile to match the package bump. Reason: mesh 0.24.0 bump. Impact: version/range fields only. Rollback: revert with the version bump. Decision: mechanical consequence of the mesh release.
+- [x] BR24-EX4: Path `packages/llm-gateway/package.json`, llm-mesh dependency range only (`^0.23.0` -> `^0.24.0`), no gateway version bump. Evidence: gateway hard-depends on the mesh; `^0.23.0` excludes 0.24.0. Reason: mesh 0.24.0 minor bump. Impact: dependency range literal. Rollback: revert with the mesh bump. Decision: mechanical consequence (mirror of fa3d41a3b).
+- [x] `attention`: api.mistral.ai enforces a strict chat message schema (live 422 extra_forbidden on body.messages[0].user.metadata) — resolved by toWireMessage projection, regression test added.
 - [x] `attention`: OpenAI SSE ` terminator would surface as a raw payload string — resolved by dropping it like muse.
 
 ## AI Flaky tests
@@ -62,7 +70,14 @@ Add the mesh-side Mistral upstream transport (MistralRuntimeClient) serving the 
   - [x] `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` lists `MistralAdapter`/`MistralRuntimeClient` leaves.
   - [x] `packages/cluster-mesh/tests/fixtures/types/llm-consumer.ts` compile fixture lists both.
   - [x] Lot gate: `make test-cluster-mesh SCOPE=tests/integrations/llm-surface.spec.ts` + `make typecheck-cluster-mesh`
-- [x] **Lot 4 — Final validation**
+- [ ] **Lot 4 — Release train surfaces for mesh 0.24.0**
+  - [ ] Widen `LLM_MESH_RANGE` to `>=0.22.0 <0.25.0` (catalog.ts, cluster-mesh package.json peer range, modules/packaging tests)
+  - [ ] Pin mesh `installedVersion` `0.24.0` in cluster-mesh tuple surfaces (gateway-surface, llm-surface)
+  - [ ] Sync gateway mesh dependency range to `^0.24.0` (no gateway version bump)
+  - [ ] `make lock-root` (root package-lock llm-mesh/gateway entries)
+  - [ ] Regenerate the frozen selected train lock via `refresh-lazy-package-lock` with packed sibling receipts
+  - [ ] Lot gate: `make typecheck-cluster-mesh` + scoped `make test-cluster-mesh`
+- [ ] **Lot 5 — Final validation**
   - [x] Typecheck & lint
   - [x] `make test-llm-mesh` full suite
   - [x] Bumped affected `packages/llm-mesh/package.json` version (minor 0.24.0, new exported runtime client) — enforced by CI `enforce-package-bump`.
