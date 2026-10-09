@@ -155,10 +155,12 @@ export type MusePosition = 'off' | 'after-claude' | 'first' | 'claude-last';
 export const DEFAULT_MUSE_POSITION: MusePosition = 'after-claude';
 
 /**
- * GLM 5.3 supplemental fallback effort per launch alias (owner decision
- * 2026-10-07, Artificial Analysis Intelligence Index: GLM-5.3 (Max) = 45 =
- * Claude Opus 5 (Medium)). The GLM candidate always mirrors the measured
- * GLM-5.3 (Max) configuration, so every mapped alias gets effort `max`.
+ * GLM 5.3 supplemental fallback effort per launch alias (owner decisions
+ * 2026-10-07 and 2026-10-08, Artificial Analysis Intelligence Index:
+ * GLM-5.3 (Max) = 45 = Claude Opus 5 (Medium)). The Claude 5.5 and Fable 5.1
+ * families mirror the requested effort at +1 rung on the native low/high/max
+ * ladder (base/low/medium -> high; high/xhigh/max -> max); the Opus 5 and
+ * Opus 4.8 families keep the measured GLM-5.3 (Max) configuration.
  * Aliases absent from this map get no GLM candidate. The candidate is the
  * LAST fallback, after Codex and Cloud Code (mistral-vibe transport).
  */
@@ -170,7 +172,24 @@ export const GLM_ROUTE_EFFORT: Readonly<Record<string, string>> = {
   'claude-opus-4-8': 'max',
   'claude-opus-4-8-xhigh': 'max',
   'claude-opus-4-8-max': 'max',
-  'claude-fable-5-1': 'max',
+  // Claude 5.5 and Fable 5.1 families (owner decision 2026-10-08): GLM 5.3
+  // mirrors the requested effort at +1 rung on its native low/high/max
+  // ladder (base/low/medium -> high; high/xhigh/max -> max).
+  'claude-opus-5-5': 'high',
+  'claude-opus-5-5-low': 'high',
+  'claude-opus-5-5-medium': 'high',
+  'claude-opus-5-5-high': 'max',
+  'claude-opus-5-5-xhigh': 'max',
+  'claude-opus-5-5-max': 'max',
+  'claude-sonnet-5-5': 'high',
+  'claude-sonnet-5-5-low': 'high',
+  'claude-sonnet-5-5-medium': 'high',
+  'claude-sonnet-5-5-high': 'max',
+  'claude-sonnet-5-5-xhigh': 'max',
+  'claude-sonnet-5-5-max': 'max',
+  'claude-fable-5-1': 'high',
+  'claude-fable-5-1-low': 'high',
+  'claude-fable-5-1-medium': 'high',
   'claude-fable-5-1-high': 'max',
   'claude-fable-5-1-xhigh': 'max',
   'claude-fable-5-1-max': 'max',
