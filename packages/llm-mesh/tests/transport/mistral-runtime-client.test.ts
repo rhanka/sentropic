@@ -166,6 +166,33 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     expect(events[events.length - 1]?.type).toBe('done');
   });
 
+  it('drops the OpenAI SSE done terminator (never a stray content delta)', async () => {
+    const sse = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const chunk of [
+          'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const client = new MistralRuntimeClient({ fetch: async () => sse });
+
+    const events = [];
+    for await (const event of await client.stream({ ...request }, auth)) {
+      events.push(event);
+    }
+
+    const deltas = events.filter((e) => e.type === 'content_delta');
+    expect(deltas.map((e) => (e as { data: { delta: string } }).data.delta).join('')).toBe('hi');
+    const done = events[events.length - 1];
+    expect(done?.type).toBe('done');
+    expect((done as { data: { finishReason: string } }).data.finishReason).toBe('stop');
+  });
+
   it('sets stream:true on the wire for SSE (Mistral answers 200 JSON without it)', async () => {
     const fetchFn = vi.fn(async () => new Response('data: {"x":1}\n\n', { status: 200 }));
     const client = new MistralRuntimeClient({ fetch: fetchFn });

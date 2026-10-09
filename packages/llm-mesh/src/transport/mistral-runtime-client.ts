@@ -134,7 +134,7 @@ const parseSseJson = async function* (
           .filter((line) => line.startsWith('data:'))
           .map((line) => line.slice(5).trim())
           .join('\n');
-        if (payload && payload) {
+        if (payload && payload !== '[DONE]') {
           try {
             yield JSON.parse(payload);
           } catch {
