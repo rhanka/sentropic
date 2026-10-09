@@ -126,7 +126,7 @@ WORKDIR /workspace/api
 CMD ["npm", "run", "dev"]
 
 # Retain legacy esbuild interfaces while rebuilding their embedded Go runtime.
-FROM golang:1.26.7-alpine3.23@sha256:b17af760035fc2f338eed92d448a6c67f2d45438844fc6c60678fa5f99e44b57 AS ci-esbuild
+FROM golang:1.26.9-alpine3.23@sha256:52c60db0b6661204bf2ed874743bffc80c17eaf95d6ff51d87e205484358d40f AS ci-esbuild
 RUN mkdir -p /patched && \
     GOBIN=/patched go install github.com/evanw/esbuild/cmd/esbuild@v0.19.12 && \
     mv /patched/esbuild /patched/esbuild-0.19.12 && \
