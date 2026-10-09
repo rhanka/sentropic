@@ -65,7 +65,7 @@ Add the mesh-side Mistral upstream transport (MistralRuntimeClient) serving the 
 - [x] **Lot 4 — Final validation**
   - [x] Typecheck & lint
   - [x] `make test-llm-mesh` full suite
-  - [ ] Bumped affected `packages/llm-mesh/package.json` version (minor 0.24.0, new exported runtime client) — enforced by CI `enforce-package-bump`.
+  - [x] Bumped affected `packages/llm-mesh/package.json` version (minor 0.24.0, new exported runtime client) — enforced by CI `enforce-package-bump`.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once CI is OK, commit removal of `BRANCH.md`, push, and merge.
