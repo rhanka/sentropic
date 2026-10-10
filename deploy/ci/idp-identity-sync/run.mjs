@@ -31,6 +31,19 @@ export function failureVerdict(name, k = kube) {
     return `job/${name} failed: ${failure.code}${pairs.length ? ` (${pairs.join(',')})` : ''}`;
   } catch { throw new Error(`job/${name} failed: termination failure code unavailable`); }
 }
+export async function importSnapshot(inputs, suffix, k = kube, wait = waitJob) {
+  if (!/^[0-9]+-[0-9]+$/.test(suffix)) throw new Error('invalid run ID');
+  const name = `sentropic-idp-sync-${suffix}`;
+  if (name.length > 63) throw new Error('Job name too long');
+  // The general app rollout can be skipped; deliver this checkout's importer first.
+  k(['apply', '-k', 'deploy/k8s/overlays/preprod/idp-identity-sync']);
+  applyJob('sentropic-preprod', name, render(template('import-job.tmpl.yaml'), { ...inputs, JOB_NAME: name }), k);
+  const verdict = await wait('sentropic-preprod', name, 900, k);
+  if (verdict === 'failed') throw new Error(failureVerdict(name, k));
+  if (verdict !== 'complete') throw new Error(`job/${name} failed`);
+  try { return collectAudit(name, inputs.DRY_RUN === '1' ? 'rolled_back' : 'committed', k); }
+  catch (error) { console.log(`job/${name}: audit unavailable`); throw error; }
+}
 export async function main(action = process.argv[2]) {
   switch (action) {
     case 'validate': validateRun(); console.log('run inputs accepted'); return;
@@ -53,15 +66,7 @@ export async function main(action = process.argv[2]) {
     case 'import': {
       const inputs = validateRun();
       const suffix = req('GITHUB_RUN_ID') + '-' + req('GITHUB_RUN_ATTEMPT');
-      if (!/^[0-9]+-[0-9]+$/.test(suffix)) throw new Error('invalid run ID');
-      const name = `sentropic-idp-sync-${suffix}`;
-      if (name.length > 63) throw new Error('Job name too long');
-      applyJob('sentropic-preprod', name, render(template('import-job.tmpl.yaml'), { ...inputs, JOB_NAME: name }));
-      const verdict = await waitJob('sentropic-preprod', name, 900);
-      if (verdict === 'failed') throw new Error(failureVerdict(name));
-      if (verdict !== 'complete') throw new Error(`job/${name} failed`);
-      try { collectAudit(name, inputs.DRY_RUN === '1' ? 'rolled_back' : 'committed'); }
-      catch (error) { console.log(`job/${name}: audit unavailable`); throw error; }
+      await importSnapshot(inputs, suffix);
       return;
     }
     case 'cleanup': rmSync(workdir(), { recursive: true, force: true }); return;

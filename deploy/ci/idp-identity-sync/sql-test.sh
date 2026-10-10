@@ -53,7 +53,10 @@ sql -d app -c "DO \$\$ BEGIN IF (SELECT count(*) FROM information_schema.column_
 reject 'reader cannot write identities' 'read-only transaction' -d app -U idp_identity_reader -c "UPDATE users SET role = 'guest'"
 stage=export
 cd /tmp/relay
-sql -d app -U idp_identity_reader -f "$prod/export-prod.sql"
+mkdir -p /sql /work
+cp "$prod/export-prod.sql" /sql/export-prod.sql
+export_bundle() { PGDATABASE=app PGUSER=idp_identity_reader sh "$prod/export-prod.sh" > /tmp/export.log 2>&1; }
+export_bundle
 IFS=, read -r snapshot users credentials consents clients < snapshot.csv
 [ "$users" = 8 ] && [ "$credentials" = 18 ] && [ "$consents" = 1 ] && [ "$clients" = 4 ]
 [ "$(wc -l < users.csv)" -eq 9 ] && [ "$(wc -l < webauthn.csv)" -eq 19 ]
@@ -88,11 +91,9 @@ echo 'PASS: default and explicit dry-run rolled back; audit users=9 credentials=
 stage=pod-import-wrapper
 mkdir -p /work /sql
 ln -s "$import" /sql/import-preprod.sql
-sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
 refresh_relay() {
-  sql -d app -U idp_identity_reader -f "$prod/export-prod.sql"
+  export_bundle
   IFS=, read -r snapshot users credentials consents clients < snapshot.csv
-  sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
 }
 wrapper() {
   (
@@ -140,7 +141,12 @@ sql -d preprod -c "CREATE FUNCTION test_consent_tamper() RETURNS trigger LANGUAG
 reject_wrapper consent_postcondition_failed
 sql -d preprod -c 'DROP TRIGGER test_consent_tamper ON oauth_consents; DROP FUNCTION test_consent_tamper();'
 cp SHA256SUMS checksums.original
-sed '/ consents.csv$/d' checksums.original > SHA256SUMS
+for file in consents.csv clients.csv; do
+  sed "/ $file\$/d" checksums.original > SHA256SUMS
+  reject_wrapper invalid_manifest
+done
+cp checksums.original SHA256SUMS
+sed -n '/ clients.csv$/p' checksums.original >> SHA256SUMS
 reject_wrapper invalid_manifest
 cp checksums.original SHA256SUMS
 sha256sum /sql/client-map.csv | sed 's@/sql/@@' >> SHA256SUMS
@@ -243,18 +249,21 @@ for mutation in "UPDATE oauth_clients SET name = 'synthetic-tamper'" "UPDATE id_
   unchanged
   sql -d preprod -c 'DROP TRIGGER test_tamper ON users; DROP FUNCTION test_tamper();'
 done
-stage=commit
-sync -v dry_run=0 -v allowed_rekey="$pair"
-grep -Fxq COMMITTED /tmp/sql.log
+stage=export-manifest-import-commit
+refresh_relay
+WRAPPER_DRY_RUN=0 wrapper
+grep -Fq '"outcome":"committed"' /dev/termination-log
+grep -Fq '"clients_upserted":1' /dev/termination-log
+grep -Fq '"clients_removed":0' /dev/termination-log
 sql -d preprod -f "$fixtures/assert-committed.sql"
 psql -XAtq -v ON_ERROR_STOP=1 -d preprod -c "SELECT to_jsonb(c) FROM oauth_clients c WHERE client_id = 'immo-mcp'" > /acceptance/immo-client.json
 assert_sql 'UPDATE test_before SET state = test_state()'
-echo 'PASS: committed users=9 credentials=22 collisions=0; product FKs and DV5 preserved'
+echo 'PASS: real export script and five-file manifest import immo-mcp; users=9 credentials=22; product FKs and DV5 preserved'
 stage=idempotent-rerun
-sync -v dry_run=0
-grep -Fxq 'rekeyed|0' /tmp/sql.log
-grep -Fxq 'consents_upserted|0' /tmp/sql.log
-grep -Fxq 'consents_removed|0' /tmp/sql.log
+WRAPPER_DRY_RUN=0 WRAPPER_REKEY='' wrapper
+for key in rekeyed consents_upserted consents_removed clients_upserted clients_removed; do
+  grep -Fq "\"$key\":0" /dev/termination-log
+done
 unchanged
 echo 'PASS: rerun with empty allowlist is a no-op'
 WRAPPER_UNSET_REKEY=1 wrapper

@@ -15,7 +15,9 @@ signing keys and authentication state of users whose IDs do not change stay inta
 3. CI waits for the new Job, reads counts from the export init container's
    termination message through pod status, then always re-suspends the CronJob.
    The prod trigger cannot create Jobs or read pod logs.
-4. CI switches to the preprod kubeconfig and creates a uniquely named import Job.
+4. CI switches to the preprod kubeconfig, applies the preprod sync subdirectory
+   from the same checkout, then creates a uniquely named import Job. Bundle
+   application failure stops before Job creation.
    Before downloading the relay, its init containers dump the complete preprod
    database in custom format and upload `pre-idp-sync/<job-name>.dump` using the
    **preprod** `sentropic-pgbackup` Secret's bucket and identity.
@@ -147,10 +149,12 @@ Audit counts `consents_upserted` and `consents_removed` report actual changes;
 an unchanged rerun reports 0/0. Failed maps and postconditions emit only
 `consent_client_missing` or `consent_postcondition_failed`.
 
-On merge, `deploy-preprod` ships the importer expecting five relay files, while
-the `bundle-prod` push ships the exporter and reader GRANT. A scheduled run
-between those updates fails closed on the manifest; the next run converges.
-After both updates, s-conductor dispatches a dry-run and then an approved real run.
+The sync run delivers its own importer before Job creation; it does not depend
+on the general `deploy-preprod` app rollout succeeding. This keeps the five-file
+export manifest and importer aligned even after a skipped app deployment.
+The preprod CI identity must be allowed to apply the scoped sync resources,
+including its SQL ConfigMap. Manifest validation remains strict.
+After merge, s-conductor dispatches a dry-run and then an approved real run.
 
 ## OAuth client convergence
 
@@ -223,4 +227,8 @@ make test-idp-sync-sql ENV=test-idp-sync
 ```
 
 Pinned containers perform kustomize rendering, mocked CI controls and isolated
-Postgres tests. No Python or cluster access is used.
+Postgres tests. The SQL gate runs the CronJob's actual `export-prod.sh`, including
+five-file SHA256SUMS generation, then the import Job's actual shell validator and
+SQL through a committed `immo-mcp` upsert and an unchanged rerun. Missing or
+duplicate client manifest entries, unexpected files and checksum tampering fail
+closed. Selftests also check Node and shell syntax. No Python or cluster access is used.

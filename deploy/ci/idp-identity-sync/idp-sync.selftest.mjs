@@ -36,6 +36,18 @@ for (const tier of ['prod', 'preprod']) {
     assert.deepEqual(pod.containers.map(c => [c.name, c.image]), [['upload', s5cmdImage]]);
   });
 }
+check('pipeline Node and shell sources pass syntax checks', () => {
+  for (const file of filesUnder('deploy/ci/idp-identity-sync').filter(file => /\.(mjs|sh)$/.test(file))) {
+    const result = file.endsWith('.mjs') ? spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' })
+      : spawnSync('sh', ['-n', file], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `syntax: ${file}`);
+  }
+  for (const objects of Object.values(bundles)) for (const cm of objects.filter(o => o.kind === 'ConfigMap')) {
+    for (const [name, source] of Object.entries(cm.data)) if (name.endsWith('.sh')) {
+      assert.equal(spawnSync('sh', ['-n'], { input: source }).status, 0, `syntax: ${name}`);
+    }
+  }
+});
 check('client host policy agrees with existing prod/preprod ingress hosts', () => {
   const cm = bundles.preprod.find(o => o.kind === 'ConfigMap' && o.metadata.name === 'sentropic-idp-identity-sync-sql');
   const hosts = cm.data['host-map.csv'].trim().split('\n').slice(1).map(row => row.split(','));
