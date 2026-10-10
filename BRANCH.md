@@ -32,6 +32,7 @@
 ## Feedback Loop
 - [x] BR45-EX2: Makefile — extend only test-idp-sync-sql to exercise the real authorize handler with the imported fixture; isolated containers only; rollback removes the added acceptance invocation.
 - [x] Design recorded in .h2a/SPEC.md; conductor review may follow the PR per build brief.
+- [x] R1: Independent review identified malformed URI authorities; reproduced the failure and reject invalid DNS/IPv4/percent syntax for redirects and resources with rollback regression checks.
 
 ## AI Flaky tests
 - [x] No provider-dependent tests or flaky exceptions.

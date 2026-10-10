@@ -41,7 +41,8 @@ this pass: immo, sentropic and auth under sent-tech.ca map to their `preprod.`
 hosts. Parse absolute HTTPS URI authority, rewrite only the exact host, and
 preserve path, port and query. External URIs stay byte-identical. Already mapped
 preprod hosts stay unchanged. Reject malformed URIs, ambiguous maps, userinfo,
-fragments and unmapped sent-tech.ca hosts with `client_policy_invalid`.
+fragments, invalid percent escapes, invalid DNS/IPv4 authorities (including DNS
+terminal dots), and unmapped sent-tech.ca hosts with `client_policy_invalid`.
 Selftests cross-check the sentropic/auth pairs against existing ingress overlays.
 
 D4. Public source means auth method none, has_secret=false, require_pkce=true.
