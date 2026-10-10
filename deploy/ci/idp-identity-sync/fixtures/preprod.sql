@@ -35,6 +35,7 @@ VALUES ('duplicate-comment', '00000000-0000-0000-0000-000000000001', 'test', 'sy
 INSERT INTO oauth_clients (id, client_id, name, redirect_uris, allowed_scopes) VALUES
 ('client-1', 'radar-immobilier-preprod', 'Synthetic radar', ARRAY['https://radar.example.invalid/callback'], ARRAY['openid']),
 ('client-2', 'synthetic-client', 'Synthetic client', ARRAY['https://client.example.invalid/callback'], ARRAY['openid']);
+UPDATE oauth_clients SET client_secret_hash = 'synthetic-preprod-hash' WHERE client_id = 'synthetic-client';
 INSERT INTO id_token_signing_keys (kid, public_jwk, private_key_encrypted, active, created_at)
 VALUES ('synthetic-signing-key', '{"kty":"OKP","x":"synthetic-public"}', decode('00', 'hex'), true, '2026-01-01');
 INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at)
