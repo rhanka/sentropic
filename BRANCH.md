@@ -1,7 +1,7 @@
 # Fix: Refresh the IdP importer before OAuth client sync
 
 ## Objective
-- [ ] Prevent a stale four-file importer from rejecting the five-file OAuth client export, and exercise export, manifest validation and committed client import together.
+- [x] Prevent a stale four-file importer from rejecting the five-file OAuth client export, and exercise export, manifest validation and committed client import together.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/idp-client-sync-manifest`; branch: `fix/idp-client-sync-manifest`; base: `origin/main`.
@@ -54,8 +54,8 @@
   - [x] Retain malformed, missing, extra, duplicate and tampered manifest rejection coverage.
   - [x] Acceptance: public PKCE, no prod secret, external callback and rewritten preprod resource in the committed row and real authorize handler.
   - [x] Gate: `make test-idp-sync-sql ENV=test-idp-sync-manifest` includes `sql-test.sh`, `clients-test.sh` and `authorize.selftest.mjs` (PASS).
-- [ ] **Lot 3 — Final validation and handoff**
+- [x] **Lot 3 — Final validation and handoff**
   - [x] Node/shell syntax and pipeline bundle checks: `make test-idp-sync-selftest ENV=test-idp-sync-manifest` (47 PASS); mechanical `make scope-check` before each atomic commit. No TypeScript or API/UI files changed; script syntax checks are the scoped static gate.
-  - [ ] Review every diff hunk, preserve all #799/#658 invariants and resolve findings.
-  - [ ] Push and create PR to main using this plan as the English PR body; post the execution plan comment.
-  - [ ] Wait for CI on the PR head, fix failures, update PR body and write `.h2a/report.md` with PR/head/check evidence and open questions.
+  - [x] Review every diff hunk locally and preserve all #799/#658 invariants; the brief's independent reviewer remains conductor-managed, with no consensus claimed.
+  - [x] Push and create PR #660 to main using this plan as the English PR body; post the execution plan comment.
+  - [x] CI run 38031356203 is green on implementation head `468d3d7f8`; `.h2a/report.md` records the root cause, PR/head/check evidence and operator handoff. Recheck the final documentation head before handoff.
