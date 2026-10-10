@@ -22,18 +22,20 @@ interface ClaudeOAuthProfile {
   source: string;
 }
 
-// Public constants verified in official Claude Code 2.1.80 (spec ledger A2).
+// Public constants verified in official Claude Code 2.1.296 (spec ledger A2; live
+// validation 2026-10-10: the legacy claude.ai authorize endpoint leaves the consent
+// button permanently disabled and current grants carry the user:plugins scope).
 const USER_SCOPES = ['user:profile', 'user:inference', 'user:sessions:claude_code',
-  'user:mcp_servers', 'user:file_upload'];
+  'user:mcp_servers', 'user:plugins', 'user:file_upload'];
 const BUNDLED_PROFILE: ClaudeOAuthProfile = {
-  id: 'claude-code-oauth-2.1.80-v1',
-  authorizationUrl: 'https://claude.ai/oauth/authorize',
+  id: 'claude-code-oauth-2.1.296-v1',
+  authorizationUrl: 'https://claude.com/cai/oauth/authorize',
   tokenUrl: 'https://platform.claude.com/v1/oauth/token',
   clientId: '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
   redirectUri: 'https://platform.claude.com/oauth/code/callback',
   authorizationScopes: ['org:create_api_key', ...USER_SCOPES],
   refreshScopes: [...USER_SCOPES], requiredScopes: ['user:inference'],
-  source: 'https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.80',
+  source: 'https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.296',
 };
 const failure = (reason: string): Error => new Error(`Claude enrollment: ${reason}; reauthenticate`);
 // Only local preparation failures may permit replaying the same refresh grant.
