@@ -163,7 +163,8 @@ Exact HTTPS authorities in redirects and resource indicators are rewritten;
 ports, paths and queries survive. External callbacks (including
 `https://claude.ai/api/mcp/auth_callback`) remain byte-identical. Already mapped
 preprod hosts remain unchanged. Unmapped sent-tech.ca hosts, userinfo, fragments,
-backslashes, insecure URIs and ambiguous policy maps fail with `client_policy_invalid`.
+backslashes, invalid percent escapes, empty/invalid DNS labels, DNS terminal dots,
+noncanonical/invalid IPv4, insecure URIs and ambiguous maps fail with `client_policy_invalid`.
 
 Public clients require `none`, no secret and PKCE. Inserts get a fresh preprod
 row ID and a null hash. Existing confidential clients require a matching

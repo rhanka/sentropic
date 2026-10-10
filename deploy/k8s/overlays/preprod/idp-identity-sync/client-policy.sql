@@ -31,14 +31,29 @@ BEGIN
     THEN RAISE EXCEPTION 'client policy invalid'; END IF;
 END $$;
 CREATE FUNCTION pg_temp.rewrite_client_uri(uri text) RETURNS text LANGUAGE plpgsql AS $$
-DECLARE parts text[]; host text; target text;
+DECLARE parts text[]; host text; target text; label text;
 BEGIN
   -- Authority parsing prevents replacing a host-looking string inside a path/query.
   parts := regexp_match(uri, '^https://([A-Za-z0-9.-]+)(:[0-9]{1,5})?([/?][^#[:space:]]*)?$', 'i');
-  IF parts IS NULL OR uri IS NULL OR strpos(uri, chr(92)) > 0
+  IF parts IS NULL OR uri IS NULL OR strpos(uri, chr(92)) > 0 OR uri ~ '[[:cntrl:]]'
+     OR strpos(regexp_replace(uri, '%[0-9A-Fa-f]{2}', '', 'g'), '%') > 0
      OR (parts[2] IS NOT NULL AND substring(parts[2] FROM 2)::int NOT BETWEEN 1 AND 65535)
     THEN RAISE EXCEPTION 'client policy invalid'; END IF;
-  host := lower(rtrim(parts[1], '.'));
+  host := lower(parts[1]);
+  -- Reject DNS terminal dots rather than silently changing an unlisted authority.
+  IF length(host) > 253 THEN RAISE EXCEPTION 'client policy invalid'; END IF;
+  FOREACH label IN ARRAY string_to_array(host, '.') LOOP
+    IF label !~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'
+      THEN RAISE EXCEPTION 'client policy invalid'; END IF;
+  END LOOP;
+  -- Numeric-ending hosts use URL IPv4 parsing. Accept only canonical dotted decimal.
+  IF host ~ '(^|[.])([0-9]+|0x[0-9a-f]+)$' THEN
+    IF host !~ '^(0|[1-9][0-9]{0,2})([.](0|[1-9][0-9]{0,2})){3}$'
+      THEN RAISE EXCEPTION 'client policy invalid'; END IF;
+    FOREACH label IN ARRAY string_to_array(host, '.') LOOP
+      IF label::int > 255 THEN RAISE EXCEPTION 'client policy invalid'; END IF;
+    END LOOP;
+  END IF;
   SELECT preprod_host INTO target FROM host_map WHERE prod_host = host;
   IF target IS NOT NULL THEN RETURN 'https://' || target || coalesce(parts[2], '') || coalesce(parts[3], ''); END IF;
   IF (host = 'sent-tech.ca' OR host LIKE '%.sent-tech.ca')
