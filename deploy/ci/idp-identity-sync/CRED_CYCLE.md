@@ -14,13 +14,24 @@ plaintext Secret manifests or CSV snapshots.
 | Existing preprod CI SA (record actual identity at bootstrap) | `sentropic-preprod` | Existing tenant deployment rights, import Jobs create/delete/apply/get/list/watch, pods/status/logs read | `KUBE_CONFIG_DATA_PREPROD` in `sentropic-idp-run` | Existing credential register; verify expiry and renew before arming |
 | `sentropic-idp-export` pod SA | `sentropic` | No API token mounted; PostgreSQL connection using reader Secret; relay writer via env | `sentropic-idp-identity-reader`, `sentropic-idp-relay-writer` | Pod SA has no issued workflow token; material rotates every 90 days |
 | `sentropic-idp-sync` pod SA | `sentropic-preprod` | No API token mounted; preprod app DB, preprod rollback bucket, relay read only | `sentropic-postgres`, `sentropic-pgbackup`, `sentropic-idp-relay-reader` | Tenant governs existing DB/backup material; relay rotation 90 days |
-| `idp_identity_reader` PG role | Prod app DB | LOGIN, read-only, connection limit 2, statement timeout 60 s, exact column SELECT (users 13, WebAuthn 10) | `sentropic-idp-identity-reader` keys PGUSER/PGPASSWORD | Tenant-generated password; record issuance and rotate ≤90 days |
+| `idp_identity_reader` PG role | Prod app DB | LOGIN, read-only, connection limit 2, statement timeout 60 s, exact column SELECT (users 13, WebAuthn 10, consents 6, clients 15) | `sentropic-idp-identity-reader` keys PGUSER/PGPASSWORD | Tenant-generated password; record issuance and rotate ≤90 days |
 
 The bundle identity is privileged within the tenant: Kubernetes create permissions
 cannot be restricted by resource name. Its existing-resource and Secret updates
 are bounded by the bootstrap Role. Keep it in the owner-reviewed prod environment.
 The narrow trigger's jobTemplate restriction depends on the k8s-owned Deny VAP;
 CD tests that admission is enforced and neutralizes its Role on gate failure.
+
+Client grants are provisioned idempotently by the same protected reader Job.
+The relay exports client configuration and only boolean secret presence; it
+never carries a prod client secret hash or signing key. Existing confidential
+preprod clients keep their independent hash. New confidential clients are
+skipped until their preprod secret is provisioned through governed CD; public
+PKCE clients use none/null. Client selection requires an explicit `ALLOWED_CLIENTS`
+dispatch input (empty on schedule); no deletion is enabled. Verify changed/skipped
+client counts in the protected dry-run before any owner-approved real dispatch.
+The tenant administrator's kubeconfig stays operator-local; only the bounded
+delegated workflow SA kubeconfigs listed above enter protected CI environments.
 
 TokenRequest kubeconfigs use bounded tokens, not legacy ServiceAccount token
 Secrets. Keep a 0600 recovery kubeconfig outside git and record its SA UID and
