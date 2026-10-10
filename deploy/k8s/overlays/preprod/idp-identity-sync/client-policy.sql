@@ -5,7 +5,7 @@
 \endif
 CREATE TEMP TABLE src_clients (LIKE oauth_clients INCLUDING DEFAULTS) ON COMMIT DROP;
 ALTER TABLE src_clients DROP COLUMN id, DROP COLUMN client_secret_hash, ADD COLUMN has_secret boolean NOT NULL;
-\copy src_clients (client_id, has_secret, name, redirect_uris, allowed_scopes, grant_types, response_types, token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce, resource_indicators, tenant_id, owner_user_id, created_at, updated_at) FROM 'clients.csv' WITH (FORMAT csv, HEADER true)
+\copy src_clients (client_id, has_secret, name, redirect_uris, allowed_scopes, grant_types, response_types, token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce, resource_indicators, tenant_id, owner_user_id, created_at, updated_at) FROM 'clients.csv' WITH (FORMAT csv, HEADER MATCH)
 SELECT set_config('sync.expected_clients', :'expected_clients', true),
        set_config('sync.allowed_clients', :'allowed_clients', true) \gset sync_
 CREATE TEMP TABLE allowed_clients ON COMMIT DROP AS
