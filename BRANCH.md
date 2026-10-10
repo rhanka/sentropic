@@ -42,11 +42,11 @@
 - [x] **Lot 0 — Baseline and evidence**
   - [x] Read rules, pipeline sources, fixtures and branch template; `harness check branch` passes.
   - [x] Confirm the source validator already accepts five files and trace the skipped preprod rollout.
-- [ ] **Lot 1 — Import delivery regression**
-  - [ ] Extend `run.selftest.mjs` to require the matching preprod bundle before Job creation and reject bundle-apply failure.
-  - [ ] Update `run.mjs` to refresh only `deploy/k8s/overlays/preprod/idp-identity-sync` before applying the import Job.
-  - [ ] Update pipeline README to explain same-checkout importer delivery.
-  - [ ] Scoped gate: `make test-idp-sync-selftest ENV=test-idp-sync-manifest`.
+- [x] **Lot 1 — Import delivery regression**
+  - [x] Extend `run.selftest.mjs` to require the matching preprod bundle before Job creation and reject bundle-apply failure; reproduce the missing-delivery assertion before fixing it.
+  - [x] Update `run.mjs` to refresh only `deploy/k8s/overlays/preprod/idp-identity-sync` before applying the import Job.
+  - [x] Update pipeline README to explain same-checkout importer delivery.
+  - [x] Scoped gate: `make test-idp-sync-selftest ENV=test-idp-sync-manifest` (46 PASS).
 - [ ] **Lot 2 — Export-to-import manifest acceptance**
   - [ ] Extract the existing prod export command into `export-prod.sh`, mounted by the prod SQL ConfigMap and invoked by the CronJob.
   - [ ] Update `bundle-checks.mjs` and `sql-test.sh` to execute that exact export command and checksum generation.
