@@ -89,6 +89,198 @@ const facade = createLlmMeshFacade({
 That migration option is only for pre-ownerScope local records. New enrollment
 always takes ownership from `StartEnrollmentInput.ownerScope`.
 
+## Claude subscription enrollment (LOT 1)
+
+The facade supports browser PKCE enrollment and renewable Claude CLI credential
+import, durable ordinary seats, and refresh on acquire. Hosts without a qualified
+official CLI runner remain **enrollment only**, execution **`not-covered`**.
+The LOT 2 bridge below provides the host injection seam.
+
+```ts
+import { createLlmMeshFacade } from '@sentropic/llm-mesh/facade';
+import type { EnrollmentCompletion } from '@sentropic/llm-mesh/enrollment';
+
+const facade = createLlmMeshFacade({
+  mode: 'cli',
+  configResolver: { async resolveConfig() { return {}; } },
+});
+const session = await facade.enroll('claude-code', {
+  configRef: 'claude-code', mode: 'cli', redirectUri: '', ownerScope: verifiedOwner,
+});
+// A trusted local component opens session.url and captures <code>#<state>.
+// Capability-check optional methods when supporting older mesh versions.
+if (!facade.completeClaudeEnrollment) throw new Error('Claude enrollment unavailable');
+const completion: EnrollmentCompletion = await facade.completeClaudeEnrollment(
+  session.enrollmentId, maskedCodeInput, verifiedOwner,
+);
+```
+
+The authenticated host supplies the owner. Code/credential inputs and the
+authorization URL stay inside trusted local UI/provider/storage components:
+never put them in agent or MCP arguments, shell text, argv, environment variables,
+logs, traces, snapshots, history, clipboard diagnostics or exception receipts.
+Completion/list results contain only public account references and labels. A
+browser session expires after 15 minutes; each completion is one-use, with strict
+state, cancellation and a 30-second token-request deadline. Failed/ambiguous
+exchanges require a fresh enrollment; codes are never retried automatically.
+
+`{}` selects the provisional A2 profile `claude-code-oauth-2.1.296-v1`, sourced from
+the [official 2.1.296 package](https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.296) and
+live-validated on 2026-10-10 (authorize endpoint `claude.com/cai`, `user:plugins` scope, 32-byte
+nonce states).
+Current provider acceptance remains unverified. Nonempty resolver results must be
+complete profiles: `id`, `authorizationUrl`, `tokenUrl`, `clientId`, `redirectUri`,
+`authorizationScopes`, `refreshScopes`, `requiredScopes`, `source`. URLs use HTTPS;
+required scopes include `user:inference` and must occur in authorization/refresh
+scopes. IDs are immutable; the bundled ID cannot be redefined. Redirect input must
+be empty or exactly the configured manual callback. No client secret is required.
+Custom refresh resolves the stored ID and requires an exact version match; keep
+old profiles available while grants exist. Bundled refresh bypasses the host
+resolver. Unknown IDs and legacy `v1.0.0` require reauthentication before HTTP.
+
+For sessionless paste, the trusted component calls the optional
+`facade.completeClaudeCredentialImport(maskedCredentialJson, verifiedOwner)`.
+Accept either the full JSON document containing `claudeAiOauth` or that inner
+object: `accessToken`, `refreshToken`, `expiresAt` (epoch milliseconds), `scopes`.
+The limit is 64 KiB in UTF-8. Access-only strings/setup tokens are refused; missing
+refresh material, blank/CR/LF tokens, invalid expiry or incompatible scopes fail.
+Unknown fields and descriptive identity data are discarded; labels use opaque
+random account IDs. Valid past expiry is accepted offline and refreshed on first
+acquire. Import uses the host's `claude-code` profile, never a profile in the paste.
+
+CLI mode defaults to an encrypted file keyring. Portal mode defaults to memory;
+provide a durable keyring with atomic owner claims for restart persistence.
+Both paths save the envelope, public record and index before local eligibility.
+Refresh stays single-flight through validation, save and publication. Local storage
+or preparation outages before a provider request are retryable; terminal errors or
+failures after a request may have been sent require reauthentication. Scope metadata
+records the actual validated grant scopes.
+One grant means one mesh account and one refresh holder. Imports with a refresh
+token already stored for a Claude account of the same owner are refused with
+"This Claude credential is already enrolled"; comparisons stay in process.
+Use one credential-owning service per grant. Before importing, disable/logout the
+source CLI and record transfer evidence; copying a file does not transfer refresh
+ownership or create a new provider device. Local removal does not prove provider
+revocation. Custody-managed access projections belong to the separate custody host,
+not this ordinary local enrollment/refresh path.
+
+### Terms of use
+
+This tool demonstrates feasibility. **Owner decision:** “each user assumes”
+responsibility for compliance and the risks of account suspension or refused calls.
+This is the owner's allocation of responsibility, not Anthropic permission.
+
+Established distinctions, **verified (source, 2026-09-26)** in
+[Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance.md):
+
+| Account | Publicly established | Unverified for this mesh deployment |
+| --- | --- | --- |
+| Individual Pro/Max | [Consumer Terms](https://www.anthropic.com/legal/consumer-terms); ordinary native-app OAuth use; advertised limits assume ordinary individual Claude Code/Agent SDK use. Developers may not route requests through Free/Pro/Max credentials on users' behalf. General third-party Claude.ai login restrictions are stated generally; developers “may not collect, store, or intermediate Claude.ai credentials or session tokens — sign-in to a Claude account must complete through Anthropic's own flow”. | Applicability of these restrictions to this user-enrolled arrangement is unverified. |
+| Organization Team/Enterprise | [Commercial Terms](https://www.anthropic.com/legal/commercial-terms); ordinary native-app OAuth use. General third-party Claude.ai login and credential/session-token collection, storage and intermediation restrictions are stated generally; sign-in to a Claude account must complete through Anthropic's own flow. | Applicability of these restrictions to this user-enrolled arrangement is unverified, as are organization-specific agreements/exceptions; the individual-plan routing sentence establishes no organizational exemption. |
+| API key / [Console](https://platform.claude.com/) | [Commercial Terms](https://www.anthropic.com/legal/commercial-terms); recommended developer authentication. Customer-managed keys for authorized users are permitted subject to billing to the key owner and the stated no-resale/intermediation conditions. | Compliance of the actual deployment; API-key guidance does not authorize subscription-token substitution. |
+
+The credential and sign-in restrictions are stated generally for all subscription
+plans. They are relevant to credential-paste enrollment (M4) and mesh storage of
+grants; user enrollment and the owner's decision do not establish an exception.
+
+**Verified (source):** the same page permits hosting the unmodified official binary
+under stated conditions: Commercial Terms, no built-in auth method restricted,
+end-user authentication/direct billing, and no paying/reselling/intermediating their
+usage. It preserves end users' own subscription sign-in to that binary.
+**Unverified:** whether mesh credential projection and runner restrictions meet
+those conditions; executing the official binary alone does not establish permission
+to enroll, store or intermediate subscription credentials.
+
+## Claude official CLI execution (LOT 2 mesh bridge)
+
+`ClaudeCodeRuntimeClient` implements the Anthropic client slot and accepts a
+host-provided `ClaudeCodeCliRunner`. The host executes the unmodified official
+`claude` subprocess; llm-mesh imports no process API and provides no runner,
+Messages transport, client headers, runtime refresh or automatic retry.
+
+```ts
+import { ClaudeCodeRuntimeClient, createDefaultProviderAdapters } from '@sentropic/llm-mesh';
+import type { AnthropicAdapterClient, ClaudeCodeCliRunner, ClaudeCodeCliCapabilities } from '@sentropic/llm-mesh';
+
+// Trusted host supplies these after qualifying the exact CLI and isolated runner.
+declare const runner: ClaudeCodeCliRunner;
+declare const capabilities: ClaudeCodeCliCapabilities;
+declare const directAnthropicClient: AnthropicAdapterClient;
+const adapters = createDefaultProviderAdapters({
+  anthropic: new ClaudeCodeRuntimeClient({ runner, capabilities, fallback: directAnthropicClient }),
+});
+```
+
+Only `account-transport` with provider `claude-code`, and `claude-code-account`,
+reach the runner. Other auth delegates to the supplied direct client, or is
+refused when no fallback exists. Conflicting request auth is removed; the selected
+auth remains in the context. Unresolved auth callbacks without a trusted context
+are refused. A seat failure never falls
+back to metered API authentication. The in-process input contains only access
+token, finite unexpired epoch-millisecond expiry and the actual grant scopes,
+the projected request, and an abort signal. Ordinary scopes come from
+`material.metadata.scopes`; access-only custody uses trusted
+`material.descriptor.metadata.scopes`, filling absent scopes from trusted resolution
+`descriptor.metadata.scopes`; explicit invalid scopes are never replaced.
+No refresh token, headers, account metadata or request auth reaches the runner.
+
+The versioned capability profile requires `cliVersion`, `source` and
+`qualificationRef` for protocol `claude-code-stream-json-v1`. These references are
+trusted host attestations, not verification by mesh. Default request support is
+an explicit `modelId` and one user text message. Only this baseline is expected to
+qualify with the official CLI; `history` and `tools` are expected **`not-covered`**
+unless M3 proves otherwise, with separate source/qualification references.
+**Verified (source):** the [SDK input contract](https://platform.claude.com/docs/en/agent-sdk/typescript)
+uses `SDKUserMessage` streams. “All CLI stream-json input is user-only” remains
+**unverified**: the inspected official 2.1.80 parser also accepts assistant/system
+records (spec A7). Neither fact proves history or mesh-owned tool continuation.
+The tool subset accepts JSON function
+schemas, complete call IDs/arguments and matching string results; it rejects
+incomplete histories and unsupported extras. System/developer prompts, media,
+reasoning, sampling/token limits, structured output, forced/parallel tools and
+provider overrides are refused before running. Callers using `createLlmMesh` may
+use its model-selection contract; mesh resolves it to `modelId` and removes `model`
+before delegation. Direct runtime-client calls must supply `modelId` and omit
+`model`; this client does not resolve aliases or choose a default model.
+
+The host must prove isolated credential/config files, environment allowlisting,
+tool/hook/MCP confinement, bounded parsing, cross-process serialization,
+descendant reaping/cleanup and zero child refresh. Abort and consumer early-close
+signal cancellation; the trusted host owns process termination. A final runner
+result must certify successful cleanup, followed by EOF.
+
+Production must enforce default-deny egress for the runner's **whole process tree**
+using a network namespace or equivalent: allow only qualified inference origins,
+block the OAuth token endpoint and all alternate destinations, and prevent bypass
+by descendants, proxies, direct IPs or inherited host access. Shared inference/token
+origins require enforceable endpoint separation or refusal. The M5 probe is a
+regression check, not this enforcement. Its fixture CA/DNS overrides and fake token
+endpoint are test-only; production denies those overrides and token egress.
+
+The host prefers verified tmpfs (e.g. `$XDG_RUNTIME_DIR`); otherwise it uses a
+dedicated 0700 directory, with exclusive 0600 files, `O_EXCL | O_NOFOLLOW` and
+`lstat` checks. SIGKILL/crash can bypass cleanup and leave an access-only file.
+A supervisor reaps descendants; orphan sweeps run at the next runner start **and
+host boot**, using lock/PID/start/boot identity and a configured staleness threshold
+(default five minutes, with retry for younger orphans). Live or ambiguous owners
+prevent deletion. Sweeps delete within the dedicated root without following
+symlinks or reading credential contents; tmpfs/deletion do not guarantee erasure
+from swap, dumps or storage.
+
+The projection contains the **real expiry**, never a refresh token. Writing an
+earlier timestamp cannot shorten provider validity. The host can refuse remaining
+TTL above `maxRemainingTtlMs` or below its run deadline. Running immediately after
+refresh improves freshness but usually maximizes remaining TTL and does not reduce
+exposure; it may conflict with that maximum. Cleanup cannot revoke a stolen token.
+These host requirements are **unverified implementations** until qualified in h2a.
+The precise contract,
+proposed h2a tests and fake-credential M5 counting probe are in
+[`spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md`](../../spec/SPEC_EVOL_LLM_MESH_CLAUDE_SEAT.md).
+No real CLI qualification is claimed by the mesh fake-runner tests. Until the
+host supplies a qualified runner, seats remain **enrollment only** and execution
+is **`not-covered`**. The Terms of use and suspension/refused-call risks above
+apply equally when the official CLI executes requests.
+
 ## Route quote
 
 `quoteRoute(input, { council, profiles })` (or `routePlanner.quote(input)`)
