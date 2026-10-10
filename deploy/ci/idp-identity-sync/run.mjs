@@ -6,7 +6,7 @@ import { replaceSecrets, antiRceGate, neutralize } from './bundle-cd.mjs';
 const template = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 export function auditSummary(raw, expectedOutcome) {
   const value = JSON.parse(raw);
-  const keys = ['synced_users', 'synced_webauthn', 'rekeyed', 'preprod_only_kept', 'post_users', 'post_webauthn', 'rekey_dropped_sessions', 'rekey_moved_webauthn', 'consents_upserted', 'consents_removed'];
+  const keys = ['synced_users', 'synced_webauthn', 'rekeyed', 'preprod_only_kept', 'post_users', 'post_webauthn', 'rekey_dropped_sessions', 'rekey_moved_webauthn', 'consents_upserted', 'consents_removed', 'clients_upserted', 'clients_removed', 'clients_skipped_confidential'];
   if (value.outcome !== expectedOutcome || keys.some(k => !Number.isSafeInteger(value[k]) || value[k] < 0) || !Array.isArray(value.rekey_pairs) || value.rekey_pairs.length !== value.rekeyed) throw new Error('invalid import audit');
   if (value.rekey_pairs.some(pair => !/^[a-f0-9-]{36}$/.test(pair.old_id) || !/^[a-f0-9-]{36}$/.test(pair.new_id))) throw new Error('invalid audit rekey IDs');
   return { outcome: value.outcome, ...Object.fromEntries(keys.map(k => [k, value[k]])), rekey_pairs: value.rekey_pairs.map(p => ({ old_id: p.old_id, new_id: p.new_id })) };
