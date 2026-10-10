@@ -21,7 +21,7 @@ export function generatePkcePair(): PkcePair {
 }
 
 export function generateNonce(): string {
-  return base64Url(randomBytes(16));
+  return base64Url(randomBytes(32));
 }
 
 export interface LoopbackCallbackResult {

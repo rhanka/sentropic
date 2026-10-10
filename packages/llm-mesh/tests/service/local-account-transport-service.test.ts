@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AccountTransportAcquireError } from '../../src/account-transports.js';
 import type { EnrollmentProvider, PreparedCredential } from '../../src/enrollment/contracts.js';
+import { MuseEnrollmentProvider } from '../../src/enrollment/muse.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
 import { InMemoryRoutePlanner } from '../../src/route-planner.js';
 import { LAUNCH_ALIAS_TARGET_MAPPINGS } from '../../src/routing-targets.js';
@@ -8,6 +9,116 @@ import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 describe('LocalAccountTransportService', () => {
+  it('persists a changed Muse CLI schema version on refresh and restores it', async () => {
+    let schemaVersion = 1;
+    const keyring = new InMemoryKeyring();
+    const provider = new MuseEnrollmentProvider({
+      readAuthFile: async () => JSON.stringify({ schema_version: schemaVersion,
+        providers: { meta: { access_token: 'fake-muse-login', user_email: 'owner@example.test' } } }),
+      fetchFn: vi.fn(async () => new Response(JSON.stringify({ api_key: 'fake-muse-serving-key' }))),
+    });
+    const providers = new Map([['muse', provider]]);
+    const config = { async resolveConfig() { return {}; } };
+    const service = new LocalAccountTransportService(keyring, providers, config);
+    const session = await service.enroll('muse', { configRef: 'default', mode: 'cli',
+      redirectUri: '', ownerScope: 'owner' });
+    const { accountId } = await service.completeMuseImport(session.enrollmentId, '', 'owner');
+    schemaVersion = 2;
+    const input = { targetProviderId: 'muse' as const, transportProviderId: 'muse' as const,
+      ownerScopeRef: 'owner' };
+    expect((await service.acquire({ ...input, now: Date.now() + 7200_000 })).material.accountId).toBe(accountId);
+    const envelope = JSON.parse((await keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`))!);
+    expect(envelope.authClientConfigVersion).toBe('2');
+    const restored = new LocalAccountTransportService(keyring, providers, config);
+    expect((await restored.acquire(input)).material.accessToken).toBe('fake-muse-serving-key');
+    expect((await restored.listAccounts('owner'))[0].status).toBe('active');
+  });
+
+  it.each(['cloud-code', 'codex'] as const)('does not replay %s refresh while the removal check awaits', async (transportProviderId) => {
+    const keyring = new InMemoryKeyring();
+    let responded = false;
+    let blocked = false;
+    let enter!: () => void;
+    let finish!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const read = keyring.getSecret.bind(keyring);
+    keyring.getSecret = async (key) => {
+      if (responded && !blocked && key.endsWith(':removed')) {
+        blocked = true; enter(); await gate;
+      }
+      return read(key);
+    };
+    const refresh = vi.fn(async (input) => {
+      responded = true;
+      return { accountId: input.accountId, accessToken: 'fresh', refreshToken: 'rotated',
+        expiresAt: '2099-01-01T00:00:00Z', authClientConfigVersion: 'v1.0.0' };
+    });
+    const service = new LocalAccountTransportService(keyring,
+      new Map([[transportProviderId, { refresh } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } });
+    service.registerAccount({ accountId: 'removal-window', targetProviderId: 'openai', transportProviderId,
+      accessToken: 'old', refreshToken: 'old-refresh', expiresAt: '2000-01-01T00:00:00Z', status: 'active' });
+    const input = { targetProviderId: 'openai' as const, transportProviderId };
+    const first = service.acquire(input);
+    await entered;
+    const second = service.acquire(input);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    finish();
+    expect((await Promise.all([first, second])).every((value) => value.material.refreshToken === 'rotated')).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['cloud-code', 'codex'] as const)('holds %s refresh until durable publication', async (transportProviderId) => {
+    for (const failSave of [false, true]) {
+      const keyring = new InMemoryKeyring();
+      let entered!: () => void;
+      let resume!: () => void;
+      const saving = new Promise<void>((resolve) => { entered = resolve; });
+      const gate = new Promise<void>((resolve) => { resume = resolve; });
+      const save = keyring.setSecret.bind(keyring);
+      keyring.setSecret = async (key, value) => {
+        if (key.endsWith(':envelope')) {
+          entered();
+          await gate;
+          if (failSave) throw new Error('CANARY_STORAGE_SECRET');
+        }
+        await save(key, value);
+      };
+      const refresh = vi.fn(async (input) => ({
+        accountId: input.accountId, accessToken: 'fresh', refreshToken: 'rotated',
+        expiresAt: '2099-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+      }));
+      const provider = { refresh } as unknown as EnrollmentProvider;
+      const service = new LocalAccountTransportService(keyring,
+        new Map([[transportProviderId, provider]]), { async resolveConfig() { return {}; } });
+      service.registerAccount({ accountId: 'race', targetProviderId: 'openai',
+        transportProviderId, accessToken: 'old', refreshToken: 'old-refresh',
+        expiresAt: '2000-01-01T00:00:00Z', status: 'active' });
+      const input = { targetProviderId: 'openai' as const, transportProviderId };
+      let published = 0;
+      const acquire = () => service.acquire(input).then((result) => { published++; return result; });
+      const first = acquire();
+      await saving;
+      const second = acquire();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(published).toBe(0);
+      resume();
+      const results = await Promise.allSettled([first, second]);
+      expect(results.map((result) => result.status)).toEqual(
+        failSave ? ['rejected', 'rejected'] : ['fulfilled', 'fulfilled']);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      if (failSave) {
+        expect(JSON.stringify(results)).not.toContain('CANARY_STORAGE_SECRET');
+        await expect(service.acquire(input)).rejects.toBeInstanceOf(AccountTransportAcquireError);
+      } else {
+        expect((await service.acquire(input)).material.accessToken).toBe('fresh');
+      }
+    }
+  });
+
   it('restores a Cloud Code enrollment in a fresh runtime service', async () => {
     const keyring = new InMemoryKeyring();
     const provider = {

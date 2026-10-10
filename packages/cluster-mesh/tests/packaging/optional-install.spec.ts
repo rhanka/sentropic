@@ -31,7 +31,7 @@ describe.skipIf(!enabled)('packed optional install', () => {
     expect(result.loaders).toHaveLength(LOADERS.length);
     expect(result.refusal).toEqual({
       recognized: true, code: 'cluster_mesh_module_unavailable', reason: 'not_installed',
-      message: 'Cluster Mesh module "llm-mesh" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.25.0" and restart.',
+      message: 'Cluster Mesh module "llm-mesh" is unavailable (not_installed). Install @sentropic/llm-mesh@">=0.22.0 <0.26.0" and restart.',
     });
     expect(result.probe).toEqual({
       gateway: { availability: 'gated', state: 'unavailable', reason: 'not_installed', packageName: '@sentropic/llm-gateway', requiredRange: '>=0.19.0 <0.20.0' },

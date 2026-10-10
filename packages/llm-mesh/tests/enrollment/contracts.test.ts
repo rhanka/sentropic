@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   EnrollmentProvider,
+  EnrollmentCompletion,
   EnrollmentSession,
   PreparedCredential,
   ResolvedProviderMetadata,
@@ -9,6 +10,10 @@ import type {
 import type { EnrollmentState } from '../../src/enrollment/contracts.js';
 
 describe('enrollment contracts', () => {
+  it('exports the existing secret-free completion type without changing provider contracts', () => {
+    const completion: EnrollmentCompletion = { accountId: 'opaque', label: 'Claude (opaque)' };
+    expect(Object.keys(completion)).toEqual(['accountId', 'label']);
+  });
   it('instantiates authorization-url and device-code enrollment sessions', () => {
     const authUrlSession: EnrollmentSession = {
       kind: 'authorization-url',

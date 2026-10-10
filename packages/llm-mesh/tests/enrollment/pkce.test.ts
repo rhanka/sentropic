@@ -9,7 +9,9 @@ describe('PKCE & Loopback Server', () => {
 
     const nonce = generateNonce();
     expect(nonce).toBeDefined();
-    expect(nonce.length).toBeGreaterThan(10);
+    // 32-byte states are the live-validated minimum: the consent approval API rejects
+    // shorter states with "Invalid request format" (validated 2026-10-10).
+    expect(nonce.length).toBeGreaterThanOrEqual(43);
   });
 
   it('ignores non-callback requests like /favicon.ico (P0-2) and handles callback (P1-3)', async () => {
