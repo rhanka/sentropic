@@ -67,9 +67,25 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   assert.equal(upload.if, 'always()');
   assert.equal(upload.with['retention-days'], 7);
   assert.ok(!JSON.stringify(job).includes('secrets.'), 'no registry credentials or OIDC token');
+  assert.ok(needsOf('ci-gate').includes('validate-publishable-manifests'), 'the aggregate gate enforces inventory validation');
   for (const name of Object.keys(jobs)) {
+    if (name === 'ci-gate') continue;
     assert.ok(!needsOf(name).includes('validate-publishable-manifests'), `${name} must not need the inventory job`);
     assert.ok(!String(jobs[name].if ?? '').includes('validate-publishable-manifests'), `${name} must not gate on the inventory job`);
+  }
+});
+
+test('ci-gate aggregates every PR job, stays unconditional and is a leaf', () => {
+  const mainOnly = ['bootstrap-publish', 'verify-train-lock-integrity', 'deploy-preprod'];
+  const excluded = (name) => name === 'ci-gate' || name.startsWith('publish-') || mainOnly.includes(name);
+  const gate = jobs['ci-gate'];
+  assert.equal(gate.if, 'always()', 'the gate must report failure after upstream failure or cancellation');
+  assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
+  assert.deepEqual(gate.permissions, { contents: 'read' });
+  assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
+  for (const name of Object.keys(jobs)) {
+    assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
+    if (excluded(name) && name !== 'ci-gate') assert.match(String(jobs[name].if ?? ''), /github\.ref == 'refs\/heads\/main'/, `${name} must stay main-only to be excluded`);
   }
 });
 
