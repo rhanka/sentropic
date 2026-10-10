@@ -61,6 +61,7 @@ export function checkBundle(objects, tier) {
     assert.deepEqual(pod.containers.map(c => c.name), ['import-preprod']);
     const importer = pod.containers[0];
     assert.equal(envValue(importer, 'DRY_RUN'), '1'); assert.equal(envValue(importer, 'ALLOWED_REKEY'), '');
+    assert.equal(envValue(importer, 'ALLOWED_CLIENTS'), '');
     assert.equal(envValue(importer, 'MAX_SNAPSHOT_AGE_S'), '7200');
     assert.deepEqual(importer.command, ['sh', '/sql/import-preprod.sh']);
     assert(pod.initContainers[0].args[0].includes('pg_dump -Fc'));

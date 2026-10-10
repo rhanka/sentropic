@@ -80,6 +80,7 @@ spec:
                 - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
                 - { name: DRY_RUN, value: "1" }
                 - { name: ALLOWED_REKEY, value: "" }
+                - { name: ALLOWED_CLIENTS, value: "" }
                 - { name: MAX_SNAPSHOT_AGE_S, value: "7200" }
               volumeMounts: [{ name: work, mountPath: /work }, { name: sql, mountPath: /sql, readOnly: true }]
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }

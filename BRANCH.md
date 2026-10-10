@@ -49,7 +49,7 @@
   - [x] Write spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md and .h2a/SPEC_READY.md before implementation.
 - [ ] **Lot 1 — Relay and run controls**
   - [x] Export clients and boolean secret presence; provision column grants; count/checksum clients.
-  - [ ] Wire ALLOWED_CLIENTS into dispatch validation and both import manifests.
+  - [x] Wire ALLOWED_CLIENTS into dispatch validation and both import manifests.
   - [ ] Extend audit and failure whitelists and run/workflow/bundle selftests.
 - [ ] **Lot 2 — Transactional client pass**
   - [ ] Add host-map.csv, URI policy, allowlist/source guards and target classification.
