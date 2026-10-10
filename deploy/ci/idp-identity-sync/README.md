@@ -227,4 +227,8 @@ make test-idp-sync-sql ENV=test-idp-sync
 ```
 
 Pinned containers perform kustomize rendering, mocked CI controls and isolated
-Postgres tests. No Python or cluster access is used.
+Postgres tests. The SQL gate runs the CronJob's actual `export-prod.sh`, including
+five-file SHA256SUMS generation, then the import Job's actual shell validator and
+SQL through a committed `immo-mcp` upsert and an unchanged rerun. Missing or
+duplicate client manifest entries, unexpected files and checksum tampering fail
+closed. Selftests also check Node and shell syntax. No Python or cluster access is used.

@@ -92,7 +92,7 @@ export async function runTests(load, bundles) {
     const dir = mkdtempSync(join(tmpdir(), 'idp-export-test-'));
     try {
       writeFileSync(join(dir, 'snapshot.csv'), '2026-10-04 00:00:00,108,118,128,138\n');
-      const script = bundles.prod.find(o => o.kind === 'CronJob').spec.jobTemplate.spec.template.spec.initContainers[0].args[0];
+      const script = bundles.prod.find(o => o.kind === 'ConfigMap' && o.metadata.name === 'sentropic-idp-identity-export-sql').data['export-prod.sh'];
       const reporting = script.slice(script.indexOf('IFS=, read')).replace('/dev/termination-log', './termination.json');
       const result = spawnSync('sh', ['-ec', reporting], { cwd: dir, encoding: 'utf8' });
       assert.equal(result.status, 0); assert.equal(result.stderr, '');
