@@ -37,7 +37,7 @@ export function classifyJobStatus(status = {}) {
   return Number(status?.active) > 0 ? 'active' : 'pending';
 }
 export function failureSummary(raw) {
-  const codes = ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'rekey_not_allowed', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit', 'consent_client_missing', 'consent_postcondition_failed'];
+  const codes = ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'rekey_not_allowed', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit', 'consent_client_missing', 'consent_postcondition_failed', 'client_source_missing', 'client_policy_invalid', 'client_postcondition_failed'];
   const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
   try {
     const value = JSON.parse(raw);
@@ -56,12 +56,15 @@ export function validateRun(env = process.env, now = new Date()) {
   const dryRun = scheduled ? '0' : env.DRY_RUN;
   if (!['0', '1'].includes(dryRun)) throw new Error('DRY_RUN must be 0 or 1');
   const allowedRekey = scheduled ? '' : (env.ALLOWED_REKEY || '').trim();
+  const clients = scheduled ? [] : (env.ALLOWED_CLIENTS || '').split(',').map(v => v.trim());
+  const allowedClients = clients.length === 1 && clients[0] === '' ? [] : clients;
+  if (allowedClients.some(v => !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(v)) || new Set(allowedClients).size !== allowedClients.length) throw new Error('invalid ALLOWED_CLIENTS format');
   const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
   if (allowedRekey && !allowedRekey.split(',').every(pair => new RegExp(`^${uuid}>${uuid}$`).test(pair.trim()))) throw new Error('invalid ALLOWED_REKEY format');
   if (!scheduled && dryRun === '0' && env.CONFIRM !== `idp-sync-${now.toISOString().slice(0, 10)}`) throw new Error('real run requires today\'s CONFIRM');
   const maxAge = env.MAX_SNAPSHOT_AGE_S || '7200';
   if (!/^[1-9][0-9]*$/.test(maxAge) || Number(maxAge) > 86400) throw new Error('invalid MAX_SNAPSHOT_AGE_S');
-  return { DRY_RUN: dryRun, ALLOWED_REKEY: allowedRekey, MAX_SNAPSHOT_AGE_S: maxAge };
+  return { DRY_RUN: dryRun, ALLOWED_REKEY: allowedRekey, ALLOWED_CLIENTS: allowedClients.join(','), MAX_SNAPSHOT_AGE_S: maxAge };
 }
 export async function waitJob(namespace, name, timeoutSeconds, k = kube, delay = sleep) {
   const deadline = Date.now() + timeoutSeconds * 1000;
@@ -97,8 +100,8 @@ export async function exportSnapshot(k = kube, delay = sleep) {
         const pods = JSON.parse(k(['-n', 'sentropic', 'get', 'pods', '-l', `job-name=${job.metadata.name}`, '-o', 'json']).stdout).items;
         const message = pods.flatMap(p => p.status?.initContainerStatuses ?? []).find(c => c.name === 'export')?.state?.terminated?.message;
         const counts = JSON.parse(message || '{}');
-        if (!Number.isInteger(counts.users) || counts.users <= 0 || !Number.isInteger(counts.webauthn) || counts.webauthn < 0 || !Number.isSafeInteger(counts.consents) || counts.consents < 0) throw new Error('invalid export termination verdict');
-        console.log(`export users=${counts.users} webauthn=${counts.webauthn} consents=${counts.consents}`);
+        if (!Number.isInteger(counts.users) || counts.users <= 0 || !Number.isInteger(counts.webauthn) || counts.webauthn < 0 || !Number.isSafeInteger(counts.consents) || counts.consents < 0 || !Number.isSafeInteger(counts.clients) || counts.clients < 0) throw new Error('invalid export termination verdict');
+        console.log(`export users=${counts.users} webauthn=${counts.webauthn} consents=${counts.consents} clients=${counts.clients}`);
         return job.metadata.name;
       }
       await delay(5000);

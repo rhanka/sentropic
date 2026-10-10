@@ -28,3 +28,9 @@ SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = 'efd67
 SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE user_id = 'preprod-only' AND client_id = 'radar-immobilier-preprod') = 1, 'preprod-only consent kept');
 SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE user_id = 'efd67056-fb60-42e6-a386-6264c854da55' AND client_id = 'synthetic-client') = 1, 'unmapped consent kept');
 SELECT test_assert((SELECT user_id FROM revoked_tokens WHERE jti = 'duplicate-revocation') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'revocation survives and is repointed');
+SELECT test_assert((SELECT client_secret_hash IS NULL AND token_endpoint_auth_method = 'none' AND require_pkce
+  AND redirect_uris = ARRAY['https://claude.ai/api/mcp/auth_callback']::text[]
+  AND allowed_scopes = ARRAY['immo:read','immo:search','immo:documents:read']::text[]
+  AND resource_indicators = ARRAY['https://preprod.immo.sent-tech.ca/mcp']::text[]
+  AND tenant_id = 'sentropic' AND owner_user_id = 'prod-user-8'
+  FROM oauth_clients WHERE client_id = 'immo-mcp'), 'immo-mcp public PKCE, external callback, preprod resource and synced owner');

@@ -1,10 +1,10 @@
 -- Preprod-side identity sync: prod users + webauthn public keys -> preprod IdP DB (model A:
 -- same user IDs as prod). Idempotent; one transaction; fail-closed (any violation => ROLLBACK).
--- Runs in ns `sentropic-preprod` with cwd=/work/in holding users, WebAuthn, consents and snapshot CSVs
+-- Runs in ns `sentropic-preprod` with cwd=/work/in holding users, WebAuthn, consents, clients and snapshot CSVs
 -- fetched from the S3 relay (written by the PROD export CronJob) and checked against SHA256SUMS.
 -- psql variables: -v dry_run=1 (default) rolls back at the end; -v dry_run=0 commits.
 --
--- NEVER touched (DV5): oauth_clients (incl. radar-immobilier-preprod), id_token_signing_keys,
+-- Protected (DV5): unselected oauth_clients, existing client IDs/secrets, id_token_signing_keys,
 -- oauth codes/tokens, and sessions/challenges/magic-links of any user EXCEPT the
 -- preprod-only duplicates being re-keyed (their ephemeral auth artefacts are dropped).
 -- Mapped consents of imported users mirror prod in step 6.
@@ -30,6 +30,7 @@ SELECT (SELECT count(*) FROM oauth_clients) AS clients,
        (SELECT md5(string_agg(t::text, '|' ORDER BY t.id)) FROM oauth_clients t) AS clients_fp,
        (SELECT count(*) FROM id_token_signing_keys) AS signing_keys,
        (SELECT md5(string_agg(t::text, '|' ORDER BY t.kid)) FROM id_token_signing_keys t) AS signing_keys_fp;
+CREATE TEMP TABLE clients_before ON COMMIT DROP AS TABLE oauth_clients;
 
 CREATE TEMP TABLE src_users (LIKE users INCLUDING DEFAULTS) ON COMMIT DROP;
 CREATE TEMP TABLE src_webauthn (LIKE webauthn_credentials INCLUDING DEFAULTS) ON COMMIT DROP;
@@ -152,21 +153,36 @@ ON CONFLICT (id) DO UPDATE SET
   transports_json = EXCLUDED.transports_json, uv = EXCLUDED.uv,
   last_used_at = GREATEST(webauthn_credentials.last_used_at, EXCLUDED.last_used_at);
 
+-- 5. Identity/rekey work must preserve the complete original client table.
+DO $$
+BEGIN
+  IF (SELECT row(clients, clients_fp) FROM inv_before) IS DISTINCT FROM
+     (SELECT row(count(*), md5(string_agg(t::text, '|' ORDER BY t.id))) FROM oauth_clients t)
+    THEN RAISE EXCEPTION 'post: DV5 invariant changed (oauth_clients / signing keys)'; END IF;
+END $$;
+CREATE TEMP TABLE client_map (prod_client_id text, preprod_client_id text) ON COMMIT DROP;
+\copy client_map FROM '/sql/client-map.csv' WITH (FORMAT csv, HEADER true)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM client_map)
+     OR EXISTS (SELECT FROM client_map WHERE coalesce(prod_client_id, '') = '' OR coalesce(preprod_client_id, '') = '')
+     OR EXISTS (SELECT FROM client_map GROUP BY prod_client_id HAVING count(*) > 1)
+     OR EXISTS (SELECT FROM client_map GROUP BY preprod_client_id HAVING count(*) > 1)
+    THEN RAISE EXCEPTION 'consent client map target missing'; END IF;
+END $$;
+\i /sql/client-policy.sql
+\i /sql/sync-clients.sql
+
 -- 6. Explicit prod consents converge only for mapped clients and prod users.
 CREATE TEMP TABLE src_consents (LIKE oauth_consents INCLUDING DEFAULTS) ON COMMIT DROP;
-CREATE TEMP TABLE client_map (prod_client_id text, preprod_client_id text) ON COMMIT DROP;
 \copy src_consents (user_id, client_id, tenant_id, scopes, created_at, updated_at) FROM 'consents.csv' WITH (FORMAT csv, HEADER true)
-\copy client_map FROM '/sql/client-map.csv' WITH (FORMAT csv, HEADER true)
 SELECT set_config('sync.expected_consents', :'expected_consents', true) \gset sync_
 DO $$
 BEGIN
   IF (SELECT count(*) FROM src_consents) <> current_setting('sync.expected_consents')::int
     THEN RAISE EXCEPTION 'export row count does not match manifest'; END IF;
-  IF NOT EXISTS (SELECT FROM client_map)
-     OR EXISTS (SELECT FROM client_map m LEFT JOIN oauth_clients c ON c.client_id = m.preprod_client_id
-                WHERE c.client_id IS NULL OR coalesce(m.prod_client_id, '') = '')
-     OR EXISTS (SELECT FROM client_map GROUP BY prod_client_id HAVING count(*) > 1)
-     OR EXISTS (SELECT FROM client_map GROUP BY preprod_client_id HAVING count(*) > 1)
+  IF EXISTS (SELECT FROM client_map m LEFT JOIN oauth_clients c ON c.client_id = m.preprod_client_id
+             WHERE c.client_id IS NULL)
     THEN RAISE EXCEPTION 'consent client map target missing'; END IF;
 END $$;
 CREATE TEMP TABLE desired_consents ON COMMIT DROP AS
@@ -203,6 +219,7 @@ BEGIN
 END $$;
 
 -- 7. Post-conditions (inside the transaction: any failure rolls everything back).
+\i /sql/client-postcondition.sql
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM src_users s LEFT JOIN users u ON u.id = s.id WHERE u.id IS NULL)
@@ -211,11 +228,15 @@ BEGIN
     THEN RAISE EXCEPTION 'post: a prod email is not bound to its prod id'; END IF;
   IF EXISTS (SELECT 1 FROM src_webauthn s LEFT JOIN webauthn_credentials w ON w.credential_id = s.credential_id AND w.user_id = s.user_id WHERE w.id IS NULL)
     THEN RAISE EXCEPTION 'post: a prod credential is missing or bound to another user'; END IF;
-  IF (SELECT row(clients, clients_fp, signing_keys, signing_keys_fp) FROM inv_before) IS DISTINCT FROM
-     (SELECT row((SELECT count(*) FROM oauth_clients),
-                 (SELECT md5(string_agg(t::text, '|' ORDER BY t.id)) FROM oauth_clients t),
-                 (SELECT count(*) FROM id_token_signing_keys),
-                 (SELECT md5(string_agg(t::text, '|' ORDER BY t.kid)) FROM id_token_signing_keys t)))
+  IF EXISTS (SELECT FROM clients_before b LEFT JOIN oauth_clients c USING (client_id)
+             WHERE c.id IS DISTINCT FROM b.id OR c.client_secret_hash IS DISTINCT FROM b.client_secret_hash)
+     OR EXISTS ((SELECT * FROM clients_before WHERE client_id NOT IN (SELECT client_id FROM desired_clients)
+                 EXCEPT SELECT * FROM oauth_clients WHERE client_id NOT IN (SELECT client_id FROM desired_clients))
+                UNION ALL
+                (SELECT * FROM oauth_clients WHERE client_id NOT IN (SELECT client_id FROM desired_clients)
+                 EXCEPT SELECT * FROM clients_before WHERE client_id NOT IN (SELECT client_id FROM desired_clients)))
+     OR (SELECT row(signing_keys, signing_keys_fp) FROM inv_before) IS DISTINCT FROM
+        (SELECT row(count(*), md5(string_agg(t::text, '|' ORDER BY t.kid))) FROM id_token_signing_keys t)
     THEN RAISE EXCEPTION 'post: DV5 invariant changed (oauth_clients / signing keys)'; END IF;
 END $$;
 
