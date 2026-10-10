@@ -2207,3 +2207,66 @@ jobs:
         run: |
           set -eu
           make k8s-deploy-preprod KUBECONFIG="${KUBECONFIG}" ENV=ci-preprod
+
+  # Aggregate every PR validation job so path-filtered skips satisfy one required check.
+  # Exclude publish-* / bootstrap-publish (main/dispatch artifact publication),
+  # verify-train-lock-integrity (main-only post-publication registry check), and
+  # deploy-preprod (main-only deployment); none validates a PR before merge.
+  ci-gate:
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      contents: read
+    needs:
+      - enforce-package-bump
+      - changes
+      - validate-publishable-manifests
+      - build-e2e
+      - typecheck-lint-ui
+      - typecheck-lint-api
+      - validate-idp-sync
+      - validate-llm-mesh
+      - validate-cluster-mesh
+      - validate-llm-gateway
+      - validate-chat-ui
+      - validate-cited-source-viewer
+      - validate-cowork-bridge
+      - validate-oauth-verify
+      - validate-mcp-auth
+      - validate-mcp-platform
+      - validate-auth-hono
+      - validate-auth-client
+      - validate-auth-ui
+      - validate-cowork-desktop
+      - validate-contracts
+      - validate-events
+      - validate-chat-core
+      - validate-chat-server
+      - validate-comments
+      - validate-flow
+      - validate-harness
+      - build-api-image
+      - build-api-tool-image
+      - test-api-unit-integration
+      - build-ui
+      - test-e2e
+      - e2e-vscode
+      - smoke-idp-screens
+      - security-sast-sca
+      - security-iac
+      - security-container
+      - test-smoke-restore
+    steps:
+      - name: Check required CI results
+        shell: bash
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result as $r | ["success", "skipped", "neutral"] | index($r) | not) | "::error title=CI gate::\(.key) result=\(.value.result)"'
+          if ! printf '%s\n' "$CI_NEEDS" | jq -e 'length > 0 and all(.[]; .result == "success" or .result == "skipped" or .result == "neutral")' > /dev/null; then
+            echo '::error::CI gate failed: required results are missing or unacceptable.'
+            exit 1
+          fi
+          echo 'CI gate passed: all required jobs succeeded, were skipped, or were neutral.'
