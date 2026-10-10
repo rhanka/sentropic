@@ -37,12 +37,17 @@ sql -d app -c "DO \$\$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'id
 RO_PASSWORD=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n'); export RO_PASSWORD
 stage=reader-provisioning
 sql -d app -f "$prod/reader-role.sql"
+sql -d app -c 'GRANT SELECT (client_secret_hash) ON oauth_clients TO idp_identity_reader'
 sql -d app -f "$prod/reader-role.sql"
 sql -d app -c "DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'idp_identity_reader' AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND NOT rolbypassrls AND NOT rolinherit AND rolconnlimit = 2 AND rolconfig @> ARRAY['default_transaction_read_only=on','statement_timeout=60s']) THEN RAISE EXCEPTION 'reader attributes'; END IF;
   IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'users') <> 13 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'webauthn_credentials') <> 10 THEN RAISE EXCEPTION 'reader column grants'; END IF;
 END \$\$;"
+sql -d app -c "DO \$\$ BEGIN
+  IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'oauth_clients') <> 14 OR (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'idp_oauth_client_secret_presence') <> 2 THEN RAISE EXCEPTION 'reader client grants'; END IF;
+END \$\$;"
 reject 'reader cannot read unexported client IDs' 'permission denied' -d app -U idp_identity_reader -c 'SELECT * FROM oauth_clients'
+reject 'reader cannot read client secret hashes' 'permission denied' -d app -U idp_identity_reader -c 'SELECT client_secret_hash FROM oauth_clients'
 sql -d app -U idp_identity_reader -c 'SELECT user_id, client_id, tenant_id, scopes, created_at, updated_at FROM oauth_consents'
 sql -d app -c "DO \$\$ BEGIN IF (SELECT count(*) FROM information_schema.column_privileges WHERE grantee = 'idp_identity_reader' AND table_name = 'oauth_consents') <> 6 THEN RAISE EXCEPTION 'reader consent grants'; END IF; END \$\$;"
 reject 'reader cannot write identities' 'read-only transaction' -d app -U idp_identity_reader -c "UPDATE users SET role = 'guest'"
@@ -52,6 +57,8 @@ sql -d app -U idp_identity_reader -f "$prod/export-prod.sql"
 IFS=, read -r snapshot users credentials consents clients < snapshot.csv
 [ "$users" = 8 ] && [ "$credentials" = 18 ] && [ "$consents" = 1 ] && [ "$clients" = 4 ]
 [ "$(wc -l < users.csv)" -eq 9 ] && [ "$(wc -l < webauthn.csv)" -eq 19 ]
+[ "$(head -n 1 clients.csv)" = 'client_id,has_secret,name,redirect_uris,allowed_scopes,grant_types,response_types,token_endpoint_auth_method,dpop_bound_access_tokens,require_pkce,resource_indicators,tenant_id,owner_user_id,created_at,updated_at' ]
+! grep -Fq -e 'synthetic-prod-hash' -e 'synthetic-new-prod-hash' -e 'prod-immo' -e 'prod-confidential' /tmp/relay/*
 echo 'PASS: read-only snapshot users=8 credentials=18'
 mkdir -p /sql
 cp "$map" /sql/client-map.csv

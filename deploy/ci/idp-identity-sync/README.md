@@ -131,8 +131,12 @@ target must exist after the allowlisted client pass; an invalid map aborts the e
 The same repeatable-read export includes `users.csv`, `webauthn.csv`,
 `consents.csv`, `clients.csv` and `snapshot.csv`, all covered by SHA256SUMS.
 Snapshot fields are UTC timestamp, user count, WebAuthn count, consent count and
-client count. The reader has six consent-column and fifteen client-column grants.
-Client export contains `has_secret`, never the secret hash or prod row ID.
+client count. The reader has six consent-column and fourteen client-column grants,
+plus client_id/has_secret on the prod-owned `idp_oauth_client_secret_presence`
+security-barrier view, provisioned by the same protected reader Job. Raw client
+hash and row-ID reads are denied, including removal of an older column hash grant.
+Client export contains `has_secret`, never the secret hash or prod row ID; its
+import requires the exact CSV header with PostgreSQL `HEADER MATCH`.
 
 The importer maps consent client IDs and copies tenant IDs, scopes and timestamps
 exactly. It updates changed grants and deletes grants absent from prod for
@@ -170,8 +174,10 @@ Public clients require `none`, no secret and PKCE. Inserts get a fresh preprod
 row ID and a null hash. Existing confidential clients require a matching
 basic/post method and an independent non-null preprod hash, preserved exactly.
 New confidential clients are skipped and counted as `clients_skipped_confidential`;
-provision their independent secret through the established governed client CD
-before selecting them again. Changing a client's classification fails closed.
+this sync does not provision their independent secret. The registration contract
+is `api/src/scripts/oauth-register-client.ts`; automated preprod confidential
+secret provisioning is not implemented by this flow and requires a separate
+governed CD integration. Changing a client's classification fails closed.
 This pass accepts the registered authorization_code/code shape; unsupported
 grant/response configurations fail for review rather than broadening access.
 
@@ -188,6 +194,9 @@ scopes `immo:read`, `immo:search`, `immo:documents:read`, and rewritten resource
 to the real authorize handler and proves 302 to preprod login, missing-client
 400 and rejection of the prod resource. Live acceptance follows owner-approved CD;
 local tests and PR CI never run the real sync.
+The immo host pair is owner-declared in the build brief; immo lives in a separate
+tenant/repository. Its DNS, ingress and configured MCP audience require validation
+by that tenant during the owner-gated CD acceptance.
 
 ## Failure and rollback
 

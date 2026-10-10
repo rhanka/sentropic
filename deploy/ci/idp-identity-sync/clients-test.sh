@@ -62,7 +62,25 @@ mv host-map.original /sql/host-map.csv
 echo 'PASS: owned host rewrite, external callback preservation and ambiguous URI/map rejection'
 
 stage=client-classification
+cp clients.csv clients.header.original
+sed '1s/redirect_uris/incorrect_header/' clients.header.original > clients.csv
+sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+reject_wrapper sql_error
+mv clients.header.original clients.csv
+refresh_relay
+cp snapshot.csv snapshot.clients.original
+printf '%s,%s,%s,%s,%s\n' "$snapshot" "$users" "$credentials" "$consents" "$((clients + 1))" > snapshot.csv
+sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
+reject_wrapper manifest_mismatch
+mv snapshot.clients.original snapshot.csv
+refresh_relay
 sql -d app -c "UPDATE oauth_clients SET token_endpoint_auth_method = 'client_secret_basic', client_secret_hash = 'synthetic-immo-secret' WHERE client_id = 'immo-mcp'"
+refresh_relay
+reject_wrapper client_policy_invalid
+sql -d app -c "UPDATE oauth_clients SET token_endpoint_auth_method = 'none' WHERE client_id = 'immo-mcp'"
+refresh_relay
+reject_wrapper client_policy_invalid
+sql -d app -c "UPDATE oauth_clients SET token_endpoint_auth_method = 'client_secret_basic', client_secret_hash = NULL WHERE client_id = 'immo-mcp'"
 refresh_relay
 reject_wrapper client_policy_invalid
 sql -d app -c "UPDATE oauth_clients SET token_endpoint_auth_method = 'none', client_secret_hash = NULL, require_pkce = false WHERE client_id = 'immo-mcp'"

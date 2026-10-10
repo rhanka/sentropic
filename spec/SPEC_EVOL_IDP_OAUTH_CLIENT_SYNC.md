@@ -25,8 +25,15 @@ D1. Export `clients.csv` with client_id, has_secret (boolean only), name,
 redirect_uris, allowed_scopes, grant_types, response_types,
 token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce,
 resource_indicators, tenant_id, owner_user_id, created_at, updated_at.
-Never export a client secret hash or reuse prod row IDs. Grant SELECT only on
-these source columns (hash is read solely to compute has_secret). Add the client
+Never export a client secret hash or reuse prod row IDs. Grant SELECT on fourteen
+configuration columns, excluding id/hash, and on client_id/has_secret from a
+prod app-owned, security-barrier presence view provisioned by reader-role.sql.
+The view retains fail-closed source classification without raw hash access for
+the reader. Explicitly revoke any older column hash grant on every provision.
+This operational view is owned by the existing protected reader provisioning
+CD; rollback removes its grant/export join, and retirement drops the view through
+that same governed lane. No application migration or live DB action is added here.
+Add the client
 count as the fifth snapshot field and checksum the fifth relay file.
 
 D2. `ALLOWED_CLIENTS` is a comma-separated list of prod client IDs, empty by
