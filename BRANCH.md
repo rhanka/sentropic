@@ -51,7 +51,7 @@
   - [x] Export clients and boolean secret presence; provision column grants; count/checksum clients.
   - [x] Wire ALLOWED_CLIENTS into dispatch validation and both import manifests.
   - [ ] Extend audit and failure whitelists and run/workflow/bundle selftests.
-- [ ] **Lot 2 — Transactional client pass**
+- [x] **Lot 2 — Transactional client pass**
   - [x] Add host-map.csv, URI policy, allowlist/source guards and target classification.
   - [x] Preserve existing secrets; skip new confidential clients; map owner FK; upsert before consents.
   - [x] Protect whole-row invariants and verify exact configuration postconditions.
