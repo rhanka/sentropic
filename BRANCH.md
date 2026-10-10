@@ -52,9 +52,9 @@
   - [x] Wire ALLOWED_CLIENTS into dispatch validation and both import manifests.
   - [ ] Extend audit and failure whitelists and run/workflow/bundle selftests.
 - [ ] **Lot 2 — Transactional client pass**
-  - [ ] Add host-map.csv, URI policy, allowlist/source guards and target classification.
-  - [ ] Preserve existing secrets; skip new confidential clients; map owner FK; upsert before consents.
-  - [ ] Protect whole-row invariants and verify exact configuration postconditions.
+  - [x] Add host-map.csv, URI policy, allowlist/source guards and target classification.
+  - [x] Preserve existing secrets; skip new confidential clients; map owner FK; upsert before consents.
+  - [x] Protect whole-row invariants and verify exact configuration postconditions.
 - [ ] **Lot 3 — Pipeline acceptance**
   - [ ] Update fixtures/prod.sql, assertions.sql and assert-committed.sql for client convergence.
   - [ ] Update sql-test.sh for five-file relay, client allowlist, rollback, idempotence and failure cases.
