@@ -2,14 +2,17 @@
 
 The `ci-gate` job in [ci.yml](workflows/ci.yml) aggregates all 38 PR validation,
 build, test, and security jobs. It runs with `if: always()`, prints each dependency
-and its result, and fails when any result is `failure` or `cancelled`. Results of
-`success`, `skipped`, and `neutral` pass. Path-filtered jobs keep their conditions.
+and its result. Only `success`, `skipped`, and `neutral` pass; failed, cancelled,
+missing, or unknown results and empty input fail. Unacceptable job results emit
+error annotations. Path-filtered jobs keep their conditions.
 Matrix jobs contribute their aggregate result through GitHub's `needs` context;
 existing `continue-on-error` policies remain in effect.
 
 Publication jobs (`publish-*`, `bootstrap-publish`), the main-only post-publication
 `verify-train-lock-integrity` job, and `deploy-preprod` are excluded because they
 do not validate a PR before merge. Future PR gates must be added to `ci-gate.needs`.
+The committed CI wiring test enforces complete coverage, unconditional execution,
+main-only exclusions, and that no job depends on the aggregate gate.
 
 After this workflow merges and `ci-gate` has passed, the conductor must replace
 `main`'s required status contexts with exactly:

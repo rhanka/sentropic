@@ -2264,8 +2264,9 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          if ! printf '%s\n' "$CI_NEEDS" | jq -e 'all(.[]; .result != "failure" and .result != "cancelled")' > /dev/null; then
-            echo '::error::CI gate failed: a required job failed or was cancelled.'
+          printf '%s\n' "$CI_NEEDS" | jq -r 'to_entries[] | select(.value.result as $r | ["success", "skipped", "neutral"] | index($r) | not) | "::error title=CI gate::\(.key) result=\(.value.result)"'
+          if ! printf '%s\n' "$CI_NEEDS" | jq -e 'length > 0 and all(.[]; .result == "success" or .result == "skipped" or .result == "neutral")' > /dev/null; then
+            echo '::error::CI gate failed: required results are missing or unacceptable.'
             exit 1
           fi
-          echo 'CI gate passed: no required job failed or was cancelled.'
+          echo 'CI gate passed: all required jobs succeeded, were skipped, or were neutral.'
