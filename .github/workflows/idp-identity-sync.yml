@@ -22,6 +22,10 @@ on:
         description: 'Required for a real manual import: idp-sync-YYYY-MM-DD (UTC)'
         type: string
         default: ''
+      ALLOWED_CLIENTS:
+        description: 'Authorized prod OAuth client IDs, comma-separated (e.g. immo-mcp)'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -75,6 +79,7 @@ jobs:
     env:
       DRY_RUN: ${{ github.event_name == 'schedule' && '0' || (inputs.DRY_RUN && '1' || '0') }}
       ALLOWED_REKEY: ${{ github.event_name == 'schedule' && '' || inputs.ALLOWED_REKEY || '' }}
+      ALLOWED_CLIENTS: ${{ github.event_name == 'schedule' && '' || inputs.ALLOWED_CLIENTS || '' }}
       CONFIRM: ${{ inputs.CONFIRM }}
       EXPECTED_KUBE_APISERVER_HOST_PROD: ${{ vars.EXPECTED_KUBE_APISERVER_HOST_PROD }}
     steps:

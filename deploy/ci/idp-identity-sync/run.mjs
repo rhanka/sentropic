@@ -6,7 +6,7 @@ import { replaceSecrets, antiRceGate, neutralize } from './bundle-cd.mjs';
 const template = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 export function auditSummary(raw, expectedOutcome) {
   const value = JSON.parse(raw);
-  const keys = ['synced_users', 'synced_webauthn', 'rekeyed', 'preprod_only_kept', 'post_users', 'post_webauthn', 'rekey_dropped_sessions', 'rekey_moved_webauthn', 'consents_upserted', 'consents_removed'];
+  const keys = ['synced_users', 'synced_webauthn', 'rekeyed', 'preprod_only_kept', 'post_users', 'post_webauthn', 'rekey_dropped_sessions', 'rekey_moved_webauthn', 'consents_upserted', 'consents_removed', 'clients_upserted', 'clients_removed', 'clients_skipped_confidential'];
   if (value.outcome !== expectedOutcome || keys.some(k => !Number.isSafeInteger(value[k]) || value[k] < 0) || !Array.isArray(value.rekey_pairs) || value.rekey_pairs.length !== value.rekeyed) throw new Error('invalid import audit');
   if (value.rekey_pairs.some(pair => !/^[a-f0-9-]{36}$/.test(pair.old_id) || !/^[a-f0-9-]{36}$/.test(pair.new_id))) throw new Error('invalid audit rekey IDs');
   return { outcome: value.outcome, ...Object.fromEntries(keys.map(k => [k, value[k]])), rekey_pairs: value.rekey_pairs.map(p => ({ old_id: p.old_id, new_id: p.new_id })) };
@@ -31,6 +31,19 @@ export function failureVerdict(name, k = kube) {
     return `job/${name} failed: ${failure.code}${pairs.length ? ` (${pairs.join(',')})` : ''}`;
   } catch { throw new Error(`job/${name} failed: termination failure code unavailable`); }
 }
+export async function importSnapshot(inputs, suffix, k = kube, wait = waitJob) {
+  if (!/^[0-9]+-[0-9]+$/.test(suffix)) throw new Error('invalid run ID');
+  const name = `sentropic-idp-sync-${suffix}`;
+  if (name.length > 63) throw new Error('Job name too long');
+  // The general app rollout can be skipped; deliver this checkout's importer first.
+  k(['apply', '-k', 'deploy/k8s/overlays/preprod/idp-identity-sync']);
+  applyJob('sentropic-preprod', name, render(template('import-job.tmpl.yaml'), { ...inputs, JOB_NAME: name }), k);
+  const verdict = await wait('sentropic-preprod', name, 900, k);
+  if (verdict === 'failed') throw new Error(failureVerdict(name, k));
+  if (verdict !== 'complete') throw new Error(`job/${name} failed`);
+  try { return collectAudit(name, inputs.DRY_RUN === '1' ? 'rolled_back' : 'committed', k); }
+  catch (error) { console.log(`job/${name}: audit unavailable`); throw error; }
+}
 export async function main(action = process.argv[2]) {
   switch (action) {
     case 'validate': validateRun(); console.log('run inputs accepted'); return;
@@ -53,15 +66,7 @@ export async function main(action = process.argv[2]) {
     case 'import': {
       const inputs = validateRun();
       const suffix = req('GITHUB_RUN_ID') + '-' + req('GITHUB_RUN_ATTEMPT');
-      if (!/^[0-9]+-[0-9]+$/.test(suffix)) throw new Error('invalid run ID');
-      const name = `sentropic-idp-sync-${suffix}`;
-      if (name.length > 63) throw new Error('Job name too long');
-      applyJob('sentropic-preprod', name, render(template('import-job.tmpl.yaml'), { ...inputs, JOB_NAME: name }));
-      const verdict = await waitJob('sentropic-preprod', name, 900);
-      if (verdict === 'failed') throw new Error(failureVerdict(name));
-      if (verdict !== 'complete') throw new Error(`job/${name} failed`);
-      try { collectAudit(name, inputs.DRY_RUN === '1' ? 'rolled_back' : 'committed'); }
-      catch (error) { console.log(`job/${name}: audit unavailable`); throw error; }
+      await importSnapshot(inputs, suffix);
       return;
     }
     case 'cleanup': rmSync(workdir(), { recursive: true, force: true }); return;

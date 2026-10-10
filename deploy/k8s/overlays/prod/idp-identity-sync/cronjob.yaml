@@ -30,14 +30,7 @@ spec:
             - name: export
               image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
               workingDir: /work
-              command: ["sh", "-ec"]
-              args:
-                - |
-                  psql -XAtq -v ON_ERROR_STOP=1 -f /sql/export-prod.sql > /work/.export.log 2>&1 || { echo 'identity export failed'; exit 1; }
-                  sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS
-                  IFS=, read -r snapshot users credentials consents < snapshot.csv
-                  echo "users=$users webauthn=$credentials consents=$consents"
-                  printf '{"users":%s,"webauthn":%s,"consents":%s}\n' "$users" "$credentials" "$consents" > /dev/termination-log
+              command: ["sh", "/sql/export-prod.sh"]
               env:
                 - { name: PGHOST, value: postgres }
                 - { name: PGDATABASE, value: app }

@@ -19,6 +19,12 @@ ALTER ROLE idp_identity_reader WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NO
 ALTER ROLE idp_identity_reader SET default_transaction_read_only = on;
 ALTER ROLE idp_identity_reader SET statement_timeout = '60s';
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM idp_identity_reader;
+-- Column ACLs survive a table-level REVOKE; explicitly remove the older hash grant.
+REVOKE SELECT (client_secret_hash) ON oauth_clients FROM idp_identity_reader;
+CREATE OR REPLACE VIEW idp_oauth_client_secret_presence
+WITH (security_barrier = true, security_invoker = false) AS
+SELECT client_id, client_secret_hash IS NOT NULL AS has_secret FROM oauth_clients;
+REVOKE ALL ON idp_oauth_client_secret_presence FROM PUBLIC;
 GRANT CONNECT ON DATABASE app TO idp_identity_reader;
 GRANT USAGE ON SCHEMA public TO idp_identity_reader;
 GRANT SELECT (id, email, display_name, role, account_status, approval_due_at, approved_at, approved_by_user_id,
@@ -26,6 +32,10 @@ GRANT SELECT (id, email, display_name, role, account_status, approval_due_at, ap
 GRANT SELECT (id, credential_id, public_key_cose, counter, user_id, device_name, transports_json, uv,
               created_at, last_used_at) ON webauthn_credentials TO idp_identity_reader;
 GRANT SELECT (user_id, client_id, tenant_id, scopes, created_at, updated_at) ON oauth_consents TO idp_identity_reader;
+GRANT SELECT (client_id, name, redirect_uris, allowed_scopes, grant_types, response_types,
+              token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce, resource_indicators,
+              tenant_id, owner_user_id, created_at, updated_at) ON oauth_clients TO idp_identity_reader;
+GRANT SELECT (client_id, has_secret) ON idp_oauth_client_secret_presence TO idp_identity_reader;
 COMMIT;
 -- Evidence (no secret): role attributes and exact column grants.
 SELECT rolname, rolcanlogin, rolsuper, rolconnlimit, rolconfig FROM pg_roles WHERE rolname = 'idp_identity_reader';
