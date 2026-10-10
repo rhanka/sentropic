@@ -16,6 +16,7 @@
   - `BRANCH.md`
   - `.github/README.md`
   - `spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md`
+  - `scripts/ci/publishable-ci-wiring.test.mjs` (directly blocking CI compatibility assertion)
   - `.h2a/report.md` (ignored handoff artifact)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -35,6 +36,7 @@
 - [x] Exclude all `publish-*` and `bootstrap-publish`: they publish artifacts on main or explicit dispatch, outside PR validation.
 - [x] Exclude `verify-train-lock-integrity`: main-only registry verification after publication; no PR artifact exists yet.
 - [x] Exclude `deploy-preprod`: main-only deployment after image publication, outside PR validation.
+- [x] BRCG-F1 — resolved: CI wiring assertion now checks publishers/bootstrap against the inventory isolation rule and requires `ci-gate` to enforce inventory validation; evidence: run 38048130949, job 114201723018, line 71; scoped reproduction failed before the change and all 20 wiring tests passed afterward.
 - [ ] After merge, conductor replaces required contexts with exactly `changes`, `enforce-package-bump`, `validate-publishable-manifests`, `ci-gate`; do not retain path-filtered individual contexts or alter settings from this branch.
 
 ## AI Flaky tests
@@ -56,10 +58,11 @@
   - [x] `make -f /tmp/ci-aggregate-gate-checks.mk test-ci-gate validate-ci-gate ENV=test-ci-aggregate-gate`: nine extracted-shell fixtures passed; success/skipped/neutral and their mix exit 0; failure/cancelled and three mixed failure cases exit 1; every dependency summary is asserted.
   - [x] The same check parses YAML in a Node container, asserts 38 exact dependencies and minimal permissions, and proves all 63 existing jobs and top-level workflow settings unchanged.
   - [x] `make check-ci-version-filters check-e2e-inventory ENV=test-ci-aggregate-gate`: passed, including all 56 numbered E2E specs.
+  - [x] Adapt `scripts/ci/publishable-ci-wiring.test.mjs` to the aggregate consumer; `make test-publishable-manifests test-qualify-published-install ENV=test-ci-aggregate-gate` passed all 84 manifest and 18 qualification fixture tests.
 - [ ] **Lot 2 — Documentation and PR handoff**
   - [x] Document required contexts and conductor migration in `.github/README.md`; align the manifest guard spec's branch-protection instructions.
-  - [ ] Run `make scope-check ENV=test-ci-aggregate-gate` before every commit.
-  - [ ] Push the branch, open the PR with this plan as its body, and post the concise execution plan as the first PR comment.
+  - [x] Run `make scope-check ENV=test-ci-aggregate-gate` before every commit; BRCG-EX1 uses numeric alias BR0-EX1 for the Harness parser.
+  - [x] Push the branch, open PR #661 with this plan as its body, and post the four-step execution plan as the first PR comment.
   - [ ] Verify all PR CI gates pass, including `ci-gate`; record review evidence and the exact head SHA.
-  - [ ] Write `.h2a/report.md` with dependency/exclusion inventory, exact contexts, PR, CI evidence, and open questions for the conductor.
+  - [x] Write `.h2a/report.md` with dependency/exclusion inventory, exact contexts, PR, CI evidence, and open questions for the conductor; update its final CI evidence before handoff.
   - [x] Leave `BRANCH.md` removal, merge, and branch-protection migration to the conductor, as required by the brief.
