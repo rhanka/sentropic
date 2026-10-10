@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { render, validateRun, classifyJobStatus, exportSnapshot, configure, waitJob, failureSummary } from './run-core.mjs';
 import { antiRceGate, replaceSecrets, policyName } from './bundle-cd.mjs';
-import { auditSummary, collectAudit, failureVerdict } from './run.mjs';
+import { auditSummary, collectAudit, failureVerdict, importSnapshot } from './run.mjs';
 const { parse } = createRequire('/tmp/idp-tools/package.json')('yaml');
 export async function runTests(load, bundles) {
   let passed = 0;
@@ -52,6 +52,37 @@ export async function runTests(load, bundles) {
     assert.equal(loadText(render(raw, { ...values, ALLOWED_REKEY: hostile })).spec.template.spec.containers[0].env.find(e => e.name === 'ALLOWED_REKEY').value, hostile);
   });
   function loadText(raw) { return parse(raw); }
+  await check('import refreshes the matching preprod bundle before creating a Job against a stale importer', async () => {
+    const calls = []; let refreshed = false;
+    const audit = { outcome: 'committed', rekey_pairs: [], synced_users: 8, synced_webauthn: 18,
+      rekeyed: 0, preprod_only_kept: 0, post_users: 8, post_webauthn: 18,
+      rekey_dropped_sessions: 0, rekey_moved_webauthn: 0, consents_upserted: 0,
+      consents_removed: 0, clients_upserted: 1, clients_removed: 0, clients_skipped_confidential: 0 };
+    const k = (args, options) => {
+      calls.push(args);
+      if (args.includes('-k')) { refreshed = true; return {}; }
+      if (args.includes('apply')) {
+        assert(refreshed, 'a stale four-file importer would reject the five-file client manifest');
+        const job = loadText(options.input);
+        assert.equal(job.spec.template.spec.containers[0].env.find(e => e.name === 'ALLOWED_CLIENTS').value, 'immo-mcp');
+      }
+      return { stdout: args.includes('pods') ? JSON.stringify({ items: [{ status: { containerStatuses: [
+        { name: 'import-preprod', state: { terminated: { message: JSON.stringify(audit) } } },
+      ] } }] }) : '' };
+    };
+    const inputs = validateRun({ ...env, DRY_RUN: '0', CONFIRM: 'idp-sync-2026-10-03', ALLOWED_CLIENTS: 'immo-mcp' }, now);
+    assert.deepEqual(await importSnapshot(inputs, '123-1', k, async () => 'complete'), audit);
+    assert.deepEqual(calls[0], ['apply', '-k', 'deploy/k8s/overlays/preprod/idp-identity-sync']);
+    assert.equal(calls[1][2], 'delete'); assert.equal(calls[2][2], 'apply');
+  });
+  await check('failed importer bundle delivery prevents Job creation and waiting', async () => {
+    const calls = []; let waited = false;
+    await assert.rejects(importSnapshot(validateRun(env, now), '123-1', args => {
+      calls.push(args); throw new Error('bundle rejected');
+    }, async () => { waited = true; }), /bundle rejected/);
+    assert.deepEqual(calls, [['apply', '-k', 'deploy/k8s/overlays/preprod/idp-identity-sync']]);
+    assert.equal(waited, false);
+  });
   await check('Job status distinguishes pending, active, complete and failed', async () => {
     for (const [status, expected] of [[{}, 'pending'], [{ active: 1 }, 'active'], [{ succeeded: 1 }, 'complete'], [{ conditions: [{ type: 'Complete', status: 'True' }] }, 'complete'], [{ failed: 1, succeeded: 1 }, 'failed'], [{ conditions: [{ type: 'Failed', status: 'True' }] }, 'failed']]) assert.equal(classifyJobStatus(status), expected);
     let calls = 0;
