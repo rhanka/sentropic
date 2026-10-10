@@ -27,12 +27,15 @@
   - `apps/**`
 - [x] **Conditional Paths (allowed only with explicit exception)**:
   - `Makefile`
+  - `.github/workflows/ci.yml`
 - [x] **Exception process**: document rationale, impact and rollback before editing.
 
 ## Feedback Loop
 - [x] BR45-EX2: Makefile — extend only test-idp-sync-sql to exercise the real authorize handler with the imported fixture; isolated containers only; rollback removes the added acceptance invocation.
 - [x] Design recorded in .h2a/SPEC.md; conductor review may follow the PR per build brief.
 - [x] R1: Independent review identified malformed URI authorities; reproduced the failure and reject invalid DNS/IPv4/percent syntax for redirects and resources with rollback regression checks.
+- [x] M1: Preserve source ambiguity checks using a prod-owned boolean presence view; remove raw hash privileges and prove the reader cannot read hashes or export prod IDs/hashes.
+- [x] BR45-EX3: .github/workflows/ci.yml — add the real authorize-handler sources to the IdP test filter; impact is an extra isolated gate on auth-hono changes; rollback removes only those filter entries.
 
 ## AI Flaky tests
 - [x] No provider-dependent tests or flaky exceptions.
