@@ -32,7 +32,7 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "hono": "^4.10.7"
+    "hono": "^4.13.13"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

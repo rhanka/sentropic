@@ -15,7 +15,7 @@
     "@sentropic/cluster-mesh": "file:../../packages/cluster-mesh",
     "@sentropic/llm-gateway": "file:../../packages/llm-gateway",
     "@sentropic/llm-mesh": "file:../../packages/llm-mesh",
-    "hono": "^4.12.25"
+    "hono": "^4.13.13"
   },
   "devDependencies": {
     "@types/node": "^20.14.2",
