@@ -45,6 +45,8 @@ export function workflowTests(check, load) {
   check('CI gates SQL and bundles for deployment changes', () => {
     const filter = parse(ci.jobs.changes.steps.find(s => s.with?.filters).with.filters);
     assert.ok(filter.idp_sync.includes('deploy/**'));
+    assert.ok(filter.idp_sync.includes('packages/auth-hono/src/**'));
+    assert.ok(filter.idp_sync.includes('packages/auth-hono/package.json'));
     assert.deepEqual(ci.jobs['validate-idp-sync'].steps.filter(s => s.run).map(s => s.run), ['make test-idp-sync-selftest ENV=test-idp-sync', 'make test-idp-sync-sql ENV=test-idp-sync']);
   });
   check('bootstrap delegates only tenant resources and two existing Secrets', () => {

@@ -1566,7 +1566,7 @@ test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without 
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund yaml@2.8.1 >/dev/null; node deploy/ci/idp-identity-sync/idp-sync.selftest.mjs'
 
 .PHONY: test-idp-sync-sql
-test-idp-sync-sql: ## Test the IdP relay SQL on a disposable, isolated Postgres database (BR45-EX1)
+test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize acceptance (BR45-EX1/EX2)
 	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
 	@set -eu; acceptance="$$(mktemp -d)"; trap 'rm -rf "$$acceptance"' EXIT; \
 	docker run --rm --network none --tmpfs /tmp:rw,exec \
@@ -1575,7 +1575,7 @@ test-idp-sync-sql: ## Test the IdP relay SQL on a disposable, isolated Postgres 
 		-v "$$acceptance:/acceptance" \
 		--entrypoint sh postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
 		/workspace/deploy/ci/idp-identity-sync/sql-test.sh; \
-	docker run --rm -v "$(CURDIR)/deploy:/workspace/deploy:ro" \
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/deploy:/workspace/deploy:ro" \
 		-v "$(CURDIR)/packages/auth-hono/src:/workspace/packages/auth-hono/src:ro" \
 		-v "$(CURDIR)/packages/auth-hono/package.json:/workspace/packages/auth-hono/package.json:ro" \
 		-v "$$acceptance:/acceptance:ro" -w /workspace \

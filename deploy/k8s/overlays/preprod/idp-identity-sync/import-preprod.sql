@@ -162,6 +162,14 @@ BEGIN
 END $$;
 CREATE TEMP TABLE client_map (prod_client_id text, preprod_client_id text) ON COMMIT DROP;
 \copy client_map FROM '/sql/client-map.csv' WITH (FORMAT csv, HEADER true)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM client_map)
+     OR EXISTS (SELECT FROM client_map WHERE coalesce(prod_client_id, '') = '' OR coalesce(preprod_client_id, '') = '')
+     OR EXISTS (SELECT FROM client_map GROUP BY prod_client_id HAVING count(*) > 1)
+     OR EXISTS (SELECT FROM client_map GROUP BY preprod_client_id HAVING count(*) > 1)
+    THEN RAISE EXCEPTION 'consent client map target missing'; END IF;
+END $$;
 \i /sql/client-policy.sql
 \i /sql/sync-clients.sql
 
@@ -173,11 +181,8 @@ DO $$
 BEGIN
   IF (SELECT count(*) FROM src_consents) <> current_setting('sync.expected_consents')::int
     THEN RAISE EXCEPTION 'export row count does not match manifest'; END IF;
-  IF NOT EXISTS (SELECT FROM client_map)
-     OR EXISTS (SELECT FROM client_map m LEFT JOIN oauth_clients c ON c.client_id = m.preprod_client_id
-                WHERE c.client_id IS NULL OR coalesce(m.prod_client_id, '') = '')
-     OR EXISTS (SELECT FROM client_map GROUP BY prod_client_id HAVING count(*) > 1)
-     OR EXISTS (SELECT FROM client_map GROUP BY preprod_client_id HAVING count(*) > 1)
+  IF EXISTS (SELECT FROM client_map m LEFT JOIN oauth_clients c ON c.client_id = m.preprod_client_id
+             WHERE c.client_id IS NULL)
     THEN RAISE EXCEPTION 'consent client map target missing'; END IF;
 END $$;
 CREATE TEMP TABLE desired_consents ON COMMIT DROP AS

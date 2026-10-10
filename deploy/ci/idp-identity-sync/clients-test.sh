@@ -1,5 +1,15 @@
 # Sourced by sql-test.sh inside the disposable database container.
 stage=client-controls
+sql -d app -c "UPDATE oauth_clients SET token_endpoint_auth_method = 'none' WHERE client_id = 'radar-immobilier'"
+assert_sql "UPDATE oauth_clients SET token_endpoint_auth_method = 'none' WHERE client_id = 'radar-immobilier-preprod'"
+assert_sql 'UPDATE test_before SET state = test_state(), dv5 = test_dv5()'
+refresh_relay
+WRAPPER_CLIENTS=radar-immobilier wrapper
+grep -Fq '"clients_upserted":1' /dev/termination-log
+unchanged
+SQL_CLIENTS=radar-immobilier sync -v dry_run=0
+assert_sql "SELECT test_assert((SELECT id = 'client-1' AND allowed_scopes = ARRAY['openid','profile','email']::text[] FROM oauth_clients WHERE client_id = 'radar-immobilier-preprod'), 'prod allowlist uses the mapped preprod target'); SELECT test_assert(NOT EXISTS (SELECT FROM oauth_clients WHERE client_id = 'radar-immobilier'), 'mapped source ID is not inserted')"
+echo 'PASS: client allowlist maps radar-immobilier to the existing preprod row'
 assert_sql 'UPDATE test_before SET state = test_state(), dv5 = test_dv5()'
 WRAPPER_CLIENTS='' wrapper
 grep -Fq '"clients_upserted":0' /dev/termination-log

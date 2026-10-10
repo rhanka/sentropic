@@ -31,11 +31,12 @@
 - [x] **Exception process**: document rationale, impact and rollback before editing.
 
 ## Feedback Loop
-- [x] BR45-EX2: Makefile — extend only test-idp-sync-sql to exercise the real authorize handler with the imported fixture; isolated containers only; rollback removes the added acceptance invocation.
+- [x] BR45-EX2: Makefile — extend only test-idp-sync-sql with the real authorize handler and imported fixture; containers publish no ports, source mounts are read-only, Node runs as host UID, and network is required for temporary tool installation; rollback removes the added acceptance invocation.
 - [x] Design recorded in .h2a/SPEC.md; conductor review may follow the PR per build brief.
 - [x] R1: Independent review identified malformed URI authorities; reproduced the failure and reject invalid DNS/IPv4/percent syntax for redirects and resources with rollback regression checks.
 - [x] M1: Preserve source ambiguity checks using a prod-owned boolean presence view; remove raw hash privileges and prove the reader cannot read hashes or export prod IDs/hashes.
 - [x] BR45-EX3: .github/workflows/ci.yml — add the real authorize-handler sources to the IdP test filter; impact is an extra isolated gate on auth-hono changes; rollback removes only those filter entries.
+- [x] Review follow-up: gate auth-hono changes, run Node acceptance as host UID, validate client-map shape before writes and prove the mapped radar client target with rollback.
 
 ## AI Flaky tests
 - [x] No provider-dependent tests or flaky exceptions.
