@@ -36,6 +36,27 @@ for (const tier of ['prod', 'preprod']) {
     assert.deepEqual(pod.containers.map(c => [c.name, c.image]), [['upload', s5cmdImage]]);
   });
 }
+check('pipeline Node and shell sources pass syntax checks', () => {
+  for (const file of filesUnder('deploy/ci/idp-identity-sync').filter(file => /\.(mjs|sh)$/.test(file))) {
+    const result = file.endsWith('.mjs') ? spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' })
+      : spawnSync('sh', ['-n', file], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `syntax: ${file}`);
+  }
+  for (const objects of Object.values(bundles)) for (const cm of objects.filter(o => o.kind === 'ConfigMap')) {
+    for (const [name, source] of Object.entries(cm.data)) if (name.endsWith('.sh')) {
+      assert.equal(spawnSync('sh', ['-n'], { input: source }).status, 0, `syntax: ${name}`);
+    }
+  }
+});
+check('client host policy agrees with existing prod/preprod ingress hosts', () => {
+  const cm = bundles.preprod.find(o => o.kind === 'ConfigMap' && o.metadata.name === 'sentropic-idp-identity-sync-sql');
+  const hosts = cm.data['host-map.csv'].trim().split('\n').slice(1).map(row => row.split(','));
+  const ingressHosts = tier => load(`/rendered/${tier}-parent.yaml`).filter(o => o.kind === 'Ingress').flatMap(o => o.spec.rules.map(r => r.host));
+  const prodHosts = ingressHosts('prod'), preprodHosts = ingressHosts('preprod');
+  let checked = 0;
+  for (const [prodHost, preprodHost] of hosts) if (prodHosts.includes(prodHost)) { assert(preprodHosts.includes(preprodHost)); checked++; }
+  assert(checked >= 2, 'auth and sentropic host pairs must be governed by the ingress overlays');
+});
 const mutated = (tier, mutation) => { const copy = structuredClone(bundles[tier]); mutation(copy); assert.throws(() => checkBundle(copy, tier)); };
 const cron = objects => objects.find(o => o.kind === 'CronJob');
 check('reject armed export CronJob', () => mutated('prod', o => { cron(o).spec.suspend = false; }));

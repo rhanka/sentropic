@@ -10,6 +10,8 @@ export function workflowTests(check, load) {
     assert.equal(w.on.schedule[0].cron, '40 4 * * *');
     assert.equal(w.on.workflow_dispatch.inputs.DRY_RUN.default, true);
     assert.equal(w.on.workflow_dispatch.inputs.ALLOWED_REKEY.default, '');
+    assert.equal(w.on.workflow_dispatch.inputs.ALLOWED_CLIENTS.default, '');
+    assert.equal(w.jobs.run.env.ALLOWED_CLIENTS, "${{ github.event_name == 'schedule' && '' || inputs.ALLOWED_CLIENTS || '' }}");
     assert.equal(w.concurrency['cancel-in-progress'], false);
     assert.equal(w.jobs['bundle-prod'].environment, 'sentropic-idp-prod');
     assert.match(w.jobs['bundle-prod'].if, /vars.IDP_SYNC_CD_ENABLED == 'true'/);
@@ -43,6 +45,8 @@ export function workflowTests(check, load) {
   check('CI gates SQL and bundles for deployment changes', () => {
     const filter = parse(ci.jobs.changes.steps.find(s => s.with?.filters).with.filters);
     assert.ok(filter.idp_sync.includes('deploy/**'));
+    assert.ok(filter.idp_sync.includes('packages/auth-hono/src/**'));
+    assert.ok(filter.idp_sync.includes('packages/auth-hono/package.json'));
     assert.deepEqual(ci.jobs['validate-idp-sync'].steps.filter(s => s.run).map(s => s.run), ['make test-idp-sync-selftest ENV=test-idp-sync', 'make test-idp-sync-sql ENV=test-idp-sync']);
   });
   check('bootstrap delegates only tenant resources and two existing Secrets', () => {
