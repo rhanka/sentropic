@@ -115,7 +115,7 @@
   "dependencies": {
     "@sentropic/contracts": "^0.3.0",
     "@sentropic/events": "^0.2.0",
-    "hono": "^4.10.7"
+    "hono": "^4.13.13"
   },
   "peerDependencies": {
     "@sentropic/llm-mesh": ">=0.22.0 <0.26.0",
