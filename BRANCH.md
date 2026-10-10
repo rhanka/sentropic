@@ -66,7 +66,7 @@
   - [x] Document required contexts and conductor migration in `.github/REQUIRED_CHECKS.md`; align the manifest guard spec's branch-protection instructions.
   - [x] Run `make scope-check ENV=test-ci-aggregate-gate` before every commit; BRCG-EX1 uses numeric alias BR0-EX1 for the Harness parser.
   - [x] Push the branch, open PR #661 with this plan as its body, and post the four-step execution plan as the first PR comment.
-  - [x] Verify initial PR CI, including `ci-gate`: run 38048511501 passed on `4d1b3d4e3331d4a071e60ec7a5244b340a49145f`; latest review-fix head/run evidence is recorded in `.h2a/report.md` after push.
+  - [x] Verify corrected PR CI, including `ci-gate`: run 38052186766 passed on `1cd43bef88e36a11a65a2b523b27a78e306b59a8` with 57 successful and 25 skipped jobs; final bookkeeping-head CI evidence is recorded in `.h2a/report.md` after push.
   - [x] Write `.h2a/report.md` with dependency/exclusion inventory, exact contexts, PR, CI evidence, and open questions for the conductor; update its final CI evidence before handoff.
   - [x] Leave `BRANCH.md` removal, merge, and branch-protection migration to the conductor, as required by the brief.
 - [x] **Lot 3 — Review corrections**
@@ -75,6 +75,6 @@
   - [x] Guard verification: unchanged workflow passes; ten mutations (including an omitted future job and removed `always()`) fail the actual committed test in an isolated container fixture.
   - [x] Minor result validation: 13 extracted-shell fixtures pass, including missing, null, unknown, and empty inputs; unacceptable jobs receive error annotations.
   - [x] Minor isolation: only `ci-gate` is exempt from inventory isolation; no job may depend on the aggregate gate.
-  - [x] Minor CI bookkeeping: close the completed initial CI checkpoint above, refresh the PR body from this file, and keep exact latest SHA/run verification in `.h2a/report.md`.
+  - [x] Minor CI bookkeeping: record the qualified review-fix SHA/run above, refresh the PR body from this file, and keep exact final bookkeeping-head verification in `.h2a/report.md`.
   - [x] Minor permissions: retain the brief's `contents: read` contract and enforce it in the committed test.
   - [x] `make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs ENV=test-ci-aggregate-gate`: all 21 wiring tests pass; full `make test-publishable-manifests ENV=test-ci-aggregate-gate`: all 85 fixtures pass.
