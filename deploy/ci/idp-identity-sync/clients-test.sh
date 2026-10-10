@@ -25,6 +25,16 @@ unchanged
 echo 'PASS: empty client allowlist, missing sources, confidential skip, local secret and idempotence'
 
 stage=client-host-policy
+for field in redirect_uris resource_indicators; do
+  for uri in 'https://immo.sent-tech.ca../mcp' 'https://immo.sent-tech.ca./mcp' 'https://immo..sent-tech.ca/mcp' 'https://999.999.999.999/callback' 'https://127.1/callback' 'https://claude.ai/callback%ZZ'; do
+    sql -d app -v uri="$uri" -v field="$field" <<'SQL'
+UPDATE oauth_clients SET :"field" = ARRAY[:'uri'] WHERE client_id = 'immo-mcp';
+SQL
+    refresh_relay
+    reject_wrapper client_policy_invalid
+  done
+  sql -d app -c "UPDATE oauth_clients SET redirect_uris = ARRAY['https://claude.ai/api/mcp/auth_callback'], resource_indicators = ARRAY['https://immo.sent-tech.ca/mcp'] WHERE client_id = 'immo-mcp'"
+done
 sql -d app -c "UPDATE oauth_clients SET redirect_uris = ARRAY['https://sentropic.sent-tech.ca/callback?next=https://auth.sent-tech.ca/login','https://claude.ai/api/mcp/auth_callback'], resource_indicators = ARRAY['https://IMMO.sent-tech.ca:443/mcp?q=immo.sent-tech.ca'] WHERE client_id = 'immo-mcp'"
 refresh_relay
 wrapper
