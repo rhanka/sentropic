@@ -30,7 +30,7 @@
 - [x] **Exception process**: document rationale, impact and rollback before editing.
 
 ## Feedback Loop
-- [x] BR-IDP-EX1: Extend only test-idp-sync-sql in Makefile to exercise the real authorize handler with the imported fixture; isolated containers only; rollback removes the added acceptance invocation.
+- [x] BR45-EX2: Makefile — extend only test-idp-sync-sql to exercise the real authorize handler with the imported fixture; isolated containers only; rollback removes the added acceptance invocation.
 - [x] Design recorded in .h2a/SPEC.md; conductor review may follow the PR per build brief.
 
 ## AI Flaky tests
@@ -56,7 +56,7 @@
   - [x] Preserve existing secrets; skip new confidential clients; map owner FK; upsert before consents.
   - [x] Protect whole-row invariants and verify exact configuration postconditions.
 - [ ] **Lot 3 — Pipeline acceptance**
-  - [ ] Update fixtures/prod.sql, assertions.sql and assert-committed.sql for client convergence.
+  - [x] Update fixtures/prod.sql, assertions.sql and assert-committed.sql for client convergence.
   - [ ] Update sql-test.sh for five-file relay, client allowlist, rollback, idempotence and failure cases.
   - [ ] Add real-handler authorize selftest proving immo-mcp 302 with the imported fixture.
   - [ ] Run make test-idp-sync-selftest and make test-idp-sync-sql ENV=test-idp-oauth-client-sync.
