@@ -1,8 +1,8 @@
 # OAuth client convergence for the IdP relay
 
-Status: implementation design; author host=codex, model=gpt-6.1-sol, effort=xhigh.
+Status: implemented design.
 
-## Evidence and model
+## Baseline evidence and model (origin/main 30a2362c0)
 
 - `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql:6` exports one
   repeatable-read snapshot; `reader-role.sql:26` uses column-level read grants.
