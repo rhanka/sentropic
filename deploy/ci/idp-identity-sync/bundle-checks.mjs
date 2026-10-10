@@ -41,7 +41,8 @@ export function checkBundle(objects, tier) {
   assert.deepEqual(network.spec.ingress, [{ from: [{ podSelector: { matchLabels: { 'app.kubernetes.io/component': component } } }], ports: [{ protocol: 'TCP', port: 5432 }] }]);
   if (prod) {
     assert.deepEqual(pod.initContainers.map(c => c.name), ['export']); assert.deepEqual(pod.containers.map(c => c.name), ['upload']);
-    assert(pod.initContainers[0].args.join(' ').includes('sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS'));
+    assert.deepEqual(pod.initContainers[0].command, ['sh', '/sql/export-prod.sh']);
+    assert(get('ConfigMap', 'sentropic-idp-identity-export-sql').data['export-prod.sh'].includes('sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS'));
     assert(!Object.hasOwn(get('ConfigMap', 'sentropic-idp-identity-export-sql').data, 'client-map.csv'));
     assert(pod.containers[0].args.includes('/work/*')); assert(pod.containers[0].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/'));
     get('ConfigMap', 'sentropic-idp-identity-export-sql'); get('ConfigMap', 'sentropic-idp-reader-role-sql');
@@ -61,6 +62,7 @@ export function checkBundle(objects, tier) {
     assert.deepEqual(pod.containers.map(c => c.name), ['import-preprod']);
     const importer = pod.containers[0];
     assert.equal(envValue(importer, 'DRY_RUN'), '1'); assert.equal(envValue(importer, 'ALLOWED_REKEY'), '');
+    assert.equal(envValue(importer, 'ALLOWED_CLIENTS'), '');
     assert.equal(envValue(importer, 'MAX_SNAPSHOT_AGE_S'), '7200');
     assert.deepEqual(importer.command, ['sh', '/sql/import-preprod.sh']);
     assert(pod.initContainers[0].args[0].includes('pg_dump -Fc'));
@@ -69,6 +71,11 @@ export function checkBundle(objects, tier) {
     assert(pod.initContainers[2].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/*'));
     const cm = get('ConfigMap', 'sentropic-idp-identity-sync-sql');
     assert.equal(cm.data['client-map.csv'], 'prod_client_id,preprod_client_id\nradar-immobilier,radar-immobilier-preprod\n');
+    const hosts = cm.data['host-map.csv'].trim().split('\n').slice(1).map(row => row.split(','));
+    assert.equal(new Set(hosts.map(row => row[0])).size, hosts.length);
+    for (const [prodHost, preprodHost] of hosts) assert.equal(preprodHost, `preprod.${prodHost}`);
+    assert(cm.data['client-policy.sql'].includes("FROM 'clients.csv'"));
+    assert(cm.data['import-preprod.sql'].includes('\\i /sql/client-postcondition.sql'));
     for (const command of ['sha256sum -c SHA256SUMS', 'MAX_SNAPSHOT_AGE_S', 'expected_users', 'expected_webauthn', '/dev/termination-log']) assert(cm.data['import-preprod.sh'].includes(command));
   }
   return cj;
