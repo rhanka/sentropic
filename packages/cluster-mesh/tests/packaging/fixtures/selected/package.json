@@ -7,7 +7,7 @@
     "@sentropic/llm-gateway": "0.19.2",
     "@sentropic/llm-mesh": "0.22.3",
     "@sentropic/mcp-auth": "0.2.1",
-    "hono": "4.10.7",
+    "hono": "4.13.13",
     "jose": "5.10.0"
   }
 }
