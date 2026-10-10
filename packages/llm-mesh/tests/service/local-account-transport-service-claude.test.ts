@@ -12,7 +12,7 @@ import { LocalAccountTransportService } from '../../src/service/local-account-tr
 const ACCESS = 'FAKE_SERVICE_ACCESS_CANARY_159';
 const REFRESH = 'FAKE_SERVICE_REFRESH_CANARY_826';
 const CODE = 'FAKE_SERVICE_CODE_CANARY_407';
-const VERSION = 'claude-code-oauth-2.1.80-v1';
+const VERSION = 'claude-code-oauth-2.1.296-v1';
 const owner = 'tenant:test:user:a';
 const acquire = { ownerScopeRef: owner, targetProviderId: 'anthropic' as const, transportProviderId: 'claude-code' as const };
 const start = { ownerScope: owner, configRef: 'claude-code', mode: 'cli' as const, redirectUri: '' };
@@ -408,7 +408,7 @@ describe('Claude service enrollment', () => {
       : await service.completeClaudeCredentialImport(paste(), owner);
     expect(Object.keys(completion).sort()).toEqual(['accountId', 'label']);
     expect(completion.label).toBe(`Claude (${completion.accountId})`);
-    expect(completion.accountId).toMatch(/^acct_claude_[\w-]{22}$/);
+    expect(completion.accountId).toMatch(/^acct_claude_[\w-]{43}$/);
     const prefix = `sentropic-llm-mesh:${completion.accountId}`;
     expect(JSON.parse((await keyring.getSecret(`${prefix}:envelope`))!)).toMatchObject({
       accountId: completion.accountId, accessToken: ACCESS, refreshToken: REFRESH, authClientConfigVersion: VERSION });
