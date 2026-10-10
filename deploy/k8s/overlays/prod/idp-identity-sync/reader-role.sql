@@ -26,6 +26,9 @@ GRANT SELECT (id, email, display_name, role, account_status, approval_due_at, ap
 GRANT SELECT (id, credential_id, public_key_cose, counter, user_id, device_name, transports_json, uv,
               created_at, last_used_at) ON webauthn_credentials TO idp_identity_reader;
 GRANT SELECT (user_id, client_id, tenant_id, scopes, created_at, updated_at) ON oauth_consents TO idp_identity_reader;
+GRANT SELECT (client_id, client_secret_hash, name, redirect_uris, allowed_scopes, grant_types, response_types,
+              token_endpoint_auth_method, dpop_bound_access_tokens, require_pkce, resource_indicators,
+              tenant_id, owner_user_id, created_at, updated_at) ON oauth_clients TO idp_identity_reader;
 COMMIT;
 -- Evidence (no secret): role attributes and exact column grants.
 SELECT rolname, rolcanlogin, rolsuper, rolconnlimit, rolconfig FROM pg_roles WHERE rolname = 'idp_identity_reader';

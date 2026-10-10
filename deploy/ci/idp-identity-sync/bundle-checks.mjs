@@ -41,7 +41,7 @@ export function checkBundle(objects, tier) {
   assert.deepEqual(network.spec.ingress, [{ from: [{ podSelector: { matchLabels: { 'app.kubernetes.io/component': component } } }], ports: [{ protocol: 'TCP', port: 5432 }] }]);
   if (prod) {
     assert.deepEqual(pod.initContainers.map(c => c.name), ['export']); assert.deepEqual(pod.containers.map(c => c.name), ['upload']);
-    assert(pod.initContainers[0].args.join(' ').includes('sha256sum users.csv webauthn.csv consents.csv snapshot.csv > SHA256SUMS'));
+    assert(pod.initContainers[0].args.join(' ').includes('sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS'));
     assert(!Object.hasOwn(get('ConfigMap', 'sentropic-idp-identity-export-sql').data, 'client-map.csv'));
     assert(pod.containers[0].args.includes('/work/*')); assert(pod.containers[0].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/'));
     get('ConfigMap', 'sentropic-idp-identity-export-sql'); get('ConfigMap', 'sentropic-idp-reader-role-sql');
