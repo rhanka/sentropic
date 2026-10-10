@@ -62,6 +62,9 @@ pair='9f11d240-fc75-4d55-80be-1bafcd79eadb>1b9b9e15-2956-4df4-9ee1-a42273f0d096'
 sync() { sql -d preprod -v expected_users="$users" -v expected_webauthn="$credentials" -v expected_consents="$consents" -v expected_clients="$clients" -v allowed_clients="${SQL_CLIENTS-immo-mcp}" "$@" -f "$import"; }
 unchanged() { assert_sql 'SELECT test_assert(test_state() = (SELECT state FROM test_before), '\''all state rolled back'\'')'; }
 stage=dry-run
+SQL_CLIENTS='' sync -v allowed_rekey="$pair"
+grep -Fxq 'clients_upserted|0' /tmp/sql.log
+unchanged
 sync -v allowed_rekey="$pair"
 grep -Fxq 'DRY RUN: rolled back' /tmp/sql.log
 grep -Fxq 'rekeyed|1' /tmp/sql.log
@@ -279,3 +282,4 @@ grep -Fxq 'consents_removed|1' /tmp/sql.log
 assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user_id = '1b9b9e15-2956-4df4-9ee1-a42273f0d096' AND client_id = 'radar-immobilier-preprod' AND tenant_id = 'sentropic'), 'prod revocation applied'); SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE tenant_id = 'other-tenant') = 1, 'other tenant grant retained')"
 assert_sql 'SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), '\''protected clients, keys and grants unchanged'\'')'
 echo 'PASS: tenant grants remain separate; prod revocation removes only its mapped grant'
+. /workspace/deploy/ci/idp-identity-sync/clients-test.sh
