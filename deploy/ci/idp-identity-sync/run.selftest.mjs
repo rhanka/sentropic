@@ -33,10 +33,11 @@ export async function runTests(load, bundles) {
     assert.equal(validateRun(env, now).DRY_RUN, '1');
     assert.throws(() => validateRun({ ...env, DRY_RUN: '0' }, now));
     assert.equal(validateRun({ ...env, DRY_RUN: '0', CONFIRM: 'idp-sync-2026-10-03' }, now).DRY_RUN, '0');
-    for (const patch of [{ GITHUB_REF: 'refs/heads/evil' }, { DRY_RUN: 'true' }, { ALLOWED_REKEY: 'invalid' }, { MAX_SNAPSHOT_AGE_S: '0' }, { CONFIRM: 'idp-sync-2026-10-02', DRY_RUN: '0' }]) assert.throws(() => validateRun({ ...env, ...patch }, now));
+    assert.equal(validateRun({ ...env, ALLOWED_CLIENTS: ' immo-mcp, other-client ' }, now).ALLOWED_CLIENTS, 'immo-mcp,other-client');
+    for (const patch of [{ GITHUB_REF: 'refs/heads/evil' }, { DRY_RUN: 'true' }, { ALLOWED_REKEY: 'invalid' }, { MAX_SNAPSHOT_AGE_S: '0' }, { CONFIRM: 'idp-sync-2026-10-02', DRY_RUN: '0' }, ...['immo-mcp,immo-mcp', 'immo-mcp,', 'bad/client', 'a\n'].map(ALLOWED_CLIENTS => ({ ALLOWED_CLIENTS: ALLOWED_CLIENTS === 'a\n' ? 'a\nb' : ALLOWED_CLIENTS }))]) assert.throws(() => validateRun({ ...env, ...patch }, now));
   });
   await check('scheduled import forces real run with empty rekey allowlist', () => {
-    assert.deepEqual(validateRun({ ...env, GITHUB_EVENT_NAME: 'schedule', ALLOWED_REKEY: 'invalid' }, now), { DRY_RUN: '0', ALLOWED_REKEY: '', MAX_SNAPSHOT_AGE_S: '7200' });
+    assert.deepEqual(validateRun({ ...env, GITHUB_EVENT_NAME: 'schedule', ALLOWED_REKEY: 'invalid', ALLOWED_CLIENTS: 'immo-mcp' }, now), { DRY_RUN: '0', ALLOWED_REKEY: '', ALLOWED_CLIENTS: '', MAX_SNAPSHOT_AGE_S: '7200' });
   });
   await check('rendered Job matches dormant CronJob pod with safe substitutions', () => {
     const values = { JOB_NAME: 'test-sync', ...validateRun(env, now) };
@@ -59,13 +60,13 @@ export async function runTests(load, bundles) {
   await check('rendered prod export reports user, WebAuthn and consent counts only', () => {
     const dir = mkdtempSync(join(tmpdir(), 'idp-export-test-'));
     try {
-      writeFileSync(join(dir, 'snapshot.csv'), '2026-10-04 00:00:00,108,118,128\n');
+      writeFileSync(join(dir, 'snapshot.csv'), '2026-10-04 00:00:00,108,118,128,138\n');
       const script = bundles.prod.find(o => o.kind === 'CronJob').spec.jobTemplate.spec.template.spec.initContainers[0].args[0];
       const reporting = script.slice(script.indexOf('IFS=, read')).replace('/dev/termination-log', './termination.json');
       const result = spawnSync('sh', ['-ec', reporting], { cwd: dir, encoding: 'utf8' });
       assert.equal(result.status, 0); assert.equal(result.stderr, '');
-      assert.equal(result.stdout, 'users=108 webauthn=118 consents=128\n');
-      assert.deepEqual(JSON.parse(readFileSync(join(dir, 'termination.json'), 'utf8')), { users: 108, webauthn: 118, consents: 128 });
+      assert.equal(result.stdout, 'users=108 webauthn=118 consents=128 clients=138\n');
+      assert.deepEqual(JSON.parse(readFileSync(join(dir, 'termination.json'), 'utf8')), { users: 108, webauthn: 118, consents: 128, clients: 138 });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
   for (const verdict of ['complete', 'failed', 'invalid', 'zero-consents', 'missing-consents', 'invalid-consents', 'negative-consents', 'fractional-consents', 'unsafe-consents']) await check(`export ${verdict} always re-suspends and uses pod status only`, async () => {
@@ -81,7 +82,7 @@ export async function runTests(load, bundles) {
       const data = resource === 'cronjob' ? { metadata: { uid: 'cron' }, spec: { suspend: true } }
         : resource === 'jobs' ? { items: ++lists === 1 ? [old] : [old, fresh] }
         : resource === 'job' ? { status: verdict === 'failed' ? { failed: 1 } : { succeeded: 1 } }
-        : { items: [{ status: { initContainerStatuses: [{ name: 'export', state: { terminated: { message: JSON.stringify({ users: verdict === 'invalid' ? 0 : 108, webauthn: 118, consents, forbidden: 'private@example.invalid' }) } } }] } }] };
+        : { items: [{ status: { initContainerStatuses: [{ name: 'export', state: { terminated: { message: JSON.stringify({ users: verdict === 'invalid' ? 0 : 108, webauthn: 118, consents, clients: 138, forbidden: 'private@example.invalid' }) } } }] } }] };
       if (resource === 'job') assert.equal(args[4], 'fresh');
       return { stdout: JSON.stringify(data) };
     };
@@ -91,7 +92,7 @@ export async function runTests(load, bundles) {
       if (['complete', 'zero-consents'].includes(verdict)) assert.equal(await exportSnapshot(k, async () => {}), 'fresh');
       else await assert.rejects(exportSnapshot(k, async () => {}), { message: verdict === 'failed' ? 'prod export Job failed' : 'invalid export termination verdict' });
     } finally { console.log = log; }
-    assert.deepEqual(output, ['complete', 'zero-consents'].includes(verdict) ? [`export users=108 webauthn=118 consents=${consents}`] : []);
+    assert.deepEqual(output, ['complete', 'zero-consents'].includes(verdict) ? [`export users=108 webauthn=118 consents=${consents} clients=138`] : []);
     assert.deepEqual(patches, [false, true]);
   });
   for (const mode of ['policy-denial', 'rbac-denial', 'admitted', 'suspend-denied']) await check(`anti-RCE ${mode} verifies admission and fails closed`, () => {
@@ -121,12 +122,12 @@ export async function runTests(load, bundles) {
     });
   } finally { rmSync(dir, { recursive: true, force: true }); if (previous === undefined) delete process.env.IDP_SYNC_WORKDIR; else process.env.IDP_SYNC_WORKDIR = previous; }
   await check('audit rejects invalid outcomes/counts and strips non-audit fields', () => {
-    const value = { outcome: 'rolled_back', synced_users: 101, synced_webauthn: 118, rekeyed: 1, preprod_only_kept: 103, post_users: 109, post_webauthn: 122, rekey_dropped_sessions: 104, rekey_moved_webauthn: 105, consents_upserted: 106, consents_removed: 107, rekey_pairs: [{ old_id: '00000000-0000-4000-8000-000000000001', new_id: '00000000-0000-4000-8000-000000000002' }], forbidden: 'discard' };
+    const value = { outcome: 'rolled_back', synced_users: 101, synced_webauthn: 118, rekeyed: 1, preprod_only_kept: 103, post_users: 109, post_webauthn: 122, rekey_dropped_sessions: 104, rekey_moved_webauthn: 105, consents_upserted: 106, consents_removed: 107, clients_upserted: 0, clients_removed: 0, clients_skipped_confidential: 0, rekey_pairs: [{ old_id: '00000000-0000-4000-8000-000000000001', new_id: '00000000-0000-4000-8000-000000000002' }], forbidden: 'discard' };
     assert.equal(Object.hasOwn(auditSummary(JSON.stringify(value), 'rolled_back'), 'forbidden'), false);
     assert.throws(() => auditSummary(JSON.stringify(value), 'committed')); assert.throws(() => auditSummary(JSON.stringify({ ...value, post_users: -1 }), 'rolled_back'));
     const k = args => ({ stdout: args.includes('logs') ? 'non-audit line\n' : JSON.stringify({ items: [{ status: { containerStatuses: [{ name: 'import-preprod', state: { terminated: { message: JSON.stringify(value) } } }] } }] }) });
     assert.equal(collectAudit('synthetic', 'rolled_back', k).post_users, 109);
-    for (const key of ['consents_upserted', 'consents_removed']) {
+    for (const key of ['consents_upserted', 'consents_removed', 'clients_upserted', 'clients_removed', 'clients_skipped_confidential']) {
       assert.throws(() => auditSummary(JSON.stringify({ ...value, [key]: -1 }), 'rolled_back'));
       const missing = { ...value }; delete missing[key];
       assert.throws(() => auditSummary(JSON.stringify(missing), 'rolled_back'));
@@ -136,7 +137,7 @@ export async function runTests(load, bundles) {
     const pair = '00000000-0000-4000-8000-000000000001>00000000-0000-4000-8000-000000000002';
     const value = { outcome: 'failed', code: 'rekey_not_allowed', rejected_rekey_pairs: [pair] };
     assert.deepEqual(failureSummary(JSON.stringify(value)), value);
-    for (const code of ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit', 'consent_client_missing', 'consent_postcondition_failed']) assert.equal(failureSummary(JSON.stringify({ outcome: 'failed', code })).code, code);
+    for (const code of ['invalid_dry_run', 'invalid_age_limit', 'invalid_manifest', 'integrity_failed', 'invalid_counts', 'invalid_timestamp', 'stale_snapshot', 'manifest_mismatch', 'empty_export', 'dv5_invariant_changed', 'postcondition_failed', 'lock_timeout', 'sql_error', 'invalid_audit', 'consent_client_missing', 'consent_postcondition_failed', 'client_source_missing', 'client_policy_invalid', 'client_postcondition_failed']) assert.equal(failureSummary(JSON.stringify({ outcome: 'failed', code })).code, code);
     const pod = message => ({ stdout: JSON.stringify({ items: [{ status: { containerStatuses: [{ name: 'import-preprod', state: { terminated: { message } } }] } }] }) });
     assert.equal(failureVerdict('synthetic', args => { assert.ok(!args.includes('logs')); return pod(JSON.stringify(value)); }), `job/synthetic failed: rekey_not_allowed (${pair})`);
     assert.equal(failureVerdict('synthetic', () => pod('{"outcome":"failed","code":"sql_error"}')), 'job/synthetic failed: sql_error');
