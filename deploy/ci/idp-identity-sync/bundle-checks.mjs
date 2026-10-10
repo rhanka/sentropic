@@ -70,6 +70,11 @@ export function checkBundle(objects, tier) {
     assert(pod.initContainers[2].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/*'));
     const cm = get('ConfigMap', 'sentropic-idp-identity-sync-sql');
     assert.equal(cm.data['client-map.csv'], 'prod_client_id,preprod_client_id\nradar-immobilier,radar-immobilier-preprod\n');
+    const hosts = cm.data['host-map.csv'].trim().split('\n').slice(1).map(row => row.split(','));
+    assert.equal(new Set(hosts.map(row => row[0])).size, hosts.length);
+    for (const [prodHost, preprodHost] of hosts) assert.equal(preprodHost, `preprod.${prodHost}`);
+    assert(cm.data['client-policy.sql'].includes("FROM 'clients.csv'"));
+    assert(cm.data['import-preprod.sql'].includes('\\i /sql/client-postcondition.sql'));
     for (const command of ['sha256sum -c SHA256SUMS', 'MAX_SNAPSHOT_AGE_S', 'expected_users', 'expected_webauthn', '/dev/termination-log']) assert(cm.data['import-preprod.sh'].includes(command));
   }
   return cj;

@@ -58,7 +58,7 @@
 - [ ] **Lot 3 — Pipeline acceptance**
   - [x] Update fixtures/prod.sql, assertions.sql and assert-committed.sql for client convergence.
   - [ ] Update sql-test.sh for five-file relay, client allowlist, rollback, idempotence and failure cases.
-  - [ ] Add real-handler authorize selftest proving immo-mcp 302 with the imported fixture.
+  - [x] Add real-handler authorize selftest proving immo-mcp 302 with the imported fixture.
   - [ ] Run make test-idp-sync-selftest and make test-idp-sync-sql ENV=test-idp-oauth-client-sync.
 - [ ] **Lot 4 — Documentation and final gates**
   - [ ] Consolidate design into README.md, CRED_CYCLE.md and durable spec.
