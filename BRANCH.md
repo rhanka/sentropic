@@ -1,7 +1,7 @@
 # Feature: Aggregate CI results without blocking skipped checks
 
 ## Objective
-- [x] Add `ci-gate` as the authoritative merge check, rejecting failed or cancelled dependencies and accepting successful, skipped, or neutral results.
+- [x] Add `ci-gate` as the authoritative merge check, accepting only successful, skipped, or neutral results and rejecting failed, cancelled, missing, or unknown results.
 
 ## Scope / Guardrails
 - [x] Work only in `feat/ci-aggregate-gate`, isolated worktree `tmp/ci-aggregate-gate`, based on `origin/main`.
@@ -29,16 +29,16 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/ci.yml`
 - **Exception process**:
-  - [x] BRCG-EX1 (harness-compatible alias BR0-EX1) approved by the task brief: add only the aggregate job to `.github/workflows/ci.yml`; rationale: path-filtered checks need one unconditional result; impact: one read-only runner after PR validation; rollback: remove its required context before reverting the added job.
+  - [x] BRCG-EX1 (harness-compatible alias BR0-EX1) approved by the brief and review corrections: add and harden only the aggregate job in `.github/workflows/ci.yml`; rationale: path-filtered checks need one unconditional result; impact: one read-only runner after PR validation; rollback: remove its required context before reverting the added job.
 
 ## Feedback Loop
 - [x] BRCG-EX1 — acknowledgement, owner: conductor, 2026-10-10; workflow exception explicitly authorized in `.h2a/inputs/brief.md`.
 - [x] Exclude all `publish-*` and `bootstrap-publish`: they publish artifacts on main or explicit dispatch, outside PR validation.
 - [x] Exclude `verify-train-lock-integrity`: main-only registry verification after publication; no PR artifact exists yet.
 - [x] Exclude `deploy-preprod`: main-only deployment after image publication, outside PR validation.
-- [x] BRCG-F1 — resolved: CI wiring assertion now checks publishers/bootstrap against the inventory isolation rule and requires `ci-gate` to enforce inventory validation; evidence: run 38048130949, job 114201723018, line 71; scoped reproduction failed before the change and all 20 wiring tests passed afterward.
+- [x] BRCG-F1 — resolved: inventory isolation applies to every job except `ci-gate`, which must enforce inventory validation; evidence: initial scoped reproduction failed, and all 21 current wiring tests pass.
 - [x] BRCG-F2 — M1: rename CI policy documentation to `.github/REQUIRED_CHECKS.md` and update its spec link so GitHub continues selecting the root `README.md`; verify the branch README endpoint after push.
-- [ ] BRCG-F3 — M2 and minor corrections: commit complete gate inventory/always/leaf guards, narrow the inventory isolation exception to the gate, reject missing/unknown results, and refresh final CI evidence after push.
+- [x] BRCG-F3 — M2 and minor corrections implemented and locally verified: complete gate inventory/always/leaf guards, isolation exception limited to the gate, and rejection of missing/unknown results; final pushed-head CI evidence belongs in `.h2a/report.md`.
 - [x] Minor permissions nit: retain `contents: read`, as explicitly required by the brief and accepted by review; the committed guard will lock that permission set.
 - [ ] After merge, conductor replaces required contexts with exactly `changes`, `enforce-package-bump`, `validate-publishable-manifests`, `ci-gate`; do not retain path-filtered individual contexts or alter settings from this branch.
 
@@ -57,7 +57,7 @@
   - [x] Mechanically validate branch with `harness check branch` and declare BRCG-EX1 before editing the workflow.
 - [x] **Lot 1 — Aggregate merge gate**
   - [x] Add `ci-gate` with 38 explicit needs covering every PR validation/build/test/security job, `if: always()`, and `contents: read`.
-  - [x] Print every dependency result and return nonzero exactly when any dependency failed or was cancelled.
+  - [x] Print every dependency result and reject failures, cancellations, missing/unknown results, and empty input.
   - [x] `make -f /tmp/ci-aggregate-gate-checks.mk test-ci-gate validate-ci-gate ENV=test-ci-aggregate-gate`: nine extracted-shell fixtures passed; success/skipped/neutral and their mix exit 0; failure/cancelled and three mixed failure cases exit 1; every dependency summary is asserted.
   - [x] The same check parses YAML in a Node container, asserts 38 exact dependencies and minimal permissions, and proves all 63 existing jobs and top-level workflow settings unchanged.
   - [x] `make check-ci-version-filters check-e2e-inventory ENV=test-ci-aggregate-gate`: passed, including all 56 numbered E2E specs.
@@ -69,3 +69,12 @@
   - [x] Verify initial PR CI, including `ci-gate`: run 38048511501 passed on `4d1b3d4e3331d4a071e60ec7a5244b340a49145f`; latest review-fix head/run evidence is recorded in `.h2a/report.md` after push.
   - [x] Write `.h2a/report.md` with dependency/exclusion inventory, exact contexts, PR, CI evidence, and open questions for the conductor; update its final CI evidence before handoff.
   - [x] Leave `BRANCH.md` removal, merge, and branch-protection migration to the conductor, as required by the brief.
+- [x] **Lot 3 — Review corrections**
+  - [x] M1: rename `.github/README.md` to `.github/REQUIRED_CHECKS.md`, update scope/spec links, and record the post-push GitHub README selection in `.h2a/report.md`.
+  - [x] M2: commit the gate inventory/always/context/permissions/leaf assertions in `scripts/ci/publishable-ci-wiring.test.mjs`, already run by CI.
+  - [x] Guard verification: unchanged workflow passes; ten mutations (including an omitted future job and removed `always()`) fail the actual committed test in an isolated container fixture.
+  - [x] Minor result validation: 13 extracted-shell fixtures pass, including missing, null, unknown, and empty inputs; unacceptable jobs receive error annotations.
+  - [x] Minor isolation: only `ci-gate` is exempt from inventory isolation; no job may depend on the aggregate gate.
+  - [x] Minor CI bookkeeping: close the completed initial CI checkpoint above, refresh the PR body from this file, and keep exact latest SHA/run verification in `.h2a/report.md`.
+  - [x] Minor permissions: retain the brief's `contents: read` contract and enforce it in the committed test.
+  - [x] `make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs ENV=test-ci-aggregate-gate`: all 21 wiring tests pass; full `make test-publishable-manifests ENV=test-ci-aggregate-gate`: all 85 fixtures pass.
