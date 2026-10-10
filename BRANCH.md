@@ -46,9 +46,9 @@
 - [x] **Lot 0 — Baseline and spec**
   - [x] Read brief, rules, consent pass, schema, authorize handler and registration shape.
   - [x] Harness branch check passes; capture isolated pipeline make targets.
-  - [x] Write spec and SPEC_READY artifact before implementation.
+  - [x] Write spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md and .h2a/SPEC_READY.md before implementation.
 - [ ] **Lot 1 — Relay and run controls**
-  - [ ] Export clients and boolean secret presence; provision column grants; count/checksum clients.
+  - [x] Export clients and boolean secret presence; provision column grants; count/checksum clients.
   - [ ] Wire ALLOWED_CLIENTS into dispatch validation and both import manifests.
   - [ ] Extend audit and failure whitelists and run/workflow/bundle selftests.
 - [ ] **Lot 2 — Transactional client pass**
