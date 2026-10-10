@@ -67,7 +67,9 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   assert.equal(upload.if, 'always()');
   assert.equal(upload.with['retention-days'], 7);
   assert.ok(!JSON.stringify(job).includes('secrets.'), 'no registry credentials or OIDC token');
+  assert.ok(needsOf('ci-gate').includes('validate-publishable-manifests'), 'the aggregate gate enforces inventory validation');
   for (const name of Object.keys(jobs)) {
+    if (!name.startsWith('publish-') && name !== 'bootstrap-publish') continue;
     assert.ok(!needsOf(name).includes('validate-publishable-manifests'), `${name} must not need the inventory job`);
     assert.ok(!String(jobs[name].if ?? '').includes('validate-publishable-manifests'), `${name} must not gate on the inventory job`);
   }
