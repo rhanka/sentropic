@@ -8,6 +8,6 @@ generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:
   - name: sentropic-idp-identity-export-sql
-    files: [export-prod.sql]
+    files: [export-prod.sql, export-prod.sh]
   - name: sentropic-idp-reader-role-sql
     files: [reader-role.sql]
