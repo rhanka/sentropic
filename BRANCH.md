@@ -47,21 +47,21 @@
   - [x] Read brief, rules, consent pass, schema, authorize handler and registration shape.
   - [x] Harness branch check passes; capture isolated pipeline make targets.
   - [x] Write spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md and .h2a/SPEC_READY.md before implementation.
-- [ ] **Lot 1 — Relay and run controls**
+- [x] **Lot 1 — Relay and run controls**
   - [x] Export clients and boolean secret presence; provision column grants; count/checksum clients.
   - [x] Wire ALLOWED_CLIENTS into dispatch validation and both import manifests.
-  - [ ] Extend audit and failure whitelists and run/workflow/bundle selftests.
+  - [x] Extend audit and failure whitelists and run/workflow/bundle selftests.
 - [x] **Lot 2 — Transactional client pass**
   - [x] Add host-map.csv, URI policy, allowlist/source guards and target classification.
   - [x] Preserve existing secrets; skip new confidential clients; map owner FK; upsert before consents.
   - [x] Protect whole-row invariants and verify exact configuration postconditions.
-- [ ] **Lot 3 — Pipeline acceptance**
+- [x] **Lot 3 — Pipeline acceptance**
   - [x] Update fixtures/prod.sql, assertions.sql and assert-committed.sql for client convergence.
   - [x] Update sql-test.sh and clients-test.sh for five-file relay, client allowlist, rollback, idempotence and failure cases.
   - [x] Add real-handler authorize selftest proving immo-mcp 302 with the imported fixture.
-  - [ ] Run make test-idp-sync-selftest and make test-idp-sync-sql ENV=test-idp-oauth-client-sync.
+  - [x] Run make test-idp-sync-selftest and make test-idp-sync-sql ENV=test-idp-oauth-client-sync; controls 44/44 and immo-mcp 302 pass.
 - [ ] **Lot 4 — Documentation and final gates**
-  - [ ] Consolidate design into README.md, CRED_CYCLE.md and durable spec.
+  - [x] Consolidate design into README.md, CRED_CYCLE.md and durable spec.
   - [ ] Check every diff hunk, run scope-check before commits and resolve review findings.
   - [ ] Open PR to main using BRANCH.md body and post the execution plan.
   - [ ] Wait for green CI at final PR head and write .h2a/report.md with PR/SHA/acceptance.
