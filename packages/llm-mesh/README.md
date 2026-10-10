@@ -124,8 +124,10 @@ browser session expires after 15 minutes; each completion is one-use, with stric
 state, cancellation and a 30-second token-request deadline. Failed/ambiguous
 exchanges require a fresh enrollment; codes are never retried automatically.
 
-`{}` selects the provisional A2 profile `claude-code-oauth-2.1.80-v1`, sourced from
-the [official 2.1.80 package](https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.80).
+`{}` selects the provisional A2 profile `claude-code-oauth-2.1.296-v1`, sourced from
+the [official 2.1.296 package](https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.296) and
+live-validated on 2026-10-10 (authorize endpoint `claude.com/cai`, `user:plugins` scope, 32-byte
+nonce states).
 Current provider acceptance remains unverified. Nonempty resolver results must be
 complete profiles: `id`, `authorizationUrl`, `tokenUrl`, `clientId`, `redirectUri`,
 `authorizationScopes`, `refreshScopes`, `requiredScopes`, `source`. URLs use HTTPS;

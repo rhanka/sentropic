@@ -5,7 +5,7 @@ import { ClaudeCodeEnrollmentProvider } from '../../src/enrollment/claude-code.j
 const ACCESS = 'FAKE_CLAUDE_ACCESS_CANARY_742';
 const REFRESH = 'FAKE_CLAUDE_REFRESH_CANARY_391';
 const CODE = 'FAKE_CLAUDE_CODE_CANARY_608';
-const VERSION = 'claude-code-oauth-2.1.80-v1';
+const VERSION = 'claude-code-oauth-2.1.296-v1';
 const NOW = Date.parse('2026-09-26T12:00:00Z');
 const start = { configRef: 'claude-code', mode: 'cli' as const, redirectUri: '', ownerScope: 'owner-a' };
 const document = (extra = {}) => ({ accessToken: ACCESS, refreshToken: REFRESH,
@@ -210,7 +210,7 @@ describe('Claude renewable enrollment', () => {
     const init = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(JSON.parse(init.body as string)).toEqual({ grant_type: 'refresh_token', refresh_token: REFRESH,
       client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
-      scope: 'user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload' });
+      scope: 'user:profile user:inference user:sessions:claude_code user:mcp_servers user:plugins user:file_upload' });
   });
 
   it.each(['body', 'network', 'json'])('sanitizes %s failure without retry', async (kind) => {
@@ -233,16 +233,16 @@ describe('Claude renewable enrollment', () => {
     expect(session.kind).toBe('authorization-url');
     if (session.kind !== 'authorization-url') throw new Error('Wrong session');
     const url = new URL(session.url);
-    expect(url.origin + url.pathname).toBe('https://claude.ai/oauth/authorize');
+    expect(url.origin + url.pathname).toBe('https://claude.com/cai/oauth/authorize');
     expect(Object.fromEntries(url.searchParams)).toMatchObject({ code: 'true', response_type: 'code',
       client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e', code_challenge_method: 'S256',
       redirect_uri: 'https://platform.claude.com/oauth/code/callback',
-      scope: 'org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload' });
+      scope: 'org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:plugins user:file_upload' });
     expect(Date.parse(session.expiresAt) - NOW).toBe(15 * 60_000);
     const credential = await provider.complete({ enrollmentId: session.enrollmentId, code: returnedCode(session) });
     expect(credential).toMatchObject({ accessToken: ACCESS, refreshToken: REFRESH,
       expiresAt: new Date(NOW + 3600_000).toISOString(), authClientConfigVersion: VERSION });
-    expect(credential.accountId).toMatch(/^acct_claude_[\w-]{22}$/);
+    expect(credential.accountId).toMatch(/^acct_claude_[\w-]{43}$/);
     const [endpoint, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
     expect(endpoint).toBe('https://platform.claude.com/v1/oauth/token');
     expect(init).toMatchObject({ method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' } });
