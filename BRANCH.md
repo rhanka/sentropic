@@ -47,15 +47,15 @@
   - [x] Update `run.mjs` to refresh only `deploy/k8s/overlays/preprod/idp-identity-sync` before applying the import Job.
   - [x] Update pipeline README to explain same-checkout importer delivery.
   - [x] Scoped gate: `make test-idp-sync-selftest ENV=test-idp-sync-manifest` (46 PASS).
-- [ ] **Lot 2 — Export-to-import manifest acceptance**
-  - [ ] Extract the existing prod export command into `export-prod.sh`, mounted by the prod SQL ConfigMap and invoked by the CronJob.
-  - [ ] Update `bundle-checks.mjs` and `sql-test.sh` to execute that exact export command and checksum generation.
-  - [ ] Commit through the real import wrapper, assert `clients_upserted=1`, and verify the imported immo client and idempotent rerun.
-  - [ ] Retain malformed, missing, extra, duplicate and tampered manifest rejection coverage.
-  - [ ] Acceptance: public PKCE, no prod secret, external callback and rewritten preprod resource in the committed row and real authorize handler.
-  - [ ] Gate: `make test-idp-sync-sql ENV=test-idp-sync-manifest` includes `sql-test.sh`, `clients-test.sh` and `authorize.selftest.mjs`.
+- [x] **Lot 2 — Export-to-import manifest acceptance**
+  - [x] Extract the existing prod export command into `export-prod.sh`, mounted by the prod SQL ConfigMap and invoked by the CronJob.
+  - [x] Update `bundle-checks.mjs` and `sql-test.sh` to execute that exact export command and checksum generation.
+  - [x] Commit through the real import wrapper, assert `clients_upserted=1`, and verify the imported immo client and idempotent rerun.
+  - [x] Retain malformed, missing, extra, duplicate and tampered manifest rejection coverage.
+  - [x] Acceptance: public PKCE, no prod secret, external callback and rewritten preprod resource in the committed row and real authorize handler.
+  - [x] Gate: `make test-idp-sync-sql ENV=test-idp-sync-manifest` includes `sql-test.sh`, `clients-test.sh` and `authorize.selftest.mjs` (PASS).
 - [ ] **Lot 3 — Final validation and handoff**
-  - [ ] Node/shell syntax and pipeline bundle checks; mechanical `make scope-check` before each atomic commit.
+  - [x] Node/shell syntax and pipeline bundle checks: `make test-idp-sync-selftest ENV=test-idp-sync-manifest` (47 PASS); mechanical `make scope-check` before each atomic commit. No TypeScript or API/UI files changed; script syntax checks are the scoped static gate.
   - [ ] Review every diff hunk, preserve all #799/#658 invariants and resolve findings.
   - [ ] Push and create PR to main using this plan as the English PR body; post the execution plan comment.
   - [ ] Wait for CI on the PR head, fix failures, update PR body and write `.h2a/report.md` with PR/head/check evidence and open questions.
