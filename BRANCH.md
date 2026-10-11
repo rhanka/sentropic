@@ -47,6 +47,9 @@
 - `acknowledge`: sticky fail-closed confirmed in code (`route-planner.ts` affinity block empties candidates when affinity account missing/not-ready); negative-cache default TTL 300s confirmed (`routing-policy.ts`); sticky file purged to `{}`.
 - `attention`: evening muse-400 exact trigger bytes unconfirmed (parse-then-auth order proves body-level failure); vibe-503 exact trigger unconfirmed (unknown-model vs no-eligible-account); owner captures requested if repro diverges.
 - `attention`: native provider token counting (Anthropic count endpoint via pooled credential) is host-transport follow-up for the h2a lane: needs a `count` seam on the production `ProviderTransport` + mesh attempt; this branch reserves the route, the error mapping, and the no-lease/no-metering contract.
+- `GWV-EX1`: `scripts/llm-model-equivalences/council.source.json` (council exclusion for `mistral:mistral-medium-3.5`, same no-benchmark rationale as its mistral siblings). Reason: equivalence gate requires every catalog model classified or excluded. Impact: generated council digest only. Rollback: drop the entry + refresh.
+- `attention`: cloud-code (agy) added to this branch scope on owner request (avoid a repeat request later): verify the agy CLI path through the gateway, fix gaps, cover with tests.
+- `attention`: auto-mode free classifier billing (forward `anthropic-beta` + `safeguards` verbatim, return `safeguard_results` untouched, keep tool-use IDs, forward error bodies unmodified) is EXCLUDED from this branch on owner request — separate later PR, gateway must keep managing (metering/leases/auth + opt-out). Findings so far: request bodies already relayed verbatim; client headers rebuilt at dispatch (beta headers dropped); upstream errors wrapped in gateway envelope (breaks client retry matching).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -91,7 +94,7 @@
   - [x] Vibe speaks OpenAI-compat `POST /v1/chat/completions` (no new ingress route needed; verified against installed CLI 2.26.1: `api_base` + `/v1`, endpoint `/chat/completions`, Bearer auth).
   - [x] Root cause of vibe failure: CLI default alias `mistral-medium-3.5` absent from mesh static routes (only `mistral-large-4` + `zai-glm-5-3` rode `mistral-vibe`).
   - [x] Added `mistral-medium-3.5` -> `{mistral, mistral-vibe}` faithful mapping in `packages/llm-mesh/src/routing-targets.ts` (propagates to canonical + candidates resolvers; no catalog profile required by `firstTargetThatResolvesProfile` fallback).
-  - [x] Regression test in `packages/llm-mesh/tests/routing-targets.test.ts` (resolve + candidates).
+  - [x] Regression test in `packages/llm-mesh/tests/routing-targets.test.ts` (resolve + candidates), plus combined CLI-default lock (muse/vibe/cloud-code, no-repeat-request).
   - [x] Equivalence council check green (`make check-llm-model-equivalences`).
   - [x] Lot gate green: typecheck + lint + full suite 594 passed (37 files).
 - [x] **Lot 3 — count_tokens on anthropic wire**
@@ -101,22 +104,23 @@
   - [x] Updated `packages/llm-gateway/tests/contract-snapshot.test.ts` (freeze 6 -> 7, wired entry; fixed mount-guard miss on POST-without-wire).
   - [x] Native provider counting left as host-transport follow-up (see Feedback Loop).
   - [x] Lot gate green: typecheck + lint + full suite 397 passed (30 files).
-- [ ] **Lot 4 — Mesh operational gaps**
-  - [ ] Gap 1: silent account expiry → pre-expiry warning or diagnostic in error.
-  - [ ] Gap 2: negative cache 300s + single eligible account kills all routes → graceful degrade.
-  - [ ] Gap 3: sticky fail-closed on deleted accounts → auto-drop affinities to deleted accounts at resolve.
-  - [ ] Gap 4: inventory not reloaded after enroll → hot-reload or systematic warning.
-  - [ ] Unit tests per gap in `packages/llm-mesh/tests/` (new + existing file list).
-  - [ ] Lot gate: `make typecheck-llm-mesh ENV=test-gw-wires`, `make test-llm-mesh ENV=test-gw-wires`.
+- [x] **Lot 4 — Mesh operational gaps**
+  - [x] Gap 1: expired credential surfaces `reauth-required` (readiness + diagnostics) even before status flips; planner excludes it and the gateway answers 503 + `X-Sentropic-Route-Action` instead of silent no-route (`local-account-transport-service.ts`).
+  - [x] Gap 2: lone route suppressed only by uncommitted failures degrades instead of starving 300s (`committed` stamp on `RouteFailureClassification` via attempt wrapper; `suppressedDegradable` on health; single-candidate fallback in planner). Committed failures stay strict (duplicate-dispatch risk); multi-route suppression unchanged. Deliberate contract change: `route-planner.test.ts` TTL test evolved (see Feedback Loop).
+  - [x] Gap 3: affinity whose account is gone auto-drops at resolve (deleted from map) and resolves normally instead of failing closed; not-ready accounts keep fail-closed.
+  - [x] Gap 4: cross-process enroll hot-reload verified pre-existing (`restorePersistedAccounts` on every serving read path + cross-instance tests); per-account model inventory fixed via catalog profile (`mistral-medium-3.5` 256K per Vibe CLI model card) so `supportedModelIds` + `/v1/models` include it (scaffold `llm-mesh-add-model` + `GWV-EX1` council exclusion + refresh).
+  - [x] Cloud-code no-repeat coverage: combined CLI-default lock test (muse/vibe/cloud-code) in `routing-targets.test.ts`; agy binary absent here — real-agy UAT added to Lot 6.
+  - [x] Lot gate green: typecheck + lint + full suite 598 passed (37 files) + council check green.
 - [ ] **Lot 5 — CI integration tests (real process)**
   - [ ] Spawn real gateway process: boot, restart, hot enroll, old-token re-presentation.
   - [ ] New: `packages/llm-gateway/tests/gateway-lifecycle.test.ts` (or equivalent path).
   - [ ] Wire into CI (declare `GWV-EX1` first if `.github/workflows/**` touched).
   - [ ] Lot gate: full `make test-llm-gateway ENV=test-gw-wires` + `make test-llm-mesh ENV=test-gw-wires`.
 - [ ] **Lot 6 — UAT (real CLIs)**
-  - [ ] UAT muse CLI via gateway with enrolled muse account (chat + stream).
-  - [ ] UAT vibe CLI via gateway with enrolled mistral-vibe account (chat + stream).
-  - [ ] UAT Claude Code count_tokens path.
+  - [ ] UAT muse CLI via gateway with enrolled muse account (chat + stream; `/muse-code/models` list).
+  - [ ] UAT vibe CLI via gateway with enrolled mistral-vibe account (chat + stream; default `mistral-medium-3.5`).
+  - [ ] UAT agy CLI via gateway with enrolled cloud-code account (no-repeat-request proof).
+  - [ ] UAT Claude Code count_tokens path (expect graceful fallback to local counting, not bare 404).
   - [ ] Record results in `## Feedback Loop`.
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` (muse/vibe wires, count_tokens, gap fixes).

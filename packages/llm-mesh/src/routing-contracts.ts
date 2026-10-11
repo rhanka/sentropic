@@ -145,6 +145,13 @@ export interface RouteFailureClassification {
   readonly retryable: boolean;
   readonly retryAfterMs?: number;
   readonly healthScope: 'route' | 'account' | 'transport' | 'provider-model';
+  /**
+   * True when the upstream produced output before failing (stream commitment).
+   * A committed failure must never be retried implicitly (duplicate dispatch
+   * risk); an uncommitted failure failed before any upstream output and is
+   * safe to degrade over. Set by the attempt wrapper, never by callers.
+   */
+  readonly committed?: boolean;
 }
 
 export interface RouteAttemptUsage {
