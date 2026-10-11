@@ -769,7 +769,10 @@ export class LocalAccountTransportService {
       });
     }
     for (const account of this.accountsMap.values()) {
-      if (account.ownerScopeRef !== subject.ownerScopeRef || account.status !== 'reauth_required') {
+      // An expired credential is reauth-required even when its status has not
+      // flipped yet — otherwise expiry dies silently as no-eligible-account.
+      if (account.ownerScopeRef !== subject.ownerScopeRef
+        || (account.status !== 'reauth_required' && !this.isCredentialExpired(account))) {
         continue;
       }
       diagnostics.push({
@@ -779,6 +782,12 @@ export class LocalAccountTransportService {
       });
     }
     return diagnostics;
+  }
+
+  private isCredentialExpired(account: { expiresAt?: string | null }): boolean {
+    if (!account.expiresAt) return false;
+    const expiresAtMs = Date.parse(account.expiresAt);
+    return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
   }
 
   private async listRouteAccounts(
@@ -799,11 +808,13 @@ export class LocalAccountTransportService {
       transportProviderId: account.transportProviderId,
       supportedModelIds: supportedModelIdsForAccount(account),
       enrollmentCompletedAt: account.enrollmentCompletedAt ?? '1970-01-01T00:00:00.000Z',
-      readiness: account.status === 'active' || account.status === undefined
-        ? 'ready'
-        : account.status === 'reauth_required'
-          ? 'reauth-required'
-          : account.status,
+      readiness: this.isCredentialExpired(account)
+        ? 'reauth-required'
+        : account.status === 'active' || account.status === undefined
+          ? 'ready'
+          : account.status === 'reauth_required'
+            ? 'reauth-required'
+            : account.status,
       revision: [
         this.credentialVersions.get(account.accountId) ?? 'v1.0.0',
         account.expiresAt ?? '', account.status ?? 'active', account.enrollmentCompletedAt ?? '',
