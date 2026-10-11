@@ -3,6 +3,7 @@
  *   POST /v1/messages            (Anthropic Messages compat)
  *   POST /v1/chat/completions    (OpenAI Chat Completions compat)
  *   GET  /v1/models              (filtered by caller/pool policy)
+ *   GET  /muse-code/models       (Muse CLI catalog; same filtered list)
  *   GET  /healthz                (liveness — real)
  *   GET  /readyz                 (readiness — real; DB + secret-store + pool)
  *
@@ -325,10 +326,13 @@ export const createGatewayRouter = (
   app.post('/v1/messages', handle('anthropic-messages'));
   app.post('/v1/chat/completions', handle('openai-chat-completions'));
 
-  app.get('/v1/models', async (c) => {
+  // Caller-filtered model catalog (spec §3), shared by GET /v1/models and
+  // GET /muse-code/models. The Muse CLI joins `/muse-code/models` to its
+  // configured base URL; pointed at the gateway origin it gets the same
+  // OpenAI-list shape as /v1/models. Caller-auth gates the catalog: an
+  // unauthenticated caller gets a provider-shaped 401, never the pool.
+  const handleListModels = async (c: import('hono').Context) => {
     const id = requestId();
-    // Filtered by caller/pool policy (spec §3). Caller-auth gates the catalog:
-    // an unauthenticated caller gets a provider-shaped 401, never the pool.
     let auth: CallerAuthResult;
     try {
       auth = await authenticateCaller(
@@ -356,7 +360,10 @@ export const createGatewayRouter = (
         ? { id: m.modelId, object: 'model', owned_by: m.providerId }
         : { id: m.id, object: 'model', owned_by: m.ownedBy })),
     });
-  });
+  };
+
+  app.get('/v1/models', handleListModels);
+  app.get('/muse-code/models', handleListModels);
 
   return app;
 };
