@@ -389,7 +389,8 @@ describe('LocalAccountTransportService', () => {
     expect(await directory.listEligible(subject)).toEqual([]);
     expect(await directory.listDiagnostics?.(subject)).toEqual([{
       code: 'reenrollment-required', transportProviderId: 'codex',
-      message: 'Codex enrollment must be renewed for owner-scoped routing',
+      message: 'Codex enrollment must be renewed for owner-scoped routing;'
+        + ' re-enroll the codex account to restore routing',
     }]);
   });
 
@@ -414,7 +415,8 @@ describe('LocalAccountTransportService', () => {
     expect(eligible[0]).toMatchObject({ readiness: 'reauth-required' });
     expect(await directory.listDiagnostics?.(subject)).toEqual([{
       code: 'reauth-required', transportProviderId: 'claude-code',
-      message: 'claude-code authentication must be renewed',
+      message: 'claude-code credential expired at 2000-01-01T00:00:00.000Z;'
+        + ' reauthenticate the claude-code account to restore routing',
     }]);
   });
 
