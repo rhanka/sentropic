@@ -487,6 +487,21 @@ export const modelProfiles = [
       contextWindowTokens: 1_000_000,
     },
   },
+  // Mistral Medium 3.5: Vibe CLI default model (alias `mistral-medium-3.5`,
+  // display "Mistral Medium 3.5"). Model card per the installed Vibe CLI:
+  // 256K context, image input, high thinking. Served on api.mistral.ai via
+  // the `mistral-vibe` account transport like the native fleet.
+  {
+    providerId: 'mistral',
+    modelId: 'mistral-medium-3.5',
+    label: 'Mistral Medium 3.5',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('mistral', 'advanced', { vision: true }),
+      contextWindowTokens: 262_144,
+    },
+  },
   // Z.ai GLM 5.3 hosted by Mistral: third-party open-weight coding model
   // (EU-hosted, served without Mistral modifications), text-only input,
   // always-on reasoning with low/high/max efforts, 1M context and 128K
