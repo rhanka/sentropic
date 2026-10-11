@@ -479,6 +479,22 @@ describe('canonical model targets', () => {
     expect(resolveCandidates('mistral-medium-3.5')).toEqual([target]);
   });
 
+  it('keeps every CLI default model on its own transport (muse, vibe, cloud-code)', () => {
+    // Locks the no-repeat-request coverage: each CLI default alias resolves
+    // faithfully without falling back to another provider.
+    expect(resolve('muse-spark-1.3-contributor')).toEqual({
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-spark-1.3-contributor',
+    });
+    expect(resolve('mistral-medium-3.5')).toMatchObject({ transportProviderId: 'mistral-vibe' });
+    expect(resolve('gemini-3.8-flash')).toEqual({
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
+    });
+    expect(resolve('gemini-3.7-flash')).toEqual({
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+    });
+  });
+
   it('routes every Claude tier to 3.8 Flash on the Cloud Code transport', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
