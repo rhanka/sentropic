@@ -46,6 +46,7 @@
 - `acknowledge`: vibe default model alias `mistral-medium-3.5` absent from `routing-targets.ts` static routes, catalog, council (only `mistral-large-4` + `zai-glm-5-3` ride `mistral-vibe`).
 - `acknowledge`: sticky fail-closed confirmed in code (`route-planner.ts` affinity block empties candidates when affinity account missing/not-ready); negative-cache default TTL 300s confirmed (`routing-policy.ts`); sticky file purged to `{}`.
 - `attention`: evening muse-400 exact trigger bytes unconfirmed (parse-then-auth order proves body-level failure); vibe-503 exact trigger unconfirmed (unknown-model vs no-eligible-account); owner captures requested if repro diverges.
+- `attention`: native provider token counting (Anthropic count endpoint via pooled credential) is host-transport follow-up for the h2a lane: needs a `count` seam on the production `ProviderTransport` + mesh attempt; this branch reserves the route, the error mapping, and the no-lease/no-metering contract.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -93,10 +94,13 @@
   - [x] Regression test in `packages/llm-mesh/tests/routing-targets.test.ts` (resolve + candidates).
   - [x] Equivalence council check green (`make check-llm-model-equivalences`).
   - [x] Lot gate green: typecheck + lint + full suite 594 passed (37 files).
-- [ ] **Lot 3 — count_tokens on anthropic wire**
-  - [ ] Implement or map `POST /v1/messages/count_tokens` faithfully.
-  - [ ] Unit tests: extend `packages/llm-gateway/tests/router.test.ts` + new fixture if needed.
-  - [ ] Lot gate: `make test-llm-gateway ENV=test-gw-wires`.
+- [x] **Lot 3 — count_tokens on anthropic wire**
+  - [x] `POST /v1/messages/count_tokens` mapped properly (no provider count seam exists; an estimator would corrupt Anthropic cache breakpoints, so no estimate is returned): parse 400, model 400, caller-auth 401 pre-pool, unknown-model frozen 404, known model provider-shaped 400 (client falls back to local counting). No lease, no metering.
+  - [x] Works in legacy (`resolveTarget`) and route (`listModels` inventory) modes; scaffold mode keeps provider-shaped 501.
+  - [x] Unit tests: `packages/llm-gateway/tests/count-tokens.test.ts` (new, 5 tests).
+  - [x] Updated `packages/llm-gateway/tests/contract-snapshot.test.ts` (freeze 6 -> 7, wired entry; fixed mount-guard miss on POST-without-wire).
+  - [x] Native provider counting left as host-transport follow-up (see Feedback Loop).
+  - [x] Lot gate green: typecheck + lint + full suite 397 passed (30 files).
 - [ ] **Lot 4 — Mesh operational gaps**
   - [ ] Gap 1: silent account expiry → pre-expiry warning or diagnostic in error.
   - [ ] Gap 2: negative cache 300s + single eligible account kills all routes → graceful degrade.

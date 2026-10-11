@@ -365,5 +365,69 @@ export const createGatewayRouter = (
   app.get('/v1/models', handleListModels);
   app.get('/muse-code/models', handleListModels);
 
+  // Token counting (spec §3b, Claude Code). The gateway owns no provider
+  // count seam, so this maps the call properly instead of answering a bare
+  // framework 404: caller-auth gates first (401 pre-pool), unknown models get
+  // the frozen unknown-model 404, and known models get a provider-shaped 400
+  // (the client falls back to its own local counting). No lease is taken and
+  // nothing is metered. Native provider counting is follow-up work for the
+  // host-owned transport, not this route.
+  app.post('/v1/messages/count_tokens', async (c) => {
+    const id = requestId();
+    if (!routeFlowDeps && !flowDeps) {
+      return sendError(c, notImplemented('anthropic-messages'), id);
+    }
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return sendError(c, mapGatewayError('anthropic-messages', 'bad-request'), id);
+    }
+    const model = readModel(body);
+    if (!model) {
+      return sendError(c, mapGatewayError('anthropic-messages', 'bad-request'), id);
+    }
+    let auth: CallerAuthResult;
+    try {
+      auth = await authenticateCaller(
+        config.callerAuth, readHeaders(c.req.raw.headers), authContextFor(c.req.raw, id),
+      );
+    } catch (error) {
+      return sendError(c, toProviderShapedError('anthropic-messages', error), id);
+    }
+    if (!auth.ok || !auth.cost) {
+      return sendError(
+        c,
+        mapGatewayError('anthropic-messages', 'caller-auth-failed'),
+        id,
+      );
+    }
+    if (flowDeps) {
+      if (!flowDeps.resolveTarget(model)) {
+        return sendError(
+          c,
+          toProviderShapedError(
+            'anthropic-messages', new GatewayError('unknown-model', 'unknown model'), model,
+          ),
+          id,
+        );
+      }
+    } else if (routeFlowDeps) {
+      const inventory = await routeFlowDeps.routePlanner.listModels?.(
+        routingSubjectForCost(auth.cost),
+      ).catch(() => undefined);
+      if (inventory && !inventory.some((m) => m.modelId === model)) {
+        return sendError(
+          c,
+          toProviderShapedError(
+            'anthropic-messages', new GatewayError('unknown-model', 'unknown model'), model,
+          ),
+          id,
+        );
+      }
+    }
+    return sendError(c, mapGatewayError('anthropic-messages', 'bad-request'), id);
+  });
+
   return app;
 };

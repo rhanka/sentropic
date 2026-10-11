@@ -5,7 +5,8 @@
  * detected by a failing test (the freeze MECHANISM; the SIGN is the gate). The
  * frozen surface = spec §3 / §3b:
  *   - the route inventory (`/v1/messages`, `/v1/chat/completions`, `/v1/models`,
- *     `/muse-code/models`, `/healthz`, `/readyz`) + methods,
+ *     `/muse-code/models`, `/v1/messages/count_tokens`, `/healthz`, `/readyz`)
+ *     + methods,
  *   - the request/response/SSE FRAMING shapes (Anthropic event/data vs OpenAI
  *     `data:` + `[DONE]`; the `X-Sentropic-Request-Id` response header),
  *   - the §3b ERROR-MAPPING table (status + provider-shaped body type per wire).
@@ -44,6 +45,7 @@ const FROZEN_ROUTES = [
   { method: 'POST', path: '/v1/chat/completions', wire: 'openai-chat-completions' },
   { method: 'GET', path: '/v1/models' },
   { method: 'GET', path: '/muse-code/models' },
+  { method: 'POST', path: '/v1/messages/count_tokens', wire: 'anthropic-messages' },
   { method: 'GET', path: '/healthz' },
   { method: 'GET', path: '/readyz' },
 ] as const;
@@ -151,12 +153,13 @@ const actualRouterRoutes = (app: { routes: { method: string; path: string }[] })
 describe('BR-46 v1 wire contract snapshot — route inventory', () => {
   it('freezes the exact v1 route inventory + methods (spec §3)', () => {
     // The inventory itself is the snapshot: count + each (method, path) pair.
-    expect(FROZEN_ROUTES).toHaveLength(6);
+    expect(FROZEN_ROUTES).toHaveLength(7);
     expect(FROZEN_ROUTES.map((r) => `${r.method} ${r.path}`)).toEqual([
       'POST /v1/messages',
       'POST /v1/chat/completions',
       'GET /v1/models',
       'GET /muse-code/models',
+      'POST /v1/messages/count_tokens',
       'GET /healthz',
       'GET /readyz',
     ]);
