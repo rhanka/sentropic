@@ -420,6 +420,29 @@ describe('LocalAccountTransportService', () => {
     }]);
   });
 
+  it('should not interpolate an unparseable expiry timestamp into diagnostics', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'weird-expiry', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'reauth_required', modelIds: ['claude-opus-4-7'],
+      expiresAt: 'soon-ish',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code authentication must be renewed;'
+        + ' reauthenticate the claude-code account to restore routing',
+    }]);
+  });
+
   it('keeps executable account material inside an opaque route attempt', async () => {
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },

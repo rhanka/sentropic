@@ -176,7 +176,9 @@ describe('CodexEnrollmentProvider', () => {
         );
       }
 
-      throw Object.assign(new TypeError('fetch failed'), {
+      // Canary payload: with a cause code present, the raw system message
+      // (which can carry hostnames/paths/secrets) must never ride out.
+      throw Object.assign(new TypeError('socket hang up sk-test-fake-secret'), {
         cause: { code: 'ECONNRESET' },
       });
     });
@@ -198,9 +200,47 @@ describe('CodexEnrollmentProvider', () => {
     );
     expect(String((error as Error).message)).toContain('ECONNRESET');
     expect(String((error as Error).message)).toContain('deviceauth/token');
+    expect(String((error as Error).message)).not.toContain('sk-test-fake-secret');
     // 1 initial attempt + 3 retries, then abort — never the full 60 attempts.
     expect(mockFetch.mock.calls.filter(([url]) => String(url).includes('deviceauth/token')))
       .toHaveLength(4);
+  });
+
+  it('should fall back to the raw message when the network error has no cause code', async () => {
+    const mockFetch = vi.fn(async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+
+      if (urlStr.includes('deviceauth/usercode')) {
+        return new Response(
+          JSON.stringify({
+            device_auth_id: 'dev_auth_nocode',
+            user_code: 'NOCODE-1',
+            interval: 0.01,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      throw new TypeError('socket hang up');
+    });
+
+    const provider = new CodexEnrollmentProvider({
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    const session = await provider.start({
+      configRef: 'vault://codex',
+      mode: 'cli',
+      redirectUri: 'http://localhost',
+      ownerScope: 'test',
+    });
+
+    const error = await provider.pollForCompletion(session.enrollmentId, 60).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect(String((error as Error).message)).toContain('socket hang up');
+    expect(String((error as Error).message)).toContain('deviceauth/token');
   });
 
   it('should complete enrollment when the token exchange throws one transient network error', async () => {
