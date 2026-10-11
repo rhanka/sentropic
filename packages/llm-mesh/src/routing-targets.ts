@@ -78,8 +78,12 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gpt-5.6-terra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
   },
-  // Mistral Vibe faithful routes: both models are served on api.mistral.ai by
-  // the plan-billed `mistral-vibe` account transport.
+  // Mistral Vibe faithful routes: these models are served on api.mistral.ai by
+  // the plan-billed `mistral-vibe` account transport. `mistral-medium-3.5` is
+  // the Vibe CLI default alias — without it the CLI resolves unknown-model.
+  'mistral-medium-3.5': {
+    providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-medium-3.5',
+  },
   'mistral-large-4': {
     providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-large-4',
   },

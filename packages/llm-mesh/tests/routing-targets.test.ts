@@ -470,6 +470,15 @@ describe('canonical model targets', () => {
     }
   });
 
+  it('routes the Vibe CLI default alias mistral-medium-3.5 faithfully on mistral-vibe', () => {
+    const target = {
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'mistral-medium-3.5',
+    };
+    expect(resolve('mistral-medium-3.5')).toEqual(target);
+    expect(resolveCandidates('mistral-medium-3.5')).toEqual([target]);
+  });
+
   it('routes every Claude tier to 3.8 Flash on the Cloud Code transport', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',

@@ -86,12 +86,13 @@
   - [x] Updated `packages/llm-gateway/tests/contract-snapshot.test.ts` (frozen inventory 5 -> 6, deliberate golden edit).
   - [x] No mesh source change required for muse dispatch (verified existing mappings).
   - [x] Lot gate green: typecheck + lint + full suite 392 passed (29 files).
-- [ ] **Lot 2 — Vibe ingress adapter**
-  - [ ] Add vibe wire ingress (resolve 503 path to eligible mistral-vibe account; models list).
-  - [ ] Unit tests: `packages/llm-gateway/tests/vibe.test.ts` (new).
-  - [ ] Update `packages/llm-gateway/tests/router.test.ts` (existing).
-  - [ ] Mesh hooks if required for vibe dispatch (list files touched).
-  - [ ] Lot gate: `make typecheck-llm-gateway ENV=test-gw-wires`, `make test-llm-gateway ENV=test-gw-wires`.
+- [x] **Lot 2 — Vibe routing**
+  - [x] Vibe speaks OpenAI-compat `POST /v1/chat/completions` (no new ingress route needed; verified against installed CLI 2.26.1: `api_base` + `/v1`, endpoint `/chat/completions`, Bearer auth).
+  - [x] Root cause of vibe failure: CLI default alias `mistral-medium-3.5` absent from mesh static routes (only `mistral-large-4` + `zai-glm-5-3` rode `mistral-vibe`).
+  - [x] Added `mistral-medium-3.5` -> `{mistral, mistral-vibe}` faithful mapping in `packages/llm-mesh/src/routing-targets.ts` (propagates to canonical + candidates resolvers; no catalog profile required by `firstTargetThatResolvesProfile` fallback).
+  - [x] Regression test in `packages/llm-mesh/tests/routing-targets.test.ts` (resolve + candidates).
+  - [x] Equivalence council check green (`make check-llm-model-equivalences`).
+  - [x] Lot gate green: typecheck + lint + full suite 594 passed (37 files).
 - [ ] **Lot 3 — count_tokens on anthropic wire**
   - [ ] Implement or map `POST /v1/messages/count_tokens` faithfully.
   - [ ] Unit tests: extend `packages/llm-gateway/tests/router.test.ts` + new fixture if needed.
