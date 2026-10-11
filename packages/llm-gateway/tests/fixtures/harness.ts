@@ -97,6 +97,8 @@ export interface HarnessOptions {
   readonly crossUserPoolEnabled?: boolean;
   /** Gateway mode (default personal-passthrough). Set `cross-user-pool` for #7 fail-closed tests. */
   readonly mode?: GatewayConfig['mode'];
+  /** Token verifier override (default accepts `valid-<principal>`). Used to model caller-token rotation. */
+  readonly verifyToken?: VerifyToken;
 }
 
 export interface Harness {
@@ -116,7 +118,9 @@ export const buildHarness = (options: HarnessOptions): Harness => {
   const config: GatewayConfig = {
     mode: options.mode ?? DEFAULT_GATEWAY_MODE,
     crossUserPoolEnabled: options.crossUserPoolEnabled ?? false,
-    callerAuth: new PersonalPassthroughCallerAuth({ verifyToken: fixtureVerifyToken }),
+    callerAuth: new PersonalPassthroughCallerAuth({
+      verifyToken: options.verifyToken ?? fixtureVerifyToken,
+    }),
     pool,
     authResolver: new PassthroughAuthResolver(),
     dispatch: new PassthroughDispatch({ transport: options.transport }),

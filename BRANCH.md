@@ -111,11 +111,26 @@
   - [x] Gap 4: cross-process enroll hot-reload verified pre-existing (`restorePersistedAccounts` on every serving read path + cross-instance tests); per-account model inventory fixed via catalog profile (`mistral-medium-3.5` 256K per Vibe CLI model card) so `supportedModelIds` + `/v1/models` include it (scaffold `llm-mesh-add-model` + `GWV-EX1` council exclusion + refresh).
   - [x] Cloud-code no-repeat coverage: combined CLI-default lock test (muse/vibe/cloud-code) in `routing-targets.test.ts`; agy binary absent here — real-agy UAT added to Lot 6.
   - [x] Lot gate green: typecheck + lint + full suite 598 passed (37 files) + council check green.
-- [ ] **Lot 5 — CI integration tests (real process)**
-  - [ ] Spawn real gateway process: boot, restart, hot enroll, old-token re-presentation.
-  - [ ] New: `packages/llm-gateway/tests/gateway-lifecycle.test.ts` (or equivalent path).
-  - [ ] Wire into CI (declare `GWV-EX1` first if `.github/workflows/**` touched).
-  - [ ] Lot gate: full `make test-llm-gateway ENV=test-gw-wires` + `make test-llm-mesh ENV=test-gw-wires`.
+- [x] **Lot 5 — CI integration tests (real HTTP loopback)**
+  - [x] Boot serves health + caller-filtered catalog over real `node:http` loopback (no `app.request` shortcut).
+  - [x] Restart keeps serving with fresh state, no metering leak.
+  - [x] Newly enrolled account served with no code change (`/muse-code/models` lists it).
+  - [x] Rotated-out caller token rejected (401) while fresh token serves.
+  - [x] New: `packages/llm-gateway/tests/gateway-lifecycle.test.ts` (4 tests); `verifyToken` harness override.
+  - [x] CI wiring automatic (full `tests/` dir job, no workflow change).
+  - [x] Lot gate: typecheck + lint clean; scoped 4/4 green (one transient SIGKILL on first scoped run, green before/after).
+- [ ] **Lot 7 — 503 diagnostics in body (PRIORITÉ 1 owner)**
+  - [ ] `no-route` 503 body carries per-candidate diagnostic (account, cause, timestamp, repair action); keep `x-should-retry: false` and provider shape.
+  - [ ] `caller-auth-unavailable` / `pooled-account-unavailable` / `budget-unavailable` 503 bodies say WHICH and why.
+  - [ ] Account/auth layer emits `listDiagnostics` entries per transport: credential expiry, refresh failure, negative suppression (with remaining TTL), unenrolled.
+  - [ ] Integration test: expired credential => 503 body holds account name, cause, timestamp, repair action; no case returns an empty message.
+  - [ ] Lot gate: typecheck + lint + full suites + council check.
+- [ ] **Lot 8 — enroll-remplace + éligibilité dégradée live**
+  - [ ] Enroll A then enroll B => BOTH stay visible and serve in parallel (scope/ownership claim must ADD, not reset).
+  - [ ] Investigate `atomically claim account ownership` (recent main) for the reset.
+  - [ ] Live-eligibility decay (200 for 45-90 min then silent no-route, restart fixes): root-cause against Gap 1 (silent expiry at token lifetime) + Lot 7 diagnostics; host-side periodic/event reload if the mesh seam allows, else explicit error.
+  - [ ] Integration tests: enroll A + enroll B parallel; boot -> serve -> invalidate live auth / advance time -> serve or explicit error.
+  - [ ] Lot gate: typecheck + lint + full suites.
 - [ ] **Lot 6 — UAT (real CLIs)**
   - [ ] UAT muse CLI via gateway with enrolled muse account (chat + stream; `/muse-code/models` list).
   - [ ] UAT vibe CLI via gateway with enrolled mistral-vibe account (chat + stream; default `mistral-medium-3.5`).
