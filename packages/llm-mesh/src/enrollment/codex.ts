@@ -30,11 +30,16 @@ export interface CodexEnrollmentOptions {
  */
 export const CODEX_POLL_NETWORK_RETRIES = 3;
 
-/** `e.cause.code` (ETIMEDOUT, ECONNRESET, ...) when present, else the message. */
+/**
+ * Sanitized network detail for client-facing exhaustion errors: the
+ * `e.cause.code` (ETIMEDOUT, ECONNRESET, ...) when present, else the raw
+ * message. Raw system messages can carry hostnames/paths, so they never ride
+ * out alongside a code — the site, retry count and URL already frame it.
+ */
 const networkErrorDetail = (error: unknown): string => {
   const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
-  const base = error instanceof Error ? error.message : String(error);
-  return typeof code === 'string' && code ? `${code}: ${base}` : base;
+  if (typeof code === 'string' && code) return code;
+  return error instanceof Error ? error.message : String(error);
 };
 
 export class CodexEnrollmentProvider implements EnrollmentProvider {

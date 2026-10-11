@@ -779,9 +779,11 @@ export class LocalAccountTransportService {
         continue;
       }
       const transport = account.transportProviderId;
-      const expiredAt = typeof account.expiresAt === 'string' && account.expiresAt
-        ? account.expiresAt
-        : undefined;
+      // Only a parseable timestamp is interpolated: the stored value is
+      // owner data, never a validated date, and this message is client-facing.
+      const rawExpiry = account.expiresAt;
+      const expiredAt = typeof rawExpiry === 'string' && rawExpiry
+        && Number.isFinite(Date.parse(rawExpiry)) ? rawExpiry : undefined;
       diagnostics.push({
         code: 'reauth-required',
         transportProviderId: transport,
