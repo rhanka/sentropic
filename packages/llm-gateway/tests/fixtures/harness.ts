@@ -145,6 +145,19 @@ export const buildHarness = (options: HarnessOptions): Harness => {
           transportProviderId: 'codex',
           model: 'gpt-5.5',
         },
+        // Branch static routes (mirror of mesh routing-targets): the Vibe
+        // CLI default alias and the cloud-code model, so fixture tests can
+        // drive the exact owner wires past resolveTarget.
+        'mistral-medium-3.5': {
+          providerId: 'mistral',
+          transportProviderId: 'mistral-vibe',
+          model: 'mistral-medium-3.5',
+        },
+        'gemini-3.7-flash': {
+          providerId: 'gemini',
+          transportProviderId: 'cloud-code',
+          model: 'gemini-3.7-flash',
+        },
       },
     }),
     metering,
