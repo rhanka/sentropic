@@ -9,8 +9,9 @@
  *   429  over-budget (BR-47)             -> provider rate-limit + Retry-After
  *   429  upstream-rate-limited (BR77)    -> provider rate-limit + Retry-After
  *   429  no-eligible-account             -> provider overloaded + Retry-After
- *   503  pooled-account-unavailable      -> provider overloaded (NOT pool detail)
- *   503  budget-unavailable (BR-47)      -> same sanitized body (pricing/store failure)
+ *   503  caller-auth-unavailable         -> provider overloaded, auth-subsystem message
+ *   503  pooled-account-unavailable      -> provider overloaded, account-subsystem message (NOT pool detail)
+ *   503  budget-unavailable (BR-47)      -> provider overloaded, budget-subsystem message (NOT pricing/store detail)
  *   400  bad-request                     -> provider invalid-request
  *   404  unknown-model (Lot 1)             -> provider not-found (model-only message)
  *   503  no-route (BR-REL-Q7)              -> provider api/server error + x-should-retry:false
@@ -105,9 +106,15 @@ const unknownModelMessage = (requestedModel?: string): string =>
 /**
  * BR-REL-Q7 known-model no-route message. Names ONLY the validated requested
  * model — never overloaded/rate-limit wording, so SDKs do not retry-loop.
+ * Lot 7: an optional per-transport detail (mesh availability messages) is
+ * appended so the body says WHY, while the status/type/header stay frozen.
  */
-const noRouteMessage = (requestedModel?: string): string =>
-  requestedModel ? `No route available for model: ${JSON.stringify(requestedModel)}` : 'No route available';
+const noRouteMessage = (requestedModel?: string, detail?: string): string => {
+  const base = requestedModel
+    ? `No route available for model: ${JSON.stringify(requestedModel)}`
+    : 'No route available';
+  return detail ? `${base} — ${detail}` : base;
+};
 
 /**
  * Map an internal failure class to a provider-shaped error for the wire. The
@@ -119,6 +126,8 @@ export const mapGatewayError = (
   kind: GatewayFailureKind,
   retryAfterSeconds?: number,
   requestedModel?: string,
+  /** Lot 7: per-transport availability detail, `no-route` only. */
+  detail?: string,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
@@ -139,12 +148,24 @@ export const mapGatewayError = (
         ? anthropicError(429, 'overloaded_error', 'service temporarily unavailable', retry)
         : openAiError(429, 'rate_limit_error', 'service temporarily unavailable', 'overloaded', retry);
 
+    // Lot 7: each 503 names its failing subsystem so operators can tell
+    // caller-auth / account-dispatch / budget failures apart. Status, error
+    // type/code, and headers stay frozen; no account, lease, credential, or
+    // pricing/store detail ever rides out in these bodies.
     case 'caller-auth-unavailable':
+      return anthropic
+        ? anthropicError(503, 'overloaded_error', 'authentication service temporarily unavailable', retry)
+        : openAiError(503, 'rate_limit_error', 'authentication service temporarily unavailable', 'overloaded', retry);
+
     case 'pooled-account-unavailable':
+      return anthropic
+        ? anthropicError(503, 'overloaded_error', 'account service temporarily unavailable', retry)
+        : openAiError(503, 'rate_limit_error', 'account service temporarily unavailable', 'overloaded', retry);
+
     case 'budget-unavailable':
       return anthropic
-        ? anthropicError(503, 'overloaded_error', 'service temporarily unavailable', retry)
-        : openAiError(503, 'rate_limit_error', 'service temporarily unavailable', 'overloaded', retry);
+        ? anthropicError(503, 'overloaded_error', 'budget service temporarily unavailable', retry)
+        : openAiError(503, 'rate_limit_error', 'budget service temporarily unavailable', 'overloaded', retry);
 
     case 'upstream-auth-failed':
       return anthropic
@@ -179,8 +200,8 @@ export const mapGatewayError = (
       // Retry-After. Never overloaded_error/rate_limit_error.
       const headers = { 'x-should-retry': 'false' };
       return anthropic
-        ? anthropicError(503, 'api_error', noRouteMessage(requestedModel), headers)
-        : openAiError(503, 'server_error', noRouteMessage(requestedModel), 'no_route', headers);
+        ? anthropicError(503, 'api_error', noRouteMessage(requestedModel, detail), headers)
+        : openAiError(503, 'server_error', noRouteMessage(requestedModel, detail), 'no_route', headers);
     }
   }
 };
@@ -194,15 +215,23 @@ export const toProviderShapedError = (
   if (error instanceof GatewayError) {
     return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel);
   }
-  const diagnostic = error && typeof error === 'object'
+  const record = error && typeof error === 'object'
     ? (error as { diagnostic?: {
-        code?: string; transportProviderId?: string;
-      } }).diagnostic
+        code?: string; transportProviderId?: string; message?: unknown;
+      };
+      diagnostics?: readonly {
+        code?: string; transportProviderId?: string; message?: unknown;
+      }[]; })
     : undefined;
+  const diagnostic = record?.diagnostic;
   if (diagnostic?.code === 'reenrollment-required' || diagnostic?.code === 'reauth-required') {
     const transport = diagnostic.transportProviderId ?? 'provider';
     const action = diagnostic.code === 'reenrollment-required' ? 're-enroll' : 'reauthenticate';
-    const message = `${transport} ${action} required`;
+    // Lot 7: the mesh-authored message (cause, timestamp, repair action)
+    // wins; the rebuilt template stays as fallback for messageless errors.
+    const message = typeof diagnostic.message === 'string' && diagnostic.message
+      ? diagnostic.message
+      : `${transport} ${action} required`;
     const headers = { 'X-Sentropic-Route-Action': `${action}-${transport}` };
     return wire === 'anthropic-messages'
       ? anthropicError(503, 'authentication_error', message, headers)
@@ -216,10 +245,18 @@ export const toProviderShapedError = (
     return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
   }
   // BR-REL-Q7: every known-model no-route without an enrollment diagnostic
-  // (checked above) becomes the non-retryable 503. The enrollment-action
-  // branch stays unchanged.
+  // (checked above) becomes the non-retryable 503. Lot 7: the per-transport
+  // availability entries ride in the body so the 503 says WHY. The
+  // enrollment-action branch stays unchanged.
   if (isRoutePlanError(error, 'no-route') || isRouteQuoteError(error, 'no-route')) {
-    return mapGatewayError(wire, 'no-route', undefined, requestedModel);
+    const entries = record?.diagnostics
+      ?? (diagnostic && typeof diagnostic.message === 'string' && diagnostic.message
+        ? [diagnostic] : []);
+    const detail = entries
+      .map((entry) => (typeof entry.message === 'string' ? entry.message : ''))
+      .filter((message) => message)
+      .join('; ');
+    return mapGatewayError(wire, 'no-route', undefined, requestedModel, detail || undefined);
   }
   if (
     isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')
