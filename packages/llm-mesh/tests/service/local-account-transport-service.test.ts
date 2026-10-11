@@ -1196,4 +1196,51 @@ describe('LocalAccountTransportService', () => {
       expect(diagnostic.actualProviderId).not.toBe('anthropic');
     }
   });
+
+  it('should keep both accounts visible after enroll A then enroll B', async () => {
+    const keyring = new InMemoryKeyring();
+    const configResolver = { async resolveConfig() { return {}; } };
+    const museProvider = {
+      async complete() {
+        return {
+          accountId: 'acct-muse-1', accessToken: 'muse-token', refreshToken: 'muse-refresh',
+          expiresAt: '2027-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+        };
+      },
+    } as unknown as EnrollmentProvider;
+    const codexProvider = {
+      async start() {
+        return {
+          kind: 'device-code', enrollmentId: 'enr-codex-1',
+          verificationUrl: 'https://auth.openai.com/codex/device', userCode: 'XXXX-1',
+          pollIntervalMs: 1, expiresAt: '2027-01-01T00:00:00.000Z',
+        };
+      },
+      async pollForCompletion() {
+        return {
+          accountId: 'acct-codex-1', label: 'Codex Account', ownerScope: 'owner-a',
+          credential: {
+            accountId: 'acct-codex-1', accessToken: 'codex-token', refreshToken: 'codex-refresh',
+            expiresAt: '2027-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+          },
+        };
+      },
+    } as unknown as EnrollmentProvider;
+
+    const svcA = new LocalAccountTransportService(
+      keyring, new Map([['muse', museProvider]]), configResolver);
+    await svcA.completeMuseImport('enr-muse-1', 'code', 'owner-a');
+
+    const svcB = new LocalAccountTransportService(
+      keyring, new Map([['codex', codexProvider]]), configResolver);
+    const session = await svcB.enroll('codex', {
+      configRef: 'vault://codex', mode: 'cli', redirectUri: 'http://localhost', ownerScope: 'owner-a',
+    });
+    await svcB.pollForCompletion(session.enrollmentId);
+
+    const svcC = new LocalAccountTransportService(keyring, new Map(), configResolver);
+    const accounts = await svcC.listAccounts('owner-a');
+    expect(accounts.map((account) => account.accountId).sort())
+      .toEqual(['acct-codex-1', 'acct-muse-1']);
+  });
 });
