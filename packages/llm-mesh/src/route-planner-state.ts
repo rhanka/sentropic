@@ -37,6 +37,12 @@ export class RoutePlanError extends Error {
     readonly code: 'no-route' | 'unknown-model' | 'capabilities-unmet' | 'invalid-plan' | 'expired-plan' | 'stale-candidate' | 'conflict'
       | 'quote-mismatch',
     readonly diagnostic?: RouteAvailabilityDiagnostic,
+    /**
+     * Every transport-matching availability entry (Lot 7): `diagnostic`
+     * stays the first match for back-compat; this carries the full
+     * per-transport list so callers can report each candidate's cause.
+     */
+    readonly diagnostics?: readonly RouteAvailabilityDiagnostic[],
   ) {
     super(message);
     this.name = 'RoutePlanError';
