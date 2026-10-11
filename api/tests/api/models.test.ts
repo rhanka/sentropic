@@ -75,6 +75,7 @@ describe('llm-mesh model projections', () => {
     expect(modelsByProvider('mistral')).toEqual([
       'magistral-medium-2509',
       'mistral-large-4',
+      'mistral-medium-3.5',
       'mistral-small-2603',
       'zai-glm-5-3',
     ]);
@@ -89,7 +90,7 @@ describe('llm-mesh model projections', () => {
       'muse-spark-1.3',
       'muse-spark-1.3-contributor',
     ]);
-    expect(data.models).toHaveLength(31);
+    expect(data.models).toHaveLength(32);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
