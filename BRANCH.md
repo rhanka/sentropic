@@ -50,6 +50,8 @@
 - `GWV-EX1`: `scripts/llm-model-equivalences/council.source.json` (council exclusion for `mistral:mistral-medium-3.5`, same no-benchmark rationale as its mistral siblings). Reason: equivalence gate requires every catalog model classified or excluded. Impact: generated council digest only. Rollback: drop the entry + refresh.
 - `attention`: cloud-code (agy) added to this branch scope on owner request (avoid a repeat request later): verify the agy CLI path through the gateway, fix gaps, cover with tests.
 - `attention`: auto-mode free classifier billing (forward `anthropic-beta` + `safeguards` verbatim, return `safeguard_results` untouched, keep tool-use IDs, forward error bodies unmodified) is EXCLUDED from this branch on owner request — separate later PR, gateway must keep managing (metering/leases/auth + opt-out). Findings so far: request bodies already relayed verbatim; client headers rebuilt at dispatch (beta headers dropped); upstream errors wrapped in gateway envelope (breaks client retry matching).
+- `attention`: URGENT owner brief via `agent:conductor:38f44695f2ad` (`env:send:0fd2a7cf`, 02:44 UTC) — codex device-flow poll loop has zero network tolerance: 1 ETIMEDOUT aborts enrollment (owner failed 4x in a row, ~10% flaky network). Fixed as Lot 9 (retry 3 + backoff on poll and token exchange, cause+URL on exhaustion). Equal priority to mute-503 Lot 7.
+- `acknowledge`: provider-cascade checked for Lot 9 — codex runs its own inline poll loop (does not use shared `runDeviceFlowUntilComplete`); sibling enrollment providers untouched, fix is codex-scoped per brief.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -119,6 +121,12 @@
   - [x] New: `packages/llm-gateway/tests/gateway-lifecycle.test.ts` (4 tests); `verifyToken` harness override.
   - [x] CI wiring automatic (full `tests/` dir job, no workflow change).
   - [x] Lot gate: typecheck + lint clean; scoped 4/4 green (one transient SIGKILL on first scoped run, green before/after).
+- [x] **Lot 9 — codex enroll device-flow network retry (URGENT owner, blocks prod enrollment)**
+  - [x] `pollForCompletion` poll fetch wrapped in retry (3 retries, linear backoff on `pollIntervalMs`): transient network errors follow the 403-pending sleep-then-continue path, never abort the device flow.
+  - [x] Same retry around the OAuth token-exchange POST.
+  - [x] Exhaustion error carries cause (`e.cause.code`: ETIMEDOUT, ECONNRESET...) + URL, never bare `fetch failed` (`enrollment/codex.ts`).
+  - [x] New: 3 tests in `tests/enrollment/codex.test.ts` (transient poll error completes; exhaustion aborts after 1+3 fetches with cause+URL; transient exchange error completes).
+  - [x] Lot gate: typecheck + lint clean; scoped 5/5 green (3 new tests failed authentically pre-fix); full mesh suite 601 passed (37 files).
 - [ ] **Lot 7 — 503 diagnostics in body (PRIORITÉ 1 owner)**
   - [ ] `no-route` 503 body carries per-candidate diagnostic (account, cause, timestamp, repair action); keep `x-should-retry: false` and provider shape.
   - [ ] `caller-auth-unavailable` / `pooled-account-unavailable` / `budget-unavailable` 503 bodies say WHICH and why.
