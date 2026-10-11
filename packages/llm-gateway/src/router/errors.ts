@@ -104,9 +104,10 @@ const unknownModelMessage = (requestedModel?: string): string =>
   requestedModel ? `Unknown model: ${JSON.stringify(requestedModel)}` : 'Unknown model';
 
 /**
- * BR-REL-Q7 known-model no-route message. Names ONLY the validated requested
+ * BR-REL-Q7 known-model no-route message. Names the validated requested
  * model — never overloaded/rate-limit wording, so SDKs do not retry-loop.
- * Lot 7: an optional per-transport detail (mesh availability messages) is
+ * Lot 7: an optional per-transport detail (mesh-authored availability
+ * messages, trusted as operator diagnostics and forwarded verbatim) is
  * appended so the body says WHY, while the status/type/header stay frozen.
  */
 const noRouteMessage = (requestedModel?: string, detail?: string): string => {
@@ -118,7 +119,10 @@ const noRouteMessage = (requestedModel?: string, detail?: string): string => {
 
 /**
  * Map an internal failure class to a provider-shaped error for the wire. The
- * CLIENT-FACING message is a fixed, pool-internal-free string per class; the
+ * CLIENT-FACING message is a fixed, pool-internal-free string per class,
+ * except for the diagnostic trust boundary: `no-route` appends
+ * mesh-authored availability detail, and the enrollment-action branch
+ * prefers the mesh-authored message over the rebuilt template. The
  * internal `error.message` (with any account/lease detail) stays in logs only.
  */
 export const mapGatewayError = (

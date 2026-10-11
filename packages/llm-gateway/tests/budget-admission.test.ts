@@ -4,8 +4,8 @@ import {
 } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import {
-  BudgetConfigurationError, budgetRetryAfterSeconds, createGatewayRouter, routeUsageCeiling,
-  runRouteJsonFlow, runRouteStreamFlow,
+  admitRoute, BudgetConfigurationError, budgetRetryAfterSeconds, createGatewayRouter,
+  routeUsageCeiling, runRouteJsonFlow, runRouteStreamFlow,
 } from '../src/index.js';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 import {
@@ -144,6 +144,45 @@ describe('budget admission quote and ceiling', () => {
     expect(response.headers.get('x-should-retry')).toBe('false');
     expect(recorder.events).toEqual([]);
     expect(calls.plan).toEqual([]);
+  });
+  it('keeps the frozen no-route refusal when the availability lookup fails', async () => {
+    // A rejecting `describeAvailability` must not replace the determined
+    // refusal with the generic retryable 503, and budget admission is never
+    // reached. The lookup failure stays on the refusal `cause` for operators.
+    const { planner } = quotingPlanner([], { quote: () => fixtureQuote({ candidates: [] }) });
+    const lookupError = new Error('keyring down');
+    const rejecting = {
+      ...planner,
+      describeAvailability: async () => { throw lookupError; },
+    } as never;
+    const recorder = recordingBudget();
+    const response = await send(budgetRouter({ planner: rejecting, recorder }), '/v1/chat/completions', false);
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-should-retry')).toBe('false');
+    expect(await response.json()).toEqual({ error: {
+      message: `No route available for model: "${MODEL}"`, type: 'server_error', code: 'no_route' } });
+    expect(recorder.events).toEqual([]);
+  });
+  it('retains the lookup failure on the refusal cause for operators', async () => {
+    const { planner } = quotingPlanner([], { quote: () => fixtureQuote({ candidates: [] }) });
+    const lookupError = new Error('keyring down');
+    const rejecting = {
+      ...planner,
+      describeAvailability: async () => { throw lookupError; },
+    } as never;
+    const recorder = recordingBudget();
+    const canonical = normalizeGatewayIngress('openai-chat-completions', {
+      model: MODEL, max_tokens: 64, messages: [{ role: 'user', content: 'hello' }],
+    });
+    const failure = await admitRoute({
+      budget: recorder.options, routePlanner: rejecting, requestId: 'req-1',
+      cost: { tenantId: 'tenant-1', principalId: 'user-1', source: 'test', correlationId: 'req-1' },
+      subject: { principalRef: 'user-1', ownerScopeRef: 'user-1' },
+      wire: 'openai-chat-completions', requestedModel: MODEL, canonical, route: {},
+    }).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
+    expect((failure as { cause?: unknown }).cause).toBe(lookupError);
+    expect(recorder.events).toEqual([]);
   });
 });
 

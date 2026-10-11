@@ -38,9 +38,12 @@ export class RoutePlanError extends Error {
       | 'quote-mismatch',
     readonly diagnostic?: RouteAvailabilityDiagnostic,
     /**
-     * Every transport-matching availability entry (Lot 7): `diagnostic`
-     * stays the first match for back-compat; this carries the full
-     * per-transport list so callers can report each candidate's cause.
+     * Every transport-matching availability entry (Lot 7): by caller
+     * convention `diagnostic` stays the first match for back-compat (not a
+     * constructor invariant — both arguments are independently optional);
+     * this carries the full per-transport list. Transport diagnostics
+     * reflect the matching entries, not necessarily every candidate or
+     * every failure cause.
      */
     readonly diagnostics?: readonly RouteAvailabilityDiagnostic[],
   ) {

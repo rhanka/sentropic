@@ -147,15 +147,27 @@ export const admitRoute = async (input: {
     throw error;
   }
   // Nothing is quotable: reserve nothing and refuse exactly like an empty route.
-  // Lot 7: explain the empty quote with the per-transport availability
-  // entries so the 503 body names each candidate's cause instead of going mute.
+  // Lot 7: attach the per-transport availability entries so the 503 can say
+  // WHY instead of going mute. Only the first entry rides as `diagnostic`
+  // (frozen enrollment precedence for the action branch); the full list
+  // rides as `diagnostics` for the joined no-route detail.
   if (quote.candidates.length === 0) {
-    const availability = await routePlanner.describeAvailability?.(input.subject, {
-      requestedModel: input.requestedModel,
-      ...(input.route.targetCandidatesOverride
-        ? { targetCandidatesOverride: input.route.targetCandidatesOverride } : {}),
-      ...(input.route.explicit ? { explicit: input.route.explicit } : {}),
-    }) ?? [];
+    let availability: Awaited<ReturnType<NonNullable<RoutePlanner['describeAvailability']>>> = [];
+    try {
+      availability = await routePlanner.describeAvailability?.(input.subject, {
+        requestedModel: input.requestedModel,
+        ...(input.route.targetCandidatesOverride
+          ? { targetCandidatesOverride: input.route.targetCandidatesOverride } : {}),
+        ...(input.route.explicit ? { explicit: input.route.explicit } : {}),
+      }) ?? [];
+    } catch (lookupError) {
+      // The explanatory lookup must never replace a determined refusal: keep
+      // the frozen typed no-route error with no detail, and retain the lookup
+      // failure for operators on the standard `cause` chain (never in a body).
+      const refusal = new RoutePlanError('Route quote has no candidates', 'no-route');
+      (refusal as { cause?: unknown }).cause = lookupError;
+      throw refusal;
+    }
     const diagnostic = availability[0];
     throw new RoutePlanError(
       diagnostic?.message ?? 'Route quote has no candidates',
