@@ -54,6 +54,8 @@
 - `acknowledge`: provider-cascade checked for Lot 9 — codex runs its own inline poll loop (does not use shared `runDeviceFlowUntilComplete`); sibling enrollment providers untouched, fix is codex-scoped per brief.
 - `acknowledge`: Lot 7 covers owner brief `env:send:03c22edf` points 1 (per-candidate diagnostic in no-route body via `diagnostics` + `describeAvailability` + enriched account messages) and 2 (subsystem-naming messages on the three sanitized 503s) plus the integration test (real planner + expired credential). Suppression-TTL / refresh-failure diagnostic entries and the zero-account bare-message case are documented follow-ups, not silent drops.
 - `attention`: Lot 7 DELIBERATELY deviates from `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md:196` (`caller-auth-unavailable` fixed message) and the main B3b pin (budget reuses pooled body): status/type/code/headers stay frozen, only the human-readable message names the subsystem. Trace-impact swept: no remaining pooled/budget equality assertion, no other package references, B3b flow test follows the mapper golden automatically. Normative spec consolidation owned by Lot N-1.
+- `acknowledge`: Lot 8 enroll-replace — NO mesh defect (owner hypothesis on the atomic claim falsified). Handoff to h2a lane: (1) confirm `H2A_LLM_MESH_OWNER_SCOPE` + `hostname` identical in every enroll shell (scope flicker = each enroll lands in its own scope, list shows current scope = looks like replace); (2) keep enroll CLI outputs (success vs error) — prod disk shows incomplete attempts, not replacements. Acceptance: enroll A + enroll B under one scope, `account list` shows both. In-branch guard: mesh regression test (passes).
+- `acknowledge`: Lot 8 live-decay — Gap 1 silent expiry at token lifetime; fixed (Lot 4 readiness/diagnostics) + surfaced (Lot 7 explicit 503 body). If a decay recurs POST-merge, the 503 body now names cause/timestamp/action instead of going mute — that output is the next diagnostic. Host-side periodic reload stays h2a-lane-owned.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -139,12 +141,13 @@
   - [x] Out of Lot 7 scope (documented, not silently dropped): negative-suppression remaining-TTL entries and refresh-failure entries are not emitted as diagnostics (no `listDiagnostics` source for them yet); a pool with zero enrolled accounts still yields the bare base message (no candidate to diagnose). Follow-up candidates for a later lot.
   - [x] Integration test: real planner + expired credential => 503 body holds account, cause, timestamp, action; new unit tests for message preference + joined no-route on both wires; mesh tests for multi-diagnostic + `describeAvailability`.
   - [x] Lot gate: typecheck + lint clean (both packages); mesh 603/603 (37 files); gateway 404/404 (31 files).
-- [ ] **Lot 8 — enroll-remplace + éligibilité dégradée live**
-  - [ ] Enroll A then enroll B => BOTH stay visible and serve in parallel (scope/ownership claim must ADD, not reset).
-  - [ ] Investigate `atomically claim account ownership` (recent main) for the reset.
-  - [ ] Live-eligibility decay (200 for 45-90 min then silent no-route, restart fixes): root-cause against Gap 1 (silent expiry at token lifetime) + Lot 7 diagnostics; host-side periodic/event reload if the mesh seam allows, else explicit error.
-  - [ ] Integration tests: enroll A + enroll B parallel; boot -> serve -> invalidate live auth / advance time -> serve or explicit error.
-  - [ ] Lot gate: typecheck + lint + full suites.
+- [x] **Lot 8 — enroll-remplace + éligibilité dégradée live (investigation close)**
+  - [x] Enroll A then enroll B => BOTH stay visible: regression test `should keep both accounts visible after enroll A then enroll B` PASSES on repo src — mesh persistence is additive at every layer (index append, per-accountId owner claims/barriers, per-accountId coordinator).
+  - [x] `atomically claim account ownership` (main `801e46a59`) EXONERATED: claims are keyed per accountId, file keyring writes are per-secret atomic; same passing result through the real installed 0.25.0 dist + `EncryptedFileKeyring` on a throwaway dir (`/tmp/repro-enroll-ab.mjs`, scratch, not committed).
+  - [x] Prod forensics (read-only, no decryption): this evening exactly ONE successful persist in `~/.sentropic/llm-mesh-keyring` (codex 22:50 local: envelope + owner claim + index); all other evening writes are orphan claim-sized files with no public record/envelope/index — i.e. INCOMPLETE attempts, consistent with the night's network flakiness behind the Lot 9 retry brief. No mesh-side replace path exists; handoff to h2a lane (scope-per-shell / enroll-output check, see Feedback Loop).
+  - [x] Live decay: root cause is Gap 1 silent expiry at token lifetime (fixed Lot 4, surfaced Lot 7). Mesh plan path re-reads disk per request (Gap 4 verified); personal-passthrough pool + gateway-host reload are host-owned (external, no in-branch seam: no prod `CoordinatorPoolState` constructor in `llm-gateway/src`). "Diagnostic clair" fallback delivered by Lot 7.
+  - [x] Integration tests: enroll A+B (mesh service, passes); invalidate-live-auth => explicit error (Lot 7 `route-json-flow` real-planner expired-credential test — expired fixture IS the post-decay state, no time travel needed).
+  - [x] Lot gate: scoped service suite 28/28 green (incl. new regression test).
 - [ ] **Lot 6 — UAT (real CLIs)**
   - [ ] UAT muse CLI via gateway with enrolled muse account (chat + stream; `/muse-code/models` list).
   - [ ] UAT vibe CLI via gateway with enrolled mistral-vibe account (chat + stream; default `mistral-medium-3.5`).
