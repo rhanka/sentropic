@@ -1189,3 +1189,116 @@ concerns: enroll produces a keyring credential; serve consumes it over the
 Meta wire (`https://api.meta.ai/v1`, api-key auth, `x-api-version: 1.0.0`).
 The serving leg does not depend on this provider's code — it depends on the
 same measured wire facts. Both must exist for §14.5 Proof 2 to go green.
+
+## 15. Muse/vibe wires, `count_tokens`, gaps and operational diagnostics (branch `fix/llm-gateway-muse-vibe-wires`)
+
+This section records the branch-scoped evolution on top of v2. Normative
+unless marked otherwise. The auto-mode free-classifier billing change is
+explicitly OUT of this branch (later PR; the gateway keeps managing
+metering/leases/auth with opt-out).
+
+### 15.1 Muse and vibe ingress
+
+- Muse chat needs no new ingress: `POST /v1/chat/completions` already parses.
+  The missing piece was catalog route `GET /muse-code/models`, served by the
+  shared `/v1/models` handler (Lot 1).
+- Vibe needs no new ingress (OpenAI-compatible). Root cause was the missing
+  `mistral-medium-3.5` static mapping + catalog profile (256K context per the
+  Vibe CLI model card), added via the `llm-mesh-add-model` scaffold (Lot 2).
+- Cloud-code rides the same wires: the CLI-default lock test covers the
+  muse/vibe/cloud-code triple so no repeat request is needed (Lot 4).
+
+### 15.2 `count_tokens` on the Anthropic wire
+
+`POST /v1/messages/count_tokens` is reserved and mapped to 401/404/400 with
+no lease and no metering (Lot 3). No token estimator is built: an estimate
+would corrupt Anthropic cache accounting. Native provider counting stays a
+host-transport follow-up (needs a `count` seam on the production
+`ProviderTransport` + mesh attempt).
+
+### 15.3 Mesh operational gaps 1–4
+
+- Gap 1: an expired credential surfaces `reauth-required` readiness +
+  `listDiagnostics` even before its status flips; the planner excludes it and
+  the gateway answers 503 + `X-Sentropic-Route-Action` instead of a silent
+  no-route.
+- Gap 2: a lone route suppressed only by UNCOMMITTED failures degrades
+  instead of starving for the 300s negative-cache TTL (`committed` stamp on
+  `RouteFailureClassification`, `suppressedDegradable` health, single-
+  candidate planner fallback). Committed failures stay strict (duplicate-
+  dispatch risk); multi-route suppression is unchanged.
+- Gap 3: affinity whose account is gone auto-drops at resolve (deleted from
+  the map) and resolves normally; not-ready accounts keep fail-closed.
+- Gap 4: cross-process enroll hot-restore verified pre-existing
+  (`restorePersistedAccounts` on every serving read path); per-account model
+  inventory fixed via catalog profile so `supportedModelIds` + `/v1/models`
+  include the scaffolded model.
+
+### 15.4 No-route diagnostics (Lot 7)
+
+- `RoutePlanError` carries `diagnostics: readonly RouteAvailabilityDiagnostic[]`;
+  `diagnostic` stays the first entry for back-compat.
+- `describeAvailability(subject, ...)` is read-only and shares
+  `matchingAvailabilityDiagnostics` with the planner no-route branch: an
+  explicit transport restriction wins, otherwise model-derived transports
+  filter `listDiagnostics` (unfiltered `[0]` once prescribed the wrong repair
+  action across transports).
+- `admitRoute` takes `subject` and attaches availability to an empty quote by
+  throwing `no-route` with the same per-transport entries.
+- The no-route 503 body joins per-transport messages (`; `-separated); the
+  enrollment-action branch prefers the mesh-authored message, rebuilt template
+  as fallback for messageless errors.
+- Status, error type/code and headers frozen: 503 `api_error` /
+  `server_error` + `no_route`, `x-should-retry: false`, no `Retry-After`;
+  the enrollment-action branch (`authentication_error` +
+  `X-Sentropic-Route-Action`) is unchanged.
+
+### 15.5 Subsystem 503 messages
+
+- `caller-auth-unavailable` -> `authentication service temporarily
+  unavailable`; `pooled-account-unavailable` -> `account service temporarily
+  unavailable`; `budget-unavailable` -> `budget service temporarily
+  unavailable` (both wires; Anthropic `overloaded_error`, OpenAI
+  `rate_limit_error` / `overloaded` unchanged).
+- Status, error type/code and headers frozen; bodies carry zero account,
+  lease, credential or pricing/store detail.
+- Deliberate deviation from `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md:196` and the
+  B3b pin on main, which froze a single generic wording: per-subsystem
+  wording is operator-distinguishable by design.
+
+### 15.6 Codex enroll retry
+
+- `CODEX_POLL_NETWORK_RETRIES = 3` on device poll and OAuth token exchange:
+  a transient fetch throw follows the same sleep-then-continue path as a 403
+  pending poll, never an instant abort.
+- Linear backoff scaled on `pollIntervalMs` (`pollIntervalMs * consecutive
+  failures`); 403 pending waits one uncapped `pollIntervalMs`.
+- Exhausted error names the site, the retry count and the URL, and appends
+  `e.cause.code` when present (`ETIMEDOUT`, `ECONNRESET`, ...) else the
+  message. Non-transient HTTP/incomplete-payload failures still fail fast.
+
+### 15.7 Enroll-replace finding (observation, non-normative)
+
+- No mesh defect on the enroll-replace path: all layers in this branch are
+  additive (availability surfacing, message wording, retry), none replaces
+  enrollment, lease or refresh state handling.
+- Disk forensics (read-only, no decryption): a single successful codex
+  persistence; remaining evening writes are orphan claim-sized files from
+  incomplete attempts, no live-account replacement. Handoff stays on the h2a
+  lane: one scope per shell (`H2A_LLM_MESH_OWNER_SCOPE` / hostname).
+
+### 15.8 Test-matrix deltas
+
+- `packages/llm-mesh/tests/route-planner.test.ts`: multi-diagnostic
+  no-route (`diagnostic` = first, `diagnostics` = per-transport list) +
+  `describeAvailability` read-only parity with the planner branch.
+- `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`:
+  expired-credential messages + enroll A+B regression.
+- `packages/llm-gateway/tests/errors.test.ts`: mesh-message preference +
+  joined no-route detail.
+- `packages/llm-gateway/tests/route-json-flow.test.ts`: expired-credential
+  end-to-end (503 + route action).
+- `packages/llm-gateway/tests/contract-snapshot.test.ts`: subsystem 503
+  freeze (status/type/code/headers).
+- `packages/llm-mesh/tests/enrollment/codex.test.ts`: 3 retry tests (poll
+  recovery, exchange recovery, exhausted error with cause code + URL).
