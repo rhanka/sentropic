@@ -23,6 +23,20 @@ export interface CodexEnrollmentOptions {
   fetchFn?: typeof fetch;
 }
 
+/**
+ * Transient network retries per device-flow fetch site. A device flow lasts
+ * minutes by design, so an instant network blip must never abort it — the
+ * error follows the same sleep-then-continue path as a 403 pending poll.
+ */
+export const CODEX_POLL_NETWORK_RETRIES = 3;
+
+/** `e.cause.code` (ETIMEDOUT, ECONNRESET, ...) when present, else the message. */
+const networkErrorDetail = (error: unknown): string => {
+  const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+  const base = error instanceof Error ? error.message : String(error);
+  return typeof code === 'string' && code ? `${code}: ${base}` : base;
+};
+
 export class CodexEnrollmentProvider implements EnrollmentProvider {
   private readonly defaultClientId: string;
   private readonly configResolver?: ConfigResolver;
@@ -137,22 +151,39 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
 
     const clientId = await this.getClientId();
 
+    let pollNetworkFailures = 0;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (entry.state.cancelledAt) {
         throw new Error(`Enrollment session ${enrollmentId} was cancelled`);
       }
 
-      const response = await this.fetchFn(CODEX_DEVICE_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-        },
-        body: JSON.stringify({
-          device_auth_id: entry.deviceAuthId,
-          user_code: entry.userCode,
-        }),
-      });
+      let response: Response;
+      try {
+        response = await this.fetchFn(CODEX_DEVICE_TOKEN_URL, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json',
+          },
+          body: JSON.stringify({
+            device_auth_id: entry.deviceAuthId,
+            user_code: entry.userCode,
+          }),
+        });
+      } catch (error) {
+        // Transient network blip: same sleep-then-continue path as a 403
+        // pending poll — a device flow must never die on an instant error.
+        pollNetworkFailures += 1;
+        if (pollNetworkFailures > CODEX_POLL_NETWORK_RETRIES) {
+          throw new Error(
+            `Codex device poll failed (network, ${CODEX_POLL_NETWORK_RETRIES} retries exhausted)`
+            + ` at ${CODEX_DEVICE_TOKEN_URL}: ${networkErrorDetail(error)}`,
+          );
+        }
+        await new Promise((res) => setTimeout(res, entry.pollIntervalMs * pollNetworkFailures));
+        continue;
+      }
+      pollNetworkFailures = 0;
 
       if (response.status === 403) {
         // P0-3: Wait for pollIntervalMs without hardcoded 50ms cap
@@ -183,14 +214,34 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
         code_verifier: tokenPayload.code_verifier,
       });
 
-      const exchangeResponse = await this.fetchFn(CODEX_OAUTH_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          accept: 'application/json',
-        },
-        body: exchangeBody,
-      });
+      let exchangeResponse: Response | undefined;
+      let exchangeNetworkFailures = 0;
+      for (;;) {
+        try {
+          exchangeResponse = await this.fetchFn(CODEX_OAUTH_TOKEN_URL, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/x-www-form-urlencoded',
+              accept: 'application/json',
+            },
+            body: exchangeBody,
+          });
+          break;
+        } catch (error) {
+          exchangeNetworkFailures += 1;
+          if (exchangeNetworkFailures > CODEX_POLL_NETWORK_RETRIES) {
+            throw new Error(
+              `Codex OAuth token exchange failed (network, ${CODEX_POLL_NETWORK_RETRIES} retries exhausted)`
+              + ` at ${CODEX_OAUTH_TOKEN_URL}: ${networkErrorDetail(error)}`,
+            );
+          }
+          await new Promise((res) => setTimeout(res, entry.pollIntervalMs * exchangeNetworkFailures));
+        }
+      }
+
+      if (!exchangeResponse) {
+        throw new Error('Codex OAuth token exchange failed (network): no response');
+      }
 
       if (!exchangeResponse.ok) {
         const text = await exchangeResponse.text().catch(() => '');
