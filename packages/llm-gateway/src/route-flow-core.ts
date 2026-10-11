@@ -163,7 +163,7 @@ const prepareAdmittedRouteFlow = async (
   const routeInput = deps.routeInput?.({ cost, request, canonical });
   const admission = await admitRoute({
     budget: deps.budget!, routePlanner: deps.routePlanner,
-    requestId: request.authContext.requestId, cost, wire: request.wire,
+    requestId: request.authContext.requestId, cost, subject, wire: request.wire,
     requestedModel: request.model, canonical,
     route: {
       ...(routeInput?.targetCandidatesOverride ? { targetCandidatesOverride: routeInput.targetCandidatesOverride } : {}),

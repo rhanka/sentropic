@@ -7,6 +7,7 @@
 import {
   RoutePlanError, type GenerateRequest, type QuotedRouteCandidate, type RoutePlanner,
   type RouteQuote, type RouteQuoteInput, type RouteUsageCeiling,
+  type VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
 import type { CanonicalIngressResult } from './canonical-ingress.js';
 import { estimateAnthropicInputTokens } from './canonical-stream.js';
@@ -120,6 +121,8 @@ export const admitRoute = async (input: {
   readonly routePlanner: RoutePlanner;
   readonly requestId: string;
   readonly cost: CostContext;
+  /** Owner-scoped subject, for per-transport availability on empty quotes (Lot 7). */
+  readonly subject: VerifiedRoutingSubject;
   readonly wire: GatewayWire;
   readonly requestedModel: string;
   readonly canonical: CanonicalIngressResult;
@@ -144,7 +147,23 @@ export const admitRoute = async (input: {
     throw error;
   }
   // Nothing is quotable: reserve nothing and refuse exactly like an empty route.
-  if (quote.candidates.length === 0) throw new RoutePlanError('Route quote has no candidates', 'no-route');
+  // Lot 7: explain the empty quote with the per-transport availability
+  // entries so the 503 body names each candidate's cause instead of going mute.
+  if (quote.candidates.length === 0) {
+    const availability = await routePlanner.describeAvailability?.(input.subject, {
+      requestedModel: input.requestedModel,
+      ...(input.route.targetCandidatesOverride
+        ? { targetCandidatesOverride: input.route.targetCandidatesOverride } : {}),
+      ...(input.route.explicit ? { explicit: input.route.explicit } : {}),
+    }) ?? [];
+    const diagnostic = availability[0];
+    throw new RoutePlanError(
+      diagnostic?.message ?? 'Route quote has no candidates',
+      'no-route',
+      diagnostic,
+      availability.length > 0 ? availability : undefined,
+    );
+  }
   let decision: Awaited<ReturnType<GatewayBudgetOptions['port']['admit']>> | undefined;
   try {
     decision = await budget.port.admit({
