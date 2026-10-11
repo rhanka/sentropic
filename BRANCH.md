@@ -42,6 +42,10 @@
 - `attention`: owner brief received via `agent:conductor:38f44695f2ad` (`env:send:a7b2be1d`), targeted at `muse:sentropic:369322cd9b39`, deposited on live lane `muse:sentropic:1ced6e4393e1`.
 - `attention`: h2a `--gw` claude-only guard relaxation + dep bump owned by h2a lane; this branch delivers gateway+mesh only.
 - `attention`: local `main` was stale at `cb618e190`; worktree based on `origin/main` `dc95f7e4f` (train mesh 0.25.0 + gateway 0.19.5 + cluster-mesh 0.13.3).
+- `acknowledge`: Lot 0 evidence (live gateway `127.0.0.1:3002`, h2a 0.98.3, personal-passthrough, ready): bad JSON -> OpenAI 400 `invalid request`; valid muse body no-auth -> 401 `authentication failed` (wire parses, auth gates pre-pool); `GET /muse-code/models` -> plain 404 (route missing); `POST /v1/messages/count_tokens` -> plain 404 (route missing).
+- `acknowledge`: vibe default model alias `mistral-medium-3.5` absent from `routing-targets.ts` static routes, catalog, council (only `mistral-large-4` + `zai-glm-5-3` ride `mistral-vibe`).
+- `acknowledge`: sticky fail-closed confirmed in code (`route-planner.ts` affinity block empties candidates when affinity account missing/not-ready); negative-cache default TTL 300s confirmed (`routing-policy.ts`); sticky file purged to `{}`.
+- `attention`: evening muse-400 exact trigger bytes unconfirmed (parse-then-auth order proves body-level failure); vibe-503 exact trigger unconfirmed (unknown-model vs no-eligible-account); owner captures requested if repro diverges.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -66,22 +70,22 @@
   - Switch back to `tmp/llm-gateway-muse-vibe-wires` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & repro**
-  - [ ] Read `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` wire surface sections.
-  - [ ] Read `packages/llm-gateway/src/router/index.ts`, `src/wire.ts`, `src/flow.ts`, `src/canonical-ingress.ts`.
-  - [ ] Read `packages/llm-mesh/src/route-planner.ts`, `src/route-health.ts`, `src/routing-targets.ts`, enrollment service.
-  - [ ] Baseline gates green: `make typecheck-llm-mesh ENV=test-gw-wires`, `make typecheck-llm-gateway ENV=test-gw-wires`, `make test-llm-mesh ENV=test-gw-wires`, `make test-llm-gateway ENV=test-gw-wires`.
-  - [ ] Repro muse CLI pointed at local gateway: capture request path, headers, body; record why 400.
-  - [ ] Repro vibe CLI pointed at local gateway: capture request; record why 503 no-route.
-  - [ ] Record measured wire facts for muse + vibe CLIs in `## Feedback Loop`.
-  - [ ] Confirm scope and guardrails.
-- [ ] **Lot 1 — Muse ingress adapter**
-  - [ ] Add muse wire ingress (models list route + OpenAI-compat passthrough incl. required headers/SSE shapes).
-  - [ ] Unit tests: `packages/llm-gateway/tests/muse.test.ts` (new).
-  - [ ] Update `packages/llm-gateway/tests/router.test.ts` (existing).
-  - [ ] Update `packages/llm-gateway/tests/contract-snapshot.test.ts` (existing).
-  - [ ] Mesh hooks if required for muse dispatch (list files touched).
-  - [ ] Lot gate: `make typecheck-llm-gateway ENV=test-gw-wires`, `make test-llm-gateway ENV=test-gw-wires`.
+- [x] **Lot 0 — Baseline & repro**
+  - [x] Read `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` wire surface sections (2-wire surface, §3b shapes, §14 muse enrollment).
+  - [x] Read `packages/llm-gateway/src/router/index.ts`, `src/wire.ts`, `src/flow.ts`, `src/router/errors.ts` (base `origin/main`).
+  - [x] Read `packages/llm-mesh/src/route-planner.ts` affinity block, `src/route-health.ts`, `src/routing-targets.ts`, `src/routing-policy.ts`.
+  - [x] Baselines green: mesh typecheck + 593 tests (37 files); gateway typecheck + 390 tests (28 files).
+  - [x] Repro muse: bad JSON 400 live, valid muse body 401 live (wire parses, auth gates pre-pool), `GET /muse-code/models` 404 live.
+  - [x] Repro vibe: default alias `mistral-medium-3.5` absent from static routes/catalog/council (code); evening 503 trigger unconfirmed.
+  - [x] Measured wire facts recorded in `## Feedback Loop` (muse ELF paths, vibe Python backend, live probe statuses).
+  - [x] Scope confirmed; no exception needed; worktree verified on `origin/main` `dc95f7e4f`.
+- [x] **Lot 1 — Muse ingress adapter**
+  - [x] `GET /muse-code/models` shares the caller-filtered catalog handler with `GET /v1/models` (legacy pool + route-planner modes, 401 pre-pool).
+  - [x] Chat passthrough unchanged: `POST /v1/chat/completions` parses muse OpenAI bodies; muse models already map to the `muse` transport in mesh `routing-targets.ts`; SSE relayed verbatim (B3); no ingress header change needed.
+  - [x] Unit tests: `packages/llm-gateway/tests/muse.test.ts` (new, 2 tests).
+  - [x] Updated `packages/llm-gateway/tests/contract-snapshot.test.ts` (frozen inventory 5 -> 6, deliberate golden edit).
+  - [x] No mesh source change required for muse dispatch (verified existing mappings).
+  - [x] Lot gate green: typecheck + lint + full suite 392 passed (29 files).
 - [ ] **Lot 2 — Vibe ingress adapter**
   - [ ] Add vibe wire ingress (resolve 503 path to eligible mistral-vibe account; models list).
   - [ ] Unit tests: `packages/llm-gateway/tests/vibe.test.ts` (new).
