@@ -6,6 +6,7 @@ interface HealthEntry {
   readonly key: string;
   readonly expiresAt: number;
   readonly reason: RouteFailureClassification['reason'];
+  readonly committed: boolean;
 }
 
 const availabilityReasons = new Set<RouteFailureClassification['reason']>([
@@ -56,6 +57,7 @@ export class InMemoryRouteHealth {
     this.entries.set(key, {
       key,
       reason: classification.reason,
+      committed: classification.committed ?? false,
       expiresAt: this.clock.now().getTime() + ttl,
     });
     this.evict();
@@ -68,6 +70,22 @@ export class InMemoryRouteHealth {
       const entry = this.entries.get(key);
       return Boolean(entry && entry.expiresAt > now);
     });
+  }
+
+  /**
+   * True when the candidate is suppressed only by failures that produced no
+   * upstream output (uncommitted): retrying cannot duplicate a dispatch, so a
+   * lone suppressed route may degrade instead of starving.
+   */
+  suppressedDegradable(candidate: RankedRouteCandidate): boolean {
+    this.evict();
+    const now = this.clock.now().getTime();
+    const suppressing: HealthEntry[] = [];
+    for (const key of applicableKeys(candidate)) {
+      const entry = this.entries.get(key);
+      if (entry && entry.expiresAt > now) suppressing.push(entry);
+    }
+    return suppressing.length > 0 && suppressing.every((entry) => !entry.committed);
   }
 
   clear(candidate: RankedRouteCandidate): void {

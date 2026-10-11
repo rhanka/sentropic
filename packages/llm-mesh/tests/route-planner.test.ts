@@ -3,7 +3,7 @@ import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js
 import { InMemoryRoutePlanner } from '../src/route-planner.js';
 import { RoutePlanError } from '../src/route-planner-state.js';
 import { DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles } from '../src/routing-policy.js';
-import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
+import { FakeRouteDirectory, routeAccounts, routingSubject } from './fixtures/route-planner.js';
 
 const request = { requestedModel: 'gemini-3.5-flash' } as const;
 
@@ -579,7 +579,10 @@ describe('opaque route planner', () => {
     },
   );
 
-  it('serves Sol 6.1 again after the suppression TTL expires', async () => {
+  it('degrades a lone uncommitted-suppressed route within TTL and serves it again after', async () => {
+    // Contract change (single-account degrade): an uncommitted failure produced
+    // no upstream output, so retrying cannot duplicate a dispatch — the lone
+    // route degrades instead of starving until TTL expiry.
     let now = Date.parse('2026-08-08T00:00:00Z');
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
@@ -597,9 +600,12 @@ describe('opaque route planner', () => {
     await (await planner.prepareAttempt(
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
     )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
-    await expect(planner.plan(routingSubject(), {
+    const degraded = await planner.plan(routingSubject(), {
       requestedModel: 'claude-opus-5-5',
-    })).rejects.toMatchObject({ code: 'no-route' });
+    });
+    expect(degraded.diagnostics[0]).toMatchObject({
+      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
+    });
 
     now += 300_000;
     const retried = await planner.plan(routingSubject(), {
@@ -724,6 +730,48 @@ describe('opaque route planner', () => {
 
     expect(fallback.diagnostics).toHaveLength(1);
     expect(fallback.diagnostics[0]?.diagnosticAccountRef).toBe('acct_old');
+  });
+
+  it('serves the suppressed route when suppression would empty the candidate set', async () => {
+    // Single eligible account inside its negative-cache TTL: degrade instead
+    // of starving every route until TTL expiry.
+    const directory = new FakeRouteDirectory([routeAccounts()[0]!]);
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), request);
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+
+    const degraded = await planner.plan(routingSubject(), request);
+    expect(degraded.diagnostics).toHaveLength(1);
+    expect(degraded.diagnostics[0]?.diagnosticAccountRef).toBe('acct_old');
+  });
+
+  it('auto-drops a sticky affinity whose account is gone instead of failing closed', async () => {
+    const directory = new FakeRouteDirectory();
+    const planner = new InMemoryRoutePlanner({ directory });
+    const first = await planner.plan(routingSubject(), {
+      ...request,
+      affinityKey: 'session-gone',
+      explicit: { diagnosticAccountRef: 'acct_old' },
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    expect(planner.describeAffinity(
+      routingSubject(), 'session-gone',
+    )?.diagnosticAccountRef).toBe('acct_old');
+
+    // The affinity account is deleted from the pool.
+    const removed = directory.accounts.findIndex((entry) => entry.accountRef === 'internal-old');
+    expect(removed).toBeGreaterThanOrEqual(0);
+    directory.accounts.splice(removed, 1);
+
+    const next = await planner.plan(routingSubject(), {
+      ...request, affinityKey: 'session-gone',
+    });
+    expect(next.diagnostics.map((entry) => entry.diagnosticAccountRef)).toEqual(['acct_new']);
+    expect(planner.describeAffinity(routingSubject(), 'session-gone')).toBeNull();
   });
 
   it('shares new-affinity round-robin and sticky affinity across authenticated sessions', async () => {

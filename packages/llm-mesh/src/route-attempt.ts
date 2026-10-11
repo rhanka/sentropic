@@ -69,7 +69,9 @@ export const prepareStoredRouteAttempt = async (input: {
     recordOutcome: async (classification, usage) => {
       if (terminal) return;
       terminal = true;
-      input.onOutcome(stored, candidate, classification);
+      input.onOutcome(
+        stored, candidate, committed ? { ...classification, committed: true } : classification,
+      );
       await attempt.recordOutcome(classification, usage);
     },
     markCommitted: async () => {

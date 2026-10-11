@@ -393,6 +393,31 @@ describe('LocalAccountTransportService', () => {
     }]);
   });
 
+  it('surfaces an expired credential as reauth-required instead of routing silently', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'expired-claude', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'active', modelIds: ['claude-opus-4-7'],
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    const eligible = await directory.listEligible(subject);
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0]).toMatchObject({ readiness: 'reauth-required' });
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code authentication must be renewed',
+    }]);
+  });
+
   it('keeps executable account material inside an opaque route attempt', async () => {
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },

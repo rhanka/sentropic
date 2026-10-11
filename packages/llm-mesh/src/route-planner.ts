@@ -117,7 +117,14 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       && inQuoteTarget(affinity.target)
     ) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
-      if (!account || account.readiness !== 'ready') {
+      if (!account) {
+        // Auto-drop: the affinity account is gone (deleted) — resolve without
+        // the dead pin instead of failing closed on it.
+        if (input.affinityKey) {
+          this.affinities.delete(affinityRef(subject, input.affinityKey, input.workspaceId));
+        }
+        candidates = this.visibleCandidates(candidates, inQuote, policy);
+      } else if (account.readiness !== 'ready') {
         candidates = [];
       } else {
         const sameAccount = candidates.filter((candidate) =>
@@ -130,14 +137,10 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           account,
           target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
         };
-        candidates = this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
-          .filter((candidate) => !this.health.isSuppressed(candidate))
-          .slice(0, policy.maxAttempts);
+        candidates = this.visibleCandidates([sticky, ...sameAccount, ...rotated], inQuote, policy);
       }
     } else {
-      candidates = this.keepQuoted(candidates, inQuote)
-        .filter((candidate) => !this.health.isSuppressed(candidate))
-        .slice(0, policy.maxAttempts);
+      candidates = this.visibleCandidates(candidates, inQuote, policy);
     }
     if (candidates.length === 0) {
       // A diagnostic is only pertinent when it belongs to the requested
@@ -231,6 +234,23 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       throw new RoutePlanError('No planned route is covered by the quote', 'quote-mismatch');
     }
     return quoted;
+  }
+  /**
+   * Health-filter candidates. Suppression-based failover stands, except for a
+   * lone quoted candidate suppressed only by failures that produced no
+   * upstream output (uncommitted): retrying cannot duplicate a dispatch, so it
+   * degrades instead of starving the only route. Committed failures stay
+   * strict (duplicate-dispatch risk), as does multi-route suppression.
+   */
+  private visibleCandidates(candidates: RankedRouteCandidate[],
+    inQuote: (candidate: RankedRouteCandidate) => boolean,
+    policy: { readonly maxAttempts: number }): RankedRouteCandidate[] {
+    const quoted = this.keepQuoted(candidates, inQuote);
+    const visible = quoted.filter((candidate) => !this.health.isSuppressed(candidate));
+    if (visible.length > 0) return visible.slice(0, policy.maxAttempts);
+    const [only] = quoted;
+    if (quoted.length === 1 && only && this.health.suppressedDegradable(only)) return quoted;
+    return [];
   }
   async prepareAttempt(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
     requestId: string, attemptIndex: number): Promise<PreparedRouteAttempt> {
