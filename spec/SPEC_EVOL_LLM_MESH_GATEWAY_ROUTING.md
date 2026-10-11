@@ -1236,10 +1236,13 @@ host-transport follow-up (needs a `count` seam on the production
 
 ### 15.4 No-route diagnostics (Lot 7)
 
-- `RoutePlanError` carries `diagnostics: readonly RouteAvailabilityDiagnostic[]`;
-  `diagnostic` stays the first entry for back-compat.
-- `describeAvailability(subject, ...)` is read-only and shares
-  `matchingAvailabilityDiagnostics` with the planner no-route branch: an
+- `RoutePlanError` carries optional `diagnostics: readonly
+  RouteAvailabilityDiagnostic[]` (absent when no transport matches);
+  `diagnostic` stays the first entry for back-compat by caller convention.
+- `describeAvailability(subject, ...)` shares
+  `matchingAvailabilityDiagnostics` with the planner no-route branch and has
+  no planning side effects (it still runs account restoration, which may
+  persist owner claims — "read-only" means no plan/affinity writes): an
   explicit transport restriction wins, otherwise model-derived transports
   filter `listDiagnostics` (unfiltered `[0]` once prescribed the wrong repair
   action across transports).
@@ -1273,9 +1276,11 @@ host-transport follow-up (needs a `count` seam on the production
   pending poll, never an instant abort.
 - Linear backoff scaled on `pollIntervalMs` (`pollIntervalMs * consecutive
   failures`); 403 pending waits one uncapped `pollIntervalMs`.
-- Exhausted error names the site, the retry count and the URL, and appends
-  `e.cause.code` when present (`ETIMEDOUT`, `ECONNRESET`, ...) else the
-  message. Non-transient HTTP/incomplete-payload failures still fail fast.
+- Exhausted error names the site, the retry count and the URL, and carries
+  `e.cause.code` alone when present (`ETIMEDOUT`, `ECONNRESET`, ...), else
+  the raw message. Raw system messages can carry hostnames/paths, so they
+  never ride out alongside a code. Non-transient HTTP/incomplete-payload
+  failures still fail fast.
 
 ### 15.7 Enroll-replace finding (observation, non-normative)
 
@@ -1291,14 +1296,18 @@ host-transport follow-up (needs a `count` seam on the production
 
 - `packages/llm-mesh/tests/route-planner.test.ts`: multi-diagnostic
   no-route (`diagnostic` = first, `diagnostics` = per-transport list) +
-  `describeAvailability` read-only parity with the planner branch.
+  `describeAvailability` sharing the same transport-resolution helper (no
+  immutability/parity claim beyond that).
 - `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`:
   expired-credential messages + enroll A+B regression.
 - `packages/llm-gateway/tests/errors.test.ts`: mesh-message preference +
   joined no-route detail.
 - `packages/llm-gateway/tests/route-json-flow.test.ts`: expired-credential
-  end-to-end (503 + route action).
-- `packages/llm-gateway/tests/contract-snapshot.test.ts`: subsystem 503
-  freeze (status/type/code/headers).
-- `packages/llm-mesh/tests/enrollment/codex.test.ts`: 3 retry tests (poll
-  recovery, exchange recovery, exhausted error with cause code + URL).
+  planner→mapper integration with a realistic entry (real planner, stubbed
+  directory, direct mapper call — no HTTP, no live expiry detection).
+- `packages/llm-gateway/tests/contract-snapshot.test.ts` +
+  `errors.test.ts`: subsystem 503 freeze (status/type/code/headers,
+  including per-kind header assertions).
+- `packages/llm-mesh/tests/enrollment/codex.test.ts`: retry tests (poll
+  recovery, exchange recovery, exhausted error with cause code + URL +
+  secret canary, raw-message fallback without code).

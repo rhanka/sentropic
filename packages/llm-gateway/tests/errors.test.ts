@@ -55,6 +55,18 @@ describe('provider-shaped error mapper (unit)', () => {
     }
   });
 
+  it('should freeze headers across the three subsystem 503s', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      for (const kind of ['caller-auth-unavailable', 'pooled-account-unavailable', 'budget-unavailable'] as const) {
+        expect(mapGatewayError(wire, kind).headers).toBeUndefined();
+      }
+      expect(mapGatewayError(wire, 'no-route', undefined, 'known-model').headers)
+        .toEqual({ 'x-should-retry': 'false' });
+      expect(mapGatewayError(wire, 'caller-auth-unavailable', 30).headers)
+        .toEqual({ 'Retry-After': '30' });
+    }
+  });
+
   it('maps a budget over-budget GatewayError to the frozen 429 with its bounded Retry-After', () => {
     for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
       const refusal = toProviderShapedError(wire, new GatewayError('over-budget', 'cap', 60));

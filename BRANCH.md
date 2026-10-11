@@ -159,7 +159,7 @@
   - [ ] Record results in `## Feedback Loop`.
 - [x] **Lot N-1 — Docs consolidation**
   - [x] `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §15 (§15.1–§15.8: wires, count_tokens, gaps 1–4, diagnostics, subsystem 503s + LOT2/B3b deviation, codex retry, enroll-replace finding, test deltas). Drafted by subagent, corrected (§15.7 forensics), read in full.
-  - [x] Double review dispatched (codex/astra + claude/opus-5, xhigh, blind, distinct lenses) — dossier `reviews/review-dossier-spec15.md`: `incomplete`, both legs launch-failed (h2a MCP identity unavailable ×3). No consensus verdict; re-dispatch pending.
+  - [x] Double review reconciled — dossier `reviews/review-dossier-spec15.md`: `completed` (tmux reroute per owner: codex/astra correctness APPROVE_WITH_CHANGES + codex/sol contracts REJECT, blind, read-only). 5 leg-1 + 3 leg-2 findings remediated (spec wording, code sanitization, canary/header tests); verbatim mesh pass-through kept with trust-domain rationale; HTTP-level expiry + immutability tests deferred with rationale.
   - [x] Equivalence council check green (`make check-llm-model-equivalences`); registry versions: mesh 0.25.0 / gateway 0.19.5 (local == registry → minor bump required: 0.26.0 / 0.20.0).
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` needed (single-spec update).
 - [ ] **Lot N — Final validation**
