@@ -154,8 +154,10 @@
   - [ ] UAT agy CLI via gateway with enrolled cloud-code account (no-repeat-request proof).
   - [ ] UAT Claude Code count_tokens path (expect graceful fallback to local counting, not bare 404).
   - [ ] Record results in `## Feedback Loop`.
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` (muse/vibe wires, count_tokens, gap fixes).
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §15 (§15.1–§15.8: wires, count_tokens, gaps 1–4, diagnostics, subsystem 503s + LOT2/B3b deviation, codex retry, enroll-replace finding, test deltas). Drafted by subagent, corrected (§15.7 forensics), read in full.
+  - [x] Double review dispatched (codex/astra + claude/opus-5, xhigh, blind, distinct lenses) — dossier `reviews/review-dossier-spec15.md`: `incomplete`, both legs launch-failed (h2a MCP identity unavailable ×3). No consensus verdict; re-dispatch pending.
+  - [x] Equivalence council check green (`make check-llm-model-equivalences`); registry versions: mesh 0.25.0 / gateway 0.19.5 (local == registry → minor bump required: 0.26.0 / 0.20.0).
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` needed (single-spec update).
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint for impacted packages.
