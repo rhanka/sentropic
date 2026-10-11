@@ -772,6 +772,48 @@ describe('opaque route planner', () => {
     });
     expect(next.diagnostics.map((entry) => entry.diagnosticAccountRef)).toEqual(['acct_new']);
     expect(planner.describeAffinity(routingSubject(), 'session-gone')).toBeNull();
+
+    // The replacement plan must prepare on the first request: the dropped
+    // pin carries no revision into the stored plan.
+    const replacement = await planner.prepareAttempt(
+      routingSubject(), next.planRef, next.candidateRefs[0]!, 'req-2', 0,
+    );
+    await replacement.complete();
+    expect(directory.prepared.at(-1)?.accountRef).toBe('internal-new');
+  });
+
+  it('prepares the replacement on the first request under round-robin after an affinity auto-drop', async () => {
+    const directory = new FakeRouteDirectory();
+    const planner = new InMemoryRoutePlanner({ directory });
+    const roundRobin = {
+      ...request,
+      policyOverride: {
+        strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
+      },
+    };
+    const first = await planner.plan(routingSubject(), {
+      ...roundRobin,
+      affinityKey: 'session-rr-gone',
+      explicit: { diagnosticAccountRef: 'acct_old' },
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+
+    const removed = directory.accounts.findIndex((entry) => entry.accountRef === 'internal-old');
+    expect(removed).toBeGreaterThanOrEqual(0);
+    directory.accounts.splice(removed, 1);
+
+    // The dropped pin must not linger in the stored revision or the
+    // round-robin reservation: the replacement prepares immediately.
+    const next = await planner.plan(routingSubject(), {
+      ...roundRobin, affinityKey: 'session-rr-gone',
+    });
+    const replacement = await planner.prepareAttempt(
+      routingSubject(), next.planRef, next.candidateRefs[0]!, 'req-2', 0,
+    );
+    await replacement.complete();
+    expect(directory.prepared.at(-1)?.accountRef).toBe('internal-new');
   });
 
   it('shares new-affinity round-robin and sticky affinity across authenticated sessions', async () => {

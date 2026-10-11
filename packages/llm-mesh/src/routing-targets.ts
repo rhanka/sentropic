@@ -80,7 +80,9 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   },
   // Mistral Vibe faithful routes: these models are served on api.mistral.ai by
   // the plan-billed `mistral-vibe` account transport. `mistral-medium-3.5` is
-  // the Vibe CLI default alias — without it the CLI resolves unknown-model.
+  // the Vibe CLI default alias — the static mapping pins its faithful
+  // transport (catalog-profile recognition alone would also resolve it, so
+  // this entry preserves the historical combined mapping/catalog gap fix).
   'mistral-medium-3.5': {
     providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-medium-3.5',
   },

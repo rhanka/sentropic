@@ -64,6 +64,44 @@ describe('route health cache', () => {
     expect(health.isSuppressed(candidate('gpt-5.6-terra'))).toBe(true);
   });
 
+  it('keeps a committed suppression when a later uncommitted outcome lands on the same key', () => {
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const health = new InMemoryRouteHealth({ now: () => new Date(now) });
+    const policy = { ...DEFAULT_ROUTE_POLICY, negativeCacheTtlMs: 300_000 };
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: true,
+    }, policy);
+    now += 1_000;
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: false,
+    }, policy);
+
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(false);
+
+    // Past the committed entry's own TTL the route is suppressible again,
+    // and a fresh uncommitted outcome degrades as before.
+    now += 300_000;
+    expect(health.isSuppressed(candidate())).toBe(false);
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: false,
+    }, policy);
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(true);
+  });
+
+  it('still degrades a lone route suppressed only by uncommitted failures', () => {
+    const health = new InMemoryRouteHealth({
+      now: () => new Date('2026-08-08T00:00:00Z'),
+    });
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: false,
+    }, DEFAULT_ROUTE_POLICY);
+
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(true);
+  });
+
   it('does not poison health for invalid requests', () => {
     const health = new InMemoryRouteHealth({ now: () => new Date() });
     health.record(candidate(), {

@@ -123,6 +123,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const affinity = input.affinityKey
       ? this.affinities.get(affinityRef(subject, input.affinityKey, input.workspaceId))
       : undefined;
+    let affinityDropped = false;
     const accounts = await this.options.directory.listEligible(subject);
     const roundRobinKey = `${routingOwnerRef(subject)}\u001f${input.requestedModel}`;
     const roundRobinState = strategy.kind === 'round-robin'
@@ -154,10 +155,14 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
       if (!account) {
         // Auto-drop: the affinity account is gone (deleted) — resolve without
-        // the dead pin instead of failing closed on it.
+        // the dead pin instead of failing closed on it. The dropped pin is
+        // cleared for the rest of planning so the stored plan carries no
+        // affinity revision and round-robin reservation applies to the
+        // replacement candidates.
         if (input.affinityKey) {
           this.affinities.delete(affinityRef(subject, input.affinityKey, input.workspaceId));
         }
+        affinityDropped = true;
         candidates = this.visibleCandidates(candidates, inQuote, policy);
       } else if (account.readiness !== 'ready') {
         candidates = [];
@@ -191,6 +196,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const storedCandidates = candidates.map((candidate) => ({
       ...candidate, candidateRef: this.ids.next('candidate'),
     }));
+    // An auto-dropped pin counts as no affinity from here on: the stored
+    // plan carries no revision and round-robin treats this as a fresh plan.
+    const effectiveAffinity = affinityDropped ? undefined : affinity;
     const plan: RoutePlan = {
       planRef,
       expiresAt: new Date(this.clock.now().getTime() + this.planTtlMs).toISOString(),
@@ -205,13 +213,13 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         actualModelId: candidate.target.modelId,
         actualTransportProviderId: candidate.target.transportProviderId,
         reason: candidate.target.reason,
-        cacheContinuityRisk: Boolean(affinity && affinity.accountRef !== candidate.account.accountRef),
+        cacheContinuityRisk: Boolean(effectiveAffinity && effectiveAffinity.accountRef !== candidate.account.accountRef),
       })),
     };
     this.plans.set(planRef, {
       plan, subjectRef: subjectRef(subject), candidates: storedCandidates, policy,
-      hadAffinity: Boolean(affinity),
-      ...(affinity ? { affinityRevision: affinity.revision } : {}),
+      hadAffinity: Boolean(effectiveAffinity),
+      ...(effectiveAffinity ? { affinityRevision: effectiveAffinity.revision } : {}),
       ...(profile ? {
         policyProfileName: profile.name,
         policyProfileRevision: profile.revision,
@@ -220,9 +228,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         ? { affinityRef: affinityRef(subject, input.affinityKey, input.workspaceId) }
         : {}),
       claimedAttempts: new Set(),
-      ...(strategy.kind === 'round-robin' && !affinity ? { roundRobinKey } : {}),
+      ...(strategy.kind === 'round-robin' && !effectiveAffinity ? { roundRobinKey } : {}),
     });
-    if (strategy.kind === 'round-robin' && !affinity) {
+    if (strategy.kind === 'round-robin' && !effectiveAffinity) {
       const state = this.roundRobin.get(roundRobinKey) ?? {
         committedOffset: 0,
         reservations: new Set<string>(),
@@ -257,10 +265,12 @@ export class InMemoryRoutePlanner implements RoutePlanner {
   }
   /**
    * Health-filter candidates. Suppression-based failover stands, except for a
-   * lone quoted candidate suppressed only by failures that produced no
-   * upstream output (uncommitted): retrying cannot duplicate a dispatch, so it
-   * degrades instead of starving the only route. Committed failures stay
-   * strict (duplicate-dispatch risk), as does multi-route suppression.
+   * lone quoted candidate suppressed only by locally uncommitted failures
+   * (no upstream output observed before failing): as an availability policy
+   * it degrades instead of starving the only route. This records local
+   * observation only — the provider may still have accepted the request
+   * before the connection failed. Committed failures stay strict, as does
+   * multi-route suppression.
    */
   private visibleCandidates(candidates: RankedRouteCandidate[],
     inQuote: (candidate: RankedRouteCandidate) => boolean,

@@ -146,10 +146,14 @@ export interface RouteFailureClassification {
   readonly retryAfterMs?: number;
   readonly healthScope: 'route' | 'account' | 'transport' | 'provider-model';
   /**
-   * True when the upstream produced output before failing (stream commitment).
-   * A committed failure must never be retried implicitly (duplicate dispatch
-   * risk); an uncommitted failure failed before any upstream output and is
-   * safe to degrade over. Set by the attempt wrapper, never by callers.
+   * True when the upstream produced output before failing (locally observed
+   * stream commitment). A committed failure must never be retried implicitly
+   * (duplicate dispatch risk); an uncommitted failure failed before any
+   * locally observed upstream output and degrades as an availability policy.
+   * Commitment is local observation only — it cannot prove the provider did
+   * not execute. Stamped by the local attempt wrapper; the public
+   * `recordOutcome` type also accepts the property and the wrapper forwards
+   * caller-supplied classifications.
    */
   readonly committed?: boolean;
 }

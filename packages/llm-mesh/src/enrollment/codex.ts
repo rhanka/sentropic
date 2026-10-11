@@ -25,16 +25,18 @@ export interface CodexEnrollmentOptions {
 
 /**
  * Transient network retries per device-flow fetch site. A device flow lasts
- * minutes by design, so an instant network blip must never abort it — the
- * error follows the same sleep-then-continue path as a 403 pending poll.
+ * minutes by design, so a poll/exchange fetch throw follows the same
+ * sleep-then-continue path as a 403 pending poll within the configured
+ * budgets — response-body reads and non-transient failures still fail fast.
  */
 export const CODEX_POLL_NETWORK_RETRIES = 3;
 
 /**
- * Sanitized network detail for client-facing exhaustion errors: the
- * `e.cause.code` (ETIMEDOUT, ECONNRESET, ...) when present, else the raw
- * message. Raw system messages can carry hostnames/paths, so they never ride
- * out alongside a code — the site, retry count and URL already frame it.
+ * Network detail for client-facing exhaustion errors: cause-code preferred
+ * (`e.cause.code`: ETIMEDOUT, ECONNRESET, ...), otherwise the raw message
+ * (expressly allowed by spec §15.6). Raw system messages can carry
+ * hostnames/paths, so they never ride out alongside a code — the site,
+ * retry count and URL already frame it.
  */
 const networkErrorDetail = (error: unknown): string => {
   const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
@@ -176,8 +178,9 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
           }),
         });
       } catch (error) {
-        // Transient network blip: same sleep-then-continue path as a 403
-        // pending poll — a device flow must never die on an instant error.
+        // Transient poll-fetch blip: same sleep-then-continue path as a 403
+        // pending poll — poll/exchange fetch throws retry within the
+        // configured budgets (which share the poll's maxAttempts budget).
         pollNetworkFailures += 1;
         if (pollNetworkFailures > CODEX_POLL_NETWORK_RETRIES) {
           throw new Error(

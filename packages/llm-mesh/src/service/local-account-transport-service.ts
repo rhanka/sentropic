@@ -779,11 +779,19 @@ export class LocalAccountTransportService {
         continue;
       }
       const transport = account.transportProviderId;
-      // Only a parseable timestamp is interpolated: the stored value is
-      // owner data, never a validated date, and this message is client-facing.
+      // The stored expiry is owner data, never a validated date, and this
+      // message is client-facing. The expired-at wording applies only when
+      // the expiry predicate holds (a past instant) — a revoked-but-
+      // unexpired credential keeps the generic renewal wording. The emitted
+      // timestamp is the canonical ISO instant, never the raw stored string
+      // (which may carry non-canonical annotations).
       const rawExpiry = account.expiresAt;
-      const expiredAt = typeof rawExpiry === 'string' && rawExpiry
-        && Number.isFinite(Date.parse(rawExpiry)) ? rawExpiry : undefined;
+      const parsedExpiry = typeof rawExpiry === 'string' && rawExpiry
+        ? Date.parse(rawExpiry)
+        : Number.NaN;
+      const expiredAt = Number.isFinite(parsedExpiry) && parsedExpiry <= Date.now()
+        ? new Date(parsedExpiry).toISOString()
+        : undefined;
       diagnostics.push({
         code: 'reauth-required',
         transportProviderId: transport,

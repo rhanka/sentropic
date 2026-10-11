@@ -54,6 +54,15 @@ export class InMemoryRouteHealth {
     const requestedTtl = classification.retryAfterMs ?? policy.negativeCacheTtlMs;
     const ttl = Math.min(Math.max(requestedTtl, 1_000), 3_600_000);
     const key = keyFor(candidate, classification.healthScope);
+    const now = this.clock.now().getTime();
+    const existing = this.entries.get(key);
+    if (existing && existing.expiresAt > now && existing.committed
+      && !(classification.committed ?? false)) {
+      // A later uncommitted outcome must not erase an unexpired committed
+      // suppression on the same key: the committed entry stands through its
+      // own remaining TTL.
+      return;
+    }
     this.entries.set(key, {
       key,
       reason: classification.reason,
@@ -73,9 +82,11 @@ export class InMemoryRouteHealth {
   }
 
   /**
-   * True when the candidate is suppressed only by failures that produced no
-   * upstream output (uncommitted): retrying cannot duplicate a dispatch, so a
-   * lone suppressed route may degrade instead of starving.
+   * True when the candidate is suppressed only by locally uncommitted
+   * failures (no upstream output observed before failing): as an
+   * availability policy a lone suppressed route may degrade instead of
+   * starving. This records local observation only — it cannot prove the
+   * provider did not execute the request.
    */
   suppressedDegradable(candidate: RankedRouteCandidate): boolean {
     this.evict();

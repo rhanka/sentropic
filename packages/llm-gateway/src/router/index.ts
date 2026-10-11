@@ -17,7 +17,7 @@
  */
 
 import { Hono } from 'hono';
-import type { RoutePlanner } from '@sentropic/llm-mesh';
+import { resolveRequestedTargets, type RoutePlanner } from '@sentropic/llm-mesh';
 
 import type { GatewayConfig } from '../config.js';
 import type { GatewayFlowDeps, MeteringSink, ResolvedTarget, TargetResolver } from '../flow.js';
@@ -367,11 +367,13 @@ export const createGatewayRouter = (
 
   // Token counting (spec §3b, Claude Code). The gateway owns no provider
   // count seam, so this maps the call properly instead of answering a bare
-  // framework 404: caller-auth gates first (401 pre-pool), unknown models get
-  // the frozen unknown-model 404, and known models get a provider-shaped 400
-  // (the client falls back to its own local counting). No lease is taken and
-  // nothing is metered. Native provider counting is follow-up work for the
-  // host-owned transport, not this route.
+  // framework 404: malformed bodies and missing models get a provider-shaped
+  // 400 before authentication; authenticated callers get the frozen
+  // unknown-model 404 only for unrecognized IDs, and known models/aliases
+  // get a provider-shaped 400 (the client falls back to its own local
+  // counting). Authentication always precedes account/pool access. No lease
+  // is taken and nothing is metered. Native provider counting is follow-up
+  // work for the host-owned transport, not this route.
   app.post('/v1/messages/count_tokens', async (c) => {
     const id = requestId();
     if (!routeFlowDeps && !flowDeps) {
@@ -413,10 +415,12 @@ export const createGatewayRouter = (
         );
       }
     } else if (routeFlowDeps) {
-      const inventory = await routeFlowDeps.routePlanner.listModels?.(
-        routingSubjectForCost(auth.cost),
-      ).catch(() => undefined);
-      if (inventory && !inventory.some((m) => m.modelId === model)) {
+      // Account-independent catalog/alias recognition: the executable
+      // inventory only lists ready accounts, so an empty or unready pool
+      // must not turn a known model into an unknown-model 404. This is the
+      // same recognition the planner inference path starts from.
+      const resolution = resolveRequestedTargets({ requestedModel: model });
+      if (resolution.kind === 'unknown-model') {
         return sendError(
           c,
           toProviderShapedError(

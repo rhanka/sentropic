@@ -443,6 +443,52 @@ describe('LocalAccountTransportService', () => {
     }]);
   });
 
+  it('describes a reauth-required credential with a future expiry as renewal, not expired', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'revoked-claude', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'reauth_required', modelIds: ['claude-opus-4-7'],
+      expiresAt: '2100-01-01T00:00:00.000Z',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code authentication must be renewed;'
+        + ' reauthenticate the claude-code account to restore routing',
+    }]);
+  });
+
+  it('emits only the canonical ISO instant for a non-canonical parseable expiry', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'annotated-expiry', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'active', modelIds: ['claude-opus-4-7'],
+      expiresAt: 'Thu, 01 Jan 1970 00:00:00 GMT (private-note)',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code credential expired at 1970-01-01T00:00:00.000Z;'
+        + ' reauthenticate the claude-code account to restore routing',
+    }]);
+  });
+
   it('keeps executable account material inside an opaque route attempt', async () => {
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
