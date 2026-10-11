@@ -164,12 +164,12 @@
   - [x] Equivalence council check green (`make check-llm-model-equivalences`); registry versions: mesh 0.25.0 / gateway 0.19.5 (local == registry → bump required). PATCH not minor: repo `cluster-mesh` pins `llm-mesh <0.26.0` + `llm-gateway <0.20.0` (peerOptional), so a minor breaks `make lock-root` (ERESOLVE proven) → 0.25.1 / 0.19.6. Widening cluster-mesh ranges would cascade its own bump+publish (out of scope).
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` needed (single-spec update).
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint for impacted packages.
-  - [ ] Retest: `make test-llm-mesh ENV=test-gw-wires`, `make test-llm-gateway ENV=test-gw-wires`.
-  - [ ] Pre-bump check: `npm view @sentropic/llm-mesh version`, `npm view @sentropic/llm-gateway version`; bump `packages/llm-mesh/package.json` + `packages/llm-gateway/package.json` semver (patch or minor per change).
-  - [ ] Equivalence council check: `make check-llm-model-equivalences` (or CI equivalent) green.
-  - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve blockers.
+  - [x] Typecheck & Lint for impacted packages.
+  - [x] Retest: mesh 606/606 + gateway 405/405 `ENV=test-gw-wires`.
+  - [x] Pre-bump check + patch bumps (mesh 0.25.1, gateway 0.19.6 — minor blocked by cluster-mesh peer caps `<0.26.0`/`<0.20.0`, ERESOLVE proven; `GWV-EX3` lock refresh, 2-line diff).
+  - [x] Equivalence council check green.
+  - [x] Final gate step 1: PR [#662](https://github.com/rhanka/sentropic/pull/662) created with `BRANCH.md` body; pushed.
+  - [ ] Final gate step 2: branch CI green (run `38140227206` queued) + resolve blockers.
   - [ ] Final gate step 3: once UAT + CI `OK`, commit removal of `BRANCH.md`, push, merge.
   - [ ] Publish via CI OIDC (`publish-llm-mesh`, `publish-llm-gateway`); verify npm versions.
   - [ ] Mark loop `gw-muse-vibe-wires` done; reply to `agent:conductor:38f44695f2ad`.
