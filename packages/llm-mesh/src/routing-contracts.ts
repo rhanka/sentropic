@@ -219,6 +219,15 @@ export interface RoutePlanner {
   plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan>;
   /** Pure, synchronous candidate and usage bounds; never touches accounts. */
   quote?(input: RouteQuoteInput): RouteQuote;
+  /**
+   * Read-only per-transport availability for a requested model (Lot 7):
+   * the transport-matching `listDiagnostics` entries, no planning side
+   * effects. Optional so hand-rolled planners keep compiling.
+   */
+  describeAvailability?(
+    subject: VerifiedRoutingSubject,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+  ): Promise<readonly RouteAvailabilityDiagnostic[]>;
   prepareAttempt(
     subject: VerifiedRoutingSubject,
     planRef: string,

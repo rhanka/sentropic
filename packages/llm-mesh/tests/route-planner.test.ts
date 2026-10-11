@@ -1099,6 +1099,67 @@ describe('opaque route planner', () => {
     expect(String((museError as Error).message)).toContain('muse reauthenticate required');
   });
 
+  it('should attach every matching transport diagnostic to the no-route error', async () => {
+    const codexReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'codex',
+      message: 'codex credential expired at 2026-01-01T00:00:00.000Z; reauthenticate the codex account',
+    };
+    const museReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'muse',
+      message: 'muse authentication must be renewed; reauthenticate the muse account',
+    };
+    const directory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly (typeof codexReauth | typeof museReauth)[]>;
+    };
+    directory.listDiagnostics = async () => [codexReauth, museReauth];
+    const planner = new InMemoryRoutePlanner({ directory });
+
+    const error = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    }).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { code?: string }).code).toBe('no-route');
+    const record = error as {
+      diagnostic?: unknown; diagnostics?: readonly unknown[];
+    };
+    expect(record.diagnostics).toHaveLength(2);
+    expect(record.diagnostic).toBe(record.diagnostics?.[0]);
+    expect(String((error as Error).message)).toContain('codex credential expired');
+  });
+
+  it('should describe per-transport availability without planning', async () => {
+    const codexReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'codex',
+      message: 'codex reauthenticate required',
+    };
+    const museReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'muse',
+      message: 'muse reauthenticate required',
+    };
+    const directory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly (typeof codexReauth | typeof museReauth)[]>;
+    };
+    directory.listDiagnostics = async () => [codexReauth, museReauth];
+    const planner = new InMemoryRoutePlanner({ directory });
+
+    const entries = await planner.describeAvailability(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+    expect(entries).toHaveLength(2);
+
+    const restricted = await planner.describeAvailability(routingSubject(), {
+      requestedModel: 'claude-opus-5-5', explicit: { transportProviderId: 'codex' },
+    });
+    expect(restricted).toEqual([codexReauth]);
+
+    const unknown = await planner.describeAvailability(routingSubject(), {
+      requestedModel: 'unknown-contract-model',
+    });
+    expect(unknown).toEqual([]);
+  });
+
   it('lists ready inventory including an advertised alias', async () => {
     const planner = new InMemoryRoutePlanner({
       directory: new FakeRouteDirectory([

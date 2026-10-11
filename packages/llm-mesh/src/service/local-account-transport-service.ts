@@ -765,7 +765,10 @@ export class LocalAccountTransportService {
       diagnostics.push({
         code: 'reenrollment-required',
         transportProviderId: 'codex',
-        message: 'Codex enrollment must be renewed for owner-scoped routing',
+        // Lot 7: the repair action rides in the message so a 503 body can
+        // tell the operator exactly what to do.
+        message: 'Codex enrollment must be renewed for owner-scoped routing;'
+          + ' re-enroll the codex account to restore routing',
       });
     }
     for (const account of this.accountsMap.values()) {
@@ -775,10 +778,18 @@ export class LocalAccountTransportService {
         || (account.status !== 'reauth_required' && !this.isCredentialExpired(account))) {
         continue;
       }
+      const transport = account.transportProviderId;
+      const expiredAt = typeof account.expiresAt === 'string' && account.expiresAt
+        ? account.expiresAt
+        : undefined;
       diagnostics.push({
         code: 'reauth-required',
-        transportProviderId: account.transportProviderId,
-        message: `${account.transportProviderId} authentication must be renewed`,
+        transportProviderId: transport,
+        message: expiredAt
+          ? `${transport} credential expired at ${expiredAt};`
+            + ` reauthenticate the ${transport} account to restore routing`
+          : `${transport} authentication must be renewed;`
+            + ` reauthenticate the ${transport} account to restore routing`,
       });
     }
     return diagnostics;

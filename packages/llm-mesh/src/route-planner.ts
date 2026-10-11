@@ -8,7 +8,8 @@ import {
 import { resolveRequestedTargets, selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
 import type {
   AccountDirectoryPort, AffinityDescription, Clock, IdFactory, PreparedRouteAttempt,
-  AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
+  AffinityMutationEvent, RouteAvailabilityDiagnostic, RoutePlan, RoutePlanInput, RoutePlanner,
+  VerifiedRoutingSubject,
   RouteModelInventoryEntry, RouteQuote, RouteQuoteInput,
 } from './routing-contracts.js';
 import { computeRouteQuoteRef, isQuotedRouteTarget, quoteRoute, resolveQuotePolicy } from './route-quote.js';
@@ -72,6 +73,40 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     return [...inventory.values()].sort((left, right) =>
       left.modelId.localeCompare(right.modelId)
       || left.providerId.localeCompare(right.providerId));
+  }
+  /**
+   * Read-only per-transport availability for a requested model (Lot 7).
+   * Same transport resolution as the plan no-route branch, without planning
+   * side effects — the budget admission path uses it to explain empty quotes.
+   */
+  async describeAvailability(
+    subject: VerifiedRoutingSubject,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+  ): Promise<readonly RouteAvailabilityDiagnostic[]> {
+    return this.matchingAvailabilityDiagnostics(subject, input);
+  }
+  private async matchingAvailabilityDiagnostics(
+    subject: VerifiedRoutingSubject,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+  ): Promise<readonly RouteAvailabilityDiagnostic[]> {
+    // A diagnostic is only pertinent when it belongs to the requested
+    // route's transports. Surfacing listDiagnostics[0] unfiltered once
+    // prescribed a `muse reauthenticate` for an explicit codex request.
+    // The model-derived resolution ignores `explicit`, so an explicit
+    // transport restriction wins over it here.
+    const explicitTransport = input.explicit?.transportProviderId;
+    const resolution = resolveRequestedTargets(input);
+    const transports = new Set<string>(
+      explicitTransport
+        ? [explicitTransport]
+        : resolution.kind === 'known'
+          ? resolution.targets
+            .map((target) => target.transportProviderId)
+            .filter((transport): transport is string => typeof transport === 'string')
+          : [],
+    );
+    const diagnostics = await this.options.directory.listDiagnostics?.(subject) ?? [];
+    return diagnostics.filter((entry) => transports.has(entry.transportProviderId));
   }
   async plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan> {
     this.evictPlans();
@@ -143,28 +178,13 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       candidates = this.visibleCandidates(candidates, inQuote, policy);
     }
     if (candidates.length === 0) {
-      // A diagnostic is only pertinent when it belongs to the requested
-      // route's transports. Surfacing listDiagnostics[0] unfiltered once
-      // prescribed a `muse reauthenticate` for an explicit codex request.
-      // The model-derived resolution ignores `explicit`, so an explicit
-      // transport restriction wins over it here.
-      const explicitTransport = input.explicit?.transportProviderId;
-      const resolution = resolveRequestedTargets(input);
-      const transports = new Set<string>(
-        explicitTransport
-          ? [explicitTransport]
-          : resolution.kind === 'known'
-            ? resolution.targets
-              .map((target) => target.transportProviderId)
-              .filter((transport): transport is string => typeof transport === 'string')
-            : [],
-      );
-      const diagnostics = await this.options.directory.listDiagnostics?.(subject) ?? [];
-      const diagnostic = diagnostics.find((entry) => transports.has(entry.transportProviderId));
+      const matching = await this.matchingAvailabilityDiagnostics(subject, input);
+      const diagnostic = matching[0];
       throw new RoutePlanError(
         diagnostic?.message ?? 'No eligible route',
         'no-route',
         diagnostic,
+        matching.length > 0 ? matching : undefined,
       );
     }
     const planRef = this.ids.next('plan');
