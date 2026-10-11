@@ -69,8 +69,8 @@ const FROZEN_ERROR_MAP: Record<
     openai: { status: 401, type: 'invalid_request_error', message: 'authentication failed', code: 'invalid_api_key' },
   },
   'caller-auth-unavailable': {
-    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
-    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+    anthropic: { status: 503, type: 'overloaded_error', message: 'authentication service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'authentication service temporarily unavailable', code: 'overloaded' },
   },
   'over-budget': {
     anthropic: { status: 429, type: 'rate_limit_error', message: 'rate limit exceeded' },
@@ -81,13 +81,14 @@ const FROZEN_ERROR_MAP: Record<
     openai: { status: 429, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
   },
   'pooled-account-unavailable': {
-    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
-    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+    anthropic: { status: 503, type: 'overloaded_error', message: 'account service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'account service temporarily unavailable', code: 'overloaded' },
   },
-  // B3b internal kind: budget pricing/store failure reuses the sanitized 503 bodies.
+  // B3b internal kind: budget pricing/store failure keeps the frozen 503
+  // status/type/code/headers; Lot 7 names the budget subsystem in the message.
   'budget-unavailable': {
-    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
-    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+    anthropic: { status: 503, type: 'overloaded_error', message: 'budget service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'budget service temporarily unavailable', code: 'overloaded' },
   },
   'upstream-auth-failed': {
     anthropic: { status: 401, type: 'authentication_error', message: 'authentication failed' },

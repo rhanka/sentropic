@@ -1,4 +1,4 @@
-import { RoutePlanError, type PreparedRouteAttempt, type RoutePlanner } from '@sentropic/llm-mesh';
+import { InMemoryRoutePlanner, RoutePlanError, type PreparedRouteAttempt, type RoutePlanner } from '@sentropic/llm-mesh';
 import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
@@ -511,5 +511,37 @@ describe('route JSON flow with budget admission', () => {
       .rejects.toThrow('ledger down');
     expect(generate).toHaveBeenCalledTimes(1);
     expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+  });
+});
+
+describe('route JSON flow with a real planner (Lot 7)', () => {
+  it('should surface an expired credential in the no-route 503 body', async () => {
+    const expiredCodex = {
+      code: 'reauth-required' as const, transportProviderId: 'codex',
+      message: 'codex credential expired at 2026-10-11T01:25:00.000Z;'
+        + ' reauthenticate the codex account to restore routing',
+    };
+    const directory = {
+      async listEligible() { return []; },
+      async listDiagnostics() { return [expiredCodex]; },
+      async prepareAttempt(): Promise<never> { throw new Error('unused'); },
+    };
+    const realPlanner = new InMemoryRoutePlanner({ directory });
+    const settleRoute = vi.fn();
+    const error = await runRouteJsonFlow(
+      { config, routePlanner: realPlanner, metering: { settleRoute } }, request,
+    ).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect(error).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
+    const mapped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(mapped.status).toBe(503);
+    expect(mapped.headers).toEqual({ 'X-Sentropic-Route-Action': 'reauthenticate-codex' });
+    const body = JSON.stringify(mapped.body);
+    expect(body).toContain('codex');
+    expect(body).toContain('expired at 2026-10-11T01:25:00.000Z');
+    expect(body).toContain('reauthenticate the codex account');
+    expect(settleRoute).toHaveBeenCalledOnce();
   });
 });

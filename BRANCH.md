@@ -52,6 +52,8 @@
 - `attention`: auto-mode free classifier billing (forward `anthropic-beta` + `safeguards` verbatim, return `safeguard_results` untouched, keep tool-use IDs, forward error bodies unmodified) is EXCLUDED from this branch on owner request — separate later PR, gateway must keep managing (metering/leases/auth + opt-out). Findings so far: request bodies already relayed verbatim; client headers rebuilt at dispatch (beta headers dropped); upstream errors wrapped in gateway envelope (breaks client retry matching).
 - `attention`: URGENT owner brief via `agent:conductor:38f44695f2ad` (`env:send:0fd2a7cf`, 02:44 UTC) — codex device-flow poll loop has zero network tolerance: 1 ETIMEDOUT aborts enrollment (owner failed 4x in a row, ~10% flaky network). Fixed as Lot 9 (retry 3 + backoff on poll and token exchange, cause+URL on exhaustion). Equal priority to mute-503 Lot 7.
 - `acknowledge`: provider-cascade checked for Lot 9 — codex runs its own inline poll loop (does not use shared `runDeviceFlowUntilComplete`); sibling enrollment providers untouched, fix is codex-scoped per brief.
+- `acknowledge`: Lot 7 covers owner brief `env:send:03c22edf` points 1 (per-candidate diagnostic in no-route body via `diagnostics` + `describeAvailability` + enriched account messages) and 2 (subsystem-naming messages on the three sanitized 503s) plus the integration test (real planner + expired credential). Suppression-TTL / refresh-failure diagnostic entries and the zero-account bare-message case are documented follow-ups, not silent drops.
+- `attention`: Lot 7 DELIBERATELY deviates from `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md:196` (`caller-auth-unavailable` fixed message) and the main B3b pin (budget reuses pooled body): status/type/code/headers stay frozen, only the human-readable message names the subsystem. Trace-impact swept: no remaining pooled/budget equality assertion, no other package references, B3b flow test follows the mapper golden automatically. Normative spec consolidation owned by Lot N-1.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -127,12 +129,16 @@
   - [x] Exhaustion error carries cause (`e.cause.code`: ETIMEDOUT, ECONNRESET...) + URL, never bare `fetch failed` (`enrollment/codex.ts`).
   - [x] New: 3 tests in `tests/enrollment/codex.test.ts` (transient poll error completes; exhaustion aborts after 1+3 fetches with cause+URL; transient exchange error completes).
   - [x] Lot gate: typecheck + lint clean; scoped 5/5 green (3 new tests failed authentically pre-fix); full mesh suite 601 passed (37 files).
-- [ ] **Lot 7 — 503 diagnostics in body (PRIORITÉ 1 owner)**
-  - [ ] `no-route` 503 body carries per-candidate diagnostic (account, cause, timestamp, repair action); keep `x-should-retry: false` and provider shape.
-  - [ ] `caller-auth-unavailable` / `pooled-account-unavailable` / `budget-unavailable` 503 bodies say WHICH and why.
-  - [ ] Account/auth layer emits `listDiagnostics` entries per transport: credential expiry, refresh failure, negative suppression (with remaining TTL), unenrolled.
-  - [ ] Integration test: expired credential => 503 body holds account name, cause, timestamp, repair action; no case returns an empty message.
-  - [ ] Lot gate: typecheck + lint + full suites + council check.
+- [x] **Lot 7 — 503 diagnostics in body (PRIORITÉ 1 owner)**
+  - [x] Mesh `RoutePlanError` carries all transport-matching diagnostics (`diagnostics`, singular `diagnostic` kept first for back-compat); planner + new read-only `describeAvailability` share one transport-resolution helper.
+  - [x] Budget admission attaches availability to empty-quote no-route (new required `subject` on `admitRoute`, wired in `route-flow-core`).
+  - [x] Gateway enrollment-action 503 body surfaces the mesh message (cause, expiry timestamp, repair action); messageless errors keep the old template + `X-Sentropic-Route-Action`.
+  - [x] Gateway no-route 503 body appends joined per-transport causes; status/type/code/`x-should-retry: false` frozen.
+  - [x] `caller-auth-unavailable` / `pooled-account-unavailable` / `budget-unavailable` bodies name their subsystem (`authentication` / `account` / `budget service temporarily unavailable`); status/type/code/headers frozen, zero account/lease/credential/pricing detail. Deliberate deviation from LOT2 spec + main B3b pin (see Feedback Loop).
+  - [x] Account/auth layer messages enriched: expiry timestamp + repair action on `reauth-required` / `reenrollment-required`.
+  - [x] Out of Lot 7 scope (documented, not silently dropped): negative-suppression remaining-TTL entries and refresh-failure entries are not emitted as diagnostics (no `listDiagnostics` source for them yet); a pool with zero enrolled accounts still yields the bare base message (no candidate to diagnose). Follow-up candidates for a later lot.
+  - [x] Integration test: real planner + expired credential => 503 body holds account, cause, timestamp, action; new unit tests for message preference + joined no-route on both wires; mesh tests for multi-diagnostic + `describeAvailability`.
+  - [x] Lot gate: typecheck + lint clean (both packages); mesh 603/603 (37 files); gateway 404/404 (31 files).
 - [ ] **Lot 8 — enroll-remplace + éligibilité dégradée live**
   - [ ] Enroll A then enroll B => BOTH stay visible and serve in parallel (scope/ownership claim must ADD, not reset).
   - [ ] Investigate `atomically claim account ownership` (recent main) for the reset.

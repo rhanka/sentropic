@@ -41,12 +41,17 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(a.headers?.['Retry-After']).toBe('5');
   });
 
-  it('maps budget-unavailable to the sanitized pooled 503 on both wires, without Retry-After', () => {
+  it('maps budget-unavailable to its own subsystem 503 on both wires, without Retry-After', () => {
     for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
       const budget = toProviderShapedError(wire, new GatewayError('budget-unavailable', 'pricing row missing'));
-      expect(budget).toEqual(mapGatewayError(wire, 'pooled-account-unavailable'));
+      expect(budget.status).toBe(503);
       expect(budget.headers).toBeUndefined();
+      expect(JSON.stringify(budget.body)).toContain('budget service temporarily unavailable');
       expect(JSON.stringify(budget.body)).not.toContain('pricing');
+      const pooled = toProviderShapedError(wire, new GatewayError('pooled-account-unavailable', 'pool down'));
+      expect(JSON.stringify(pooled.body)).toContain('account service temporarily unavailable');
+      const callerAuth = toProviderShapedError(wire, new GatewayError('caller-auth-unavailable', 'verifier down'));
+      expect(JSON.stringify(callerAuth.body)).toContain('authentication service temporarily unavailable');
     }
   });
 
@@ -247,6 +252,51 @@ describe('provider-shaped error mapper (unit)', () => {
       status: 503,
       headers: { 'X-Sentropic-Route-Action': 'reauthenticate-cloud-code' },
       body: { error: { type: 'authentication_error', message: 'cloud-code reauthenticate required' } },
+    });
+  });
+
+  it('should surface the mesh diagnostic message in the enrollment-action 503 body', () => {
+    const error = {
+      name: 'RoutePlanError', code: 'no-route',
+      diagnostic: {
+        code: 'reauth-required', transportProviderId: 'codex',
+        message: 'codex credential expired at 2026-10-11T01:25:00.000Z; reauthenticate the codex account to restore routing',
+      },
+    };
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, error, 'known-model');
+      expect(mapped.status).toBe(503);
+      expect(mapped.headers).toEqual({ 'X-Sentropic-Route-Action': 'reauthenticate-codex' });
+      expect(JSON.stringify(mapped.body)).toContain('codex credential expired at 2026-10-11T01:25:00.000Z');
+      expect(JSON.stringify(mapped.body)).toContain('reauthenticate the codex account');
+    }
+  });
+
+  it('should join per-transport diagnostics in the no-route 503 body', () => {
+    const error = {
+      name: 'RoutePlanError', code: 'no-route',
+      diagnostics: [
+        { code: 'reauth-required', transportProviderId: 'codex', message: 'codex credential expired at 2026-10-11T01:25:00.000Z' },
+        { code: 'reenrollment-required', transportProviderId: 'mistral', message: 'mistral-vibe: not enrolled' },
+      ],
+    };
+    const a = toProviderShapedError('anthropic-messages', error, 'claude-opus-5-5');
+    expect(a.status).toBe(503);
+    expect(a.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(a.body).toEqual({
+      type: 'error',
+      error: {
+        type: 'api_error',
+        message: 'No route available for model: "claude-opus-5-5" — codex credential expired at 2026-10-11T01:25:00.000Z; mistral-vibe: not enrolled',
+      },
+    });
+    const o = toProviderShapedError('openai-chat-completions', error, 'mistral-vibe');
+    expect(o.status).toBe(503);
+    expect(o.body).toEqual({
+      error: {
+        message: 'No route available for model: "mistral-vibe" — codex credential expired at 2026-10-11T01:25:00.000Z; mistral-vibe: not enrolled',
+        type: 'server_error', code: 'no_route',
+      },
     });
   });
 
