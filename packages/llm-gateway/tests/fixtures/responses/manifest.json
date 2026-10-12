@@ -63,6 +63,27 @@
       "originalPath": "POST /v1/chat/completions",
       "originalLength": 32006,
       "sha256": "bad2c52de60f2927a94a699285d698f48cda73bbe11cd896460bc09e7c091ae2"
+    },
+    {
+      "file": "provider-codex.sse",
+      "scenario": "SYNTHETIC provider replay: codex native SSE (text turn, fragmented tool args with done-item snapshot, terminal usage)",
+      "originalPath": "synthetic",
+      "originalLength": 0,
+      "sha256": "synthetic"
+    },
+    {
+      "file": "provider-muse-chat.sse",
+      "scenario": "SYNTHETIC provider replay: meta chat SSE (text delta, two-fragment tool call, tool_calls finish, terminal usage)",
+      "originalPath": "synthetic",
+      "originalLength": 0,
+      "sha256": "synthetic"
+    },
+    {
+      "file": "provider-mistral-chat.sse",
+      "scenario": "SYNTHETIC provider replay: mistral chat SSE (text delta, three-fragment tool call, tool_calls finish, terminal usage)",
+      "originalPath": "synthetic",
+      "originalLength": 0,
+      "sha256": "synthetic"
     }
   ]
 }
