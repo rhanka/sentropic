@@ -100,7 +100,7 @@
 - [ ] **Lot 6 — Review remediation (Opus review B1, M1-M7, m1-m8)**
   - [x] Fix registration validators (M3, m4), derivation helpers (m4) and add parity golden vectors test (m4).
   - [x] Add binding revision, revalidation, and initial binding tests (m3).
-  - [ ] Enforce durable withdrawal order (M5), mandatory declaration triple (M2), and binding authorization port (B1).
+  - [x] Enforce durable withdrawal order (M5), mandatory declaration triple (M2), and binding authorization port (B1).
   - [ ] Correct control-schema comments and BRANCH.md allowed paths and migration sequencing (m6, M6).
   - [ ] Implement code-workspace binding authorizer in code-git-ports.ts (B1).
   - [ ] Upgrade PostgresLiveDeclarationStore with canonicalIdKey (M1), mandatory triple (M2), revision race protection (M4), and authorizer (B1).
