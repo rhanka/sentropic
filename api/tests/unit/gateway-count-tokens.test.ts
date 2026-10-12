@@ -143,7 +143,7 @@ describe('createGatewayCountTokensPort', () => {
     });
   });
 
-  it('maps provider rate limits with Retry-After and a rate_limited lease outcome', async () => {
+  it('maps provider rate limits with Retry-After and a neutral lease outcome', async () => {
     resolveCredential.mockResolvedValue({ credential: undefined });
     transportMode.mockResolvedValue('claude-code');
     primaryAccount.mockResolvedValue({ status: 'active' });
@@ -162,7 +162,27 @@ describe('createGatewayCountTokensPort', () => {
     expect(response.status).toBe(429);
     expect(response.headers).toEqual({ 'Retry-After': '9' });
     expect(response.body).toEqual({ type: 'error', error: { type: 'rate_limit_error', message: 'slow down' } });
-    expect(recordOutcome).toHaveBeenCalledWith({ status: 'rate_limited', providerStatusCode: 429 });
+    expect(recordOutcome).toHaveBeenCalledWith({ status: 'failed', providerStatusCode: 429 });
+  });
+
+  it('never puts the account in reauth_required on a counting auth failure', async () => {
+    resolveCredential.mockResolvedValue({ credential: undefined });
+    transportMode.mockResolvedValue('claude-code');
+    primaryAccount.mockResolvedValue({ status: 'active' });
+    const recordOutcome = vi.fn(async () => undefined);
+    acquire.mockResolvedValue({ accessToken: 'account-access-token', recordOutcome });
+    const countTokens = vi.fn(async () => {
+      throw Object.assign(new Error('auth failed'), {
+        status: 403,
+        error: { type: 'authentication_error', message: 'oauth token not accepted' },
+      });
+    });
+    const port = portFor({ countTokens });
+    const capability = await port.prepare(SUBJECT, PREPARE_INPUT);
+    const response = await responseOf(() => capability!.execute(countRequest()));
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ type: 'error', error: { type: 'authentication_error', message: 'authentication failed' } });
+    expect(recordOutcome).toHaveBeenCalledWith({ status: 'failed', providerStatusCode: 403 });
   });
 
   it('maps provider auth failures to a generic 401 without credential detail', async () => {
