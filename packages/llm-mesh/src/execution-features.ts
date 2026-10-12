@@ -11,6 +11,12 @@
  * no route map (keyed by transport, never by model, account or affinity).
  * Unknown support is not support: a transport with no proven declaration
  * for a required feature is ineligible, before acquisition.
+ *
+ * Two taxonomy items are bounded extensions from pinned CLI captures
+ * (spec §16.9): `reasoning-context` (Codex `reasoning.context`, a
+ * server-side retention semantic only native Codex execution can honor)
+ * and `custom-tools` (Codex freeform tools, carried opaquely for native
+ * execution only). Translated adapters never declare them.
  */
 
 export type ExecutionFeature =
@@ -19,6 +25,8 @@ export type ExecutionFeature =
   | 'strict-schema'
   | 'structured-output'
   | 'reasoning-controls'
+  | 'reasoning-context'
+  | 'custom-tools'
   | 'native-reasoning-replay'
   | 'verbosity'
   | 'explicit-output-ceiling';
@@ -29,6 +37,8 @@ export const EXECUTION_FEATURES: readonly ExecutionFeature[] = [
   'strict-schema',
   'structured-output',
   'reasoning-controls',
+  'reasoning-context',
+  'custom-tools',
   'native-reasoning-replay',
   'verbosity',
   'explicit-output-ceiling',

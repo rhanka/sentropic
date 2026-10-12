@@ -11,6 +11,7 @@ export * from './messages.js';
 export * from './mesh.js';
 export * from './providers.js';
 export * from './registry.js';
+export * from './responses-wire.js';
 export * from './routing-targets.js';
 export * from './routing-policy.js';
 export * from './routing-contracts.js';

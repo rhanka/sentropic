@@ -14,10 +14,12 @@ import {
 describe('execution features (spec §16.3)', () => {
   it('fixes the finer-than-capability feature taxonomy', () => {
     expect([...EXECUTION_FEATURES].sort()).toEqual([
+      'custom-tools',
       'explicit-output-ceiling',
       'named-tool-choice',
       'native-reasoning-replay',
       'parallel-tool-control',
+      'reasoning-context',
       'reasoning-controls',
       'strict-schema',
       'structured-output',
@@ -36,6 +38,7 @@ describe('execution features (spec §16.3)', () => {
 
   it('fails closed on undeclared support (populated with adapter proofs in D16-C)', () => {
     expect(transportSupportsExecutionFeatures('codex', ['named-tool-choice'])).toBe(false);
+    expect(transportSupportsExecutionFeatures('codex', ['custom-tools', 'reasoning-context'])).toBe(false);
     expect(transportSupportsExecutionFeatures('muse', ['structured-output'])).toBe(false);
     expect(transportSupportsExecutionFeatures('unknown-transport', ['verbosity'])).toBe(false);
   });
