@@ -190,6 +190,16 @@
   - [x] Double review reconciled — dossier `reviews/review-dossier-spec15.md`: `completed` (tmux reroute per owner: codex/astra correctness APPROVE_WITH_CHANGES + codex/sol contracts REJECT, blind, read-only). 5 leg-1 + 3 leg-2 findings remediated (spec wording, code sanitization, canary/header tests); verbatim mesh pass-through kept with trust-domain rationale; HTTP-level expiry + immutability tests deferred with rationale.
   - [x] Equivalence council check green (`make check-llm-model-equivalences`); registry versions: mesh 0.25.0 / gateway 0.19.5 (local == registry → bump required). Owner decision 2026-10-11: MINOR (mesh 0.26.0, gateway 0.20.0 — the required `subject` in `admitRoute` is breaking); cluster-mesh ceilings widened to `<0.27.0` / `<0.21.0` (BR662-EX6); cluster-mesh itself MINOR 0.14.0 per the lazy-surface policy (R3-MIN-3, README matrix refreshed).
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` needed (single-spec update).
+- [ ] **Lot R — Responses ingress + Vibe alias (§16 build)**
+  - [x] Normative contract `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16 committed (design `.h2a/design/responses-route.md`, UAT evidence `904e8d8f3`).
+  - [ ] D16-A routed ingress: `openai-responses` wire, both POST mounts, identical admission.
+  - [ ] D16-B strict Responses normalizer + lossless canonical mapping.
+  - [ ] D16-C native Codex + translated Muse/Mistral execution; Muse/Mistral tool decoding fix.
+  - [ ] D16-D shared accumulator, JSON/SSE encoders, delegation from canonical entry points.
+  - [ ] D16-E lease/accounting/count neutrality; D16-F error shaping + shared limits.
+  - [ ] D16-G `mistral-vibe-cli-latest` alias via mesh; no gateway table, no duplicate profile.
+  - [ ] Fixture capture (pinned Muse/Codex/Vibe) + replay tests; UAT P0 interceptor covers both paths.
+  - [ ] Live qualification: streamed text + tool continuation (Muse, Codex), Vibe default model.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint for impacted packages.
   - [x] Retest: mesh 606/606 + gateway 405/405 `ENV=test-gw-wires`.

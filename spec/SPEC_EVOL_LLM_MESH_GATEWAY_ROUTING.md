@@ -1352,3 +1352,395 @@ estimator is built: an estimate would corrupt Anthropic cache accounting.
 - `packages/llm-mesh/tests/enrollment/codex.test.ts`: retry tests (poll
   recovery, exchange recovery, exhausted error with cause code + URL +
   secret canary, raw-message fallback without code).
+
+## 16. PR #662 completion: Responses ingress and the Vibe wire alias
+
+Design dated 2026-10-12, based on candidate
+`904e8d8f3759b270a65d96c45b77f755e84eacd1`. This is an implementation contract,
+not a claim that the routes or tests already exist. Complete this work in
+PR #662; do not split its blocking defects into another PR. The build handoff
+is `.h2a/design/responses-route.md`.
+
+### 16.1 Evidence, corrections and scope
+
+This section supersedes the ingress conclusions in §15.1. The real clients,
+not a manually constructed Chat Completions request, determine compatibility:
+
+| Client measured in the UAT | Actual inference request | Required correction |
+|---|---|---|
+| Muse Code `1.4.6-R6000.1` | `POST /responses`, model `muse-spark-1.3-contributor`, streaming, one tool | Add Responses ingress; retain authenticated `/muse-code/models`. |
+| Codex `0.162.1` | `POST /v1/responses`, model `gpt-6.1-sol`, streaming, zero tools in this probe | Add the same ingress under `/v1`; retain `wire_api = "responses"`. |
+| Vibe `2.26.1`, unmodified default | `POST /v1/chat/completions`, model `mistral-vibe-cli-latest`, streaming, nine tools, temperature `1` | Resolve its wire alias inside mesh. |
+| Antigravity `1.3.3` | Gemini `:streamGenerateContent?alt=sse` | Gemini HTTP ingress is out of scope for this Muse/Vibe PR. |
+
+Evidence: `.h2a/uat/uat-results-904e8d8f3.md` and the campaign's
+`evidence/{gateway,parameters}.ndjson` under
+`.tmp/llm-gateway-uat/pr662-904e8d8f3-01/`. Muse bodies measured 94,624 and
+64,400 bytes; the Codex probe measured 58,150 bytes. The runner retained only
+parameter projections, not full `input`, `instructions`, or tool schemas.
+These are measured envelopes, not complete captured-body fixtures. The raw
+Vibe log records a P0 interception; the UAT report separately records the
+native alias rejection. Do not relabel either as a successful provider run.
+
+The remaining fixture acquisition is a build prerequisite (§16.9). Do not
+invent full request bodies and describe them as UAT captures. Gemini egress
+through `cloud-code` remains available to compatible routed requests; this
+does not make the Antigravity HTTP ingress compatible.
+
+### 16.2 D16-A — One routed ingress, two paths, identical admission
+
+Add `openai-responses` to `GatewayWire` and `WIRE_BY_PATH`. Mount both
+`POST /responses` and `POST /v1/responses` on one handler, without redirects.
+Use `prepareRouteFlow`, `runRouteJsonFlow` and `runRouteStreamFlow`; no second
+pool, HTTP self-proxy, gateway-owned credential path, or default Codex target.
+The requested model, mesh policy and executable capabilities select the
+provider independently of the caller's wire.
+
+Both aliases use the same `CallerAuthPort`, verified cost/owner context,
+cross-user kill switch, quota, budget admission and cancellation as Messages.
+Malformed JSON/missing model may fail before authentication, matching the
+existing router. Semantic validation follows caller verification and precedes
+quoting, leasing or dispatch. A missing/invalid caller token returns 401;
+verifier failure returns the existing sanitized authentication-subsystem 503.
+Never reinterpret a caller bearer as a provider credential. Untrusted owner,
+account, transport, provider URL or `providerOptions` body fields are refused;
+response ids and client session headers grant no identity or account access.
+Trusted host affinity projection remains the only source of routing affinity.
+
+The product mount needs explicit coverage too: add `/responses` and
+`/v1/responses` to `GW_PATHS` in `api/src/routes/namespaces/gw.ts`, and run the
+same product caller-token bridge for `/responses` that currently runs for
+`/v1/*`. Apply `requireAuth` and `settlementModeMiddleware` to that path too;
+preserve the author fence, unavailable-module behavior and per-request
+bridge-token cleanup. `/api/v1/gw/responses` must receive the
+same caller admission as `/api/v1/gw/v1/responses`; a package-only test misses
+this boundary. Never execute the bridge twice on the `/v1` alias.
+
+Responses requires routed dependencies. A legacy/scaffold-only router returns
+an authenticated, OpenAI-shaped 501 for this wire, without calling its legacy
+Chat Completions dispatch. Existing Messages/Chat scaffold behavior is unchanged.
+
+### 16.3 D16-B — Supported request contract and lossless normalization
+
+Create a strict Responses-specific normalizer, selected by
+`normalizeGatewayIngress`. Do not feed `input` through the current permissive
+`raw.messages` parser or silently discard unknown item types. Preserve order,
+string contents, explicit false values and the distinction between an output
+item `id` and a tool `call_id`.
+
+| Responses field/item | Canonical mapping and validation |
+|---|---|
+| `model`; `stream` | Nonempty model; boolean stream, default false. Retain the requested id for diagnostics; mesh chooses the actual model. |
+| `instructions` | Optional string, prepended as an instruction message. Preserve ordered system/developer input and the existing transport-specific instruction projection. |
+| `input` string | One user message, including an empty string when deliberately supplied. |
+| `input` array of messages | Ordered `system`, `developer`, `user`, `assistant` messages; accept the documented shorthand and `type: "message"`. Map `input_text`/assistant `output_text` to text. |
+| `input_image` | Preserve URL/data URL and detail; derive `input:image`. A transport unable to preserve requested image semantics is ineligible. Do not fetch URLs in the gateway. |
+| `function_call` history | Assistant `ToolCall`; `call_id` becomes `providerCallId` and the round-trip correlation key; preserve name and the exact arguments string. Preserve item id separately. |
+| `function_call_output` | Tool result joined to its preceding call by `call_id`; preserve the output string or supported text/image parts. Reject ambiguous duplicates, orphan results and unsupported result parts. Never stringify an unsupported part into prompt text. |
+| Flat `tools: [{type:"function", name, description, parameters, strict}]` | `ToolDefinition`, including `strict`; validate unique names and schemas. Map back to nested function tools only in Chat egress adapters. |
+| `tool_choice`; `parallel_tool_calls` | Preserve `auto`, `none`, `required`, named `{type:"function",name}` and explicit parallel true/false. Reject a named choice absent from tools. |
+| `max_output_tokens`; `temperature`; `top_p` | Finite validated values to `maxOutputTokens`, `temperature`, `topP`; integer positive output ceiling. No coercion, silent clamping or omission of an explicit limit. |
+| `reasoning.effort`, `reasoning.summary` | Existing canonical reasoning options and mesh alias-effort policy; reject unsupported values. Preserve summary intent; never expose hidden reasoning as text. |
+| `text.format` | Text, JSON object or JSON schema to `ResponseFormat`, retaining name/schema/description/strict. Eligibility requires the actual transport implementation, not just a catalog model claim. |
+| `text.verbosity` | Preserve on a qualified native Responses route; otherwise unsupported unless an equivalent implemented control is demonstrated. |
+| `include: ["reasoning.encrypted_content"]` | Request the optional native reasoning artifact. A translated provider may have none; never fabricate encrypted content. Other includes are unsupported in this version. |
+| Completed `reasoning` history item | Preserve its summary and opaque encrypted content in a validated native carrier. Encrypted replay requires compatible Codex egress and existing owner-scoped stickiness; it cannot cross to Muse/Mistral/Gemini. |
+| `metadata`, `prompt_cache_key`, `safety_identifier` | Validate and bound. Metadata may be echoed locally; cache/safety hints are forwarded only to an adapter declaring support. They never select owner, lease, account or upstream URL; no cache-reuse claim follows from acceptance. |
+
+Functions are the mandatory CLI tool baseline. Hosted tools, custom/freeform
+tools, item references, audio/video, provider file ids, server-side execution,
+and unsupported content/annotation types return 400 `unsupported_parameter`
+with a field path. If a full default CLI capture requires one of these, the
+fixture gate stays red until this same PR defines and implements that bounded
+extension; changing the CLI's tool configuration is not acceptance.
+
+The route is stateless: absent/false `store` becomes false; absent/false
+`background` is accepted; absent/`disabled` truncation is accepted. Refuse
+`store:true`, `background:true`, `truncation:auto`, a non-null
+`previous_response_id` or `conversation`, and retrieval/cancel/compact or
+WebSocket behavior. Clients send complete supported history on each POST.
+Unknown behavior-affecting fields fail explicitly; known harmless telemetry
+fields need an enumerated, tested allowlist rather than a catch-all spread.
+
+Use existing canonical messages/tools/reasoning for common features. Add typed
+allowlisted Responses carrier definitions in mesh `responses-wire.ts`, held
+in `providerOptions`/event metadata/`providerMetadata`, for native input order,
+item identity, completed reasoning artifacts and terminal output snapshots.
+Construct this carrier from validated fields; never copy caller routing/auth
+controls. Only the matching adapter consumes it. Public responses filter it
+again; credentials, raw provider errors and internal headers never enter it.
+Encrypted replay requires a trusted stable affinity and a compatible sticky
+route; absent that context, refuse it before acquisition. Neither an input
+item id nor opaque content may establish that affinity or loosen account scope.
+
+Add optional mesh-owned `requiredExecutionFeatures` to route plan/quote input
+for requirements finer than existing `requiredCapabilities`: named/parallel
+tool control, strict schema, structured output, reasoning controls, native
+reasoning replay, verbosity and an explicit output ceiling. Derive these from
+validated input, never a caller-supplied feature list. One pure mesh predicate
+filters the actual model/transport pair in both planning and quoting, including
+quote identity/revalidation. Capability rejection occurs before acquisition;
+unknown support is not support. Gateway consumes this result, without a
+provider table. Trusted API runtime adapters must declare only controls they
+actually forward. Conflicting requirements and host restrictions fail closed.
+
+### 16.4 D16-C — Native and translated provider execution
+
+“Native” here describes the provider egress wire; every route still uses the
+same opaque mesh attempt and gateway Responses encoder.
+
+| Provider / account transport | Egress already present | Responses execution in this extension |
+|---|---|---|
+| OpenAI / `codex` | `https://chatgpt.com/backend-api/codex/responses` | Native Responses via `CodexRuntimeClient`; validate/project the native carrier, preserve call ids, terminal items and available reasoning artifacts. Upstream remains streaming with `store:false`; collect for downstream JSON requests. |
+| Muse / `muse` | Meta `/v1/chat/completions` | Translate Responses to canonical to Chat and back. The CLI's `/responses` path does not establish a native Meta serving endpoint; do not repoint `MUSE_SERVING_PATH` on that inference. |
+| Mistral / `mistral-vibe` | Mistral `/v1/chat/completions` | Translate text, images and qualified function/tool-result controls. Preserve the plan-billed account transport. |
+| Gemini / `cloud-code` | Cloud Code generation transport | Translate supported canonical content/tools/summaries; retain required provider continuation signatures or refuse the affected round trip. No Gemini ingress is added. |
+| Anthropic / `claude-code` | Qualified CLI runtime seam | Translation is conditional on that runtime's proven capabilities. Its current strict request projector rejects several canonical fields; do not label it universally compatible or substitute an unapproved HTTP transport. |
+| Other injected API-key/runtime adapters | Host-selected implementation | Translation only for advertised, tested controls. Being an OpenAI model or having a Responses URL elsewhere does not prove this configured adapter serves it natively. |
+
+Two existing defects directly block CLI tools: both Muse and Mistral runtime
+clients currently return `toolCalls: []` and stream text only. Fix their
+Chat request projection (including tool history, named choice and parallel
+control) and JSON/SSE tool decoding in this PR. Accumulate call fragments by
+upstream choice/tool index, retain the provider call id, and honor
+`finish_reason` including tool calls, length and content filter. A usage-only
+chunk is accounting, not an unconditional early `stop`. Reject malformed
+streams; never turn premature EOF into successful text completion.
+
+Codex decoding must also retain item/content indices, final tool arguments,
+reasoning-item completion, incomplete status and error codes. Use the completed
+reasoning artifact, never an in-progress encrypted fragment. Deduplicate final
+snapshots against deltas; some Codex completions omit tool items, so already
+observed complete calls remain authoritative. JSON collection and streaming
+must agree on the resulting ordered items. Do not use hidden/signature deltas
+as visible summary text.
+
+The Codex adapter currently omits `max_output_tokens` because its backend
+rejects it. It cannot satisfy an explicit hard output limit in this extension:
+exclude it for that requirement and return a capability 400 if no permitted
+candidate remains. Do not claim that the existing budget accounting ceiling
+enforces provider generation length. Preserve existing budget decisions for
+quotes marked `outputCeilingEnforced:false`; default accounting allowances
+alone do not create a new output-limit guarantee.
+
+### 16.5 D16-D — JSON and streaming Responses contract
+
+Use a shared bounded output accumulator for JSON and SSE. The JSON response is
+an `object:"response"` envelope with a stable unique id, `created_at`, actual
+served `model`, `status`, ordered `output`, `error`, `incomplete_details`,
+`usage`, `store:false` and the supported effective request fields. Emit
+assistant message items containing `output_text` parts with annotations, and
+separate `function_call` items with `id`, `call_id`, name and arguments string.
+Tool output supplied on the next request is input, not an invented assistant
+result. Do not emit Chat `choices`, `chat.completion` objects or SDK-only
+`output_text` convenience properties in place of the Responses envelope.
+
+`stop` and a completed `tool_calls` turn map to `status:"completed"`.
+`length` maps to `incomplete` / `max_output_tokens`; `content_filter` maps to
+`incomplete` / `content_filter`, retaining an actual refusal if provided.
+Unknown termination, provider errors and premature EOF are failures, not
+completed empty responses. A legitimate provider terminal response may have
+empty output. Client cancellation closes the connection and releases the
+attempt; it does not manufacture a completed response.
+
+Map provider usage to `input_tokens`, `output_tokens`, `total_tokens`, and
+available `input_tokens_details.cached_tokens` /
+`output_tokens_details.reasoning_tokens`. Preserve native usage detail through
+the carrier/`providerRawUsage`. Total is provider-reported or computed from
+known components. Unknown usage is null, never a fabricated exact zero or the
+Messages count estimate. Financial settlement may still use the existing
+separately marked estimate. Do not add reasoning/cache subcounts to totals a
+second time.
+
+SSE uses `event: <type>` plus a JSON `data` object with the same `type` and a
+monotonically increasing `sequence_number`, starting at zero. The accumulator
+allocates stable item ids and output/content indices once and reuses them:
+
+| Canonical observation | Ordered Responses events |
+|---|---|
+| First validated content/tool event or legitimate terminal result | `response.created`, then `response.in_progress`. Both remain buffered until the existing pre-commit checks succeed. |
+| First text for an item | `response.output_item.added` (assistant message), `response.content_part.added` (empty output text), then `response.output_text.delta`. |
+| Later text | Further text deltas with matching `item_id`, `output_index`, `content_index`. |
+| Function call start/fragments | `response.output_item.added` (function call with distinct item id and `call_id`), then `response.function_call_arguments.delta`; keep separate buffers for interleaved calls. |
+| Qualified visible reasoning summary | Reasoning item plus `response.reasoning_summary_part.added`, `response.reasoning_summary_text.delta`, matching text/part done events, then item done. Opaque artifacts accompany only the validated completed item. |
+| Text/item closure | `response.output_text.done`, `response.content_part.done`, `response.output_item.done`, with accumulated final content. |
+| Function call closure | `response.function_call_arguments.done`, then `response.output_item.done`, retaining exact final arguments and call id. |
+| Terminal `done` | Close open supported parts/items once, then exactly one `response.completed` or `response.incomplete` with the final response snapshot and usage. |
+| Failure after commitment | Exactly one sanitized `response.failed` with partial output and `response.error`; no successful terminal follows. |
+
+Interleaved tool items may close independently; final output retains allocation
+order. Actual refusal parts use the corresponding refusal delta/done events.
+Missing required ids, an inconsistent snapshot or an unsupported provider item
+is a protocol failure, not permission to drop data. The encoder must never
+consume the whole stream before the first content delta merely to discover ids
+or usage. Responses ends on its terminal event and connection close; it does
+not use Chat's `[DONE]` sentinel.
+
+Provider `response.created`/status-only events do not commit downstream headers.
+Retain `runRouteStreamFlow` priming and mark the attempt committed before
+exposing any synthesized start frame. Eligible failures may advance only
+through the existing bounded mesh plan before commitment. After any header or
+body is exposed there is no replay, account rotation or fallback. Propagate
+abort/backpressure, return the upstream iterator, and settle once even when
+the caller disconnects before its first read.
+
+### 16.6 D16-E — Lease outcomes, accounting and token counting
+
+Each dispatched attempt takes its existing mesh reservation and finishes once
+through `complete`, `recordOutcome` or `releaseCancelled`. Do not acquire a
+second lease for wire translation, JSON collection, usage extraction or an
+SSE item. An ordinary provider length limit, refusal or completed tool turn is
+a successfully served attempt for account health, despite its client-facing
+incomplete/tool status. A terminal canonical error/cancellation must not fall
+through the current stream flow's generic successful `done` handling.
+
+| Failure source | Lease/account effect |
+|---|---|
+| Caller auth, malformed/unsupported request, unknown model, capability mismatch, body limit, budget refusal before dispatch | No provider call; no account auth/cooldown outcome. Release any admitted hold under the existing rules. |
+| Local codec/size/protocol failure after acquisition | Neutral failed outcome, or cancelled release when aborted. Never infer provider authentication failure from a local error string/status. |
+| Provider-confirmed inference 401/403 or provider-confirmed refresh rejection | Existing mesh auth classification and refresh/reauth rules; no new route-specific degradation rule. |
+| Provider-confirmed inference 429 | Existing rate-limit outcome and bounded Retry-After handling. |
+| Provider 400/model rejection, network/5xx | Existing request/route/transport health scopes and retry eligibility; no invented account auth failure. |
+| Caller disconnect | Cancel and release; no retry or availability poisoning. |
+
+Keep source/provenance on failures until classification. In particular, the
+generic classifier's auth/rate code matching must not see gateway validation
+errors as provider evidence. Provider model 404 and invalid input do not make
+the account unusable. Account state, route negative caching and caller billing
+are separate effects and each must be asserted in tests.
+
+One aggregate settlement includes all dispatched attempts, including partial
+usage from failed attempts, exactly once. Terminal usage is a cumulative
+snapshot, not another increment on top of preceding snapshots. Preserve the
+existing admitted-request idempotency key, dispatch marker, hold release and
+never-zero fallback estimation for genuinely dispatched work. Pre-admission
+refusals have zero attempts and no durable debit; operational zero-dispatch
+notifications keep the existing behavior. Settlement callback failure must
+not replace the original typed error or trigger a retry.
+
+`POST /v1/messages/count_tokens` is unchanged: real Anthropic count or explicit
+unsupported refusal, no inference dispatch, no budget/debit, and only the
+host's advisory lease. Every count failure, including 401/403/429, completes
+that reservation neutrally; it never changes account authentication or
+cooldown. Responses adds no count endpoint, no hidden count request and no
+model-backed estimator. Existing local client counting remains local.
+
+### 16.7 D16-F — Errors and bounded operation
+
+Before commitment, return the OpenAI error envelope
+`{error:{message,type,code,param}}`, with null/omitted `param` except for
+validated field errors. Reuse the existing mapper's statuses and sanitized
+headers rather than routing errors through Chat output serialization:
+
+| Condition | Public result |
+|---|---|
+| Bad input / unsupported feature | 400 `invalid_request_error`; `bad_request` or `unsupported_parameter`, with a safe field path. |
+| Missing/invalid caller credential | 401, existing OpenAI authentication mapping. |
+| Unknown model | 404 `invalid_request_error` / `model_not_found`; requested model only. |
+| Known model, no eligible account | Existing 503 `server_error` / `no_route`, `x-should-retry:false`, no Retry-After; preserve enrollment-action diagnostics when applicable. |
+| Caller-auth/account/budget subsystem unavailable | Existing distinct sanitized 503 messages from §15.5. |
+| Provider auth/rate refusal | Existing terminal 401/429 mappings; forward only allowlisted retry/request headers. |
+| Body too large | 413 OpenAI-shaped `request_too_large`, before dispatch. |
+| Invalid upstream stream / local encoding failure | Sanitized gateway failure (503 before commitment); `response.failed` after commitment. No fabricated provider-auth signal. |
+
+Carry `X-Sentropic-Request-Id`; add `X-Sentropic-Served` only for an actual
+selected target under existing rules. Strip tokens, cookies, upstream URLs,
+account ids and arbitrary upstream error text. Once committed, HTTP status
+stays 200 and the stream carries the failure; do not append another HTTP body.
+
+Add validated `responsesLimits` router options shared by both aliases:
+16 MiB decoded request body, 4,096 input items, 256 tools, 1,024 output items,
+1 MiB individual decoded upstream SSE event, and 8 MiB accumulated output
+(including arguments and opaque artifacts), as initial defaults. Enforce the
+body cap while reading, including missing/false Content-Length; enforce stream
+caps incrementally in the codecs/adapters. Pass decoder bounds through the
+trusted typed carrier, never from caller body fields. A stricter host limit wins. Any
+override must remain finite and positive. These are engineering defaults, not
+provider context limits. Reuse host request/abort deadlines and mesh attempt
+bounds; do not reset budgets or deadlines between candidates. Output overflow
+aborts upstream and fails neutrally; no silent truncation or unbounded final
+snapshot. Fragmented UTF-8, CRLF, multi-line data and terminal frames split
+across network chunks must parse correctly within the same caps.
+
+### 16.8 D16-G — Vibe alias and catalog consistency
+
+Mesh resolves `mistral-vibe-cli-latest` to:
+
+```ts
+{ providerId: 'mistral', transportProviderId: 'mistral-vibe',
+  model: 'mistral-medium-3.5' }
+```
+
+This is a pinned gateway compatibility alias to the existing catalog model,
+not a claim that upstream `latest` can never change. Preserve the requested
+alias in audit/cost context and report `mistral-medium-3.5` as actually served.
+With no enrolled account it is recognized and returns no-route 503, not
+model-not-found 404. It does not gain Muse/Codex/Cloud fallback candidates.
+
+Define the CLI alias once in mesh `routing-targets.ts`, referencing the
+canonical target; consume it through all resolver variants, including
+nondefault Muse-position options. Do not add a duplicate model profile,
+pricing row, equivalence member, account inventory id or gateway alias table.
+Capability/context/cost lookup dereferences the target catalog profile
+(currently 262,144 context tokens). Discovery may remain the existing filtered
+canonical catalog; if it exposes aliases, derive and filter them from this
+same mapping rather than maintaining another list.
+
+A pinned Vibe fixture records CLI version, active display alias and actual
+API name. Resolver tests assert target profile existence, provider/transport
+consistency, unchanged capabilities and identical canonical/alias eligibility.
+The CLI/catalog update recipe must update that fixture and its mapping in the
+same change when the wire name or target changes. Removing/renaming the target
+without updating aliases fails the existing mesh test gate. Never fetch an
+unreviewed upstream `latest` during CI to mutate the mapping.
+
+### 16.9 Tests and acceptance
+
+The exact source/test manifest and build order are in
+`.h2a/design/responses-route.md`. Required evidence is additive to §15 tests:
+
+1. Unit fixtures cover every supported input/output mapping, tool id versus
+   call id, interleaved calls, empty valid responses, reasoning/refusal,
+   incomplete/error terminals, UTF-8/chunk boundaries and all limits. Native
+   Codex and translated Muse/Mistral fixtures exercise real adapter codecs.
+2. Route contracts run both aliases through the same Hono/router/mesh flow,
+   with JSON and SSE. Assert caller ownership, zero dispatch on refusal,
+   identical lease/meter/budget effects, pre-byte fallback and no post-byte
+   fallback, cancellation and cleanup. Verify product `/api/v1/gw` mounting,
+   caller bridge and author fence, not just the standalone package.
+3. Acquire sanitized full initial and tool-continuation bodies from the pinned
+   Muse and Codex clients using an isolated recording endpoint with provider
+   dispatch disabled. Preserve types, field presence, tool schemas, ids and
+   argument/result structure; replace secret/personal content, not semantics.
+   Capture both observed Muse request shapes. Replay committed fixtures in CI
+   without installing clients, using synthetic upstream responses. Record
+   fixture provenance and SHA-256, and distinguish reconstructed unit cases
+   from real captures. Also pin the Vibe default model projection.
+4. The UAT P0 interceptor must recognize both new Responses paths before the
+   fixed gateway is probed; its current Messages/Chat-only condition is no
+   longer sufficient to prevent live inference. No OAuth/enrollment is needed
+   for capture. If a required shape is unsupported, resolve it in #662 before
+   declaring client compatibility.
+5. Re-run existing Messages, Chat, count-token, budget, ownership and health
+   regressions. In particular, counting 401/403/429 leaves accounts active,
+   local Responses failures never mark reauth/cooldown, and only an actual
+   provider inference signal can invoke the existing degradation rules.
+6. Real Muse and Codex smoke tests must complete a streamed text turn and a
+   tool/result/continuation round trip; Vibe must run with its unmodified
+   default model. Record client versions, requested/actual route, candidate
+   package provenance, settlement count and lease cleanup. Empty-pool 503
+   proves recognition/admission only, not successful inference. Provider
+   enrollment remains a separate prerequisite for live qualification; a
+   blocked enrollment must not be reported as PASS.
+
+Acceptance requires both Responses paths to leave the router-404 state,
+all mandatory full CLI fixtures to pass without parameter loss, the Vibe
+default alias to resolve to the pinned Mistral target, and the above accounting
+and existing-wire regressions to pass. Gemini native ingress remains explicitly
+unqualified and does not block this scoped acceptance. Builds and qualification
+belong to the implementation run, not this documentation-only design task.
+
+Wire event names and completed-item semantics follow the
+[official OpenAI Responses streaming reference](https://developers.openai.com/api/reference/resources/responses/streaming-events).
+Transport availability and limitations above are grounded in this checkout's
+runtime clients and UAT, not inferred from that API reference.
