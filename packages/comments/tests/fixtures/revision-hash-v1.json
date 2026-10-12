@@ -428,3 +428,146 @@
     {
       "id": "box-full-frame",
       "frame": {
+        "width": 200,
+        "height": 100,
+        "digest": "frame-digest-1"
+      },
+      "input": {
+        "kind": "box",
+        "x": "0",
+        "y": "0",
+        "width": "1",
+        "height": "1"
+      },
+      "quantized": {
+        "kind": "box",
+        "x": 0,
+        "y": 0,
+        "width": 1000000,
+        "height": 1000000
+      }
+    },
+    {
+      "id": "circle-complete-shorter-dimension",
+      "frame": {
+        "width": 200,
+        "height": 100,
+        "digest": "frame-digest-1"
+      },
+      "input": {
+        "kind": "circle",
+        "cx": "0.5",
+        "cy": "0.5",
+        "r": "0.5"
+      },
+      "quantized": {
+        "kind": "circle",
+        "cx": 500000,
+        "cy": 500000,
+        "r": 500000
+      }
+    },
+    {
+      "id": "circle-quarter-200x100",
+      "frame": {
+        "width": 200,
+        "height": 100,
+        "digest": "frame-digest-1"
+      },
+      "input": {
+        "kind": "circle",
+        "cx": "0.5",
+        "cy": "0.5",
+        "r": "0.25"
+      },
+      "quantized": {
+        "kind": "circle",
+        "cx": 500000,
+        "cy": 500000,
+        "r": 250000
+      }
+    }
+  ],
+  "rejections": [
+    {
+      "id": "circle-overflow-200x100",
+      "frame": {
+        "width": 200,
+        "height": 100,
+        "digest": "frame-digest-1"
+      },
+      "input": {
+        "kind": "circle",
+        "cx": "0.5",
+        "cy": "0.5",
+        "r": "0.51"
+      },
+      "code": "circle-overflow"
+    },
+    {
+      "id": "box-collapse",
+      "frame": {
+        "width": 200,
+        "height": 100,
+        "digest": "frame-digest-1"
+      },
+      "input": {
+        "kind": "box",
+        "x": "0.1",
+        "y": "0.1",
+        "width": "0",
+        "height": "0.5"
+      },
+      "code": "collapsed-size"
+    },
+    {
+      "id": "decimal-exponent",
+      "input": "1.5e3",
+      "code": "invalid-decimal"
+    },
+    {
+      "id": "decimal-leading-plus",
+      "input": "+1",
+      "code": "invalid-decimal"
+    },
+    {
+      "id": "decimal-leading-dot",
+      "input": ".5",
+      "code": "invalid-decimal"
+    },
+    {
+      "id": "decimal-trailing-dot",
+      "input": "1.",
+      "code": "invalid-decimal"
+    },
+    {
+      "id": "decimal-whitespace",
+      "input": " 1",
+      "code": "invalid-decimal"
+    },
+    {
+      "id": "lone-surrogate",
+      "charCodes": [55296, 97],
+      "code": "invalid-envelope"
+    },
+    {
+      "id": "float-value",
+      "value": 0.5,
+      "code": "invalid-envelope"
+    },
+    {
+      "id": "unsafe-integer",
+      "value": 9007199254740992,
+      "code": "invalid-envelope"
+    },
+    {
+      "id": "envelope-kind-override",
+      "code": "invalid-envelope"
+    },
+    {
+      "id": "unknown-record-kind",
+      "kind": "not-a-kind",
+      "code": "invalid-kind"
+    }
+  ]
+}
