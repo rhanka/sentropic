@@ -3,8 +3,8 @@ import { createRemoteJudgeClient } from '../src/judge/client.js';
 import { judgeRequest, qualifiedDescriptor } from './judge-fixtures.js';
 import type { JudgeReceipt, JudgeResult } from '../src/judge/receipt.js';
 
-const mockReceipt = (): JudgeReceipt => ({
-  schemaVersion: 1, callId: 'test-call-1', correlationId: 'test-corr-1',
+const mockReceipt = (correlationId = 'test-corr-1'): JudgeReceipt => ({
+  schemaVersion: 1, callId: 'test-call-1', correlationId,
   evaluator: qualifiedDescriptor().evaluator, servedEvaluator: qualifiedDescriptor().evaluator,
   servedModelId: 'synthetic-served-model', startedAt: '2026-10-12T00:00:00.000Z',
   finishedAt: '2026-10-12T00:00:01.000Z', latencyMs: 1000, dispatch: 'completed', attempts: 1,
@@ -15,10 +15,10 @@ const mockReceipt = (): JudgeReceipt => ({
   budget: { state: 'settled', overrun: false }, outcome: 'verdict',
 });
 
-const mockVerdictResult = (): JudgeResult => ({
+const mockVerdictResult = (correlationId = 'test-corr-1'): JudgeResult => ({
   kind: 'verdict', ok: true,
   verdict: { decision: { pass: true }, confidence: { value: 0.95 }, score: { value: 0.95 } },
-  receipt: mockReceipt(),
+  receipt: mockReceipt(correlationId),
 });
 
 describe('remote judge client', () => {
@@ -28,7 +28,8 @@ describe('remote judge client', () => {
     const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       capturedUrl = String(url);
       capturedInit = init;
-      return new Response(JSON.stringify(mockVerdictResult()), { status: 200, headers: { 'content-type': 'application/json' } });
+      const corr = JSON.parse(String(init?.body)).correlationId;
+      return new Response(JSON.stringify(mockVerdictResult(corr)), { status: 200, headers: { 'content-type': 'application/json' } });
     });
     const client = createRemoteJudgeClient({
       baseUrl: 'https://mesh.internal/llm-mesh',
@@ -51,7 +52,7 @@ describe('remote judge client', () => {
     let sentBody: Record<string, unknown> | undefined;
     const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
       sentBody = JSON.parse(String(init?.body));
-      return new Response(JSON.stringify(mockVerdictResult()), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify(mockVerdictResult(sentBody?.correlationId as string)), { status: 200, headers: { 'content-type': 'application/json' } });
     });
     const client = createRemoteJudgeClient({
       baseUrl: 'https://mesh.internal/llm-mesh/judge',
@@ -64,15 +65,23 @@ describe('remote judge client', () => {
   });
 
   it('returns typed error result when server returns error with receipt', async () => {
-    const errorResult: JudgeResult = {
-      kind: 'error', ok: false,
-      error: { code: 'REQUEST_INVALID', message: 'Invalid judge request.', phase: 'preflight', retryable: false },
-      receipt: { ...mockReceipt(), outcome: 'error', errorCode: 'REQUEST_INVALID' },
-    };
-    const fetch = vi.fn(async () => new Response(JSON.stringify(errorResult), { status: 400, headers: { 'content-type': 'application/json' } }));
+    let sentCorr = '';
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      sentCorr = JSON.parse(String(init?.body)).correlationId;
+      const errorResult: JudgeResult = {
+        kind: 'error', ok: false,
+        error: { code: 'REQUEST_INVALID', message: 'Invalid judge request.', phase: 'preflight', retryable: false },
+        receipt: { ...mockReceipt(sentCorr), outcome: 'error', errorCode: 'REQUEST_INVALID' },
+      };
+      return new Response(JSON.stringify(errorResult), { status: 400, headers: { 'content-type': 'application/json' } });
+    });
     const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
     const result = await client.judge(judgeRequest());
-    expect(result).toEqual(errorResult);
+    expect(result).toEqual({
+      kind: 'error', ok: false,
+      error: { code: 'REQUEST_INVALID', message: 'Invalid judge request.', phase: 'preflight', retryable: false },
+      receipt: { ...mockReceipt(sentCorr), outcome: 'error', errorCode: 'REQUEST_INVALID' },
+    });
   });
 
   it('returns connection failure on network error without retrying', async () => {
@@ -152,7 +161,7 @@ describe('remote judge client', () => {
       usage: { evaluatorCalls: null },
       correlationId: 'weird-corr',
     });
-    expect(result).not.toHaveProperty('receipt.budget');
+    expect(result.receipt).toBeNull();
   });
 
   it('keeps execution and cost uncertainty on unknown wire error phase', async () => {
@@ -182,5 +191,65 @@ describe('remote judge client', () => {
       expect(result.kind).toBe('connection-failure');
       expect(fetch).toHaveBeenCalledOnce();
     }
+  });
+
+  it('bounds slow body stream reading by caller deadline and returns TIMEOUT', async () => {
+    vi.useFakeTimers();
+    try {
+      const stream = new ReadableStream<Uint8Array>({
+        start() {},
+      });
+      const fetch = vi.fn(async () => new Response(stream, { status: 200 }));
+      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', timeoutMs: 1000, fetch: fetch as unknown as typeof globalThis.fetch });
+      const resultPromise = client.judge(judgeRequest());
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await resultPromise;
+      expect(result).toMatchObject({
+        kind: 'connection-failure', ok: false, error: { code: 'TIMEOUT', phase: 'dispatch' },
+        receipt: null, callStatus: 'unknown',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels reader and returns CANCELLED when aborted during stream read', async () => {
+    const controller = new AbortController();
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start() {},
+      cancel() { cancelled = true; },
+    });
+    const fetch = vi.fn(async () => {
+      setTimeout(() => controller.abort(), 10);
+      return new Response(stream, { status: 200 });
+    });
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest(), { signal: controller.signal });
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false, error: { code: 'CANCELLED', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+    });
+    expect(cancelled).toBe(true);
+  });
+
+  it('refuses 3xx redirects without forwarding headers or following', async () => {
+    let capturedInit: RequestInit | undefined;
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      capturedInit = init;
+      return new Response(null, { status: 307, headers: { location: 'https://evil.internal/judge' } });
+    });
+    const client = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      headers: { 'x-custom-secret': 'secret-value' },
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const result = await client.judge(judgeRequest());
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+    });
+    expect(capturedInit?.redirect).toBe('manual');
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });
