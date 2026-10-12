@@ -320,6 +320,105 @@ describe('live registration', () => {
     expect(calls).toEqual(['save', 'save', 'save']);
   });
 
+  it('enforces monotonic binding revisions, revalidation and initial binding rules', async () => {
+    const { store } = memoryStore();
+    const live = registration(store, deferredWorkFake(0), purgeFake().port);
+    const id = sampleIdentity('host-m3', 'repo-m3');
+    await live.declare({
+      tenant: 'tenant-m3',
+      principal: 'principal-m3',
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      identityUncertainty: id.identityUncertainty,
+      hostFingerprint: 'ws:m3',
+      authorizedRoots: ['/repos/m3'],
+      policyVersion: 'live-git-indexing/1',
+      serverWorkspaceId: 'ws-m3',
+      serverIssuer: 'https://idp.example',
+      bindingRevision: INITIAL_BINDING_REVISION,
+    });
+
+    // Refusal of equal or lower bindingRevision
+    await expect(live.revise(
+      'tenant-m3',
+      id.declarationId,
+      { bindingRevision: INITIAL_BINDING_REVISION },
+      id.cloneId,
+      id.worktreeId,
+    )).rejects.toThrow(/monotonic/);
+
+    // Changing issuer alone requires fresh strictly increasing bindingRevision
+    await expect(live.revise(
+      'tenant-m3',
+      id.declarationId,
+      { serverIssuer: 'https://idp-2.example' },
+      id.cloneId,
+      id.worktreeId,
+    )).rejects.toThrow(/strictly increasing bindingRevision/);
+
+    const issuerRevised = await live.revise(
+      'tenant-m3',
+      id.declarationId,
+      {
+        serverIssuer: 'https://idp-2.example',
+        bindingRevision: INITIAL_BINDING_REVISION + 1,
+      },
+      id.cloneId,
+      id.worktreeId,
+    );
+    expect(issuerRevised.serverIssuer).toBe('https://idp-2.example');
+    expect(issuerRevised.bindingRevision).toBe(INITIAL_BINDING_REVISION + 1);
+
+    // Explicit revalidation
+    const revalidated = await live.revise(
+      'tenant-m3',
+      id.declarationId,
+      { bindingRevision: INITIAL_BINDING_REVISION + 2 },
+      id.cloneId,
+      id.worktreeId,
+    );
+    expect(revalidated.bindingRevision).toBe(INITIAL_BINDING_REVISION + 2);
+
+    // Local-only declaration transitioning to product binding requires bindingRevision === INITIAL_BINDING_REVISION (1)
+    const localId = sampleIdentity('host-m3', 'local-repo');
+    await live.declare({
+      tenant: 'tenant-m3',
+      principal: 'principal-local',
+      declarationId: localId.declarationId,
+      cloneId: localId.cloneId,
+      worktreeId: localId.worktreeId,
+      identityUncertainty: localId.identityUncertainty,
+      hostFingerprint: 'ws:local',
+      authorizedRoots: ['/repos/local'],
+      policyVersion: 'live-git-indexing/1',
+    });
+    await expect(live.revise(
+      'tenant-m3',
+      localId.declarationId,
+      {
+        serverWorkspaceId: 'ws-local',
+        serverIssuer: 'https://idp.example',
+        bindingRevision: 2,
+      },
+      localId.cloneId,
+      localId.worktreeId,
+    )).rejects.toThrow(/first product binding to carry bindingRevision 1/);
+
+    const firstBound = await live.revise(
+      'tenant-m3',
+      localId.declarationId,
+      {
+        serverWorkspaceId: 'ws-local',
+        serverIssuer: 'https://idp.example',
+        bindingRevision: INITIAL_BINDING_REVISION,
+      },
+      localId.cloneId,
+      localId.worktreeId,
+    );
+    expect(firstBound.bindingRevision).toBe(INITIAL_BINDING_REVISION);
+  });
+
   it('mirrors canonical identity derivations with exact golden parity', () => {
     const clone = deriveCloneIdentity({
       hostScope: 'host:a',
