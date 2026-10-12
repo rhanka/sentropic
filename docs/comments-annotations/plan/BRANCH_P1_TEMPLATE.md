@@ -124,3 +124,60 @@
   - [ ] Allocate ENV/API/UI/Maildev ports and local build slot; name exact new source/test paths and resolve neutral runner/identity/surface exceptions.
   - [ ] Gate: scope and checks support independent P1/P2/P4-M/P5 evidence, with green existing API CI and separate S/U responsibilities.
 
+- [ ] **Lot 1 — M1 canonical contracts and contract-freeze receipt**
+  - [ ] Add plan M.A contracts under distinct canonical exports, preserving the old app-facing signatures and unchanged contracts primitives including CheckpointVersion.
+  - [ ] Define root, /pg and canonical /hono public signatures, ports and wire/DTOs in contract-v1, with later implementations marked due. Root uses a driver-agnostic transaction handle; no Drizzle/pg type is reachable from root or /hono. Qualify G2's isolated /pg against ARCH-12's optional-executor/behavioral CHANGELOG clause.
+  - [ ] Define every SPEC §4.4 record kind/stream; distinguish mutable aggregate/tombstone projections, lifecycle events, operation audits and host-declared conversion reports.
+  - [ ] Keep annotation primary identity immutable across revisions; close structural triggers, revision pins, observed/conversion/unknown source indicators, provenance/source time, CommonMark/mentions/profiles/segments and capacity descriptor.
+  - [ ] Preserve exact decimal-string millionth geometry, endpoint boxes, complete shorter-dimension circles in non-square frames, box-collapse denial and crop/frame changes, integer registration time, code-point offsets and no implicit normalization.
+  - [ ] Separate pure hash vectors from command/host conformance: IDs cannot reveal shadow/alias or synthetic/real membership. Host resolver tests belong to P4-S/P6.
+  - [ ] Restore all SPEC §4.4 corpus/behavior cases: plain discussions, different annotation-revision pins, unavailable targets, changed selection/capture, denied/unconfigured authority, unchanged/conflicting replay and linked corrections.
+  - [ ] Implement CAS/idempotency/default denial, all-target access, exact-hash G3/history, archive/tombstone semantics and G4 base/proposed-content binding without circular output hashes. Audit human decision, optional agent proposal and executor/service/run separately; default scope/admin flags never replace authority.
+  - [ ] Tests: existing domain-schema, in-memory-crud, tenant-scoping, threading, thread-cascade, thread-summary, wire-events and hono suites; canonical annotation-anchors/revisions/reviews/retention/conformance, revision-hash and fixtures/revision-hash-v1.json; conformance/comments-conformance.ts and conformance/in-memory.ts.
+  - [ ] Gate: server corpus plus browser-safe root, descriptor completeness and cross-review; no browser executor here.
+  - [ ] Produce docs/comments-annotations/contract/contract-v1.json with exact artifacts/source/evidence hashes and declared M2/M3 exports, reviewed by Astra max/Opus 5.5 max; index freeze receipt and host acknowledgement. OWNER-D1 synthetic preparation can then begin.
+
+- [ ] **Lot 2 — M2 portable PG, attached history and lifecycle**
+  - [ ] Add plan M.B /pg schema/store/transactions/migrations/change-log/cursors/dispatcher/purge modules and immutable assets; inject connection/clock/IDs, no API imports or autonomous migrator.
+  - [ ] Neutral host bootstraps the extension table through its own schema history; record bootstrap/migration/asset/predecessor/checksum and conversion completion transactionally.
+  - [ ] Prove scheduling-lock then conversion-lock then deterministic scope-lock order, crash resume, actual packaged/applied byte comparisons and non-skipped upgrades.
+  - [ ] Commit model/audit/heads/idempotency/receipts/log atomically; persist canonical bytes and verify PG reload, concurrent allocation, expiry/resync and retry deduplication.
+  - [ ] Implement aggregate conversion report: opaque frozen inventory, admissible-manifest digest, host completeness declaration, disjoint source-unit equation; no excluded-row details in manifests, receipts, logs or exports produced with comments tooling, or fabricated completeness.
+  - [ ] Implement irreversible tombstones and separate archive, durable purge intent/receipt, revocation/holds/shared-blob handling with synthetic policies; recovery cannot resurrect tombstones. No quarantine or invented hold may bypass OWNER-D4's legacy eradication in its owner-approved scope; this adds no Immo backup prescription. A live tombstone is not proof of backup/export/recipient erasure.
+  - [ ] Tests: pg-store.spec.ts, pg-migrations.spec.ts, pg-events.spec.ts, pg-retention.spec.ts, pg-mapping.spec.ts, fixtures/pg/** and shared conformance.
+  - [ ] Gate: actual neutral PG/runner bootstrap/upgrade/rollback/restore and security cross-review; Sentropic tenant/public/control/poison binding remains P4-S.
+
+- [ ] **Lot 3 — M3 common HTTP/services and unitary preparation**
+  - [ ] Create src/canonical-hono.ts and its distinct canonical /hono export, preserving old src/hono.ts signatures during staging; evolve the shared command layer; reserve collection routes and inject authorization/resource/capture/decision ports.
+  - [ ] Implement coherent importBatch/receipt recovery/exportBatch, changed-input conflict, linked correction/source evolution, copy/move and no inherited validation authority.
+  - [ ] Pin complete target/version/comment/structural/capture selection in an immutable unitary manifest with recoverable receipt; preparation invokes no AI.
+  - [ ] G4 rechecks authority, base/proposal binding, expiry/revocation and CAS; exact read/export and every page recheck scope/permissions.
+  - [ ] Tests: retain hono.spec.ts as old-app regression; add canonical-hono.spec.ts, batch-import.spec.ts, batch-export.spec.ts, annotation-submissions.spec.ts via real neutral HTTP/service/PG; partial atomic groups, commit-before-response, correction, denial and revocation.
+  - [ ] Gate: reviewed common model/API behavior and all five anchors, including data-only changed digest; no chat-server/controller/message/job/history/provider dependency.
+
+- [ ] **Lot 4 — M4 exact candidate and independent V0-M**
+  - [ ] Freeze clean model-branch source/base/parent/lock; pack root/hono/pg with SQL/manifest assets and full dependency closure, without source mounts or workspace symlinks.
+  - [ ] CONF3 n-7, delivery maintainer before P5/M4: qualify the actual delivery-branch workflow trigger without a main merge and record workflow/run/source identity. Branch pushes under the current workflow or unverified off-default workflow_dispatch are insufficient; retain the separately authorized exact direct-copy route.
+  - [ ] Reserve a unique prerelease on the reviewed breaking-minor line; include temporary-export inventory and canonical receiver reachability proof. Reject any same-version/different-integrity build/publication.
+  - [ ] Apply ARCH-D11=B with additive-preferred and ARCH-12: CHANGELOG BREAKING entry, packages/comments/MIGRATION.md using SPEC §3's comments-migration-note-v1 template, full packed export/wire surface comparison and reviewed bump class; inspect published versions and recheck after rebase.
+  - [ ] Audit root/hono/pg reachability, Hono/Zod and injected driver; enumerate every contracts resolver including comments/chat-core/events and installed chat-ui with exact resolution/integrity.
+  - [ ] Record contracts external-consumer trigger assessment under separate architecture authority; leave its source/version unchanged.
+  - [ ] Tests: exports.spec.ts, consumer-install.spec.ts, neutral-host-acceptance.spec.ts and fixtures/neutral-host/**; actual installed PG/HTTP save/reload/comment/review/prepare, recovery/export/lifecycle and synthetic policy denial.
+  - [ ] Gate: V0-M closes without Sentropic conversion or U; all current API CI checks remain green on the same commit. Record archives/manifest/lock and qualification receipts; no real delivery occurs automatically.
+
+- [ ] **Lot 5 — Delivery guide and separate integration handoffs**
+  - [ ] Document exact assets, extension bootstrap/history/lock order, independent install, candidate identity guard, available retrieval path, durable receiver copy, rebuild/restore and withdrawal.
+  - [ ] Prepare OWNER-D2 dossier for each actual package: exact qualified bytes/path/effects, receiver procedure and availability. Default implementation authority is not handoff approval.
+  - [ ] Hand P4-S its exact candidate commit and full consumer list; require distinct-version legacy removal, authority-bound tenant, text-cast source time, public/control binding, poison retry, deployment hold and schema-only startup then post-reconciliation retirement.
+  - [ ] Restore Sentropic backup/restore rehearsal under Q4; retain conversion-report counts for legacy rows not carried over. Immo's backups and their lifecycle are its own domain and decision, outside this template/SPEC; prepare Sentropic consumers offline.
+  - [ ] CONF3 n-6, respective host integration maintainers before P4-S/P6: prove that the Sentropic P4-S rehearsal gates only Sentropic's cutover; receiver reopening and independent delivery do not depend on it.
+  - [ ] Hand U browser execution and typed runtime/host acceptance; no new receiving-host UI decision is presumed.
+  - [ ] Record host first-entry attribution/redaction/scope, HOST-D3 implementation, Q3 activation/Q4 lifecycle, tenant-cutover and delivery/operation evidence at their actual gates.
+  - [ ] Gate: technical obligations have bounded responsible scopes; only genuinely uncovered owner choices receive concrete dossiers stating what the answer settles.
+
+- [ ] **Lot 6 — Final candidate verification and review**
+  - [ ] Run inspected Make model/PG/HTTP/pack/neutral checks plus existing API CI and relevant quality gates on the exact candidate; no UI/browser/chat-provider test is recast as M acceptance.
+  - [ ] Recheck branch/scope, every hunk, temporary exports, surface/version/migration notes, integrity/locks and documented durable evidence; rerun only affected checks after changes.
+  - [ ] BUILD cross-review by the other of Vibe GLM 5.3/Gemini 3.8 high; SPEC/plan/freeze deltas get Astra max/Opus 5.5 max convergence on resulting bytes.
+  - [ ] Sequence local builds; use exact ports and ENV last, clean only assigned environments. Never test on dev or use clean-all.
+  - [ ] Future PR text uses actual BRANCH.md; record candidate readiness with P4-S/main and actual delivery gates still separate. Do not run the generic branch-close merge sequence on this candidate branch.
