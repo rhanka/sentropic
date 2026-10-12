@@ -4,6 +4,7 @@
 // No durability, no SQL, no backend claim.
 
 import {
+  StorageCasConflictError,
   StorageDeniedError,
   StorageIdempotencyConflictError,
   StorageInvalidCommandError,
@@ -16,6 +17,7 @@ import {
   getScopeState,
   incrementAllocation,
   type ReferenceState,
+  type TestChainState,
 } from './reference-state.js';
 
 export type TestClock = () => string;
@@ -73,6 +75,7 @@ export class TestBoundStore {
     const chain = scopeState.chains.get(chainId);
     if (chain?.disposed) throw new StorageInvalidCommandError('chain disposed');
     if (expectation.kind === 'absent') {
+      if (expectation.allocation !== '0') throw new StorageInvalidCommandError('unexpected allocation for creation');
       if (chain) throw new StorageIdempotencyConflictError('chain already exists');
       scopeState.chains.set(chainId, {
         allocation: incrementAllocation('0'),
@@ -82,8 +85,8 @@ export class TestBoundStore {
       });
       return { seq: 0, hash: record.hash, replayed: false };
     }
-    if (!chain) throw new StorageIdempotencyConflictError('missing chain for head expectation');
-    if (chain.head !== expectation.hash) throw new StorageIdempotencyConflictError('stale head');
+    if (!chain) throw new StorageCasConflictError('missing chain for head expectation');
+    if (chain.head !== expectation.hash) throw new StorageCasConflictError('stale head');
     const seq = chain.records.length;
     chain.records.push({ ...record, seq });
     chain.head = record.hash;
@@ -127,6 +130,16 @@ export class TestBoundStore {
   readHead(chainId: string): string | null {
     this.requireOperation('read');
     return getScopeState(this.state, this.scope).chains.get(chainId)?.head ?? null;
+  }
+
+  readRecord(key: string): { readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; readonly contentHash: string } | null {
+    this.requireOperation('read');
+    return getScopeState(this.state, this.scope).records.get(key) ?? null;
+  }
+
+  readAggregate(key: string): { readonly version: number; readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string } } | null {
+    this.requireOperation('read');
+    return getScopeState(this.state, this.scope).aggregates.get(key) ?? null;
   }
 
   readChain(chainId: string): readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[] {
@@ -185,7 +198,7 @@ export class TestBoundStore {
     for (const guard of unit.guards) {
       if (guard.kind === 'head') {
         const head = scopeState.chains.get(guard.chainId)?.head ?? null;
-        if (head !== guard.hash) throw new StorageIdempotencyConflictError('guard head mismatch');
+        if (head !== guard.hash) throw new StorageCasConflictError('guard head mismatch');
       }
       if (guard.kind === 'absent') {
         if (scopeState.chains.has(guard.chainId)) throw new StorageIdempotencyConflictError('guard absent violated');
@@ -193,18 +206,27 @@ export class TestBoundStore {
     }
     for (const append of unit.appends) {
       const chain = scopeState.chains.get(append.chainId);
-      if (append.expectation.kind === 'absent' && chain) {
-        throw new StorageIdempotencyConflictError('stale creation expectation');
+      if (append.expectation.kind === 'absent') {
+        if (append.expectation.allocation !== '0') throw new StorageInvalidCommandError('unexpected allocation at commit');
+        if (chain) throw new StorageIdempotencyConflictError('stale creation expectation');
       }
       if (append.expectation.kind === 'head' && chain?.head !== append.expectation.hash) {
-        throw new StorageIdempotencyConflictError('stale head at commit');
+        throw new StorageCasConflictError('stale head at commit');
       }
     }
+    const stagedChains = new Map<string, TestChainState>();
+    for (const [id, chain] of scopeState.chains) {
+      stagedChains.set(id, { allocation: chain.allocation, head: chain.head, records: [...chain.records], disposed: chain.disposed });
+    }
+    const stagedIndex = new Map(scopeState.index);
+    const stagedRecords = new Map(scopeState.records);
+    const stagedAggregates = new Map(scopeState.aggregates);
     let applied = 0;
     for (const append of unit.appends) {
-      const chain = scopeState.chains.get(append.chainId);
+      const chain = stagedChains.get(append.chainId);
+      if (chain?.disposed) throw new StorageInvalidCommandError('chain disposed at commit');
       if (!chain) {
-        scopeState.chains.set(append.chainId, {
+        stagedChains.set(append.chainId, {
           allocation: incrementAllocation('0'),
           head: append.record.hash,
           records: [{ id: append.record.id, seq: 0, hash: append.record.hash, bytes: append.record.bytes }],
@@ -219,14 +241,32 @@ export class TestBoundStore {
       applied += 1;
     }
     for (const write of unit.indexWrites) {
-      const stored = scopeState.index.get(write.key);
+      const stored = stagedIndex.get(write.key);
       if (stored && stored.digest !== write.digest) {
         throw new StorageIdempotencyConflictError('index digest conflict at commit');
       }
-      scopeState.index.set(write.key, { digest: write.digest, resultIds: write.resultIds, resultHash: write.resultHash });
+      stagedIndex.set(write.key, { digest: write.digest, resultIds: write.resultIds, resultHash: write.resultHash });
       applied += 1;
     }
+    for (const record of unit.records) {
+      const stored = stagedRecords.get(record.key);
+      if (stored && stored.contentHash !== record.contentHash) {
+        throw new StorageIdempotencyConflictError('record hash conflict at commit');
+      }
+      stagedRecords.set(record.key, { bytes: record.bytes, contentHash: record.contentHash });
+    }
+    for (const update of unit.updates) {
+      stagedAggregates.set(update.key, { version: update.version, value: update.value });
+    }
     applied += unit.records.length + unit.updates.length;
+    scopeState.chains.clear();
+    for (const [id, chain] of stagedChains) scopeState.chains.set(id, chain);
+    scopeState.index.clear();
+    for (const [key, entry] of stagedIndex) scopeState.index.set(key, entry);
+    scopeState.records.clear();
+    for (const [key, entry] of stagedRecords) scopeState.records.set(key, entry);
+    scopeState.aggregates.clear();
+    for (const [key, entry] of stagedAggregates) scopeState.aggregates.set(key, entry);
     this.commitSeq += 1;
     const receipt: CommitReceipt = {
       commitId: `commit-${this.commitSeq}`,

@@ -26,10 +26,22 @@ export interface TestIndexEntry {
   readonly resultHash: string | null;
 }
 
+export interface TestAtomicRecord {
+  readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string };
+  readonly contentHash: string;
+}
+
+export interface TestAggregate {
+  readonly version: number;
+  readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string };
+}
+
 export interface TestScopeState {
   readonly chains: Map<string, TestChainState>;
   readonly genesis: Map<string, TestGenesisState>;
   readonly index: Map<string, TestIndexEntry>;
+  readonly records: Map<string, TestAtomicRecord>;
+  readonly aggregates: Map<string, TestAggregate>;
   readonly receipts: Map<string, unknown>;
 }
 
@@ -50,6 +62,8 @@ export const getScopeState = (state: ReferenceState, scope: { readonly tenantId:
     chains: new Map(),
     genesis: new Map(),
     index: new Map(),
+    records: new Map(),
+    aggregates: new Map(),
     receipts: new Map(),
   };
   state.scopes.set(key, created);
