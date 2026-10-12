@@ -2,9 +2,10 @@
  * Canonical command store port (SPEC §3, §4.4).
  *
  * The root exposes only this driver-agnostic transaction handle and store
- * port: no Drizzle or pg type is reachable from the root or `/hono`. The
- * portable `/pg` adapter and the canonical HTTP router are declared surfaces
- * with implementations due at M2/M3.
+ * port: no driver-specific type is reachable from the root. The durable
+ * storage adapter and the canonical HTTP composition are declared surfaces
+ * owned by the cluster-mesh module (owner decision 2026-10-11), with
+ * implementations due at M2/M3.
  */
 
 import type { IdempotencyKey } from '@sentropic/contracts';
@@ -113,27 +114,30 @@ export interface CanonicalCommandStore {
 }
 
 /**
- * DECLARED — IMPLEMENTATION DUE M2: the `@sentropic/comments/pg` public
- * surface. Generic schema, packaged migrations and the transaction-capable
- * adapter run in the host's database with injected connection/clock/IDs; no
- * API import, no autonomous migrator.
+ * DECLARED — IMPLEMENTATION DUE M2 (owner decision 2026-10-11): the durable
+ * adapter of this port belongs to the cluster-mesh module, built on the
+ * generic cluster-mesh storage port with injected connection, clock and ID
+ * dependencies. This neutral declaration pins the port type and the
+ * injected-dependency rule only; the owning module declares its own
+ * entrypoints, schema and migration assets.
  */
-export type CanonicalPgSurface = {
-  readonly exportPath: './pg';
-  readonly store: 'CanonicalCommandStore (pg adapter)';
-  readonly migrations: 'packages/comments/migrations/**';
+export type CanonicalStorageAdapterSurface = {
+  readonly port: CanonicalCommandStore;
+  readonly basis: 'generic-cluster-mesh-storage-port';
+  readonly dependencies: 'injected-connection-clock-ids';
   readonly status: 'due-m2';
 };
 
 /**
- * DECLARED — IMPLEMENTATION DUE M3: the canonical `/hono` export authored in
- * `src/canonical-hono.ts`, distinct from the legacy router in `src/hono.ts`,
- * which keeps its exact old signatures during staging.
+ * DECLARED — IMPLEMENTATION DUE M3 (owner decision 2026-10-11): the canonical
+ * HTTP composition belongs to the cluster-mesh module and is exported through
+ * that module's entrypoint. This declaration pins the entrypoint name, the
+ * factory signature and the injected ports — never a placement path.
  */
-export type CanonicalHonoSurface = {
-  readonly exportPath: './hono';
-  readonly router: 'createCanonicalCommentsRouter';
-  readonly ports: 'CanonicalHttpPorts';
+export type CanonicalHttpSurface = {
+  readonly entrypoint: 'createCanonicalCommentsRouter';
+  readonly factorySignature: 'CanonicalRouterFactory';
+  readonly ports: CanonicalHttpPorts;
   readonly status: 'due-m3';
 };
 
