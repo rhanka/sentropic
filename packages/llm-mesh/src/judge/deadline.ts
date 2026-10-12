@@ -1,7 +1,7 @@
 import type { JudgeErrorCode } from './errors.js';
 import { createJudgeError } from './errors.js';
 import type { JudgeExecution } from './execution.js';
-import { closeJudgeReceipt, copyJudgeReceipt } from './execution.js';
+import { copyJudgeReceipt } from './execution.js';
 import type { JudgeReceipt, JudgeResult } from './receipt.js';
 
 function interruptedResult(execution: JudgeExecution, code: JudgeErrorCode): JudgeResult {
