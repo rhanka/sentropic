@@ -19,6 +19,7 @@ const attachInput = (overrides = {}) => ({
   workspaceId: 'workspace-1',
   sessionTenantId: 'tenant-a',
   workspaceTenantId: 'tenant-a',
+  principalId: 'user-1',
   ...overrides,
 });
 
@@ -68,6 +69,33 @@ describe('session workspace binding', () => {
     expect(ended.status).toBe('ended');
     expect(ended.workspaceId).toBe('workspace-1');
     await expect(service.attach(attachInput())).rejects.toMatchObject({ code: 'session_ended' });
+  });
+
+  it('should store principalId on attach', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const binding = await service.attach(attachInput({ principalId: 'user-1' }));
+    expect(binding.principalId).toBe('user-1');
+  });
+
+  it('should enforce rights on detach: refuse unauthorized caller, allow owner and admin', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput({ principalId: 'user-1' }));
+    await expect(service.detach('session-1', 'tenant-a', 'user-2', false))
+      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    const detached = await service.detach('session-1', 'tenant-a', 'user-2', true);
+    expect(detached.status).toBe('detached');
+  });
+
+  it('should enforce rights on end: refuse unauthorized caller, allow owner and admin', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput({ principalId: 'user-1' }));
+    await expect(service.end('session-1', 'tenant-a', 'user-2', false))
+      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    const ended = await service.end('session-1', 'tenant-a', 'user-2', true);
+    expect(ended.status).toBe('ended');
   });
 
   it('should refuse cross-tenant attach', async () => {
