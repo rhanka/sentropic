@@ -335,3 +335,50 @@ only then publishes through npm OIDC provenance. The workflow never writes the v
 
 Published versions are immutable. Keep the previous and replacement clients valid for an agreed
 grace period, or explicitly accept that revocation breaks enrollment for older package versions.
+
+## Generic Judge Capability
+
+`@sentropic/llm-mesh` provides strict judge evaluation contracts, portable client execution, and a deterministic JEV (Judge Evaluator/Verdict) host service via three distinct export subpaths:
+
+- `@sentropic/llm-mesh/judge`: Consumer contracts (`EvaluatorRef`, `JudgeRequest`, `JudgeResult`, `JudgeVerdict`, `JudgeReceipt`) and portable remote client (`createRemoteJudgeClient`).
+- `@sentropic/llm-mesh/judge/host`: Trusted host factory (`createJudgeService`) and JEV adapter (`createJevAdapter`).
+- `@sentropic/llm-mesh/transport/jev`: Deterministic JEV transport (`createJevTransport`).
+
+### Consumer usage
+
+```ts
+import { createRemoteJudgeClient } from '@sentropic/llm-mesh/judge';
+
+const client = createRemoteJudgeClient({
+  baseUrl: 'https://llm.sent-tech.ca',
+  resolveToken: async () => 'secret-bearer-token',
+  timeoutMs: 10_000, // Client applies +1 000 ms grace margin (11 000 ms total)
+});
+
+const result = await client.judge({
+  schemaVersion: 1,
+  evaluator: { providerId: 'typesafe', modelId: 'jev-1.13.0', revision: 'syn-v1' },
+  inputs: { output: 'Candidate completion', state: null },
+  criterion: { kind: 'binary', instructions: 'Verify output correctness' },
+  decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 },
+  correlationId: 'corr-judge-100',
+});
+```
+
+### Host usage
+
+```ts
+import { createJudgeService, createJevAdapter } from '@sentropic/llm-mesh/judge/host';
+import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
+import { createProviderRegistry } from '@sentropic/llm-mesh';
+
+const adapter = createJevAdapter({ descriptor: jevDescriptor, transport: createJevTransport({ endpoint: 'https://api.jev.ai/v1/eval' }) });
+const service = createJudgeService({ registry: createProviderRegistry([adapter]), resolveEvaluator, resolvePrice, authorize, budget, receipts, resolveAuth, clock });
+```
+
+### Deadline & Failure Semantics
+
+- **Deadline margin**: The client waits server deadline + 1 000 ms grace margin (11 000 ms default, 61 000 ms cap) so that the server's own timeout receipt reaches the client before client-side abort.
+- **Phase-aware errors**: `preflight`, `admission`, `dispatch`, `settlement`. Settlement and post-result timeouts have `retryable: false`.
+- **Advisory retry hints**: Bounded strictly to a 60-second ceiling.
+- **Normalization & security**: Unsafe JSON keys (`__proto__`, `constructor`, `prototype`) are rejected. MicroUsd prices use integer strings. Null candidate output/state is accepted; absent/undefined is refused.

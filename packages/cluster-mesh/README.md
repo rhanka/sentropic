@@ -295,3 +295,21 @@ Manual publication is forbidden. For the first release, merge the validated pack
 run the `ci.yml` workflow with `bootstrap_publish_target=cluster-mesh`, then attach the
 npm OIDC trusted publisher to `rhanka/sentropic` and `ci.yml`. Later releases use the
 repository CI publication path.
+
+## LLM Mesh Composition with Judge Support
+
+`createLlmMeshNamespaceModule` supports optional judge hosting via `{ judge: true, judgeHost }`. When `judge` is omitted or false, judge subpaths are not acquired.
+
+```ts
+import { createLlmMeshNamespaceModule, createClusterMeshModules } from '@sentropic/cluster-mesh';
+
+const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
+  enabled: true,
+  judge: true,
+  judgeHost: { jevDescriptor, createJudgeService, createJevAdapter },
+});
+```
+
+### Correlation & Receipt Neutrality
+
+The registration gate validates generation policy (`generationId`). Refusals produce stage `verified` with `decision: 'refused'` and code-derived `reason: 'generation_mismatch'` without emitting an `acted` stage. Neutral invocation receipts correlate via `effectRef` (`receipt:${callId}:metadata`), strictly preserving verdict privacy without exposing `pass`, `score`, or `noul` values.
