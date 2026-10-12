@@ -39,6 +39,8 @@
   - [x] `packages/cluster-mesh/tests/storage/reference.spec.ts`
   - [x] `packages/cluster-mesh/tests/storage/mutations.spec.ts`
   - [x] `.h2a/build/k1_k2a_report.md`
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -59,7 +61,7 @@
   - [x] Mirror the same exception in this file under Feedback Loop.
 
 ## Feedback Loop
-- [x] No open items.
+- [x] `CI-666-1` — validate-cluster-mesh ENOENT on stale `file:../sentropic-cluster-mesh-0.13.3.tgz` after the 0.15.0 proposal; fixture and lock re-pointed to 0.15.0 via `refresh-lazy-package-lock`, `test-lazy-package` 63/63 green locally.
 
 ## AI Flaky tests
 - [x] No AI flaky tests in scope.
