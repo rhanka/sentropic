@@ -99,7 +99,7 @@
     - [x] K1 exit commit recorded.
 - [ ] Lot K2a — Test-only in-memory reference plus atomic, authority, chain, read corpus
   - [x] Implement packages/cluster-mesh/tests/storage/reference-state.ts (test-only).
-  - [ ] Implement packages/cluster-mesh/tests/storage/reference-store.ts (test-only).
+  - [x] Implement packages/cluster-mesh/tests/storage/reference-store.ts (test-only).
   - [x] Implement packages/cluster-mesh/tests/storage/atomic-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/authority-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/chain-corpus.ts.
