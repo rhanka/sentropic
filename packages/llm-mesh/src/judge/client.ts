@@ -1,6 +1,6 @@
 import type { JudgeRequest } from './request.js';
-import type { JudgeConnectionFailure, JudgeResult, RemoteJudgeClient } from './receipt.js';
-import { resolveJudgeCorrelationId, unreportedJudgeUsage } from './receipt.js';
+import type { JudgeConnectionFailure, JudgeReceipt, JudgeResult, RemoteJudgeClient } from './receipt.js';
+import { parseJudgeUsage, resolveJudgeCorrelationId, unreportedJudgeUsage } from './receipt.js';
 import type { JudgeError } from './errors.js';
 import { createJudgeError, isJudgeErrorCode } from './errors.js';
 import { JUDGE_MAX_JSON_BYTES, isRecord, snapshotBoundedJson } from './validation.js';
@@ -23,6 +23,15 @@ const resolveEndpoint = (base: string) => {
 type ConnectionErrorCode = 'MESH_UNAVAILABLE' | 'TRANSPORT_FAILED' | 'TIMEOUT' | 'CANCELLED';
 const connectionError = (code: ConnectionErrorCode, phase: 'preflight' | 'dispatch') =>
   createJudgeError(code, phase) as JudgeError & { code: ConnectionErrorCode };
+
+function isValidJudgeReceipt(r: unknown, expectedCorrelationId: string): r is JudgeReceipt {
+  if (!isRecord(r)) return false;
+  if (r.schemaVersion !== 1 || typeof r.callId !== 'string' || !r.callId) return false;
+  if (r.correlationId !== expectedCorrelationId) return false;
+  if (!isRecord(r.budget) || typeof r.budget.state !== 'string' || typeof r.budget.overrun !== 'boolean') return false;
+  if (!isRecord(r.cost) || typeof r.cost.status !== 'string' || typeof r.cost.amountMicroUsd !== 'string') return false;
+  return parseJudgeUsage(r.usage) !== null;
+}
 
 /** Remote judge client calling an authenticated mesh endpoint without custody of provider keys. */
 export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): RemoteJudgeClient {
@@ -131,7 +140,7 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
             }
             if (chunk.done) break;
             if (size + chunk.value.byteLength > cap) {
-              void reader.cancel().catch(() => {});
+              await reader.cancel().catch(() => {});
               return fail('MESH_UNAVAILABLE');
             }
             if (size + chunk.value.byteLength > chunks.byteLength) {
@@ -146,7 +155,7 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       } catch {
         return fail(timedOut ? 'TIMEOUT' : callOptions?.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED');
       } finally {
-        reader?.releaseLock();
+        try { reader?.releaseLock(); } catch {}
         clearTimeout(timer);
         callOptions?.signal?.removeEventListener('abort', onAbort);
       }
@@ -161,10 +170,12 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       const snapshot = snapshotBoundedJson(parsed, cap);
       if (!snapshot.ok || !isRecord(snapshot.value)) return fail('MESH_UNAVAILABLE');
       const val = snapshot.value;
-      if (val.kind === 'verdict' && val.ok === true && isRecord(val.verdict) && isRecord(val.receipt)) {
+      if (val.kind === 'verdict' && val.ok === true && isRecord(val.verdict)
+        && isValidJudgeReceipt(val.receipt, correlationId) && val.receipt.outcome === 'verdict') {
         return val as unknown as JudgeResult;
       }
-      if (val.kind === 'error' && val.ok === false && isRecord(val.error) && isRecord(val.receipt)) {
+      if (val.kind === 'error' && val.ok === false && isRecord(val.error)
+        && isValidJudgeReceipt(val.receipt, correlationId) && val.receipt.outcome === 'error') {
         const err = val.error;
         if (isJudgeErrorCode(err.code) && ['preflight', 'admission', 'dispatch', 'parse', 'settlement'].includes(err.phase as string)) {
           return val as unknown as JudgeResult;
