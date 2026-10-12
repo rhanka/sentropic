@@ -475,28 +475,19 @@ describe('live registration', () => {
       privatePurge: purge,
       bindingAuthorization,
     });
-    const clone = deriveCloneIdentity({
-      hostScope: 'host:a',
-      commonDirRealpath: '/srv/repo/.git',
-      commonDirProjectFingerprint: 'proj-fp-a',
-      oidAlgorithm: 'sha1',
-    });
-    const worktree = deriveWorktreeIdentity({
-      hostScope: 'host:a',
-      clone,
-      worktreePath: '/srv/repo',
-      gitDir: '/srv/repo/.git',
-    });
-    const declId = deriveDeclarationIdentity({ hostScope: 'host:a', clone, worktree });
+    const id = sampleIdentity('host-a', 'repo-denied');
 
     await expect(
       reg.declare({
         tenant: 'tenant-a',
         principal: 'principal-a',
-        hostScope: 'host:a',
-        clone,
-        worktree,
+        declarationId: id.declarationId,
+        cloneId: id.cloneId,
+        worktreeId: id.worktreeId,
+        identityUncertainty: id.identityUncertainty,
+        hostFingerprint: 'ws:sha256:denied',
         authorizedRoots: ['/srv/repo'],
+        policyVersion: 'live-git-indexing/1',
         serverWorkspaceId: 'ws-denied',
         serverIssuer: 'https://auth.example.com',
         bindingRevision: INITIAL_BINDING_REVISION,
@@ -510,29 +501,19 @@ describe('live registration', () => {
       serverIssuer: 'https://auth.example.com',
       bindingRevision: INITIAL_BINDING_REVISION,
     });
-    expect(await store.find('tenant-a', declId.declarationId, clone.cloneId, worktree.worktreeId)).toBeNull();
+    expect(await store.find('tenant-a', id.declarationId, id.cloneId, id.worktreeId)).toBeNull();
   });
 
   it('rejects declaration with unknown policy version', () => {
-    const clone = deriveCloneIdentity({
-      hostScope: 'host:a',
-      commonDirRealpath: '/srv/repo/.git',
-      commonDirProjectFingerprint: 'proj-fp-a',
-      oidAlgorithm: 'sha1',
-    });
-    const worktree = deriveWorktreeIdentity({
-      hostScope: 'host:a',
-      clone,
-      worktreePath: '/srv/repo',
-      gitDir: '/srv/repo/.git',
-    });
-    const declId = deriveDeclarationIdentity({ hostScope: 'host:a', clone, worktree });
+    const id = sampleIdentity('host-a', 'repo-invalid-policy');
     const invalid = {
       tenant: 'tenant-a',
       principal: 'principal-a',
-      declarationId: declId.declarationId,
-      cloneId: clone.cloneId,
-      worktreeId: worktree.worktreeId,
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      identityUncertainty: id.identityUncertainty,
+      hostFingerprint: 'ws:sha256:policy',
       authorizedRoots: ['/srv/repo'],
       liveCapability: 'live' as const,
       policyVersion: 'unknown-policy/9' as never,
@@ -540,7 +521,7 @@ describe('live registration', () => {
     };
     const check = validateWorkspaceDeclaration(invalid);
     expect(check.ok).toBe(false);
-    expect(check.errors).toContain(`policyVersion must be ${POLICY_VERSION}`);
+    expect(check.errors).toContain(`declaration.policyVersion must be the fixed live policy version "${POLICY_VERSION}"`);
   });
 
   it('refuses to cancel deferred work or request purge if withdrawal record fails or declaration unknown', async () => {
@@ -560,25 +541,17 @@ describe('live registration', () => {
     expect(unknownRes).toEqual({ ok: false, reason: 'unknown_declaration' });
     expect(received).toHaveLength(0);
 
-    const clone = deriveCloneIdentity({
-      hostScope: 'host:a',
-      commonDirRealpath: '/srv/repo/.git',
-      commonDirProjectFingerprint: 'proj-fp-a',
-      oidAlgorithm: 'sha1',
-    });
-    const worktree = deriveWorktreeIdentity({
-      hostScope: 'host:a',
-      clone,
-      worktreePath: '/srv/repo',
-      gitDir: '/srv/repo/.git',
-    });
+    const id = sampleIdentity('host-a', 'repo-fail-rec');
     const decl = await reg.declare({
       tenant: 'tenant-a',
       principal: 'principal-a',
-      hostScope: 'host:a',
-      clone,
-      worktree,
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      identityUncertainty: id.identityUncertainty,
+      hostFingerprint: 'ws:sha256:rec',
       authorizedRoots: ['/srv/repo'],
+      policyVersion: 'live-git-indexing/1',
     });
 
     vi.mocked(store.recordWithdrawal).mockResolvedValueOnce(false);
@@ -600,25 +573,17 @@ describe('live registration', () => {
     const { port: purge, received } = purgeFake();
     const reg = registration(store, work, purge);
 
-    const clone = deriveCloneIdentity({
-      hostScope: 'host:a',
-      commonDirRealpath: '/srv/repo/.git',
-      commonDirProjectFingerprint: 'proj-fp-a',
-      oidAlgorithm: 'sha1',
-    });
-    const worktree = deriveWorktreeIdentity({
-      hostScope: 'host:a',
-      clone,
-      worktreePath: '/srv/repo',
-      gitDir: '/srv/repo/.git',
-    });
+    const id = sampleIdentity('host-a', 'repo-retry-purge');
     const decl = await reg.declare({
       tenant: 'tenant-a',
       principal: 'principal-a',
-      hostScope: 'host:a',
-      clone,
-      worktree,
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      identityUncertainty: id.identityUncertainty,
+      hostFingerprint: 'ws:sha256:retry',
       authorizedRoots: ['/srv/repo'],
+      policyVersion: 'live-git-indexing/1',
     });
 
     const firstRes = await reg.withdraw({
