@@ -89,6 +89,54 @@ export type CanonicalConversionReport = {
   readonly hash: string;
 };
 
+/** Every canonical record kind readable through this port (SPEC §4.4). */
+export type CanonicalChainRecord =
+  | AnnotationRevisionRecord
+  | ThreadStructureRevisionRecord
+  | CommentRevisionRecord
+  | ReviewEventRecord
+  | LifecycleEventRecord
+  | OperationAuditEventRecord
+  | PreparedSubmissionManifest
+  | CanonicalImportManifest
+  | CanonicalUnitReceipt
+  | CanonicalBatchReceiptSnapshot
+  | CanonicalConversionReport;
+
+/** One chain (or genesis record) selected for paged reading. */
+export type CanonicalReadSelection =
+  | { readonly kind: 'annotation-revisions'; readonly annotationId: string }
+  | { readonly kind: 'thread-structure-revisions'; readonly threadId: string }
+  | { readonly kind: 'comment-revisions'; readonly commentId: string }
+  | { readonly kind: 'review-events'; readonly annotationId: string }
+  | { readonly kind: 'lifecycle-events'; readonly objectKind: LifecycleObjectKind; readonly objectId: string }
+  | { readonly kind: 'operation-audit-events'; readonly subject: OperationAuditSubject; readonly subjectId: string }
+  | { readonly kind: 'prepared-submission-manifests'; readonly submissionId: string }
+  | { readonly kind: 'import-manifests'; readonly importId: string }
+  | { readonly kind: 'unit-receipts'; readonly unitId: string }
+  | { readonly kind: 'batch-receipt-snapshots'; readonly batchId: string }
+  | { readonly kind: 'conversion-reports'; readonly reportId: string };
+
+/** Bounded read request: page limit plus opaque continuation cursor. */
+export type CanonicalPageRequest = {
+  readonly limit: number;
+  readonly cursor: string | null;
+};
+
+/** Closed set of read-page outcomes (SPEC §4.6). */
+export const CANONICAL_READ_PAGE_OUTCOMES = ['page', 'incomplete', 'inaccessible'] as const;
+export type CanonicalReadPageOutcome = (typeof CANONICAL_READ_PAGE_OUTCOMES)[number];
+
+/**
+ * One page of records. `incomplete` and `inaccessible` are durable-adapter
+ * or composition outcomes; `nextCursor` is null only at chain exhaustion.
+ */
+export type CanonicalReadPage = {
+  readonly outcome: CanonicalReadPageOutcome;
+  readonly records: readonly CanonicalChainRecord[];
+  readonly nextCursor: string | null;
+};
+
 /** Scope shared by every canonical store operation. */
 export type CanonicalStoreScope = { readonly tenantId: string; readonly workspaceId: string };
 
@@ -285,6 +333,18 @@ export interface CanonicalCommandStore {
     scope: CanonicalStoreScope,
     commentId: string,
   ): Promise<readonly CommentRevisionRecord[]>;
+
+  /**
+   * Read one bounded page of the selected chain. `limit` is a positive safe
+   * integer; `cursor` is an opaque continuation token from a prior page.
+   * The in-memory driver always returns `page`; `incomplete` and
+   * `inaccessible` exist for durable adapters and composition layers.
+   */
+  readChainPage(
+    scope: CanonicalStoreScope,
+    selection: CanonicalReadSelection,
+    page: CanonicalPageRequest,
+  ): Promise<CanonicalReadPage>;
 
   /** Idempotency index read: the committed command for this key, or null. */
   findCommittedCommand(

@@ -150,7 +150,14 @@ export type {
   CanonicalUnitReceipt,
   CanonicalBatchReceiptSnapshot,
   CanonicalConversionReport,
+  CanonicalChainRecord,
+  CanonicalPageRequest,
+  CanonicalReadSelection,
+  CanonicalReadPage,
+  CanonicalReadPageOutcome,
 } from './command-store.js';
+
+export { CANONICAL_READ_PAGE_OUTCOMES } from './command-store.js';
 
 export type {
   CanonicalCommandEnvelope,
