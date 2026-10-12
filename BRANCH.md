@@ -39,6 +39,7 @@
   - [x] `packages/cluster-mesh/tests/storage/reference.spec.ts`
   - [x] `packages/cluster-mesh/tests/storage/mutations.spec.ts`
   - [x] `.h2a/build/k1_k2a_report.md`
+  - [x] `.h2a/build/k1_corev_report.md`
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -62,6 +63,7 @@
 
 ## Feedback Loop
 - [x] `CI-666-1` — validate-cluster-mesh ENOENT on stale `file:../sentropic-cluster-mesh-0.13.3.tgz` after the 0.15.0 proposal; fixture and lock re-pointed to 0.15.0 via `refresh-lazy-package-lock`, `test-lazy-package` 63/63 green locally.
+- [x] `BR-K1C-EX1` — K1+K2a share one branch with 22 files vs twelve-file §17.4 budget; combined review requested in one pass; rollback by splitting K1C follow-ups per lot if required.
 
 ## AI Flaky tests
 - [x] No AI flaky tests in scope.
@@ -114,6 +116,16 @@
     - [x] K2a corpus executed against the test reference.
     - [x] Discriminating mutations recorded.
     - [ ] K2a exit commit recorded.
+- [ ] Lot K1C — Co-review fixes for K1/K2a rejection
+  - [x] Fix 1 local live without product triplet plus partial-triplet rejection.
+  - [x] Fix 2 parsed-instant expiry for grants and leased snapshots.
+  - [ ] Fix 3 atomic staging with persisted records and updates.
+  - [ ] Fix 4 allocation check plus CAS conflict codes.
+  - [ ] Fix 5 forged-grant authenticity via issued grants.
+  - [ ] Fix 6 stable head-bound reads plus full encoded-byte budget.
+  - [ ] Fix 7 async backend-agnostic corpus with injected fixtures.
+  - [ ] Fix 8 discriminating mutations preserving valid cases.
+  - [ ] Fix 9 branch file-budget exception recorded above.
 - [ ] Lot N — Final validation
   - [ ] Typecheck and Lint
   - [ ] Retest cluster-mesh
