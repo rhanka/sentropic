@@ -10,10 +10,14 @@ import {
 } from './conformance/comments-conformance.js';
 import {
   STRUCTURAL_TRIGGERS,
+  checkRevisionBodyCapacity,
   createAnnotationRevision,
   createCommentRevision,
   createThreadStructureRevision,
+  validateCapacityDescriptor,
+  validateRevisionBody,
   type AnnotationRevisionRecord,
+  type CapacityDescriptor,
 } from '../src/revisions.js';
 
 const scope = conformanceScope();
@@ -220,5 +224,88 @@ describe('revision content validation', () => {
       },
     });
     expect(aiAttributed.provenance.attribution.variant).toBe('ai');
+  });
+});
+
+describe('capacity descriptor (SPEC 4.6)', () => {
+  const capacity = (overrides: Record<string, unknown> = {}): CapacityDescriptor => ({
+    body: { limit: 16, unit: 'utf8-bytes' },
+    segment: { limit: 8, unit: 'utf8-bytes' },
+    profile: { limit: 96, unit: 'canonical-bytes' },
+    unitManifest: { limit: 2048, unit: 'canonical-bytes' },
+    unitPayload: { limit: 4096, unit: 'utf8-bytes' },
+    batchUnits: { limit: 50, unit: 'units' },
+    batchManifest: { limit: 8192, unit: 'canonical-bytes' },
+    batchRequest: { limit: 65536, unit: 'canonical-bytes' },
+    pageRecords: { limit: 100, unit: 'records' },
+    pageEncodedBytes: { limit: 262144, unit: 'canonical-bytes' },
+    ...overrides,
+  });
+
+  const bodyOf = (text: string) => conformanceBody(text);
+
+  it('accepts a complete descriptor with every SPEC 4.6 row', () => {
+    const descriptor = capacity();
+    expect(validateCapacityDescriptor(descriptor)).toBe(descriptor);
+  });
+
+  it('rejects missing, non-positive, float and wrongly-declared bounds', () => {
+    expect(() => validateCapacityDescriptor(capacity({ body: undefined }))).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+    expect(() => validateCapacityDescriptor(capacity({ segment: { limit: 0, unit: 'utf8-bytes' } }))).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+    expect(() => validateCapacityDescriptor(capacity({ profile: { limit: 0.5, unit: 'canonical-bytes' } }))).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+    expect(() => validateCapacityDescriptor(capacity({ body: { limit: 16, unit: 'canonical-bytes' } }))).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+    expect(() => validateCapacityDescriptor(capacity({ batchUnits: { limit: 50, unit: 'records' } }))).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+  });
+
+  it('enforces the body UTF-8 byte bound, counting bytes not characters', () => {
+    expect(() => validateRevisionBody(bodyOf('0123456789abcdef'), capacity())).not.toThrow();
+    expect(() => validateRevisionBody(bodyOf('0123456789abcdefg'), capacity())).toThrowError(
+      expect.objectContaining({ code: 'capacity-exceeded' }),
+    );
+    const eightTwoByteChars = 'éééééééé';
+    expect(() => validateRevisionBody(bodyOf(eightTwoByteChars), capacity())).not.toThrow();
+    expect(() => validateRevisionBody(bodyOf(`${eightTwoByteChars}é`), capacity())).toThrowError(
+      expect.objectContaining({ code: 'capacity-exceeded' }),
+    );
+  });
+
+  it('enforces the distinct segment byte bound', () => {
+    const segmented = { ...bodyOf('hello world'), segments: [{ start: 0, end: 5, digest: 'seg-1' }] };
+    expect(() => validateRevisionBody(segmented, capacity())).not.toThrow();
+    expect(() =>
+      validateRevisionBody(segmented, capacity({ segment: { limit: 4, unit: 'utf8-bytes' } })),
+    ).toThrowError(expect.objectContaining({ code: 'capacity-exceeded' }));
+  });
+
+  it('enforces the profile canonical byte bound', () => {
+    const withProfile = {
+      ...bodyOf('hello world'),
+      profile: { schemaId: 'schema-1', version: '1', digest: 'digest-1', fields: { score: 1 } },
+    };
+    expect(() => validateRevisionBody(withProfile, capacity())).not.toThrow();
+    expect(() =>
+      validateRevisionBody(withProfile, capacity({ profile: { limit: 8, unit: 'canonical-bytes' } })),
+    ).toThrowError(expect.objectContaining({ code: 'capacity-exceeded' }));
+  });
+
+  it('fails closed on an invalid descriptor before checking the body', () => {
+    expect(() => checkRevisionBodyCapacity(bodyOf('hello'), capacity({ pageRecords: undefined }))).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+  });
+
+  it('keeps unbounded validation unchanged when no descriptor is supplied', () => {
+    expect(() => validateRevisionBody(bodyOf('a text far beyond any test bound'))).not.toThrow();
+    expect(() => createAnnotationRevision(null, annotationInput('a text far beyond any test bound'))).not.toThrow();
   });
 });
