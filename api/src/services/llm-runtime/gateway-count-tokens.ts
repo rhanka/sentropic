@@ -127,7 +127,7 @@ const executeCount = async (deps: GatewayCountDependencies, auth: GatewayCountAu
     const client = deps.createClient({ credential: auth.credential });
     try {
       const body = await client.countTokens(
-        request.body as Anthropic.MessageCountTokensParams, { signal: request.signal });
+        request.body as unknown as Anthropic.MessageCountTokensParams, { signal: request.signal });
       return { kind: 'json', status: 200, headers: {}, body: body as Record<string, unknown> };
     } catch (error) {
       throw toUpstreamError(error);
@@ -144,7 +144,7 @@ const executeCount = async (deps: GatewayCountDependencies, auth: GatewayCountAu
   try {
     const client = deps.createClient({ transport: { accessToken: lease.accessToken } });
     const body = await client.countTokens(
-      request.body as Anthropic.MessageCountTokensParams, { signal: request.signal });
+      request.body as unknown as Anthropic.MessageCountTokensParams, { signal: request.signal });
     return { kind: 'json', status: 200, headers: {}, body: body as Record<string, unknown> };
   } catch (error) {
     failure = error;
