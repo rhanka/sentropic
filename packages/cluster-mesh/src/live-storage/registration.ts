@@ -556,33 +556,36 @@ export function createLiveDeclarationRegistration(input: {
 
     async withdraw(withdrawal: {
       readonly tenant: string;
-      readonly hostFingerprint: string;
-      readonly reason: LiveRevocationReason;
+      readonly declarationId: string;
+      readonly cloneId: string;
+      readonly worktreeId: string;
+      readonly reason: RevocationReason;
       readonly withdrawnAt: string;
     }): Promise<LiveWithdrawalResult> {
-      if (!(LIVE_REVOCATION_REASONS as readonly string[]).includes(withdrawal.reason)) {
+      if (!isRevocationReason(withdrawal.reason)) {
         throw new Error(`invalid withdrawal reason: ${String(withdrawal.reason)}`);
       }
-      const declaration = await input.store.find(withdrawal.tenant, withdrawal.hostFingerprint);
+      const declaration = await input.store.find(
+        withdrawal.tenant,
+        withdrawal.declarationId,
+        withdrawal.cloneId,
+        withdrawal.worktreeId,
+      );
       if (!declaration
-        || await input.store.status(withdrawal.tenant, withdrawal.hostFingerprint) !== 'declared') {
+        || await input.store.status(
+          withdrawal.tenant,
+          withdrawal.declarationId,
+          withdrawal.cloneId,
+          withdrawal.worktreeId,
+        ) !== 'declared') {
         return { ok: false, reason: 'unknown_declaration' };
       }
-      const request: LiveDeclarationWithdrawal = {
-        tenant: withdrawal.tenant,
-        hostFingerprint: withdrawal.hostFingerprint,
-        declarationRevision: declaration.declarationRevision,
-        reason: withdrawal.reason,
-        requestPrivatePurge: {
-          purgePrivateSnapshots: true,
-          purgeDerivedIndexes: true,
-          revokeDecryptability: true,
-          preserveCommittedHistory: true,
-        },
-      };
+      const request = revokeLiveDeclaration(declaration, withdrawal.reason);
       const cancelledDeferredWork = await input.deferredWork.cancelDeferredWork({
         tenant: request.tenant,
-        hostFingerprint: request.hostFingerprint,
+        declarationId: request.declarationId,
+        cloneId: request.cloneId,
+        worktreeId: request.worktreeId,
         declarationRevision: request.declarationRevision,
       });
       await input.privatePurge.requestPrivatePurge(request);
@@ -591,8 +594,8 @@ export function createLiveDeclarationRegistration(input: {
         : { ok: false, reason: 'unknown_declaration' };
     },
 
-    async status(tenant: string, hostFingerprint: string): Promise<'declared' | 'withdrawn' | 'unknown'> {
-      return input.store.status(tenant, hostFingerprint);
+    async status(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<'declared' | 'withdrawn' | 'unknown'> {
+      return input.store.status(tenant, declarationId, cloneId, worktreeId);
     },
 
     async list(tenant?: string): Promise<readonly LiveWorkspaceDeclaration[]> {
