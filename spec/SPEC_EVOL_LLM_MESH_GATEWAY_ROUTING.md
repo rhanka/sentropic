@@ -1218,15 +1218,19 @@ host-transport follow-up (needs a `count` seam on the production
 
 ### 15.3 Mesh operational gaps 1–4
 
-- Gap 1: an expired credential surfaces `reauth-required` readiness +
-  `listDiagnostics` even before its status flips; the planner excludes it and
-  the gateway answers 503 + `X-Sentropic-Route-Action` instead of a silent
-  no-route.
+- Gap 1: a credential that cannot self-recover (no refresh token, or a
+  refresh already failed so the status flipped to `reauth_required`) surfaces
+  `reauth-required` readiness + `listDiagnostics` even before its status
+  flips; the planner excludes it and the gateway answers 503 +
+  `X-Sentropic-Route-Action` instead of a silent no-route. A merely expired
+  ACCESS token with a live refresh token stays `ready`: `acquire()` refreshes
+  it silently before dispatch.
 - Gap 2: a lone route suppressed only by UNCOMMITTED failures degrades
   instead of starving for the 300s negative-cache TTL (`committed` stamp on
   `RouteFailureClassification`, `suppressedDegradable` health, single-
   candidate planner fallback). Committed failures stay strict (duplicate-
-  dispatch risk); multi-route suppression is unchanged.
+  dispatch risk); provider rate limits keep their Retry-After window (no
+  degrade, no redispatch storm); multi-route suppression is unchanged.
 - Gap 3: affinity whose account is gone auto-drops at resolve (deleted from
   the map) and resolves normally; not-ready accounts keep fail-closed.
 - Gap 4: cross-process enroll hot-restore verified pre-existing
