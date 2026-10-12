@@ -20,7 +20,7 @@ const bindFresh = (store?: TestReferenceStore): { store: TestReferenceStore; bou
   const target = store ?? new TestReferenceStore('comments');
   return {
     store: target,
-    bound: target.bind(grantFor({ token: 'token-mutant-1', operations: ['read', 'write', 'maintain'] })),
+    bound: target.bindNew(grantFor({ token: 'token-mutant-1', operations: ['read', 'write', 'maintain'] })),
   };
 };
 
@@ -54,7 +54,7 @@ class NoByteLimitStore extends TestReferenceStore {
   override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
     const bound = super.bind(grant);
     const inner = bound.readPage.bind(bound);
-    bound.readPage = (chainId: string, limit: number, cursor: number | null) =>
+    bound.readPage = (chainId: string, limit: number, cursor: Parameters<TestBoundStore['readPage']>[2]) =>
       inner(chainId, limit, cursor, Number.MAX_SAFE_INTEGER);
     return bound;
   }
