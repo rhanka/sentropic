@@ -106,7 +106,7 @@
   - [x] Correct control-schema comments and BRANCH.md allowed paths and migration sequencing (m6, M6).
   - [x] Implement code-workspace binding authorizer in code-git-ports.ts (B1).
   - [x] Upgrade PostgresLiveDeclarationStore with canonicalIdKey (M1), mandatory triple (M2), revision race protection (M4), and authorizer (B1).
-  - [ ] Add comprehensive RED and GUARD test cases in live-registration.test.ts (B1, M4, m5, M7) and verify green.
+  - [x] Add comprehensive RED and GUARD test cases in live-registration.test.ts (B1, M4, m5, M7) and verify green.
   - [ ] Full validation: lint, typecheck, scoped/full tests, push branch, wait for PR #664 CI fully green (m7).
   - [ ] Write fix report .h2a/build/l6a_s_fix_report.md (m8).
 
