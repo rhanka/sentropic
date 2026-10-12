@@ -94,9 +94,9 @@
 - [x] **Lot 9 / C09 — Complete the model template**
   - [x] Files: plan/BRANCH_P1_TEMPLATE.md lines 127–183 and BRANCH.md; message: `docs: complete comments model qualification lots`; approximately 63 changed lines.
   - [x] Gate: add the full working template and BRANCH.md by name in one call, then commit separately; after C09, `rtk proxy git show HEAD:docs/comments-annotations/plan/BRANCH_P1_TEMPLATE.md | rtk sha256sum` hashes raw committed bytes and must yield c7a21ddd5d63ed60a89537dcd9694722977be6d84871068b6c61a814d6e558e4. The complete checkbox-only template retains file-level checks and n-6/n-7 roles/gates.
-- [ ] **Lot 10 / C10 — Record promotion treatment and convergence**
-  - [ ] Files: evidence/treatment-promotion.md, evidence/convergence.md and BRANCH.md; message: `docs: record comments promotion treatment and convergence`; approximately 124 changed lines.
-  - [ ] Gate: CONF4's actual verdict/block and P-1–P-5 dispositions are recorded; the receipt supersedes historical pending-confirmation mentions without changing SPEC/plan bytes. Only the closed recording delta is permitted without further confirmation.
+- [x] **Lot 10 / C10 — Record promotion treatment and convergence**
+  - [x] Files: evidence/treatment-promotion.md, evidence/convergence.md and BRANCH.md; message: `docs: record comments promotion treatment and convergence`; approximately 124 changed lines.
+  - [x] Gate: CONF4's actual verdict/block and P-1–P-5 dispositions are recorded; the receipt supersedes historical pending-confirmation mentions without changing SPEC/plan bytes. Only the closed recording delta is permitted without further confirmation.
 - [ ] **Lot 11 / C11 — Final evidence index and documentary validation**
   - [ ] Files: evidence/index.md and BRANCH.md, plus bounded receipt corrections only if counted below the limit; message: `docs: anchor comments documentary promotion`; under 140 changed lines.
   - [ ] Gate: all links and digests resolve, reviewed SPEC/plans are complete, actual delta receipt is present; ordinary commits remain below 150 changed lines and at most 15 files including checkbox updates.
