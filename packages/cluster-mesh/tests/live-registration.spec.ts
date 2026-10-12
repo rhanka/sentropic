@@ -167,20 +167,27 @@ describe('live registration', () => {
   });
 
   it('removal cancels delayed work and requests private purge without deleting committed history', async () => {
-    const { store, rows } = memoryStore();
+    const { store, rows, tripleKey } = memoryStore();
     const work = deferredWorkFake(3);
     const purge = purgeFake();
     const live = registration(store, work, purge.port);
+    const id = sampleIdentity('host-b', 'gamma');
     await live.declare({
       tenant: 'tenant-b',
       principal: 'principal-2',
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      identityUncertainty: id.identityUncertainty,
       hostFingerprint: 'ws:sha256:bbb',
       authorizedRoots: ['/repos/gamma'],
       policyVersion: 'live-git-indexing/1',
     });
     const removal = await live.withdraw({
       tenant: 'tenant-b',
-      hostFingerprint: 'ws:sha256:bbb',
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
       reason: 'workspace-remove',
       withdrawnAt: '2026-10-12T13:00:00.000Z',
     });
@@ -189,8 +196,10 @@ describe('live registration', () => {
       cancelledDeferredWork: 3,
       withdrawal: {
         tenant: 'tenant-b',
-        hostFingerprint: 'ws:sha256:bbb',
-        declarationRevision: 0,
+        declarationId: id.declarationId,
+        cloneId: id.cloneId,
+        worktreeId: id.worktreeId,
+        declarationRevision: INITIAL_DECLARATION_REVISION,
         reason: 'workspace-remove',
         requestPrivatePurge: {
           purgePrivateSnapshots: true,
@@ -202,18 +211,22 @@ describe('live registration', () => {
     });
     expect(work.cancelDeferredWork).toHaveBeenCalledWith({
       tenant: 'tenant-b',
-      hostFingerprint: 'ws:sha256:bbb',
-      declarationRevision: 0,
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      declarationRevision: INITIAL_DECLARATION_REVISION,
     });
     expect(purge.received).toHaveLength(1);
     expect(purge.received[0].requestPrivatePurge.preserveCommittedHistory).toBe(true);
     // Committed history is preserved: the durable record is retained, only its status changes.
-    await expect(live.status('tenant-b', 'ws:sha256:bbb')).resolves.toBe('withdrawn');
-    expect(rows.get('tenant-b\0ws:sha256:bbb')).toBeDefined();
+    await expect(live.status('tenant-b', id.declarationId, id.cloneId, id.worktreeId)).resolves.toBe('withdrawn');
+    expect(rows.get(tripleKey('tenant-b', id.declarationId, id.cloneId, id.worktreeId))).toBeDefined();
     // Removal is final: no delayed-work reactivation after withdrawal.
     await expect(live.withdraw({
       tenant: 'tenant-b',
-      hostFingerprint: 'ws:sha256:bbb',
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
       reason: 'owner-request',
       withdrawnAt: '2026-10-12T13:01:00.000Z',
     })).resolves.toMatchObject({ ok: false, reason: 'unknown_declaration' });
@@ -223,41 +236,87 @@ describe('live registration', () => {
   it('product declarations use authorized code-workspace bindings without changing membership or enrollment', async () => {
     const { store, calls } = memoryStore();
     const live = registration(store, deferredWorkFake(0), purgeFake().port);
+    const idC = sampleIdentity('host-c', 'delta');
     const product = await live.declare({
       tenant: 'tenant-c',
       principal: 'principal-3',
+      declarationId: idC.declarationId,
+      cloneId: idC.cloneId,
+      worktreeId: idC.worktreeId,
+      identityUncertainty: idC.identityUncertainty,
       hostFingerprint: 'ws:sha256:ccc',
       authorizedRoots: ['/repos/delta'],
       policyVersion: 'live-git-indexing/1',
       serverWorkspaceId: 'ws-7',
       serverIssuer: 'https://idp.example',
-      bindingRevision: 4,
+      bindingRevision: INITIAL_BINDING_REVISION,
     });
-    expect(product).toMatchObject({ serverWorkspaceId: 'ws-7', serverIssuer: 'https://idp.example', bindingRevision: 4 });
+    expect(product).toMatchObject({
+      serverWorkspaceId: 'ws-7',
+      serverIssuer: 'https://idp.example',
+      bindingRevision: INITIAL_BINDING_REVISION,
+    });
+    // Non-binding revision preserves bindingRevision
+    const nonBindingRevised = await live.revise(
+      'tenant-c',
+      idC.declarationId,
+      { authorizedRoots: ['/repos/delta', '/repos/delta-2'] },
+      idC.cloneId,
+      idC.worktreeId,
+    );
+    expect(nonBindingRevised.bindingRevision).toBe(INITIAL_BINDING_REVISION);
+    expect(nonBindingRevised.declarationRevision).toBe(INITIAL_DECLARATION_REVISION + 1);
+
+    // Workspace change requires strictly increasing bindingRevision
+    const workspaceRevised = await live.revise(
+      'tenant-c',
+      idC.declarationId,
+      {
+        serverWorkspaceId: 'ws-8',
+        serverIssuer: 'https://idp.example',
+        bindingRevision: INITIAL_BINDING_REVISION + 1,
+      },
+      idC.cloneId,
+      idC.worktreeId,
+    );
+    expect(workspaceRevised.serverWorkspaceId).toBe('ws-8');
+    expect(workspaceRevised.bindingRevision).toBe(INITIAL_BINDING_REVISION + 1);
+    expect(workspaceRevised.declarationRevision).toBe(INITIAL_DECLARATION_REVISION + 2);
+
     // An authorized code-workspace binding is a coherent trio; partial bindings are refused.
+    const idD = sampleIdentity('host-d', 'epsilon');
     await expect(live.declare({
       tenant: 'tenant-d',
       principal: 'principal-4',
-      hostFingerprint: 'ws:sha256:ddd',
+      declarationId: idD.declarationId,
+      cloneId: idD.cloneId,
+      worktreeId: idD.worktreeId,
+      identityUncertainty: idD.identityUncertainty,
       authorizedRoots: ['/repos/epsilon'],
       policyVersion: 'live-git-indexing/1',
       serverWorkspaceId: 'ws-8',
     })).rejects.toThrow(/bindingRevision/);
+
+    const idE = sampleIdentity('host-e', 'zeta');
     await expect(live.declare({
       tenant: 'tenant-e',
       principal: 'principal-5',
-      hostFingerprint: 'ws:sha256:eee',
+      declarationId: idE.declarationId,
+      cloneId: idE.cloneId,
+      worktreeId: idE.worktreeId,
+      identityUncertainty: idE.identityUncertainty,
       authorizedRoots: ['/repos/zeta'],
       policyVersion: 'live-git-indexing/1',
       serverIssuer: 'https://idp.example',
     })).rejects.toThrow(/serverWorkspaceId/);
+
     // Bind, upload, code-workspace creation and session open/end never activate or remove.
     for (const kind of NON_ACTIVATING_LIFECYCLE_KINDS) {
       expect(classifyLifecycleEvent(kind)).toBe('no-activation-change');
     }
-    expect(() => classifyLifecycleEvent('declare-live')).toThrow(/unknown lifecycle kind/);
+    expect(() => classifyLifecycleEvent('declare-live' as never)).toThrow(/unknown lifecycle kind/);
     // No membership or enrollment seam exists: the domain is declaration-only.
     expect(Object.keys(live).sort()).toEqual(['declare', 'list', 'replay', 'revise', 'status', 'withdraw']);
-    expect(calls).toEqual(['save']);
+    expect(calls).toEqual(['save', 'save', 'save']);
   });
 });
