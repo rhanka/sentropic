@@ -243,6 +243,21 @@ describe('cluster mesh gateway namespace', () => {
     }
   });
 
+  it('excludes execution features the application runtime does not support (spec §16.4)', async () => {
+    // The injected application runtime honors no §16 execution feature
+    // across providers (named choice and parallel control are refused by
+    // the adapter; the rest is partial at most). A plan requiring one is
+    // excluded before resolution or dispatch — a capability refusal, never
+    // a dispatched request that silently drops the control.
+    const generate = vi.fn();
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate, stream: vi.fn() } });
+    await expect(routePlane.planner.plan(
+      { principalRef: 'user-1', ownerScopeRef: 'workspace:t-ws:principal:user-1' },
+      { requestedModel: 'gpt-5.6-terra', requiredExecutionFeatures: ['named-tool-choice'] },
+    )).rejects.toMatchObject({ name: 'RoutePlanError', code: 'capabilities-unmet' });
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it('fails the unavailable gateway module closed on both Responses aliases', async () => {
     const registry = createClusterMeshModules();
     const broken = {
