@@ -1226,7 +1226,8 @@ estimator is built: an estimate would corrupt Anthropic cache accounting.
 - Host port (api, `gateway-count-tokens.ts`, injected through
   `gateway-route-plane.ts` and the `gw.ts` `nativeCountTokens` option): the
   trusted host resolves the credential — the caller's provider credential
-  when present, else the owner's claude-code account transport (only under
+  when present (user BYOK, else workspace key, else the server environment
+  key), else the owner's claude-code account transport (only under
   `claude-code` transport mode with an `active` or `cooldown` primary
   account). Caller fields never select a credential, account or URL, and
   the model allowlist is the exact `anthropic` catalog, never an alias
