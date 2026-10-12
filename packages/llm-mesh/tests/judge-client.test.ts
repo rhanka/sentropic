@@ -343,18 +343,42 @@ describe('remote judge client', () => {
       }));
       const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
       const p1 = client.judge(judgeRequest());
+      let p1Settled = false;
+      p1.finally(() => { p1Settled = true; });
       await vi.advanceTimersByTimeAsync(10_000);
       expect(fetch).toHaveBeenCalledOnce();
+      expect(p1Settled).toBe(false);
       await vi.advanceTimersByTimeAsync(1_000);
+      expect(p1Settled).toBe(true);
       expect(await p1).toMatchObject({ kind: 'connection-failure', error: { code: 'TIMEOUT', phase: 'dispatch' } });
 
       const p2 = client.judge({ ...judgeRequest(), policy: { timeoutMs: 60_000 } });
+      let p2Settled = false;
+      p2.finally(() => { p2Settled = true; });
       await vi.advanceTimersByTimeAsync(60_000);
+      expect(p2Settled).toBe(false);
       await vi.advanceTimersByTimeAsync(1_000);
+      expect(p2Settled).toBe(true);
       expect(await p2).toMatchObject({ kind: 'connection-failure', error: { code: 'TIMEOUT', phase: 'dispatch' } });
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('leaves no abort event listeners on caller signal after preflight completion', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(mockVerdictResult('corr-1')), { status: 200 }));
+    const client = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      authToken: async () => 'test-token',
+      headers: async () => ({ 'x-custom': 'val' }),
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const controller = new AbortController();
+    const addSpy = vi.spyOn(controller.signal, 'addEventListener');
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
+    await client.judge(judgeRequest({ correlationId: 'corr-1' }), { signal: controller.signal });
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    expect(removeSpy).toHaveBeenCalledTimes(1);
   });
 
   it('honors cancellation and deadline when token resolution is stalled in preflight', async () => {
