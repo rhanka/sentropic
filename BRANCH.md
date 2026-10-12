@@ -105,12 +105,12 @@
   - [x] Implement packages/cluster-mesh/tests/storage/chain-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/read-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/reference.spec.ts executing the corpus against the reference.
-  - [ ] Implement packages/cluster-mesh/tests/storage/mutations.spec.ts with discriminating recorded mutations.
+  - [x] Implement packages/cluster-mesh/tests/storage/mutations.spec.ts with discriminating recorded mutations.
   - [ ] Lot gate:
     - [ ] make typecheck-cluster-mesh API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
     - [ ] make test-cluster-mesh API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
-    - [ ] K2a corpus executed against the test reference.
-    - [ ] Discriminating mutations recorded.
+    - [x] K2a corpus executed against the test reference.
+    - [x] Discriminating mutations recorded.
     - [ ] K2a exit commit recorded.
 - [ ] Lot N — Final validation
   - [ ] Typecheck and Lint
