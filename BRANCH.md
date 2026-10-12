@@ -70,9 +70,9 @@
 - [x] **Lot 1 / C01 — Declare promotion scope**
   - [x] Files: BRANCH.md; message: `docs: scope comments annotation promotion`; approximately 105 added lines.
   - [x] Gate: use the supplied untracked-file baseline only after the committer verifies it; no implementation authority is inferred.
-- [ ] **Lot 2 / C02 — Promote the indivisible SPEC**
-  - [ ] Files: spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md and BRANCH.md; message: `docs: promote comments annotation specification`; approximately 537 changed lines under BRCA-EX1.
-  - [ ] Gate: complete SPEC, exact quotations, restored n-5 clauses and tracked authority links match the reviewed promotion bytes.
+- [x] **Lot 2 / C02 — Promote the indivisible SPEC**
+  - [x] Files: spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md and BRANCH.md; message: `docs: promote comments annotation specification`; approximately 537 changed lines under BRCA-EX1.
+  - [x] Gate: complete SPEC, exact quotations, restored n-5 clauses and tracked authority links match the reviewed promotion bytes.
 - [ ] **Lot 3 / C03 — Preserve owner authority and author declarations**
   - [ ] Files: evidence/owner-decisions.md, evidence/author-metadata.md and BRANCH.md; message: `docs: preserve comments owner authority`; approximately 105 changed lines.
   - [ ] Gate: AUTH-M and all TREAT2 answers verbatim; register quotations alone copied from private provenance; AUTHOR-C6/2E/PROMO whole logs and AUTHOR-RESERVES' fixed header source-hashed with their declaration limits.
