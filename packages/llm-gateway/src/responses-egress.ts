@@ -111,8 +111,18 @@ export interface ResponsesSnapshot {
   readonly failure?: { message: string; code?: string; type?: string };
 }
 
+/** Item allocation for one observed event: stable id, positional output index. */
+export interface ResponsesAllocation {
+  readonly itemId: string;
+  readonly outputIndex: number;
+  /** True when this observation created the item. */
+  readonly isNew: boolean;
+  /** True when this observation replaced previously buffered content. */
+  readonly replaced: boolean;
+}
+
 export interface ResponsesAccumulator {
-  observe(event: StreamEvent): void;
+  observe(event: StreamEvent): ResponsesAllocation | undefined;
   ingest(response: GenerateResponse): void;
   snapshot(): ResponsesSnapshot;
 }
@@ -129,7 +139,7 @@ export const createResponsesAccumulator = (
   let text = '';
   let summary = '';
   const calls = new Map<string, { providerCallId?: string; name: string; args: string }>();
-  const order: Array<{ kind: 'message' | 'reasoning' | 'tool'; key: string }> = [];
+  const order: Array<{ kind: 'message' | 'reasoning' | 'tool'; key: string; itemId: string; outputIndex: number }> = [];
   let bytes = 0;
   let messageCount = 0;
   let reasoningCount = 0;
@@ -139,6 +149,27 @@ export const createResponsesAccumulator = (
   let failure: ResponsesSnapshot['failure'];
 
   const itemCount = () => (text ? 1 : 0) + (summary ? 1 : 0) + calls.size;
+
+  const pushOrder = (
+    kind: 'message' | 'reasoning' | 'tool', key: string,
+  ): { itemId: string; outputIndex: number } => {
+    const outputIndex = order.length;
+    const itemId = kind === 'message' ? `msg_${messageCount++}`
+      : kind === 'reasoning' ? `rs_${reasoningCount++}` : `fc_${toolCount++}`;
+    order.push({ kind, key, itemId, outputIndex });
+    return { itemId, outputIndex };
+  };
+
+  const locate = (
+    kind: 'message' | 'reasoning' | 'tool', key: string,
+  ): { itemId: string; outputIndex: number } => {
+    const index = order.findIndex((entry) => entry.kind === kind && entry.key === key);
+    const entry = index >= 0 ? order[index] : undefined;
+    if (!entry) {
+      throw new ResponsesBoundError('responses_protocol', 'responses item vanished');
+    }
+    return { itemId: entry.itemId, outputIndex: entry.outputIndex };
+  };
 
   const checkBounds = (growth: number, extraItems: number): void => {
     if (itemCount() + extraItems > limits.maxOutputItems) {
@@ -150,45 +181,53 @@ export const createResponsesAccumulator = (
     bytes += growth;
   };
 
-  const observe = (event: StreamEvent): void => {
+  const observe = (event: StreamEvent): ResponsesAllocation | undefined => {
     if (event.type === 'content_delta') {
-      const added = text ? 0 : 1;
-      checkBounds(event.data.delta.length, added);
-      if (!text) order.push({ kind: 'message', key: '' });
+      const isNew = !text;
+      checkBounds(event.data.delta.length, isNew ? 1 : 0);
+      const alloc = isNew ? pushOrder('message', '') : locate('message', '');
       text += event.data.delta;
-    } else if (event.type === 'reasoning_delta') {
+      return { ...alloc, isNew, replaced: false };
+    }
+    if (event.type === 'reasoning_delta') {
       // Completed summaries replace streamed fragments (authoritative
       // artifact, spec §16.4); hidden/signature kinds never render.
       const kind = event.data.kind ?? 'summary';
+      if (kind !== 'summary' && kind !== 'summary_done') return undefined;
+      const isNew = !order.some((entry) => entry.kind === 'reasoning');
+      checkBounds(event.data.delta.length, isNew ? 1 : 0);
+      const alloc = isNew ? pushOrder('reasoning', '') : locate('reasoning', '');
+      const replaced = kind === 'summary_done' && summary.length > 0;
       if (kind === 'summary_done') {
-        checkBounds(event.data.delta.length, summary ? 0 : 1);
-        if (!summary) order.push({ kind: 'reasoning', key: '' });
         bytes -= summary.length;
         summary = event.data.delta;
-      } else if (kind === 'summary') {
-        checkBounds(event.data.delta.length, summary ? 0 : 1);
-        if (!summary) order.push({ kind: 'reasoning', key: '' });
+      } else {
         summary += event.data.delta;
       }
-    } else if (event.type === 'tool_call_start') {
+      return { ...alloc, isNew, replaced };
+    }
+    if (event.type === 'tool_call_start') {
       const current = calls.get(event.data.toolCallId);
       const args = event.data.argumentsText ?? '';
       if (current) {
+        const replaced = args.length > 0;
         if (args) {
           checkBounds(args.length, 0);
           bytes -= current.args.length;
           current.args = args;
         }
-      } else {
-        checkBounds(args.length, 1);
-        order.push({ kind: 'tool', key: event.data.toolCallId });
-        calls.set(event.data.toolCallId, {
-          ...(event.data.providerCallId ? { providerCallId: event.data.providerCallId } : {}),
-          name: event.data.name,
-          args,
-        });
+        return { ...locate('tool', event.data.toolCallId), isNew: false, replaced };
       }
-    } else if (event.type === 'tool_call_delta') {
+      checkBounds(args.length, 1);
+      const alloc = pushOrder('tool', event.data.toolCallId);
+      calls.set(event.data.toolCallId, {
+        ...(event.data.providerCallId ? { providerCallId: event.data.providerCallId } : {}),
+        name: event.data.name,
+        args,
+      });
+      return { ...alloc, isNew: true, replaced: false };
+    }
+    if (event.type === 'tool_call_delta') {
       const current = calls.get(event.data.toolCallId);
       if (!current) {
         throw new ResponsesBoundError(
@@ -198,16 +237,22 @@ export const createResponsesAccumulator = (
       }
       checkBounds(event.data.delta.length, 0);
       current.args += event.data.delta;
-    } else if (event.type === 'done') {
+      return { ...locate('tool', event.data.toolCallId), isNew: false, replaced: false };
+    }
+    if (event.type === 'done') {
       terminal = { finishReason: event.data.finishReason ?? 'unknown' };
       if (event.data.usage) usage = event.data.usage;
-    } else if (event.type === 'error') {
+      return undefined;
+    }
+    if (event.type === 'error') {
       terminal = { finishReason: 'error' };
       failure = {
         message: event.data.message,
         ...(event.data.code ? { code: event.data.code } : {}),
       };
+      return undefined;
     }
+    return undefined;
   };
 
   const ingest = (response: GenerateResponse): void => {
@@ -217,7 +262,7 @@ export const createResponsesAccumulator = (
       .join('');
     if (incomingText) {
       checkBounds(incomingText.length, text ? 0 : 1);
-      if (!text) order.push({ kind: 'message', key: '' });
+      if (!text) pushOrder('message', '');
       text = incomingText;
     }
     if (typeof content !== 'string') {
@@ -226,14 +271,14 @@ export const createResponsesAccumulator = (
         .join('');
       if (incomingSummary) {
         checkBounds(incomingSummary.length, summary ? 0 : 1);
-        if (!summary) order.push({ kind: 'reasoning', key: '' });
+        if (!summary) pushOrder('reasoning', '');
         summary = incomingSummary;
       }
     }
     for (const call of response.toolCalls) {
       if (calls.has(call.toolCallId)) continue;
       checkBounds(call.argumentsText.length, 1);
-      order.push({ kind: 'tool', key: call.toolCallId });
+      pushOrder('tool', call.toolCallId);
       calls.set(call.toolCallId, {
         ...(call.providerCallId ? { providerCallId: call.providerCallId } : {}),
         name: call.name,
@@ -249,14 +294,14 @@ export const createResponsesAccumulator = (
     for (const entry of order) {
       if (entry.kind === 'message') {
         if (!text) continue;
-        items.push(messageItem(`msg_${messageCount++}`, text));
+        items.push(messageItem(entry.itemId, text));
       } else if (entry.kind === 'reasoning') {
         if (!summary) continue;
-        items.push(reasoningItem(`rs_${reasoningCount++}`, summary));
+        items.push(reasoningItem(entry.itemId, summary));
       } else {
         const call = calls.get(entry.key);
         if (!call) continue;
-        items.push(functionCallItem(`fc_${toolCount++}`, {
+        items.push(functionCallItem(entry.itemId, {
           toolCallId: entry.key, ...(call.providerCallId ? { providerCallId: call.providerCallId } : {}),
           name: call.name, argumentsText: call.args,
         }));
