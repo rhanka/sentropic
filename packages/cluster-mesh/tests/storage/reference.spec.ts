@@ -1,0 +1,147 @@
+// K2a gate: the shared corpus executed against the test-only reference
+// (L3a v4 §16.1, §17.1) plus K1 data-pure validator checks.
+
+import { describe, expect, it } from 'vitest';
+import { validateAtomicUnit } from '../../src/storage/atomic.js';
+import { deriveEffectiveChanges, validateModuleDescriptor } from '../../src/storage/descriptor.js';
+import { mapKernelCondition } from '../../src/storage/errors.js';
+import { CONSUMER_REQUIREMENTS, missingProfiles } from '../../src/storage/profiles.js';
+import { decodeChainCursor, encodeChainCursor, validateReadPage } from '../../src/storage/readers.js';
+import { canonicalFragmentEncoding, nextStagedState, validateFragmentSequence } from '../../src/storage/staged-units.js';
+import { runAtomicCorpus } from './atomic-corpus.js';
+import { grantFor, runAuthorityCorpus } from './authority-corpus.js';
+import { runChainCorpus } from './chain-corpus.js';
+import { runReadCorpus } from './read-corpus.js';
+import { TestReferenceStore } from './reference-store.js';
+
+const scope = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
+
+describe('K2a reference: atomic corpus', () => {
+  it('K2a-RED commits, guards, replay and idempotency hold', async () => {
+    const store = new TestReferenceStore('comments');
+    await runAtomicCorpus(store.bind(grantFor()));
+  });
+});
+
+describe('K2a reference: authority corpus', () => {
+  it('K2a-RED forged, cross-module, escalation, expiry and revocation deny', async () => {
+    let now = '2026-01-01T00:00:00.000Z';
+    const store = new TestReferenceStore('comments', () => now);
+    await runAuthorityCorpus({
+      store,
+      grant: grantFor(),
+      readGrant: grantFor({ token: 'token-read-1', operations: ['read'] }),
+      setNow: (iso: string) => {
+        now = iso;
+      },
+    });
+  });
+});
+
+describe('K2a reference: chain corpus', () => {
+  it('K2a-RED independent chains, allocation and disposal hold', async () => {
+    const store = new TestReferenceStore('comments');
+    await runChainCorpus(store.bind(grantFor({ operations: ['read', 'write', 'maintain'] })));
+  });
+});
+
+describe('K2a reference: read corpus', () => {
+  it('K2a-RED stable cursors, page bounds and explicit gaps hold', async () => {
+    const store = new TestReferenceStore('comments');
+    await runReadCorpus(store.bind(grantFor()));
+  });
+});
+
+describe('K1 validators', () => {
+  it('K1-RED rejects an empty atomic unit', () => {
+    const result = validateAtomicUnit({
+      guards: [],
+      records: [],
+      appends: [],
+      updates: [],
+      relationships: [],
+      barriers: [],
+      purgeIntents: [],
+      indexWrites: [],
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('K1-RED derives no creation event from duplicate genesis', () => {
+    const changes = deriveEffectiveChanges([
+      { kind: 'genesis', key: 'submission:sub-1', digest: 'd1', duplicate: true },
+      { kind: 'append', key: 'chain-a:0', digest: 'h1' },
+    ]);
+    expect(changes.map((entry) => entry.kind)).toEqual(['appended']);
+  });
+
+  it('K1-RED maps kernel conditions without inventing canonical codes', () => {
+    expect(mapKernelCondition('cas-conflict')).toBe('cas-conflict');
+    expect(mapKernelCondition('unavailable')).toBe('transport-failure');
+  });
+
+  it('K1-RED requires M1 profiles for the persistence adapter', () => {
+    const missing = missingProfiles([], CONSUMER_REQUIREMENTS['m1-adapter']);
+    expect(missing.length).toBeGreaterThan(0);
+  });
+
+  it('K1-RED round-trips an immutable chain cursor', () => {
+    const cursor = encodeChainCursor({
+      formatVersion: 1,
+      moduleId: 'comments',
+      scope,
+      incarnation: 'store-1',
+      selection: 'annotation-revisions:ann-1',
+      head: 'hash-1',
+      ordering: 'seq-asc',
+      position: '0',
+    });
+    const decoded = decodeChainCursor(cursor);
+    expect(decoded?.head).toBe('hash-1');
+  });
+
+  it('K1-RED rejects a gapped fragment sequence', () => {
+    const encoding = canonicalFragmentEncoding({
+      moduleId: 'comments',
+      scope,
+      operationId: 'op-1',
+      contractVersion: 'storage-v1',
+      sourceBoundary: 'boundary-1',
+      ordinal: '1',
+      predecessorHash: 'prev-0',
+      effectDigest: 'digest-1',
+    });
+    expect(typeof encoding).toBe('string');
+    const accepted = [{ ordinal: '0', fragmentDigest: 'digest-0' }];
+    const gapped = validateFragmentSequence(accepted, {
+      ordinal: '2',
+      predecessorHash: 'digest-0',
+      fragmentDigest: 'digest-2',
+    });
+    expect(gapped.ok).toBe(false);
+    expect(nextStagedState('staging', 'begin-seal')).toBe('sealing');
+  });
+
+  it('K1-RED rejects a descriptor with unknown profiles', () => {
+    const result = validateModuleDescriptor({
+      contractVersion: 'storage-v1',
+      contractDigest: 'ab'.repeat(32),
+      schemaVersions: ['v1'],
+      requiredProfiles: ['no-such-profile'],
+      optionalProfiles: [],
+      chainKinds: ['annotation-revisions'],
+      queryNames: ['by-resource'],
+      boundaries: ['immutable'],
+      pageLimits: { maxRecords: 100, maxEncodedBytes: 65536 },
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('K1-RED rejects an oversized page', () => {
+    const result = validateReadPage(
+      { outcome: 'page', records: [{ id: 'a', seq: 0, hash: 'h', bytes: 'x'.repeat(100) }], nextCursor: null },
+      { maxRecords: 10, maxEncodedBytes: 16 },
+    );
+    expect(result.ok).toBe(false);
+  });
+});
