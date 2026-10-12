@@ -108,14 +108,18 @@ export const canonicalRecordBytes = (kind: RecordKind, envelope: HashEnvelope): 
 };
 
 /** Validate the shape of one chain link. */
-export const isChainLink = (value: unknown): value is ChainLink =>
-  typeof value === 'object' &&
-  value !== null &&
-  Number.isSafeInteger((value as { sequence?: unknown }).sequence) &&
-  (value as { sequence: number }).sequence >= 1 &&
-  ((value as { previousHash?: unknown }).previousHash === null ||
-    (typeof (value as { previousHash?: unknown }).previousHash === 'string' &&
-      (value as { previousHash?: unknown }).previousHash!.length > 0));
+export const isChainLink = (value: unknown): value is ChainLink => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const link = value as { sequence?: unknown; previousHash?: unknown };
+  return (
+    Number.isSafeInteger(link.sequence) &&
+    (link as { sequence: number }).sequence >= 1 &&
+    (link.previousHash === null ||
+      (typeof link.previousHash === 'string' && link.previousHash.length > 0))
+  );
+};
 
 /**
  * Validate an ordered chain of typed hashes: sequence strictly increases from
