@@ -324,6 +324,48 @@ export const createResponsesAccumulator = (
  * `store:false`. Content-filter keeps an actual refusal when the turn
  * produced text; unknown/error termination is a failed envelope.
  */
+/**
+ * Refusal conversion shared by the JSON envelope and the SSE item closure:
+ * a content-filtered turn keeps an actual refusal part when it produced
+ * text, never an invented one.
+ */
+export const finalizeMessageItem = (
+  item: Record<string, unknown>, finishReason: FinishReason,
+): Record<string, unknown> => {
+  if (item.type === 'message' && finishReason === 'content_filter') {
+    const text = (item.content as Array<Record<string, unknown>>)
+      .filter((part) => part.type === 'output_text')
+      .map((part) => String(part.text ?? ''))
+      .join('');
+    if (text) return { ...item, content: [{ type: 'refusal', refusal: text }] };
+  }
+  return item;
+};
+
+/** Envelope assembly from a terminal snapshot, shared by JSON and SSE terminals. */
+export const envelopeFromSnapshot = (input: {
+  responseId: string;
+  model: string;
+  createdAt: number;
+  snap: ResponsesSnapshot;
+}): Record<string, unknown> => {
+  const terminal = responsesTerminal(input.snap.terminal.finishReason);
+  return {
+    id: input.responseId,
+    object: 'response',
+    created_at: input.createdAt,
+    model: input.model,
+    status: terminal.status,
+    error: terminal.status === 'failed'
+      ? input.snap.failure ?? { message: 'response did not complete' }
+      : null,
+    incomplete_details: terminal.incomplete_details,
+    output: input.snap.items.map((item) => finalizeMessageItem(item, input.snap.terminal.finishReason)),
+    usage: responsesUsage(input.snap.usage),
+    store: false,
+  };
+};
+
 export const buildResponsesJson = (input: {
   responseId: string;
   model: string;
@@ -335,29 +377,10 @@ export const buildResponsesJson = (input: {
   const acc = createResponsesAccumulator(input.limits);
   acc.ingest(input.response);
   const snap = acc.snapshot();
-  const terminal = responsesTerminal(snap.terminal.finishReason);
-  const items = snap.items.map((item) => {
-    if (item.type === 'message' && snap.terminal.finishReason === 'content_filter') {
-      const text = (item.content as Array<Record<string, unknown>>)
-        .filter((part) => part.type === 'output_text')
-        .map((part) => String(part.text ?? ''))
-        .join('');
-      if (text) return { ...item, content: [{ type: 'refusal', refusal: text }] };
-    }
-    return item;
-  });
-  return {
-    id: input.responseId,
-    object: 'response',
-    created_at: input.createdAt,
+  return envelopeFromSnapshot({
+    responseId: input.responseId,
     model: input.model,
-    status: terminal.status,
-    error: terminal.status === 'failed'
-      ? snap.failure ?? input.failure ?? { message: 'response did not complete' }
-      : null,
-    incomplete_details: terminal.incomplete_details,
-    output: items,
-    usage: responsesUsage(snap.usage),
-    store: false,
-  };
+    createdAt: input.createdAt,
+    snap: snap.failure || !input.failure ? snap : { ...snap, failure: input.failure },
+  });
 };
