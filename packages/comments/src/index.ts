@@ -130,3 +130,97 @@ export {
   validateRevisionProvenance,
   validateRevisionTargets,
 } from './revisions.js';
+
+export type {
+  CanonicalCommandEnvelope,
+  CanonicalHttpCapability,
+  CanonicalHttpPorts,
+  CanonicalPgSurface,
+  CanonicalStoreScope,
+  CanonicalTransactionHandle,
+  CanonicalHonoSurface,
+  CanonicalCommandStore,
+} from './command-store.js';
+
+export type {
+  CapabilityCheckPort,
+  CommandActor,
+  CommandCapability,
+  CommittedCommand,
+  DecisionEvidence,
+  DecisionResolutionPort,
+  ExpectedState,
+  ResourceResolverPort,
+} from './commands.js';
+export {
+  COMMAND_CAPABILITIES,
+  CanonicalCommandError,
+  checkDecisionEvidence,
+  commandIdempotencyKey,
+  commandPayloadDigest,
+  computeProposedContentDigest,
+  defaultDenyCapabilityCheck,
+  isCommandCapability,
+  resolveIdempotentReplay,
+} from './commands.js';
+
+export type {
+  ContestView,
+  ReviewAction,
+  ReviewAgentProposal,
+  ReviewDecisionAudit,
+  ReviewDecisionOutcome,
+  ReviewEventRecord,
+  ReviewExecutorAudit,
+  ReviewProjection,
+  ReviewState,
+} from './reviews.js';
+export {
+  REVIEW_ACTIONS,
+  REVIEW_DECISION_OUTCOMES,
+  ReviewValidationError,
+  createReviewEvent,
+  isReviewAction,
+  isReviewDecisionOutcome,
+  projectReviewState,
+  projectRevisionReview,
+} from './reviews.js';
+
+export type {
+  ArchiveKind,
+  LifecycleAction,
+  LifecycleEventRecord,
+  LifecycleObjectKind,
+  LifecycleProjection,
+  OperationAuditEventRecord,
+  OperationAuditSubject,
+  PurgeState,
+} from './lifecycle.js';
+export {
+  ARCHIVE_KINDS,
+  LIFECYCLE_ACTIONS,
+  LIFECYCLE_OBJECT_KINDS,
+  OPERATION_AUDIT_SUBJECTS,
+  LifecycleValidationError,
+  OperationAuditValidationError,
+  createLifecycleEvent,
+  createOperationAuditEvent,
+  isArchiveKind,
+  isLifecycleAction,
+  isLifecycleObjectKind,
+  isOperationAuditSubject,
+  projectLifecycleState,
+} from './lifecycle.js';
+
+export type {
+  PreparedSubmissionManifest,
+  PreparedSubmissionReceipt,
+  SelectedCommentRevision,
+  SelectedStructureRevision,
+} from './submissions.js';
+export {
+  SubmissionValidationError,
+  createPreparedSubmissionManifest,
+  recoverPreparedSubmissionReceipt,
+  verifyPreparedSubmission,
+} from './submissions.js';
