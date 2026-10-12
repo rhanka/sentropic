@@ -72,7 +72,9 @@ export const validateGrantLifetime = (lifetime: unknown, nowIso?: string): Valid
   }
   if (candidate['kind'] === 'lease') {
     if (!isIsoDateString(candidate['expiresAt'])) return errResult('lease lifetime requires an ISO expiresAt');
-    if (nowIso !== undefined && candidate['expiresAt'] <= nowIso) return errResult('lease is expired');
+    if (nowIso !== undefined && Date.parse(candidate['expiresAt'] as string) <= Date.parse(nowIso)) {
+      return errResult('lease is expired');
+    }
     return okResult();
   }
   return errResult('lifetime.kind must be invocation or lease');
