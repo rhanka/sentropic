@@ -940,15 +940,13 @@ export const sessionWorkspaceBindings = controlSchema.table(
  * control.live_git_declarations — durable explicit live workspace
  * declarations (engram plan L6a, S seat).
  *
- * Identity-adapter isolation: the engram-live L6a contract identity fields
- * are under revision (revocation will target a unique declarationId attached
- * to cloneId/worktreeId, with explicit identity-uncertainty states and one
- * canonical id derivation exported by the contract). No contract identity
- * field is a key column here: `declaration_key` is the opaque key derived by
- * the thin identity adapter in services/cluster-mesh/live-declarations.ts,
- * and the full declaration and withdrawal documents live in
- * `payload`/`withdrawal` jsonb. Swapping the contract identity model changes
- * that adapter only — not this schema.
+ * Canonical engram contract 70ebdfee: declarations carry the opaque identity
+ * triangle (declarationId, cloneId, worktreeId) with explicit uncertainty
+ * states. No contract identity field is an individual key column: `declaration_key`
+ * is the unambiguous canonical JSON key derived by canonicalLiveDeclarationIdentity
+ * (using canonicalIdKey('declaration', [tenant, declarationId, cloneId, worktreeId]))
+ * in services/cluster-mesh/live-declarations.ts, and the full declaration and
+ * withdrawal documents live in `payload`/`withdrawal` jsonb.
  *
  * Guardrails:
  * - NO cross-namespace FK (control-namespace rule).
