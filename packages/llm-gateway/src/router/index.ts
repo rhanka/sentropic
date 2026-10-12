@@ -42,6 +42,11 @@ import { authenticateCaller, validateAuthContext } from '../internal/caller-auth
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 import type { GatewayBudgetOptions } from '../ports/budget.js';
 import { assertBudgetRouteDeps } from '../admission.js';
+import {
+  NativeCountTokensRefusal, NativeCountUpstreamError, runNativeCountTokens,
+  type NativeCountTokensPort,
+} from '../native-count-tokens.js';
+import type { NativeCountTokensRateLimiter } from '../native-count-rate.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -77,6 +82,16 @@ export interface CreateGatewayRouterOptions {
    * and `routeMetering`; construction fails otherwise. Absent: no quote call.
    */
   readonly budget?: GatewayBudgetOptions;
+  /**
+   * Host-owned provider count transport (spec §15.2 round 2): when present,
+   * `POST /v1/messages/count_tokens` relays the authenticated caller body and
+   * returns the provider count verbatim (real counting, never an estimate).
+   * Absent: explicit provider-shaped refusal — the client falls back to its
+   * own local counting. Trusted injection, never caller-selected.
+   */
+  readonly nativeCountTokens?: NativeCountTokensPort;
+  /** Per-principal count engineering limits; omitted routers share the process-wide limiter. */
+  readonly nativeCountRate?: NativeCountTokensRateLimiter;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -365,15 +380,16 @@ export const createGatewayRouter = (
   app.get('/v1/models', handleListModels);
   app.get('/muse-code/models', handleListModels);
 
-  // Token counting (spec §3b, Claude Code). The gateway owns no provider
-  // count seam, so this maps the call properly instead of answering a bare
-  // framework 404: malformed bodies and missing models get a provider-shaped
-  // 400 before authentication; authenticated callers get the frozen
-  // unknown-model 404 only for unrecognized IDs, and known models/aliases
-  // get a provider-shaped 400 (the client falls back to its own local
+  // Token counting (spec §15.2 round 2, Claude Code). The gateway relays the
+  // authenticated, recognized request to the host-owned NativeCountTokensPort
+  // and returns the provider count verbatim — real provider counting, never
+  // an estimate (an estimate would corrupt Anthropic cache accounting).
+  // Malformed bodies and missing models get a provider-shaped 400 before
+  // authentication; authenticated callers get the frozen unknown-model 404
+  // only for unrecognized IDs. Without a port the route keeps an explicit
+  // provider-shaped refusal (the client falls back to its own local
   // counting). Authentication always precedes account/pool access. No lease
-  // is taken and nothing is metered. Native provider counting is follow-up
-  // work for the host-owned transport, not this route.
+  // is taken and nothing is metered on any count path.
   app.post('/v1/messages/count_tokens', async (c) => {
     const id = requestId();
     if (!routeFlowDeps && !flowDeps) {
@@ -430,7 +446,23 @@ export const createGatewayRouter = (
         );
       }
     }
-    return sendError(c, mapGatewayError('anthropic-messages', 'bad-request'), id);
+    try {
+      const result = await runNativeCountTokens({
+        port: options.nativeCountTokens,
+        rate: options.nativeCountRate,
+      }, {
+        cost: auth.cost, body, headers: readHeaders(c.req.raw.headers),
+        signal: c.req.raw.signal, requestId: id,
+      });
+      forwardProviderHeaders(c, result.headers);
+      c.header(REQUEST_ID_HEADER, id);
+      return c.json(result.body as object, 200);
+    } catch (error) {
+      if (error instanceof NativeCountTokensRefusal || error instanceof NativeCountUpstreamError) {
+        return sendError(c, error.response, id);
+      }
+      return sendError(c, toProviderShapedError('anthropic-messages', error, model), id);
+    }
   });
 
   return app;
