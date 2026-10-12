@@ -98,11 +98,11 @@
     - [x] make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
     - [x] K1 exit commit recorded.
 - [ ] Lot K2a — Test-only in-memory reference plus atomic, authority, chain, read corpus
-  - [ ] Implement packages/cluster-mesh/tests/storage/reference-state.ts (test-only).
+  - [x] Implement packages/cluster-mesh/tests/storage/reference-state.ts (test-only).
   - [ ] Implement packages/cluster-mesh/tests/storage/reference-store.ts (test-only).
   - [ ] Implement packages/cluster-mesh/tests/storage/atomic-corpus.ts.
   - [ ] Implement packages/cluster-mesh/tests/storage/authority-corpus.ts.
-  - [ ] Implement packages/cluster-mesh/tests/storage/chain-corpus.ts.
+  - [x] Implement packages/cluster-mesh/tests/storage/chain-corpus.ts.
   - [ ] Implement packages/cluster-mesh/tests/storage/read-corpus.ts.
   - [ ] Implement packages/cluster-mesh/tests/storage/reference.spec.ts executing the corpus against the reference.
   - [ ] Implement packages/cluster-mesh/tests/storage/mutations.spec.ts with discriminating recorded mutations.
