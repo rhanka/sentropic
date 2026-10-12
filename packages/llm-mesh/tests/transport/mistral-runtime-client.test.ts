@@ -252,6 +252,80 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     });
   });
 
+  it('decodes message tool calls instead of dropping them (spec §16.4)', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-tc', choices: [{
+        message: {
+          content: null,
+          tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_time', arguments: '{"x":1}' } }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+      usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+    }), { status: 200 }));
+    const client = new MistralRuntimeClient({ fetch: fetchFn });
+    const response = await client.generate({
+      ...request,
+      tools: [{ type: 'function', name: 'get_time', inputSchema: { type: 'object' } }],
+    }, auth);
+    expect(response.toolCalls).toEqual([{
+      toolCallId: 'call_1', providerCallId: 'call_1', name: 'get_time', argumentsText: '{"x":1}',
+    }]);
+    expect(response.finishReason).toBe('tool_calls');
+    expect(response.message).toMatchObject({
+      toolCalls: [{ toolCallId: 'call_1', name: 'get_time' }],
+    });
+  });
+
+  it('recovers from malformed tool entries without losing valid calls', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-tc2', choices: [{
+        message: {
+          content: 'partial',
+          tool_calls: [
+            { id: 'call_ok', type: 'function', function: { name: 'get_time', arguments: '{}' } },
+            { type: 'function', function: { name: 'ghost' } },
+            'not-an-object',
+          ],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    }), { status: 200 }));
+    const client = new MistralRuntimeClient({ fetch: fetchFn });
+    const response = await client.generate({ ...request }, auth);
+    expect(response.toolCalls.map((call) => call.toolCallId)).toEqual(['call_ok']);
+    expect(response.finishReason).toBe('tool_calls');
+    expect(response.text).toBe('partial');
+  });
+
+  it('decodes SSE tool deltas into start/delta events with a tool_calls terminal', async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_9","type":"function","function":{"name":"get_time","arguments":""}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"x\\""}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"1}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}}\n\n',
+    ];
+    const sse = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const client = new MistralRuntimeClient({ fetch: async () => sse });
+    const events = [];
+    for await (const event of await client.stream({ ...request }, auth)) {
+      events.push(event);
+    }
+    const starts = events.filter((e) => e.type === 'tool_call_start');
+    expect(starts).toHaveLength(1);
+    expect(starts[0]).toMatchObject({ data: { toolCallId: 'call_9', providerCallId: 'call_9', name: 'get_time' } });
+    const deltas = events.filter((e) => e.type === 'tool_call_delta');
+    expect(deltas.map((e) => (e as { data: { delta: string } }).data.delta).join('')).toBe('{"x"1}');
+    const done = events[events.length - 1];
+    expect(done).toMatchObject({ type: 'done', data: { finishReason: 'tool_calls' } });
+  });
+
   it('forwards effort on the proven reasoning_effort slot and omits none (spec §16.4)', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       id: 'resp-3', choices: [{ message: { content: 'ok' } }],
