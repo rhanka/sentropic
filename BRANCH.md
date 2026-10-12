@@ -102,6 +102,7 @@
 - [x] Lot 2.09 review resolution - part 1 (2026-10-12): resolved MINEUR-1 so persisted receipt and settlement ledger agree on verdict outcome when deadline occurs during settlement without overwriting durable receipt to error; mapped transport/adapter CANCELLED to TIMEOUT when deadline exceeded; removed unused closeJudgeReceipt import in deadline.ts; pinned exact settled verdict assertions and new CANCELLED/TIMEOUT regressions in tests/judge-dispatch.test.ts.
 - [x] Lot 2.09 review resolution - part 2 (2026-10-12): resolved MAJEUR-1 by keeping timer and caller abort signal active across whole body stream read, cancelling reader on timeout/abort; resolved MAJEUR-2 by refusing 3xx redirects via manual redirect policy without following or leaking headers; added regression tests for slow body stream timeout, stream read cancellation, and redirect refusal.
 - [x] Lot 2.09 review resolution - part 3 (2026-10-12): resolved MINEUR-2 by returning typed preflight failure on correlation generation/token resolution exceptions and handling cancellation during preflight token resolution; resolved MINEUR-3 by bounding timeout with min and providing grace margin for server deadline.
+- [x] Lot 2.09 review resolution - part 4 (2026-10-12): resolved MINEUR-4 by validating full response shape (schemaVersion, callId, matching correlationId, budget, cost, parseJudgeUsage, outcome); resolved MINEUR-5 by testing body stream overflow during reading, environment JEV_API_KEY leak protection, and invalid response shapes.
 
 
 ## AI Flaky tests

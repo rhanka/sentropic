@@ -149,7 +149,7 @@ describe('remote judge client', () => {
     const weird = {
       kind: 'error', ok: false,
       error: { code: 'NONEXISTENT_ERROR_CODE', phase: 'dispatch' },
-      receipt: mockReceipt(),
+      receipt: mockReceipt('weird-corr'),
     };
     const fetch = vi.fn(async () => new Response(JSON.stringify(weird), { status: 500, headers: { 'content-type': 'application/json' } }));
     const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
@@ -168,7 +168,7 @@ describe('remote judge client', () => {
     const weirdPhase = {
       kind: 'error', ok: false,
       error: { code: 'TIMEOUT', phase: 'unknown-phase' },
-      receipt: mockReceipt(),
+      receipt: mockReceipt('phase-corr'),
     };
     const fetch = vi.fn(async () => new Response(JSON.stringify(weirdPhase), { status: 500, headers: { 'content-type': 'application/json' } }));
     const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
@@ -306,5 +306,80 @@ describe('remote judge client', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('refuses body stream exceeding maxResponseBytes during chunk reading', async () => {
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        ctrl.enqueue(new Uint8Array(400));
+        ctrl.enqueue(new Uint8Array(200));
+      },
+      cancel() { cancelled = true; },
+    });
+    const fetch = vi.fn(async () => new Response(stream, { status: 200 }));
+    const client = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      maxResponseBytes: 500,
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const result = await client.judge(judgeRequest());
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false,
+      error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+    });
+    expect(cancelled).toBe(true);
+  });
+
+  it('never leaks JEV_API_KEY from environment to headers or body', async () => {
+    const originalKey = process.env.JEV_API_KEY;
+    process.env.JEV_API_KEY = 'super-secret-jev-key-env';
+    try {
+      let capturedInit: RequestInit | undefined;
+      const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+        capturedInit = init;
+        const corr = JSON.parse(String(init?.body)).correlationId;
+        return new Response(JSON.stringify(mockVerdictResult(corr)), { status: 200 });
+      });
+      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+      const result = await client.judge(judgeRequest());
+      expect(result.ok).toBe(true);
+      const headers = capturedInit?.headers as Record<string, string>;
+      expect(headers.authorization).toBeUndefined();
+      expect(JSON.stringify(headers)).not.toContain('super-secret-jev-key-env');
+      expect(String(capturedInit?.body)).not.toContain('super-secret-jev-key-env');
+    } finally {
+      if (originalKey === undefined) delete process.env.JEV_API_KEY;
+      else process.env.JEV_API_KEY = originalKey;
+    }
+  });
+
+  it('refuses invalid mesh response shapes with MESH_UNAVAILABLE', async () => {
+    const fetchWithBody = (body: unknown) => {
+      const fn = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
+      return createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fn as unknown as typeof globalThis.fetch });
+    };
+
+    const badCorr = mockVerdictResult('different-corr');
+    const res1 = await fetchWithBody(badCorr).judge(judgeRequest({ correlationId: 'sent-corr' }));
+    expect(res1).toMatchObject({
+      kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+    });
+
+    const badSchema = { ...mockVerdictResult('my-corr'), receipt: { ...mockReceipt('my-corr'), schemaVersion: 2 } };
+    const res2 = await fetchWithBody(badSchema).judge(judgeRequest({ correlationId: 'my-corr' }));
+    expect(res2).toMatchObject({
+      kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+    });
+
+    const badUsage = { ...mockVerdictResult('my-corr'), receipt: { ...mockReceipt('my-corr'), usage: { tokens: null } } };
+    const res3 = await fetchWithBody(badUsage).judge(judgeRequest({ correlationId: 'my-corr' }));
+    expect(res3).toMatchObject({
+      kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+    });
   });
 });
