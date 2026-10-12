@@ -3,8 +3,27 @@ import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } f
 import type { MistralAdapterClient } from '../adapters.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { ProviderRuntimeContext } from '../registry.js';
-import type { StreamEvent, TokenUsage } from '../streaming.js';
+import type { FinishReason, StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
+
+/** Canonical terminal reason: provider finish_reason wins over inference (spec §16.4). */
+const terminalFinish = (args: { sawToolCalls: boolean; rawFinish?: string; sawText: boolean }): FinishReason => {
+  if (args.sawToolCalls || args.rawFinish === 'tool_calls') return 'tool_calls';
+  if (args.rawFinish === 'length') return 'length';
+  if (args.rawFinish === 'content_filter') return 'content_filter';
+  return args.sawText ? 'stop' : 'unknown';
+};
+
+/** Latest string `choices[0].finish_reason` on a Chat JSON/SSE payload, if any. */
+const rawFinishOf = (payload: unknown): string | undefined => {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const choices = (payload as Record<string, unknown>).choices;
+  if (!Array.isArray(choices) || choices.length === 0) return undefined;
+  const first = choices[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const reason = (first as Record<string, unknown>).finish_reason;
+  return typeof reason === 'string' && reason ? reason : undefined;
+};
 
 /** Decode OpenAI Chat `message.tool_calls` — malformed entries are skipped, never fatal (spec §16.3). */
 const extractToolCalls = (message: unknown): ToolCall[] => {
@@ -291,10 +310,14 @@ export class MistralRuntimeClient implements MistralAdapterClient {
     return (async function* (): AsyncGenerator<StreamEvent> {
       let sawText = false;
       let sawToolCalls = false;
+      let rawFinish: string | undefined;
+      let stashedUsage: TokenUsage | undefined;
       const toolCallIds = new Map<number, string>();
       for await (const raw of parseSseJson(response.body!)) {
         const text = extractText(raw);
         const usage = extractUsage(raw);
+        const finish = rawFinishOf(raw);
+        if (finish) rawFinish = finish;
         if (text) {
           sawText = true;
           yield { type: 'content_delta', data: { delta: text } };
@@ -328,16 +351,30 @@ export class MistralRuntimeClient implements MistralAdapterClient {
           }
         }
         if (usage) {
+          // A usage-only chunk before any content/finish/terminal is
+          // accounting, not a terminal stop (spec §16.4): stash and continue.
+          if (!sawText && !sawToolCalls && !rawFinish) {
+            stashedUsage = usage;
+            continue;
+          }
           yield {
             type: 'done',
-            data: { finishReason: sawToolCalls ? 'tool_calls' as const : 'stop' as const, usage },
+            data: {
+              finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText }),
+              ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
+              usage,
+            },
           };
           return;
         }
       }
       yield {
         type: 'done',
-        data: { finishReason: sawToolCalls ? 'tool_calls' as const : sawText ? 'stop' as const : 'unknown' as const },
+        data: {
+          finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText }),
+          ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
+          ...(stashedUsage ? { usage: stashedUsage } : {}),
+        },
       };
     })();
   }
@@ -373,7 +410,10 @@ export class MistralRuntimeClient implements MistralAdapterClient {
       },
       text,
       toolCalls,
-      finishReason: toolCalls.length > 0 ? 'tool_calls' : text ? 'stop' : 'unknown',
+      finishReason: toolCalls.length > 0 ? 'tool_calls'
+        : rawFinish === 'length' ? 'length'
+        : rawFinish === 'content_filter' ? 'content_filter'
+        : text ? 'stop' : 'unknown',
       ...(usage ? { usage } : {}),
       ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
     };

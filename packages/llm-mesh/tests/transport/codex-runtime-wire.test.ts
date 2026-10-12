@@ -98,10 +98,7 @@ describe('Codex runtime wire', () => {
     })).toEqual([]);
     expect(decodeCodexRuntimeEvent({
       type: 'response.output_item.done',
-      item: {
-        type: 'reasoning', id: 'rs-1',
-        summary: [{ type: 'summary_text', text: 'thought a bit' }],
-      },
+      item: { type: 'reasoning', id: 'rs-1', encrypted_content: 'e30=' },
     })).toEqual([]);
   });
 
@@ -127,6 +124,23 @@ describe('Codex runtime wire', () => {
       },
     });
     expect(filtered).toMatchObject({ type: 'done', data: { finishReason: 'content_filter' } });
+  });
+
+  it('surfaces completed reasoning summaries without rendering encrypted content', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: {
+        type: 'reasoning', id: 'rs-9',
+        summary: [{ type: 'summary_text', text: 'considered the options' }],
+        encrypted_content: 'e30=',
+      },
+    })).toEqual([{ type: 'reasoning_delta', data: {
+      delta: 'considered the options', kind: 'summary_done',
+    } }]);
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: { type: 'reasoning', id: 'rs-10', encrypted_content: 'e30=' },
+    })).toEqual([]);
   });
 
   it('decodes failure terminals as errors with the provider message', () => {

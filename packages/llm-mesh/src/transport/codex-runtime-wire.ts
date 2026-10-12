@@ -118,6 +118,21 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
         name: String(item.name ?? ''), argumentsText: String(item.arguments ?? ''),
       },
     }];
+    // A completed reasoning item is the authoritative summary artifact
+    // (spec §16.4): surface its summary text once as summary_done so JSON
+    // collection and streaming agree. Encrypted content is never rendered
+    // as visible text and has no event slot here.
+    if (item?.type === 'reasoning' && Array.isArray(item.summary)) {
+      const text = item.summary
+        .map((part) => {
+          const entry = asRecord(part);
+          return entry?.type === 'summary_text' && typeof entry.text === 'string'
+            ? entry.text
+            : '';
+        })
+        .join('');
+      if (text) return [{ type: 'reasoning_delta', data: { delta: text, kind: 'summary_done' } }];
+    }
   }
   if (type === 'response.function_call_arguments.delta' && typeof record?.delta === 'string') {
     return [{
