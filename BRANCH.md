@@ -63,14 +63,14 @@
   - [x] Lot gate: RED evidence recorded in commit; `make scope-check ... ENV=test-live-l6a-s`.
 
 - [x] **Lot 2 — GREEN: cluster-mesh live declaration registration module**
-  - [ ] Implement `packages/cluster-mesh/src/live-storage/registration.ts`: data-pure declaration/withdrawal DTOs mirroring the engram-live L6a contract, `LiveDeclarationStorePort` (save/find/list/status/recordWithdrawal), deferred-work cancellation and private-purge ports, replay seam after projection loss, revision increments of exactly one, non-activating lifecycle classification, product binding trio coherence (server/issuer, workspace/fingerprint pair, binding revision).
-  - [ ] Scoped run green: `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
-    - [ ] `make test-cluster-mesh API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s` (full package suite).
-    - [ ] `make scope-check ... ENV=test-live-l6a-s`.
+  - [x] Implement `packages/cluster-mesh/src/live-storage/registration.ts`: data-pure declaration/withdrawal DTOs mirroring the engram-live L6a contract, `LiveDeclarationStorePort` (save/find/list/status/recordWithdrawal), deferred-work cancellation and private-purge ports, replay seam after projection loss, revision increments of exactly one, non-activating lifecycle classification, product binding trio coherence (server/issuer, workspace/fingerprint pair, binding revision).
+  - [x] Scoped run green: `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s`.
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
+    - [x] `make test-cluster-mesh API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s` (full package suite).
+    - [x] `make scope-check ... ENV=test-live-l6a-s`.
 
-- [ ] **Lot 3 — API product persistence: control table, migration, Postgres store**
+- [x] **Lot 3 — API product persistence: control table, migration, Postgres store**
   - [ ] Add `control.live_git_declarations` to `api/src/db/control-schema.ts` (explicit `'live'` capability check, product binding trio coherence check, withdrawal reason check, no cross-namespace FK).
   - [ ] Add migration `api/drizzle/control/0010_live_git_declarations.sql` + `api/drizzle/control/meta/_journal.json` entry (first free number on main; `0009` reserved by unmerged cowork branch).
   - [ ] Implement `api/src/services/cluster-mesh/live-declarations.ts`: Postgres `LiveDeclarationStorePort` adapter — save/find/list/status/recordWithdrawal, withdrawal records the private-purge request and never deletes committed rows.
