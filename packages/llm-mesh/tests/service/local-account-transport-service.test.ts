@@ -420,6 +420,60 @@ describe('LocalAccountTransportService', () => {
     }]);
   });
 
+  it('refreshes an expired access token with a valid refresh token instead of excluding the account', async () => {
+    const keyring = new InMemoryKeyring();
+    const refresh = vi.fn(async (input: { accountId: string }) => ({
+      accountId: input.accountId, accessToken: 'fresh-access',
+      refreshToken: 'rotated-refresh', expiresAt: '2099-01-01T00:00:00.000Z',
+      authClientConfigVersion: 'v1.0.0',
+    }));
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map([['codex', { refresh } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'refreshable-expired', targetProviderId: 'openai', transportProviderId: 'codex',
+      accessToken: 'stale-access', refreshToken: 'valid-refresh', status: 'active',
+      modelIds: ['gpt-6.1-sol'], expiresAt: '2000-01-01T00:00:00.000Z',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z', ownerScopeRef: 'owner-a',
+    });
+    const generate = vi.fn(async (request) => ({
+      id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-6.1-sol' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+      finishReason: 'stop' as const, providerMetadata: { receivedAuth: request.auth },
+    }));
+    const directory = service.createRouteDirectory({
+      generate,
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const planner = new InMemoryRoutePlanner({ directory });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+
+    // An expired ACCESS token with a live refresh token is not a reauth
+    // condition: acquire() refreshes silently before dispatch.
+    const eligible = await directory.listEligible(subject);
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0]).toMatchObject({ readiness: 'ready' });
+    expect(await directory.listDiagnostics?.(subject)).toEqual([]);
+    expect(await planner.listModels(subject)).toContainEqual({
+      modelId: 'gpt-6.1-sol', providerId: 'openai',
+    });
+
+    const plan = await planner.plan(subject, { requestedModel: 'claude-opus-5-5' });
+    const attempt = await planner.prepareAttempt(
+      subject, plan.planRef, plan.candidateRefs[0]!, 'req-1', 0,
+    );
+    await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      auth: expect.objectContaining({
+        material: expect.objectContaining({ accessToken: 'fresh-access' }),
+      }),
+    }));
+    await attempt.complete();
+  });
+
   it('should not interpolate an unparseable expiry timestamp into diagnostics', async () => {
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
