@@ -155,9 +155,21 @@ export type {
   CanonicalReadSelection,
   CanonicalReadPage,
   CanonicalReadPageOutcome,
+  CanonicalWireError,
+  CanonicalWireErrorCode,
+  CanonicalReviewRequest,
+  CanonicalLifecycleRequest,
+  CanonicalImportUnit,
+  CanonicalBatchImportRequest,
+  CanonicalUnitOutcome,
+  CanonicalBatchImportResponse,
+  CanonicalBatchExportRequest,
+  CanonicalBatchExportResponse,
+  CanonicalRouterOptions,
+  CanonicalRouterFactory,
 } from './command-store.js';
 
-export { CANONICAL_READ_PAGE_OUTCOMES } from './command-store.js';
+export { CANONICAL_READ_PAGE_OUTCOMES, CANONICAL_WIRE_ERROR_CODES } from './command-store.js';
 
 export type {
   CanonicalCommandEnvelope,
