@@ -17,8 +17,8 @@ export interface ResponsesCustomTool {
   /** Bare tool name as declared (namespace carried separately). */
   readonly name: string;
   readonly description?: string;
-  /** Codex freeform format marker (e.g. its exec tool format). */
-  readonly format?: string;
+  /** Codex freeform format (string marker or grammar object, carried opaquely). */
+  readonly format?: string | Record<string, unknown>;
   /** Declaring namespace, when nested (Codex `additional_tools`). */
   readonly namespace?: string;
   readonly providerMetadata?: Record<string, unknown>;
