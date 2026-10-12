@@ -146,6 +146,10 @@ export type {
   CanonicalHttpPorts,
   CanonicalHttpCapability,
   CanonicalCommandStore,
+  CanonicalImportManifest,
+  CanonicalUnitReceipt,
+  CanonicalBatchReceiptSnapshot,
+  CanonicalConversionReport,
 } from './command-store.js';
 
 export type {

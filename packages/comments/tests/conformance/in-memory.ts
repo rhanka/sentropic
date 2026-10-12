@@ -11,9 +11,14 @@ import type { IdempotencyKey } from '@sentropic/contracts';
 import { CanonicalCommandError } from '../../src/commands.js';
 import type {
   CanonicalCommandStore,
+  CanonicalConversionReport,
+  CanonicalBatchReceiptSnapshot,
+  CanonicalImportManifest,
   CanonicalStoreScope,
   CanonicalTransactionHandle,
+  CanonicalUnitReceipt,
 } from '../../src/command-store.js';
+import type { PreparedSubmissionManifest } from '../../src/submissions.js';
 import type {
   AnnotationRevisionRecord,
   CommentRevisionRecord,
@@ -40,6 +45,11 @@ export class InMemoryCanonicalStore implements CanonicalCommandStore {
   private readonly reviews = new Map<string, ReviewEventRecord[]>();
   private readonly lifecycle = new Map<string, LifecycleEventRecord[]>();
   private readonly audits = new Map<string, OperationAuditEventRecord[]>();
+  private readonly submissionManifests = new Map<string, PreparedSubmissionManifest>();
+  private readonly importManifests = new Map<string, CanonicalImportManifest>();
+  private readonly unitReceipts = new Map<string, CanonicalUnitReceipt>();
+  private readonly batchSnapshots = new Map<string, CanonicalBatchReceiptSnapshot[]>();
+  private readonly conversionReports = new Map<string, CanonicalConversionReport[]>();
   private readonly idempotency = new Map<string, { digest: string; resultIds: string[]; resultHash: string | null }>();
   private readonly allocations = new Map<string, number>();
 
@@ -96,6 +106,37 @@ export class InMemoryCanonicalStore implements CanonicalCommandStore {
     return record;
   }
 
+  /**
+   * CAS-only append for records with no link field (batch snapshots,
+   * conversion reports): the expected state alone binds the chain position.
+   */
+  private appendCasOnly<R extends { hash: string }>(
+    chains: Map<string, R[]>,
+    key: string,
+    record: R,
+    expected: Expected,
+  ): R {
+    this.checkCas(chains, key, expected);
+    const chain = chains.get(key) ?? [];
+    chain.push(record);
+    chains.set(key, chain);
+    if (expected.kind === 'creation') {
+      this.allocate(key);
+    }
+    return record;
+  }
+
+  /** Idempotent genesis: same ID+hash replays, different hash conflicts. */
+  private genesis<G extends { hash: string }>(records: Map<string, G>, key: string, record: G): G {
+    const existing = records.get(key);
+    if (existing !== undefined) {
+      if (existing.hash === record.hash) return existing;
+      throw new CanonicalCommandError('idempotency-conflict', 'Genesis record replayed with different content');
+    }
+    records.set(key, record);
+    return record;
+  }
+
   appendAnnotationRevision(scope: CanonicalStoreScope, annotationId: string, record: AnnotationRevisionRecord, expected: Expected): Promise<AnnotationRevisionRecord> {
     if (!sameScope(record.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
     return Promise.resolve(this.append(this.annotations, `${scope.tenantId}/${scope.workspaceId}/a/${annotationId}`, record, expected));
@@ -124,6 +165,31 @@ export class InMemoryCanonicalStore implements CanonicalCommandStore {
   appendOperationAuditEvent(scope: CanonicalStoreScope, subject: OperationAuditSubject, subjectId: string, record: OperationAuditEventRecord, expected: Expected): Promise<OperationAuditEventRecord> {
     if (!sameScope(record.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
     return Promise.resolve(this.append(this.audits, `${scope.tenantId}/${scope.workspaceId}/o/${subject}/${subjectId}`, record, expected));
+  }
+
+  appendPreparedSubmissionManifest(scope: CanonicalStoreScope, submissionId: string, manifest: PreparedSubmissionManifest): Promise<PreparedSubmissionManifest> {
+    if (!sameScope(manifest.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.genesis(this.submissionManifests, `${scope.tenantId}/${scope.workspaceId}/m/${submissionId}`, manifest));
+  }
+
+  appendImportManifest(scope: CanonicalStoreScope, importId: string, manifest: CanonicalImportManifest): Promise<CanonicalImportManifest> {
+    if (!sameScope(manifest.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.genesis(this.importManifests, `${scope.tenantId}/${scope.workspaceId}/i/${importId}`, manifest));
+  }
+
+  appendUnitReceipt(scope: CanonicalStoreScope, unitId: string, receipt: CanonicalUnitReceipt): Promise<CanonicalUnitReceipt> {
+    if (!sameScope(receipt.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.genesis(this.unitReceipts, `${scope.tenantId}/${scope.workspaceId}/u/${unitId}`, receipt));
+  }
+
+  appendBatchReceiptSnapshot(scope: CanonicalStoreScope, batchId: string, snapshot: CanonicalBatchReceiptSnapshot, expected: Expected): Promise<CanonicalBatchReceiptSnapshot> {
+    if (!sameScope(snapshot.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.appendCasOnly(this.batchSnapshots, `${scope.tenantId}/${scope.workspaceId}/b/${batchId}`, snapshot, expected));
+  }
+
+  appendConversionReport(scope: CanonicalStoreScope, reportId: string, report: CanonicalConversionReport, expected: Expected): Promise<CanonicalConversionReport> {
+    if (!sameScope(report.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.appendCasOnly(this.conversionReports, `${scope.tenantId}/${scope.workspaceId}/v/${reportId}`, report, expected));
   }
 
   getAnnotationHead(scope: CanonicalStoreScope, annotationId: string): Promise<AnnotationRevisionRecord | null> {
