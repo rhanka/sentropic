@@ -105,8 +105,12 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
   if (type === 'response.reasoning_summary_text.delta' && typeof record?.delta === 'string') {
     return [{ type: 'reasoning_delta', data: { delta: record.delta, kind: 'summary' } }];
   }
-  if (type === 'response.output_item.added') {
+  if (type === 'response.output_item.added' || type === 'response.output_item.done') {
     const item = asRecord(record?.item);
+    // A done function_call item carries the authoritative final arguments
+    // snapshot; the client accumulator lets it win over streamed fragments
+    // instead of appending (no duplication). Non-function done snapshots
+    // (message/reasoning/output_text) duplicate streamed deltas — dropped.
     if (item?.type === 'function_call') return [{
       type: 'tool_call_start', data: {
         toolCallId: String(item.id ?? item.call_id ?? ''),
@@ -130,6 +134,23 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
       && response.output.some((item) => asRecord(item)?.type === 'function_call');
     return [{ type: 'done', data: {
       finishReason: hasToolCall ? 'tool_calls' : 'stop', providerId: 'openai',
+      ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
+      usage: {
+        inputTokens: Number(usage?.input_tokens ?? 0),
+        outputTokens: Number(usage?.output_tokens ?? 0),
+        totalTokens: Number(usage?.total_tokens ?? 0), providerRawUsage: usage,
+      },
+    } }];
+  }
+  if (type === 'response.incomplete') {
+    // An incomplete terminal is served, never success: map the provider
+    // reason onto the canonical finish vocabulary and keep usage + id.
+    const response = asRecord(record?.response); const usage = asRecord(response?.usage);
+    const reason = asRecord(response?.incomplete_details)?.reason;
+    const finishReason = reason === 'max_output_tokens' ? 'length'
+      : reason === 'content_filter' ? 'content_filter' : 'unknown';
+    return [{ type: 'done', data: {
+      finishReason, providerId: 'openai',
       ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
       usage: {
         inputTokens: Number(usage?.input_tokens ?? 0),
