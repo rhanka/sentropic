@@ -10,6 +10,7 @@
 import type { Anchor, ResourceRef, SourceVersionIndicator } from './anchors.js';
 import { resourceKey, scopeKey } from './anchors.js';
 import type { QuantizedGeometry } from './geometry.js';
+import { hashRecord } from './revision-hash.js';
 
 /** Structural revision triggers: the closed list (SPEC §4.1). */
 export const STRUCTURAL_TRIGGERS = [
@@ -272,4 +273,119 @@ export const validateRevisionProvenance = (provenance: RevisionProvenance): Revi
     }
   }
   return provenance;
+};
+
+/** Immutable annotation revision (hashed record kind `annotation-revision`). */
+export type AnnotationRevisionRecord = {
+  readonly kind: 'annotation-revision';
+  readonly scope: { readonly tenantId: string; readonly workspaceId: string };
+  readonly annotationId: string;
+  readonly link: { readonly sequence: number; readonly previousHash: string | null };
+  readonly primary: RevisionTargetBinding;
+  readonly secondary: readonly RevisionTargetBinding[];
+  readonly visualAnchors: readonly VisualAnchorBinding[];
+  readonly body: RevisionBody;
+  readonly provenance: RevisionProvenance;
+  /** Computed canonical digest of this record. */
+  readonly hash: string;
+};
+
+/** Immutable thread structural revision (kind `thread-structure-revision`). */
+export type ThreadStructureRevisionRecord = {
+  readonly kind: 'thread-structure-revision';
+  readonly scope: { readonly tenantId: string; readonly workspaceId: string };
+  readonly threadId: string;
+  readonly link: { readonly sequence: number; readonly previousHash: string | null };
+  readonly trigger: StructuralTrigger;
+  readonly primary: RevisionTargetBinding;
+  readonly annotationId: string | null;
+  readonly provenance: RevisionProvenance;
+  readonly hash: string;
+};
+
+/** Immutable comment revision (kind `comment-revision`). */
+export type CommentRevisionRecord = {
+  readonly kind: 'comment-revision';
+  readonly scope: { readonly tenantId: string; readonly workspaceId: string };
+  readonly threadId: string;
+  readonly commentId: string;
+  readonly link: { readonly sequence: number; readonly previousHash: string | null };
+  readonly parentCommentId: string | null;
+  readonly structureRevision: { readonly id: string; readonly hash: string };
+  readonly annotationPin: { readonly annotationId: string; readonly revisionHash: string } | null;
+  readonly body: RevisionBody;
+  readonly provenance: RevisionProvenance;
+  readonly hash: string;
+};
+
+/**
+ * Create an annotation revision. The primary resource identity is immutable
+ * across revisions; a change creates a new annotation through a versioned
+ * conversion, never an in-place edit. Content, anchors, geometry or semantic
+ * metadata changes always create a new revision.
+ */
+export const createAnnotationRevision = (
+  previous: AnnotationRevisionRecord | null,
+  input: Omit<AnnotationRevisionRecord, 'kind' | 'link' | 'hash'>,
+): AnnotationRevisionRecord => {
+  validateRevisionTargets(input.scope, input.primary, input.secondary);
+  validateRevisionBody(input.body);
+  validateRevisionProvenance(input.provenance);
+  if (previous !== null) {
+    if (resourceKey(previous.primary.resource) !== resourceKey(input.primary.resource)) {
+      throw new RevisionValidationError('invalid-targets', 'Annotation primary resource identity is immutable');
+    }
+  }
+  const link = { sequence: previous === null ? 1 : previous.link.sequence + 1, previousHash: previous === null ? null : previous.hash };
+  const envelope = { ...input, link };
+  const hash = hashRecord('annotation-revision', envelope as unknown as Record<string, unknown>);
+  return { ...envelope, kind: 'annotation-revision', hash };
+};
+
+/**
+ * Create a thread structural revision. The trigger list is closed; assignment,
+ * resolution, archive, new replies and a changed live resource alone never
+ * create structural revisions. An annotation-bound structure retains the
+ * annotation's immutable primary resource identity.
+ */
+export const createThreadStructureRevision = (
+  previous: ThreadStructureRevisionRecord | null,
+  input: Omit<ThreadStructureRevisionRecord, 'kind' | 'link' | 'hash'>,
+): ThreadStructureRevisionRecord => {
+  if (!isStructuralTrigger(input.trigger)) {
+    throw new RevisionValidationError('invalid-trigger', `Unknown structural trigger: ${String(input.trigger)}`);
+  }
+  validateRevisionTargets(input.scope, input.primary, []);
+  validateRevisionProvenance(input.provenance);
+  if (previous !== null && previous.annotationId !== input.annotationId) {
+    throw new RevisionValidationError('invalid-pin', 'Thread annotation identity is immutable');
+  }
+  const link = { sequence: previous === null ? 1 : previous.link.sequence + 1, previousHash: previous === null ? null : previous.hash };
+  const envelope = { ...input, link };
+  const hash = hashRecord('thread-structure-revision', envelope as unknown as Record<string, unknown>);
+  return { ...envelope, kind: 'thread-structure-revision', hash };
+};
+
+/**
+ * Create a comment revision. In an annotation-bound thread, the comment pins
+ * exactly one revision/hash of that annotation; replies may deliberately pin
+ * different revisions of the same annotation and old pins stay unchanged.
+ * The parent relation is immutable for the lifetime of the comment.
+ */
+export const createCommentRevision = (
+  previous: CommentRevisionRecord | null,
+  input: Omit<CommentRevisionRecord, 'kind' | 'link' | 'hash'>,
+): CommentRevisionRecord => {
+  validateRevisionBody(input.body);
+  validateRevisionProvenance(input.provenance);
+  if (input.annotationPin !== null && (input.annotationPin.annotationId.length === 0 || input.annotationPin.revisionHash.length === 0)) {
+    throw new RevisionValidationError('invalid-pin', 'Annotation pin needs an annotation id and exact revision hash');
+  }
+  if (previous !== null && previous.parentCommentId !== input.parentCommentId) {
+    throw new RevisionValidationError('invalid-pin', 'Comment parent relation is immutable');
+  }
+  const link = { sequence: previous === null ? 1 : previous.link.sequence + 1, previousHash: previous === null ? null : previous.hash };
+  const envelope = { ...input, link };
+  const hash = hashRecord('comment-revision', envelope as unknown as Record<string, unknown>);
+  return { ...envelope, kind: 'comment-revision', hash };
 };
