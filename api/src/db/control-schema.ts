@@ -907,6 +907,7 @@ export const sessionWorkspaceBindings = controlSchema.table(
     sessionId: text('session_id').notNull(),
     workspaceId: text('workspace_id').notNull(),
     tenantId: text('tenant_id').notNull(),
+    principalId: text('principal_id').notNull(),
     status: text('status').notNull().default('attached'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
@@ -918,6 +919,10 @@ export const sessionWorkspaceBindings = controlSchema.table(
     tenantWorkspaceIdx: index('session_workspace_bindings_tenant_workspace_idx').on(
       table.tenantId,
       table.workspaceId,
+    ),
+    tenantPrincipalIdx: index('session_workspace_bindings_tenant_principal_idx').on(
+      table.tenantId,
+      table.principalId,
     ),
     statusCheck: check(
       'session_workspace_bindings_status_check',
