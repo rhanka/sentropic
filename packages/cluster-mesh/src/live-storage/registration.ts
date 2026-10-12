@@ -494,11 +494,23 @@ export function revokeLiveDeclaration(declaration: LiveWorkspaceDeclaration, rea
   return revocation;
 }
 
+export interface LiveProductBindingAuthorizationInput {
+  readonly tenant: string;
+  readonly principal: string;
+  readonly serverWorkspaceId: string;
+  readonly serverIssuer: string;
+  readonly bindingRevision: number;
+}
+
+export interface LiveProductBindingAuthorizationPort {
+  authorizeProductBinding(input: LiveProductBindingAuthorizationInput): Promise<void>;
+}
+
 export interface LiveDeclarationStorePort {
   save(declaration: LiveWorkspaceDeclaration): Promise<void>;
-  find(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<LiveWorkspaceDeclaration | null>;
+  find(tenant: string, declarationId: string, cloneId: string, worktreeId: string): Promise<LiveWorkspaceDeclaration | null>;
   list(tenant?: string): Promise<readonly LiveWorkspaceDeclaration[]>;
-  status(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<'declared' | 'withdrawn' | 'unknown'>;
+  status(tenant: string, declarationId: string, cloneId: string, worktreeId: string): Promise<'declared' | 'withdrawn' | 'unknown'>;
   recordWithdrawal(withdrawal: LiveDeclarationWithdrawal, withdrawnAt: string): Promise<boolean>;
 }
 
@@ -551,6 +563,7 @@ export function createLiveDeclarationRegistration(input: {
   readonly store: LiveDeclarationStorePort;
   readonly deferredWork: LiveDeferredWorkPort;
   readonly privatePurge: LivePrivatePurgePort;
+  readonly bindingAuthorization?: LiveProductBindingAuthorizationPort;
 }) {
   return {
     async declare(declarationInput: DeclareLiveDeclarationInput): Promise<LiveWorkspaceDeclaration> {
@@ -561,6 +574,15 @@ export function createLiveDeclarationRegistration(input: {
       if (await input.store.status(declaration.tenant, declaration.declarationId, declaration.cloneId, declaration.worktreeId) !== 'unknown') {
         throw new Error(`live declaration already exists for ${declaration.tenant}/${declaration.declarationId}`);
       }
+      if (declaration.serverWorkspaceId && input.bindingAuthorization) {
+        await input.bindingAuthorization.authorizeProductBinding({
+          tenant: declaration.tenant,
+          principal: declaration.principal,
+          serverWorkspaceId: declaration.serverWorkspaceId,
+          serverIssuer: declaration.serverIssuer!,
+          bindingRevision: declaration.bindingRevision!,
+        });
+      }
       await input.store.save(declaration);
       return declaration;
     },
@@ -569,14 +591,23 @@ export function createLiveDeclarationRegistration(input: {
       tenant: string,
       declarationId: string,
       patch: LiveDeclarationPatch,
-      cloneId?: string,
-      worktreeId?: string,
+      cloneId: string,
+      worktreeId: string,
     ): Promise<LiveWorkspaceDeclaration> {
       const previous = await input.store.find(tenant, declarationId, cloneId, worktreeId);
       if (!previous || await input.store.status(tenant, declarationId, cloneId, worktreeId) !== 'declared') {
         throw new Error(`no live declaration for ${tenant}/${declarationId}`);
       }
       const next = reviseLiveDeclaration(previous, patch);
+      if (next.serverWorkspaceId && input.bindingAuthorization) {
+        await input.bindingAuthorization.authorizeProductBinding({
+          tenant: next.tenant,
+          principal: next.principal,
+          serverWorkspaceId: next.serverWorkspaceId,
+          serverIssuer: next.serverIssuer!,
+          bindingRevision: next.bindingRevision!,
+        });
+      }
       await input.store.save(next);
       return next;
     },
@@ -608,6 +639,10 @@ export function createLiveDeclarationRegistration(input: {
         return { ok: false, reason: 'unknown_declaration' };
       }
       const request = revokeLiveDeclaration(declaration, withdrawal.reason);
+      const recorded = await input.store.recordWithdrawal(request, withdrawal.withdrawnAt);
+      if (!recorded) {
+        return { ok: false, reason: 'unknown_declaration' };
+      }
       const cancelledDeferredWork = await input.deferredWork.cancelDeferredWork({
         tenant: request.tenant,
         declarationId: request.declarationId,
@@ -616,12 +651,10 @@ export function createLiveDeclarationRegistration(input: {
         declarationRevision: request.declarationRevision,
       });
       await input.privatePurge.requestPrivatePurge(request);
-      const recorded = await input.store.recordWithdrawal(request, withdrawal.withdrawnAt);
-      return recorded ? { ok: true, cancelledDeferredWork, withdrawal: request }
-        : { ok: false, reason: 'unknown_declaration' };
+      return { ok: true, cancelledDeferredWork, withdrawal: request };
     },
 
-    async status(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<'declared' | 'withdrawn' | 'unknown'> {
+    async status(tenant: string, declarationId: string, cloneId: string, worktreeId: string): Promise<'declared' | 'withdrawn' | 'unknown'> {
       return input.store.status(tenant, declarationId, cloneId, worktreeId);
     },
 
