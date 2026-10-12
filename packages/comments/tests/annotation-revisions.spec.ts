@@ -183,6 +183,31 @@ describe('revision content validation', () => {
     ).toThrowError(expect.objectContaining({ code: 'invalid-body' }));
   });
 
+  it('validates semantic profile fields recursively and rejects arrays', () => {
+    const profile = (fields: Record<string, unknown>) =>
+      body({ profile: { schemaId: 's', version: '1', digest: 'd', fields } });
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('profile'),
+        body: profile({ group: { score: 1, ratio: 0.25 } }),
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-body' }));
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('profile'),
+        body: profile({ outer: { inner: { depth: Number.MAX_SAFE_INTEGER + 1 } } }),
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-body' }));
+    expect(() =>
+      createAnnotationRevision(null, { ...annotationInput('profile'), body: profile({ list: [1, 2] }) }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-body' }));
+    const nested = createAnnotationRevision(null, {
+      ...annotationInput('profile'),
+      body: profile({ group: { score: 1, flag: true, note: 'ok' }, top: null, label: 'x' }),
+    });
+    expect(nested.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it('rejects out-of-scope and duplicate targets', () => {
     const otherScopeResource = conformanceResource(conformanceScope('b'));
     expect(() =>

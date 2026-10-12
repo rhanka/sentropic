@@ -117,6 +117,7 @@ export type {
   RevisionProvenance,
   RevisionRegistration,
   RevisionTargetBinding,
+  SemanticFieldValue,
   SemanticProfile,
   SourceTime,
   StructuralTrigger,
