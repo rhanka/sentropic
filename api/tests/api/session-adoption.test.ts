@@ -36,7 +36,8 @@ describe('session adoption workspace binding', () => {
   afterEach(async () => {
     await db.delete(sessionWorkspaceBindings)
       .where(inArray(sessionWorkspaceBindings.sessionId, sessionIds));
-    await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    const workspaceIds = user.workspaceId ? [workspaceId, user.workspaceId] : [workspaceId];
+    await db.delete(workspaces).where(inArray(workspaces.id, workspaceIds));
     await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
     await db.delete(tenants).where(inArray(tenants.id, [TENANT_A, TENANT_B]));
     await cleanupAuthData();
@@ -93,6 +94,9 @@ describe('session adoption workspace binding', () => {
 
   it('should refuse cross-tenant attach and enforce rights', async () => {
     const service = new SessionWorkspaceService();
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_B, userId: user.id, status: 'approved', role: 'member',
+    });
     await expect(service.adopt({
       sessionId: 'sess-adopt-6', tenantId: TENANT_B, principalId: user.id, workspaceId,
     })).rejects.toMatchObject({ code: 'cross_tenant_refused' });
