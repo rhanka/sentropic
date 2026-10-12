@@ -122,6 +122,11 @@ export const prepareRouteFlow = async (
       ...routeInput,
       requestedModel: request.model,
       requiredCapabilities: canonical.requiredCapabilities,
+      // Spec §16.3: forward codec-derived execution features — no gateway
+      // table. Absent for the Messages/Chat wires (the conditional spread
+      // keeps their plan inputs byte-identical).
+      ...(canonical.requiredExecutionFeatures
+        ? { requiredExecutionFeatures: canonical.requiredExecutionFeatures } : {}),
       workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
     });
@@ -178,6 +183,8 @@ const prepareAdmittedRouteFlow = async (
       ...routeInput,
       requestedModel: request.model,
       requiredCapabilities: canonical.requiredCapabilities,
+      ...(canonical.requiredExecutionFeatures
+        ? { requiredExecutionFeatures: canonical.requiredExecutionFeatures } : {}),
       workspaceId: routeInput?.workspaceId ?? cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? cost.correlationId,
       quote: admission.quote,
