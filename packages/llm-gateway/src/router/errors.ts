@@ -57,6 +57,17 @@ export class GatewayError extends Error {
     readonly retryAfterSeconds?: number,
     /** Present only after a provider/model has been selected for dispatch. */
     readonly servedTarget?: ResolvedTarget,
+    /**
+     * Client-safe bad-request code (spec §16.7: `bad_request` or
+     * `unsupported_parameter`). Rendered only for `bad-request` on
+     * OpenAI-shaped wires; every other kind stays frozen.
+     */
+    readonly code?: string,
+    /**
+     * Client-safe field path (gateway-built, never caller text). Rendered
+     * only for `bad-request` on OpenAI-shaped wires.
+     */
+    readonly param?: string,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -80,11 +91,32 @@ export const openAiError = (
   message: string,
   code?: string,
   headers?: Readonly<Record<string, string>>,
+  /** Validated client-safe field path (spec §16.7); rendered only when safe. */
+  param?: string,
 ): ProviderShapedError => ({
   status,
-  body: { error: { message, type, ...(code ? { code } : {}) } },
+  body: { error: { message, type, ...(code ? { code } : {}), ...(param ? { param } : {}) } },
   ...(headers ? { headers } : {}),
 });
+
+/** Client-safe bad-request codes (spec §16.7); anything else falls back frozen. */
+const FIELD_ERROR_CODES: ReadonlySet<string> = new Set(
+  ['bad_request', 'unsupported_parameter', 'invalid_request'],
+);
+
+/** Field paths are gateway-built from literal segments — never caller text. */
+const FIELD_PATH_PATTERN = /^[A-Za-z0-9_.[\]-]+$/;
+
+export interface FieldError {
+  readonly code?: string;
+  readonly param?: string;
+}
+
+const sanitizedFieldError = (field?: FieldError): { code: string; param?: string } => {
+  const code = field?.code && FIELD_ERROR_CODES.has(field.code) ? field.code : 'invalid_request';
+  const param = field?.param && FIELD_PATH_PATTERN.test(field.param) ? field.param : undefined;
+  return param ? { code, param } : { code };
+};
 
 const retryAfterHeader = (
   seconds: number | undefined,
@@ -132,6 +164,8 @@ export const mapGatewayError = (
   requestedModel?: string,
   /** Lot 7: per-transport availability detail, `no-route` only. */
   detail?: string,
+  /** Spec §16.7: validated field code/path, `bad-request` only. */
+  field?: FieldError,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
@@ -187,10 +221,17 @@ export const mapGatewayError = (
         ? anthropicError(400, 'invalid_request_error', 'request not permitted')
         : openAiError(400, 'invalid_request_error', 'request not permitted', 'unsupported');
 
-    case 'bad-request':
-      return anthropic
-        ? anthropicError(400, 'invalid_request_error', 'invalid request')
-        : openAiError(400, 'invalid_request_error', 'invalid request', 'invalid_request');
+    case 'bad-request': {
+      // Spec §16.7: validated field code/path ride the OpenAI envelope;
+      // the Anthropic shape and the no-field frozen shape stay exact.
+      if (anthropic || !field) {
+        return anthropic
+          ? anthropicError(400, 'invalid_request_error', 'invalid request')
+          : openAiError(400, 'invalid_request_error', 'invalid request', 'invalid_request');
+      }
+      const { code, param } = sanitizedFieldError(field);
+      return openAiError(400, 'invalid_request_error', 'invalid request', code, undefined, param);
+    }
 
     case 'unknown-model':
       // Lot 1 404: no Retry-After, no x-should-retry, JSON content type is set
@@ -217,7 +258,12 @@ export const toProviderShapedError = (
   requestedModel?: string,
 ): ProviderShapedError => {
   if (error instanceof GatewayError) {
-    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel);
+    // Spec §16.7: a GatewayError may carry a validated field code/path;
+    // the mapper renders them only for `bad-request` on OpenAI wires.
+    const field = error.code !== undefined || error.param !== undefined
+      ? { code: error.code, param: error.param }
+      : undefined;
+    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, undefined, field);
   }
   const record = error && typeof error === 'object'
     ? (error as { diagnostic?: {
