@@ -58,8 +58,16 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       const timeoutMs = Math.max(1, Math.min(60_000, request.policy?.timeoutMs ?? options.timeoutMs ?? 10_000));
       const controller = new AbortController();
       let timedOut = false;
-      const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
-      const onAbort = () => controller.abort();
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      const onAbort = () => {
+        void reader?.cancel().catch(() => {});
+        controller.abort();
+      };
+      const timer = setTimeout(() => {
+        timedOut = true;
+        void reader?.cancel().catch(() => {});
+        controller.abort();
+      }, timeoutMs);
       callOptions?.signal?.addEventListener('abort', onAbort, { once: true });
       const fail = (code: ConnectionErrorCode): JudgeConnectionFailure => ({
         kind: 'connection-failure', ok: false, error: connectionError(code, 'dispatch'),
@@ -69,21 +77,28 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       let response: Response;
       try {
         response = await fetchFn(endpoint, {
-          method: 'POST', headers, body: JSON.stringify({ ...request, correlationId }), signal: controller.signal,
+          method: 'POST', redirect: 'manual', headers, body: JSON.stringify({ ...request, correlationId }), signal: controller.signal,
         });
       } catch {
-        return fail(timedOut ? 'TIMEOUT' : callOptions?.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED');
-      } finally {
         clearTimeout(timer);
         callOptions?.signal?.removeEventListener('abort', onAbort);
+        return fail(timedOut ? 'TIMEOUT' : callOptions?.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED');
+      }
+
+      if (response.redirected || (response.status >= 300 && response.status < 400)) {
+        clearTimeout(timer);
+        callOptions?.signal?.removeEventListener('abort', onAbort);
+        void response.body?.cancel().catch(() => {});
+        return fail('MESH_UNAVAILABLE');
       }
 
       const declared = response.headers.get('content-length');
       if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > cap)) {
+        clearTimeout(timer);
+        callOptions?.signal?.removeEventListener('abort', onAbort);
         void response.body?.cancel().catch(() => {});
         return fail('MESH_UNAVAILABLE');
       }
-      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
       const buffer = new Uint8Array(Math.min(cap, 65_536));
       let size = 0;
       let chunks: Uint8Array = buffer;
@@ -92,6 +107,9 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
         if (reader) {
           for (;;) {
             const chunk = await reader.read();
+            if (timedOut || controller.signal.aborted || callOptions?.signal?.aborted) {
+              return fail(timedOut ? 'TIMEOUT' : callOptions?.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED');
+            }
             if (chunk.done) break;
             if (size + chunk.value.byteLength > cap) {
               void reader.cancel().catch(() => {});
@@ -108,7 +126,15 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
         }
       } catch {
         return fail(timedOut ? 'TIMEOUT' : callOptions?.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED');
-      } finally { reader?.releaseLock(); }
+      } finally {
+        reader?.releaseLock();
+        clearTimeout(timer);
+        callOptions?.signal?.removeEventListener('abort', onAbort);
+      }
+
+      if (timedOut || controller.signal.aborted || callOptions?.signal?.aborted) {
+        return fail(timedOut ? 'TIMEOUT' : callOptions?.signal?.aborted ? 'CANCELLED' : 'TRANSPORT_FAILED');
+      }
 
       let parsed: unknown;
       try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(chunks.subarray(0, size))); }
