@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  INITIAL_BINDING_REVISION,
+  INITIAL_DECLARATION_REVISION,
   NON_ACTIVATING_LIFECYCLE_KINDS,
   classifyLifecycleEvent,
   createLiveDeclarationRegistration,
+  deriveCloneIdentity,
+  deriveDeclarationIdentity,
+  deriveWorktreeIdentity,
   type LiveDeclarationReplaySink,
   type LiveDeclarationStorePort,
   type LiveDeclarationWithdrawal,
@@ -14,27 +19,49 @@ import {
 function memoryStore() {
   const rows = new Map<string, { declaration: Record<string, unknown>; status: string }>();
   const calls: string[] = [];
-  const key = (tenant: string, hostFingerprint: string) => `${tenant}\0${hostFingerprint}`;
+  const tripleKey = (tenant: string, declarationId: string, cloneId: string, worktreeId: string) =>
+    `${tenant}\0${declarationId}\0${cloneId}\0${worktreeId}`;
   const store: LiveDeclarationStorePort = {
     save: vi.fn(async (declaration) => {
       calls.push('save');
-      rows.set(key(declaration.tenant, declaration.hostFingerprint), { declaration: { ...declaration }, status: 'declared' });
+      rows.set(tripleKey(declaration.tenant, declaration.declarationId, declaration.cloneId, declaration.worktreeId), {
+        declaration: { ...declaration },
+        status: 'declared',
+      });
     }),
-    find: vi.fn(async (tenant, hostFingerprint) =>
-      (rows.get(key(tenant, hostFingerprint))?.declaration as never) ?? null),
+    find: vi.fn(async (tenant, declarationId, cloneId, worktreeId) => {
+      if (cloneId && worktreeId) {
+        return (rows.get(tripleKey(tenant, declarationId, cloneId, worktreeId))?.declaration as never) ?? null;
+      }
+      for (const row of rows.values()) {
+        if (row.declaration.tenant === tenant && row.declaration.declarationId === declarationId) {
+          return row.declaration as never;
+        }
+      }
+      return null;
+    }),
     list: vi.fn(async (tenant?) => [...rows.values()]
       .filter((row) => row.status === 'declared' && (tenant === undefined || row.declaration.tenant === tenant))
       .map((row) => row.declaration as never)),
-    status: vi.fn(async (tenant, hostFingerprint) =>
-      (rows.get(key(tenant, hostFingerprint))?.status as 'declared' | 'withdrawn') ?? 'unknown'),
+    status: vi.fn(async (tenant, declarationId, cloneId, worktreeId) => {
+      if (cloneId && worktreeId) {
+        return (rows.get(tripleKey(tenant, declarationId, cloneId, worktreeId))?.status as 'declared' | 'withdrawn') ?? 'unknown';
+      }
+      for (const row of rows.values()) {
+        if (row.declaration.tenant === tenant && row.declaration.declarationId === declarationId) {
+          return row.status as 'declared' | 'withdrawn';
+        }
+      }
+      return 'unknown';
+    }),
     recordWithdrawal: vi.fn(async (withdrawal: LiveDeclarationWithdrawal) => {
-      const row = rows.get(key(withdrawal.tenant, withdrawal.hostFingerprint));
+      const row = rows.get(tripleKey(withdrawal.tenant, withdrawal.declarationId, withdrawal.cloneId, withdrawal.worktreeId));
       if (!row || row.status !== 'declared') return false;
       row.status = 'withdrawn';
       return true;
     }),
   };
-  return { store, rows, calls };
+  return { store, rows, calls, tripleKey };
 }
 
 function deferredWorkFake(pending: number) {
@@ -62,30 +89,69 @@ function registration(store: LiveDeclarationStorePort, work: LiveDeferredWorkPor
   return createLiveDeclarationRegistration({ store, deferredWork: work, privatePurge: purge });
 }
 
+function sampleIdentity(hostScope: string, repo: string) {
+  const clone = deriveCloneIdentity({
+    hostScope,
+    commonDirRealpath: `/repos/${repo}`,
+    commonDirProjectFingerprint: `proj:${repo}:root`,
+    oidAlgorithm: 'sha1',
+  });
+  const worktree = deriveWorktreeIdentity({
+    clone,
+    hostScope,
+    worktreePath: `/repos/${repo}`,
+    gitDir: `/repos/${repo}/.git`,
+    worktreeFingerprint: `wt:${repo}:head`,
+  });
+  const decl = deriveDeclarationIdentity({
+    hostScope,
+    clone,
+    worktree,
+  });
+  return {
+    ...decl,
+    identityUncertainty: [...clone.identityUncertainty, ...worktree.identityUncertainty],
+  };
+}
+
 describe('live registration', () => {
-  it('declarations bind workspace fingerprint and revision and replay after projection loss', async () => {
+  it('declarations bind canonical identity derivation and revision and replay after projection loss', async () => {
     const { store, calls } = memoryStore();
     const live = registration(store, deferredWorkFake(0), purgeFake().port);
+    const id = sampleIdentity('host-a', 'alpha');
     const declared = await live.declare({
       tenant: 'tenant-a',
       principal: 'principal-1',
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      identityUncertainty: id.identityUncertainty,
       hostFingerprint: 'ws:sha256:aaa',
       authorizedRoots: ['/repos/alpha'],
       policyVersion: 'live-git-indexing/1',
     });
-    expect(declared).toMatchObject({ hostFingerprint: 'ws:sha256:aaa', declarationRevision: 0 });
-    const revised = await live.revise('tenant-a', 'ws:sha256:aaa', {
-      authorizedRoots: ['/repos/alpha', '/repos/beta'],
+    expect(declared).toMatchObject({
+      declarationId: id.declarationId,
+      cloneId: id.cloneId,
+      worktreeId: id.worktreeId,
+      declarationRevision: INITIAL_DECLARATION_REVISION,
     });
+    const revised = await live.revise(
+      'tenant-a',
+      id.declarationId,
+      { authorizedRoots: ['/repos/alpha', '/repos/beta'] },
+      id.cloneId,
+      id.worktreeId,
+    );
     expect(revised).toMatchObject({
       tenant: 'tenant-a',
       principal: 'principal-1',
-      hostFingerprint: 'ws:sha256:aaa',
-      declarationRevision: 1,
+      declarationId: id.declarationId,
+      declarationRevision: INITIAL_DECLARATION_REVISION + 1,
     });
-    await expect(store.find('tenant-a', 'ws:sha256:aaa')).resolves.toMatchObject({
-      hostFingerprint: 'ws:sha256:aaa',
-      declarationRevision: 1,
+    await expect(store.find('tenant-a', id.declarationId, id.cloneId, id.worktreeId)).resolves.toMatchObject({
+      declarationId: id.declarationId,
+      declarationRevision: INITIAL_DECLARATION_REVISION + 1,
     });
     // Projection loss: the previous sink is replaced; replay needs no renewed activation.
     const lostSink: LiveDeclarationReplaySink = { replayDeclaration: vi.fn(async () => undefined) };
@@ -93,8 +159,8 @@ describe('live registration', () => {
     const replacement: LiveDeclarationReplaySink = { replayDeclaration: vi.fn(async () => undefined) };
     await expect(live.replay(replacement)).resolves.toBe(1);
     expect(replacement.replayDeclaration).toHaveBeenCalledWith(expect.objectContaining({
-      hostFingerprint: 'ws:sha256:aaa',
-      declarationRevision: 1,
+      declarationId: id.declarationId,
+      declarationRevision: INITIAL_DECLARATION_REVISION + 1,
     }));
     expect(lostSink.replayDeclaration).toHaveBeenCalledTimes(1);
     expect(calls).toEqual(['save', 'save']);
