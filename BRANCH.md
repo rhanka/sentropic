@@ -66,22 +66,22 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read rules and proposal sources
-  - [ ] Confirm worktree `tmp/worktrees/session-workspace-binding` on branch `feat/session-workspace-binding` from `origin/main`
-  - [ ] Capture make targets for debug and testing
-  - [ ] Define environment mapping and ports for this branch
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last
-  - [ ] Confirm scope and guardrails
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR01-EX1`
-  - [ ] Environment mapping: `ENV=test-session-ws`, `API_PORT=9490`, `UI_PORT=5690`, `MAILDEV_UI_PORT=1590`
-  - [ ] cluster-mesh version: propose `0.16.0` (0.14.0 taken by #662, next minor by #664), do not publish
-  - [ ] Lot gate:
-    - [ ] `make ps-all API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules and proposal sources
+  - [x] Confirm worktree `tmp/worktrees/session-workspace-binding` on branch `feat/session-workspace-binding` from `origin/main`
+  - [x] Capture make targets for debug and testing
+  - [x] Define environment mapping and ports for this branch
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last
+  - [x] Confirm scope and guardrails
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR01-EX1`
+  - [x] Environment mapping: `ENV=test-session-ws`, `API_PORT=9490`, `UI_PORT=5690`, `MAILDEV_UI_PORT=1590`
+  - [x] cluster-mesh version: propose `0.16.0` (0.14.0 taken by #662, next minor by #664), do not publish
+  - [x] Lot gate:
+    - [x] `make ps-all API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
     - [ ] `make scope-check API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
 
 - [ ] **Lot 1 — D1 durable session workspace binding**
-  - [ ] RED: add `packages/cluster-mesh/tests/session-workspace.spec.ts` (rights, idempotence, restart, cross-tenant refusal, reuse, keep after detach and end)
+  - [x] RED: add `packages/cluster-mesh/tests/session-workspace.spec.ts` (rights, idempotence, restart, cross-tenant refusal, reuse, keep after detach and end)
   - [ ] RED: add `api/tests/api/session-adoption.test.ts` (attach existing, create new, reuse, keep project and history after detach and end, rights, idempotence, restart, cross-tenant refusal)
   - [ ] GREEN: add `packages/cluster-mesh/src/sessions/workspace-binding.ts` (pure binding behind narrow storage port for later L3a move)
   - [ ] GREEN: export binding from `packages/cluster-mesh/src/index.ts`
