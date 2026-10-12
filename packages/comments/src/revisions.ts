@@ -140,12 +140,25 @@ export type BodyMention = {
   readonly end: number;
 };
 
+/**
+ * Semantic profile field values (SPEC §4.6): safe-integer numbers, strings,
+ * booleans, null or nested field objects. Arrays and any other type are
+ * rejected, and the safe-integer rule applies recursively inside nested
+ * field objects.
+ */
+export type SemanticFieldValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { readonly [field: string]: SemanticFieldValue };
+
 /** Host semantic profile; unknown profiles fail closed at validation. */
 export type SemanticProfile = {
   readonly schemaId: string;
   readonly version: string;
   readonly digest: string;
-  readonly fields: Readonly<Record<string, string | number | boolean | null>>;
+  readonly fields: Readonly<Record<string, SemanticFieldValue>>;
 };
 
 /**
@@ -236,6 +249,24 @@ const validateSpans = (
   }
 };
 
+const validateProfileFields = (fields: Readonly<Record<string, SemanticFieldValue>>): void => {
+  for (const value of Object.values(fields)) {
+    if (Array.isArray(value)) {
+      throw new RevisionValidationError('invalid-body', 'Profile fields must not contain arrays');
+    }
+    if (value !== null && typeof value === 'object') {
+      validateProfileFields(value);
+      continue;
+    }
+    if (typeof value === 'number' && (!Number.isInteger(value) || !Number.isSafeInteger(value))) {
+      throw new RevisionValidationError('invalid-body', 'Profile numbers must be safe integers');
+    }
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean' && value !== null) {
+      throw new RevisionValidationError('invalid-body', 'Profile field has an unsupported type');
+    }
+  }
+};
+
 /** Validate body content: codec descriptor, segment/mention spans, profile shape, capacity bounds. */
 export const validateRevisionBody = (body: RevisionBody, capacity?: CapacityDescriptor): RevisionBody => {
   if (
@@ -272,11 +303,7 @@ export const validateRevisionBody = (body: RevisionBody, capacity?: CapacityDesc
     if (!isNonEmptyString(schemaId) || !isNonEmptyString(version) || !isNonEmptyString(digest)) {
       throw new RevisionValidationError('invalid-body', 'Invalid semantic profile');
     }
-    for (const value of Object.values(body.profile.fields)) {
-      if (typeof value === 'number' && (!Number.isInteger(value) || !Number.isSafeInteger(value))) {
-        throw new RevisionValidationError('invalid-body', 'Profile numbers must be safe integers');
-      }
-    }
+    validateProfileFields(body.profile.fields);
   }
   if (capacity !== undefined) {
     checkRevisionBodyCapacity(body, capacity);
