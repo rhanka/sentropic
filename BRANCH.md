@@ -96,6 +96,9 @@
 - [x] Implementation m1 operational limitation: out-of-band user-scoped judge-only defaults require operator repair. Runbook: identify the affected user's default_provider_id setting through existing restricted DB administration, replace only that scoped value with an ordinary provider (or remove that override to inherit a valid global default), then verify that user's catalog GET. Never substitute a provider during judge/chat execution; conductor may authorize a separate user-repair route refinement.
 - [x] Implementation m2 deviation: temporary unlocked Rollup fetch/symlink and -o prepare-node-workspace bypass were used to diagnose the incomplete generated graph in 1B; the subsequent lockfile npm ci superseded them. This checkpoint restores through prepare-node-workspace only, never an ad-hoc package fetch or prerequisite bypass; unresolved graph defects go in the conductor report.
 - [x] Resume environment evidence: generated-dependency EACCES was cleared by clean-node-modules; normal up-api-test then failed the image audit on critical proxy-addr GHSA-jqcg-44mw-7w3h. No dependency/allowlist bypass. Existing up-api-test-ci used the 1B lockfile-prepared local/sentropic-api:9a8b8a image with ignored, read-only current-source mounts; toolbox runtime checks and all eight judge-chat-settings endpoint tests passed. This is source-test evidence, not rebuilt-image/security qualification; the audit defect remains a conductor release/environment handoff.
+- [x] Lot R0 rebase & compatibility (2026-10-12): Option A (« rebase puis finir ») executed from .h2a/proposals/judge_resume_proposal.md. Old HEAD 24966366e03de395337bc28585919b69199014e6 rebased cleanly onto origin/main dc95f7e4f88048e9671002827537cde4cb8149b7 (0 git conflicts). Semantic compatibility confirmed: preserved judge refusals (isJudgeOnlyProvider in runtime/catalog), preserved transports from #645 (Mistral Vibe/GLM 5.3), #655 (Claude seats) and #659 (export maps). Updated packages/llm-mesh/tests/judge-public-surface.test.ts to rebased 0.25.0 manifest version.
+- [x] Lot R0 version collision analysis & proposal: origin/main published versions are llm-mesh 0.25.0, llm-gateway 0.19.5, cluster-mesh 0.13.3. The previously reserved tuple (0.24.0/0.21.0/0.15.0) collides because llm-mesh 0.24.0 is already used. Pending PR #662 advances gateway/mesh to minor (0.26.0/0.20.0) and PR #664 advances cluster-mesh to 0.14.0. Proposed next free minors strictly above published/pending for conductor determination: llm-mesh 0.27.0, llm-gateway 0.21.0, cluster-mesh 0.15.0. No publication versions chosen in branch.
+
 
 ## AI Flaky tests
 - [x] Deterministic fake-only execution; no flaky acceptance or real-call qualification claimed; never increase test timeouts.
@@ -191,6 +194,19 @@
   - [x] Integrated timer tracks literal lifecycle phases and snapshots pending liability before admission awaits; late acknowledgements release proven-unsent holds or complete settlement without redispatch. Cancellation signals are detached/cleaned after the bounded caller result.
   - [x] Timer integration gate: all 22 judge-dispatch tests pass, including six stalled stages and timer cleanup. A cancelled admission returns pending metadata until its late acknowledgement proves release; the returned snapshot never mutates. Both full package gates were rerun and passed after this fix; the earlier 7de338ae1 gate is superseded by the final closure commit.
   - [x] Closure: C1 PASS, selective atomic commits and authoritative C2 before each; versions remain 0.22.3/0.19.1/0.13.0. Test project make ps is empty and ports 9480/5680/1580 are free; volumes retained. Commit this gate before emitting .h2a/build/lot1C_impl_report.md as FINAL; stop for conductor-arranged Opus review without entering 1D.
+- [x] **Lot R0 — Rebase & 1C requalification (Option A)**
+  - [x] Record old HEAD `24966366e`, fetch origin/main `dc95f7e4f`, rebase feat/llm-judge onto origin/main (59 commits replayed cleanly, 0 git conflicts).
+  - [x] Verify semantic compatibility: preserve judge refusals in catalog/runtime, preserve new transports from #645/#655/#659; update public surface version test to 0.25.0 (commit `682deefd9`).
+  - [x] Version collision analysis: submit next free minor proposal (`llm-mesh 0.27.0` / `llm-gateway 0.21.0` / `cluster-mesh 0.15.0`) to conductor in BRANCH.md.
+  - [x] Sequential Make gates (ENV=test-llm-judge, API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580):
+    - [x] llm-mesh: build, typecheck, lint, test (55 files, 928 passed).
+    - [x] llm-gateway: typecheck, lint, test (28 files, 390 passed).
+    - [x] cluster-mesh: build, typecheck, lint, test (53 passed, 5 skipped; 398 passed, 34 skipped).
+    - [x] Judge API regressions: unit regressions passed (4 files, 38 passed); endpoint regressions passed (1 file, 8 passed).
+    - [x] Audited API Docker image build: `make build-api-image REGISTRY=local` passed both base and production security audit gates in 1400.4s (CVE-2026-jqcg-44mw-7w3h confirmed fixed by origin/main); runtime verified without npm/npx on node v24.21.0.
+  - [x] Teardown: `make down` clean, all test slot ports (9480, 5680, 1580) free.
+  - [x] Gate: atomic commit of test fix and BRANCH.md; push ONLY feat/llm-judge with `--force-with-lease`.
+  - [x] Emit `.h2a/build/judge_r0_report.md` (English) and stop before Lot 2.09.
 - [ ] **Lot 1D — Remote client, cluster surface and public docs**
   - [ ] 2.09 prerequisite: client.ts authenticated mesh-only caller, correlation, bounded envelopes, receipt-null connection failure and no retry; new mesh tests/judge-client.test.ts; update public-surface test.
     - [ ] Lot 1C handoff: unknown wire error code or phase is an invalid mesh response; return typed MESH_UNAVAILABLE/TRANSPORT_FAILED connection failure with callStatus unknown, never coerce through createJudgeError into preflight/not-sent/zero spend. Pin both refusals in judge-client.test.ts.
