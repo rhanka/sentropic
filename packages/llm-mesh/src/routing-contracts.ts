@@ -1,4 +1,5 @@
 import type { CapabilityRequirement } from './equivalence-council.js';
+import type { ExecutionFeature } from './execution-features.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
 import type { RoutePolicy, RouteSelector } from './routing-policy.js';
 import type { TargetMapping } from './routing-targets.js';
@@ -18,6 +19,13 @@ export interface EligibleAccountDescriptor {
   readonly enrollmentCompletedAt: string;
   readonly readiness: 'ready' | 'cooldown' | 'reauth-required' | 'disabled';
   readonly revision: string;
+  /**
+   * Trusted runtime execution-feature declaration for this account (spec
+   * §16.3): only controls the serving adapter actually forwards. Absent
+   * means the mesh-known transport table applies; unknown support is not
+   * support. Populated by the account directory from runtime declarations.
+   */
+  readonly supportedExecutionFeatures?: readonly ExecutionFeature[];
 }
 
 export interface RouteAvailabilityDiagnostic {
@@ -41,6 +49,13 @@ export interface RoutePlanInput {
   readonly targetCandidatesOverride?: readonly TargetMapping[];
   readonly intent?: 'coding' | 'general' | 'reasoning' | 'fast';
   readonly requiredCapabilities?: readonly CapabilityRequirement[];
+  /**
+   * Finer-than-capability execution requirements (spec §16.3), derived by
+   * the gateway from validated input — never a caller-supplied feature
+   * list. Filters actual model/transport pairs in planning and quoting,
+   * before acquisition; unknown support is not support.
+   */
+  readonly requiredExecutionFeatures?: readonly ExecutionFeature[];
   readonly affinityKey?: string;
   readonly workspaceId?: string;
   readonly policyProfile?: string;
@@ -65,7 +80,7 @@ export interface RouteUsageCeiling {
 }
 
 export type RouteQuoteInput = Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'intent'
-  | 'requiredCapabilities' | 'policyProfile' | 'policyOverride' | 'explicit'>
+  | 'requiredCapabilities' | 'requiredExecutionFeatures' | 'policyProfile' | 'policyOverride' | 'explicit'>
   & { readonly ceiling: RouteUsageCeiling; readonly now: Date };
 
 export interface QuotedRouteCandidate {
