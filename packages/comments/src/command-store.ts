@@ -22,6 +22,13 @@ import type {
   CommentRevisionRecord,
   ThreadStructureRevisionRecord,
 } from './revisions.js';
+import type { ReviewEventRecord } from './reviews.js';
+import type {
+  LifecycleEventRecord,
+  LifecycleObjectKind,
+  OperationAuditEventRecord,
+  OperationAuditSubject,
+} from './lifecycle.js';
 
 /** Scope shared by every canonical store operation. */
 export type CanonicalStoreScope = { readonly tenantId: string; readonly workspaceId: string };
@@ -69,6 +76,44 @@ export interface CanonicalCommandStore {
     expected: ExpectedState,
   ): Promise<CommentRevisionRecord>;
 
+  /**
+   * Append a review event, CAS-checked against the annotation's review chain:
+   * `creation` binds the empty chain, `revision` binds the last committed
+   * review event hash. The record pins the exact annotation revision it
+   * applies to; delayed reviews on older revisions stay attachable.
+   */
+  appendReviewEvent(
+    scope: CanonicalStoreScope,
+    annotationId: string,
+    record: ReviewEventRecord,
+    expected: ExpectedState,
+  ): Promise<ReviewEventRecord>;
+
+  /**
+   * Append a lifecycle event (archive/restore, tombstone, purge
+   * intent/outcome), CAS-checked against the scoped object's lifecycle chain.
+   */
+  appendLifecycleEvent(
+    scope: CanonicalStoreScope,
+    objectKind: LifecycleObjectKind,
+    objectId: string,
+    record: LifecycleEventRecord,
+    expected: ExpectedState,
+  ): Promise<LifecycleEventRecord>;
+
+  /**
+   * Append an operation audit event, CAS-checked against the scoped audit
+   * subject's chain; audit chains stay separate from every content and
+   * lifecycle chain.
+   */
+  appendOperationAuditEvent(
+    scope: CanonicalStoreScope,
+    subject: OperationAuditSubject,
+    subjectId: string,
+    record: OperationAuditEventRecord,
+    expected: ExpectedState,
+  ): Promise<OperationAuditEventRecord>;
+
   /** Current annotation head revision, or null when the annotation does not exist. */
   getAnnotationHead(
     scope: CanonicalStoreScope,
@@ -86,6 +131,32 @@ export interface CanonicalCommandStore {
     scope: CanonicalStoreScope,
     threadId: string,
   ): Promise<ThreadStructureRevisionRecord | null>;
+
+  /** Full thread structural revision chain, ordered by sequence. */
+  getThreadStructureChain(
+    scope: CanonicalStoreScope,
+    threadId: string,
+  ): Promise<readonly ThreadStructureRevisionRecord[]>;
+
+  /** Full review event chain of one annotation, ordered by sequence. */
+  getReviewChain(
+    scope: CanonicalStoreScope,
+    annotationId: string,
+  ): Promise<readonly ReviewEventRecord[]>;
+
+  /** Full lifecycle chain of one scoped object, ordered by sequence. */
+  getLifecycleChain(
+    scope: CanonicalStoreScope,
+    objectKind: LifecycleObjectKind,
+    objectId: string,
+  ): Promise<readonly LifecycleEventRecord[]>;
+
+  /** Full operation audit chain of one scoped subject, ordered by sequence. */
+  getOperationAuditChain(
+    scope: CanonicalStoreScope,
+    subject: OperationAuditSubject,
+    subjectId: string,
+  ): Promise<readonly OperationAuditEventRecord[]>;
 
   /** Current comment head revision, or null. */
   getCommentHead(
