@@ -520,78 +520,19 @@ export type LiveWithdrawalResult =
   | { readonly ok: true; readonly cancelledDeferredWork: number; readonly withdrawal: LiveDeclarationWithdrawal }
   | { readonly ok: false; readonly reason: 'unknown_declaration' };
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.trim().length > 0;
-
-const isNonNegativeInteger = (value: unknown): boolean =>
-  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-
-const optional = (key: string, value: unknown): Record<string, unknown> =>
-  value !== undefined ? { [key]: value } : {};
-
-function declarationErrors(d: Record<string, unknown>): readonly string[] {
-  const errors: string[] = [];
-  const optionalString = (key: string) => {
-    if (d[key] !== undefined && !isNonEmptyString(d[key])) {
-      errors.push(`${key}, when present, must be a non-empty string`);
-    }
-  };
-  for (const key of ['tenant', 'principal', 'hostFingerprint', 'policyVersion']) {
-    if (!isNonEmptyString(d[key])) errors.push(`${key} must be a non-empty string`);
-  }
-  if (d.liveCapability !== 'live') {
-    errors.push('liveCapability must be the explicit string "live" (bind/upload is not activation)');
-  }
-  if (!Array.isArray(d.authorizedRoots) || d.authorizedRoots.length === 0
-    || (d.authorizedRoots as readonly unknown[]).some((root) => !isNonEmptyString(root))) {
-    errors.push('authorizedRoots must be a non-empty array of non-empty strings');
-  }
-  if (!isNonNegativeInteger(d.declarationRevision)) {
-    errors.push('declarationRevision must be a non-negative integer');
-  }
-  optionalString('serverWorkspaceId');
-  optionalString('serverIssuer');
-  if (d.bindingRevision !== undefined && !isNonNegativeInteger(d.bindingRevision)) {
-    errors.push('bindingRevision, when present, must be a non-negative integer');
-  }
-  if (d.serverWorkspaceId !== undefined && d.bindingRevision === undefined) {
-    errors.push('bindingRevision is required when serverWorkspaceId is present (authorized code-workspace binding)');
-  }
-  if (d.serverIssuer !== undefined && d.serverWorkspaceId === undefined) {
-    errors.push('serverWorkspaceId is required when serverIssuer is present');
-  }
-  if (d.bindingRevision !== undefined && d.serverWorkspaceId === undefined) {
-    errors.push('serverWorkspaceId is required when bindingRevision is present');
-  }
-  return errors;
-}
-
 export function createLiveDeclarationRegistration(input: {
   readonly store: LiveDeclarationStorePort;
   readonly deferredWork: LiveDeferredWorkPort;
   readonly privatePurge: LivePrivatePurgePort;
 }) {
-  const validate = (declaration: LiveWorkspaceDeclaration, label: string): void => {
-    const errors = declarationErrors(declaration as unknown as Record<string, unknown>);
-    if (errors.length > 0) throw new Error(`${label}: ${errors.join('; ')}`);
-  };
   return {
     async declare(declarationInput: DeclareLiveDeclarationInput): Promise<LiveWorkspaceDeclaration> {
-      const declaration = {
-        tenant: declarationInput.tenant,
-        principal: declarationInput.principal,
-        hostFingerprint: declarationInput.hostFingerprint,
-        authorizedRoots: [...declarationInput.authorizedRoots],
-        liveCapability: 'live' as const,
-        policyVersion: declarationInput.policyVersion,
-        declarationRevision: 0,
-        ...optional('serverWorkspaceId', declarationInput.serverWorkspaceId),
-        ...optional('serverIssuer', declarationInput.serverIssuer),
-        ...optional('bindingRevision', declarationInput.bindingRevision),
-      } as LiveWorkspaceDeclaration;
-      validate(declaration, 'invalid live workspace declaration');
-      if (await input.store.status(declaration.tenant, declaration.hostFingerprint) !== 'unknown') {
-        throw new Error(`live declaration already exists for ${declaration.tenant}/${declaration.hostFingerprint}`);
+      const declaration = createLiveDeclaration({
+        ...declarationInput,
+        liveCapability: 'live',
+      });
+      if (await input.store.status(declaration.tenant, declaration.declarationId, declaration.cloneId, declaration.worktreeId) !== 'unknown') {
+        throw new Error(`live declaration already exists for ${declaration.tenant}/${declaration.declarationId}`);
       }
       await input.store.save(declaration);
       return declaration;
@@ -599,27 +540,16 @@ export function createLiveDeclarationRegistration(input: {
 
     async revise(
       tenant: string,
-      hostFingerprint: string,
+      declarationId: string,
       patch: LiveDeclarationPatch,
+      cloneId?: string,
+      worktreeId?: string,
     ): Promise<LiveWorkspaceDeclaration> {
-      const previous = await input.store.find(tenant, hostFingerprint);
-      if (!previous || await input.store.status(tenant, hostFingerprint) !== 'declared') {
-        throw new Error(`no live declaration for ${tenant}/${hostFingerprint}`);
+      const previous = await input.store.find(tenant, declarationId, cloneId, worktreeId);
+      if (!previous || await input.store.status(tenant, declarationId, cloneId, worktreeId) !== 'declared') {
+        throw new Error(`no live declaration for ${tenant}/${declarationId}`);
       }
-      if (patch.serverWorkspaceId !== undefined && patch.serverWorkspaceId !== previous.serverWorkspaceId
-        && patch.bindingRevision === undefined) {
-        throw new Error('a changed serverWorkspaceId requires a fresh bindingRevision (revalidation)');
-      }
-      const next = {
-        ...previous,
-        ...(patch.authorizedRoots !== undefined ? { authorizedRoots: [...patch.authorizedRoots] } : {}),
-        ...(patch.policyVersion !== undefined ? { policyVersion: patch.policyVersion } : {}),
-        ...optional('serverWorkspaceId', patch.serverWorkspaceId),
-        ...optional('serverIssuer', patch.serverIssuer),
-        ...optional('bindingRevision', patch.bindingRevision),
-        declarationRevision: previous.declarationRevision + 1,
-      } as LiveWorkspaceDeclaration;
-      validate(next, 'invalid revised declaration');
+      const next = reviseLiveDeclaration(previous, patch);
       await input.store.save(next);
       return next;
     },
