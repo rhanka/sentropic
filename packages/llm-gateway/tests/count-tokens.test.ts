@@ -19,7 +19,7 @@ import {
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
 import { authHeaders, buildHarness } from './fixtures/harness.js';
-import { anthropicRequest } from './fixtures/anthropic.js';
+import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
 import {
   COUNT_MODEL, countBody, countHarness, sendCount,
 } from './fixtures/native-count.js';
@@ -145,8 +145,19 @@ describe('POST /v1/messages/count_tokens', () => {
 
   it('leaves the Anthropic inference body fixture untouched', async () => {
     // The count endpoint must not alter /v1/messages semantics: the fixture
-    // request shape used here stays valid for inference.
-    expect((anthropicRequest(false) as { model: unknown }).model).toBeTruthy();
+    // request shape used here still parses, dispatches and relays for inference.
+    const transport = new FixtureTransport({
+      jsonResponse: { status: 200, body: anthropicMessageResponse },
+    });
+    const { app } = buildHarness({ transport });
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(anthropicMessageResponse);
+    expect(transport.seenBodies).toHaveLength(1);
   });
 
   describe('planner-mode recognition is account-independent', () => {
