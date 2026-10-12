@@ -37,7 +37,7 @@
 - [ ] **Exception process**: none required; no conditional or forbidden path touched. `packages/cluster-mesh/package.json` + `package-lock.json` are the workflow-mandated version bump for a `packages/cluster-mesh/src` change.
 
 ## Feedback Loop
-- [ ] None open.
+- [ ] `deferred` (S, engram L6a): the engram-live L6a contract `645d2f13` was REJECTED by Sol; a revised SHA will move revocation to a unique `declarationId` (attached to `cloneId`/`worktreeId`), add identity-uncertainty states (`shallow_history`, `no_history`) with optional fingerprints, make product binding the full workspace/issuer/revision triple with strictly increasing revision, and export ONE canonical id derivation. Per the conductor UPDATE this branch builds only what does not depend on those fields (control table, migration, replay, purge/withdrawal mechanics) and keeps identity fields behind the thin adapter in `api/src/services/cluster-mesh/live-declarations.ts`; swapping the revised contract touches that adapter (and the registration DTOs) only.
 
 ## AI Flaky tests
 - [ ] Acceptance rule: none expected; no AI/provider-dependent test in scope. If a flaky failure appears, record command + failing file + signature here and treat as blocking when related to this branch.
@@ -71,13 +71,14 @@
     - [x] `make scope-check ... ENV=test-live-l6a-s`.
 
 - [x] **Lot 3 — API product persistence: control table, migration, Postgres store**
-  - [ ] Add `control.live_git_declarations` to `api/src/db/control-schema.ts` (explicit `'live'` capability check, product binding trio coherence check, withdrawal reason check, no cross-namespace FK).
-  - [ ] Add migration `api/drizzle/control/0010_live_git_declarations.sql` + `api/drizzle/control/meta/_journal.json` entry (first free number on main; `0009` reserved by unmerged cowork branch).
-  - [ ] Implement `api/src/services/cluster-mesh/live-declarations.ts`: Postgres `LiveDeclarationStorePort` adapter — save/find/list/status/recordWithdrawal, withdrawal records the private-purge request and never deletes committed rows.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
-    - [ ] Scoped API tests: `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
-    - [ ] `make scope-check ... ENV=test-live-l6a-s`.
+  - [x] Add `control.live_git_declarations` to `api/src/db/control-schema.ts` (explicit `'live'` capability check, withdrawal reason and withdrawal coherence checks, no cross-namespace FK; per the conductor UPDATE, no contract identity field is a key column — declaration and withdrawal documents are stored as jsonb behind a thin identity adapter so the revised contract can be swapped without touching the schema).
+  - [x] Add migration `api/drizzle/control/0010_live_git_declarations.sql` + `api/drizzle/control/meta/_journal.json` entry (first free number on main; `0009` reserved by unmerged cowork branch).
+  - [x] Implement `api/src/services/cluster-mesh/live-declarations.ts`: Postgres `LiveDeclarationStorePort` adapter — thin identity adapter typed against the contract, save/find/list/status/recordWithdrawal, list returns declared rows only, withdrawal records the private-purge request and never deletes committed rows; product binding trio coherence stays in the cluster-mesh registration validators (not frozen in DDL).
+  - [x] Export the registration module through a `./live-storage/registration` subpath in `packages/cluster-mesh/package.json` (root `index.ts` is outside this branch's scope).
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
+    - [x] Scoped API tests: `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s` (16 passed; `control.live_git_declarations` verified applied in the test database).
+    - [x] `make scope-check ... ENV=test-live-l6a-s`.
 
 - [ ] **Lot 4 — Package version bump**
   - [ ] Bump `packages/cluster-mesh/package.json` (minor: new live-storage feature) with pre-bump registry check strictly greater than the published version; update `package-lock.json` workspace entry.
