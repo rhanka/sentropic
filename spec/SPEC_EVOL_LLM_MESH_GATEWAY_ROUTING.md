@@ -1441,18 +1441,22 @@ item `id` and a tool `call_id`.
 | `tool_choice`; `parallel_tool_calls` | Preserve `auto`, `none`, `required`, named `{type:"function",name}` and explicit parallel true/false. Reject a named choice absent from tools. |
 | `max_output_tokens`; `temperature`; `top_p` | Finite validated values to `maxOutputTokens`, `temperature`, `topP`; integer positive output ceiling. No coercion, silent clamping or omission of an explicit limit. |
 | `reasoning.effort`, `reasoning.summary` | Existing canonical reasoning options and mesh alias-effort policy; reject unsupported values. Preserve summary intent; never expose hidden reasoning as text. |
+| `reasoning.context` | Validated string into the native carrier; honored only by native Codex execution (`reasoning-context`). Translated routes never declare it. Reject non-string values. |
 | `text.format` | Text, JSON object or JSON schema to `ResponseFormat`, retaining name/schema/description/strict. Eligibility requires the actual transport implementation, not just a catalog model claim. |
 | `text.verbosity` | Preserve on a qualified native Responses route; otherwise unsupported unless an equivalent implemented control is demonstrated. |
 | `include: ["reasoning.encrypted_content"]` | Request the optional native reasoning artifact. A translated provider may have none; never fabricate encrypted content. Other includes are unsupported in this version. |
 | Completed `reasoning` history item | Preserve its summary and opaque encrypted content in a validated native carrier. Encrypted replay requires compatible Codex egress and existing owner-scoped stickiness; it cannot cross to Muse/Mistral/Gemini. |
 | `metadata`, `prompt_cache_key`, `safety_identifier` | Validate and bound. Metadata may be echoed locally; cache/safety hints are forwarded only to an adapter declaring support. They never select owner, lease, account or upstream URL; no cache-reuse claim follows from acceptance. |
 
-Functions are the mandatory CLI tool baseline. Hosted tools, custom/freeform
-tools, item references, audio/video, provider file ids, server-side execution,
-and unsupported content/annotation types return 400 `unsupported_parameter`
-with a field path. If a full default CLI capture requires one of these, the
-fixture gate stays red until this same PR defines and implements that bounded
-extension; changing the CLI's tool configuration is not acceptance.
+Functions are the mandatory CLI tool baseline. Namespace-wrapped function
+tools flatten to qualified names (`namespace.name`, with the bare name kept
+for correlation). Hosted tools, item references, audio/video, provider file
+ids, server-side execution, and unsupported content/annotation types return
+400 `unsupported_parameter` with a field path. Custom/freeform tools are the
+bounded extension the pinned Codex capture requires: validated into the
+native carrier and served only on a native Responses route (execution
+feature `custom-tools`); translated routes refuse the round trip.
+Changing the CLI's tool configuration is not acceptance.
 
 The route is stateless: absent/false `store` becomes false; absent/false
 `background` is accepted; absent/`disabled` truncation is accepted. Refuse
@@ -1475,14 +1479,19 @@ item id nor opaque content may establish that affinity or loosen account scope.
 
 Add optional mesh-owned `requiredExecutionFeatures` to route plan/quote input
 for requirements finer than existing `requiredCapabilities`: named/parallel
-tool control, strict schema, structured output, reasoning controls, native
-reasoning replay, verbosity and an explicit output ceiling. Derive these from
-validated input, never a caller-supplied feature list. One pure mesh predicate
-filters the actual model/transport pair in both planning and quoting, including
-quote identity/revalidation. Capability rejection occurs before acquisition;
-unknown support is not support. Gateway consumes this result, without a
-provider table. Trusted API runtime adapters must declare only controls they
-actually forward. Conflicting requirements and host restrictions fail closed.
+tool control, strict schema, structured output, reasoning controls, reasoning
+context, custom tools, native reasoning replay, verbosity and an explicit
+output ceiling. Derive these from validated input, never a caller-supplied
+feature list. `reasoning.context` is the second bounded extension the pinned
+Codex capture requires: a server-side retention semantic carried in the
+native carrier and honored only by native Codex execution (feature
+`reasoning-context`); translated adapters never declare it. One pure mesh
+predicate filters the actual model/transport pair in both planning and
+quoting, including quote identity/revalidation. Capability rejection occurs
+before acquisition; unknown support is not support. Gateway consumes this
+result, without a provider table. Trusted API runtime adapters must declare
+only controls they actually forward. Conflicting requirements and host
+restrictions fail closed.
 
 ### 16.4 D16-C — Native and translated provider execution
 
