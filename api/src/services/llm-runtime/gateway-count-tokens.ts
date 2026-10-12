@@ -111,13 +111,18 @@ const toUpstreamError = (error: unknown): NativeCountUpstreamError => {
     'counting service temporarily unavailable'));
 };
 
+/**
+ * Counting is advisory and must never degrade the inference account (spec §15.2):
+ * a 401/403 or a 429 from count_tokens only completes the reservation with a
+ * neutral `failed` outcome — never `auth_failed` (reauth_required) and never
+ * `rate_limited` (60s cooldown). The caller still gets the mapped provider
+ * error with its Retry-After.
+ */
 const leaseOutcome = (error: unknown):
-  { status: 'success' } | { status: 'failed' | 'rate_limited' | 'auth_failed'; providerStatusCode?: number } => {
+  { status: 'success' } | { status: 'failed'; providerStatusCode?: number } => {
   if (!error) return { status: 'success' };
   const status = typeof (error as { status?: unknown }).status === 'number'
     ? (error as { status: number }).status : undefined;
-  if (status === 429) return { status: 'rate_limited', ...(status ? { providerStatusCode: status } : {}) };
-  if (status === 401 || status === 403) return { status: 'auth_failed', ...(status ? { providerStatusCode: status } : {}) };
   return { status: 'failed', ...(status ? { providerStatusCode: status } : {}) };
 };
 
