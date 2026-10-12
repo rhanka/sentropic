@@ -81,10 +81,12 @@ export async function admitJudge(execution: JudgeExecution, selection: Extract<J
     if (!marked.ok) {
       const error = createJudgeError(marked.code === 'PROVIDER_UNAVAILABLE' ? 'PROVIDER_UNAVAILABLE' : 'BUDGET_UNAVAILABLE', 'dispatch');
       if (marked.provenUnsent === true) return releaseUnsentJudge(execution, options, holdId, error);
+      // Ambiguous marker: attempts remains 0 since no provider dispatch was made; dispatch is unknown.
       execution.receipt.dispatch = 'unknown';
       return failed(error);
     }
   } catch {
+    // Ambiguous marker exception: attempts remains 0 since no provider dispatch was made; dispatch is unknown.
     execution.receipt.dispatch = 'unknown';
     return failed(createJudgeError('BUDGET_UNAVAILABLE', 'dispatch'));
   }

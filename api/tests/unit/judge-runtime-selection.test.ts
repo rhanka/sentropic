@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settingsService } from '../../src/services/settings';
 import { resolveProviderCredential } from '../../src/services/provider-credentials';
 import * as connections from '../../src/services/provider-connections';
-import { dispatchMeshGenerateRaw, dispatchMeshStreamRaw } from '../../src/services/llm-runtime/mesh-dispatch';
+import { createMistralVibeAccountAuthInput, dispatchMeshGenerateRaw, dispatchMeshStreamRaw } from '../../src/services/llm-runtime/mesh-dispatch';
 import { callLLM, callLLMStream, resolveRuntimeSelection } from '../../src/services/llm-runtime';
 
 const defaults = { defaultProviderId: 'openai', defaultModel: 'gpt-4.1-nano',
@@ -14,11 +14,12 @@ vi.mock('../../src/services/provider-credentials', () => ({ resolveProviderCrede
 vi.mock('../../src/services/provider-connections', () => ({
   getAnthropicTransportMode: vi.fn(), getOpenAITransportMode: vi.fn(),
   resolveAntigravityFallbackTransport: vi.fn(), resolveConnectedClaudeCodeTransport: vi.fn(),
-  resolveConnectedCodexTransport: vi.fn(),
+  resolveConnectedCodexTransport: vi.fn(), resolveConnectedMistralVibeTransport: vi.fn(),
 }));
 vi.mock('../../src/services/llm-runtime/mesh-dispatch', () => ({
   dispatchMeshGenerateRaw: vi.fn(), dispatchMeshStreamRaw: vi.fn(),
   createClaudeCodeAccountAuthInput: vi.fn(), createCodexAccountAuthInput: vi.fn(),
+  createMistralVibeAccountAuthInput: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -36,6 +37,7 @@ const expectNoDispatch = () => {
   for (const connection of Object.values(connections)) expect(connection).not.toHaveBeenCalled();
   expect(dispatchMeshGenerateRaw).not.toHaveBeenCalled();
   expect(dispatchMeshStreamRaw).not.toHaveBeenCalled();
+  expect(createMistralVibeAccountAuthInput).not.toHaveBeenCalled();
 };
 
 describe('judge-only runtime selection', () => {
