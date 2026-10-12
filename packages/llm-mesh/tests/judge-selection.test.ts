@@ -3,6 +3,7 @@ import { createProviderRegistry } from '../src/registry.js';
 import { createJevAdapter } from '../src/judge/adapter.js';
 import { preflightJudgeRequest } from '../src/judge/service.js';
 import { judgeRequest, qualifiedDescriptor } from './judge-fixtures.js';
+import { jevDescriptor } from '../src/judge/jev-descriptor.js';
 
 const setup = (descriptor = qualifiedDescriptor()) => {
   const send = vi.fn();
@@ -54,6 +55,16 @@ describe('exact judge preflight selection', () => {
     const { options, send } = setup(descriptor);
     expect(await preflightJudgeRequest(judgeRequest({ criterion: { kind: 'registered', criteriaId: 'choose', revision: 'r1' },
       decision: { kind: 'labels', passing: ['C'] } }), options)).toEqual({ ok: false, code: 'REQUEST_INVALID' });
+    expect(send).not.toHaveBeenCalled();
+  });
+  it('refuses when service and adapter descriptors differ before any send', async () => {
+    const send = vi.fn();
+    const serviceDescriptor = qualifiedDescriptor();
+    const unqualifiedDesc = { ...jevDescriptor, evaluator: { ...jevDescriptor.evaluator, revision: 'synthetic-v1' } };
+    const adapter = createJevAdapter({ descriptor: unqualifiedDesc, transport: { send } });
+    const options = { registry: createProviderRegistry([adapter]), resolveEvaluator: vi.fn(() => serviceDescriptor) };
+    const result = await preflightJudgeRequest(judgeRequest(), options);
+    expect(result).toEqual({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
     expect(send).not.toHaveBeenCalled();
   });
 });

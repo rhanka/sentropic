@@ -14,7 +14,10 @@ describe('judge admission and exactly one dispatch', () => {
     } else if (stage === 'admit') f.budget.admit.mockImplementationOnce(async (input) => { await gate; return { ok: true, holdId: input.callId }; });
     else if (stage === 'mark') f.budget.markDispatched.mockImplementationOnce(async () => { await gate; return { ok: true }; });
     else if (stage === 'provider') f.transport.send.mockImplementationOnce(async () => { await gate; return { ok: true, body: jevResponse() }; });
-    else if (stage === 'settle') f.budget.settle.mockImplementationOnce(async () => { await gate; });
+    else if (stage === 'settle') {
+      const original = f.budget.settle;
+      f.budget.settle.mockImplementationOnce(async (input) => { await gate; return original(input); });
+    }
     else vi.mocked(f.options.receipts.persist).mockImplementationOnce(async () => { await gate; });
     const controller = new AbortController();
     let received: unknown;
@@ -36,6 +39,10 @@ describe('judge admission and exactly one dispatch', () => {
     expect(f.transport.send).toHaveBeenCalledTimes(['provider', 'settle', 'receipt'].includes(stage) ? 1 : 0);
     if (stage === 'admit' || stage === 'mark') expect(f.budget.release).toHaveBeenCalledOnce();
     if (stage === 'provider') expect(f.state.ledger).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error' }]);
+    if (stage === 'settle') {
+      expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' } }]);
+      expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' } }]);
+    }
   });
   it.each(['descriptor', 'price'] as const)('checks expiry after %s resolution before acquiring credentials', async (stage) => {
     const f = judgeServiceFixture();
