@@ -9,6 +9,10 @@ import type {
   CostContext,
 } from '@sentropic/llm-gateway';
 
+import type {
+  NativeCountTokensPort,
+} from '@sentropic/llm-gateway';
+
 import { providerRegistry } from '../provider-registry';
 import {
   applicationGatewayRuntime,
@@ -20,6 +24,7 @@ import {
   createGatewayRoutePlane,
   type GatewayRouteIntentEvidence,
 } from './standalone-ports';
+import { createGatewayCountTokensPort } from './gateway-count-tokens';
 
 export type { GatewayRouteIntentEvidence } from './standalone-ports';
 
@@ -59,6 +64,8 @@ export const createApplicationGatewayRoutePlane = (options?: {
   readonly observeShadow?: (evidence: GatewayRouteIntentEvidence) => void;
 }): {
   readonly planner: RoutePlanner;
+  /** Host-owned provider count transport for POST /v1/messages/count_tokens. */
+  readonly nativeCountTokens: NativeCountTokensPort;
   readonly shadowRouteIntent: (input: GatewayShadowRouteIntentInput) => Promise<void>;
 } => {
   const plane = createGatewayRoutePlane({
@@ -71,6 +78,7 @@ export const createApplicationGatewayRoutePlane = (options?: {
   });
   return {
     ...plane,
+    nativeCountTokens: createGatewayCountTokensPort(),
     planner: withCatalogQuote(plane.planner, { catalog: applicationCatalog, councilRevision: APPLICATION_COUNCIL_REVISION }),
   };
 };
