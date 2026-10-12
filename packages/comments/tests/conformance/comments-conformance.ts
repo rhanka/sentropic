@@ -106,6 +106,8 @@ import {
   createCommentRevision,
   createThreadStructureRevision,
 } from '../../src/revisions.js';
+import { createReviewEvent, projectReviewState } from '../../src/reviews.js';
+import { createLifecycleEvent, projectLifecycleState } from '../../src/lifecycle.js';
 
 /**
  * Run the canonical corpus against one store implementation. Every case throws
@@ -193,3 +195,124 @@ export const runCommentsConformance = async (store: CanonicalCommandStore): Prom
     'sources: observed, fixed-at-conversion and unknown indicators are all accepted',
   );
   const head = unknownBound;
+
+  const reviewInput = (
+    action: 'submit' | 'validate' | 'contest' | 'resolve-contest' | 'withdraw',
+    revisionHash: string,
+    extra: Partial<{ referencesEventHash: string | null; decision: { principal: string; outcome: 'accept' | 'reject' | 'abstain' } }> = {},
+  ) => ({
+    scope,
+    annotationId: 'ann-1',
+    action,
+    revisionHash,
+    referencesEventHash: null,
+    actor: { principal: 'reviewer-1' },
+    decision: null,
+    proposal: null,
+    executor: null,
+    ...extra,
+  });
+
+  const reviews: ReturnType<typeof createReviewEvent>[] = [];
+  reviews.push(createReviewEvent(reviews, reviewInput('submit', head.hash)));
+  const validation = createReviewEvent(reviews, reviewInput('validate', head.hash, { decision: { principal: 'reviewer-1', outcome: 'accept' } }));
+  reviews.push(validation);
+  const contest = createReviewEvent(reviews, reviewInput('contest', head.hash, { referencesEventHash: validation.hash }));
+  reviews.push(contest);
+  const resolution = createReviewEvent(reviews, reviewInput('resolve-contest', head.hash, { referencesEventHash: contest.hash, decision: { principal: 'reviewer-2', outcome: 'accept' } }));
+  reviews.push(resolution);
+  let projection = projectReviewState(reviews, head.hash);
+  conformanceAssert(projection.state === 'contested', 'review: a resolved contest does not silently revalidate');
+  conformanceAssert(projection.requiresRenewedValidation, 'review: a resolved contest requires renewed validation');
+  conformanceAssert(
+    projection.contests.some((entry) => entry.eventHash === contest.hash && entry.contestsEventHash === validation.hash && entry.resolvedByEventHash === resolution.hash),
+    'review: the resolved contest stays visible with exact hashes',
+  );
+  reviews.push(createReviewEvent(reviews, reviewInput('validate', head.hash, { decision: { principal: 'reviewer-3', outcome: 'accept' } })));
+  conformanceAssert(projectReviewState(reviews, head.hash).state === 'validated', 'review: renewed validation revalidates');
+  const staleProjection = projectReviewState(reviews, genesis.hash);
+  conformanceAssert(staleProjection.state === 'none' && staleProjection.staleEventHashes.length === reviews.length, 'review: events pinned to a superseded revision are stale');
+
+  const lifecycleInput = (
+    action: 'archive' | 'restore' | 'tombstone' | 'purge-intent' | 'purge-outcome',
+    extra: Partial<{ archiveKind: 'shared' | 'personal' }> = {},
+  ) => ({ scope, objectKind: 'annotation' as const, objectId: 'ann-1', action, archiveKind: null, actor: { principal: 'admin-1' }, reason: null, ...extra });
+  const lifecycle: ReturnType<typeof createLifecycleEvent>[] = [];
+  lifecycle.push(createLifecycleEvent(lifecycle, lifecycleInput('archive', { archiveKind: 'shared' })));
+  conformanceAssert(projectLifecycleState(lifecycle).archived, 'lifecycle: an archive is projected');
+  lifecycle.push(createLifecycleEvent(lifecycle, lifecycleInput('restore')));
+  conformanceAssert(!projectLifecycleState(lifecycle).archived && projectLifecycleState(lifecycle).available, 'lifecycle: an archive is reversible');
+  lifecycle.push(createLifecycleEvent(lifecycle, lifecycleInput('tombstone')));
+  conformanceAssert(!projectLifecycleState(lifecycle).available, 'lifecycle: a tombstone removes availability');
+  await expectConformanceError(() => createLifecycleEvent(lifecycle, lifecycleInput('archive', { archiveKind: 'shared' })), 'tombstoned', 'lifecycle: a tombstoned object cannot be archived');
+  await expectConformanceError(() => createLifecycleEvent(lifecycle, lifecycleInput('tombstone')), 'tombstoned', 'lifecycle: a tombstone is irreversible');
+  await expectConformanceError(() => createLifecycleEvent(lifecycle, lifecycleInput('restore')), 'tombstoned', 'lifecycle: recovery cannot resurrect a tombstone');
+  lifecycle.push(createLifecycleEvent(lifecycle, lifecycleInput('purge-intent')));
+  lifecycle.push(createLifecycleEvent(lifecycle, lifecycleInput('purge-outcome')));
+  conformanceAssert(projectLifecycleState(lifecycle).purge === 'purged', 'lifecycle: the purge state is explicit');
+
+  const proposal = { primary: conformanceTarget(resource), secondary: [], visualAnchors: [], body: conformanceBody('proposed content') };
+  const proposedContentDigest = computeProposedContentDigest(proposal);
+  const evidence: DecisionEvidence = {
+    actor: 'author-1',
+    action: 'revise',
+    scope,
+    issuedAt: 1_717_000_000_000,
+    expiresAt: null,
+    revoked: false,
+    revocationVersion: 0,
+    authority: 'host-authority',
+    binding: { kind: 'creation', aggregateVersion: 0, proposedContentDigest },
+  };
+  const g4Output = createAnnotationRevision(null, { ...input('proposed content'), annotationId: 'ann-g4' });
+  conformanceAssert(g4Output.hash !== proposedContentDigest, 'g4: a decision never binds its own future output hash');
+  checkDecisionEvidence(evidence, {
+    actor: 'author-1',
+    action: 'revise',
+    scope,
+    now: 1_717_000_000_001,
+    binding: { kind: 'creation', aggregateVersion: 0, proposedContentDigest },
+  });
+  await expectConformanceError(
+    () =>
+      checkDecisionEvidence(evidence, {
+        actor: 'author-1',
+        action: 'revise',
+        scope,
+        now: 1_717_000_000_001,
+        binding: { kind: 'creation', aggregateVersion: 0, proposedContentDigest: computeProposedContentDigest({ tampered: true }) },
+      }),
+    'denied',
+    'g4: a mismatched proposed-content digest denies the action',
+  );
+
+  const plainThread = createThreadStructureRevision(null, {
+    scope,
+    threadId: 'thread-plain',
+    trigger: 'initial-registration',
+    primary: conformanceTarget(resource),
+    annotationId: null,
+    provenance: conformanceProvenance(),
+  });
+  await store.appendThreadStructureRevision(scope, 'thread-plain', plainThread, { kind: 'creation', aggregateVersion: 0 });
+  const structurePin = { id: 'thread-plain', hash: plainThread.hash };
+  const commentInput = (commentId: string, text: string, pin: { annotationId: string; revisionHash: string } | null) => ({
+    scope,
+    threadId: 'thread-plain',
+    commentId,
+    parentCommentId: null,
+    structureRevision: structurePin,
+    annotationPin: pin,
+    body: conformanceBody(text),
+    provenance: conformanceProvenance(),
+  });
+  await store.appendCommentRevision(scope, 'comment-plain', createCommentRevision(null, commentInput('comment-plain', 'plain reply', null)), { kind: 'creation', aggregateVersion: 0 });
+  const pinsGenesis = createCommentRevision(null, commentInput('comment-old-pin', 'pins the genesis revision', { annotationId: 'ann-1', revisionHash: genesis.hash }));
+  await store.appendCommentRevision(scope, 'comment-old-pin', pinsGenesis, { kind: 'creation', aggregateVersion: 0 });
+  const pinsHead = createCommentRevision(null, commentInput('comment-new-pin', 'pins the head revision', { annotationId: 'ann-1', revisionHash: head.hash }));
+  await store.appendCommentRevision(scope, 'comment-new-pin', pinsHead, { kind: 'creation', aggregateVersion: 0 });
+  conformanceAssert(
+    pinsGenesis.annotationPin !== null && pinsHead.annotationPin !== null && pinsGenesis.annotationPin.revisionHash !== pinsHead.annotationPin.revisionHash,
+    'pins: comments may pin different revisions of one annotation and coexist',
+  );
+};
