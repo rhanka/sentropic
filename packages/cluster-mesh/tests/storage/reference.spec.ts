@@ -3,10 +3,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { validateAtomicUnit } from '../../src/storage/atomic.js';
+import { validateLiveIdentityTriangle } from '../../src/storage/authority.js';
 import { deriveEffectiveChanges, validateModuleDescriptor } from '../../src/storage/descriptor.js';
 import { mapKernelCondition } from '../../src/storage/errors.js';
 import { CONSUMER_REQUIREMENTS, missingProfiles } from '../../src/storage/profiles.js';
-import { decodeChainCursor, encodeChainCursor, validateReadPage } from '../../src/storage/readers.js';
+import { validateGrantLifetime } from '../../src/storage/contracts.js';
+import { decodeChainCursor, encodeChainCursor, validateLeasedSnapshot, validateReadPage } from '../../src/storage/readers.js';
 import { canonicalFragmentEncoding, nextStagedState, validateFragmentSequence } from '../../src/storage/staged-units.js';
 import { runAtomicCorpus } from './atomic-corpus.js';
 import { grantFor, runAuthorityCorpus } from './authority-corpus.js';
@@ -49,6 +51,89 @@ describe('K2a reference: read corpus', () => {
   it('K2a-RED stable cursors, page bounds and explicit gaps hold', async () => {
     const store = new TestReferenceStore('comments');
     await runReadCorpus(store.bind(grantFor()));
+  });
+});
+
+describe('K1C triangle: L6a product triplet is optional together', () => {
+  const local = {
+    declarationId: 'decl:local-1',
+    cloneId: 'clone:local-1',
+    worktreeId: 'wt:local-1',
+    declarationRevision: 1,
+  };
+
+  const product = {
+    declarationId: 'decl:product-1',
+    cloneId: 'clone:product-1',
+    worktreeId: 'wt:product-1',
+    declarationRevision: 1,
+    serverWorkspaceId: 'srv-ws-1',
+    serverIssuer: 'srv-issuer-1',
+    bindingRevision: 1,
+  };
+
+  it('K1C-RED accepts a valid L6a local identity without the product triplet', () => {
+    expect(validateLiveIdentityTriangle(local).ok).toBe(true);
+  });
+
+  it('K1C-RED accepts a complete product triplet', () => {
+    expect(validateLiveIdentityTriangle(product).ok).toBe(true);
+  });
+
+  it('K1C-RED rejects a bindingRevision alone without workspace and issuer', () => {
+    expect(validateLiveIdentityTriangle({ ...local, bindingRevision: 1 }).ok).toBe(false);
+  });
+
+  it('K1C-RED rejects partial triplets', () => {
+    expect(
+      validateLiveIdentityTriangle({ ...local, serverWorkspaceId: 'srv-ws-1', serverIssuer: 'srv-issuer-1' }).ok,
+    ).toBe(false);
+    expect(validateLiveIdentityTriangle({ ...local, serverWorkspaceId: 'srv-ws-1' }).ok).toBe(false);
+    expect(validateLiveIdentityTriangle({ ...local, serverIssuer: 'srv-issuer-1' }).ok).toBe(false);
+    expect(
+      validateLiveIdentityTriangle({ ...local, serverWorkspaceId: 'srv-ws-1', bindingRevision: 1 }).ok,
+    ).toBe(false);
+    expect(validateLiveIdentityTriangle({ ...local, serverIssuer: 'srv-issuer-1', bindingRevision: 1 }).ok).toBe(
+      false,
+    );
+  });
+
+  it('K1C-RED rejects a product bindingRevision below 1', () => {
+    expect(validateLiveIdentityTriangle({ ...product, bindingRevision: 0 }).ok).toBe(false);
+  });
+});
+
+describe('K1C expiry: parsed instants reject expired authority', () => {
+  it('K1C-RED rejects an expiry with a timezone offset that is already past', () => {
+    const expired = validateGrantLifetime(
+      { kind: 'lease', expiresAt: '2026-10-12T10:00:00+02:00' },
+      '2026-10-12T09:00:00.000Z',
+    );
+    expect(expired.ok).toBe(false);
+  });
+
+  it('K1C-RED rejects authority at the exact expiry instant', () => {
+    const atExpiry = validateGrantLifetime(
+      { kind: 'lease', expiresAt: '2026-10-12T08:00:00.000Z' },
+      '2026-10-12T08:00:00.000Z',
+    );
+    expect(atExpiry.ok).toBe(false);
+  });
+
+  it('K1C-RED rejects a leased snapshot with an offset expiry that is already past', () => {
+    const snapshot = {
+      token: 'lease-1',
+      queryVersion: 'v1',
+      paramsHash: 'ph-1',
+      order: 'seq-asc',
+      root: 'root-1',
+      incarnation: 'store-1',
+      expiresAt: '2026-10-12T10:00:00+02:00',
+    };
+    expect(validateLeasedSnapshot(snapshot, '2026-10-12T09:00:00.000Z').ok).toBe(false);
+    expect(validateLeasedSnapshot({ ...snapshot, expiresAt: '2026-10-12T08:00:00.000Z' }, '2026-10-12T08:00:00.000Z').ok).toBe(
+      false,
+    );
   });
 });
 
