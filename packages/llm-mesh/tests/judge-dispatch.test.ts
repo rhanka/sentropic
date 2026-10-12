@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createJudgeService } from '../src/judge/service.js';
+import * as pricing from '../src/judge/pricing.js';
 import { judgeRequest, judgeServiceFixture, judgePrice, jevResponse } from './judge-fixtures.js';
 
 describe('judge admission and exactly one dispatch', () => {
@@ -38,10 +39,16 @@ describe('judge admission and exactly one dispatch', () => {
     }
     expect(f.transport.send).toHaveBeenCalledTimes(['provider', 'settle', 'receipt'].includes(stage) ? 1 : 0);
     if (stage === 'admit' || stage === 'mark') expect(f.budget.release).toHaveBeenCalledOnce();
-    if (stage === 'provider') expect(f.state.ledger).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error' }]);
+    if (stage === 'provider') {
+      expect(f.state.ledger).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error', errorCode: 'TIMEOUT' }]);
+      expect(f.state.receipts).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error', errorCode: 'TIMEOUT' }]);
+      expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+      expect(f.state.receipts[0].errorCode).toBe(f.state.ledger[0].errorCode);
+    }
     if (stage === 'settle') {
       expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
       expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+      expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
       expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
       expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
     }
@@ -62,8 +69,53 @@ describe('judge admission and exactly one dispatch', () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
     expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
     expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
     expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
+  });
+  it('agrees on verdict between ledger and persisted receipt on cancellation during settlement with pending reconciliation', async () => {
+    const f = judgeServiceFixture();
+    let acknowledge!: () => void;
+    const gate = new Promise<void>((resolve) => { acknowledge = resolve; });
+    const original = f.budget.settle;
+    f.budget.settle.mockImplementationOnce(async (input) => { await gate; return original(input); });
+    const spy = vi.spyOn(pricing, 'priceJudgeUsage').mockReturnValue({
+      cost: { status: 'estimated', amountMicroUsd: '42', source: 'reserved-liability', priceRevision: 'fixture-price-v1', rounding: 'ceil-micro-usd' },
+      pending: true,
+      overrun: false,
+    });
+    try {
+      const controller = new AbortController();
+      const pending = createJudgeService(f.options).judge(judgeRequest(), { signal: controller.signal });
+      await new Promise((r) => setTimeout(r, 10));
+      controller.abort();
+      const received = await pending;
+      expect(received).toMatchObject({ ok: false, error: { code: 'CANCELLED', phase: 'settlement' } });
+      acknowledge();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(f.state.ledger).toMatchObject([{ budget: { state: 'pending-reconciliation' }, outcome: 'verdict' }]);
+      expect(f.state.receipts).toMatchObject([{ budget: { state: 'pending-reconciliation' }, outcome: 'verdict' }]);
+      expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+      expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
+      expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('agrees on error between ledger and persisted receipt when adapter returns verdict after cancellation', async () => {
+    const f = judgeServiceFixture();
+    const controller = new AbortController();
+    f.transport.send.mockImplementationOnce(async () => {
+      controller.abort();
+      return { ok: true, body: jevResponse() };
+    });
+    const result = await createJudgeService(f.options).judge(judgeRequest(), { signal: controller.signal });
+    expect(result).toMatchObject({ ok: false, error: { code: 'CANCELLED' } });
+    expect(result.receipt.outcome).toBe('error');
+    expect(f.state.ledger).toMatchObject([{ outcome: 'error', errorCode: 'CANCELLED' }]);
+    expect(f.state.receipts).toMatchObject([{ outcome: 'error', errorCode: 'CANCELLED' }]);
+    expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+    expect(f.state.receipts[0].errorCode).toBe(f.state.ledger[0].errorCode);
   });
   it('maps adapter CANCELLED to TIMEOUT on provider deadline expiry', async () => {
     const f = judgeServiceFixture();
