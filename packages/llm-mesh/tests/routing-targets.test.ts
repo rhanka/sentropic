@@ -479,6 +479,41 @@ describe('canonical model targets', () => {
     expect(resolveCandidates('mistral-medium-3.5')).toEqual([target]);
   });
 
+  it('routes the Vibe 2.26.1 wire API name mistral-vibe-cli-latest to the pinned Mistral target', () => {
+    const target = {
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'mistral-medium-3.5',
+    };
+    expect(resolve('mistral-vibe-cli-latest')).toEqual(target);
+    expect(resolveCandidates('mistral-vibe-cli-latest')).toEqual([target]);
+  });
+
+  it('keeps the Vibe wire alias eligible under every resolver and muse position', () => {
+    const target = {
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'mistral-medium-3.5',
+    };
+    // Alias/canonical parity: the wire name serves the same target as the
+    // canonical alias, dereferencing the same catalog profile (262144 ctx).
+    expect(resolve('mistral-vibe-cli-latest')).toEqual(resolve('mistral-medium-3.5'));
+    const profile = modelProfiles.find((candidate) =>
+      candidate.providerId === 'mistral' && candidate.modelId === 'mistral-medium-3.5');
+    expect(profile).toBeDefined();
+    expect(profile?.capabilities.contextWindowTokens).toBe(262_144);
+    for (const musePosition of ['off', 'after-claude', 'first', 'claude-last'] as const) {
+      expect(createCanonicalTargetResolver({ musePosition })('mistral-vibe-cli-latest'))
+        .toEqual(target);
+      expect(createCanonicalTargetCandidatesResolver({ musePosition })('mistral-vibe-cli-latest'))
+        .toEqual([target]);
+    }
+    expect(describeCanonicalTargetRoutes().filter(({ requestedId }) =>
+      requestedId === 'mistral-vibe-cli-latest')).toEqual([{
+        requestedId: 'mistral-vibe-cli-latest',
+        providerId: 'mistral', transportProviderId: 'mistral-vibe',
+        model: 'mistral-medium-3.5', kind: 'alias',
+      }]);
+  });
+
   it('keeps every CLI default model on its own transport (muse, vibe, cloud-code)', () => {
     // Locks the no-repeat-request coverage: each CLI default alias resolves
     // faithfully without falling back to another provider.
