@@ -21,6 +21,7 @@
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
   - `api/src/services/cluster-mesh/live-declarations.ts`
+  - `api/src/routes/namespaces/code-git-ports.ts`
   - `api/src/db/control-schema.ts`
   - `api/drizzle/control/0010_live_git_declarations.sql`
   - `api/drizzle/control/meta/_journal.json`
@@ -33,9 +34,9 @@
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/tests/**` (except `api/llm-admission-schema.test.ts`, L6A-EX2; and `api/tests/api/live-registration.test.ts`, L6A-EX3)
+  - `api/tests/**` (except `api/tests/api/llm-admission-schema.test.ts`, L6A-EX2; and `api/tests/api/live-registration.test.ts`, L6A-EX3)
   - `packages/cluster-mesh/src/**` (except `live-storage/registration.ts`)
-  - `api/src/**` (except `services/cluster-mesh/live-declarations.ts` and `db/control-schema.ts`)
+  - `api/src/**` (except `services/cluster-mesh/live-declarations.ts`, `routes/namespaces/code-git-ports.ts`, and `db/control-schema.ts`)
   - `api/drizzle/**` (except `control/0010_live_git_declarations.sql` and `control/meta/_journal.json`)
 - [x] **Conditional Paths**: none.
 - [x] **Exception process**: `L6A-EX1`, `L6A-EX2`, and `L6A-EX3` declared in Feedback Loop before touching the paths; no other conditional or forbidden path touched. `packages/cluster-mesh/package.json` + `package-lock.json` are the workflow-mandated version bump for a `packages/cluster-mesh/src` change.
@@ -45,6 +46,7 @@
 - [x] `L6A-EX2` (exception, declared before touching the path): `api/tests/api/llm-admission-schema.test.ts` is under Forbidden `api/tests/**` but MUST evolve with the new `0010_live_git_declarations` journal entry — the test froze "0008 is the last control journal entry" (idx array `[0..8]`, `last.tag === '0008_llm_admission'`, last applied row = 0008) and "the disposable upgrade applies exactly one migration after 0007" (`migrations: 9`); both fail on CI (`test-api-unit-integration (endpoints, 3)`, run 38262321264) because the journal now has idx 9 and the upgrade applies 0008 + 0010. Reason: legitimate test evolution — the journal grew, the 0008 expand-first semantics (NOT VALID CHECKs, preserved null-cost history, restore/rollback) are unchanged. Impact: assertion-level changes only — 0008 is pinned at idx 8 (contiguous journal idx `0..N-1`), its applied row is matched by sha256 hash of `0008_llm_admission.sql`, and the disposable upgrade expects `journal.entries.length` applied migrations. Rollback: `git checkout` the test file (the two CI failures return). Executed: scoped `make test-api-endpoints SCOPE=tests/api/llm-admission-schema.test.ts API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s` green locally (1 file / 20 tests passed); scoped `tests/api/cluster-mesh-migration.test.ts` re-run green (16 passed).
 - [x] `L6A-EX3` (exception, declared before touching the path): `api/tests/api/live-registration.test.ts` is under Forbidden `api/tests/**` but is mandated by the approved engram contract alignment brief to test PostgresLiveDeclarationStore product-binding persistence, canonical identity derivation, uncertainty states, and single-target revocation. Reason: product-binding integration test suite in API. Impact: new test file only. Rollback: `rm api/tests/api/live-registration.test.ts`.
 - [x] `aligned` (S, engram L6a): the engram-live L6a contract was APPROVED and MERGED in engram PR rhanka/engram#359, merge 3b311dfb, contract commit 70ebdfee9857ba381059896089e4f2d5c19363ea. Mirrored exact canonical derivation and contract validators from 70ebdfee without registry dependency (pinned reference in adapter and TODO-free notes); revocation targets exactly one declaration by the triple declarationId/cloneId/worktreeId; product binding is the complete workspace/issuer/revision triple with strictly increasing revision; identity uncertainty states are explicit (missing_history, shallow_history).
+- [x] Migration sequencing (M6): migration `0010_live_git_declarations.sql` has `idx: 9`, `when: 1791845400000`. It sequences after `feat/cowork-remote-mcp` (which also holds an unmerged `idx: 9` in its branch). Any eventual renumbering will follow the final merge order onto main.
 
 ## AI Flaky tests
 - [x] Acceptance rule: none expected; no AI/provider-dependent test in scope. If a flaky failure appears, record command + failing file + signature here and treat as blocking when related to this branch.
@@ -71,7 +73,7 @@
   - [x] Lot gate: RED evidence recorded in commit; `make scope-check ... ENV=test-live-l6a-s`.
 
 - [x] **Lot 2 — GREEN: cluster-mesh live declaration registration module**
-  - [x] Implement `packages/cluster-mesh/src/live-storage/registration.ts`: data-pure declaration/withdrawal DTOs mirroring the engram-live L6a contract, `LiveDeclarationStorePort` (save/find/list/status/recordWithdrawal), deferred-work cancellation and private-purge ports, replay seam after projection loss, revision increments of exactly one, non-activating lifecycle classification, product binding trio coherence (server/issuer, workspace/fingerprint pair, binding revision).
+  - [x] Implement `packages/cluster-mesh/src/live-storage/registration.ts`: data-pure declaration/withdrawal DTOs mirroring the engram-live L6a contract, `LiveDeclarationStorePort` (save/find/list/status/recordWithdrawal), deferred-work cancellation and private-purge ports, replay seam after projection loss, revision increments of exactly one, non-activating lifecycle classification, product binding trio coherence (serverIssuer, serverWorkspaceId, bindingRevision).
   - [x] Scoped run green: `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s`.
   - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
@@ -101,7 +103,7 @@
   - [x] Fix registration validators (M3, m4), derivation helpers (m4) and add parity golden vectors test (m4).
   - [x] Add binding revision, revalidation, and initial binding tests (m3).
   - [x] Enforce durable withdrawal order (M5), mandatory declaration triple (M2), and binding authorization port (B1).
-  - [ ] Correct control-schema comments and BRANCH.md allowed paths and migration sequencing (m6, M6).
+  - [x] Correct control-schema comments and BRANCH.md allowed paths and migration sequencing (m6, M6).
   - [ ] Implement code-workspace binding authorizer in code-git-ports.ts (B1).
   - [ ] Upgrade PostgresLiveDeclarationStore with canonicalIdKey (M1), mandatory triple (M2), revision race protection (M4), and authorizer (B1).
   - [ ] Add comprehensive RED and GUARD test cases in live-registration.test.ts (B1, M4, m5, M7) and verify green.
