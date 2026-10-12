@@ -230,7 +230,7 @@
     - [x] 1.21b: add llm-mesh/judge/host static leaf, typed loader and package export; update llm-surface.spec.ts and judge-loading.spec.ts.
     - [x] 1.21c: add llm-mesh/transport/jev static leaf, typed loader and package export; update llm-surface.spec.ts and judge-loading.spec.ts.
   - [x] 1.22: compose/llm-mesh optional host judge input, disabled path acquires nothing; new cluster tests/judge-compose.spec.ts.
-  - [ ] 1.23: public-port receipt correlation/generation-policy refusal; new cluster tests/judge-receipts.spec.ts.
+  - [x] 1.23: public-port receipt correlation/generation-policy refusal; new cluster tests/judge-receipts.spec.ts.
   - [ ] 1.25a…: bounded public consumer/host examples, normalization/privacy/failure semantics and tracked architecture consolidation; regress mesh tests/judge-public-surface.test.ts.
     - [ ] Carry Lot 1A phase-aware retryability, 60-second advisory hint ceiling, unsafe-key set, MicroUsd digit policy and the eventual m5 null-only decision into tracked docs.
   - [ ] Per-row gate: run each named mesh/cluster file separately with `make test-llm-mesh`/`make test-cluster-mesh SCOPE=<package-relative-path> API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge`.
