@@ -205,4 +205,56 @@ describe('live registration product-binding persistence (L6a)', () => {
     expect(found).toMatchObject({ declarationId: identity.declarationId, identityUncertainty: ['missing_history'] });
     expect(found?.hostFingerprint).toBeUndefined();
   });
+
+  it('replays declared registrations after projection loss and never resurrects withdrawn declarations', async () => {
+    const declA = makeDeclaration();
+    const declB = makeDeclaration({
+      declarationId: 'decl:test-second-b',
+      cloneId: 'clone:test-second-b',
+      worktreeId: 'wt:test-second-b',
+    });
+
+    await store.save(declA as never);
+    await store.save(declB as never);
+
+    const purge = {
+      purgePrivateSnapshots: true as const,
+      purgeDerivedIndexes: true as const,
+      revokeDecryptability: true as const,
+      preserveCommittedHistory: true as const,
+    };
+    const withdrawal = {
+      declarationId: declB.declarationId,
+      tenant: declB.tenant,
+      cloneId: declB.cloneId,
+      worktreeId: declB.worktreeId,
+      declarationRevision: declB.declarationRevision,
+      reason: 'workspace-remove' as const,
+      requestPrivatePurge: purge,
+    };
+    expect(await store.recordWithdrawal(withdrawal as never, '2026-10-12T15:00:00Z')).toBe(true);
+
+    const replayed = await store.list(TEST_TENANT);
+    expect(replayed).toHaveLength(1);
+    expect(replayed[0].declarationId).toBe(declA.declarationId);
+    expect(await store.status(TEST_TENANT, declB.declarationId, declB.cloneId, declB.worktreeId)).toBe('withdrawn');
+  });
+
+  it('rejects revision races and preserves monotonic declaration revisions', async () => {
+    const decl = makeDeclaration();
+    await store.save(decl as never);
+
+    await expect(store.save(decl as never)).rejects.toThrow(/already exists/);
+
+    const rev2 = { ...decl, declarationRevision: 2, authorizedRoots: ['/srv/repo', '/srv/repo/v2'] };
+    await store.save(rev2 as never);
+
+    const found = await store.find(decl.tenant, decl.declarationId, decl.cloneId, decl.worktreeId);
+    expect(found?.declarationRevision).toBe(2);
+
+    await expect(store.save(rev2 as never)).rejects.toThrow(/revision conflict/);
+
+    const rev4 = { ...decl, declarationRevision: 4 };
+    await expect(store.save(rev4 as never)).rejects.toThrow(/revision conflict/);
+  });
 });
