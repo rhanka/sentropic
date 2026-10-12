@@ -319,4 +319,26 @@ describe('live registration', () => {
     expect(Object.keys(live).sort()).toEqual(['declare', 'list', 'replay', 'revise', 'status', 'withdraw']);
     expect(calls).toEqual(['save', 'save', 'save']);
   });
+
+  it('mirrors canonical identity derivations with exact golden parity', () => {
+    const clone = deriveCloneIdentity({
+      hostScope: 'host:a',
+      commonDirRealpath: '/srv/repo/.git',
+      commonDirProjectFingerprint: 'proj-fingerprint-9f',
+      identityUncertainty: [],
+      oidAlgorithm: 'sha1',
+    });
+    expect(clone.cloneId).toBe('clone:c5bd6c412ce05e16d45a5504240903d27e65c11c94d30f8fb82ff648056443ed');
+    const worktree = deriveWorktreeIdentity({
+      hostScope: 'host:a',
+      clone,
+      worktreePath: '/work/repo',
+      gitDir: '/srv/repo/.git',
+      worktreeFingerprint: 'ws:abc123',
+      identityUncertainty: [],
+    });
+    expect(worktree.worktreeId).toBe('wt:3aea1f8cbce8363e2168b4422b9fde11aec8e984eec828236d08c8842a46e5a8');
+    const declaration = deriveDeclarationIdentity({ hostScope: 'host:a', clone, worktree });
+    expect(declaration.declarationId).toBe('decl:8a1205250845002fd2a8326d3514a5c6ce0b19d1d44e81641d1a3752b112f3b5');
+  });
 });
