@@ -86,7 +86,10 @@ export class InMemoryRouteHealth {
    * failures (no upstream output observed before failing): as an
    * availability policy a lone suppressed route may degrade instead of
    * starving. This records local observation only — it cannot prove the
-   * provider did not execute the request.
+   * provider did not execute the request. Provider rate limits are exempt:
+   * they carry a provider-asked Retry-After window, and redispatching a
+   * lone seat inside that window is a retry storm, not an availability
+   * gap — the suppression stands through its own TTL.
    */
   suppressedDegradable(candidate: RankedRouteCandidate): boolean {
     this.evict();
@@ -96,7 +99,8 @@ export class InMemoryRouteHealth {
       const entry = this.entries.get(key);
       if (entry && entry.expiresAt > now) suppressing.push(entry);
     }
-    return suppressing.length > 0 && suppressing.every((entry) => !entry.committed);
+    return suppressing.length > 0
+      && suppressing.every((entry) => !entry.committed && entry.reason !== 'rate-limited');
   }
 
   clear(candidate: RankedRouteCandidate): void {

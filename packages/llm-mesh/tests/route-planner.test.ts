@@ -616,6 +616,46 @@ describe('opaque route planner', () => {
     });
   });
 
+  it('keeps a lone rate-limited route suppressed for its Retry-After instead of redispatching', async () => {
+    // Quarantine must not be disabled by the lone-route degrade: a 429 with
+    // Retry-After on the only account must hold the negative cache for the
+    // provider-asked window, or every following request re-hits the seat.
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const directory = new FakeRouteDirectory([{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      readiness: 'ready', revision: 'r1',
+    }]);
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      clock: { now: () => new Date(now) },
+    });
+    const first = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).recordOutcome({
+      reason: 'rate-limited', retryable: true, retryAfterMs: 10_000,
+      healthScope: 'route',
+    });
+
+    // Inside the Retry-After window the lone route stays quarantined.
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    })).rejects.toMatchObject({ code: 'no-route' });
+
+    // Once the provider-asked window elapses the route serves again.
+    now += 10_000;
+    const retried = await planner.plan(routingSubject(), {
+      requestedModel: 'claude-opus-5-5',
+    });
+    expect(retried.diagnostics[0]).toMatchObject({
+      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
+    });
+  });
+
   it('keeps a compatible sticky Sol without rotating to a second account', async () => {
     const directory = new FakeRouteDirectory([
       {
