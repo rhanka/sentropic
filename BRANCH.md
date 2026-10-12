@@ -219,6 +219,7 @@
     - [x] Lot 1C handoff: unknown wire error code or phase is an invalid mesh response; return typed MESH_UNAVAILABLE/TRANSPORT_FAILED connection failure with callStatus unknown, never coerce through createJudgeError into preflight/not-sent/zero spend. Pin both refusals in judge-client.test.ts.
   - [ ] 1.20a–c: three separate cluster module/catalog commits after client exists; update tests/modules/capabilities.spec.ts and new/update tests/modules/judge-loading.spec.ts for each.
     - [x] 1.20a: declare llm-mesh/judge consumer module in provider catalog; update capabilities.spec.ts and create judge-loading.spec.ts.
+    - [x] 1.20b: declare llm-mesh/judge/host module in provider catalog; update capabilities.spec.ts and judge-loading.spec.ts.
   - [ ] 1.21a–c: three separate cluster leaf/typed-loader/export commits; update tests/integrations/llm-surface.spec.ts and tests/modules/judge-loading.spec.ts for each; retain existing ranges.
   - [ ] 1.22: compose/llm-mesh optional host judge input, disabled path acquires nothing; new cluster tests/judge-compose.spec.ts.
   - [ ] 1.23: public-port receipt correlation/generation-policy refusal; new cluster tests/judge-receipts.spec.ts.
