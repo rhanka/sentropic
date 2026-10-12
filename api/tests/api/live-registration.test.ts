@@ -74,6 +74,87 @@ function makeDeclaration(overrides: Record<string, unknown> = {}) {
 }
 
 describe('live registration product-binding persistence (L6a)', () => {
+  it('product declarations use authorized code-workspace bindings without changing membership or enrollment semantics', async () => {
+    const issuer = resolveOAuthIssuer();
+    const membershipsBefore = await db.select().from(workspaceMemberships);
+    const enrollmentsBefore = await db.select().from(connectorTenantEnrollments);
+
+    const authorized = makeDeclaration({
+      serverWorkspaceId: TEST_CODE_WORKSPACE,
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    });
+    await store.save(authorized as never);
+
+    const found = await store.find(authorized.tenant, authorized.declarationId, authorized.cloneId, authorized.worktreeId);
+    expect(found).toMatchObject({
+      serverWorkspaceId: TEST_CODE_WORKSPACE,
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    });
+
+    await expect(store.save(makeDeclaration({
+      serverWorkspaceId: 'ws-non-existent',
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/not found or hidden/);
+
+    await expect(store.save(makeDeclaration({
+      serverWorkspaceId: TEST_NEUTRAL_WORKSPACE,
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/live Git indexing requires a code workspace/);
+
+    await expect(store.save(makeDeclaration({
+      serverWorkspaceId: TEST_HIDDEN_WORKSPACE,
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/not found or hidden/);
+
+    await expect(store.save(makeDeclaration({
+      principal: TEST_USER_UNAUTHORIZED,
+      serverWorkspaceId: TEST_CODE_WORKSPACE,
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/not an authorized member/);
+
+    await expect(store.save(makeDeclaration({
+      serverWorkspaceId: TEST_CODE_WORKSPACE,
+      serverIssuer: 'https://untrusted.example',
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/serverIssuer mismatch/);
+
+    const membershipsAfter = await db.select().from(workspaceMemberships);
+    const enrollmentsAfter = await db.select().from(connectorTenantEnrollments);
+    expect(membershipsAfter).toEqual(membershipsBefore);
+    expect(enrollmentsAfter).toEqual(enrollmentsBefore);
+  });
+
+  it('admin-gated bind and default transcript persistence do not imply live authorization', async () => {
+    const issuer = resolveOAuthIssuer();
+    const membershipsBefore = await db.select().from(workspaceMemberships);
+    const enrollmentsBefore = await db.select().from(connectorTenantEnrollments);
+
+    await expect(store.save(makeDeclaration({
+      principal: TEST_USER_ADMIN_BIND,
+      serverWorkspaceId: TEST_ADMIN_NEUTRAL_WORKSPACE,
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/live Git indexing requires a code workspace/);
+
+    await expect(store.save(makeDeclaration({
+      principal: TEST_USER_ADMIN_BIND,
+      serverWorkspaceId: TEST_CODE_WORKSPACE,
+      serverIssuer: issuer,
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/not an authorized member/);
+
+    const membershipsAfter = await db.select().from(workspaceMemberships);
+    const enrollmentsAfter = await db.select().from(connectorTenantEnrollments);
+    expect(membershipsAfter).toEqual(membershipsBefore);
+    expect(enrollmentsAfter).toEqual(enrollmentsBefore);
+  });
+
   it('enforces complete product-binding triplet and initial revision 1', async () => {
     const issuer = resolveOAuthIssuer();
     const partial = makeDeclaration({ serverWorkspaceId: TEST_CODE_WORKSPACE });
