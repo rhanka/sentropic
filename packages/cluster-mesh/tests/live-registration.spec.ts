@@ -29,30 +29,14 @@ function memoryStore() {
         status: 'declared',
       });
     }),
-    find: vi.fn(async (tenant, declarationId, cloneId, worktreeId) => {
-      if (cloneId && worktreeId) {
-        return (rows.get(tripleKey(tenant, declarationId, cloneId, worktreeId))?.declaration as never) ?? null;
-      }
-      for (const row of rows.values()) {
-        if (row.declaration.tenant === tenant && row.declaration.declarationId === declarationId) {
-          return row.declaration as never;
-        }
-      }
-      return null;
+    find: vi.fn(async (tenant: string, declarationId: string, cloneId: string, worktreeId: string) => {
+      return (rows.get(tripleKey(tenant, declarationId, cloneId, worktreeId))?.declaration as never) ?? null;
     }),
     list: vi.fn(async (tenant?) => [...rows.values()]
       .filter((row) => row.status === 'declared' && (tenant === undefined || row.declaration.tenant === tenant))
       .map((row) => row.declaration as never)),
-    status: vi.fn(async (tenant, declarationId, cloneId, worktreeId) => {
-      if (cloneId && worktreeId) {
-        return (rows.get(tripleKey(tenant, declarationId, cloneId, worktreeId))?.status as 'declared' | 'withdrawn') ?? 'unknown';
-      }
-      for (const row of rows.values()) {
-        if (row.declaration.tenant === tenant && row.declaration.declarationId === declarationId) {
-          return row.status as 'declared' | 'withdrawn';
-        }
-      }
-      return 'unknown';
+    status: vi.fn(async (tenant: string, declarationId: string, cloneId: string, worktreeId: string) => {
+      return (rows.get(tripleKey(tenant, declarationId, cloneId, worktreeId))?.status as 'declared' | 'withdrawn') ?? 'unknown';
     }),
     recordWithdrawal: vi.fn(async (withdrawal: LiveDeclarationWithdrawal) => {
       const row = rows.get(tripleKey(withdrawal.tenant, withdrawal.declarationId, withdrawal.cloneId, withdrawal.worktreeId));
@@ -231,6 +215,37 @@ describe('live registration', () => {
       withdrawnAt: '2026-10-12T13:01:00.000Z',
     })).resolves.toMatchObject({ ok: false, reason: 'unknown_declaration' });
     expect(work.cancelDeferredWork).toHaveBeenCalledTimes(1);
+
+    // If recordWithdrawal fails (e.g. concurrent race), store fails durable record first: no cancel and no purge
+    const idRace = sampleIdentity('host-b', 'race');
+    await live.declare({
+      tenant: 'tenant-b',
+      principal: 'principal-race',
+      declarationId: idRace.declarationId,
+      cloneId: idRace.cloneId,
+      worktreeId: idRace.worktreeId,
+      identityUncertainty: idRace.identityUncertainty,
+      hostFingerprint: 'ws:race',
+      authorizedRoots: ['/repos/race'],
+      policyVersion: 'live-git-indexing/1',
+    });
+    const workRace = deferredWorkFake(2);
+    const purgeRace = purgeFake();
+    const storeRace: LiveDeclarationStorePort = {
+      ...store,
+      recordWithdrawal: vi.fn(async () => false),
+    };
+    const liveRace = createLiveDeclarationRegistration({ store: storeRace, deferredWork: workRace, privatePurge: purgeRace.port });
+    await expect(liveRace.withdraw({
+      tenant: 'tenant-b',
+      declarationId: idRace.declarationId,
+      cloneId: idRace.cloneId,
+      worktreeId: idRace.worktreeId,
+      reason: 'owner-request',
+      withdrawnAt: '2026-10-12T13:03:00.000Z',
+    })).resolves.toMatchObject({ ok: false, reason: 'unknown_declaration' });
+    expect(workRace.cancelDeferredWork).not.toHaveBeenCalled();
+    expect(purgeRace.received).toHaveLength(0);
   });
 
   it('product declarations use authorized code-workspace bindings without changing membership or enrollment', async () => {
