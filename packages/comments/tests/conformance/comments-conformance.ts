@@ -126,7 +126,7 @@ import {
   createThreadStructureRevision,
 } from '../../src/revisions.js';
 import { createReviewEvent, projectReviewState } from '../../src/reviews.js';
-import { createLifecycleEvent, projectLifecycleState } from '../../src/lifecycle.js';
+import { createLifecycleEvent, createOperationAuditEvent, projectLifecycleState } from '../../src/lifecycle.js';
 
 /**
  * Run the canonical corpus against one store implementation. Every case throws
@@ -253,6 +253,27 @@ export const runCommentsConformance = async (store: CanonicalCommandStore): Prom
   const staleProjection = projectReviewState(reviews, genesis.hash);
   conformanceAssert(staleProjection.state === 'none' && staleProjection.staleEventHashes.length === reviews.length, 'review: events pinned to a superseded revision are stale');
 
+  let reviewHead: string | null = null;
+  for (const event of reviews) {
+    await store.appendReviewEvent(
+      scope,
+      'ann-1',
+      event,
+      reviewHead === null ? { kind: 'creation', aggregateVersion: 0 } : { kind: 'revision', revisionHash: reviewHead },
+    );
+    reviewHead = event.hash;
+  }
+  const storedReviews = await store.getReviewChain(scope, 'ann-1');
+  conformanceAssert(
+    storedReviews.length === reviews.length && storedReviews[storedReviews.length - 1].hash === reviewHead,
+    'review: the store chain matches the projected history',
+  );
+  await expectConformanceError(
+    () => store.appendReviewEvent(scope, 'ann-1', reviews[0], { kind: 'revision', revisionHash: reviewHead }),
+    'cas-conflict',
+    'review: a stale review append conflicts',
+  );
+
   const lifecycleInput = (
     action: 'archive' | 'restore' | 'tombstone' | 'purge-intent' | 'purge-outcome',
     extra: Partial<{ archiveKind: 'shared' | 'personal' }> = {},
@@ -270,6 +291,52 @@ export const runCommentsConformance = async (store: CanonicalCommandStore): Prom
   lifecycle.push(createLifecycleEvent(lifecycle, lifecycleInput('purge-intent'), capacity));
   lifecycle.push(createLifecycleEvent(lifecycle, lifecycleInput('purge-outcome'), capacity));
   conformanceAssert(projectLifecycleState(lifecycle).purge === 'purged', 'lifecycle: the purge state is explicit');
+
+  let lifecycleHead: string | null = null;
+  for (const event of lifecycle) {
+    await store.appendLifecycleEvent(
+      scope,
+      'annotation',
+      'ann-1',
+      event,
+      lifecycleHead === null ? { kind: 'creation', aggregateVersion: 0 } : { kind: 'revision', revisionHash: lifecycleHead },
+    );
+    lifecycleHead = event.hash;
+  }
+  const storedLifecycle = await store.getLifecycleChain(scope, 'annotation', 'ann-1');
+  conformanceAssert(
+    storedLifecycle.length === lifecycle.length && storedLifecycle[storedLifecycle.length - 1].hash === lifecycleHead,
+    'lifecycle: the store chain matches the projected lifecycle',
+  );
+  await expectConformanceError(
+    () => store.appendLifecycleEvent(scope, 'annotation', 'ann-1', lifecycle[0], { kind: 'revision', revisionHash: lifecycleHead }),
+    'cas-conflict',
+    'lifecycle: a stale lifecycle append conflicts',
+  );
+
+  const auditInput = (operation: string) => ({
+    scope,
+    subject: 'assignment' as const,
+    subjectId: 'assign-1',
+    operation,
+    principal: 'admin-1',
+    audience: ['aud-1'],
+    detail: null,
+  });
+  const auditOne = createOperationAuditEvent([], auditInput('assign'), capacity);
+  const auditTwo = createOperationAuditEvent([auditOne], auditInput('reassign'), capacity);
+  await store.appendOperationAuditEvent(scope, 'assignment', 'assign-1', auditOne, { kind: 'creation', aggregateVersion: 0 });
+  await store.appendOperationAuditEvent(scope, 'assignment', 'assign-1', auditTwo, { kind: 'revision', revisionHash: auditOne.hash });
+  const storedAudits = await store.getOperationAuditChain(scope, 'assignment', 'assign-1');
+  conformanceAssert(
+    storedAudits.length === 2 && storedAudits[1].hash === auditTwo.hash,
+    'audit: the audit chain stays separate and ordered',
+  );
+  await expectConformanceError(
+    () => store.appendOperationAuditEvent(scope, 'assignment', 'assign-1', auditTwo, { kind: 'revision', revisionHash: auditOne.hash }),
+    'cas-conflict',
+    'audit: a stale audit append conflicts',
+  );
 
   const proposal = { primary: conformanceTarget(resource), secondary: [], visualAnchors: [], body: conformanceBody('proposed content') };
   const proposedContentDigest = computeProposedContentDigest(proposal);
@@ -335,4 +402,5 @@ export const runCommentsConformance = async (store: CanonicalCommandStore): Prom
     pinsGenesis.annotationPin !== null && pinsHead.annotationPin !== null && pinsGenesis.annotationPin.revisionHash !== pinsHead.annotationPin.revisionHash,
     'pins: comments may pin different revisions of one annotation and coexist',
   );
+
 };
