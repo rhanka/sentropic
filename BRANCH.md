@@ -197,7 +197,7 @@
   - [ ] D16-C native Codex + translated Muse/Mistral execution; Muse/Mistral tool decoding fix.
   - [ ] D16-D shared accumulator, JSON/SSE encoders, delegation from canonical entry points.
   - [ ] D16-E lease/accounting/count neutrality; D16-F error shaping + shared limits.
-  - [ ] D16-G `mistral-vibe-cli-latest` alias via mesh; no gateway table, no duplicate profile.
+  - [x] D16-G `mistral-vibe-cli-latest` alias via mesh; no gateway table, no duplicate profile.
   - [ ] Fixture capture (pinned Muse/Codex/Vibe) + replay tests; UAT P0 interceptor covers both paths.
   - [ ] Live qualification: streamed text + tool continuation (Muse, Codex), Vibe default model.
 - [ ] **Lot N — Final validation**
