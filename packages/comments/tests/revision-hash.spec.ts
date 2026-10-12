@@ -8,6 +8,8 @@ import {
   REVISION_HASH_VERSION,
   canonicalRecordBytes,
   hashRecord,
+  isChainLink,
+  validateChain,
 } from '../src/revision-hash.js';
 import { quantizeMillionths, validateBox, validateCircle } from '../src/geometry.js';
 
@@ -94,5 +96,119 @@ describe('geometry corpus', () => {
         expect(validateCircle(entry.frame, entry.input)).toEqual(vector.quantized);
       }
     }
+  });
+});
+
+type Rejection = {
+  id: string;
+  code: string;
+  input?: string;
+  frame?: Frame;
+  value?: unknown;
+  charCodes?: number[];
+  kind?: string;
+};
+
+describe('corpus rejections', () => {
+  const rejections = (fixture as { rejections: Rejection[] }).rejections;
+
+  it('rejects invalid decimal grammar without normalization', () => {
+    for (const rejection of rejections) {
+      if (rejection.id.startsWith('decimal-')) {
+      expect(() => quantizeMillionths(rejection.input as string)).toThrowError(expect.objectContaining({ code: rejection.code }));
+      }
+    }
+  });
+
+  it('rejects out-of-frame circles and collapsed boxes', () => {
+    for (const rejection of rejections) {
+      if (rejection.id === 'circle-overflow-200x100') {
+        const input = rejection as unknown as { frame: Frame; input: CircleInput };
+        expect(() => validateCircle(input.frame, input.input)).toThrowError(expect.objectContaining({ code: rejection.code }));
+      }
+      if (rejection.id === 'box-collapse') {
+        const input = rejection as unknown as { frame: Frame; input: BoxInput };
+        expect(() => validateBox(input.frame, input.input)).toThrowError(expect.objectContaining({ code: rejection.code }));
+      }
+    }
+  });
+
+  it('rejects unserializable envelope values and closed-kind violations', () => {
+    for (const rejection of rejections) {
+      if (rejection.charCodes !== undefined) {
+        const text = String.fromCharCode(...rejection.charCodes);
+        expect(() => hashRecord('review-event', { actor: { principal: text } })).toThrowError(
+          expect.objectContaining({ code: rejection.code }),
+        );
+      } else if (rejection.value !== undefined) {
+        expect(() => hashRecord('review-event', { actor: { principal: 'p' }, score: rejection.value })).toThrowError(
+          expect.objectContaining({ code: rejection.code }),
+        );
+      } else if (rejection.id === 'envelope-kind-override') {
+        expect(() => hashRecord('review-event', { kind: 'other' })).toThrowError(
+          expect.objectContaining({ code: rejection.code }),
+        );
+      } else if (rejection.id === 'unknown-record-kind') {
+        expect(() => hashRecord(rejection.kind as never, {})).toThrowError(
+          expect.objectContaining({ code: rejection.code }),
+        );
+      }
+    }
+  });
+});
+
+describe('chain validation', () => {
+  const link = (sequence: number, previousHash: string | null) => ({ sequence, previousHash });
+  const digestOf = (seed: string) => sha256Hex(seed);
+
+  it('accepts a well-formed chain and rejects gaps and broken links', () => {
+    const h1 = digestOf('chain-1');
+    const h2 = digestOf('chain-2');
+    const h3 = digestOf('chain-3');
+    expect(() =>
+      validateChain([
+        { kind: 'annotation-revision', link: link(1, null), hash: h1 },
+        { kind: 'annotation-revision', link: link(2, h1), hash: h2 },
+        { kind: 'annotation-revision', link: link(3, h2), hash: h3 },
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      validateChain([
+        { kind: 'annotation-revision', link: link(1, null), hash: h1 },
+        { kind: 'annotation-revision', link: link(3, h1), hash: h2 },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'chain-broken' }));
+    expect(() =>
+      validateChain([
+        { kind: 'annotation-revision', link: link(1, null), hash: h1 },
+        { kind: 'annotation-revision', link: link(2, h3), hash: h2 },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'chain-broken' }));
+  });
+
+  it('rejects repeated digests and kind substitution inside a chain', () => {
+    const h1 = digestOf('cycle-1');
+    expect(() =>
+      validateChain([
+        { kind: 'comment-revision', link: link(1, null), hash: h1 },
+        { kind: 'comment-revision', link: link(2, h1), hash: digestOf('cycle-2') },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'chain-cycle' }));
+    expect(() =>
+      validateChain(
+        [
+          { kind: 'annotation-revision', link: link(1, null), hash: h1 },
+          { kind: 'review-event', link: link(2, h1), hash: digestOf('mixed-2') },
+        ],
+        { expectedKind: 'annotation-revision' },
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'chain-broken' }));
+  });
+
+  it('rejects invalid links', () => {
+    expect(isChainLink({ sequence: 0, previousHash: null })).toBe(false);
+    expect(isChainLink({ sequence: 1, previousHash: '' })).toBe(false);
+    expect(isChainLink({ sequence: 1.5, previousHash: null })).toBe(false);
+    expect(isChainLink({ sequence: 2, previousHash: 'abc' })).toBe(true);
   });
 });
