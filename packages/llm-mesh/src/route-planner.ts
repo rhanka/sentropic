@@ -270,7 +270,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
    * it degrades instead of starving the only route. This records local
    * observation only — the provider may still have accepted the request
    * before the connection failed. Committed failures stay strict, as does
-   * multi-route suppression.
+   * multi-route suppression, and provider rate limits keep their
+   * Retry-After window even on a lone route.
    */
   private visibleCandidates(candidates: RankedRouteCandidate[],
     inQuote: (candidate: RankedRouteCandidate) => boolean,

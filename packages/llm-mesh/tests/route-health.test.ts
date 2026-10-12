@@ -102,6 +102,24 @@ describe('route health cache', () => {
     expect(health.suppressedDegradable(candidate())).toBe(true);
   });
 
+  it('never degrades a route suppressed by a provider rate limit', () => {
+    // A provider-issued 429 carries its own Retry-After; redispatching a lone
+    // seat during that window is a retry storm, not an availability gap.
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const health = new InMemoryRouteHealth({ now: () => new Date(now) });
+    health.record(candidate(), {
+      reason: 'rate-limited', retryable: true, retryAfterMs: 10_000,
+      healthScope: 'route', committed: false,
+    }, DEFAULT_ROUTE_POLICY);
+
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(false);
+
+    // The route becomes dispatchable again only once Retry-After elapses.
+    now += 10_000;
+    expect(health.isSuppressed(candidate())).toBe(false);
+  });
+
   it('does not poison health for invalid requests', () => {
     const health = new InMemoryRouteHealth({ now: () => new Date() });
     health.record(candidate(), {
