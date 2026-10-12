@@ -11,6 +11,9 @@
 
 import { canonicalRecordBytes, hashRecord } from './revision-hash.js';
 import { sha256Hex } from './sha256.js';
+import { validateCapacityDescriptor } from './revisions.js';
+import { RevisionValidationError } from './revisions.js';
+import type { CapacityDescriptor } from './revisions.js';
 import type { CanonicalStoreScope } from './command-store.js';
 
 /** Submission validation error with a closed reason code. */
@@ -89,11 +92,16 @@ const validateSelection = (manifest: Omit<PreparedSubmissionManifest, 'kind' | '
 /**
  * Create a prepared submission manifest. Standalone genesis: the record hashes
  * only its own content, never a predecessor, and the selection order is the
- * submission order.
+ * submission order. The required capacity descriptor is validated in full
+ * (fail closed when missing or invalid) and its `unitManifest` bound is
+ * enforced over the manifest's canonical bytes before the record is built;
+ * the descriptor's values never enter the manifest hash.
  */
 export const createPreparedSubmissionManifest = (
   input: Omit<PreparedSubmissionManifest, 'kind' | 'hash'>,
+  capacity: CapacityDescriptor,
 ): PreparedSubmissionManifest => {
+  validateCapacityDescriptor(capacity);
   if (
     !isNonEmptyString(input.submissionId) ||
     !isNonEmptyString(input.annotation.annotationId) ||
@@ -105,6 +113,15 @@ export const createPreparedSubmissionManifest = (
     throw new SubmissionValidationError('invalid-manifest', 'Manifest needs ids, exact revision pin, versions and principal');
   }
   validateSelection(input);
+  const manifestBytes = new TextEncoder().encode(
+    canonicalRecordBytes('prepared-submission-manifest', input as unknown as Record<string, unknown>),
+  ).length;
+  if (manifestBytes > capacity.unitManifest.limit) {
+    throw new RevisionValidationError(
+      'capacity-exceeded',
+      `Manifest is ${manifestBytes} canonical bytes, bound is ${capacity.unitManifest.limit}`,
+    );
+  }
   const hash = hashRecord('prepared-submission-manifest', input as unknown as Record<string, unknown>);
   return { ...input, kind: 'prepared-submission-manifest', hash };
 };

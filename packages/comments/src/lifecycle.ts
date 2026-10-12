@@ -10,6 +10,8 @@
  */
 
 import { hashRecord } from './revision-hash.js';
+import { validateCapacityDescriptor } from './revisions.js';
+import type { CapacityDescriptor } from './revisions.js';
 import type { CanonicalStoreScope } from './command-store.js';
 
 /** Scoped objects with their own lifecycle chain. */
@@ -111,12 +113,16 @@ const projectLifecycle = (chain: readonly LifecycleEventRecord[]): LifecycleProj
  * Create a lifecycle event appended to the chain of one scoped object. Archive
  * and restore stay reversible; a tombstone is terminal for archive actions and
  * cannot be resurrected by any later event except the explicit purge
- * intent/outcome pipeline, which itself only follows a tombstone.
+ * intent/outcome pipeline, which itself only follows a tombstone. The
+ * required capacity descriptor is validated in full and fails closed when
+ * missing or invalid; its values never enter the event hash.
  */
 export const createLifecycleEvent = (
   chain: readonly LifecycleEventRecord[],
   input: Omit<LifecycleEventRecord, 'kind' | 'link' | 'hash'>,
+  capacity: CapacityDescriptor,
 ): LifecycleEventRecord => {
+  validateCapacityDescriptor(capacity);
   if (!isLifecycleObjectKind(input.objectKind)) {
     throw new LifecycleValidationError('invalid-object', `Unknown lifecycle object kind: ${String(input.objectKind)}`);
   }
@@ -211,11 +217,17 @@ export type OperationAuditEventRecord = {
   readonly hash: string;
 };
 
-/** Create an operation audit event appended to its per-subject chain. */
+/**
+ * Create an operation audit event appended to its per-subject chain. The
+ * required capacity descriptor is validated in full and fails closed when
+ * missing or invalid; its values never enter the event hash.
+ */
 export const createOperationAuditEvent = (
   chain: readonly OperationAuditEventRecord[],
   input: Omit<OperationAuditEventRecord, 'kind' | 'link' | 'hash'>,
+  capacity: CapacityDescriptor,
 ): OperationAuditEventRecord => {
+  validateCapacityDescriptor(capacity);
   if (!isOperationAuditSubject(input.subject)) {
     throw new OperationAuditValidationError('invalid-subject', `Unknown audit subject: ${String(input.subject)}`);
   }
