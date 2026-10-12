@@ -112,3 +112,113 @@ describe('annotation revisions', () => {
     expect(a.hash).not.toBe(b.hash);
   });
 });
+
+describe('revision content validation', () => {
+  const body = (overrides: Record<string, unknown>) => ({
+    text: 'hello world',
+    codec: { format: 'plain', codecId: 'plain-v1', specDigest: 'spec-1', extensions: [] },
+    ...overrides,
+  });
+
+  it('counts offsets in code points, not UTF-16 units', () => {
+    const astral = 'a😀b';
+    const valid = createAnnotationRevision(null, {
+      ...annotationInput('astral'),
+      body: { ...conformanceBody(astral), segments: [{ start: 1, end: 3, digest: 'seg-1' }] },
+    });
+    expect(valid.body.segments).toEqual([{ start: 1, end: 3, digest: 'seg-1' }]);
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('astral'),
+        body: { ...conformanceBody(astral), segments: [{ start: 1, end: 4, digest: 'seg-1' }] },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-body' }));
+  });
+
+  it('rejects overlapping segments and unmatched mention text', () => {
+    const text = 'hello @ada and @bob today';
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('mentions'),
+        body: {
+          ...conformanceBody(text),
+          segments: [
+            { start: 0, end: 5, digest: 'seg-1' },
+            { start: 3, end: 9, digest: 'seg-2' },
+          ],
+        },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-body' }));
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('mentions'),
+        body: {
+          ...conformanceBody(text),
+          mentions: [{ principal: 'ada', displayText: '@ada', start: 6, end: 10 }],
+        },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-mentions' }));
+    const withMention = createAnnotationRevision(null, {
+      ...annotationInput('mentions'),
+      body: {
+        ...conformanceBody(text),
+        mentions: [{ principal: 'ada', displayText: '@ada', start: 6, end: 10 }],
+      },
+    });
+    expect(withMention.body.mentions).toEqual([{ principal: 'ada', displayText: '@ada', start: 6, end: 10 }]);
+  });
+
+  it('rejects float and non-integer codec/profile values', () => {
+    expect(() => createAnnotationRevision(null, { ...annotationInput('codec'), body: body({ codec: { format: 'html', codecId: 'x', specDigest: 'd', extensions: [] } }) }))
+      .toThrowError(expect.objectContaining({ code: 'invalid-body' }));
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('profile'),
+        body: body({ profile: { schemaId: 's', version: '1', digest: 'd', fields: { score: 0.5 } } }),
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-body' }));
+  });
+
+  it('rejects out-of-scope and duplicate targets', () => {
+    const otherScopeResource = conformanceResource(conformanceScope('b'));
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('targets'),
+        secondary: [conformanceTarget(otherScopeResource)],
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-targets' }));
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('targets'),
+        secondary: [conformanceTarget(resource)],
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'duplicate-target' }));
+  });
+
+  it('validates provenance registration and attribution', () => {
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('prov'),
+        provenance: { ...conformanceProvenance(), registration: { principal: 'author_1', registeredAt: 1717000000000.5 } },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-provenance' }));
+    expect(() =>
+      createAnnotationRevision(null, {
+        ...annotationInput('prov'),
+        provenance: {
+          registration: { principal: 'author_1', registeredAt: 1717000000000 },
+          attribution: { variant: 'unknown' },
+        },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-provenance' }));
+    const aiAttributed = createAnnotationRevision(null, {
+      ...annotationInput('prov'),
+      provenance: {
+        registration: { principal: 'author_1', registeredAt: 1717000000000 },
+        attribution: { variant: 'ai', assertionClass: 'model-declared', evidence: 'model-run-1' },
+        sourceTime: { lexical: '2024-05-30T12:00:00', dateKind: 'absolute', precision: 'second' },
+      },
+    });
+    expect(aiAttributed.provenance.attribution.variant).toBe('ai');
+  });
+});
