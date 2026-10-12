@@ -108,6 +108,7 @@
 - [x] Lot 1.21 review resolution - MINEUR-C (2026-10-12): validated wire verdict shape via isValidJudgeVerdict and receipt budget/cost/outcome/errorCode integrity; enforced error.code === receipt.errorCode concordance; restored meaningful unknown wire error code/phase tests with error outcome and added discordant kind/outcome/codes regressions in tests/judge-client.test.ts.
 - [x] Lot 1.21 review resolution - MINEUR-D & MINEUR-E (2026-10-12): removed unneeded public loader aliases loadJudgeClient, loadJudgeHost, loadJevTransport; updated tests/modules/judge-loading.spec.ts to verify ClusterMeshModuleUnavailableError with code cluster_mesh_module_unavailable and reasons disabled and export_unavailable (via fakeMesh in-range without judge subpaths).
 - [x] Lot 1.23 review resolution - MINEUR-1, 2, 3 (2026-10-12): marked pending-reconciliation on returned receipt when clock exceeds deadline during persist (execution.ts); pinned 1 000 ms grace margin (unsettled at 10 000/60 000 ms, TIMEOUT at 11 000/61 000 ms) and verified no abort listener leaks on caller signal (client.ts, judge-client.test.ts, judge-dispatch.test.ts); affirmed client deadline semantics (server deadline + 1 000 ms margin).
+- [x] Lot 1.23 review resolution - MAJEUR-1 (2026-10-12): exercised real judge composition, registration generation mismatch refusal (code-derived reason 'generation_mismatch'), effectRef derived from real JudgeReceipt.callId (no verdict fields), and deduplicated idempotent receipt stage (judge-receipts.spec.ts).
 
 
 ## AI Flaky tests
