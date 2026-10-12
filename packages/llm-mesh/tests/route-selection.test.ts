@@ -638,3 +638,59 @@ describe('route candidate selection', () => {
     });
   });
 });
+
+describe('execution-feature eligibility (spec §16.3)', () => {
+  const codexAccount = {
+    accountRef: 'codex-internal',
+    diagnosticAccountRef: 'codex-redacted',
+    targetProviderId: 'openai',
+    transportProviderId: 'codex',
+    supportedModelIds: ['gpt-6.1-sol'],
+    enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+    readiness: 'ready' as const,
+    revision: 'r1',
+  };
+  const selectWith = (
+    request: Parameters<typeof selectRouteCandidates>[0]['request'],
+    accountsForSignal: Parameters<typeof selectRouteCandidates>[0]['accounts'],
+  ) => selectRouteCandidates({
+    request,
+    policy: DEFAULT_ROUTE_POLICY,
+    council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+    accounts: accountsForSignal,
+  });
+
+  it('excludes a pinned transport without the required execution features before acquisition', () => {
+    // Codex omits max_output_tokens (spec §16.4): an explicit output ceiling
+    // can never be served there — refused before any lease, like capabilities.
+    expect(selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      requiredExecutionFeatures: ['explicit-output-ceiling'],
+    }, [codexAccount])).toMatchObject({ kind: 'capabilities-unmet', requestedModel: 'gpt-6.1-sol' });
+  });
+
+  it('fails closed when the account declares no execution support', () => {
+    expect(selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+      requiredExecutionFeatures: ['named-tool-choice'],
+    }, [codexAccount])).toMatchObject({ kind: 'no-eligible-account' });
+  });
+
+  it('keeps an account whose trusted declaration covers the required features', () => {
+    const selection = selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+      requiredExecutionFeatures: ['named-tool-choice'],
+    }, [{ ...codexAccount, supportedExecutionFeatures: ['named-tool-choice'] }]);
+    if (selection.kind !== 'candidates') throw new Error(`Expected candidates, got ${selection.kind}`);
+    expect(selection.candidates.map((candidate) => candidate.account.transportProviderId))
+      .toEqual(['codex']);
+  });
+
+  it('leaves featureless requests eligible everywhere (no behavior change)', () => {
+    const selection = selectWith({ requestedModel: 'gpt-6.1-sol' }, [codexAccount]);
+    if (selection.kind !== 'candidates') throw new Error(`Expected candidates, got ${selection.kind}`);
+    expect(selection.candidates).toHaveLength(1);
+  });
+});

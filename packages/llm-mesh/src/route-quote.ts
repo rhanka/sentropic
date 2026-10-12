@@ -32,7 +32,7 @@ export interface RouteQuoteOptions {
 }
 
 type QuoteRouteFields = Pick<RoutePlanInput, 'targetCandidatesOverride' | 'intent'
-  | 'requiredCapabilities' | 'policyProfile' | 'policyOverride' | 'explicit'>;
+  | 'requiredCapabilities' | 'requiredExecutionFeatures' | 'policyProfile' | 'policyOverride' | 'explicit'>;
 type QuoteBody = Omit<RouteQuote, 'quoteRef'>;
 
 interface QuoteTarget {
@@ -109,6 +109,9 @@ export const computeRouteQuoteRef = (
     // Order-insensitive: the capability filter is a conjunction.
     requiredCapabilities: input.requiredCapabilities
       ?.map((entry) => JSON.stringify(canonical(entry))).sort(),
+    // Order-insensitive: the execution-feature filter is a conjunction.
+    requiredExecutionFeatures: input.requiredExecutionFeatures
+      ? [...input.requiredExecutionFeatures].sort() : undefined,
     policyProfile: input.policyProfile,
     policyOverride: input.policyOverride,
     explicit: input.explicit,

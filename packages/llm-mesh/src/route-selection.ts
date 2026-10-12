@@ -1,5 +1,6 @@
 import { modelProfiles, type ModelProfile } from './catalog.js';
 import { modelSupportsCapability, type ModelEquivalenceCouncil } from './equivalence-council.js';
+import { transportSupportsExecutionFeatures } from './execution-features.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
 import {
@@ -170,12 +171,19 @@ export const resolveRouteTargets = (
       && profile.modelId === capabilitySource.model);
     return supportsCapabilities(targetProfile, request.requiredCapabilities);
   };
+  // Execution-feature eligibility of the actual model/transport pair (spec
+  // §16.3): account-independent here (mesh-known table; unpinned stays for
+  // the plan-time account check). Shared by planning and quoting.
+  const supportsTargetExecution = (target: ResolvedRouteTarget): boolean =>
+    transportSupportsExecutionFeatures(target.transportProviderId, request.requiredExecutionFeatures);
+  const supportsTarget = (target: ResolvedRouteTarget): boolean =>
+    supportsTargetCapabilities(target) && supportsTargetExecution(target);
   const faithfulClaude = request.requestedModel.startsWith('claude-')
     && resolution.useFaithfulAnthropicTarget;
-  if (faithfulClaude && targets[0] && !supportsTargetCapabilities(targets[0])) {
+  if (faithfulClaude && targets[0] && !supportsTarget(targets[0])) {
     return { kind: 'capabilities-unmet', requestedModel: request.requestedModel };
   }
-  const capableTargets = targets.filter(supportsTargetCapabilities);
+  const capableTargets = targets.filter(supportsTarget);
   if (!faithfulClaude && targets.length > 0 && capableTargets.length === 0) {
     return { kind: 'capabilities-unmet', requestedModel: request.requestedModel };
   }
@@ -201,7 +209,11 @@ export const selectRouteCandidates = (input: {
         && account.targetProviderId === target.providerId
         && account.supportedModelIds.includes(target.modelId)
         && (!target.transportProviderId
-          || target.transportProviderId === account.transportProviderId))
+          || target.transportProviderId === account.transportProviderId)
+        && transportSupportsExecutionFeatures(
+          account.transportProviderId,
+          input.request.requiredExecutionFeatures,
+          account.supportedExecutionFeatures))
       .map((account): RankedRouteCandidate => ({
         account,
         target: {
