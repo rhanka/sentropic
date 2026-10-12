@@ -307,9 +307,9 @@ export class MuseRuntimeClient implements MuseAdapterClient {
           yield { type: 'content_delta', data: { delta: text } };
         }
         for (const toolDelta of extractToolDeltas(raw)) {
-          let toolCallId = toolCallIds.get(toolDelta.index);
-          if (!toolCallId) {
-            toolCallId = toolDelta.id ?? `muse-call-${toolDelta.index}`;
+          const known = toolCallIds.get(toolDelta.index);
+          const toolCallId = known ?? toolDelta.id ?? `muse-call-${toolDelta.index}`;
+          if (!known) {
             toolCallIds.set(toolDelta.index, toolCallId);
             sawToolCalls = true;
             yield {
@@ -321,18 +321,21 @@ export class MuseRuntimeClient implements MuseAdapterClient {
                 argumentsText: '',
               },
             };
+            // A first fragment carrying only an id/name emits no empty
+            // delta; argument text arrives as real fragments.
+            if (!toolDelta.fragment) continue;
+          } else if (!toolDelta.fragment && !toolDelta.name) {
+            continue;
           }
-          if (toolDelta.name || toolDelta.fragment) {
-            yield {
-              type: 'tool_call_delta',
-              data: {
-                toolCallId,
-                providerCallId: toolDelta.id ?? toolCallId,
-                delta: toolDelta.fragment,
-                ...(toolDelta.name ? { name: toolDelta.name } : {}),
-              },
-            };
-          }
+          yield {
+            type: 'tool_call_delta',
+            data: {
+              toolCallId,
+              providerCallId: toolDelta.id ?? toolCallId,
+              delta: toolDelta.fragment,
+              ...(toolDelta.name ? { name: toolDelta.name } : {}),
+            },
+          };
         }
         if (usage) {
           // A usage-only chunk before any content/finish/terminal is
