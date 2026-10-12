@@ -45,6 +45,14 @@ export async function preflightJudgeRequest(candidate: unknown, options: JudgeSe
     if (!descriptor || descriptor.evaluator.providerId !== request.evaluator.providerId
       || descriptor.evaluator.evaluatorId !== request.evaluator.evaluatorId
       || descriptor.evaluator.revision !== request.evaluator.revision) return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
+    if ('descriptor' in adapter && adapter.descriptor !== undefined) {
+      const adapterDescriptor = parseEvaluatorDescriptor(adapter.descriptor);
+      if (!adapterDescriptor
+        || adapterDescriptor.wireModel !== descriptor.wireModel
+        || adapterDescriptor.qualification.servedIdentity !== descriptor.qualification.servedIdentity) {
+        return { ok: false, code: 'PROVIDER_UNAVAILABLE' };
+      }
+    }
     const code = validateJevPolicy(request, descriptor, options.policy);
     return code ? { ok: false, code } : { ok: true, request, descriptor, adapter };
   } catch { return { ok: false, code: 'PROVIDER_UNAVAILABLE' }; }

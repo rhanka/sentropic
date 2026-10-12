@@ -2,21 +2,24 @@ import type { JudgeErrorCode } from './errors.js';
 import { createJudgeError } from './errors.js';
 import type { JudgeExecution } from './execution.js';
 import { closeJudgeReceipt, copyJudgeReceipt } from './execution.js';
-import type { JudgeResult } from './receipt.js';
+import type { JudgeReceipt, JudgeResult } from './receipt.js';
 
 function interruptedResult(execution: JudgeExecution, code: JudgeErrorCode): JudgeResult {
   const error = execution.phase === 'settlement' ? createJudgeError(code, 'settlement')
     : execution.phase === 'dispatch' ? createJudgeError(code, 'dispatch')
       : execution.phase === 'admission' ? createJudgeError(code, 'admission')
         : execution.phase === 'parse' ? createJudgeError(code, 'parse') : createJudgeError(code, 'preflight');
-  const receipt = execution.receipt;
+  const receipt: JudgeReceipt = structuredClone(execution.receipt);
   if (receipt.budget.state !== 'not-admitted' && receipt.budget.state !== 'released') {
     receipt.budget.state = 'pending-reconciliation';
     error.retryable = false;
     delete error.retryAfterMs;
   }
   if (receipt.dispatch === 'started') receipt.dispatch = 'unknown';
-  closeJudgeReceipt(execution, error);
+  receipt.finishedAt = new Date(execution.clock.wall()).toISOString();
+  receipt.latencyMs = Math.max(0, execution.clock.monotonic() - execution.start);
+  receipt.outcome = 'error';
+  receipt.errorCode = error.code;
   return { kind: 'error', ok: false, error, receipt: copyJudgeReceipt(receipt) };
 }
 
