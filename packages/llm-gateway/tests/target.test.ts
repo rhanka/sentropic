@@ -97,6 +97,23 @@ describe('launch-alias target-map', () => {
     expect(resolve('claude-opus-5-ultra')).toBeUndefined();
     expect(resolve('claude-sonnet-5-ultra')).toBeUndefined();
   });
+
+  it('resolves the Vibe 2.26.1 wire name via the mesh re-export, with no gateway table', () => {
+    // The gateway holds no model table: resolution comes from the mesh
+    // re-export (`personal-passthrough/target.ts` -> `@sentropic/llm-mesh`).
+    // An empty pool returns typed no-route 503; an unknown name stays 404 —
+    // the wire name is recognized here, so it must never be a 404.
+    const canonical = createCanonicalTargetResolver();
+    expect(canonical('mistral-vibe-cli-latest')).toEqual({
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'mistral-medium-3.5',
+    });
+    expect(canonical('mistral-vibe-cli-latest')).toEqual(canonical('mistral-medium-3.5'));
+    expect(createCanonicalTargetCandidatesResolver()('mistral-vibe-cli-latest')).toEqual([{
+      providerId: 'mistral', transportProviderId: 'mistral-vibe',
+      model: 'mistral-medium-3.5',
+    }]);
+  });
 });
 
 describe('defineLaunchAliases', () => {

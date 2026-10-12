@@ -29,6 +29,16 @@ export const defineLaunchAliases = (
 
 export const MUSE_CONTRIBUTOR_MODEL = 'muse-spark-1.3-contributor';
 
+/**
+ * Vibe CLI wire API name (spec §16.8, UAT `904e8d8f3`). Vibe `2.26.1` sends
+ * its internal API name, not the display alias. This pinned gateway
+ * compatibility alias serves the existing `mistral-medium-3.5` catalog target
+ * over `mistral-vibe`; it is not a new model profile, pricing row, or
+ * equivalence member. Update the pinned Vibe fixture in the same change when
+ * the wire name or target changes.
+ */
+export const VIBE_CLI_WIRE_MODEL = 'mistral-vibe-cli-latest';
+
 export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
   'muse-spark-1.3': {
     providerId: 'muse', transportProviderId: 'muse', model: 'muse-spark-1.3',
@@ -84,6 +94,12 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   // transport (catalog-profile recognition alone would also resolve it, so
   // this entry preserves the historical combined mapping/catalog gap fix).
   'mistral-medium-3.5': {
+    providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-medium-3.5',
+  },
+  // Pinned Vibe CLI wire alias (spec §16.8): the single definition of the
+  // `mistral-vibe-cli-latest` compatibility alias, referencing the canonical
+  // target above. All resolver variants consume it from this table.
+  [VIBE_CLI_WIRE_MODEL]: {
     providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-medium-3.5',
   },
   'mistral-large-4': {
@@ -458,13 +474,20 @@ const canonicalTargetMappingsFor = (
   musePosition: MusePosition = DEFAULT_MUSE_POSITION,
 ): Readonly<Record<string, TargetMapping>> => {
   if (musePosition === DEFAULT_MUSE_POSITION) return CANONICAL_TARGET_MAPPINGS;
-  return Object.fromEntries(
-    Object.entries(launchAliasRouteMappingsFor(musePosition))
-      .map(([requestedId, targets]) => [
-        requestedId,
-        firstTargetThatResolvesProfile(targets),
-      ]),
-  );
+  // Static defaults (including the Vibe wire alias) stay eligible under every
+  // muse position; only launch-alias candidate order varies by position.
+  return {
+    ...Object.fromEntries(Object.entries(DEFAULT_TARGET_MAPPINGS).map(
+      ([requestedId, target]) => [requestedId, firstTargetThatResolvesProfile([target])],
+    )),
+    ...Object.fromEntries(
+      Object.entries(launchAliasRouteMappingsFor(musePosition))
+        .map(([requestedId, targets]) => [
+          requestedId,
+          firstTargetThatResolvesProfile(targets),
+        ]),
+    ),
+  };
 };
 
 export const createCanonicalTargetResolver = (
