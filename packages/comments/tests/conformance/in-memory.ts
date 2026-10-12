@@ -13,7 +13,11 @@ import type {
   CanonicalCommandStore,
   CanonicalConversionReport,
   CanonicalBatchReceiptSnapshot,
+  CanonicalChainRecord,
   CanonicalImportManifest,
+  CanonicalPageRequest,
+  CanonicalReadPage,
+  CanonicalReadSelection,
   CanonicalStoreScope,
   CanonicalTransactionHandle,
   CanonicalUnitReceipt,
@@ -226,6 +230,59 @@ export class InMemoryCanonicalStore implements CanonicalCommandStore {
 
   getCommentChain(scope: CanonicalStoreScope, commentId: string): Promise<readonly CommentRevisionRecord[]> {
     return Promise.resolve(this.comments.get(`${scope.tenantId}/${scope.workspaceId}/c/${commentId}`) ?? []);
+  }
+
+  private chainFor(scope: CanonicalStoreScope, selection: CanonicalReadSelection): readonly CanonicalChainRecord[] {
+    const base = `${scope.tenantId}/${scope.workspaceId}`;
+    switch (selection.kind) {
+      case 'annotation-revisions':
+        return this.annotations.get(`${base}/a/${selection.annotationId}`) ?? [];
+      case 'thread-structure-revisions':
+        return this.threads.get(`${base}/t/${selection.threadId}`) ?? [];
+      case 'comment-revisions':
+        return this.comments.get(`${base}/c/${selection.commentId}`) ?? [];
+      case 'review-events':
+        return this.reviews.get(`${base}/r/${selection.annotationId}`) ?? [];
+      case 'lifecycle-events':
+        return this.lifecycle.get(`${base}/l/${selection.objectKind}/${selection.objectId}`) ?? [];
+      case 'operation-audit-events':
+        return this.audits.get(`${base}/o/${selection.subject}/${selection.subjectId}`) ?? [];
+      case 'prepared-submission-manifests': {
+        const manifest = this.submissionManifests.get(`${base}/m/${selection.submissionId}`);
+        return manifest === undefined ? [] : [manifest];
+      }
+      case 'import-manifests': {
+        const manifest = this.importManifests.get(`${base}/i/${selection.importId}`);
+        return manifest === undefined ? [] : [manifest];
+      }
+      case 'unit-receipts': {
+        const receipt = this.unitReceipts.get(`${base}/u/${selection.unitId}`);
+        return receipt === undefined ? [] : [receipt];
+      }
+      case 'batch-receipt-snapshots':
+        return this.batchSnapshots.get(`${base}/b/${selection.batchId}`) ?? [];
+      case 'conversion-reports':
+        return this.conversionReports.get(`${base}/v/${selection.reportId}`) ?? [];
+    }
+  }
+
+  readChainPage(scope: CanonicalStoreScope, selection: CanonicalReadSelection, page: CanonicalPageRequest): Promise<CanonicalReadPage> {
+    if (!Number.isSafeInteger(page.limit) || page.limit <= 0) {
+      throw new CanonicalCommandError('invalid-command', 'Page limit must be a positive safe integer');
+    }
+    let offset = 0;
+    if (page.cursor !== null) {
+      if (!/^\d+$/.test(page.cursor)) throw new CanonicalCommandError('invalid-command', 'Opaque cursor is malformed');
+      offset = Number(page.cursor);
+    }
+    const chain = this.chainFor(scope, selection);
+    const records = chain.slice(offset, offset + page.limit);
+    const consumed = offset + records.length;
+    return Promise.resolve({
+      outcome: 'page',
+      records,
+      nextCursor: consumed < chain.length ? String(consumed) : null,
+    });
   }
 
   findCommittedCommand(scope: CanonicalStoreScope, idempotencyKey: IdempotencyKey): Promise<{ digest: string; resultIds: string[]; resultHash: string | null } | null> {
