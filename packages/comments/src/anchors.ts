@@ -236,7 +236,10 @@ export const validateAnchor = (anchor: Anchor): Anchor => {
     return anchor;
   }
   if (anchor.kind !== 'data') {
-    throw new AnchorValidationError('unknown-kind', `Unknown anchor kind: ${String(anchor.kind)}`);
+    throw new AnchorValidationError(
+      'unknown-kind',
+      `Unknown anchor kind: ${String((anchor as { readonly kind: unknown }).kind)}`,
+    );
   }
   return anchor;
 };
