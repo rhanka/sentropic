@@ -122,4 +122,35 @@ describe('canonical gateway streams', () => {
       }] } }],
     });
   });
+
+  it('delegates the Responses wire to the lifecycle encoder without Chat framing', async () => {
+    let text = '';
+    for await (const frame of encodeGatewayStream(
+      'openai-responses', 'gpt-6.1-sol', 'resp_1', source(), undefined, { createdAt: 1_700_000_000 },
+    )) {
+      text += frame.raw;
+    }
+    const frames = parseSse(text);
+    expect(frames.map((frame) => frame.event)).toEqual([
+      'response.created', 'response.in_progress',
+      'response.output_item.added', 'response.reasoning_summary_part.added',
+      'response.reasoning_summary_text.delta',
+      'response.output_item.added', 'response.content_part.added',
+      'response.output_text.delta',
+      'response.output_item.added', 'response.function_call_arguments.delta',
+      'response.reasoning_summary_part.done', 'response.output_item.done',
+      'response.output_text.done', 'response.content_part.done', 'response.output_item.done',
+      'response.function_call_arguments.done', 'response.output_item.done',
+      'response.completed',
+    ]);
+    const completed = JSON.parse(frames[frames.length - 1]!.data);
+    expect(completed).toMatchObject({
+      type: 'response.completed',
+      response: {
+        id: 'resp_1', status: 'completed', created_at: 1_700_000_000,
+        usage: { input_tokens: 12, output_tokens: 7, total_tokens: 19 },
+      },
+    });
+    expect(text).not.toContain('[DONE]');
+  });
 });

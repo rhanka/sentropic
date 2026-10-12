@@ -36,6 +36,25 @@ describe('canonical gateway egress', () => {
     });
   });
 
+  it('delegates the Responses wire to the response envelope without Chat choices', () => {
+    const encoded = encodeGatewayResponse('openai-responses', response);
+
+    expect(encoded.status).toBe(200);
+    expect(encoded.body).toMatchObject({
+      id: 'response-1', object: 'response', model: 'gpt-5.6-terra',
+      status: 'completed', error: null, store: false,
+      output: [
+        { type: 'message', id: 'msg_0' },
+        { type: 'function_call', id: 'fc_0', call_id: 'provider-call-1', arguments: '{"id":1}' },
+      ],
+      usage: { input_tokens: 12, output_tokens: 7, total_tokens: 19 },
+    });
+    expect(encoded.body).not.toHaveProperty('choices');
+    expect(encoded.headers).toEqual({
+      'retry-after': '4', 'x-request-id': 'provider-request-1',
+    });
+  });
+
   it('encodes an OpenAI completion with native usage and finish reason', () => {
     const encoded = encodeGatewayResponse('openai-chat-completions', response);
 

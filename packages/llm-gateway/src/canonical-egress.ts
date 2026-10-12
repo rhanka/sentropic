@@ -1,5 +1,6 @@
 import type { GenerateResponse, TokenUsage } from '@sentropic/llm-mesh';
 import type { GatewayWire, ProviderResponseHeaders } from './ports/dispatch.js';
+import { buildResponsesJson } from './responses-egress.js';
 
 export interface CanonicalGatewayResponse {
   readonly status: number;
@@ -42,6 +43,13 @@ export const encodeGatewayResponse = (
   response: GenerateResponse,
 ): CanonicalGatewayResponse => {
   const headers = safeHeaders(response.providerMetadata);
+  if (wire === 'openai-responses') {
+    return {
+      status: 200,
+      body: buildResponsesJson({ responseId: response.id, model: response.modelId, response }),
+      ...(headers ? { headers } : {}),
+    };
+  }
   if (wire === 'anthropic-messages') {
     const content: unknown[] = response.text ? [{ type: 'text', text: response.text }] : [];
     response.toolCalls.forEach((call) => {
