@@ -1,17 +1,32 @@
 // Shared atomic corpus for every backend (L3a v4 §5, §16.1).
 // Runs against the test-only reference here; real SQLite/Postgres later.
+// Backend-agnostic: structural port-shaped operations, all awaited (§5.2).
 
 import assert from 'node:assert/strict';
-import type { TestBoundStore } from './reference-store.js';
+import type { AtomicUnit, CommitOptions, CommitReceipt } from '../../src/storage/atomic.js';
+
+export type Awaitable<T> = T | Promise<T>;
+
+export interface AtomicCorpusStore {
+  appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
+  genesis(kind: string, id: string, hash: string, value: unknown): Awaitable<{ readonly hash: string; readonly replayed: boolean }>;
+  indexGet(key: string): Awaitable<{ readonly digest: string; readonly resultIds: readonly string[]; readonly resultHash: string | null } | null>;
+  indexPut(key: string, entry: { readonly digest: string; readonly resultIds: readonly string[]; readonly resultHash: string | null }): Awaitable<'insert' | 'replace'>;
+  readHead(chainId: string): Awaitable<string | null>;
+  readChain(chainId: string): Awaitable<readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[]>;
+  readRecord(key: string): Awaitable<{ readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; readonly contentHash: string } | null>;
+  readAggregate(key: string): Awaitable<{ readonly version: number; readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string } } | null>;
+  commitAtomic(unit: AtomicUnit, options?: CommitOptions): Awaitable<CommitReceipt>;
+}
 
 const record = (id: string, n: number) => ({ id, bytes: `{"n":${n}}`, hash: `hash-${id}-${n}` });
 
-export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
-  const first = bound.appendChain('chain-a', record('a', 1), { kind: 'absent', allocation: '0' });
+export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> => {
+  const first = await bound.appendChain('chain-a', record('a', 1), { kind: 'absent', allocation: '0' });
   assert.equal(first.seq, 0);
   assert.equal(first.replayed, false);
 
-  const second = bound.appendChain('chain-a', record('a', 2), { kind: 'head', hash: 'hash-a-1' });
+  const second = await bound.appendChain('chain-a', record('a', 2), { kind: 'head', hash: 'hash-a-1' });
   assert.equal(second.seq, 1);
 
   await assert.rejects(
@@ -20,9 +35,9 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
     'K2a-RED atomic: repeated bytes under a stale head still conflict (CAS first)',
   );
 
-  const replayed = bound.genesis('submission', 'sub-1', 'digest-1', { v: 1 });
+  const replayed = await bound.genesis('submission', 'sub-1', 'digest-1', { v: 1 });
   assert.equal(replayed.replayed, false);
-  const replay = bound.genesis('submission', 'sub-1', 'digest-1', { v: 1 });
+  const replay = await bound.genesis('submission', 'sub-1', 'digest-1', { v: 1 });
   assert.equal(replay.replayed, true);
   await assert.rejects(
     async () => bound.genesis('submission', 'sub-1', 'digest-2', { v: 2 }),
@@ -31,11 +46,11 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
   );
 
   assert.equal(
-    bound.indexPut('cmd-1', { digest: 'd1', resultIds: ['r1'], resultHash: null }),
+    await bound.indexPut('cmd-1', { digest: 'd1', resultIds: ['r1'], resultHash: null }),
     'insert',
   );
   assert.equal(
-    bound.indexPut('cmd-1', { digest: 'd1', resultIds: ['r2'], resultHash: null }),
+    await bound.indexPut('cmd-1', { digest: 'd1', resultIds: ['r2'], resultHash: null }),
     'replace',
   );
   await assert.rejects(
@@ -44,7 +59,7 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
     'K2a-RED atomic: different digest under the same command key conflicts',
   );
 
-  const receipt = bound.commitAtomic(
+  const receipt = await bound.commitAtomic(
     {
       guards: [{ kind: 'head', chainId: 'chain-a', hash: 'hash-a-2' }],
       records: [],
@@ -70,7 +85,7 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
   );
   assert.equal(receipt.effectiveAppends, 2);
 
-  const sameReceipt = bound.commitAtomic(
+  const sameReceipt = await bound.commitAtomic(
     {
       guards: [],
       records: [],
@@ -90,9 +105,9 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
     { idempotencyKey: 'unit-1' },
   );
   assert.equal(sameReceipt.commitId, receipt.commitId);
-  assert.equal(bound.readHead('chain-a'), 'hash-a-3');
+  assert.equal(await bound.readHead('chain-a'), 'hash-a-3');
 
-  const before = bound.readChain('chain-a').length;
+  const before = (await bound.readChain('chain-a')).length;
   await assert.rejects(
     async () =>
       bound.commitAtomic({
@@ -114,11 +129,11 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
     /guard/,
     'K2a-RED atomic: a failing guard rolls back the whole unit',
   );
-  assert.equal(bound.readChain('chain-a').length, before);
+  assert.equal((await bound.readChain('chain-a')).length, before);
 
-  bound.indexPut('atomic-idx-1', { digest: 'd1', resultIds: ['r1'], resultHash: null });
-  const headBeforeLate = bound.readHead('chain-a');
-  const lenBeforeLate = bound.readChain('chain-a').length;
+  await bound.indexPut('atomic-idx-1', { digest: 'd1', resultIds: ['r1'], resultHash: null });
+  const headBeforeLate = await bound.readHead('chain-a');
+  const lenBeforeLate = (await bound.readChain('chain-a')).length;
   await assert.rejects(
     async () =>
       bound.commitAtomic({
@@ -140,13 +155,13 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
     /conflict/,
     'K2aC-RED atomic: a late index conflict rolls back appends, records and updates',
   );
-  assert.equal(bound.readHead('chain-a'), headBeforeLate);
-  assert.equal(bound.readChain('chain-a').length, lenBeforeLate);
-  assert.equal(bound.indexGet('atomic-idx-1')?.digest, 'd1');
-  assert.equal(bound.readRecord('rec-1'), null);
-  assert.equal(bound.readAggregate('agg-1'), null);
+  assert.equal(await bound.readHead('chain-a'), headBeforeLate);
+  assert.equal((await bound.readChain('chain-a')).length, lenBeforeLate);
+  assert.equal((await bound.indexGet('atomic-idx-1'))?.digest, 'd1');
+  assert.equal(await bound.readRecord('rec-1'), null);
+  assert.equal(await bound.readAggregate('agg-1'), null);
 
-  const fullReceipt = bound.commitAtomic({
+  const fullReceipt = await bound.commitAtomic({
     guards: [],
     records: [{ key: 'rec-1', bytes: { format: 'utf8', data: 'hello' }, contentHash: 'h-rec-1' }],
     appends: [
@@ -163,10 +178,10 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
     indexWrites: [{ key: 'atomic-idx-1', digest: 'd1', resultIds: ['r2'], resultHash: null }],
   });
   assert.equal(fullReceipt.effectiveAppends, 1);
-  assert.equal(bound.readHead('chain-a'), 'hash-a-4');
-  assert.equal(bound.readRecord('rec-1')?.contentHash, 'h-rec-1');
-  assert.equal(bound.readAggregate('agg-1')?.version, 1);
-  assert.deepEqual(bound.indexGet('atomic-idx-1')?.resultIds, ['r2']);
+  assert.equal(await bound.readHead('chain-a'), 'hash-a-4');
+  assert.equal((await bound.readRecord('rec-1'))?.contentHash, 'h-rec-1');
+  assert.equal((await bound.readAggregate('agg-1'))?.version, 1);
+  assert.deepEqual((await bound.indexGet('atomic-idx-1'))?.resultIds, ['r2']);
 
   await assert.rejects(
     async () =>
