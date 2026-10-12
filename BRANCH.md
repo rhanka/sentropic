@@ -113,8 +113,8 @@
 - [ ] **Lot 7 — Round-2 review remediation (Opus review N1, m1-m8)**
   - [x] Make withdrawal retryable on status withdrawn and support optional binding authorization input (m3).
   - [x] Add missing cluster-mesh tests for binding authorizer, policyVersion, and retryable withdrawal (m2, m3).
-  - [ ] Decouple live declaration service from route module (m7).
-  - [ ] Enforce allowed role, active account and approved tenant membership in binding authorizer (N1, m1).
+  - [x] Decouple live declaration service from route module (m7).
+  - [x] Enforce allowed role, active account and approved tenant membership in binding authorizer (N1, m1).
   - [ ] Add refusal tests for viewer, inactive account, inactive/revoked membership, and unbound bypass (N1, m1).
   - [ ] Cover default transcript persistence in GUARD test (m4).
   - [ ] Record non-compiling intermediate commit and commits without BRANCH.md in Feedback Loop (m6).
