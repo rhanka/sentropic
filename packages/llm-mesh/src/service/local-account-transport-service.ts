@@ -772,10 +772,12 @@ export class LocalAccountTransportService {
       });
     }
     for (const account of this.accountsMap.values()) {
-      // An expired credential is reauth-required even when its status has not
-      // flipped yet — otherwise expiry dies silently as no-eligible-account.
+      // A credential is reauth-required when its status has already flipped
+      // (a refresh failed) or when it is expired with no refresh token to
+      // mint a fresh access token silently — otherwise expiry dies silently
+      // as no-eligible-account.
       if (account.ownerScopeRef !== subject.ownerScopeRef
-        || (account.status !== 'reauth_required' && !this.isCredentialExpired(account))) {
+        || !this.requiresReauth(account)) {
         continue;
       }
       const transport = account.transportProviderId;
@@ -811,6 +813,20 @@ export class LocalAccountTransportService {
     return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
   }
 
+  /**
+   * True when the account cannot recover on its own: its status already
+   * flipped to reauth_required (a refresh failed), or its ACCESS token is
+   * expired with no refresh token to renew it. A merely expired access
+   * token with a live refresh token stays ready — acquire() refreshes it
+   * before dispatch.
+   */
+  private requiresReauth(account: {
+    status?: string | null; refreshToken?: string | null; expiresAt?: string | null;
+  }): boolean {
+    if (account.status === 'reauth_required') return true;
+    return this.isCredentialExpired(account) && !account.refreshToken;
+  }
+
   private async listRouteAccounts(
     subject: import('../routing-contracts.js').VerifiedRoutingSubject,
   ): Promise<readonly EligibleAccountDescriptor[]> {
@@ -829,7 +845,7 @@ export class LocalAccountTransportService {
       transportProviderId: account.transportProviderId,
       supportedModelIds: supportedModelIdsForAccount(account),
       enrollmentCompletedAt: account.enrollmentCompletedAt ?? '1970-01-01T00:00:00.000Z',
-      readiness: this.isCredentialExpired(account)
+      readiness: this.requiresReauth(account)
         ? 'reauth-required'
         : account.status === 'active' || account.status === undefined
           ? 'ready'
