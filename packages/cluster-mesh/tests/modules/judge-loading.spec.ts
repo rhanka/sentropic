@@ -3,6 +3,7 @@ import { createClusterMeshModules } from '../../src/index.js';
 import * as meshJudgeProvider from '@sentropic/llm-mesh/judge';
 import * as meshJudgeHostProvider from '@sentropic/llm-mesh/judge/host';
 import * as meshJevTransportProvider from '@sentropic/llm-mesh/transport/jev';
+import { loadLlmMeshJudge, loadJudgeClient } from '../../src/loaders/llm-mesh/judge.js';
 
 describe('judge module loading', () => {
   it('probes and loads llm-mesh/judge from installed provider', async () => {
@@ -17,6 +18,10 @@ describe('judge module loading', () => {
     const loaded = (await modules.load('llm-mesh/judge')) as typeof meshJudgeProvider;
     expect(typeof loaded.createRemoteJudgeClient).toBe('function');
     expect(loaded.createRemoteJudgeClient).toBe(meshJudgeProvider.createRemoteJudgeClient);
+    const loadedByLoader = await loadLlmMeshJudge(modules);
+    expect(loadedByLoader.createRemoteJudgeClient).toBe(meshJudgeProvider.createRemoteJudgeClient);
+    const loadedByAlias = await loadJudgeClient(modules);
+    expect(loadedByAlias.createRemoteJudgeClient).toBe(meshJudgeProvider.createRemoteJudgeClient);
     expect(modules.snapshot()['llm-mesh/judge']).toMatchObject({ state: 'loaded' });
   });
 
@@ -59,6 +64,8 @@ describe('judge module loading', () => {
     expect(modules.isEnabled('llm-mesh/judge/host')).toBe(false);
     expect(modules.isEnabled('llm-mesh/transport/jev')).toBe(false);
     await expect(modules.load('llm-mesh/judge')).rejects.toThrow();
+    await expect(loadLlmMeshJudge(modules)).rejects.toThrow();
+    await expect(loadJudgeClient(modules)).rejects.toThrow();
     await expect(modules.load('llm-mesh/judge/host')).rejects.toThrow();
     await expect(modules.load('llm-mesh/transport/jev')).rejects.toThrow();
   });
