@@ -121,8 +121,8 @@
   - [x] Fix 2 parsed-instant expiry for grants and leased snapshots.
   - [x] Fix 3 atomic staging with persisted records and updates.
   - [x] Fix 4 allocation check plus CAS conflict codes.
-  - [ ] Fix 5 forged-grant authenticity via issued grants.
-  - [ ] Fix 6 stable head-bound reads plus full encoded-byte budget.
+  - [x] Fix 5 forged-grant authenticity via issued grants.
+  - [x] Fix 6 stable head-bound reads plus full encoded-byte budget.
   - [ ] Fix 7 async backend-agnostic corpus with injected fixtures.
   - [ ] Fix 8 discriminating mutations preserving valid cases.
   - [ ] Fix 9 branch file-budget exception recorded above.
