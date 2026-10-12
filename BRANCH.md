@@ -104,7 +104,7 @@
   - [x] Implement packages/cluster-mesh/tests/storage/authority-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/chain-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/read-corpus.ts.
-  - [ ] Implement packages/cluster-mesh/tests/storage/reference.spec.ts executing the corpus against the reference.
+  - [x] Implement packages/cluster-mesh/tests/storage/reference.spec.ts executing the corpus against the reference.
   - [ ] Implement packages/cluster-mesh/tests/storage/mutations.spec.ts with discriminating recorded mutations.
   - [ ] Lot gate:
     - [ ] make typecheck-cluster-mesh API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
