@@ -39,6 +39,9 @@ export async function dispatchJudge(execution: JudgeExecution, selection: Extrac
   receipt.budget = { state: priced.pending ? 'pending-reconciliation' : 'settled',
     reservedMicroUsd: admitted.quote.reservedMicroUsd, overrun: priced.overrun };
   let error = result.ok ? judgeInterruption(execution, 'settlement') ?? undefined : result.error;
+  if (!result.ok && result.error.code === 'CANCELLED' && (execution.expired || execution.clock.monotonic() >= execution.deadline)) {
+    error = createJudgeError('TIMEOUT', result.error.phase);
+  }
   closeJudgeReceipt(execution, error);
   try { await options.budget.settle({ holdId: admitted.holdId, receipt: copyJudgeReceipt(receipt), boundViolated: priced.overrun }); }
   catch {

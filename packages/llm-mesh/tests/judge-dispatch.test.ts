@@ -40,9 +40,43 @@ describe('judge admission and exactly one dispatch', () => {
     if (stage === 'admit' || stage === 'mark') expect(f.budget.release).toHaveBeenCalledOnce();
     if (stage === 'provider') expect(f.state.ledger).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error' }]);
     if (stage === 'settle') {
-      expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' } }]);
-      expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' } }]);
+      expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+      expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+      expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
+      expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
     }
+  });
+  it('agrees on settled verdict between ledger and persisted receipt on cancellation during settlement', async () => {
+    const f = judgeServiceFixture();
+    let acknowledge!: () => void;
+    const gate = new Promise<void>((resolve) => { acknowledge = resolve; });
+    const original = f.budget.settle;
+    f.budget.settle.mockImplementationOnce(async (input) => { await gate; return original(input); });
+    const controller = new AbortController();
+    const pending = createJudgeService(f.options).judge(judgeRequest(), { signal: controller.signal });
+    await new Promise((r) => setTimeout(r, 10));
+    controller.abort();
+    const received = await pending;
+    expect(received).toMatchObject({ ok: false, error: { code: 'CANCELLED', phase: 'settlement' } });
+    acknowledge();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
+    expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
+  });
+  it('maps adapter CANCELLED to TIMEOUT on provider deadline expiry', async () => {
+    const f = judgeServiceFixture();
+    f.transport.send.mockImplementationOnce(async () => {
+      f.state.now = 10001;
+      return { ok: false, error: { code: 'CANCELLED', phase: 'dispatch', message: 'Cancelled.' } };
+    });
+    const result = await createJudgeService(f.options).judge(judgeRequest());
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'TIMEOUT', phase: 'dispatch' },
+      receipt: { attempts: 1, dispatch: 'unknown' },
+    });
   });
   it.each(['descriptor', 'price'] as const)('checks expiry after %s resolution before acquiring credentials', async (stage) => {
     const f = judgeServiceFixture();
