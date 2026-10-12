@@ -243,6 +243,74 @@ export function deriveDeclarationIdentity(input: DeriveDeclarationIdentityInput)
   };
 }
 
+const PURGE_KEYS = ['purgePrivateSnapshots', 'purgeDerivedIndexes', 'revokeDecryptability', 'preserveCommittedHistory'] as const;
+export function validatePrivatePurgeRequest(request: unknown): ValidationResult {
+  if (!isRecord(request)) return { ok: false, errors: ['requestPrivatePurge must be an object'] };
+  const errors: string[] = [];
+  rejectUnknown(request, PURGE_KEYS, 'requestPrivatePurge', errors);
+  if (request.purgePrivateSnapshots !== true) errors.push('requestPrivatePurge.purgePrivateSnapshots must be true');
+  if (request.purgeDerivedIndexes !== true) errors.push('requestPrivatePurge.purgeDerivedIndexes must be true');
+  if (request.revokeDecryptability !== true) errors.push('requestPrivatePurge.revokeDecryptability must be true');
+  if (request.preserveCommittedHistory !== true) errors.push('requestPrivatePurge.preserveCommittedHistory must be true');
+  return { ok: errors.length === 0, errors };
+}
+
+const REVOCATION_KEYS = ['declarationId', 'tenant', 'cloneId', 'worktreeId', 'declarationRevision', 'reason', 'requestPrivatePurge'] as const;
+export function validateDeclarationRevocation(revocation: unknown): ValidationResult {
+  if (!isRecord(revocation)) return { ok: false, errors: ['revocation must be an object'] };
+  const errors: string[] = [];
+  rejectUnknown(revocation, REVOCATION_KEYS, 'revocation', errors);
+  if (!isOpaqueId(revocation.declarationId, ID_PREFIXES.declaration)) errors.push(`revocation.declarationId must be a non-empty opaque id starting with "${ID_PREFIXES.declaration}"`);
+  if (!isNonEmptyString(revocation.tenant) || hasNul(revocation.tenant)) errors.push('revocation.tenant must be a non-empty string without NUL');
+  if (!isOpaqueId(revocation.cloneId, ID_PREFIXES.clone)) errors.push(`revocation.cloneId must be a non-empty opaque id starting with "${ID_PREFIXES.clone}"`);
+  if (!isOpaqueId(revocation.worktreeId, ID_PREFIXES.worktree)) errors.push(`revocation.worktreeId must be a non-empty opaque id starting with "${ID_PREFIXES.worktree}"`);
+  if (!isPositiveInteger(revocation.declarationRevision) || (revocation.declarationRevision as number) < INITIAL_DECLARATION_REVISION) {
+    errors.push(`revocation.declarationRevision must be an integer >= ${INITIAL_DECLARATION_REVISION}`);
+  }
+  if (!isRevocationReason(revocation.reason)) errors.push(`revocation.reason must be one of ${REVOCATION_REASONS.join(', ')}`);
+  const purge = validatePrivatePurgeRequest(revocation.requestPrivatePurge);
+  if (!purge.ok) errors.push(...purge.errors.map((e) => `revocation.${e}`));
+  return { ok: errors.length === 0, errors };
+}
+
+const DECLARATION_KEYS = ['tenant', 'principal', 'hostFingerprint', 'identityUncertainty', 'declarationId', 'cloneId', 'worktreeId', 'authorizedRoots', 'liveCapability', 'policyVersion', 'declarationRevision', 'serverWorkspaceId', 'serverIssuer', 'bindingRevision'] as const;
+export function validateWorkspaceDeclaration(declaration: unknown): ValidationResult {
+  if (!isRecord(declaration)) return { ok: false, errors: ['declaration must be an object'] };
+  const errors: string[] = [];
+  rejectUnknown(declaration, DECLARATION_KEYS, 'declaration', errors);
+  if (!isNonEmptyString(declaration.tenant) || hasNul(declaration.tenant)) errors.push('declaration.tenant must be a non-empty string without NUL');
+  if (!isNonEmptyString(declaration.principal) || hasNul(declaration.principal)) errors.push('declaration.principal must be a non-empty string without NUL');
+  if (declaration.hostFingerprint !== undefined && (!isNonEmptyString(declaration.hostFingerprint) || hasNul(declaration.hostFingerprint))) {
+    errors.push('declaration.hostFingerprint, when present, must be a non-empty string without NUL');
+  } else if (declaration.hostFingerprint === undefined && (!isUncertaintyList(declaration.identityUncertainty) || !declaration.identityUncertainty.includes('missing_history'))) {
+    errors.push('declaration.hostFingerprint is absent: identityUncertainty must explicitly contain "missing_history" (LIVE §12)');
+  }
+  if (!isUncertaintyList(declaration.identityUncertainty)) errors.push(`declaration.identityUncertainty must be an array of uncertainty states (${IDENTITY_UNCERTAINTY_STATES.join(', ')})`);
+  if (!isOpaqueId(declaration.declarationId, ID_PREFIXES.declaration)) errors.push(`declaration.declarationId must be a non-empty opaque id starting with "${ID_PREFIXES.declaration}"`);
+  if (!isOpaqueId(declaration.cloneId, ID_PREFIXES.clone)) errors.push(`declaration.cloneId must be a non-empty opaque id starting with "${ID_PREFIXES.clone}"`);
+  if (!isOpaqueId(declaration.worktreeId, ID_PREFIXES.worktree)) errors.push(`declaration.worktreeId must be a non-empty opaque id starting with "${ID_PREFIXES.worktree}"`);
+  if (!Array.isArray(declaration.authorizedRoots) || declaration.authorizedRoots.length === 0 || !declaration.authorizedRoots.every((r) => isNonEmptyString(r) && !hasNul(r))) {
+    errors.push('declaration.authorizedRoots must be a non-empty array of non-empty strings without NUL');
+  }
+  if (declaration.liveCapability !== EXPLICIT_LIVE_CAPABILITY) errors.push(`declaration.liveCapability must be "${EXPLICIT_LIVE_CAPABILITY}"`);
+  if (!isNonEmptyString(declaration.policyVersion) || hasNul(declaration.policyVersion)) errors.push('declaration.policyVersion must be a non-empty string without NUL');
+  if (!isPositiveInteger(declaration.declarationRevision) || (declaration.declarationRevision as number) < INITIAL_DECLARATION_REVISION) {
+    errors.push(`declaration.declarationRevision must be an integer >= ${INITIAL_DECLARATION_REVISION}`);
+  }
+  const hasServerWorkspace = declaration.serverWorkspaceId !== undefined;
+  const hasServerIssuer = declaration.serverIssuer !== undefined;
+  const hasBindingRevision = declaration.bindingRevision !== undefined;
+  if (hasServerWorkspace && (!isNonEmptyString(declaration.serverWorkspaceId) || hasNul(declaration.serverWorkspaceId))) errors.push('declaration.serverWorkspaceId, when present, must be a non-empty string without NUL');
+  if (hasServerIssuer && (!isNonEmptyString(declaration.serverIssuer) || hasNul(declaration.serverIssuer))) errors.push('declaration.serverIssuer, when present, must be a non-empty string without NUL');
+  if (hasBindingRevision && (!isPositiveInteger(declaration.bindingRevision) || (declaration.bindingRevision as number) < INITIAL_BINDING_REVISION)) {
+    errors.push(`declaration.bindingRevision, when present, must be an integer >= ${INITIAL_BINDING_REVISION}`);
+  }
+  if ((hasServerWorkspace || hasServerIssuer || hasBindingRevision) && !(hasServerWorkspace && hasServerIssuer && hasBindingRevision)) {
+    errors.push('the product binding must be the complete serverWorkspaceId + serverIssuer + bindingRevision triplet: a partial binding is not a valid product intent');
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 export interface LiveWorkspaceDeclaration {
   readonly tenant: string;
   readonly principal: string;
