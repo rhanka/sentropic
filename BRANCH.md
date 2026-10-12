@@ -73,9 +73,9 @@
 - [x] **Lot 2 / C02 — Promote the indivisible SPEC**
   - [x] Files: spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md and BRANCH.md; message: `docs: promote comments annotation specification`; approximately 537 changed lines under BRCA-EX1.
   - [x] Gate: complete SPEC, exact quotations, restored n-5 clauses and tracked authority links match the reviewed promotion bytes.
-- [ ] **Lot 3 / C03 — Preserve owner authority and author declarations**
-  - [ ] Files: evidence/owner-decisions.md, evidence/author-metadata.md and BRANCH.md; message: `docs: preserve comments owner authority`; approximately 105 changed lines.
-  - [ ] Gate: AUTH-M and all TREAT2 answers verbatim; register quotations alone copied from private provenance; AUTHOR-C6/2E/PROMO whole logs and AUTHOR-RESERVES' fixed header source-hashed with their declaration limits.
+- [x] **Lot 3 / C03 — Preserve owner authority and author declarations**
+  - [x] Files: evidence/owner-decisions.md, evidence/author-metadata.md and BRANCH.md; message: `docs: preserve comments owner authority`; approximately 105 changed lines.
+  - [x] Gate: AUTH-M and all TREAT2 answers verbatim; register quotations alone copied from private provenance; AUTHOR-C6/2E/PROMO whole logs and AUTHOR-RESERVES' fixed header source-hashed with their declaration limits.
 - [ ] **Lot 4 / C04 — Promote historical interface and review evidence**
   - [ ] Files: evidence/interface-errata.md, evidence/review-history.md and BRANCH.md; message: `docs: preserve comments interface review evidence`; approximately 130 changed lines.
   - [ ] Gate: S-R01–20, SO/CROSS treatments and superseded attribution/backup clauses remain readable without ignored sources.
