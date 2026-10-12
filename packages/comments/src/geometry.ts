@@ -162,3 +162,88 @@ const validateFrame = (frame: GeometryFrame): void => {
   }
 };
 
+/**
+ * Validate a normalized box against its frame. Both endpoints of each axis are
+ * checked exactly against the frame, quantized, and width/height is derived
+ * by integer subtraction; origin and width are never rounded independently,
+ * shapes are never silently clipped, and collapsed sizes are rejected.
+ */
+export const validateBox = (frame: GeometryFrame, box: BoxGeometryInput): QuantizedBox => {
+  validateFrame(frame);
+  if (box.kind !== 'box') {
+    throw new GeometryValidationError('unknown-shape', 'Not a box');
+  }
+  const x = quantizeMillionths(box.x);
+  const y = quantizeMillionths(box.y);
+  const endX = quantizeRational(addDecimals(box.x, box.width));
+  const endY = quantizeRational(addDecimals(box.y, box.height));
+  for (const [value, label] of [
+    [x, 'x'],
+    [y, 'y'],
+    [endX, 'x + width'],
+    [endY, 'y + height'],
+  ] as const) {
+    if (value < 0 || value > GEOMETRY_SCALE) {
+      throw new GeometryValidationError('out-of-frame', `Box ${label} out of frame: ${value}`);
+    }
+  }
+  const width = endX - x;
+  const height = endY - y;
+  if (width <= 0 || height <= 0) {
+    throw new GeometryValidationError('collapsed-size', 'Box collapsed to an empty edge');
+  }
+  return { kind: 'box', x, y, width, height };
+};
+
+/**
+ * Validate a normalized circle against its frame. The entire disk must be
+ * inside the frame before and after quantization, checked with exact rational
+ * arithmetic before and integer products after; the radius scales by
+ * min(W, H) and is never scaled by viewport width and height independently.
+ */
+export const validateCircle = (frame: GeometryFrame, circle: CircleGeometryInput): QuantizedCircle => {
+  validateFrame(frame);
+  if (circle.kind !== 'circle') {
+    throw new GeometryValidationError('unknown-shape', 'Not a circle');
+  }
+  const cx = parseDecimal(circle.cx);
+  const cy = parseDecimal(circle.cy);
+  const r = parseDecimal(circle.r);
+  if (cx.n < 0n || cy.n < 0n || r.n <= 0n) {
+    if (r.n <= 0n) {
+      throw new GeometryValidationError('collapsed-size', 'Circle radius collapsed');
+    }
+    throw new GeometryValidationError('out-of-frame', 'Circle center or radius is negative');
+  }
+  const shorter = BigInt(Math.min(frame.width, frame.height));
+  // Before quantization: exact rational containment cx*W - r*min >= 0 etc.
+  const exactContainment =
+    cx.n * BigInt(frame.width) - r.n * shorter >= 0n &&
+    cx.n * BigInt(frame.width) + r.n * shorter <= cx.d * BigInt(frame.width) &&
+    cy.n * BigInt(frame.height) - r.n * shorter >= 0n &&
+    cy.n * BigInt(frame.height) + r.n * shorter <= cy.d * BigInt(frame.height);
+  if (!exactContainment) {
+    throw new GeometryValidationError('circle-overflow', 'Circle disk is not fully inside the frame');
+  }
+  const qcx = quantizeMillionths(circle.cx);
+  const qcy = quantizeMillionths(circle.cy);
+  const qr = quantizeMillionths(circle.r);
+  if (qr <= 0) {
+    throw new GeometryValidationError('collapsed-size', 'Circle radius collapsed after quantization');
+  }
+  // After quantization: integer-product containment with intrinsic dimensions.
+  const qShorter = Math.min(frame.width, frame.height);
+  if (
+    qcx * frame.width - qr * qShorter < 0 ||
+    qcx * frame.width + qr * qShorter > GEOMETRY_SCALE * frame.width ||
+    qcy * frame.height - qr * qShorter < 0 ||
+    qcy * frame.height + qr * qShorter > GEOMETRY_SCALE * frame.height
+  ) {
+    throw new GeometryValidationError('circle-overflow', 'Circle disk is not fully inside the frame after quantization');
+  }
+  return { kind: 'circle', cx: qcx, cy: qcy, r: qr };
+};
+
+/** Validate any supported shape; circle support is required, ellipse needs a reviewed schema extension. */
+export const validateGeometry = (frame: GeometryFrame, input: GeometryInput): QuantizedGeometry =>
+  input.kind === 'box' ? validateBox(frame, input) : validateCircle(frame, input);
