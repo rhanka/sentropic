@@ -115,8 +115,8 @@
   - [x] Add missing cluster-mesh tests for binding authorizer, policyVersion, and retryable withdrawal (m2, m3).
   - [x] Decouple live declaration service from route module (m7).
   - [x] Enforce allowed role, active account and approved tenant membership in binding authorizer (N1, m1).
-  - [ ] Add refusal tests for viewer, inactive account, inactive/revoked membership, and unbound bypass (N1, m1).
-  - [ ] Cover default transcript persistence in GUARD test (m4).
+  - [x] Add refusal tests for viewer, inactive account, inactive/revoked membership, and unbound bypass (N1, m1).
+  - [x] Cover default transcript persistence in GUARD test (m4).
   - [ ] Record non-compiling intermediate commit and commits without BRANCH.md in Feedback Loop (m6).
   - [ ] Record cluster-mesh 0.15.0 deferral to rebase after #662 and M6 migration check in Feedback Loop (m8).
   - [ ] Full validation and report .h2a/build/l6a_s_r2_report.md.
