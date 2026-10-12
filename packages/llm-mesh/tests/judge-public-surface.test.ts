@@ -22,6 +22,7 @@ describe('published judge boundaries', () => {
       const file = join(directory, 'consumer.mts');
       writeFileSync(file, `import type { ProviderAdapter } from '@sentropic/llm-mesh';
 import type { EvaluatorRef, JudgeRequest, JudgeAdapterResult, JudgeResult } from '@sentropic/llm-mesh/judge';
+import { createRemoteJudgeClient } from '@sentropic/llm-mesh/judge';
 import { createJudgeService, createJevAdapter } from '@sentropic/llm-mesh/judge/host';
 import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
 declare const adapter: ProviderAdapter;
@@ -31,7 +32,7 @@ declare const request: JudgeRequest;
 const argument: Parameters<NonNullable<typeof adapter.judge>>[0] = request;
 const evaluator: EvaluatorRef = argument.evaluator;
 declare const receipt: JudgeResult;
-void [evidence, evaluator, receipt, createJudgeService, createJevAdapter, createJevTransport];
+void [evidence, evaluator, receipt, createJudgeService, createJevAdapter, createJevTransport, createRemoteJudgeClient];
 // @ts-expect-error Consumer contracts must not expose host custody.
 import { createJudgeService as consumerFactory } from '@sentropic/llm-mesh/judge';
 // @ts-expect-error Private judge modules must not have export-map escape hatches.
@@ -47,8 +48,9 @@ import { quoteJudge } from '@sentropic/llm-mesh/judge/pricing';
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() => { throw new Error('Unexpected consumer fetch'); });
     try {
       const consumer = await import('../dist/judge/index.js');
-      expect(Object.keys(consumer)).toEqual([]);
-      expect(readFileSync(resolve('dist/judge/index.js'), 'utf8')).not.toMatch(/(?:import|export).*from/);
+      expect(Object.keys(consumer)).toEqual(['createRemoteJudgeClient']);
+      expect(typeof consumer.createRemoteJudgeClient).toBe('function');
+      expect(readFileSync(resolve('dist/judge/index.js'), 'utf8')).not.toMatch(/(?:import|export).*from.*(?:host|pricing|transport)/);
       const host = await import('../dist/judge/host.js');
       expect(typeof host.createJudgeService).toBe('function');
       expect(fetch).not.toHaveBeenCalled();
