@@ -107,3 +107,57 @@ const projectLifecycle = (chain: readonly LifecycleEventRecord[]): LifecycleProj
   }
   return { archived, archiveKind, tombstoned, purge, available: !tombstoned && purge !== 'purged' };
 };
+/**
+ * Create a lifecycle event appended to the chain of one scoped object. Archive
+ * and restore stay reversible; a tombstone is terminal for archive actions and
+ * cannot be resurrected by any later event except the explicit purge
+ * intent/outcome pipeline, which itself only follows a tombstone.
+ */
+export const createLifecycleEvent = (
+  chain: readonly LifecycleEventRecord[],
+  input: Omit<LifecycleEventRecord, 'kind' | 'link' | 'hash'>,
+): LifecycleEventRecord => {
+  if (!isLifecycleObjectKind(input.objectKind)) {
+    throw new LifecycleValidationError('invalid-object', `Unknown lifecycle object kind: ${String(input.objectKind)}`);
+  }
+  if (!isLifecycleAction(input.action)) {
+    throw new LifecycleValidationError('invalid-action', `Unknown lifecycle action: ${String(input.action)}`);
+  }
+  if (input.objectId.length === 0 || input.actor.principal.length === 0) {
+    throw new LifecycleValidationError('invalid-object', 'Lifecycle needs an object id and an actor principal');
+  }
+  if (input.action === 'archive') {
+    if (!isArchiveKind(input.archiveKind)) {
+      throw new LifecycleValidationError('invalid-archive-kind', 'Archive requires a shared or personal audience');
+    }
+  } else if (input.archiveKind !== null) {
+    throw new LifecycleValidationError('invalid-archive-kind', 'archiveKind applies only to archive actions');
+  }
+  const previous = chain.length > 0 ? chain[chain.length - 1] : null;
+  if (previous !== null && (previous.objectKind !== input.objectKind || previous.objectId !== input.objectId || previous.scope.tenantId !== input.scope.tenantId || previous.scope.workspaceId !== input.scope.workspaceId)) {
+    throw new LifecycleValidationError('invalid-sequence', 'Lifecycle chain is scoped to one object');
+  }
+  const projection = projectLifecycle(chain);
+  if (input.action === 'archive' && projection.tombstoned) {
+    throw new LifecycleValidationError('tombstoned', 'A tombstoned object cannot be archived');
+  }
+  if (input.action === 'restore' && !projection.archived) {
+    throw new LifecycleValidationError('invalid-sequence', 'Only an archived object can be restored');
+  }
+  if (input.action === 'tombstone' && projection.tombstoned) {
+    throw new LifecycleValidationError('tombstoned', 'A tombstone is irreversible');
+  }
+  if (input.action === 'purge-intent' && !projection.tombstoned) {
+    throw new LifecycleValidationError('invalid-sequence', 'Purge intent requires a prior tombstone');
+  }
+  if (input.action === 'purge-outcome' && projection.purge !== 'intended') {
+    throw new LifecycleValidationError('invalid-sequence', 'Purge outcome requires a prior purge intent');
+  }
+  const link = { sequence: previous === null ? 1 : previous.link.sequence + 1, previousHash: previous === null ? null : previous.hash };
+  const envelope = { ...input, link };
+  const hash = hashRecord('lifecycle-event', envelope as unknown as Record<string, unknown>);
+  return { ...envelope, kind: 'lifecycle-event', hash };
+};
+
+export const projectLifecycleState = (chain: readonly LifecycleEventRecord[]): LifecycleProjection =>
+  projectLifecycle(chain);
