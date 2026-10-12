@@ -631,6 +631,44 @@ describe('pure route quote', () => {
   });
 });
 
+describe('execution-feature-bound quotes (spec §16.3)', () => {
+  const codexOverride = (extra: Partial<RouteQuoteInput> = {}) => quoteInput('gpt-6.1-sol', {
+    targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol', transportProviderId: 'codex' }],
+    ...extra,
+  });
+  const openOverride = (extra: Partial<RouteQuoteInput> = {}) => quoteInput('gpt-6.1-sol', {
+    targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+    ...extra,
+  });
+
+  it('refuses pinned transports without the required execution features, like planning', () => {
+    expectQuoteError(() => quoteRoute(codexOverride({
+      requiredExecutionFeatures: ['explicit-output-ceiling'],
+    })), 'capabilities-unmet');
+  });
+
+  it('binds the requirements into the deterministic quote identity', () => {
+    const plain = quoteRoute(openOverride());
+    const featured = quoteRoute(openOverride({ requiredExecutionFeatures: ['named-tool-choice'] }));
+    expect(featured.candidates.length).toBeGreaterThan(0);
+    expect(featured.quoteRef).not.toBe(plain.quoteRef);
+    expect(quoteRoute(openOverride({
+      requiredExecutionFeatures: ['named-tool-choice'],
+    }))).toEqual(featured);
+  });
+
+  it('rejects a plan whose execution requirements differ from its quote', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory() });
+    const quote = quoteRoute(openOverride());
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'gpt-6.1-sol',
+      targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+      requiredExecutionFeatures: ['named-tool-choice'],
+      quote,
+    })).rejects.toMatchObject({ code: 'quote-mismatch' });
+  });
+});
+
 // Codex-pinned alias targets plus unpinned OpenAI profiles (codex is OpenAI's only account transport).
 const EXPECTED_UNENFORCED = [
   'openai/gpt-4.1-nano@*',
