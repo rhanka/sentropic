@@ -128,3 +128,79 @@ describe('operation audit events', () => {
     );
   });
 });
+
+import {
+  SubmissionValidationError,
+  createPreparedSubmissionManifest,
+  recoverPreparedSubmissionReceipt,
+  verifyPreparedSubmission,
+} from '../src/submissions.js';
+
+describe('prepared submissions', () => {
+  const manifestInput = (extra: Record<string, unknown> = {}) => ({
+    scope,
+    submissionId: 'sub_1',
+    annotation: { annotationId: 'ann_1', revisionHash: 'a'.repeat(64) },
+    selectedComments: [{ commentId: 'cmt_1', revisionHash: 'b'.repeat(64) }],
+    selectedStructures: [{ threadId: 'thr_1', revisionHash: 'c'.repeat(64) }],
+    captureDigests: ['capture-digest-1'],
+    contractVersion: 'contract-v1',
+    profileVersion: 'profile-v1',
+    preparedBy: { principal: 'author_1' },
+    ...extra,
+  });
+
+  it('creates standalone genesis manifests with a recoverable receipt', () => {
+    const manifest = createPreparedSubmissionManifest(manifestInput());
+    expect(manifest.kind).toBe('prepared-submission-manifest');
+    expect(manifest.hash).toMatch(/^[0-9a-f]{64}$/);
+    const receipt = recoverPreparedSubmissionReceipt(manifest);
+    expect(receipt.manifestHash).toBe(manifest.hash);
+    expect(receipt.manifestDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifyPreparedSubmission(manifest)).toBe(true);
+    expect(recoverPreparedSubmissionReceipt(manifest).manifestDigest).toBe(receipt.manifestDigest);
+  });
+
+  it('fails verification when a manifest field is forged', () => {
+    const manifest = createPreparedSubmissionManifest(manifestInput());
+    const forged = { ...manifest, contractVersion: 'contract-v2' };
+    expect(verifyPreparedSubmission(forged)).toBe(false);
+    expect(() => verifyPreparedSubmission(forged)).not.toThrow();
+  });
+
+  it('rejects duplicate selections and incomplete manifests', () => {
+    expect(() =>
+      createPreparedSubmissionManifest(manifestInput({ selectedComments: [
+        { commentId: 'cmt_1', revisionHash: 'b'.repeat(64) },
+        { commentId: 'cmt_1', revisionHash: 'c'.repeat(64) },
+      ] })),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-selection' }));
+    expect(() =>
+      createPreparedSubmissionManifest(manifestInput({ selectedStructures: [
+        { threadId: 'thr_1', revisionHash: 'b'.repeat(64) },
+        { threadId: 'thr_1', revisionHash: 'c'.repeat(64) },
+      ] })),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-selection' }));
+    expect(() =>
+      createPreparedSubmissionManifest(manifestInput({ annotation: { annotationId: 'ann_1', revisionHash: '' } })),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-manifest' }));
+    expect(() =>
+      createPreparedSubmissionManifest(manifestInput({ captureDigests: ['', 'd'] })),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-selection' }));
+    expect(() => createPreparedSubmissionManifest(manifestInput({ submissionId: '' }))).toThrowError(
+      expect.objectContaining({ code: 'invalid-manifest' }),
+    );
+  });
+
+  it('keeps the selection order in the hashed manifest', () => {
+    const first = createPreparedSubmissionManifest(manifestInput());
+    const reordered = createPreparedSubmissionManifest(manifestInput({
+      selectedComments: [{ commentId: 'cmt_2', revisionHash: 'd'.repeat(64) }, { commentId: 'cmt_1', revisionHash: 'b'.repeat(64) }],
+    }));
+    expect(reordered.selectedComments.map((item) => item.commentId)).toEqual(['cmt_2', 'cmt_1']);
+    expect(first.hash).not.toBe(reordered.hash);
+    expect(() => createPreparedSubmissionManifest(manifestInput({ preparedBy: { principal: '' } }))).toThrowError(
+      SubmissionValidationError,
+    );
+  });
+});
