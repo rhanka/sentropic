@@ -61,7 +61,7 @@
 ## UAT Management (in orchestration context)
 - [x] Document inspection covers links, source digests, exact quotations, reserve treatment and template structure; runtime web/Chrome/VSCode UAT is outside this branch.
 - [ ] Subsequent committer verifies actual branch/ancestry with harness, runs scope-check before each commit and checks staged changed-line/file counts; this task ran none of those commands.
-- [ ] Before C11, run `rtk sha256sum spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md docs/comments-annotations/plan/*.md docs/comments-annotations/evidence/*.md`; compare the SPEC and three plans to the four pinned hashes in evidence/convergence.md, refreshed extracts to evidence/index.md, and all six untouched extracts to CONF4's pre-recording hashes. Any unlisted delta requires confirmation before recording.
+- [x] Before C11, run `rtk sha256sum spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md docs/comments-annotations/plan/*.md docs/comments-annotations/evidence/*.md`; compare the SPEC and three plans to the four pinned hashes in evidence/convergence.md, refreshed extracts to evidence/index.md, and all six untouched extracts to CONF4's pre-recording hashes. Any unlisted delta requires confirmation before recording.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Prepared source inventory and scope**
@@ -97,9 +97,9 @@
 - [x] **Lot 10 / C10 — Record promotion treatment and convergence**
   - [x] Files: evidence/treatment-promotion.md, evidence/convergence.md and BRANCH.md; message: `docs: record comments promotion treatment and convergence`; approximately 124 changed lines.
   - [x] Gate: CONF4's actual verdict/block and P-1–P-5 dispositions are recorded; the receipt supersedes historical pending-confirmation mentions without changing SPEC/plan bytes. Only the closed recording delta is permitted without further confirmation.
-- [ ] **Lot 11 / C11 — Final evidence index and documentary validation**
-  - [ ] Files: evidence/index.md and BRANCH.md, plus bounded receipt corrections only if counted below the limit; message: `docs: anchor comments documentary promotion`; under 140 changed lines.
-  - [ ] Gate: all links and digests resolve, reviewed SPEC/plans are complete, actual delta receipt is present; ordinary commits remain below 150 changed lines and at most 15 files including checkbox updates.
+- [x] **Lot 11 / C11 — Final evidence index and documentary validation**
+  - [x] Files: evidence/index.md and BRANCH.md, plus bounded receipt corrections only if counted below the limit; message: `docs: anchor comments documentary promotion`; under 140 changed lines.
+  - [x] Gate: all links and digests resolve, reviewed SPEC/plans are complete, actual delta receipt is present; ordinary commits remain below 150 changed lines and at most 15 files including checkbox updates.
   - [ ] Record the LAST series commit SHA as the model-branch anchor in the subsequent model BRANCH.md, with pinned main ancestor dc95f7e4f88048e9671002827537cde4cb8149b7 after ancestry verification; do not invent or self-embed the future SHA.
-  - [ ] Any extra correction outside the closed recording list requires affected-delta confirmation and a separately counted commit before the final index commit; no squash, main merge or implicit delivery approval.
+  - [x] Any extra correction outside the closed recording list requires affected-delta confirmation and a separately counted commit before the final index commit; no squash, main merge or implicit delivery approval.
 - [x] Paths abbreviated as evidence/ and plan/ above are under docs/comments-annotations/; estimates include six changed lines for routine BRANCH.md checkbox updates. Count extra receipt/checklist edits before staging; split them if needed.
