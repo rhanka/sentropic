@@ -80,6 +80,8 @@
 - [ ] HOST-GATES; responsible: each host's data/policy/operations authority; first-entry/Q3/Q4/tenant-cutover and OWNER-D2 exact delivery dossiers.
 - [ ] S-HANDOFF; responsible: Sentropic integration/outbox maintainers; separate P4-S scope must cover deployment hold, schema-only startup, guarded later retirement, disabled/missing-state fence, control watermark/poison retry and backup/restore rehearsal.
 - [ ] CADENCE; responsible: integration lead; log agent wall intervals, processing/queues, operator gestures and external waits separately; no calendar forecast.
+- [x] COMMIT-SIZE; responsible: build agent; recorded deviation (cross-review F-02): commits `f22161a3c`, `13e1997d4`, `2ece1386c`, `d99a33c4c`, `8420b1b9d` exceeded the 150-changed-line rule; history is kept intact with no rewrite and no force-push; from `3bdfd4c5b` onward every commit stays under 150 changed lines.
+- [x] CHECKBOX-CADENCE; responsible: build agent; recorded deviation (cross-review F-03): Lot 0/Lot 1 checkboxes were checked in one block in `3bdfd4c5b` instead of within each commit; later lots update BRANCH.md checkboxes within the same commit as the work.
 
 ## AI Flaky tests
 
