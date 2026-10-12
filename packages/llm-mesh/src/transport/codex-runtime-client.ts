@@ -89,7 +89,16 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
     const toolCalls = new Map<string, ToolCall>();
     for await (const event of stream) {
       if (event.type === 'content_delta') text += event.data.delta;
-      else if (event.type === 'tool_call_start') toolCalls.set(event.data.toolCallId, event.data);
+      else if (event.type === 'tool_call_start') {
+        // A repeated start carries the done-item argument snapshot: its
+        // arguments win over streamed fragments (never appended). An empty
+        // repeat never wipes accumulated fragments.
+        const current = toolCalls.get(event.data.toolCallId);
+        if (!current) toolCalls.set(event.data.toolCallId, event.data);
+        else if (event.data.argumentsText) {
+          toolCalls.set(event.data.toolCallId, { ...current, ...event.data });
+        }
+      }
       else if (event.type === 'tool_call_delta') {
         const current = toolCalls.get(event.data.toolCallId);
         if (current) toolCalls.set(event.data.toolCallId, {
