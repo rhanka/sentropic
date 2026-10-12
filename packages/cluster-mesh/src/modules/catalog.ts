@@ -81,6 +81,7 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   'llm-mesh/facade': mesh('llm-mesh/facade', './facade', ['createLlmMeshFacade']),
   'llm-mesh/enrollment': mesh('llm-mesh/enrollment', './enrollment', []),
   'llm-mesh/node': mesh('llm-mesh/node', './node', ['InMemoryKeyring']),
+  'llm-mesh/judge': mesh('llm-mesh/judge', './judge', ['createRemoteJudgeClient']),
   'llm-mesh/transport/cloud-code': mesh('llm-mesh/transport/cloud-code', './transport/cloud-code', ['CloudCodeProviderAdapter']),
   gateway: gateway('gateway', '.', ['createGatewayRouter'], [], '/gw'),
   'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS),

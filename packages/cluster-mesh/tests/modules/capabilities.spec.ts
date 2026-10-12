@@ -34,6 +34,7 @@ describe('module capability reporting', () => {
     const input = bindings();
     const mesh = createDegenerateClusterMesh({ ...input, modules });
     expect(mesh.capabilities.modules?.['llm-mesh']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(mesh.capabilities.modules?.['llm-mesh/judge']).toEqual({ availability: 'gated', state: 'unprobed' });
     await modules.probe();
     expect(mesh.capabilities.modules?.['llm-mesh']).toMatchObject({ availability: 'available', state: 'installed' });
     expect(mesh.capabilities.modules?.gateway).toMatchObject({ state: 'unavailable', reason: 'not_installed' });
@@ -48,7 +49,10 @@ describe('module capability reporting', () => {
   it('should create an unprobed public registry without resolving providers', () => {
     const modules = createClusterMeshModules();
     expect(modules.snapshot().gateway).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['llm-mesh/judge']).toEqual({ availability: 'gated', state: 'unprobed' });
     expect(modules.isEnabled('gateway')).toBe(true);
+    expect(modules.isEnabled('llm-mesh/judge')).toBe(true);
     expect(createClusterMeshModules({ disabled: ['gateway'] }).isEnabled('gateway')).toBe(false);
+    expect(createClusterMeshModules({ disabled: ['llm-mesh/judge'] }).isEnabled('llm-mesh/judge')).toBe(false);
   });
 });
