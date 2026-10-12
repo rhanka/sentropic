@@ -834,3 +834,22 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
   council listing (owner request 2026-10-14); same `gemini-3.8-flash` pattern
   (`gemini-4-argon-low|medium|high` resolve per effort through the generic Cloud Code
   wire suffix, no transport change).
+
+## Generic Judge Capability (BR96 Evolution)
+
+Generic evaluation contracts, portable client execution, and trusted JEV hosting are established under `@sentropic/llm-mesh/judge`, `@sentropic/llm-mesh/judge/host`, and `@sentropic/llm-mesh/transport/jev`.
+
+### 1. Phase-Aware Retryability & Advisory Hints
+- **Literal lifecycle phases**: Errors record the exact lifecycle phase: `preflight`, `admission`, `dispatch`, or `settlement`.
+- **Retryability rules**: Failures in `settlement` or after provider result are strictly non-retryable (`retryable: false`). Unknown wire error codes or phases fail closed as non-retryable `MESH_UNAVAILABLE` or `TRANSPORT_FAILED`.
+- **Advisory hint ceiling**: Backoff hints are purely advisory and capped at 60 seconds (60 000 ms). Hints exceeding 60s, non-finite values, or negative numbers are rejected or clamped.
+
+### 2. Strict Normalization & Input Validation
+- **Unsafe-key prohibition**: JSON payloads containing prototype pollution vectors (`__proto__`, `constructor`, `prototype`) are rejected across inputs, criteria, and decision configs.
+- **Canonical MicroUsd digit policy**: Currency amounts (`inputMicroUsdPerMtok`, `outputMicroUsdPerMtok`, `minimumMicroUsd`) must be canonical non-negative integer digit strings without fractions, signs, or exponents.
+- **Null-only candidate decision**: Candidate payloads support explicit null for `inputs.output` and `inputs.state` (output-only null, state-only null, or both null), preserving field presence. Absent or undefined fields fail closed with `REQUEST_INVALID`.
+
+### 3. Client & Server Deadline Semantics
+- **Client grace margin**: Client transport timeout strictly exceeds the server deadline by a 1 000 ms grace margin (default client timeout 11 000 ms for a 10 000 ms server deadline, capped at 61 000 ms for a 60 000 ms server deadline).
+- **Semantics rationale**: The earlier conductor phrase "client deadline strictly below server" was erroneous; the client waits longer so the server's own timeout receipt and financial reconciliation can reach the client before client-side transport abort.
+- **Post-dispatch timeout**: If the server deadline expires during or after dispatch, the service persists a durable `TIMEOUT` receipt, records `TIMEOUT` in the settlement ledger, and marks `budget.state: 'pending-reconciliation'` if persist completes after deadline.

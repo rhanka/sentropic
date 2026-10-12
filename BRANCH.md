@@ -234,13 +234,13 @@
   - [x] 1.22: compose/llm-mesh optional host judge input, disabled path acquires nothing; new cluster tests/judge-compose.spec.ts.
   - [x] 1.23: public-port receipt correlation/generation-policy refusal; new cluster tests/judge-receipts.spec.ts.
   - [x] 1.25a: bounded public consumer/host examples, failure semantics, deadline margin and cluster compose in package READMEs; regressed mesh tests/judge-public-surface.test.ts.
-  - [ ] 1.25b: tracked spec consolidation (SPEC_EVOL_LLM_MESH.md) carrying retryability, 60s hint ceiling, unsafe keys, MicroUsd digits, m5 null-only, and deadline margin.
+  - [x] 1.25b: tracked spec consolidation (SPEC_EVOL_LLM_MESH.md) carrying retryability, 60s hint ceiling, unsafe keys, MicroUsd digits, m5 null-only, and deadline margin.
   - [ ] Per-row gate: run each named mesh/cluster file separately with `make test-llm-mesh`/`make test-cluster-mesh SCOPE=<package-relative-path> API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge`.
   - [ ] API gate when needed: `make up-api-test REGISTRY=local API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge`, then scoped test-api-unit/test-api-endpoints in that slot; `make down API_PORT=9480 UI_PORT=5680 MAILDEV_UI_PORT=1580 ENV=test-llm-judge` afterward.
   - [ ] Gate: sequential mesh/gateway/cluster typecheck/lint/full affected suites and named API regressions; scope-check before each commit; write .h2a/build/lot1D_report.md and stop for Opus review.
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
+  - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
 - [ ] **Lot N — Final validation (deferred to conductor release train)**
   - [ ] After PR #633 merged + rebase + 2.12 committed: 1.26a independent post-train literals in tests/fixtures/train.ts, integration suites/package-tree helper; registry/topology regressions.
