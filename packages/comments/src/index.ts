@@ -53,6 +53,7 @@ export type {
   FieldAnchor,
   FieldSelector,
   FieldSelector as CanonicalFieldSelector,
+  ResolverOutcome,
   ResourceRef,
   SourceVersionIndicator,
   TextAnchor,
