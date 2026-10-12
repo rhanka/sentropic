@@ -141,6 +141,9 @@ export const createLifecycleEvent = (
   if (input.action === 'archive' && projection.tombstoned) {
     throw new LifecycleValidationError('tombstoned', 'A tombstoned object cannot be archived');
   }
+  if (input.action === 'restore' && projection.tombstoned) {
+    throw new LifecycleValidationError('tombstoned', 'Recovery cannot resurrect a tombstoned object');
+  }
   if (input.action === 'restore' && !projection.archived) {
     throw new LifecycleValidationError('invalid-sequence', 'Only an archived object can be restored');
   }
