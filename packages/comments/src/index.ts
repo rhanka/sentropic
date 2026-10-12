@@ -132,17 +132,17 @@ export {
 } from './revisions.js';
 
 export type {
-  CanonicalCommandEnvelope,
-  CanonicalHttpCapability,
-  CanonicalHttpPorts,
-  CanonicalPgSurface,
   CanonicalStoreScope,
   CanonicalTransactionHandle,
+  CanonicalPgSurface,
   CanonicalHonoSurface,
+  CanonicalHttpPorts,
+  CanonicalHttpCapability,
   CanonicalCommandStore,
 } from './command-store.js';
 
 export type {
+  CanonicalCommandEnvelope,
   CapabilityCheckPort,
   CommandActor,
   CommandCapability,
