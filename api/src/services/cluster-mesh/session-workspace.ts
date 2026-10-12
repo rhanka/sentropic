@@ -34,11 +34,9 @@ export type SessionWorkspaceErrorCode =
   | 'invalid_request' | 'workspace_not_found' | 'cross_tenant_refused' | 'workspace_rights_refused'
   | 'session_already_attached' | 'session_not_attached' | 'session_ended' | 'binding_not_found';
 
-export class SessionWorkspaceError extends SessionWorkspaceBindingError {
-  override readonly code: SessionWorkspaceErrorCode;
-  constructor(code: SessionWorkspaceErrorCode, message: string) {
-    super(code as any, message);
-    this.code = code;
+export class SessionWorkspaceError extends Error {
+  constructor(readonly code: SessionWorkspaceErrorCode, message: string) {
+    super(message);
     this.name = 'SessionWorkspaceError';
   }
 }
