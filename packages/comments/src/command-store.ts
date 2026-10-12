@@ -19,11 +19,14 @@ import type {
 } from './commands.js';
 import type {
   AnnotationRevisionRecord,
+  CapacityDescriptor,
   CommentRevisionRecord,
   ThreadStructureRevisionRecord,
 } from './revisions.js';
-import type { ReviewEventRecord } from './reviews.js';
+import type { ReviewAction, ReviewEventRecord } from './reviews.js';
 import type {
+  ArchiveKind,
+  LifecycleAction,
   LifecycleEventRecord,
   LifecycleObjectKind,
   OperationAuditEventRecord,
@@ -398,3 +401,117 @@ export type CanonicalHttpPorts = {
 
 /** Capability names exposed over the canonical HTTP surface (declared wire vocabulary). */
 export type CanonicalHttpCapability = CommandCapability;
+
+/**
+ * Closed wire error vocabulary (SPEC §5): 401 boundary `unauthenticated`,
+ * 403 `denied`, non-enumerating 404 `not-found`, 409 stale `conflict`,
+ * 400 malformed `invalid-request`, bounded `capacity-exceeded`, and
+ * continuation-required `incomplete`.
+ */
+export const CANONICAL_WIRE_ERROR_CODES = [
+  'unauthenticated',
+  'denied',
+  'not-found',
+  'conflict',
+  'invalid-request',
+  'capacity-exceeded',
+  'incomplete',
+] as const;
+export type CanonicalWireErrorCode = (typeof CANONICAL_WIRE_ERROR_CODES)[number];
+
+/** Wire-level error body; the message never enumerates protected resources. */
+export type CanonicalWireError = {
+  readonly code: CanonicalWireErrorCode;
+  readonly message: string;
+};
+
+/** Review decision request over the canonical wire (SPEC §7.1). */
+export type CanonicalReviewRequest = {
+  readonly scope: CanonicalStoreScope;
+  readonly annotationId: string;
+  readonly action: ReviewAction;
+  readonly revisionHash: string;
+  readonly referencesEventHash: string;
+  readonly reason: string | null;
+  readonly decisionRef: string;
+  readonly idempotencyKey: IdempotencyKey;
+  readonly expected: ExpectedState;
+};
+
+/** Lifecycle command request over the canonical wire (SPEC §7.1). */
+export type CanonicalLifecycleRequest = {
+  readonly scope: CanonicalStoreScope;
+  readonly objectKind: LifecycleObjectKind;
+  readonly objectId: string;
+  readonly action: LifecycleAction;
+  readonly archiveKind: ArchiveKind | null;
+  readonly reason: string | null;
+  readonly decisionRef: string;
+  readonly idempotencyKey: IdempotencyKey;
+  readonly expected: ExpectedState;
+};
+
+/** One source unit declared in a batch import request (SPEC §7.2). */
+export type CanonicalImportUnit = {
+  readonly unitId: string;
+  readonly unitKind: 'annotation' | 'discussion' | 'review';
+  readonly dependsOnUnitIds: readonly string[];
+  readonly manifestDigest: string;
+  readonly payloadDigest: string;
+};
+
+/** Batch import request: one frozen manifest, its declared units, one idempotency key. */
+export type CanonicalBatchImportRequest = {
+  readonly scope: CanonicalStoreScope;
+  readonly batchId: string;
+  readonly manifest: CanonicalImportManifest;
+  readonly units: readonly CanonicalImportUnit[];
+  readonly expectedMappingVersion: string;
+  readonly idempotencyKey: IdempotencyKey;
+};
+
+/** Per-unit import outcome: committed with receipt, or an outcome that yields no canonical content. */
+export type CanonicalUnitOutcome =
+  | { readonly outcome: 'committed'; readonly unitId: string; readonly receipt: CanonicalUnitReceipt }
+  | { readonly outcome: 'denied'; readonly unitId: string }
+  | { readonly outcome: 'rejected'; readonly unitId: string }
+  | { readonly outcome: 'host-only'; readonly unitId: string };
+
+/** Batch import response: the committed snapshot plus every unit outcome. */
+export type CanonicalBatchImportResponse = {
+  readonly snapshot: CanonicalBatchReceiptSnapshot;
+  readonly unitOutcomes: readonly CanonicalUnitOutcome[];
+};
+
+/** Batch export request: bounded selections against one frozen snapshot boundary. */
+export type CanonicalBatchExportRequest = {
+  readonly scope: CanonicalStoreScope;
+  readonly exportId: string;
+  readonly selections: readonly CanonicalReadSelection[];
+  readonly snapshotBoundary: { readonly frozenAt: number; readonly boundaryDigest: string };
+  readonly idempotencyKey: IdempotencyKey;
+};
+
+/** Batch export response: one page of the frozen selection plus its continuation cursor. */
+export type CanonicalBatchExportResponse = {
+  readonly page: CanonicalReadPage;
+  readonly nextCursor: string | null;
+};
+
+/**
+ * Host parameters of the canonical HTTP composition. Capacity values are
+ * host parameters: they bound accepted requests and never enter any hash.
+ */
+export type CanonicalRouterOptions = {
+  readonly capacity: CapacityDescriptor;
+};
+
+/**
+ * Factory signature of the future canonical router entrypoint: the owning
+ * module composes the injected ports under these options and returns its own
+ * router type.
+ */
+export type CanonicalRouterFactory<TRouter = unknown> = (
+  ports: CanonicalHttpPorts,
+  options: CanonicalRouterOptions,
+) => TRouter;
