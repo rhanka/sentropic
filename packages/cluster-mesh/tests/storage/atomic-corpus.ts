@@ -116,6 +116,58 @@ export const runAtomicCorpus = async (bound: TestBoundStore): Promise<void> => {
   );
   assert.equal(bound.readChain('chain-a').length, before);
 
+  bound.indexPut('atomic-idx-1', { digest: 'd1', resultIds: ['r1'], resultHash: null });
+  const headBeforeLate = bound.readHead('chain-a');
+  const lenBeforeLate = bound.readChain('chain-a').length;
+  await assert.rejects(
+    async () =>
+      bound.commitAtomic({
+        guards: [],
+        records: [{ key: 'rec-1', bytes: { format: 'utf8', data: 'hello' }, contentHash: 'h-rec-1' }],
+        appends: [
+          {
+            chainId: 'chain-a',
+            record: record('a', 4),
+            expectation: { kind: 'head', hash: 'hash-a-3' },
+          },
+        ],
+        updates: [{ key: 'agg-1', version: 1, value: { format: 'utf8', data: 'v1' } }],
+        relationships: [],
+        barriers: [],
+        purgeIntents: [],
+        indexWrites: [{ key: 'atomic-idx-1', digest: 'd2', resultIds: ['r2'], resultHash: null }],
+      }),
+    /conflict/,
+    'K2aC-RED atomic: a late index conflict rolls back appends, records and updates',
+  );
+  assert.equal(bound.readHead('chain-a'), headBeforeLate);
+  assert.equal(bound.readChain('chain-a').length, lenBeforeLate);
+  assert.equal(bound.indexGet('atomic-idx-1')?.digest, 'd1');
+  assert.equal(bound.readRecord('rec-1'), null);
+  assert.equal(bound.readAggregate('agg-1'), null);
+
+  const fullReceipt = bound.commitAtomic({
+    guards: [],
+    records: [{ key: 'rec-1', bytes: { format: 'utf8', data: 'hello' }, contentHash: 'h-rec-1' }],
+    appends: [
+      {
+        chainId: 'chain-a',
+        record: record('a', 4),
+        expectation: { kind: 'head', hash: 'hash-a-3' },
+      },
+    ],
+    updates: [{ key: 'agg-1', version: 1, value: { format: 'utf8', data: 'v1' } }],
+    relationships: [],
+    barriers: [],
+    purgeIntents: [],
+    indexWrites: [{ key: 'atomic-idx-1', digest: 'd1', resultIds: ['r2'], resultHash: null }],
+  });
+  assert.equal(fullReceipt.effectiveAppends, 1);
+  assert.equal(bound.readHead('chain-a'), 'hash-a-4');
+  assert.equal(bound.readRecord('rec-1')?.contentHash, 'h-rec-1');
+  assert.equal(bound.readAggregate('agg-1')?.version, 1);
+  assert.deepEqual(bound.indexGet('atomic-idx-1')?.resultIds, ['r2']);
+
   await assert.rejects(
     async () =>
       bound.commitAtomic({

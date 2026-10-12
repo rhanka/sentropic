@@ -119,7 +119,7 @@
 - [ ] Lot K1C — Co-review fixes for K1/K2a rejection
   - [x] Fix 1 local live without product triplet plus partial-triplet rejection.
   - [x] Fix 2 parsed-instant expiry for grants and leased snapshots.
-  - [ ] Fix 3 atomic staging with persisted records and updates.
+  - [x] Fix 3 atomic staging with persisted records and updates.
   - [ ] Fix 4 allocation check plus CAS conflict codes.
   - [ ] Fix 5 forged-grant authenticity via issued grants.
   - [ ] Fix 6 stable head-bound reads plus full encoded-byte budget.
