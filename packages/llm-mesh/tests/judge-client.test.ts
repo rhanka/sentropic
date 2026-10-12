@@ -17,7 +17,11 @@ const mockReceipt = (correlationId = 'test-corr-1'): JudgeReceipt => ({
 
 const mockVerdictResult = (correlationId = 'test-corr-1'): JudgeResult => ({
   kind: 'verdict', ok: true,
-  verdict: { decision: { pass: true }, confidence: { value: 0.95 }, score: { value: 0.95 } },
+  verdict: {
+    criterionKind: 'binary', resolvedCriterionKind: 'binary', score: null,
+    decision: { pass: true, origin: 'provider' }, label: null, rationale: null,
+    confidence: null, distribution: null,
+  },
   receipt: mockReceipt(correlationId),
 });
 
@@ -149,7 +153,7 @@ describe('remote judge client', () => {
     const weird = {
       kind: 'error', ok: false,
       error: { code: 'NONEXISTENT_ERROR_CODE', phase: 'dispatch' },
-      receipt: mockReceipt('weird-corr'),
+      receipt: { ...mockReceipt('weird-corr'), outcome: 'error' as const, errorCode: 'NONEXISTENT_ERROR_CODE' as any },
     };
     const fetch = vi.fn(async () => new Response(JSON.stringify(weird), { status: 500, headers: { 'content-type': 'application/json' } }));
     const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
@@ -168,7 +172,7 @@ describe('remote judge client', () => {
     const weirdPhase = {
       kind: 'error', ok: false,
       error: { code: 'TIMEOUT', phase: 'unknown-phase' },
-      receipt: mockReceipt('phase-corr'),
+      receipt: { ...mockReceipt('phase-corr'), outcome: 'error' as const, errorCode: 'TIMEOUT' },
     };
     const fetch = vi.fn(async () => new Response(JSON.stringify(weirdPhase), { status: 500, headers: { 'content-type': 'application/json' } }));
     const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
@@ -180,6 +184,29 @@ describe('remote judge client', () => {
       usage: { evaluatorCalls: null },
       correlationId: 'phase-corr',
     });
+  });
+
+  it('refuses responses with discordant kind/outcome, mismatched error codes, or invalid shapes', async () => {
+    const corr = 'disc-corr';
+    const client = (body: unknown) => createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      fetch: vi.fn(async () => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof globalThis.fetch,
+    }).judge(judgeRequest({ correlationId: corr }));
+
+    const r1 = await client({ ...mockVerdictResult(corr), receipt: { ...mockReceipt(corr), outcome: 'error', errorCode: 'TIMEOUT' } });
+    expect(r1).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' } });
+
+    const r2 = await client({ kind: 'error', ok: false, error: { code: 'TIMEOUT', phase: 'dispatch' }, receipt: mockReceipt(corr) });
+    expect(r2).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' } });
+
+    const r3 = await client({ kind: 'error', ok: false, error: { code: 'TIMEOUT', phase: 'dispatch' }, receipt: { ...mockReceipt(corr), outcome: 'error', errorCode: 'REQUEST_INVALID' } });
+    expect(r3).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' } });
+
+    const r4 = await client({ ...mockVerdictResult(corr), verdict: { decision: { pass: true } } });
+    expect(r4).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' } });
+
+    const r5 = await client({ ...mockVerdictResult(corr), receipt: { ...mockReceipt(corr), cost: { status: 'actual', amountMicroUsd: '-1' } } });
+    expect(r5).toMatchObject({ kind: 'connection-failure', error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' } });
   });
 
   it('never retries the call automatically on 502/503/429 status', async () => {
