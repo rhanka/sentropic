@@ -80,8 +80,8 @@
     - [x] Scoped API tests: `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s` (16 passed; `control.live_git_declarations` verified applied in the test database).
     - [x] `make scope-check ... ENV=test-live-l6a-s`.
 
-- [ ] **Lot 4 — Package version bump**
-  - [ ] Bump `packages/cluster-mesh/package.json` (minor: new live-storage feature) with pre-bump registry check strictly greater than the published version; update `package-lock.json` workspace entry.
+- [x] **Lot 4 — Package version bump**
+  - [x] Bump `packages/cluster-mesh/package.json` to `0.14.0` (minor: new live-storage feature) with pre-bump registry check (npm latest `0.13.3`, strictly greater); update `package-lock.json` workspace entry.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` used; nothing to consolidate.
