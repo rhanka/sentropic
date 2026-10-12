@@ -469,16 +469,18 @@ export function revokeLiveDeclaration(declaration: LiveWorkspaceDeclaration, rea
 
 export interface LiveDeclarationStorePort {
   save(declaration: LiveWorkspaceDeclaration): Promise<void>;
-  find(tenant: string, hostFingerprint: string): Promise<LiveWorkspaceDeclaration | null>;
+  find(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<LiveWorkspaceDeclaration | null>;
   list(tenant?: string): Promise<readonly LiveWorkspaceDeclaration[]>;
-  status(tenant: string, hostFingerprint: string): Promise<'declared' | 'withdrawn' | 'unknown'>;
+  status(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<'declared' | 'withdrawn' | 'unknown'>;
   recordWithdrawal(withdrawal: LiveDeclarationWithdrawal, withdrawnAt: string): Promise<boolean>;
 }
 
 export interface LiveDeferredWorkPort {
   cancelDeferredWork(input: {
     readonly tenant: string;
-    readonly hostFingerprint: string;
+    readonly declarationId: string;
+    readonly cloneId: string;
+    readonly worktreeId: string;
     readonly declarationRevision: number;
   }): Promise<number>;
 }
@@ -494,7 +496,11 @@ export interface LiveDeclarationReplaySink {
 export interface DeclareLiveDeclarationInput {
   readonly tenant: string;
   readonly principal: string;
-  readonly hostFingerprint: string;
+  readonly hostFingerprint?: string;
+  readonly identityUncertainty: readonly IdentityUncertaintyState[];
+  readonly declarationId: string;
+  readonly cloneId: string;
+  readonly worktreeId: string;
   readonly authorizedRoots: readonly string[];
   readonly policyVersion: string;
   readonly serverWorkspaceId?: string;
