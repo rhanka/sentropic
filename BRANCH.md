@@ -14,9 +14,14 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 - No D2 content consent or mirror, no UI.
+- Cluster-mesh version coordination tuple: #662 is 0.14.0, #666 is 0.15.0, #664 moves to next free at rebase; this branch proposes 0.16.0.
+- Migration recalage rule: `0011_session_workspace_bindings` has `when: 1791900000000` strictly after 0009 cowork (`1791632933743`) and 0010 live-git (`1791845400000`). If rebased, re-verify contiguous `idx` and `when > last.when`.
+- History semantics: "Keep project and history after detach/end" guarantees that the Sentropic workspace data (files, commits, history) is preserved across session detachment and termination.
+- Session registry dependency: session ID validity against the session registry is gated on PR #664 (L6a contract).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
   - `packages/cluster-mesh/src/sessions/workspace-binding.ts`
   - `packages/cluster-mesh/src/index.ts`
   - `packages/cluster-mesh/package.json`
@@ -24,7 +29,11 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - `api/src/services/cluster-mesh/session-workspace.ts`
   - `api/src/db/control-schema.ts`
   - `api/tests/api/session-adoption.test.ts`
+  - `api/tests/api/llm-admission-schema.test.ts`
+  - `api/drizzle/control/0011_session_workspace_bindings.sql`
+  - `api/drizzle/control/meta/_journal.json`
   - `.h2a/build/app_cm_lot1_report.md`
+  - `.h2a/build/app_cm_lot1_fix_report.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -39,8 +48,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] `BR01-EX1`: touch `api/drizzle/control/0011_session_workspace_bindings.sql` (one new migration, next free number avoiding 0009 cowork and 0010 PR 664 live-git) (requires clarification about none)
-  - `acknowledge`: single additive table, rollback is DROP TABLE, no backfill
+- [x] `BR01-EX1`: touch `api/drizzle/control/0011_session_workspace_bindings.sql` and `api/drizzle/control/meta/_journal.json` (one new migration, next free number avoiding 0009 cowork and 0010 PR 664 live-git)
+  - `acknowledge`: single additive table with principal_id, rollback is DROP TABLE, no backfill
 - [x] `BR01-EX2`: regenerate root `package-lock.json` via `make lock-root` for cluster-mesh 0.16.0 lock-sync (CI changes job)
   - `acknowledge`: one version line sync, rollback is restore lock entry
 - [x] `BR01-EX3`: refresh `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` for the 0.16.0 bump (CI validate-cluster-mesh test-lazy-package ENOENT sentropic-cluster-mesh-0.13.3.tgz)
@@ -84,7 +93,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] cluster-mesh version: propose `0.16.0` (0.14.0 taken by #662, next minor by #664), do not publish
   - [x] Lot gate:
     - [x] `make ps-all API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
-    - [ ] `make scope-check API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+    - [x] `make scope-check API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
 
 - [x] **Lot 1 — D1 durable session workspace binding**
   - [x] RED: add `packages/cluster-mesh/tests/session-workspace.spec.ts` (rights, idempotence, restart, cross-tenant refusal, reuse, keep after detach and end)
@@ -109,6 +118,14 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
     - [x] **E2E tests**
       - [x] No E2E changes in LOT1
     - [x] `make test-cluster-mesh SCOPE=tests/session-workspace.spec.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+
+- [ ] **Lot 2 — Opus NO-GO fixes**
+  - [x] RED: add cluster-mesh principalId and rights tests in packages/cluster-mesh/tests/session-workspace.spec.ts
+  - [ ] GREEN: enforce principalId and rights in packages/cluster-mesh/src/sessions/workspace-binding.ts
+  - [ ] Migration 0011 re-date after 0009/0010 and add principal_id column to schema
+  - [ ] RED: add API refusal and RBAC tests in api/tests/api/session-adoption.test.ts
+  - [ ] GREEN: implement RBAC, canonical workspace, and rights enforcement in api/src/services/cluster-mesh/session-workspace.ts
+  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
