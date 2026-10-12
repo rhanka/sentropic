@@ -335,3 +335,56 @@ describe('capacity descriptor (SPEC 4.6)', () => {
     expect(() => validateRevisionBody(bodyOf('a text far beyond any test bound'))).not.toThrow();
   });
 });
+
+describe('capacity enforcement in create* constructors (SPEC 4.6)', () => {
+  const commentInput = (commentId: string, text: string) => ({
+    scope,
+    threadId: 'thr_1',
+    commentId,
+    parentCommentId: null,
+    structureRevision: { id: 'thr_1', hash: 'f'.repeat(64) },
+    annotationPin: null,
+    body: conformanceBody(text),
+    provenance: conformanceProvenance(),
+  });
+
+  it('fails closed when a constructor receives no descriptor', () => {
+    expect(() => createAnnotationRevision(null, annotationInput('short body'), undefined as never)).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+    expect(() => createCommentRevision(null, commentInput('cmt_x', 'short body'), undefined as never)).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+    expect(() =>
+      createThreadStructureRevision(
+        null,
+        {
+          scope,
+          threadId: 'thr_x',
+          trigger: 'initial-registration',
+          primary: conformanceTarget(resource),
+          annotationId: null,
+          provenance: conformanceProvenance(),
+        },
+        undefined as never,
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-capacity' }));
+  });
+
+  it('rejects a body beyond the constructor-enforced bound', () => {
+    expect(() => createAnnotationRevision(null, annotationInput('0123456789abcdef'), capacityWith())).not.toThrow();
+    expect(() => createAnnotationRevision(null, annotationInput('0123456789abcdefg'), capacityWith())).toThrowError(
+      expect.objectContaining({ code: 'capacity-exceeded' }),
+    );
+    expect(() =>
+      createCommentRevision(null, commentInput('cmt_x', '0123456789abcdefg'), capacityWith()),
+    ).toThrowError(expect.objectContaining({ code: 'capacity-exceeded' }));
+  });
+
+  it('never lets capacity values enter the record hash', () => {
+    const strict = createAnnotationRevision(null, annotationInput('hashed body'), capacityWith());
+    const loose = createAnnotationRevision(null, annotationInput('hashed body'), capacity);
+    expect(strict.hash).toBe(loose.hash);
+    expect(strict.link).toEqual(loose.link);
+  });
+});

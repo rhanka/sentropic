@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { conformanceScope } from './conformance/comments-conformance.js';
+import { conformanceCapacity, conformanceScope } from './conformance/comments-conformance.js';
 import {
   REVIEW_ACTIONS,
   REVIEW_DECISION_OUTCOMES,
@@ -11,6 +11,7 @@ import {
 } from '../src/reviews.js';
 
 const scope = conformanceScope();
+const capacity = conformanceCapacity();
 const head = 'a'.repeat(64);
 const older = 'b'.repeat(64);
 
@@ -39,19 +40,19 @@ describe('annotation reviews', () => {
 
   it('runs the conservative submit/validate/contest/resolve lifecycle', () => {
     const chain: ReviewEventRecord[] = [];
-    const submit = createReviewEvent(chain, input('submit', head));
+    const submit = createReviewEvent(chain, input('submit', head), capacity);
     chain.push(submit);
     expect(projectReviewState(chain, head).state).toBe('submitted');
 
-    expect(() => createReviewEvent(chain, input('contest', head))).toThrowError(
+    expect(() => createReviewEvent(chain, input('contest', head), capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-sequence' }),
     );
 
-    const validation = createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_1', outcome: 'accept' } }));
+    const validation = createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_1', outcome: 'accept' } }), capacity);
     chain.push(validation);
     expect(projectReviewState(chain, head).state).toBe('validated');
 
-    const contest = createReviewEvent(chain, input('contest', head, { referencesEventHash: validation.hash }));
+    const contest = createReviewEvent(chain, input('contest', head, { referencesEventHash: validation.hash }), capacity);
     chain.push(contest);
     expect(projectReviewState(chain, head).state).toBe('contested');
     expect(projectReviewState(chain, head).contests[0]).toMatchObject({
@@ -60,14 +61,14 @@ describe('annotation reviews', () => {
       resolvedByEventHash: null,
     });
 
-    const resolution = createReviewEvent(chain, input('resolve-contest', head, { referencesEventHash: contest.hash, decision: { principal: 'reviewer_2', outcome: 'accept' } }));
+    const resolution = createReviewEvent(chain, input('resolve-contest', head, { referencesEventHash: contest.hash, decision: { principal: 'reviewer_2', outcome: 'accept' } }), capacity);
     chain.push(resolution);
     const resolved = projectReviewState(chain, head);
     expect(resolved.state).toBe('contested');
     expect(resolved.requiresRenewedValidation).toBe(true);
     expect(resolved.contests[0].resolvedByEventHash).toBe(resolution.hash);
 
-    const renewed = createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_3', outcome: 'accept' } }));
+    const renewed = createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_3', outcome: 'accept' } }), capacity);
     chain.push(renewed);
     expect(projectReviewState(chain, head).state).toBe('validated');
     expect(projectReviewState(chain, head).requiresRenewedValidation).toBe(false);
@@ -75,8 +76,8 @@ describe('annotation reviews', () => {
 
   it('marks events pinned to superseded revisions as stale', () => {
     const chain: ReviewEventRecord[] = [];
-    chain.push(createReviewEvent(chain, input('submit', older)));
-    chain.push(createReviewEvent(chain, input('submit', head)));
+    chain.push(createReviewEvent(chain, input('submit', older), capacity));
+    chain.push(createReviewEvent(chain, input('submit', head), capacity));
     const stale = projectReviewState(chain, head);
     expect(stale.state).toBe('submitted');
     expect(stale.staleEventHashes).toEqual([chain[0].hash]);
@@ -87,59 +88,69 @@ describe('annotation reviews', () => {
 
   it('requires exact references for contests and resolutions', () => {
     const chain: ReviewEventRecord[] = [];
-    chain.push(createReviewEvent(chain, input('submit', head)));
-    const validation = createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_1', outcome: 'accept' } }));
+    chain.push(createReviewEvent(chain, input('submit', head), capacity));
+    const validation = createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_1', outcome: 'accept' } }), capacity);
     chain.push(validation);
-    expect(() => createReviewEvent(chain, input('contest', head, { referencesEventHash: head }))).toThrowError(
+    expect(() => createReviewEvent(chain, input('contest', head, { referencesEventHash: head }), capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-reference' }),
     );
     const otherRevisionValidation = 'c'.repeat(64);
-    expect(() => createReviewEvent(chain, input('contest', head, { referencesEventHash: otherRevisionValidation }))).toThrowError(
+    expect(() => createReviewEvent(chain, input('contest', head, { referencesEventHash: otherRevisionValidation }), capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-reference' }),
     );
-    const contest = createReviewEvent(chain, input('contest', head, { referencesEventHash: validation.hash }));
+    const contest = createReviewEvent(chain, input('contest', head, { referencesEventHash: validation.hash }), capacity);
     chain.push(contest);
-    expect(() => createReviewEvent(chain, input('resolve-contest', head, { referencesEventHash: validation.hash }))).toThrowError(
+    expect(() => createReviewEvent(chain, input('resolve-contest', head, { referencesEventHash: validation.hash }), capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-reference' }),
     );
-    expect(() => createReviewEvent(chain, input('resolve-contest', head, { referencesEventHash: contest.hash }))).toThrowError(
+    expect(() => createReviewEvent(chain, input('resolve-contest', head, { referencesEventHash: contest.hash }), capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-audit' }),
     );
   });
 
   it('withdraws open reviews and enforces chain scoping', () => {
     const chain: ReviewEventRecord[] = [];
-    chain.push(createReviewEvent(chain, input('submit', head)));
-    chain.push(createReviewEvent(chain, input('withdraw', head)));
+    chain.push(createReviewEvent(chain, input('submit', head), capacity));
+    chain.push(createReviewEvent(chain, input('withdraw', head), capacity));
     expect(projectReviewState(chain, head).state).toBe('withdrawn');
-    expect(() => createReviewEvent(chain, input('withdraw', head))).toThrowError(
+    expect(() => createReviewEvent(chain, input('withdraw', head), capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-sequence' }),
     );
     const otherScope = { ...input('submit', head), scope: { tenantId: 'tenant-other', workspaceId: 'ws-a' } };
-    expect(() => createReviewEvent(chain, otherScope)).toThrowError(ReviewValidationError);
-    expect(() => createReviewEvent(chain, { ...input('submit', head), annotationId: '' })).toThrowError(
+    expect(() => createReviewEvent(chain, otherScope, capacity)).toThrowError(ReviewValidationError);
+    expect(() => createReviewEvent(chain, { ...input('submit', head), annotationId: '' }, capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-pin' }),
     );
-    expect(() => createReviewEvent(chain, { ...input('unknown' as never, head) })).toThrowError(
+    expect(() => createReviewEvent(chain, { ...input('unknown' as never, head) }, capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-action' }),
     );
   });
 
   it('audits decision, proposal and executor separately', () => {
     const chain: ReviewEventRecord[] = [];
-    chain.push(createReviewEvent(chain, input('submit', head)));
+    chain.push(createReviewEvent(chain, input('submit', head), capacity));
     const validation = createReviewEvent(chain, input('validate', head, {
       decision: { principal: 'reviewer_1', outcome: 'reject' },
       proposal: { agent: 'agent_1', proposalDigest: 'd'.repeat(64) },
       executor: { service: 'svc_1', run: 'run_1' },
-    }));
+    }), capacity);
     chain.push(validation);
     expect(validation.decision).toEqual({ principal: 'reviewer_1', outcome: 'reject' });
     expect(validation.proposal).toEqual({ agent: 'agent_1', proposalDigest: 'd'.repeat(64) });
     expect(validation.executor).toEqual({ service: 'svc_1', run: 'run_1' });
-    expect(() => createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_1', outcome: 'maybe' as never } }))).toThrow();
-    expect(() => createReviewEvent(chain, input('validate', head, { proposal: { agent: '', proposalDigest: 'd' } }))).toThrowError(
+    expect(() => createReviewEvent(chain, input('validate', head, { decision: { principal: 'reviewer_1', outcome: 'maybe' as never } }), capacity)).toThrow();
+    expect(() => createReviewEvent(chain, input('validate', head, { proposal: { agent: '', proposalDigest: 'd' } }), capacity)).toThrowError(
       expect.objectContaining({ code: 'invalid-audit' }),
+    );
+  });
+
+  it('fails closed when the capacity descriptor is missing or invalid', () => {
+    expect(() => createReviewEvent([], input('submit', head), undefined as never)).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
+    );
+    const broken = { ...capacity, body: undefined } as never;
+    expect(() => createReviewEvent([], input('submit', head), broken)).toThrowError(
+      expect.objectContaining({ code: 'invalid-capacity' }),
     );
   });
 });
