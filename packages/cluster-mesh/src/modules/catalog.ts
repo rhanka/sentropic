@@ -67,6 +67,7 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   'llm-mesh/node': mesh('llm-mesh/node', './node', ['InMemoryKeyring']),
   'llm-mesh/judge': mesh('llm-mesh/judge', './judge', ['createRemoteJudgeClient']),
   'llm-mesh/judge/host': mesh('llm-mesh/judge/host', './judge/host', ['createJudgeService', 'createJevAdapter', 'jevDescriptor']),
+  'llm-mesh/transport/jev': mesh('llm-mesh/transport/jev', './transport/jev', ['createJevTransport']),
   'llm-mesh/transport/cloud-code': mesh('llm-mesh/transport/cloud-code', './transport/cloud-code', ['CloudCodeProviderAdapter']),
   gateway: gateway('gateway', '.', ['createGatewayRouter'], [], '/gw'),
   'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS),
