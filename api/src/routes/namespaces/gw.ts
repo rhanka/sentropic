@@ -214,6 +214,7 @@ export const createGwNamespaceModule = async (
         });
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
+          nativeCountTokens: routePlane.nativeCountTokens,
           budget: { port: budget, defaultOutputTokens: options.defaultOutputTokens ?? GW_DEFAULT_OUTPUT_TOKENS },
         }));
         return router;
