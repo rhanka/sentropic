@@ -71,14 +71,14 @@ export type RevalidationPoint = (typeof REVALIDATION_POINTS)[number];
 
 // Structural view of the merged L6a identity triangle (engram PR #359):
 // exact declaration/clone/worktree ids with separate declaration and binding
-// revisions plus the optional product triplet. Syntax only; derivation and
-// authorization stay with the neutral engram contract.
+// revisions plus the complete optional product triplet. Syntax only;
+// derivation and authorization stay with the neutral engram contract.
 export interface LiveIdentityTriangle {
   readonly declarationId: string;
   readonly cloneId: string;
   readonly worktreeId: string;
   readonly declarationRevision: number;
-  readonly bindingRevision: number;
+  readonly bindingRevision?: number;
   readonly serverWorkspaceId?: string;
   readonly serverIssuer?: string;
 }
@@ -98,19 +98,23 @@ export const validateLiveIdentityTriangle = (triangle: unknown): ValidationResul
   if (!Number.isSafeInteger(candidate['declarationRevision']) || (candidate['declarationRevision'] as number) < 1) {
     return errResult('triangle requires declarationRevision >= 1');
   }
-  if (!Number.isSafeInteger(candidate['bindingRevision']) || (candidate['bindingRevision'] as number) < 1) {
-    return errResult('triangle requires bindingRevision >= 1');
-  }
   const serverWorkspaceId = candidate['serverWorkspaceId'];
   const serverIssuer = candidate['serverIssuer'];
-  if (serverWorkspaceId !== undefined && !isNonEmptyString(serverWorkspaceId)) {
+  const bindingRevision = candidate['bindingRevision'];
+  const hasWorkspace = serverWorkspaceId !== undefined;
+  const hasIssuer = serverIssuer !== undefined;
+  const hasBinding = bindingRevision !== undefined;
+  if (hasWorkspace && !isNonEmptyString(serverWorkspaceId)) {
     return errResult('serverWorkspaceId must be non-empty when present');
   }
-  if (serverIssuer !== undefined && !isNonEmptyString(serverIssuer)) {
+  if (hasIssuer && !isNonEmptyString(serverIssuer)) {
     return errResult('serverIssuer must be non-empty when present');
   }
-  if ((serverWorkspaceId === undefined) !== (serverIssuer === undefined)) {
-    return errResult('product triplet binds serverWorkspaceId and serverIssuer together');
+  if (hasBinding && (!Number.isSafeInteger(bindingRevision) || (bindingRevision as number) < 1)) {
+    return errResult('triangle requires bindingRevision >= 1 when present');
+  }
+  if ((hasWorkspace || hasIssuer || hasBinding) && !(hasWorkspace && hasIssuer && hasBinding)) {
+    return errResult('product triplet requires serverWorkspaceId, serverIssuer and bindingRevision together');
   }
   return okResult();
 };

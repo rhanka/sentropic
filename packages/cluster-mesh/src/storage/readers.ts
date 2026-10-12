@@ -164,6 +164,6 @@ export const validateLeasedSnapshot = (snapshot: LeasedSnapshot, nowIso?: string
   if (!isNonEmptyString(snapshot.root)) errors.push('lease requires a root');
   if (validateStoreIncarnation(snapshot.incarnation).ok === false) errors.push('lease requires an incarnation');
   if (!isIsoDateString(snapshot.expiresAt)) errors.push('lease requires an ISO expiry');
-  else if (nowIso !== undefined && snapshot.expiresAt <= nowIso) errors.push('lease is expired');
+  else if (nowIso !== undefined && Date.parse(snapshot.expiresAt) <= Date.parse(nowIso)) errors.push('lease is expired');
   return errors.length === 0 ? okResult() : errResult(...errors);
 };
