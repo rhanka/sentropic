@@ -467,3 +467,66 @@ describe('error mapping through the router (integration)', () => {
     expect(text).not.toContain('reservation');
   });
 });
+
+describe('Responses field errors (spec §16.7)', () => {
+  it('renders bad-request with code and a safe field path on the Responses wire', () => {
+    const shaped = mapGatewayError('openai-responses', 'bad-request', undefined, undefined, undefined, {
+      code: 'unsupported_parameter', param: 'tools[0].parameters',
+    });
+    expect(shaped.status).toBe(400);
+    expect(shaped.body).toEqual({ error: {
+      message: 'invalid request',
+      type: 'invalid_request_error',
+      code: 'unsupported_parameter',
+      param: 'tools[0].parameters',
+    } });
+  });
+
+  it('keeps the frozen bad-request shape without code/param on every wire', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions', 'openai-responses'] as const) {
+      expect(mapGatewayError(wire, 'bad-request').body).toEqual(
+        wire === 'anthropic-messages'
+          ? { type: 'error', error: { type: 'invalid_request_error', message: 'invalid request' } }
+          : { error: { message: 'invalid request', type: 'invalid_request_error', code: 'invalid_request' } },
+      );
+    }
+  });
+
+  it('forwards GatewayError code/param for bad-request without leaking the internal detail', () => {
+    const shaped = toProviderShapedError(
+      'openai-responses',
+      new GatewayError('bad-request', 'internal detail never shown', undefined, undefined, 'unsupported_parameter', 'input[2].type'),
+    );
+    expect(shaped.status).toBe(400);
+    expect(shaped.body).toEqual({ error: {
+      message: 'invalid request',
+      type: 'invalid_request_error',
+      code: 'unsupported_parameter',
+      param: 'input[2].type',
+    } });
+  });
+
+  it('sanitizes hostile code/param values back to the frozen shape', () => {
+    const shaped = mapGatewayError('openai-responses', 'bad-request', undefined, undefined, undefined, {
+      code: 'no_such_code', param: 'input[0]; DROP TABLE',
+    });
+    expect(shaped.body).toEqual({ error: {
+      message: 'invalid request', type: 'invalid_request_error', code: 'invalid_request',
+    } });
+  });
+
+  it('never renders code/param on other failure kinds or the Anthropic wire', () => {
+    const route = toProviderShapedError(
+      'openai-responses',
+      new GatewayError('no-route', 'internal', undefined, undefined, 'x', 'y'),
+    );
+    expect(route.status).toBe(503);
+    expect(JSON.stringify(route.body)).not.toContain('"x"');
+    const anthropic = mapGatewayError('anthropic-messages', 'bad-request', undefined, undefined, undefined, {
+      code: 'unsupported_parameter', param: 'input[0]',
+    });
+    expect(anthropic.body).toEqual({
+      type: 'error', error: { type: 'invalid_request_error', message: 'invalid request' },
+    });
+  });
+});
