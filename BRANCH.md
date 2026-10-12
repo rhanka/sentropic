@@ -101,9 +101,9 @@
   - [x] Implement packages/cluster-mesh/tests/storage/reference-state.ts (test-only).
   - [ ] Implement packages/cluster-mesh/tests/storage/reference-store.ts (test-only).
   - [ ] Implement packages/cluster-mesh/tests/storage/atomic-corpus.ts.
-  - [ ] Implement packages/cluster-mesh/tests/storage/authority-corpus.ts.
+  - [x] Implement packages/cluster-mesh/tests/storage/authority-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/chain-corpus.ts.
-  - [ ] Implement packages/cluster-mesh/tests/storage/read-corpus.ts.
+  - [x] Implement packages/cluster-mesh/tests/storage/read-corpus.ts.
   - [ ] Implement packages/cluster-mesh/tests/storage/reference.spec.ts executing the corpus against the reference.
   - [ ] Implement packages/cluster-mesh/tests/storage/mutations.spec.ts with discriminating recorded mutations.
   - [ ] Lot gate:
