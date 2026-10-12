@@ -21,7 +21,7 @@ const scope = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
 describe('K2a reference: atomic corpus', () => {
   it('K2a-RED commits, guards, replay and idempotency hold', async () => {
     const store = new TestReferenceStore('comments');
-    await runAtomicCorpus(store.bind(grantFor()));
+    await runAtomicCorpus(store.bindNew(grantFor()));
   });
 });
 
@@ -43,14 +43,14 @@ describe('K2a reference: authority corpus', () => {
 describe('K2a reference: chain corpus', () => {
   it('K2a-RED independent chains, allocation and disposal hold', async () => {
     const store = new TestReferenceStore('comments');
-    await runChainCorpus(store.bind(grantFor({ operations: ['read', 'write', 'maintain'] })));
+    await runChainCorpus(store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] })));
   });
 });
 
 describe('K2a reference: read corpus', () => {
   it('K2a-RED stable cursors, page bounds and explicit gaps hold', async () => {
     const store = new TestReferenceStore('comments');
-    await runReadCorpus(store.bind(grantFor()));
+    await runReadCorpus(store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] })));
   });
 });
 

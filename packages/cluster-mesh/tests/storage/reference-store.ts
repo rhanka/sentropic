@@ -34,10 +34,15 @@ export interface AppendOutcome {
   readonly replayed: boolean;
 }
 
+export interface ChainPageCursor {
+  readonly position: number;
+  readonly head: string | null;
+}
+
 export interface ChainPage {
   readonly outcome: 'page' | 'incomplete';
   readonly records: readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[];
-  readonly nextCursor: number | null;
+  readonly nextCursor: ChainPageCursor | null;
 }
 
 const defaultClock: TestClock = () => new Date().toISOString();
@@ -147,22 +152,32 @@ export class TestBoundStore {
     return getScopeState(this.state, this.scope).chains.get(chainId)?.records ?? [];
   }
 
-  readPage(chainId: string, limit: number, cursor: number | null, maxEncodedBytes: number): ChainPage {
+  readPage(chainId: string, limit: number, cursor: ChainPageCursor | null, maxEncodedBytes: number): ChainPage {
     this.requireOperation('read');
     if (!Number.isSafeInteger(limit) || limit <= 0) throw new StorageInvalidCommandError('invalid limit');
-    const records = this.readChain(chainId);
-    const start = cursor ?? 0;
+    const scopeState = getScopeState(this.state, this.scope);
+    const chain = scopeState.chains.get(chainId);
+    if (chain?.disposed) return { outcome: 'incomplete', records: [], nextCursor: cursor };
+    const records = chain?.records ?? [];
+    const boundHead = cursor?.head ?? chain?.head ?? null;
+    const start = cursor?.position ?? 0;
+    const boundIdx = boundHead === null ? records.length : records.findIndex((entry) => entry.hash === boundHead);
+    if (boundHead !== null && boundIdx === -1) {
+      return { outcome: 'incomplete', records: [], nextCursor: cursor };
+    }
+    const visible = boundHead === null ? [] : records.slice(0, boundIdx + 1);
     const page: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[] = [];
     let used = 0;
-    for (const record of records) {
+    for (const record of visible) {
       if (record.seq < start) continue;
-      if (page.length >= limit) return { outcome: 'page', records: page, nextCursor: record.seq };
-      const size = Buffer.byteLength(record.bytes, 'utf8');
+      const next: ChainPageCursor = { position: record.seq, head: boundHead };
+      if (page.length >= limit) return { outcome: 'page', records: page, nextCursor: next };
+      const size = Buffer.byteLength(JSON.stringify(record), 'utf8');
       if (size > maxEncodedBytes) {
-        if (page.length === 0) return { outcome: 'incomplete', records: [], nextCursor: record.seq };
-        return { outcome: 'incomplete', records: page, nextCursor: record.seq };
+        if (page.length === 0) return { outcome: 'incomplete', records: [], nextCursor: next };
+        return { outcome: 'incomplete', records: page, nextCursor: next };
       }
-      if (used + size > maxEncodedBytes) return { outcome: 'incomplete', records: page, nextCursor: record.seq };
+      if (used + size > maxEncodedBytes) return { outcome: 'incomplete', records: page, nextCursor: next };
       used += size;
       page.push(record);
     }
@@ -285,6 +300,7 @@ export class TestBoundStore {
 export class TestReferenceStore {
   private readonly state = createReferenceState();
   private readonly revoked = new Set<string>();
+  private readonly issued = new Map<string, string>();
 
   constructor(
     readonly moduleId: string,
@@ -299,11 +315,23 @@ export class TestReferenceStore {
     this.revoked.add(token);
   }
 
+  issueGrant(grant: ScopeGrant<unknown>): ScopeGrant<unknown> {
+    this.issued.set(grant.token, JSON.stringify(grant));
+    return grant;
+  }
+
+  bindNew(grant: ScopeGrant<unknown>): TestBoundStore {
+    return this.bind(this.issueGrant(grant));
+  }
+
   bind(grant: ScopeGrant<unknown>): TestBoundStore {
     const validity = validateScopeGrant(grant, { nowIso: this.clock() });
     if (!validity.ok) throw new StorageDeniedError(validity.errors.join('; '));
     if (grant.moduleId !== this.moduleId) throw new StorageDeniedError('wrong module');
     if (this.revoked.has(grant.token)) throw new StorageDeniedError('grant revoked');
+    const issued = this.issued.get(grant.token);
+    if (!issued) throw new StorageDeniedError('unknown grant token');
+    if (issued !== JSON.stringify(grant)) throw new StorageDeniedError('grant tampered');
     return new TestBoundStore(grant, this.moduleId, this.state, this.revoked, this.clock);
   }
 }
