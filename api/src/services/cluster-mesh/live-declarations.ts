@@ -10,11 +10,7 @@ import {
 } from '../../../../packages/cluster-mesh/src/live-storage/registration';
 import { db } from '../../db/client';
 import { liveGitDeclarations } from '../../db/control-schema';
-export {
-  DatabaseCodeWorkspaceBindingAuthorizer,
-  defaultCodeWorkspaceBindingAuthorizer,
-} from '../../routes/namespaces/code-git-ports';
-import { defaultCodeWorkspaceBindingAuthorizer } from '../../routes/namespaces/code-git-ports';
+
 
 export {
   canonicalIdKey,
@@ -78,7 +74,7 @@ export const contractLiveDeclarationIdentity = canonicalLiveDeclarationIdentity;
 export class PostgresLiveDeclarationStore implements LiveDeclarationStorePort {
   constructor(
     private readonly identity: LiveDeclarationIdentityAdapter = contractLiveDeclarationIdentity,
-    private readonly bindingAuthorizer: LiveProductBindingAuthorizationPort = defaultCodeWorkspaceBindingAuthorizer,
+    private readonly bindingAuthorizer?: LiveProductBindingAuthorizationPort,
   ) {}
 
   async save(declaration: LiveWorkspaceDeclaration): Promise<void> {
@@ -87,13 +83,13 @@ export class PostgresLiveDeclarationStore implements LiveDeclarationStorePort {
       throw new Error(`invalid live workspace declaration: ${checked.errors.join('; ')}`);
     }
 
-    if (declaration.serverWorkspaceId && this.bindingAuthorizer) {
+    if (this.bindingAuthorizer) {
       await this.bindingAuthorizer.authorizeProductBinding({
         tenant: declaration.tenant,
         principal: declaration.principal,
         serverWorkspaceId: declaration.serverWorkspaceId,
-        serverIssuer: declaration.serverIssuer!,
-        bindingRevision: declaration.bindingRevision!,
+        serverIssuer: declaration.serverIssuer,
+        bindingRevision: declaration.bindingRevision,
       });
     }
 
