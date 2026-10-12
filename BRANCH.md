@@ -1,20 +1,20 @@
 # Feature: engram L6a — explicit live host declarations and registration persistence (S seat)
 
 ## Objective
-- [ ] Deliver the sentropic (S) seat of engram plan L6a: durable live workspace declaration registration in `@sentropic/cluster-mesh` (bind to workspace fingerprint + revision, replay after projection loss, withdrawal that cancels deferred work and requests a private purge without deleting committed history) and product declaration persistence in the app control schema (authorized code-workspace bindings without changing membership or enrollment).
-- [ ] RED first, then GREEN; contract work runs without a live DB or projection provider (injected ports only).
+- [x] Deliver the sentropic (S) seat of engram plan L6a: durable live workspace declaration registration in `@sentropic/cluster-mesh` (bind to workspace fingerprint + revision, replay after projection loss, withdrawal that cancels deferred work and requests a private purge without deleting committed history) and product declaration persistence in the app control schema (authorized code-workspace bindings without changing membership or enrollment).
+- [x] RED first, then GREEN; contract work runs without a live DB or projection provider (injected ports only).
 
 ## Scope / Guardrails
-- [ ] Scope limited to `packages/cluster-mesh` live-storage registration + its spec, and the api live declaration control table, migration and Postgres store service.
-- [ ] One migration max in `api/drizzle/control/*.sql` (`0010_live_git_declarations.sql`; first free number on main, `0009` reserved by an unmerged cowork branch).
-- [ ] Make-only workflow, no direct Docker commands.
-- [ ] Branch development happens in isolated worktree `tmp/worktrees/live-git-l6a-s` (branch `feat/live-git-l6a-s`).
-- [ ] Automated test campaigns run on `ENV=test-live-l6a-s` with `API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555`, never on root `dev`.
-- [ ] In every `make` command, `ENV=test-live-l6a-s` is passed as the last argument.
-- [ ] All new text in English.
+- [x] Scope limited to `packages/cluster-mesh` live-storage registration + its spec, and the api live declaration control table, migration and Postgres store service.
+- [x] One migration max in `api/drizzle/control/*.sql` (`0010_live_git_declarations.sql`; first free number on main, `0009` reserved by an unmerged cowork branch).
+- [x] Make-only workflow, no direct Docker commands.
+- [x] Branch development happens in isolated worktree `tmp/worktrees/live-git-l6a-s` (branch `feat/live-git-l6a-s`).
+- [x] Automated test campaigns run on `ENV=test-live-l6a-s` with `API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555`, never on root `dev`.
+- [x] In every `make` command, `ENV=test-live-l6a-s` is passed as the last argument.
+- [x] All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**:
+- [x] **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/cluster-mesh/src/live-storage/registration.ts`
   - `packages/cluster-mesh/tests/live-registration.spec.ts`
@@ -28,7 +28,7 @@
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (L6A-EX1)
   - `api/tests/api/llm-admission-schema.test.ts` (L6A-EX2)
   - `api/tests/api/live-registration.test.ts` (L6A-EX3)
-- [ ] **Forbidden Paths (must not change in this branch)**:
+- [x] **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -37,8 +37,8 @@
   - `packages/cluster-mesh/src/**` (except `live-storage/registration.ts`)
   - `api/src/**` (except `services/cluster-mesh/live-declarations.ts` and `db/control-schema.ts`)
   - `api/drizzle/**` (except `control/0010_live_git_declarations.sql` and `control/meta/_journal.json`)
-- [ ] **Conditional Paths**: none.
-- [ ] **Exception process**: `L6A-EX1`, `L6A-EX2`, and `L6A-EX3` declared in Feedback Loop before touching the paths; no other conditional or forbidden path touched. `packages/cluster-mesh/package.json` + `package-lock.json` are the workflow-mandated version bump for a `packages/cluster-mesh/src` change.
+- [x] **Conditional Paths**: none.
+- [x] **Exception process**: `L6A-EX1`, `L6A-EX2`, and `L6A-EX3` declared in Feedback Loop before touching the paths; no other conditional or forbidden path touched. `packages/cluster-mesh/package.json` + `package-lock.json` are the workflow-mandated version bump for a `packages/cluster-mesh/src` change.
 
 ## Feedback Loop
 - [x] `L6A-EX1` (exception, declared before touching the path): `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` are outside Allowed Paths but MUST be refreshed after the Lot 4 version bump — CI `validate-cluster-mesh` job `test-lazy-package` pins the packed tarball name `sentropic-cluster-mesh-<version>.tgz` in the fixture and failed with `ENOENT ...sentropic-cluster-mesh-0.13.3.tgz` after the bump to 0.14.0. Reason: the workflow documents the regeneration procedure `refresh-lazy-package-lock` (never hand-edit hashes). Impact: fixture-only change, regenerated by the make target from the freshly packed 0.14.0 tarball. Rollback: `git checkout` the two fixture files. Executed: fixture `package.json` pointed at the 0.14.0 tarball, lock regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock ENV=test-live-l6a-s`; `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-live-l6a-s` green locally (10 files / 63 tests).
@@ -47,16 +47,16 @@
 - [x] `aligned` (S, engram L6a): the engram-live L6a contract was APPROVED and MERGED in engram PR rhanka/engram#359, merge 3b311dfb, contract commit 70ebdfee9857ba381059896089e4f2d5c19363ea. Mirrored exact canonical derivation and contract validators from 70ebdfee without registry dependency (pinned reference in adapter and TODO-free notes); revocation targets exactly one declaration by the triple declarationId/cloneId/worktreeId; product binding is the complete workspace/issuer/revision triple with strictly increasing revision; identity uncertainty states are explicit (missing_history, shallow_history).
 
 ## AI Flaky tests
-- [ ] Acceptance rule: none expected; no AI/provider-dependent test in scope. If a flaky failure appears, record command + failing file + signature here and treat as blocking when related to this branch.
-- [ ] Transient (resolved, not AI-related): first `make test-cluster-mesh ... ENV=test-live-l6a-s` full run failed 2 suites (`tests/integrations/gateway-surface.spec.ts`, `tests/modules/namespace-loading.spec.ts`) with `Could not resolve "@sentropic/llm-gateway[/auth]" imported by "@sentropic/cluster-mesh"` immediately after the target's own `build-llm-gateway` prerequisite rebuilt `packages/llm-gateway/dist`; the same command on the same commit passed on rerun (54 files / 401 tests green), and a scoped rerun of both suites passed. Signature: vite optional-peer resolution race against freshly rebuilt peer `dist`, unrelated to this branch's files.
+- [x] Acceptance rule: none expected; no AI/provider-dependent test in scope. If a flaky failure appears, record command + failing file + signature here and treat as blocking when related to this branch.
+- [x] Transient (resolved, not AI-related): first `make test-cluster-mesh ... ENV=test-live-l6a-s` full run failed 2 suites (`tests/integrations/gateway-surface.spec.ts`, `tests/modules/namespace-loading.spec.ts`) with `Could not resolve "@sentropic/llm-gateway[/auth]" imported by "@sentropic/cluster-mesh"` immediately after the target's own `build-llm-gateway` prerequisite rebuilt `packages/llm-gateway/dist`; the same command on the same commit passed on rerun (54 files / 401 tests green), and a scoped rerun of both suites passed. Signature: vite optional-peer resolution race against freshly rebuilt peer `dist`, unrelated to this branch's files.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
 - Rationale: single orthogonal seat (S) of plan lot L6a; E and H seats live in their owning repositories.
 
 ## UAT Management (in orchestration context)
-- [ ] **Mono-branch**: no UI change; no user UAT required for this branch.
+- [x] **Mono-branch**: no UI change; no user UAT required for this branch.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
@@ -91,20 +91,20 @@
 - [x] **Lot 4 — Package version bump**
   - [x] Bump `packages/cluster-mesh/package.json` to `0.14.0` (minor: new live-storage feature) with pre-bump registry check (npm latest `0.13.3`, strictly greater); update `package-lock.json` workspace entry.
 
-- [ ] **Lot 5 — Align on approved engram contract (70ebdfee)**
-  - [ ] Add `api/tests/api/live-registration.test.ts` (L6A-EX3) with product-binding RED tests.
-  - [ ] Align `packages/cluster-mesh/src/live-storage/registration.ts` on canonical derivation, DTOs, validators and monotonic binding revisions.
-  - [ ] Align `packages/cluster-mesh/tests/live-registration.spec.ts` on canonical derivation and contract conventions.
-  - [ ] Swap `api/src/services/cluster-mesh/live-declarations.ts` to canonical derivation and triple-targeted revocation/lookup; make tests GREEN.
+- [x] **Lot 5 — Align on approved engram contract (70ebdfee)**
+  - [x] Add `api/tests/api/live-registration.test.ts` (L6A-EX3) with product-binding RED tests.
+  - [x] Align `packages/cluster-mesh/src/live-storage/registration.ts` on canonical derivation, DTOs, validators and monotonic binding revisions.
+  - [x] Align `packages/cluster-mesh/tests/live-registration.spec.ts` on canonical derivation and contract conventions.
+  - [x] Swap `api/src/services/cluster-mesh/live-declarations.ts` to canonical derivation and triple-targeted revocation/lookup; make tests GREEN.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] No `spec/BRANCH_SPEC_EVOL.md` used; nothing to consolidate.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] No `spec/BRANCH_SPEC_EVOL.md` used; nothing to consolidate.
 
-- [ ] **Lot N — Final validation**
+- [x] **Lot N — Final validation**
   - [x] Typecheck & lint for impacted components: `make typecheck-cluster-mesh` (PASS), `make lint-cluster-mesh` (PASS), `make typecheck-api` (PASS), `make lint-api` (PASS, 0 errors / pre-existing warnings).
-  - [x] Retest scoped cluster-mesh suite (cf Lot 2): `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s` (3 passed) and full `make test-cluster-mesh ... ENV=test-live-l6a-s` (54 files / 401 tests passed, 34 skipped; one transient first run recorded under AI Flaky tests); scoped api suite (cf Lot 3): `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts ... ENV=test-live-l6a-s` (16 passed).
+  - [x] Retest scoped cluster-mesh suite (cf Lot 2): `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s` (3 passed) and full `make test-cluster-mesh ... ENV=test-live-l6a-s` (54 files / 401 tests passed, 34 skipped; one transient first run recorded under AI Flaky tests); scoped api suite (cf Lot 3): `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts ... ENV=test-live-l6a-s` (16 passed); live-registration test suite: `make test-api-endpoints SCOPE=tests/api/live-registration.test.ts ... ENV=test-live-l6a-s` (3 passed).
   - [x] Bumped `packages/cluster-mesh/package.json` version to `0.14.0` for the changed `packages/cluster-mesh/src/**` (enforced by CI `enforce-package-bump`).
   - [x] Test evolution (L6A-EX2): adapted the two frozen-journal assertions in `api/tests/api/llm-admission-schema.test.ts` to accept `0010_live_git_declarations` (0008 pinned at idx 8, applied row matched by hash, disposable upgrade expects `journal.entries.length` applied migrations); scoped runs green locally (20 + 16 passed).
-  - [ ] Push branch `feat/live-git-l6a-s`; open DRAFT PR to `main` (never merge); verify CI.
-  - [ ] `make down API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
-  - [ ] Report `.h2a/build/l6a_s_report.md`.
+  - [x] Push branch `feat/live-git-l6a-s`; draft PR #664 updated with approved engram contract alignment; verify CI green.
+  - [x] `make down API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
+  - [x] Report `.h2a/build/l6a_s_align_report.md`.
