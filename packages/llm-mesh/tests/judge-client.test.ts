@@ -102,4 +102,85 @@ describe('remote judge client', () => {
     });
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it('returns connection failure when cancelled mid-flight keeping cost uncertainty', async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn(async () => {
+      controller.abort();
+      throw new Error('aborted');
+    });
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest(), { signal: controller.signal });
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false,
+      error: { code: 'CANCELLED', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+      usage: { evaluatorCalls: null },
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('returns connection failure when response exceeds byte bound', async () => {
+    const big = JSON.stringify({ kind: 'verdict', ok: true, padding: 'x'.repeat(1000) });
+    const fetch = vi.fn(async () => new Response(big, { status: 200, headers: { 'content-length': '1500' } }));
+    const client = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      maxResponseBytes: 500,
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const result = await client.judge(judgeRequest());
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false,
+      error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+    });
+  });
+
+  it('keeps execution and cost uncertainty on unknown wire error code', async () => {
+    const weird = {
+      kind: 'error', ok: false,
+      error: { code: 'NONEXISTENT_ERROR_CODE', phase: 'dispatch' },
+      receipt: mockReceipt(),
+    };
+    const fetch = vi.fn(async () => new Response(JSON.stringify(weird), { status: 500, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: 'weird-corr' }));
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false,
+      error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+      usage: { evaluatorCalls: null },
+      correlationId: 'weird-corr',
+    });
+    expect(result).not.toHaveProperty('receipt.budget');
+  });
+
+  it('keeps execution and cost uncertainty on unknown wire error phase', async () => {
+    const weirdPhase = {
+      kind: 'error', ok: false,
+      error: { code: 'TIMEOUT', phase: 'unknown-phase' },
+      receipt: mockReceipt(),
+    };
+    const fetch = vi.fn(async () => new Response(JSON.stringify(weirdPhase), { status: 500, headers: { 'content-type': 'application/json' } }));
+    const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+    const result = await client.judge(judgeRequest({ correlationId: 'phase-corr' }));
+    expect(result).toMatchObject({
+      kind: 'connection-failure', ok: false,
+      error: { code: 'MESH_UNAVAILABLE', phase: 'dispatch' },
+      receipt: null, callStatus: 'unknown',
+      usage: { evaluatorCalls: null },
+      correlationId: 'phase-corr',
+    });
+  });
+
+  it('never retries the call automatically on 502/503/429 status', async () => {
+    for (const status of [429, 502, 503, 504]) {
+      const fetch = vi.fn(async () => new Response('HTML Gateway Error', { status }));
+      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+      const result = await client.judge(judgeRequest());
+      expect(result.ok).toBe(false);
+      expect(result.kind).toBe('connection-failure');
+      expect(fetch).toHaveBeenCalledOnce();
+    }
+  });
 });
