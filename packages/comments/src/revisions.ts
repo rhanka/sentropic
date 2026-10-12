@@ -9,6 +9,7 @@
 
 import type { Anchor, ResourceRef, SourceVersionIndicator } from './anchors.js';
 import { resourceKey, scopeKey } from './anchors.js';
+import { canonicalJson } from './canonical-json.js';
 import type { QuantizedGeometry } from './geometry.js';
 import { hashRecord } from './revision-hash.js';
 
@@ -91,7 +92,9 @@ export class RevisionValidationError extends Error {
       | 'invalid-body'
       | 'invalid-mentions'
       | 'invalid-provenance'
-      | 'invalid-pin',
+      | 'invalid-pin'
+      | 'invalid-capacity'
+      | 'capacity-exceeded',
     message: string,
   ) {
     super(message);
@@ -145,6 +148,57 @@ export type SemanticProfile = {
   readonly fields: Readonly<Record<string, string | number | boolean | null>>;
 };
 
+/**
+ * Declared measurement unit of a capacity bound (SPEC §4.6). `utf8-bytes`
+ * counts exact UTF-8 source bytes, `canonical-bytes` counts the RFC 8785
+ * canonical JSON encoding of the bounded value, and `units`/`records` count
+ * whole objects.
+ */
+export type CapacityUnit = 'utf8-bytes' | 'canonical-bytes' | 'units' | 'records';
+
+/** One explicit capacity bound: a positive safe-integer limit with its declared unit. */
+export type CapacityBound = {
+  readonly limit: number;
+  readonly unit: CapacityUnit;
+};
+
+/**
+ * Bounded capacity descriptor required before P1 freeze (SPEC §4.6). Every
+ * limit is an explicit parameter with a declared unit following the
+ * SPEC-defined structure; the model invents no policy value, and a missing
+ * or invalid bound fails closed and blocks the contract freeze. Body and
+ * segment carry distinct UTF-8 byte bounds, semantic metadata a canonical
+ * byte bound, atomic units separate manifest and payload bounds, batches a
+ * unit count plus manifest/request bytes, and reads/exports per-page record
+ * and encoded-byte bounds.
+ */
+export type CapacityDescriptor = {
+  readonly body: CapacityBound;
+  readonly segment: CapacityBound;
+  readonly profile: CapacityBound;
+  readonly unitManifest: CapacityBound;
+  readonly unitPayload: CapacityBound;
+  readonly batchUnits: CapacityBound;
+  readonly batchManifest: CapacityBound;
+  readonly batchRequest: CapacityBound;
+  readonly pageRecords: CapacityBound;
+  readonly pageEncodedBytes: CapacityBound;
+};
+
+/** Units each descriptor bound may declare (SPEC §4.6 rows). */
+const CAPACITY_DECLARED_UNITS = {
+  body: ['utf8-bytes'],
+  segment: ['utf8-bytes'],
+  profile: ['canonical-bytes'],
+  unitManifest: ['utf8-bytes', 'canonical-bytes'],
+  unitPayload: ['utf8-bytes', 'canonical-bytes'],
+  batchUnits: ['units'],
+  batchManifest: ['utf8-bytes', 'canonical-bytes'],
+  batchRequest: ['utf8-bytes', 'canonical-bytes'],
+  pageRecords: ['records'],
+  pageEncodedBytes: ['utf8-bytes', 'canonical-bytes'],
+} as const satisfies Record<keyof CapacityDescriptor, readonly CapacityUnit[]>;
+
 /** Canonical body content of one revision. */
 export type RevisionBody = {
   readonly text: string;
@@ -182,8 +236,8 @@ const validateSpans = (
   }
 };
 
-/** Validate body content: codec descriptor, segment/mention spans, profile shape. */
-export const validateRevisionBody = (body: RevisionBody): RevisionBody => {
+/** Validate body content: codec descriptor, segment/mention spans, profile shape, capacity bounds. */
+export const validateRevisionBody = (body: RevisionBody, capacity?: CapacityDescriptor): RevisionBody => {
   if (
     !isNonEmptyString(body.text) ||
     (body.codec.format !== 'plain' && body.codec.format !== 'commonmark') ||
@@ -224,7 +278,78 @@ export const validateRevisionBody = (body: RevisionBody): RevisionBody => {
       }
     }
   }
+  if (capacity !== undefined) {
+    checkRevisionBodyCapacity(body, capacity);
+  }
   return body;
+};
+
+/**
+ * Validate a capacity descriptor: every SPEC §4.6 bound must be present with
+ * a positive safe-integer limit and one of its declared units. Missing or
+ * invalid values fail closed; no default limit exists.
+ */
+export const validateCapacityDescriptor = (capacity: CapacityDescriptor): CapacityDescriptor => {
+  for (const field of Object.keys(CAPACITY_DECLARED_UNITS) as (keyof CapacityDescriptor)[]) {
+    const bound = capacity[field];
+    const declared = CAPACITY_DECLARED_UNITS[field];
+    if (
+      bound === undefined ||
+      bound === null ||
+      typeof bound !== 'object' ||
+      Array.isArray(bound)
+    ) {
+      throw new RevisionValidationError('invalid-capacity', `Capacity bound ${field} is missing`);
+    }
+    if (!Number.isSafeInteger(bound.limit) || bound.limit < 1) {
+      throw new RevisionValidationError('invalid-capacity', `Capacity bound ${field} needs a positive safe-integer limit`);
+    }
+    if (!(declared as readonly CapacityUnit[]).includes(bound.unit)) {
+      throw new RevisionValidationError(
+        'invalid-capacity',
+        `Capacity bound ${field} must declare unit ${declared.join(' or ')}`,
+      );
+    }
+  }
+  return capacity;
+};
+
+const utf8ByteLength = (value: string): number => new TextEncoder().encode(value).length;
+
+/**
+ * Enforce the SPEC §4.6 body, segment and semantic-metadata bounds: the
+ * whole body and each segment stay within their distinct UTF-8 byte bounds,
+ * and the profile stays within its canonical byte bound.
+ */
+export const checkRevisionBodyCapacity = (body: RevisionBody, capacity: CapacityDescriptor): void => {
+  validateCapacityDescriptor(capacity);
+  const bodyBytes = utf8ByteLength(body.text);
+  if (bodyBytes > capacity.body.limit) {
+    throw new RevisionValidationError(
+      'capacity-exceeded',
+      `Body is ${bodyBytes} UTF-8 bytes, bound is ${capacity.body.limit}`,
+    );
+  }
+  if (body.segments !== undefined) {
+    for (const segment of body.segments) {
+      const segmentBytes = utf8ByteLength([...body.text].slice(segment.start, segment.end).join(''));
+      if (segmentBytes > capacity.segment.limit) {
+        throw new RevisionValidationError(
+          'capacity-exceeded',
+          `Segment is ${segmentBytes} UTF-8 bytes, bound is ${capacity.segment.limit}`,
+        );
+      }
+    }
+  }
+  if (body.profile !== undefined) {
+    const profileBytes = utf8ByteLength(canonicalJson(body.profile));
+    if (profileBytes > capacity.profile.limit) {
+      throw new RevisionValidationError(
+        'capacity-exceeded',
+        `Profile is ${profileBytes} canonical bytes, bound is ${capacity.profile.limit}`,
+      );
+    }
+  }
 };
 
 /** Validate the ordered target bindings of a revision: complete identities, no ambiguous duplicates. */
