@@ -76,9 +76,9 @@
 - [x] **Lot 3 / C03 — Preserve owner authority and author declarations**
   - [x] Files: evidence/owner-decisions.md, evidence/author-metadata.md and BRANCH.md; message: `docs: preserve comments owner authority`; approximately 105 changed lines.
   - [x] Gate: AUTH-M and all TREAT2 answers verbatim; register quotations alone copied from private provenance; AUTHOR-C6/2E/PROMO whole logs and AUTHOR-RESERVES' fixed header source-hashed with their declaration limits.
-- [ ] **Lot 4 / C04 — Promote historical interface and review evidence**
-  - [ ] Files: evidence/interface-errata.md, evidence/review-history.md and BRANCH.md; message: `docs: preserve comments interface review evidence`; approximately 130 changed lines.
-  - [ ] Gate: S-R01–20, SO/CROSS treatments and superseded attribution/backup clauses remain readable without ignored sources.
+- [x] **Lot 4 / C04 — Promote historical interface and review evidence**
+  - [x] Files: evidence/interface-errata.md, evidence/review-history.md and BRANCH.md; message: `docs: preserve comments interface review evidence`; approximately 130 changed lines.
+  - [x] Gate: S-R01–20, SO/CROSS treatments and superseded attribution/backup clauses remain readable without ignored sources.
 - [ ] **Lot 5 / C05 — Promote treatment and confirmation evidence**
   - [ ] Files: evidence/review-c6.md, evidence/review-confirmations.md and BRANCH.md; message: `docs: preserve comments confirmation evidence`; approximately 100 changed lines.
   - [ ] Gate: every C6/CONF2 finding has a reasoned disposition; CONF3's exact source verdict and all seven reserve gates are identified.
