@@ -7,7 +7,9 @@ import {
 } from '@sentropic/cluster-mesh';
 import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
-import { tenantMemberships, workspaces } from '../../db/schema';
+import { tenantMemberships, workspaceMemberships, workspaces } from '../../db/schema';
+import { getDefaultGateConfig } from '../gate-service';
+import { hasWorkspaceRole, type WorkspaceType } from '../workspace-access';
 
 export type AdoptedSessionWorkspaceStatus = 'attached' | 'detached' | 'ended';
 
@@ -87,7 +89,7 @@ const drizzleBindingStore: SessionWorkspaceBindingStore = {
 export class SessionWorkspaceService {
   private readonly mesh = createSessionWorkspaceBindingService(drizzleBindingStore);
 
-  private async checkRights(tenantId: string, principalId: string): Promise<void> {
+  private async checkTenantMember(tenantId: string, principalId: string): Promise<void> {
     const [membership] = await db.select({ status: tenantMemberships.status }).from(tenantMemberships)
       .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, principalId))).limit(1);
     if (membership?.status !== 'approved') {
@@ -95,19 +97,47 @@ export class SessionWorkspaceService {
     }
   }
 
+  private async checkIsAdmin(tenantId: string, principalId: string, workspaceId: string): Promise<boolean> {
+    const [tMember] = await db.select({ role: tenantMemberships.role, status: tenantMemberships.status }).from(tenantMemberships)
+      .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, principalId))).limit(1);
+    if (tMember?.status === 'approved' && (tMember.role === 'admin' || tMember.role === 'owner')) return true;
+    if (workspaceId) return await hasWorkspaceRole(principalId, workspaceId, 'admin');
+    return false;
+  }
+
   private async resolveWorkspaceId(tenantId: string, principalId: string, wId?: string, create?: { name: string; type?: string }): Promise<string> {
     if (wId) {
       const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, wId)).limit(1);
-      if (!ws) throw new SessionWorkspaceError('workspace_not_found', 'workspace does not exist');
-      if (ws.tenantId !== tenantId) {
-        throw new SessionWorkspaceError('cross_tenant_refused', 'workspace tenant does not match session tenant');
+      if (!ws || ws.tenantId !== tenantId) {
+        throw new SessionWorkspaceError('workspace_not_found', 'workspace does not exist');
+      }
+      const canEdit = await hasWorkspaceRole(principalId, ws.id, 'editor');
+      if (!canEdit) {
+        throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient workspace rights');
       }
       return ws.id;
     }
     if (!create?.name?.trim()) throw new SessionWorkspaceError('invalid_request', 'either workspaceId or create is required');
+    const name = create.name.trim();
+    if (name.length > 128) throw new SessionWorkspaceError('invalid_request', 'workspace name too long');
+    const rawType = create.type ?? 'code';
+    const allowedTypes: WorkspaceType[] = ['code', 'ai-priorities', 'opportunity'];
+    if (!allowedTypes.includes(rawType as WorkspaceType)) {
+      throw new SessionWorkspaceError('invalid_request', `invalid workspace type: ${rawType}`);
+    }
+    const type = rawType as WorkspaceType;
     const id = crypto.randomUUID();
-    await db.insert(workspaces).values(
-      { id, ownerUserId: principalId, name: create.name, type: create.type ?? 'code', tenantId });
+    const now = new Date();
+    const gateConfig = getDefaultGateConfig(type);
+    await db.transaction(async (tx) => {
+      await tx.insert(workspaces).values({
+        id, ownerUserId: principalId, name, type,
+        gateConfig: gateConfig ?? undefined, tenantId, createdAt: now, updatedAt: now,
+      });
+      await tx.insert(workspaceMemberships).values({
+        workspaceId: id, userId: principalId, role: 'admin', createdAt: now,
+      });
+    });
     return id;
   }
 
@@ -115,7 +145,22 @@ export class SessionWorkspaceService {
     const sessionId = requireId(input.sessionId, 'sessionId');
     const tenantId = requireId(input.tenantId, 'tenantId');
     const principalId = requireId(input.principalId, 'principalId');
-    await this.checkRights(tenantId, principalId);
+    await this.checkTenantMember(tenantId, principalId);
+
+    const existing = await drizzleBindingStore.findBySession(sessionId);
+    if (existing) {
+      if (existing.tenantId !== tenantId) {
+        throw new SessionWorkspaceError('cross_tenant_refused', 'session tenant does not match binding tenant');
+      }
+      if (existing.status === 'ended') {
+        throw new SessionWorkspaceError('session_ended', 'session is ended and keeps its workspace history');
+      }
+      if (existing.status === 'attached') {
+        if (input.workspaceId && existing.workspaceId === input.workspaceId) return toRecord(existing);
+        throw new SessionWorkspaceError('session_already_attached', 'session is already attached; detach or end it first');
+      }
+    }
+
     const workspaceId = await this.resolveWorkspaceId(tenantId, principalId, input.workspaceId, input.create);
     try {
       const binding = await this.mesh.attach({
@@ -132,8 +177,14 @@ export class SessionWorkspaceService {
   async detach(sessionId: string, tenantId: string, principalId?: string): Promise<AdoptedSessionWorkspace> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
+    const existing = await drizzleBindingStore.findBySession(sessionId);
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
+    }
+    if (principalId) await this.checkTenantMember(tenantId, principalId);
+    const isAdmin = principalId ? await this.checkIsAdmin(tenantId, principalId, existing.workspaceId) : false;
     try {
-      const binding = await this.mesh.detach(sessionId, tenantId, principalId);
+      const binding = await this.mesh.detach(sessionId, tenantId, principalId, isAdmin);
       return toRecord(binding);
     } catch (err) {
       if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
@@ -144,8 +195,14 @@ export class SessionWorkspaceService {
   async end(sessionId: string, tenantId: string, principalId?: string): Promise<AdoptedSessionWorkspace> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
+    const existing = await drizzleBindingStore.findBySession(sessionId);
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
+    }
+    if (principalId) await this.checkTenantMember(tenantId, principalId);
+    const isAdmin = principalId ? await this.checkIsAdmin(tenantId, principalId, existing.workspaceId) : false;
     try {
-      const binding = await this.mesh.end(sessionId, tenantId, principalId);
+      const binding = await this.mesh.end(sessionId, tenantId, principalId, isAdmin);
       return toRecord(binding);
     } catch (err) {
       if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);

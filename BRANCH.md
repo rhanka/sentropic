@@ -119,14 +119,14 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
       - [x] No E2E changes in LOT1
     - [x] `make test-cluster-mesh SCOPE=tests/session-workspace.spec.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
 
-- [ ] **Lot 2 — Opus NO-GO fixes**
+- [x] **Lot 2 — Opus NO-GO fixes**
   - [x] RED: add cluster-mesh principalId and rights tests in packages/cluster-mesh/tests/session-workspace.spec.ts
   - [x] GREEN: enforce principalId and rights in packages/cluster-mesh/src/sessions/workspace-binding.ts
   - [x] Migration 0011 re-date after 0009/0010 and add principal_id column to schema
   - [x] RED: add API refusal and RBAC tests in api/tests/api/session-adoption.test.ts
   - [x] GREEN: integrate cluster-mesh storage port in session-workspace service
-  - [ ] GREEN: enforce workspace RBAC and canonical creation in session-workspace service
-  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
+  - [x] GREEN: enforce workspace RBAC and canonical creation in session-workspace service
+  - [x] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
