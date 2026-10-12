@@ -41,6 +41,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 ## Feedback Loop
 - [ ] `BR01-EX1`: touch `api/drizzle/control/0011_session_workspace_bindings.sql` (one new migration, next free number avoiding 0009 cowork and 0010 PR 664 live-git) (requires clarification about none)
   - `acknowledge`: single additive table, rollback is DROP TABLE, no backfill
+- [x] `BR01-EX2`: regenerate root `package-lock.json` via `make lock-root` for cluster-mesh 0.16.0 lock-sync (CI changes job)
+  - `acknowledge`: one version line sync, rollback is restore lock entry
 
 ## AI Flaky tests
 - Acceptance rule:
