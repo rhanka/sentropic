@@ -90,17 +90,20 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
       if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
 
       const racePreflight = async <T>(promiseOrValue: T | Promise<T>): Promise<T> => {
-        if (controller.signal.aborted || callOptions?.signal?.aborted) throw new Error('preflight-interrupted');
-        const val = await Promise.race([
-          promiseOrValue,
-          new Promise<never>((_, reject) => {
-            const abort = () => reject(new Error('preflight-interrupted'));
-            controller.signal.addEventListener('abort', abort, { once: true });
-            callOptions?.signal?.addEventListener('abort', abort, { once: true });
-          }),
-        ]);
-        if (controller.signal.aborted || callOptions?.signal?.aborted) throw new Error('preflight-interrupted');
-        return val;
+        if (controller.signal.aborted) throw new Error('preflight-interrupted');
+        let cleanup: (() => void) | undefined;
+        try {
+          return await Promise.race([
+            promiseOrValue,
+            new Promise<never>((_, reject) => {
+              const abort = () => reject(new Error('preflight-interrupted'));
+              controller.signal.addEventListener('abort', abort, { once: true });
+              cleanup = () => controller.signal.removeEventListener('abort', abort);
+            }),
+          ]);
+        } finally {
+          cleanup?.();
+        }
       };
 
       const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };

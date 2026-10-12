@@ -65,7 +65,15 @@ export async function persistJudgeResult(execution: JudgeExecution, sink: JudgeR
     closeJudgeReceipt(execution, error);
   }
   // Persistence can complete after the caller's deadline; accounting is never replayed.
-  error ??= judgeInterruption(execution, execution.receipt.attempts ? 'settlement' : 'preflight') ?? undefined;
+  const interrupted = !error ? judgeInterruption(execution, execution.receipt.attempts ? 'settlement' : 'preflight') : null;
+  if (interrupted) {
+    error = interrupted;
+    if (execution.receipt.budget.state !== 'not-admitted' && execution.receipt.budget.state !== 'released') {
+      execution.receipt.budget.state = 'pending-reconciliation';
+      error.retryable = false;
+      delete error.retryAfterMs;
+    }
+  }
   if (error) {
     closeJudgeReceipt(execution, error);
     return { kind: 'error', ok: false, error, receipt: copyJudgeReceipt(execution.receipt) };
