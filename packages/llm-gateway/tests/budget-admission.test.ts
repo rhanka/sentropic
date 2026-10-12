@@ -249,4 +249,21 @@ describe('budget admission with the real mesh planner', () => {
       usage: { inputTokens: 3, outputTokens: 2, estimated: false },
     });
   });
+
+  it('forwards Responses execution features into quote and plan input (same-input parity)', async () => {
+    // Spec §16.3/§16.6: quote and plan see identical requirements, so a
+    // quoted Responses request revalidates instead of mismatching.
+    const recorder = recordingBudget();
+    const { planner, calls } = quotingPlanner([jsonAttempt(textResponse())]);
+    const app = budgetRouter({ planner, recorder });
+    const res = await app.request('/v1/responses', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, input: 'hello', max_output_tokens: 64 }),
+    });
+    expect(res.status).toBe(200);
+    expect(calls.quote).toHaveLength(1);
+    expect(calls.quote[0]).toMatchObject({ requiredExecutionFeatures: ['explicit-output-ceiling'] });
+    expect(calls.plan).toHaveLength(1);
+    expect(calls.plan[0]).toMatchObject({ requiredExecutionFeatures: ['explicit-output-ceiling'] });
+  });
 });
