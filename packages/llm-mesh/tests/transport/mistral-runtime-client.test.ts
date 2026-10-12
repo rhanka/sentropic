@@ -321,6 +321,7 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     expect(starts).toHaveLength(1);
     expect(starts[0]).toMatchObject({ data: { toolCallId: 'call_9', providerCallId: 'call_9', name: 'get_time' } });
     const deltas = events.filter((e) => e.type === 'tool_call_delta');
+    expect(deltas).toHaveLength(2);
     expect(deltas.map((e) => (e as { data: { delta: string } }).data.delta).join('')).toBe('{"x"1}');
     const done = events[events.length - 1];
     expect(done).toMatchObject({ type: 'done', data: { finishReason: 'tool_calls' } });
