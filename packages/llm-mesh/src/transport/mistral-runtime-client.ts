@@ -4,6 +4,56 @@ import type { MistralAdapterClient } from '../adapters.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { ProviderRuntimeContext } from '../registry.js';
 import type { StreamEvent, TokenUsage } from '../streaming.js';
+import type { ToolCall } from '../tools.js';
+
+/** Decode OpenAI Chat `message.tool_calls` — malformed entries are skipped, never fatal (spec §16.3). */
+const extractToolCalls = (message: unknown): ToolCall[] => {
+  if (!message || typeof message !== 'object') return [];
+  const calls = (message as Record<string, unknown>).tool_calls;
+  if (!Array.isArray(calls)) return [];
+  const decoded: ToolCall[] = [];
+  for (const entry of calls) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    const fn = record.function && typeof record.function === 'object'
+      ? (record.function as Record<string, unknown>)
+      : {};
+    if (typeof record.id !== 'string' || typeof fn.name !== 'string') continue;
+    decoded.push({
+      toolCallId: record.id,
+      providerCallId: record.id,
+      name: fn.name,
+      argumentsText: typeof fn.arguments === 'string' ? fn.arguments : '',
+    });
+  }
+  return decoded;
+};
+
+/** Decode OpenAI Chat SSE `choices[].delta.tool_calls[]` fragments keyed by stream index. */
+const extractToolDeltas = (raw: unknown): Array<{ index: number; id?: string; name?: string; fragment: string }> => {
+  if (!raw || typeof raw !== 'object') return [];
+  const choices = (raw as Record<string, unknown>).choices;
+  if (!Array.isArray(choices) || choices.length === 0) return [];
+  const delta = (choices[0] as Record<string, unknown>)?.delta;
+  if (!delta || typeof delta !== 'object') return [];
+  const calls = (delta as Record<string, unknown>).tool_calls;
+  if (!Array.isArray(calls)) return [];
+  const out: Array<{ index: number; id?: string; name?: string; fragment: string }> = [];
+  for (const entry of calls) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    const index = typeof record.index === 'number' ? record.index : out.length;
+    const fn = record.function && typeof record.function === 'object'
+      ? (record.function as Record<string, unknown>)
+      : {};
+    const name = typeof fn.name === 'string' && fn.name ? fn.name : undefined;
+    const id = typeof record.id === 'string' && record.id ? record.id : undefined;
+    const fragment = typeof fn.arguments === 'string' ? fn.arguments : '';
+    if (!id && !name && !fragment) continue;
+    out.push({ index, id, name, fragment });
+  }
+  return out;
+};
 
 export interface MistralRuntimeClientOptions {
   readonly fetch?: typeof fetch;
@@ -240,6 +290,8 @@ export class MistralRuntimeClient implements MistralAdapterClient {
     }
     return (async function* (): AsyncGenerator<StreamEvent> {
       let sawText = false;
+      let sawToolCalls = false;
+      const toolCallIds = new Map<number, string>();
       for await (const raw of parseSseJson(response.body!)) {
         const text = extractText(raw);
         const usage = extractUsage(raw);
@@ -247,17 +299,45 @@ export class MistralRuntimeClient implements MistralAdapterClient {
           sawText = true;
           yield { type: 'content_delta', data: { delta: text } };
         }
+        for (const toolDelta of extractToolDeltas(raw)) {
+          let toolCallId = toolCallIds.get(toolDelta.index);
+          if (!toolCallId) {
+            toolCallId = toolDelta.id ?? `mistral-call-${toolDelta.index}`;
+            toolCallIds.set(toolDelta.index, toolCallId);
+            sawToolCalls = true;
+            yield {
+              type: 'tool_call_start',
+              data: {
+                toolCallId,
+                providerCallId: toolDelta.id ?? toolCallId,
+                name: toolDelta.name ?? '',
+                argumentsText: '',
+              },
+            };
+          }
+          if (toolDelta.name || toolDelta.fragment) {
+            yield {
+              type: 'tool_call_delta',
+              data: {
+                toolCallId,
+                providerCallId: toolDelta.id ?? toolCallId,
+                delta: toolDelta.fragment,
+                ...(toolDelta.name ? { name: toolDelta.name } : {}),
+              },
+            };
+          }
+        }
         if (usage) {
           yield {
             type: 'done',
-            data: { finishReason: 'stop' as const, usage },
+            data: { finishReason: sawToolCalls ? 'tool_calls' as const : 'stop' as const, usage },
           };
           return;
         }
       }
       yield {
         type: 'done',
-        data: { finishReason: sawText ? ('stop' as const) : ('unknown' as const) },
+        data: { finishReason: sawToolCalls ? 'tool_calls' as const : sawText ? 'stop' as const : 'unknown' as const },
       };
     })();
   }
@@ -271,15 +351,31 @@ export class MistralRuntimeClient implements MistralAdapterClient {
       ? textOf((payload as Record<string, unknown>).id)
       : null;
     const id = rawId ?? 'mistral_response';
+    const firstChoice = payload && typeof payload === 'object'
+      && Array.isArray((payload as Record<string, unknown>).choices)
+      ? ((payload as Record<string, unknown>).choices as Array<unknown>)[0]
+      : undefined;
+    const choiceMessage = firstChoice && typeof firstChoice === 'object'
+      ? (firstChoice as Record<string, unknown>).message
+      : undefined;
+    const toolCalls = extractToolCalls(choiceMessage);
+    const rawFinish = firstChoice && typeof firstChoice === 'object'
+      ? textOf((firstChoice as Record<string, unknown>).finish_reason)
+      : null;
     return {
       id,
       providerId: 'mistral',
       modelId: request.modelId ?? 'mistral-small-2603',
-      message: { role: 'assistant', content: text },
+      message: {
+        role: 'assistant',
+        content: text,
+        ...(toolCalls.length > 0 ? { toolCalls } : {}),
+      },
       text,
-      toolCalls: [],
-      finishReason: text ? 'stop' : 'unknown',
+      toolCalls,
+      finishReason: toolCalls.length > 0 ? 'tool_calls' : text ? 'stop' : 'unknown',
       ...(usage ? { usage } : {}),
+      ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
     };
   }
 }
