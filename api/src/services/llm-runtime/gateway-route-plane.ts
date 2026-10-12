@@ -1,5 +1,7 @@
 import {
+  type ExecutionFeature,
   type PlannedRouteTarget,
+  RoutePlanError,
   type RoutePlanInput,
   type RoutePlanner,
   type VerifiedRoutingSubject,
@@ -56,6 +58,34 @@ const APPLICATION_COUNCIL_REVISION = 'application-runtime-v1';
 const applicationCatalog = { listModels: () => providerRegistry.listModels() };
 
 /**
+ * Truthful execution-feature support for the injected application runtime
+ * (spec §16.4): no §16 execution feature is honored across the whole
+ * runtime. Named choice and parallel control are refused by the dispatch
+ * adapter; reasoning/strict/structured support is partial per provider at
+ * most; replay, context, custom tools, verbosity and output-ceiling
+ * enforcement are unserved. Unknown/partial support is not support: fail
+ * closed. A request requiring any feature is excluded at plan time with a
+ * capability refusal instead of reaching dispatch.
+ */
+const APPLICATION_RUNTIME_EXECUTION_FEATURES: readonly ExecutionFeature[] = [];
+
+const withExecutionFeatureSupport = (planner: RoutePlanner): RoutePlanner => ({
+  ...planner,
+  async plan(subject, input) {
+    const unsupported = (input.requiredExecutionFeatures ?? []).filter(
+      (feature) => !APPLICATION_RUNTIME_EXECUTION_FEATURES.includes(feature),
+    );
+    if (unsupported.length > 0) {
+      throw new RoutePlanError(
+        `application runtime does not support execution features: ${unsupported.join(', ')}`,
+        'capabilities-unmet',
+      );
+    }
+    return planner.plan(subject, input);
+  },
+});
+
+/**
  * Product route plane. Its planner carries the catalog quote seam (B3c): budget admission quotes
  * the requested model's catalog entries and the plan refuses any target outside that quote.
  */
@@ -79,6 +109,6 @@ export const createApplicationGatewayRoutePlane = (options?: {
   return {
     ...plane,
     nativeCountTokens: createGatewayCountTokensPort(),
-    planner: withCatalogQuote(plane.planner, { catalog: applicationCatalog, councilRevision: APPLICATION_COUNCIL_REVISION }),
+    planner: withCatalogQuote(withExecutionFeatureSupport(plane.planner), { catalog: applicationCatalog, councilRevision: APPLICATION_COUNCIL_REVISION }),
   };
 };
