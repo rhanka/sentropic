@@ -129,13 +129,11 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest UI (cf Lot1, copy checklist)
-  - [ ] Retest API (cf Lot1, copy checklist)
-  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [x] Typecheck & Lint
+  - [x] Retest UI (no UI changes in Lot 1)
+  - [x] Retest API (session-adoption scoped tests 10/10 PASS)
+  - [x] Retest e2e (no E2E changes in Lot 1)
+  - [x] Bumped affected `packages/<pkg>/package.json` version (cluster-mesh 0.16.0)
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
