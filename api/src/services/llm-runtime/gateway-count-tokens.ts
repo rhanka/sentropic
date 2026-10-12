@@ -1,5 +1,5 @@
 /**
- * Host-owned NativeCountTokensPort (gateway count_tokens, spec §15.2 round 2).
+ * Host-owned NativeCountTokensPort (gateway count_tokens, spec §15.2).
  * Real provider counting: the port resolves the trusted server credential
  * (user provider credential, or the owner's claude-code account transport) and
  * asks the Anthropic Messages count_tokens endpoint. The gateway relays the

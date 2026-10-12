@@ -1210,11 +1210,47 @@ metering/leases/auth with opt-out).
 
 ### 15.2 `count_tokens` on the Anthropic wire
 
-`POST /v1/messages/count_tokens` is reserved and mapped to 401/404/400 with
-no lease and no metering (Lot 3). No token estimator is built: an estimate
-would corrupt Anthropic cache accounting. Native provider counting stays a
-host-transport follow-up (needs a `count` seam on the production
-`ProviderTransport` + mesh attempt).
+`POST /v1/messages/count_tokens` relays the authenticated caller body to the
+Anthropic count endpoint and returns the provider count verbatim. No token
+estimator is built: an estimate would corrupt Anthropic cache accounting.
+
+- Gateway route (Lot 3, evolved to a real relay): a malformed body or a
+  missing model maps to a provider-shaped 400 before authentication;
+  authenticated callers get the frozen unknown-model 404 only for
+  unrecognized IDs. A `safeguards` field in the body is refused fail-closed
+  with 400 (never silently dropped — deliberate deviation from the #633
+  native relay draft, which forwards it when native Messages is enabled).
+  Without an injected `NativeCountTokensPort` the route keeps an explicit
+  provider-shaped refusal (400 `count_tokens is not supported`) so the
+  client falls back to its own local counting.
+- Host port (api, `gateway-count-tokens.ts`, injected through
+  `gateway-route-plane.ts` and the `gw.ts` `nativeCountTokens` option): the
+  trusted host resolves the credential — the caller's provider credential
+  when present, else the owner's claude-code account transport (only under
+  `claude-code` transport mode with an `active` or `cooldown` primary
+  account). Caller fields never select a credential, account or URL, and
+  the model allowlist is the exact `anthropic` catalog, never an alias
+  catalog.
+- Transport headers follow the #633 native Messages contract
+  (`nativeTransportHeaders`): the gateway-validated forwarded headers
+  (`anthropic-beta` and friends) and the negotiated `anthropic-version` ride
+  the provider request, so a body that relies on beta fields or tools is
+  counted exactly as it will be served. Deviation from #633: the count
+  transport uses the Anthropic SDK instead of the native HTTP framer, and
+  `safeguards` is refused instead of forwarded.
+- Per-principal engineering limits apply before dispatch (`nativeCountRate`,
+  429 `rate_limit_error` on exhaustion without a provider call).
+- The account lease taken by the host port is advisory-only: any counting
+  failure completes the reservation with a neutral `failed` outcome — a
+  401/403 from counting never flips the account to `reauth_required`, and a
+  429 from counting never starts a cooldown; the inference account keeps
+  serving. Nothing is metered and no budget is admitted on any count path
+  (the gateway itself takes no lease).
+- Upstream failures are re-exposed provider-shaped and sanitized: 401/403 →
+  generic 401 `authentication_error`; 429 → 429 with the provider
+  `Retry-After` (1-second floor when absent); other 4xx keep their type with
+  a byte-capped public message; network/5xx → sanitized 503
+  `api_error`. No credential, account or host detail rides out.
 
 ### 15.3 Mesh operational gaps 1–4
 

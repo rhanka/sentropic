@@ -1,5 +1,5 @@
 /**
- * Gateway count_tokens host port (spec §15.2 round 2): the port resolves the
+ * Gateway count_tokens host port (spec §15.2): the port resolves the
  * trusted server credential (user provider credential or the owner's
  * claude-code account transport) and relays the caller body to the Anthropic
  * Messages count_tokens endpoint. These tests pin the credential selection,
