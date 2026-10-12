@@ -47,6 +47,8 @@
 - [x] `L6A-EX3` (exception, declared before touching the path): `api/tests/api/live-registration.test.ts` is under Forbidden `api/tests/**` but is mandated by the approved engram contract alignment brief to test PostgresLiveDeclarationStore product-binding persistence, canonical identity derivation, uncertainty states, and single-target revocation. Reason: product-binding integration test suite in API. Impact: new test file only. Rollback: `rm api/tests/api/live-registration.test.ts`.
 - [x] `aligned` (S, engram L6a): the engram-live L6a contract was APPROVED and MERGED in engram PR rhanka/engram#359, merge 3b311dfb, contract commit 70ebdfee9857ba381059896089e4f2d5c19363ea. Mirrored exact canonical derivation and contract validators from 70ebdfee without registry dependency (pinned reference in adapter and TODO-free notes); revocation targets exactly one declaration by the triple declarationId/cloneId/worktreeId; product binding is the complete workspace/issuer/revision triple with strictly increasing revision; identity uncertainty states are explicit (missing_history, shallow_history).
 - [x] Migration sequencing (M6): migration `0010_live_git_declarations.sql` has `idx: 9`, `when: 1791845400000`. It sequences after `feat/cowork-remote-mcp` (which also holds an unmerged `idx: 9` in its branch). Any eventual renumbering will follow the final merge order onto main.
+- [x] Round-1 commit discipline anomalies (m6): commit `2569bbd09` failed standalone compilation due to missing `INITIAL_DECLARATION_REVISION` import, resolved immediately in subsequent commit `0d7778af4`. Commits `0d7778af4`, `3821a06e3`, and `f828d112e` were committed without an updated `BRANCH.md` in-commit. Recorded here permanently per Sentropic review policy (no history rewriting on published review branches).
+- [x] Cluster-mesh package versioning and migration sequencing (m8, M6): `@sentropic/cluster-mesh` remains at `0.14.0` in this branch to avoid a version collision with open PR #662 (which also targets `0.14.0`). When PR #662 merges and `feat/live-git-l6a-s` is rebased onto `origin/main`, `@sentropic/cluster-mesh` will be bumped to `0.15.0` (including root `package-lock.json` and `refresh-lazy-package-lock` for the `selected` fixture). Migration ordering for `0010_live_git_declarations.sql` (M6, `idx: 9`, `when: 1791845400000`) will also be rechecked and sequenced against `origin/main` at that time.
 
 ## AI Flaky tests
 - [x] Acceptance rule: none expected; no AI/provider-dependent test in scope. If a flaky failure appears, record command + failing file + signature here and treat as blocking when related to this branch.
@@ -110,16 +112,16 @@
   - [x] Full validation: lint, typecheck, scoped/full tests, push branch, wait for PR #664 CI fully green (m7).
   - [x] Write fix report .h2a/build/l6a_s_fix_report.md (m8).
 
-- [ ] **Lot 7 — Round-2 review remediation (Opus review N1, m1-m8)**
+- [x] **Lot 7 — Round-2 review remediation (Opus review N1, m1-m8)**
   - [x] Make withdrawal retryable on status withdrawn and support optional binding authorization input (m3).
   - [x] Add missing cluster-mesh tests for binding authorizer, policyVersion, and retryable withdrawal (m2, m3).
   - [x] Decouple live declaration service from route module (m7).
   - [x] Enforce allowed role, active account and approved tenant membership in binding authorizer (N1, m1).
   - [x] Add refusal tests for viewer, inactive account, inactive/revoked membership, and unbound bypass (N1, m1).
   - [x] Cover default transcript persistence in GUARD test (m4).
-  - [ ] Record non-compiling intermediate commit and commits without BRANCH.md in Feedback Loop (m6).
-  - [ ] Record cluster-mesh 0.15.0 deferral to rebase after #662 and M6 migration check in Feedback Loop (m8).
-  - [ ] Full validation and report .h2a/build/l6a_s_r2_report.md.
+  - [x] Record non-compiling intermediate commit and commits without BRANCH.md in Feedback Loop (m6).
+  - [x] Record cluster-mesh 0.15.0 deferral to rebase after #662 and M6 migration check in Feedback Loop (m8).
+  - [x] Full validation and report .h2a/build/l6a_s_r2_report.md.
 
 - [x] **Lot N-1 — Docs consolidation**
   - [x] No `spec/BRANCH_SPEC_EVOL.md` used; nothing to consolidate.
