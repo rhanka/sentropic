@@ -1,9 +1,10 @@
 // Shared chain corpus (L3a v4 §5.3): independent typed chains, allocation
 // rules, CAS ordering and disposal-retained recreation guards.
+// Backend-agnostic: structural port-shaped operations, all awaited (§5.2).
 
 import assert from 'node:assert/strict';
 import { isStorageError } from '../../src/storage/errors.js';
-import type { TestBoundStore } from './reference-store.js';
+import type { Awaitable } from './atomic-corpus.js';
 
 const codeOf = async (operation: () => unknown): Promise<string | null> => {
   try {
@@ -17,22 +18,28 @@ const codeOf = async (operation: () => unknown): Promise<string | null> => {
 
 const record = (id: string, n: number) => ({ id, bytes: `{"n":${n}}`, hash: `hash-${id}-${n}` });
 
-export const runChainCorpus = async (bound: TestBoundStore): Promise<void> => {
-  bound.appendChain('content', record('c', 1), { kind: 'absent', allocation: '0' });
-  bound.appendChain('review', record('r', 1), { kind: 'absent', allocation: '0' });
+export interface ChainCorpusStore {
+  appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
+  readChain(chainId: string): Awaitable<readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[]>;
+  disposeChain(chainId: string): Awaitable<void>;
+}
 
-  assert.equal(bound.readChain('content').length, 1);
-  assert.equal(bound.readChain('review').length, 1);
+export const runChainCorpus = async (bound: ChainCorpusStore): Promise<void> => {
+  await bound.appendChain('content', record('c', 1), { kind: 'absent', allocation: '0' });
+  await bound.appendChain('review', record('r', 1), { kind: 'absent', allocation: '0' });
 
-  bound.appendChain('content', record('c', 2), { kind: 'head', hash: 'hash-c-1' });
-  assert.equal(bound.readChain('content').length, 2);
+  assert.equal((await bound.readChain('content')).length, 1);
+  assert.equal((await bound.readChain('review')).length, 1);
+
+  await bound.appendChain('content', record('c', 2), { kind: 'head', hash: 'hash-c-1' });
+  assert.equal((await bound.readChain('content')).length, 2);
   assert.equal(
-    bound.readChain('review').length,
+    (await bound.readChain('review')).length,
     1,
     'K2a-RED chains: appending content does not allocate the review chain',
   );
 
-  const heads = bound.readChain('content').map((entry) => entry.hash);
+  const heads = (await bound.readChain('content')).map((entry) => entry.hash);
   assert.deepEqual(heads, ['hash-c-1', 'hash-c-2']);
 
   await assert.rejects(
@@ -63,7 +70,7 @@ export const runChainCorpus = async (bound: TestBoundStore): Promise<void> => {
     'K2aC-RED chains: creation under an old absent expectation reports idempotency-conflict',
   );
 
-  bound.disposeChain('content');
+  await bound.disposeChain('content');
   await assert.rejects(
     async () => bound.appendChain('content', record('c', 4), { kind: 'head', hash: 'hash-c-2' }),
     /disposed/,
