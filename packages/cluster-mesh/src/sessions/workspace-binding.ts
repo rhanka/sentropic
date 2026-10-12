@@ -5,6 +5,7 @@ export interface SessionWorkspaceBinding {
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly tenantId: string;
+  readonly principalId: string;
   readonly status: SessionWorkspaceBindingStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -17,7 +18,17 @@ export interface SessionWorkspaceAttachmentInput {
   readonly workspaceId: string;
   readonly sessionTenantId: string;
   readonly workspaceTenantId: string;
+  readonly principalId: string;
 }
+
+export interface SessionWorkspaceActionInput {
+  readonly sessionId: string;
+  readonly tenantId?: string;
+  readonly principalId?: string;
+  readonly isAdmin?: boolean;
+}
+export type SessionWorkspaceDetachInput = SessionWorkspaceActionInput;
+export type SessionWorkspaceEndInput = SessionWorkspaceActionInput;
 
 /** Narrow storage port; movable onto the generic cluster-mesh storage port (L3a) later. */
 export interface SessionWorkspaceBindingStore {
@@ -28,6 +39,7 @@ export interface SessionWorkspaceBindingStore {
 export type SessionWorkspaceBindingErrorCode =
   | 'invalid_request'
   | 'cross_tenant_refused'
+  | 'workspace_rights_refused'
   | 'session_already_attached'
   | 'session_not_attached'
   | 'session_ended'
@@ -59,6 +71,7 @@ export const createSessionWorkspaceBindingService = (
     requireId(input.workspaceId, 'workspaceId');
     requireId(input.sessionTenantId, 'sessionTenantId');
     requireId(input.workspaceTenantId, 'workspaceTenantId');
+    requireId(input.principalId, 'principalId');
     if (input.sessionTenantId !== input.workspaceTenantId) {
       throw new SessionWorkspaceBindingError('cross_tenant_refused', 'workspace tenant does not match session tenant');
     }
@@ -78,30 +91,50 @@ export const createSessionWorkspaceBindingService = (
         );
       }
       const reattached: SessionWorkspaceBinding = {
-        ...existing, workspaceId: input.workspaceId, status: 'attached',
-        updatedAt: now().toISOString(), detachedAt: undefined,
+        ...existing, workspaceId: input.workspaceId, principalId: input.principalId,
+        status: 'attached', updatedAt: now().toISOString(), detachedAt: undefined,
       };
       await store.save(reattached);
       return reattached;
     }
     const timestamp = now().toISOString();
     const binding: SessionWorkspaceBinding = {
-      bindingId: newId(),
-      sessionId: input.sessionId,
-      workspaceId: input.workspaceId,
-      tenantId: input.sessionTenantId,
-      status: 'attached',
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      bindingId: newId(), sessionId: input.sessionId, workspaceId: input.workspaceId,
+      tenantId: input.sessionTenantId, principalId: input.principalId, status: 'attached',
+      createdAt: timestamp, updatedAt: timestamp,
     };
     await store.save(binding);
     return binding;
   };
 
-  const detach = async (sessionId: string): Promise<SessionWorkspaceBinding> => {
+  const findAndAuthorize = async (
+    target: string | SessionWorkspaceDetachInput,
+    tenantIdArg?: string,
+    principalIdArg?: string,
+    isAdminArg = false,
+  ): Promise<SessionWorkspaceBinding> => {
+    const sessionId = typeof target === 'string' ? target : target.sessionId;
+    const tenantId = typeof target === 'string' ? tenantIdArg : target.tenantId;
+    const principalId = typeof target === 'string' ? principalIdArg : target.principalId;
+    const isAdmin = typeof target === 'string' ? isAdminArg : (target.isAdmin ?? false);
     requireId(sessionId, 'sessionId');
     const existing = await store.findBySession(sessionId);
-    if (!existing) throw new SessionWorkspaceBindingError('binding_not_found', 'no binding for session');
+    if (!existing || (tenantId && existing.tenantId !== tenantId)) {
+      throw new SessionWorkspaceBindingError('binding_not_found', 'no binding for session');
+    }
+    if (principalId && existing.principalId !== principalId && !isAdmin) {
+      throw new SessionWorkspaceBindingError('workspace_rights_refused', 'insufficient rights for session');
+    }
+    return existing;
+  };
+
+  const detach = async (
+    target: string | SessionWorkspaceDetachInput,
+    tenantIdArg?: string,
+    principalIdArg?: string,
+    isAdminArg = false,
+  ): Promise<SessionWorkspaceBinding> => {
+    const existing = await findAndAuthorize(target, tenantIdArg, principalIdArg, isAdminArg);
     if (existing.status === 'ended') {
       throw new SessionWorkspaceBindingError('session_ended', 'session is ended and keeps its workspace history');
     }
@@ -116,10 +149,13 @@ export const createSessionWorkspaceBindingService = (
     return detached;
   };
 
-  const end = async (sessionId: string): Promise<SessionWorkspaceBinding> => {
-    requireId(sessionId, 'sessionId');
-    const existing = await store.findBySession(sessionId);
-    if (!existing) throw new SessionWorkspaceBindingError('binding_not_found', 'no binding for session');
+  const end = async (
+    target: string | SessionWorkspaceEndInput,
+    tenantIdArg?: string,
+    principalIdArg?: string,
+    isAdminArg = false,
+  ): Promise<SessionWorkspaceBinding> => {
+    const existing = await findAndAuthorize(target, tenantIdArg, principalIdArg, isAdminArg);
     if (existing.status === 'ended') return existing;
     const timestamp = now().toISOString();
     const ended: SessionWorkspaceBinding = {
@@ -129,9 +165,12 @@ export const createSessionWorkspaceBindingService = (
     return ended;
   };
 
-  const get = async (sessionId: string): Promise<SessionWorkspaceBinding | null> => {
+  const get = async (sessionId: string, tenantId?: string): Promise<SessionWorkspaceBinding | null> => {
     requireId(sessionId, 'sessionId');
-    return store.findBySession(sessionId);
+    const existing = await store.findBySession(sessionId);
+    if (!existing) return null;
+    if (tenantId && existing.tenantId !== tenantId) return null;
+    return existing;
   };
 
   return { attach, detach, end, get };
