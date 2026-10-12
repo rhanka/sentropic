@@ -9,6 +9,7 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'llm-mesh/node',
   'llm-mesh/judge',
   'llm-mesh/judge/host',
+  'llm-mesh/transport/jev',
   'llm-mesh/transport/cloud-code',
   'gateway',
   'gateway/auth',
