@@ -8,5 +8,3 @@ import type { ClusterMeshModules } from '../../modules/contracts.js';
 export async function loadLlmMeshJudge(modules: ClusterMeshModules): Promise<typeof import('@sentropic/llm-mesh/judge')> {
   return (await modules.load('llm-mesh/judge')) as typeof import('@sentropic/llm-mesh/judge');
 }
-
-export const loadJudgeClient = loadLlmMeshJudge;
