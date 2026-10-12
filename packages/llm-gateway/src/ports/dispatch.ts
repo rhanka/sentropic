@@ -23,7 +23,7 @@ export interface RouteAttemptDispatchPort {
   stream(input: RouteAttemptDispatchRequest): Promise<StreamResult>;
 }
 
-export type GatewayWire = 'anthropic-messages' | 'openai-chat-completions';
+export type GatewayWire = 'anthropic-messages' | 'openai-chat-completions' | 'openai-responses';
 
 /**
  * One dispatch unit: the provider-native body passed through verbatim (spec
