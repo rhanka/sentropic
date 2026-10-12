@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import { InMemoryCanonicalStore } from './conformance/in-memory.js';
-import { runCommentsConformance } from './conformance/comments-conformance.js';
+import { runCommentsConformance, conformanceCapacity } from './conformance/comments-conformance.js';
 import {
   defaultDenyCapabilityCheck,
   type DecisionResolutionPort,
   type ResourceResolverPort,
 } from '../src/commands.js';
-import type {
-  CanonicalHttpPorts,
-  CanonicalHttpSurface,
-  CanonicalStorageAdapterSurface,
+import {
+  CANONICAL_READ_PAGE_OUTCOMES,
+  CANONICAL_WIRE_ERROR_CODES,
+  type CanonicalHttpPorts,
+  type CanonicalHttpSurface,
+  type CanonicalRouterFactory,
+  type CanonicalStorageAdapterSurface,
 } from '../src/command-store.js';
 
 describe('canonical comments conformance', () => {
@@ -49,5 +52,27 @@ describe('canonical comments conformance', () => {
     expect(http.ports.store).toBe(store);
     const serialized = `${storage.basis} ${storage.dependencies} ${storage.status} ${http.entrypoint} ${http.factorySignature} ${http.status}`;
     expect(serialized).not.toMatch(/(\.\/|packages\/|src\/|migrations)/);
+
+    const factory: CanonicalRouterFactory<{ composed: boolean }> = (_ports, options) => {
+      expect(options.capacity.batchUnits.limit).toBeGreaterThan(0);
+      return { composed: true };
+    };
+    expect(factory(ports, { capacity: conformanceCapacity() })).toEqual({ composed: true });
+  });
+
+  it('closes the wire error vocabulary', () => {
+    expect([...CANONICAL_WIRE_ERROR_CODES]).toEqual([
+      'unauthenticated',
+      'denied',
+      'not-found',
+      'conflict',
+      'invalid-request',
+      'capacity-exceeded',
+      'incomplete',
+    ]);
+  });
+
+  it('closes the read-page outcome vocabulary', () => {
+    expect([...CANONICAL_READ_PAGE_OUTCOMES]).toEqual(['page', 'incomplete', 'inaccessible']);
   });
 });
