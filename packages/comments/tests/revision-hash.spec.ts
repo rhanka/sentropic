@@ -191,7 +191,7 @@ describe('chain validation', () => {
     expect(() =>
       validateChain([
         { kind: 'comment-revision', link: link(1, null), hash: h1 },
-        { kind: 'comment-revision', link: link(2, h1), hash: digestOf('cycle-2') },
+        { kind: 'comment-revision', link: link(2, h1), hash: h1 },
       ]),
     ).toThrowError(expect.objectContaining({ code: 'chain-cycle' }));
     expect(() =>

@@ -154,7 +154,7 @@ describe('revision content validation', () => {
         ...annotationInput('mentions'),
         body: {
           ...conformanceBody(text),
-          mentions: [{ principal: 'ada', displayText: '@ada', start: 6, end: 10 }],
+          mentions: [{ principal: 'ada', displayText: '@bob', start: 6, end: 10 }],
         },
       }),
     ).toThrowError(expect.objectContaining({ code: 'invalid-mentions' }));
