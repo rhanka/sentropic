@@ -11,6 +11,8 @@
  */
 
 import { hashRecord } from './revision-hash.js';
+import { validateCapacityDescriptor } from './revisions.js';
+import type { CapacityDescriptor } from './revisions.js';
 import type { CanonicalStoreScope } from './command-store.js';
 
 /** Closed review-action set: submission, validation, contest, resolution, withdrawal. */
@@ -177,12 +179,16 @@ const validateReviewAudit = (
  * revisions; the new event pins the exact revision it applies to. A contest
  * must reference a validation of that same revision, a resolution must
  * reference an open contest, and sequencing is enforced against the
- * conservative per-revision state machine.
+ * conservative per-revision state machine. The required capacity descriptor
+ * is validated in full and fails closed when missing or invalid; its values
+ * never enter the event hash.
  */
 export const createReviewEvent = (
   chain: readonly ReviewEventRecord[],
   input: Omit<ReviewEventRecord, 'kind' | 'link' | 'hash'>,
+  capacity: CapacityDescriptor,
 ): ReviewEventRecord => {
+  validateCapacityDescriptor(capacity);
   if (!isReviewAction(input.action)) {
     throw new ReviewValidationError('invalid-action', `Unknown review action: ${String(input.action)}`);
   }

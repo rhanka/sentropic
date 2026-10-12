@@ -317,6 +317,9 @@ export const validateRevisionBody = (body: RevisionBody, capacity?: CapacityDesc
  * invalid values fail closed; no default limit exists.
  */
 export const validateCapacityDescriptor = (capacity: CapacityDescriptor): CapacityDescriptor => {
+  if (typeof capacity !== 'object' || capacity === null || Array.isArray(capacity)) {
+    throw new RevisionValidationError('invalid-capacity', 'Capacity descriptor is missing or malformed');
+  }
   for (const field of Object.keys(CAPACITY_DECLARED_UNITS) as (keyof CapacityDescriptor)[]) {
     const bound = capacity[field];
     const declared = CAPACITY_DECLARED_UNITS[field];
@@ -475,13 +478,20 @@ export type CommentRevisionRecord = {
  * across revisions; a change creates a new annotation through a versioned
  * conversion, never an in-place edit. Content, anchors, geometry or semantic
  * metadata changes always create a new revision.
+ *
+ * The capacity descriptor is a required deployment parameter, never record
+ * content: it is validated in full (a missing or invalid bound fails closed
+ * with `invalid-capacity`), the body, segment and profile bounds are enforced
+ * before any record is built, and its values never enter the record hash.
  */
 export const createAnnotationRevision = (
   previous: AnnotationRevisionRecord | null,
   input: Omit<AnnotationRevisionRecord, 'kind' | 'link' | 'hash'>,
+  capacity: CapacityDescriptor,
 ): AnnotationRevisionRecord => {
+  validateCapacityDescriptor(capacity);
   validateRevisionTargets(input.scope, input.primary, input.secondary);
-  validateRevisionBody(input.body);
+  validateRevisionBody(input.body, capacity);
   validateRevisionProvenance(input.provenance);
   if (previous !== null) {
     if (resourceKey(previous.primary.resource) !== resourceKey(input.primary.resource)) {
@@ -498,12 +508,16 @@ export const createAnnotationRevision = (
  * Create a thread structural revision. The trigger list is closed; assignment,
  * resolution, archive, new replies and a changed live resource alone never
  * create structural revisions. An annotation-bound structure retains the
- * annotation's immutable primary resource identity.
+ * annotation's immutable primary resource identity. The required capacity
+ * descriptor is validated in full and fails closed when missing or invalid;
+ * no structural bound is enforced beyond descriptor validity.
  */
 export const createThreadStructureRevision = (
   previous: ThreadStructureRevisionRecord | null,
   input: Omit<ThreadStructureRevisionRecord, 'kind' | 'link' | 'hash'>,
+  capacity: CapacityDescriptor,
 ): ThreadStructureRevisionRecord => {
+  validateCapacityDescriptor(capacity);
   if (!isStructuralTrigger(input.trigger)) {
     throw new RevisionValidationError('invalid-trigger', `Unknown structural trigger: ${String(input.trigger)}`);
   }
@@ -522,13 +536,18 @@ export const createThreadStructureRevision = (
  * Create a comment revision. In an annotation-bound thread, the comment pins
  * exactly one revision/hash of that annotation; replies may deliberately pin
  * different revisions of the same annotation and old pins stay unchanged.
- * The parent relation is immutable for the lifetime of the comment.
+ * The parent relation is immutable for the lifetime of the comment. The
+ * required capacity descriptor is validated in full (fail closed when missing
+ * or invalid) and its body, segment and profile bounds are enforced; its
+ * values never enter the record hash.
  */
 export const createCommentRevision = (
   previous: CommentRevisionRecord | null,
   input: Omit<CommentRevisionRecord, 'kind' | 'link' | 'hash'>,
+  capacity: CapacityDescriptor,
 ): CommentRevisionRecord => {
-  validateRevisionBody(input.body);
+  validateCapacityDescriptor(capacity);
+  validateRevisionBody(input.body, capacity);
   validateRevisionProvenance(input.provenance);
   if (input.annotationPin !== null && (input.annotationPin.annotationId.length === 0 || input.annotationPin.revisionHash.length === 0)) {
     throw new RevisionValidationError('invalid-pin', 'Annotation pin needs an annotation id and exact revision hash');
