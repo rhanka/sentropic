@@ -269,6 +269,72 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
     expect(done).toMatchObject({ type: 'done', data: { finishReason: 'tool_calls' } });
   });
 
+  it('honors provider finish reasons instead of defaulting to stop (spec §16.4)', async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"content":"cut"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":4,"completion_tokens":12,"total_tokens":16}}\n\n',
+    ];
+    const sse = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const client = new MuseRuntimeClient({ fetch: async () => sse });
+    const events = [];
+    for await (const event of await client.stream({ ...request }, auth)) {
+      events.push(event);
+    }
+    const doneEvents = events.filter((e) => e.type === 'done');
+    expect(doneEvents).toHaveLength(1);
+    expect(doneEvents[0]).toMatchObject({
+      data: {
+        finishReason: 'length', providerRawFinishReason: 'length',
+        usage: { inputTokens: 4, outputTokens: 12, totalTokens: 16 },
+      },
+    });
+  });
+
+  it('treats an early usage-only chunk as accounting, not a terminal stop', async () => {
+    const chunks = [
+      'data: {"choices":[],"usage":{"prompt_tokens":4,"completion_tokens":0,"total_tokens":4}}\n\n',
+      'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":4,"completion_tokens":1,"total_tokens":5}}\n\n',
+    ];
+    const sse = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const client = new MuseRuntimeClient({ fetch: async () => sse });
+    const events = [];
+    for await (const event of await client.stream({ ...request }, auth)) {
+      events.push(event);
+    }
+    const deltas = events.filter((e) => e.type === 'content_delta');
+    expect(deltas.map((e) => (e as { data: { delta: string } }).data.delta).join('')).toBe('hi');
+    const doneEvents = events.filter((e) => e.type === 'done');
+    expect(doneEvents).toHaveLength(1);
+    expect(doneEvents[0]).toMatchObject({
+      data: { finishReason: 'stop', usage: { totalTokens: 5 } },
+    });
+  });
+
+  it('maps JSON finish reasons length and content_filter instead of stop', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-len', choices: [{ message: { content: 'cut' }, finish_reason: 'length' }],
+      usage: { prompt_tokens: 4, completion_tokens: 12, total_tokens: 16 },
+    }), { status: 200 }));
+    const client = new MuseRuntimeClient({ fetch: fetchFn });
+    const response = await client.generate({ ...request }, auth);
+    expect(response.finishReason).toBe('length');
+    expect(response).toMatchObject({ providerRawFinishReason: 'length' });
+  });
+
   it('never invents a reasoning slot on the Meta wire (spec §16.4)', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       id: 'resp-3', choices: [{ message: { content: 'ok' } }],
