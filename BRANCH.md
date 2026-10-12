@@ -99,7 +99,7 @@
   - [x] Align `packages/cluster-mesh/tests/live-registration.spec.ts` on canonical derivation and contract conventions.
   - [x] Swap `api/src/services/cluster-mesh/live-declarations.ts` to canonical derivation and triple-targeted revocation/lookup; make tests GREEN.
 
-- [ ] **Lot 6 — Review remediation (Opus review B1, M1-M7, m1-m8)**
+- [x] **Lot 6 — Review remediation (Opus review B1, M1-M7, m1-m8)**
   - [x] Fix registration validators (M3, m4), derivation helpers (m4) and add parity golden vectors test (m4).
   - [x] Add binding revision, revalidation, and initial binding tests (m3).
   - [x] Enforce durable withdrawal order (M5), mandatory declaration triple (M2), and binding authorization port (B1).
@@ -107,17 +107,17 @@
   - [x] Implement code-workspace binding authorizer in code-git-ports.ts (B1).
   - [x] Upgrade PostgresLiveDeclarationStore with canonicalIdKey (M1), mandatory triple (M2), revision race protection (M4), and authorizer (B1).
   - [x] Add comprehensive RED and GUARD test cases in live-registration.test.ts (B1, M4, m5, M7) and verify green.
-  - [ ] Full validation: lint, typecheck, scoped/full tests, push branch, wait for PR #664 CI fully green (m7).
-  - [ ] Write fix report .h2a/build/l6a_s_fix_report.md (m8).
+  - [x] Full validation: lint, typecheck, scoped/full tests, push branch, wait for PR #664 CI fully green (m7).
+  - [x] Write fix report .h2a/build/l6a_s_fix_report.md (m8).
 
 - [x] **Lot N-1 — Docs consolidation**
   - [x] No `spec/BRANCH_SPEC_EVOL.md` used; nothing to consolidate.
 
-- [ ] **Lot N — Final validation**
+- [x] **Lot N — Final validation**
   - [x] Typecheck & lint for impacted components: `make typecheck-cluster-mesh` (PASS), `make lint-cluster-mesh` (PASS), `make typecheck-api` (PASS), `make lint-api` (PASS, 0 errors / pre-existing warnings).
-  - [x] Retest scoped cluster-mesh suite (cf Lot 2): `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s` (3 passed) and full `make test-cluster-mesh ... ENV=test-live-l6a-s` (54 files / 401 tests passed, 34 skipped; one transient first run recorded under AI Flaky tests); scoped api suite (cf Lot 3): `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts ... ENV=test-live-l6a-s` (16 passed); live-registration test suite: `make test-api-endpoints SCOPE=tests/api/live-registration.test.ts ... ENV=test-live-l6a-s` (3 passed).
+  - [x] Retest scoped cluster-mesh suite (cf Lot 2): `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s` (3 passed) and full `make test-cluster-mesh ... ENV=test-live-l6a-s` (54 files / 401 tests passed, 34 skipped; one transient first run recorded under AI Flaky tests); scoped api suite (cf Lot 3): `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts ... ENV=test-live-l6a-s` (16 passed); live-registration test suite: `make test-api-endpoints SCOPE=tests/api/live-registration.test.ts ... ENV=test-live-l6a-s` (7 passed).
   - [x] Bumped `packages/cluster-mesh/package.json` version to `0.14.0` for the changed `packages/cluster-mesh/src/**` (enforced by CI `enforce-package-bump`).
   - [x] Test evolution (L6A-EX2): adapted the two frozen-journal assertions in `api/tests/api/llm-admission-schema.test.ts` to accept `0010_live_git_declarations` (0008 pinned at idx 8, applied row matched by hash, disposable upgrade expects `journal.entries.length` applied migrations); scoped runs green locally (20 + 16 passed).
-  - [ ] Push branch `feat/live-git-l6a-s`; draft PR #664 updated with approved engram contract alignment; verify CI green.
-  - [ ] `make down API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
-  - [ ] Report `.h2a/build/l6a_s_fix_report.md`.
+  - [x] Push branch `feat/live-git-l6a-s`; draft PR #664 updated with approved engram contract alignment; verify CI green.
+  - [x] `make down API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
+  - [x] Report `.h2a/build/l6a_s_fix_report.md`.
