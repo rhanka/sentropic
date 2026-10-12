@@ -71,6 +71,13 @@
       "when": 1791855645000,
       "tag": "0011_session_workspace_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791845400000,
+      "tag": "0010_live_git_declarations",
+      "breakpoints": true
     }
   ]
 }
