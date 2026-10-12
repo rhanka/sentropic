@@ -14,7 +14,7 @@
 - [x] Zero Python.
 - [x] Engram stays neutral (cluster-mesh imports engram-live, never the inverse).
 - [x] Frozen comments M1 and merged engram L6a identity contract unchanged.
-- [x] Version proposal 0.14.0 recorded below, package not published.
+- [x] Version proposal 0.15.0 recorded below, package not published (0.14.0 taken by feat/live-git-l6a-s).
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] Allowed Paths (implementation scope):
@@ -115,8 +115,8 @@
 - [ ] Lot N — Final validation
   - [ ] Typecheck and Lint
   - [ ] Retest cluster-mesh
-  - [ ] Bumped packages/cluster-mesh/package.json version to 0.14.0 (proposal, not published).
-  - [ ] make scope-check API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
+  - [x] Bumped packages/cluster-mesh/package.json version to 0.15.0 (proposal, not published).
+  - [x] make scope-check API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
   - [ ] Final gate step 1: push branch and open DRAFT PR to main using BRANCH.md text as PR body (never merge).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Write .h2a/build/k1_k2a_report.md with K1 exit SHA and K2a exit SHA.
