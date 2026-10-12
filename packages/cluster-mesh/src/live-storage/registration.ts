@@ -131,6 +131,10 @@ const hasNul = (v: unknown): boolean =>
   typeof v === 'string' && v.includes('\0');
 const isOpaqueId = (v: unknown, prefix: string): v is string =>
   isNonEmptyString(v) && !hasNul(v) && v.startsWith(prefix);
+const isCloneIdReference = (v: unknown): v is string =>
+  isNonEmptyString(v) && v.startsWith(ID_PREFIXES.clone);
+const isWorktreeIdReference = (v: unknown): v is string =>
+  isNonEmptyString(v) && v.startsWith(ID_PREFIXES.worktree);
 const isUncertaintyList = (v: unknown): v is readonly IdentityUncertaintyState[] =>
   Array.isArray(v) && v.every((s) => (IDENTITY_UNCERTAINTY_STATES as readonly string[]).includes(s));
 
@@ -206,7 +210,7 @@ export function deriveCloneIdentity(input: DeriveCloneIdentityInput): CloneIdent
 
 export function deriveWorktreeIdentity(input: DeriveWorktreeIdentityInput): WorktreeIdentityDto {
   if (!isRecord(input)) throw new Error('deriveWorktreeIdentity requires a worktree input object');
-  if (!isRecord(input.clone) || !isOpaqueId(input.clone.cloneId, ID_PREFIXES.clone)) throw new Error('deriveWorktreeIdentity requires a derived clone carrying a canonical cloneId');
+  if (!isRecord(input.clone) || !isCloneIdReference(input.clone.cloneId)) throw new Error('deriveWorktreeIdentity requires a derived clone carrying a canonical cloneId');
   if (!isNonEmptyString(input.hostScope)) throw new Error('deriveWorktreeIdentity requires a non-empty hostScope');
   if (!isNonEmptyString(input.worktreePath)) throw new Error('deriveWorktreeIdentity requires a non-empty worktreePath');
   if (!isNonEmptyString(input.gitDir)) throw new Error('deriveWorktreeIdentity requires a non-empty gitDir');
@@ -234,8 +238,8 @@ export function deriveWorktreeIdentity(input: DeriveWorktreeIdentityInput): Work
 
 export function deriveDeclarationIdentity(input: DeriveDeclarationIdentityInput): DeclarationIdentityDto {
   if (!isRecord(input)) throw new Error('deriveDeclarationIdentity requires a declaration identity input object');
-  if (!isRecord(input.clone) || !isOpaqueId(input.clone.cloneId, ID_PREFIXES.clone)) throw new Error('deriveDeclarationIdentity requires a derived clone carrying a canonical cloneId');
-  if (!isRecord(input.worktree) || !isOpaqueId(input.worktree.worktreeId, ID_PREFIXES.worktree)) throw new Error('deriveDeclarationIdentity requires a derived worktree carrying a canonical worktreeId');
+  if (!isRecord(input.clone) || !isCloneIdReference(input.clone.cloneId)) throw new Error('deriveDeclarationIdentity requires a derived clone carrying a canonical cloneId');
+  if (!isRecord(input.worktree) || !isWorktreeIdReference(input.worktree.worktreeId)) throw new Error('deriveDeclarationIdentity requires a derived worktree carrying a canonical worktreeId');
   if (!isNonEmptyString(input.hostScope)) throw new Error('deriveDeclarationIdentity requires a non-empty hostScope');
   const canonical = canonicalIdKey('declaration', [input.hostScope, input.clone.cloneId, input.worktree.worktreeId]);
   return {
@@ -250,10 +254,18 @@ export function validatePrivatePurgeRequest(request: unknown): ValidationResult 
   if (!isRecord(request)) return { ok: false, errors: ['requestPrivatePurge must be an object'] };
   const errors: string[] = [];
   rejectUnknown(request, PURGE_KEYS, 'requestPrivatePurge', errors);
-  if (request.purgePrivateSnapshots !== true) errors.push('requestPrivatePurge.purgePrivateSnapshots must be true');
-  if (request.purgeDerivedIndexes !== true) errors.push('requestPrivatePurge.purgeDerivedIndexes must be true');
-  if (request.revokeDecryptability !== true) errors.push('requestPrivatePurge.revokeDecryptability must be true');
-  if (request.preserveCommittedHistory !== true) errors.push('requestPrivatePurge.preserveCommittedHistory must be true');
+  if (request.purgePrivateSnapshots !== true) {
+    errors.push('requestPrivatePurge.purgePrivateSnapshots must be true (revocation always purges private snapshots)');
+  }
+  if (request.purgeDerivedIndexes !== true) {
+    errors.push('requestPrivatePurge.purgeDerivedIndexes must be true (revocation always purges derived indexes)');
+  }
+  if (request.revokeDecryptability !== true) {
+    errors.push('requestPrivatePurge.revokeDecryptability must be true (revocation always revokes decryptability)');
+  }
+  if (request.preserveCommittedHistory !== true) {
+    errors.push('requestPrivatePurge.preserveCommittedHistory must be true (revocation never deletes committed history)');
+  }
   return { ok: errors.length === 0, errors };
 }
 
@@ -291,11 +303,17 @@ export function validateWorkspaceDeclaration(declaration: unknown): ValidationRe
   if (!isOpaqueId(declaration.declarationId, ID_PREFIXES.declaration)) errors.push(`declaration.declarationId must be a non-empty opaque id starting with "${ID_PREFIXES.declaration}"`);
   if (!isOpaqueId(declaration.cloneId, ID_PREFIXES.clone)) errors.push(`declaration.cloneId must be a non-empty opaque id starting with "${ID_PREFIXES.clone}"`);
   if (!isOpaqueId(declaration.worktreeId, ID_PREFIXES.worktree)) errors.push(`declaration.worktreeId must be a non-empty opaque id starting with "${ID_PREFIXES.worktree}"`);
-  if (!Array.isArray(declaration.authorizedRoots) || declaration.authorizedRoots.length === 0 || !declaration.authorizedRoots.every((r) => isNonEmptyString(r) && !hasNul(r))) {
-    errors.push('declaration.authorizedRoots must be a non-empty array of non-empty strings without NUL');
+  if (!Array.isArray(declaration.authorizedRoots) || declaration.authorizedRoots.length === 0) {
+    errors.push('declaration.authorizedRoots must be a non-empty array');
+  } else if (declaration.authorizedRoots.some((r: unknown) => !isNonEmptyString(r) || hasNul(r))) {
+    errors.push('declaration.authorizedRoots entries must be non-empty strings without NUL');
   }
-  if (declaration.liveCapability !== EXPLICIT_LIVE_CAPABILITY) errors.push(`declaration.liveCapability must be "${EXPLICIT_LIVE_CAPABILITY}"`);
-  if (!isNonEmptyString(declaration.policyVersion) || hasNul(declaration.policyVersion)) errors.push('declaration.policyVersion must be a non-empty string without NUL');
+  if (declaration.liveCapability !== EXPLICIT_LIVE_CAPABILITY) {
+    errors.push('declaration.liveCapability must be the explicit string "live" (bind/upload is not activation)');
+  }
+  if (declaration.policyVersion !== POLICY_VERSION) {
+    errors.push(`declaration.policyVersion must be the fixed live policy version "${POLICY_VERSION}"`);
+  }
   if (!isPositiveInteger(declaration.declarationRevision) || (declaration.declarationRevision as number) < INITIAL_DECLARATION_REVISION) {
     errors.push(`declaration.declarationRevision must be an integer >= ${INITIAL_DECLARATION_REVISION}`);
   }
