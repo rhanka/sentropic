@@ -80,7 +80,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
     - [x] `make ps-all API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
     - [ ] `make scope-check API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
 
-- [ ] **Lot 1 — D1 durable session workspace binding**
+- [x] **Lot 1 — D1 durable session workspace binding**
   - [x] RED: add `packages/cluster-mesh/tests/session-workspace.spec.ts` (rights, idempotence, restart, cross-tenant refusal, reuse, keep after detach and end)
   - [x] RED: add `api/tests/api/session-adoption.test.ts` (attach existing, create new, reuse, keep project and history after detach and end, rights, idempotence, restart, cross-tenant refusal)
   - [x] GREEN: add `packages/cluster-mesh/src/sessions/workspace-binding.ts` (pure binding behind narrow storage port for later L3a move)
@@ -89,20 +89,20 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: extend `api/src/db/control-schema.ts` with `sessionWorkspaceBindings`
   - [x] GREEN: add `api/drizzle/control/0011_session_workspace_bindings.sql` (one migration, BR01-EX1)
   - [x] GREEN: add `api/src/services/cluster-mesh/session-workspace.ts` (attach and create existing Sentropic workspace durably, reuse, keep after detach and end)
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
-    - [ ] `make lint-cluster-mesh API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
-    - [ ] **API tests**
-      - [ ] Update `api/tests/api/session-adoption.test.ts` (new)
-      - [ ] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
-      - [ ] Sub-lot gate: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
-      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-session-ws` and document status/signature in `BRANCH.md`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] No UI changes in LOT1
-      - [ ] Sub-lot gate: `make test-ui ENV=test-session-ws`
-    - [ ] **E2E tests**
-      - [ ] No E2E changes in LOT1
-    - [ ] `make test-cluster-mesh SCOPE=tests/session-workspace.spec.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+    - [x] `make lint-cluster-mesh API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+    - [x] **API tests**
+      - [x] Update `api/tests/api/session-adoption.test.ts` (new)
+      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+      - [x] Sub-lot gate: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
+      - [x] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-session-ws` and document status/signature in `BRANCH.md`
+    - [x] **UI tests (TypeScript only)**
+      - [x] No UI changes in LOT1
+      - [x] Sub-lot gate: `make test-ui ENV=test-session-ws`
+    - [x] **E2E tests**
+      - [x] No E2E changes in LOT1
+    - [x] `make test-cluster-mesh SCOPE=tests/session-workspace.spec.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
