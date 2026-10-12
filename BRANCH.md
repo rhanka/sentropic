@@ -104,7 +104,7 @@
   - [x] Add binding revision, revalidation, and initial binding tests (m3).
   - [x] Enforce durable withdrawal order (M5), mandatory declaration triple (M2), and binding authorization port (B1).
   - [x] Correct control-schema comments and BRANCH.md allowed paths and migration sequencing (m6, M6).
-  - [ ] Implement code-workspace binding authorizer in code-git-ports.ts (B1).
+  - [x] Implement code-workspace binding authorizer in code-git-ports.ts (B1).
   - [ ] Upgrade PostgresLiveDeclarationStore with canonicalIdKey (M1), mandatory triple (M2), revision race protection (M4), and authorizer (B1).
   - [ ] Add comprehensive RED and GUARD test cases in live-registration.test.ts (B1, M4, m5, M7) and verify green.
   - [ ] Full validation: lint, typecheck, scoped/full tests, push branch, wait for PR #664 CI fully green (m7).
