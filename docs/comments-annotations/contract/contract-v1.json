@@ -1,0 +1,1084 @@
+{
+  "manifestVersion": 1,
+  "contractVersion": "contract-v1",
+  "hashVersion": "revision-hash-v1",
+  "status": "frozen",
+  "scope": "M1 canonical contract only; not an M2 storage, M3 API or package-delivery acceptance",
+  "source": {
+    "repository": "rhanka/sentropic",
+    "branch": "feat/comments-annotations-model",
+    "commit": "7b8e5daf022cc58819dfdfae43cd89a703a82f96",
+    "documentaryBaseCommit": "90e7a9fd89c58178aa889d83dee7b1c3099f08ca",
+    "pinnedMainAncestor": "dc95f7e4f88048e9671002827537cde4cb8149b7",
+    "observedOn": "2026-10-12",
+    "headResolution": "Resolved with git rev-parse HEAD in the worktree; branch feat/comments-annotations-model verified with git branch --show-current.",
+    "checksumMethod": "sha256sum on actual raw file bytes in this worktree at the observed HEAD. Source files and local review evidence are distinguished below; no clean-tree, build or package-install attestation is made here."
+  },
+  "references": {
+    "spec": {
+      "path": "spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md",
+      "sha256": "abf5b628063a93c92335ab660aeb68b23e40bc3c0c32233ce68b87be99a9ad9f",
+      "sections": [
+        "3",
+        "4.1-4.6",
+        "5",
+        "6.2",
+        "9.1"
+      ]
+    },
+    "plan": {
+      "path": "docs/comments-annotations/plan/BRANCH_P1_TEMPLATE.md",
+      "sha256": "c7a21ddd5d63ed60a89537dcd9694722977be6d84871068b6c61a814d6e558e4",
+      "section": "Lot 1 — M1 canonical contracts and contract-freeze receipt"
+    },
+    "branchPlan": {
+      "path": "BRANCH.md",
+      "sha256": "7f84132b53636d8df5302dfc379815b9898ffe8f554a36366fad83b8946ab97e"
+    }
+  },
+  "ownerDecision": {
+    "date": "2026-10-11",
+    "source": {
+      "path": ".h2a/inputs/contract_freeze_brief.md",
+      "sha256": "5c4a7ca39c199a1984a5bded7eeedca053bde96f912899fa6a9970a557f4d787",
+      "availability": "local ignored input; the relevant decision is reproduced here"
+    },
+    "statement": "Storage and API of the model will be a cluster-mesh module (M2); packages/comments keeps the contract. The freeze covers the CONTRACT only. M2/M3 exports are later/due on the cluster-mesh module side, not in comments/pg.",
+    "precedence": "Supersedes storage/API placement in SPEC sections 1/3/9.1, the plan and CanonicalPgSurface/CanonicalHonoSurface at the source commit. It does not change the hashed model, invent module entrypoints or attest implementation.",
+    "contractOwner": "@sentropic/comments",
+    "implementationOwner": "cluster-mesh module",
+    "implementationAvailability": "due"
+  },
+  "artifacts": [
+    {
+      "id": "package",
+      "path": "packages/comments/package.json",
+      "sha256": "821786727350ec56d333b6c8a6199f278c3a72cf1d642c44aaaac25b4f419d08",
+      "roles": [
+        "package identity and current export map"
+      ],
+      "packageName": "@sentropic/comments",
+      "workingVersion": "0.3.0",
+      "currentExports": {
+        ".": {
+          "types": "./dist/index.d.ts",
+          "import": "./dist/index.js"
+        },
+        "./hono": {
+          "types": "./dist/hono.d.ts",
+          "import": "./dist/hono.js"
+        }
+      },
+      "availability": "source manifest; no built or published artifact attested"
+    },
+    {
+      "id": "root",
+      "path": "packages/comments/src/index.ts",
+      "sha256": "c12f9ecc2556fe16dd1766ce0ec40ce228d7efdb2829e47b2e1d9d4ef17bbdf0",
+      "roles": [
+        "exact root export inventory"
+      ],
+      "entrypoint": "@sentropic/comments",
+      "signatureAuthority": "The checksummed source modules below define the exact TypeScript signatures and optionality; generated declarations are not substituted."
+    },
+    {
+      "id": "anchors",
+      "path": "packages/comments/src/anchors.ts",
+      "sha256": "83f238f8121cd66ad0a0f93881f4bebb3abb0614cc7631c99b54ef6e5046e49c",
+      "roles": [
+        "identity and anchor schemas",
+        "source-version indicators",
+        "resolver outcomes"
+      ],
+      "publicTypes": [
+        "Anchor",
+        "CaptureAnchor",
+        "CanonicalScope",
+        "DataAnchor",
+        "FieldAnchor",
+        "FieldSelector",
+        "CanonicalFieldSelector",
+        "ResolverOutcome",
+        "ResourceRef",
+        "SourceVersionIndicator",
+        "TextAnchor",
+        "UiAnchor"
+      ],
+      "publicValues": [
+        "AnchorValidationError",
+        "isCanonicalScope",
+        "isResourceRef",
+        "isSourceVersionIndicator",
+        "resourceKey",
+        "scopeKey",
+        "validateAnchor"
+      ],
+      "aliases": [
+        {
+          "name": "CanonicalFieldSelector",
+          "sourceName": "FieldSelector"
+        }
+      ]
+    },
+    {
+      "id": "geometry",
+      "path": "packages/comments/src/geometry.ts",
+      "sha256": "75bf806ba5ade9dedb8f9b5f85685d70199a335866342589e050fbe48506fede",
+      "roles": [
+        "geometry input and output DTOs",
+        "frame and quantizer descriptor"
+      ],
+      "publicTypes": [
+        "BoxGeometryInput",
+        "CircleGeometryInput",
+        "GeometryFrame",
+        "GeometryInput",
+        "QuantizedBox",
+        "QuantizedCircle",
+        "QuantizedGeometry"
+      ],
+      "publicValues": [
+        "GEOMETRY_SCALE",
+        "GeometryValidationError",
+        "quantizeMillionths",
+        "validateBox",
+        "validateCircle",
+        "validateGeometry"
+      ]
+    },
+    {
+      "id": "canonical-json",
+      "path": "packages/comments/src/canonical-json.ts",
+      "sha256": "b7dc124252de880ca21bf36caed8d76e7d24a10718e0c4954dc9f3675847d45f",
+      "roles": [
+        "canonical serialization"
+      ],
+      "publicValues": [
+        "CanonicalizationError",
+        "canonicalJson"
+      ]
+    },
+    {
+      "id": "sha256",
+      "path": "packages/comments/src/sha256.ts",
+      "sha256": "23eeb9f8f479b111675c6d667f5f99a4c60ed76bfde822f2cdf6ae77e98619da",
+      "roles": [
+        "SHA-256 implementation"
+      ],
+      "publicValues": [
+        "sha256Hex"
+      ]
+    },
+    {
+      "id": "revision-hash",
+      "path": "packages/comments/src/revision-hash.ts",
+      "sha256": "280e9cd22e2f748ec8989e3499acfc89fa9393db90825e8c9dddf32aa9c1069d",
+      "roles": [
+        "record-kind vocabulary",
+        "hash envelope and chain contracts"
+      ],
+      "publicTypes": [
+        "ChainLink",
+        "HashEnvelope",
+        "RecordKind"
+      ],
+      "publicValues": [
+        "RECORD_KINDS",
+        "REVISION_HASH_VERSION",
+        "RevisionHashError",
+        "canonicalRecordBytes",
+        "hashRecord",
+        "isChainLink",
+        "isRecordKind",
+        "validateChain"
+      ]
+    },
+    {
+      "id": "revisions",
+      "path": "packages/comments/src/revisions.ts",
+      "sha256": "5e6e78efd130afa8456b60ac9dc0f7ec74c17b2926d9d737d6f1dd60cdded65c",
+      "roles": [
+        "revision DTOs",
+        "provenance and source-time schemas",
+        "body codec, mention, segment, profile and capacity descriptors"
+      ],
+      "publicTypes": [
+        "AnnotationRevisionRecord",
+        "BodyCodecDescriptor",
+        "BodyMention",
+        "BodySegment",
+        "CapacityBound",
+        "CapacityDescriptor",
+        "CapacityUnit",
+        "CommentRevisionRecord",
+        "DocumentaryAttribution",
+        "ImportExecution",
+        "RevisionBody",
+        "RevisionProvenance",
+        "RevisionRegistration",
+        "RevisionTargetBinding",
+        "SemanticFieldValue",
+        "SemanticProfile",
+        "SourceTime",
+        "StructuralTrigger",
+        "ThreadStructureRevisionRecord",
+        "VisualAnchorBinding"
+      ],
+      "publicValues": [
+        "STRUCTURAL_TRIGGERS",
+        "RevisionValidationError",
+        "checkRevisionBodyCapacity",
+        "createAnnotationRevision",
+        "createCommentRevision",
+        "createThreadStructureRevision",
+        "isStructuralTrigger",
+        "validateCapacityDescriptor",
+        "validateRevisionBody",
+        "validateRevisionProvenance",
+        "validateRevisionTargets"
+      ]
+    },
+    {
+      "id": "command-store",
+      "path": "packages/comments/src/command-store.ts",
+      "sha256": "912efa9278be93720887b58af75df91e4d2aad85f4a898faad6130a441616ec5",
+      "roles": [
+        "driver-agnostic transaction and persistence ports",
+        "declared future storage and HTTP surfaces",
+        "canonical wire DTOs, batch semantics, paged chain reads and router entrypoint"
+      ],
+      "publicTypes": [
+        "CanonicalStoreScope",
+        "CanonicalTransactionHandle",
+        "CanonicalCommandStore",
+        "CanonicalStorageAdapterSurface",
+        "CanonicalHttpSurface",
+        "CanonicalHttpPorts",
+        "CanonicalHttpCapability",
+        "CanonicalImportManifest",
+        "CanonicalUnitReceipt",
+        "CanonicalBatchReceiptSnapshot",
+        "CanonicalConversionReport",
+        "CanonicalChainRecord",
+        "CanonicalReadSelection",
+        "CanonicalPageRequest",
+        "CanonicalReadPage",
+        "CanonicalReadPageOutcome",
+        "CanonicalWireError",
+        "CanonicalWireErrorCode",
+        "CanonicalReviewRequest",
+        "CanonicalLifecycleRequest",
+        "CanonicalImportUnit",
+        "CanonicalBatchImportRequest",
+        "CanonicalUnitOutcome",
+        "CanonicalBatchImportResponse",
+        "CanonicalBatchExportRequest",
+        "CanonicalBatchExportResponse",
+        "CanonicalRouterOptions",
+        "CanonicalRouterFactory"
+      ],
+      "publicValues": [
+        "CANONICAL_READ_PAGE_OUTCOMES",
+        "CANONICAL_WIRE_ERROR_CODES"
+      ]
+    },
+    {
+      "id": "commands",
+      "path": "packages/comments/src/commands.ts",
+      "sha256": "b4c0f9558a0130e4774cd6fa4a75ef077ee0e18abb8a50398ed430b17bcb798c",
+      "roles": [
+        "command and decision DTOs",
+        "capability, resource and decision ports",
+        "CAS, idempotency and proposal-digest contracts"
+      ],
+      "publicTypes": [
+        "CanonicalCommandEnvelope",
+        "CapabilityCheckPort",
+        "CommandActor",
+        "CommandCapability",
+        "CommittedCommand",
+        "DecisionEvidence",
+        "DecisionResolutionPort",
+        "ExpectedState",
+        "ResourceResolverPort"
+      ],
+      "publicValues": [
+        "COMMAND_CAPABILITIES",
+        "CanonicalCommandError",
+        "checkDecisionEvidence",
+        "commandIdempotencyKey",
+        "commandPayloadDigest",
+        "computeProposedContentDigest",
+        "defaultDenyCapabilityCheck",
+        "isCommandCapability",
+        "resolveIdempotentReplay"
+      ]
+    },
+    {
+      "id": "reviews",
+      "path": "packages/comments/src/reviews.ts",
+      "sha256": "940d14d3439c7d435f356f7ccc460a89267a0c17814ab44d2233c721c5b6853e",
+      "roles": [
+        "review and contest DTOs",
+        "review projections"
+      ],
+      "publicTypes": [
+        "ContestView",
+        "ReviewAction",
+        "ReviewAgentProposal",
+        "ReviewDecisionAudit",
+        "ReviewDecisionOutcome",
+        "ReviewEventRecord",
+        "ReviewExecutorAudit",
+        "ReviewProjection",
+        "ReviewState"
+      ],
+      "publicValues": [
+        "REVIEW_ACTIONS",
+        "REVIEW_DECISION_OUTCOMES",
+        "ReviewValidationError",
+        "createReviewEvent",
+        "isReviewAction",
+        "isReviewDecisionOutcome",
+        "projectReviewState",
+        "projectRevisionReview"
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "path": "packages/comments/src/lifecycle.ts",
+      "sha256": "1502a16733f2dfa6ba1abf6027066501a921fc646bea8752ec18b5f87904d2f3",
+      "roles": [
+        "lifecycle and operation-audit DTOs",
+        "archive, tombstone and purge projections"
+      ],
+      "publicTypes": [
+        "ArchiveKind",
+        "LifecycleAction",
+        "LifecycleEventRecord",
+        "LifecycleObjectKind",
+        "LifecycleProjection",
+        "OperationAuditEventRecord",
+        "OperationAuditSubject",
+        "PurgeState"
+      ],
+      "publicValues": [
+        "ARCHIVE_KINDS",
+        "LIFECYCLE_ACTIONS",
+        "LIFECYCLE_OBJECT_KINDS",
+        "OPERATION_AUDIT_SUBJECTS",
+        "LifecycleValidationError",
+        "OperationAuditValidationError",
+        "createLifecycleEvent",
+        "createOperationAuditEvent",
+        "isArchiveKind",
+        "isLifecycleAction",
+        "isLifecycleObjectKind",
+        "isOperationAuditSubject",
+        "projectLifecycleState"
+      ]
+    },
+    {
+      "id": "submissions",
+      "path": "packages/comments/src/submissions.ts",
+      "sha256": "b9cce84efea5f9f5c9be6492c085250d5ade75303596f78d737baee5f906fe27",
+      "roles": [
+        "prepared-submission manifest and receipt DTOs",
+        "exact selection pins"
+      ],
+      "publicTypes": [
+        "PreparedSubmissionManifest",
+        "PreparedSubmissionReceipt",
+        "SelectedCommentRevision",
+        "SelectedStructureRevision"
+      ],
+      "publicValues": [
+        "SubmissionValidationError",
+        "createPreparedSubmissionManifest",
+        "recoverPreparedSubmissionReceipt",
+        "verifyPreparedSubmission"
+      ]
+    }
+  ],
+  "recordKinds": [
+    {
+      "kind": "annotation-revision",
+      "artifact": "revisions",
+      "type": "AnnotationRevisionRecord",
+      "stream": "scope + annotationId",
+      "corpusRecord": "annotation-genesis",
+      "availability": "M1 typed record and hash implementation"
+    },
+    {
+      "kind": "thread-structure-revision",
+      "artifact": "revisions",
+      "type": "ThreadStructureRevisionRecord",
+      "stream": "scope + threadId",
+      "corpusRecord": "thread-structure-genesis",
+      "availability": "M1 typed record and hash implementation"
+    },
+    {
+      "kind": "comment-revision",
+      "artifact": "revisions",
+      "type": "CommentRevisionRecord",
+      "stream": "scope + commentId",
+      "corpusRecord": "comment-genesis",
+      "availability": "M1 typed record and hash implementation"
+    },
+    {
+      "kind": "review-event",
+      "artifact": "reviews",
+      "type": "ReviewEventRecord",
+      "stream": "scope + annotationId, across annotation revisions",
+      "corpusRecord": "review-submit",
+      "availability": "M1 typed record and hash implementation"
+    },
+    {
+      "kind": "prepared-submission-manifest",
+      "artifact": "submissions",
+      "type": "PreparedSubmissionManifest",
+      "stream": "standalone genesis with exact dependency pins",
+      "corpusRecord": "prepared-submission",
+      "availability": "M1 typed record and hash implementation"
+    },
+    {
+      "kind": "import-manifest",
+      "artifact": "revision-hash",
+      "type": "HashEnvelope",
+      "stream": "standalone genesis with typed dependencies",
+      "corpusRecord": "import-manifest",
+      "availability": "M1 discriminator, generic hash envelope, fixture and declared CanonicalImportManifest wire DTO on the command-store port; service implementation due M2/M3 in the cluster-mesh module"
+    },
+    {
+      "kind": "unit-receipt",
+      "artifact": "revision-hash",
+      "type": "HashEnvelope",
+      "stream": "standalone genesis with typed dependencies",
+      "corpusRecord": "unit-receipt",
+      "availability": "M1 discriminator, generic hash envelope, fixture and declared CanonicalUnitReceipt wire DTO on the command-store port; service implementation due M2/M3 in the cluster-mesh module"
+    },
+    {
+      "kind": "batch-receipt-snapshot",
+      "artifact": "revision-hash",
+      "type": "HashEnvelope",
+      "stream": "scope + batchId; immutable progress snapshots",
+      "corpusRecord": "batch-receipt-snapshot",
+      "availability": "M1 discriminator, generic hash envelope, fixture and declared CanonicalBatchReceiptSnapshot wire DTO on the command-store port; service implementation due M2/M3 in the cluster-mesh module"
+    },
+    {
+      "kind": "lifecycle-event",
+      "artifact": "lifecycle",
+      "type": "LifecycleEventRecord",
+      "stream": "scope + objectKind + objectId",
+      "corpusRecord": "lifecycle-tombstone",
+      "availability": "M1 typed record and hash implementation"
+    },
+    {
+      "kind": "operation-audit-event",
+      "artifact": "lifecycle",
+      "type": "OperationAuditEventRecord",
+      "stream": "scope + subject + subjectId; principal/audience in payload",
+      "corpusRecord": "operation-audit-assignment",
+      "availability": "M1 typed record and hash implementation"
+    },
+    {
+      "kind": "conversion-report",
+      "artifact": "revision-hash",
+      "type": "HashEnvelope",
+      "stream": "host operation/inventory reference within scope",
+      "corpusRecord": "conversion-report",
+      "availability": "M1 discriminator, generic hash envelope, fixture and declared CanonicalConversionReport wire DTO on the command-store port; service implementation due M2/M3 in the cluster-mesh module"
+    }
+  ],
+  "descriptors": {
+    "hash": {
+      "artifacts": [
+        "canonical-json",
+        "sha256",
+        "revision-hash"
+      ],
+      "algorithm": "SHA-256",
+      "encoding": "RFC 8785 canonical UTF-8 JSON restricted to the source validator's accepted values",
+      "envelope": "{ kind, hashVersion: 'revision-hash-v1', ...envelope }; envelope cannot override kind or hashVersion",
+      "resultingHash": "Excluded from its own input; callers remove kind/hash from stored records before rehashing.",
+      "schemaVersion": "contract-v1 identifies this source schema snapshot; no extra schemaVersion field is added to the wire envelope.",
+      "integers": "Safe integers; untyped floats, unsafe integers and lone surrogates are rejected.",
+      "chains": "Sequence starts at 1 with previousHash null; ordered sequences, predecessor hashes, expected kinds and repeated-digest denial are defined by validateChain.",
+      "unhashed": "Mutable heads, assignment/resolution/account projections, review applicability, tombstone/purge projections, idempotency indexes and delivery infrastructure are not extra record kinds."
+    },
+    "anchors": {
+      "artifact": "anchors",
+      "kinds": [
+        "data",
+        "field",
+        "text",
+        "ui",
+        "capture"
+      ],
+      "sourceVariants": [
+        "observed",
+        "fixed-at-conversion",
+        "unknown"
+      ],
+      "resolverOutcomes": [
+        "exact",
+        "source-changed",
+        "unresolved",
+        "unavailable"
+      ],
+      "fieldSelectors": [
+        "stable-id",
+        "json-pointer"
+      ],
+      "textOffsets": "Unicode code points; end exclusive; no implicit Unicode/newline normalization"
+    },
+    "quantizer": {
+      "artifact": "geometry",
+      "scale": 1000000,
+      "input": "base-ten decimal string",
+      "grammar": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+      "rounding": "Exact rational arithmetic, ties toward positive infinity; negative zero becomes zero.",
+      "shapes": [
+        "box",
+        "circle"
+      ],
+      "box": "Quantize endpoints, derive width/height by subtraction; reject collapse.",
+      "circle": "Center normalized by width/height, radius by min(width,height); full-disk containment before and after quantization.",
+      "frame": "Positive safe-integer intrinsic pixel dimensions and digest; optional versioned crop with integer origins."
+    },
+    "provenance": {
+      "artifact": "revisions",
+      "types": [
+        "RevisionRegistration",
+        "DocumentaryAttribution",
+        "SourceTime",
+        "ImportExecution",
+        "RevisionProvenance"
+      ],
+      "attributionVariants": [
+        "human",
+        "ai",
+        "unknown"
+      ],
+      "registration": "Principal and integer UTC epoch milliseconds.",
+      "sourceTime": "Preserve lexical date, kind, precision and optional evidenced zone/parsed instant; absence is not fabricated history.",
+      "evidenceVocabulary": "Exact source types are pinned; string-valued classifications are not represented as closed enums or authenticated assertions."
+    },
+    "body": {
+      "artifact": "revisions",
+      "formats": [
+        "plain",
+        "commonmark"
+      ],
+      "codecFields": [
+        "format",
+        "codecId",
+        "specDigest",
+        "extensions"
+      ],
+      "types": [
+        "BodyCodecDescriptor",
+        "BodySegment",
+        "BodyMention",
+        "RevisionBody",
+        "SemanticFieldValue",
+        "SemanticProfile"
+      ],
+      "spans": "Ordered, non-overlapping code-point spans, end exclusive; exact body text.",
+      "profileValues": "Strings, booleans, null, safe integers or recursive field objects; arrays and unsupported values rejected.",
+      "qualification": "Codec/profile descriptor shapes are pinned. Fixture specDigest/schema labels are synthetic, not a qualified CommonMark specification or host profile."
+    },
+    "capacity": {
+      "artifact": "revisions",
+      "types": [
+        "CapacityUnit",
+        "CapacityBound",
+        "CapacityDescriptor"
+      ],
+      "validators": [
+        "validateCapacityDescriptor",
+        "checkRevisionBodyCapacity",
+        "validateRevisionBody"
+      ],
+      "fields": {
+        "body": [
+          "utf8-bytes"
+        ],
+        "segment": [
+          "utf8-bytes"
+        ],
+        "profile": [
+          "canonical-bytes"
+        ],
+        "unitManifest": [
+          "utf8-bytes",
+          "canonical-bytes"
+        ],
+        "unitPayload": [
+          "utf8-bytes",
+          "canonical-bytes"
+        ],
+        "batchUnits": [
+          "units"
+        ],
+        "batchManifest": [
+          "utf8-bytes",
+          "canonical-bytes"
+        ],
+        "batchRequest": [
+          "utf8-bytes",
+          "canonical-bytes"
+        ],
+        "pageRecords": [
+          "records"
+        ],
+        "pageEncodedBytes": [
+          "utf8-bytes",
+          "canonical-bytes"
+        ]
+      },
+      "limitRule": "Every bound requires a positive safe-integer limit and a unit allowed for that field; missing/invalid bounds reject with invalid-capacity.",
+      "enforcement": "checkRevisionBodyCapacity checks body/segment UTF-8 bytes and profile canonical bytes; validateRevisionBody accepts capacity as an optional argument.",
+      "operationalValues": null,
+      "operationalValuesStatus": "due; no measured/deployment limits or defaults are supplied by these source artifacts",
+      "qualificationGate": "SPEC section 4.6 says missing values block contract freeze. The fix review accepts the schema but defers operational qualification to production; this receipt does not silently waive the earlier SPEC gate."
+    },
+    "commands": {
+      "artifacts": [
+        "commands",
+        "command-store"
+      ],
+      "capabilities": [
+        "read",
+        "comment",
+        "revise",
+        "assign",
+        "resolve-discussion",
+        "review",
+        "contest",
+        "resolve-contest",
+        "shared-archive",
+        "shared-restore",
+        "personal-archive",
+        "tombstone",
+        "purge",
+        "submit-to-ai"
+      ],
+      "ports": [
+        "CanonicalCommandStore",
+        "CanonicalTransactionHandle",
+        "CapabilityCheckPort",
+        "ResourceResolverPort",
+        "DecisionResolutionPort",
+        "CanonicalHttpPorts"
+      ],
+      "dtos": [
+        "CanonicalCommandEnvelope",
+        "ExpectedState",
+        "CommandActor",
+        "DecisionEvidence",
+        "CommittedCommand",
+        "CanonicalHttpCapability"
+      ],
+      "defaultAuthority": "defaultDenyCapabilityCheck denies every capability.",
+      "decisionBinding": "Exact existing revision hash, or creation aggregate version plus proposed-content digest; no future output-hash circularity.",
+      "boundaries": "Root contract and transaction handle remain driver-agnostic; no Drizzle/pg type or runtime is introduced by this manifest."
+    },
+    "reviewAndLifecycle": {
+      "artifacts": [
+        "reviews",
+        "lifecycle"
+      ],
+      "reviewActions": [
+        "submit",
+        "validate",
+        "contest",
+        "resolve-contest",
+        "withdraw"
+      ],
+      "decisionOutcomes": [
+        "accept",
+        "reject",
+        "abstain"
+      ],
+      "lifecycleObjectKinds": [
+        "annotation",
+        "thread",
+        "comment"
+      ],
+      "lifecycleActions": [
+        "archive",
+        "restore",
+        "tombstone",
+        "purge-intent",
+        "purge-outcome"
+      ],
+      "archiveKinds": [
+        "shared",
+        "personal"
+      ],
+      "auditSubjects": [
+        "assignment",
+        "discussion-state",
+        "archive",
+        "account-association"
+      ],
+      "semantics": "Review binds exact revision hashes; resolved contests need renewed validation. Archive is reversible; tombstone cannot be undone; purge requires intent/outcome. Current source applicability and authority remain host-qualified."
+    }
+  },
+  "vectorCorpus": {
+    "path": "packages/comments/tests/fixtures/revision-hash-v1.json",
+    "sha256": "26ee62b09d22f39438c344a9223564f08e696eeba95ddd0558f357407a40f0c0",
+    "hashVersion": "revision-hash-v1",
+    "counts": {
+      "records": 11,
+      "canonicalVectors": 6,
+      "geometry": 8,
+      "rejections": 12
+    },
+    "contents": "Eleven kind-specific inputs/envelopes, canonical UTF-8 JSON strings and expected SHA-256 values; six standalone canonical vectors, eight geometry vectors and twelve declared rejection cases.",
+    "independence": "The M1 build report and initial Gemini review report independent recomputation of all 17 expected digests. That historical claim is attributed to those sources; this authoring pass computed file checksums only."
+  },
+  "conformanceEvidence": {
+    "files": [
+      {
+        "path": "packages/comments/tests/conformance/comments-conformance.ts",
+        "sha256": "26cdaf181afbc73c145c57974c6762230757bc101a0418f8da0654f505fb7b00",
+        "role": "Shared runCommentsConformance corpus"
+      },
+      {
+        "path": "packages/comments/tests/conformance/in-memory.ts",
+        "sha256": "0b91befcb3b67418667ccda1a36bbd40a183fd37c38eeb40ddb8a1495d42f945",
+        "role": "M1 test-only InMemoryCanonicalStore; not a production adapter or PG transaction proof"
+      },
+      {
+        "path": "packages/comments/tests/annotation-conformance.spec.ts",
+        "sha256": "64995fbebb08679983effb5946e8f34e69e96a52f997300ff18f04bff75b7910",
+        "role": "Shared corpus execution and fresh-store isolation"
+      },
+      {
+        "path": "packages/comments/tests/revision-hash.spec.ts",
+        "sha256": "b2f37d176bb247c8cc6623e143a5c565434fd9c3f2d9172e72f96865186e8231",
+        "role": "Record/canonical/geometry vectors and chain validation"
+      },
+      {
+        "path": "packages/comments/tests/annotation-anchors.spec.ts",
+        "sha256": "53be9b89a3b74d283172dc808eda8c083a55e3ce2eb461615412cbd5dfa1492c",
+        "role": "Anchor and geometry validation"
+      },
+      {
+        "path": "packages/comments/tests/annotation-revisions.spec.ts",
+        "sha256": "de403673ce42fb01c3c2e3cd603727260fbf442baa2c330db846e38c7299118d",
+        "role": "Revision, provenance, body, recursive profile and capacity validation"
+      },
+      {
+        "path": "packages/comments/tests/annotation-reviews.spec.ts",
+        "sha256": "dd93c5fdc16e740941dccd79d4e88491e78102ceced7b18068f6696574229309",
+        "role": "Exact revision review and contest history"
+      },
+      {
+        "path": "packages/comments/tests/annotation-retention.spec.ts",
+        "sha256": "a852f3a6a0e8cf0de32161c51dcb51223f77f690d772f344b93951e467e781fc",
+        "role": "Archive, tombstone, purge and operation-audit behavior"
+      }
+    ],
+    "reportedExecution": {
+      "source": ".h2a/build/m1_fix_report.md",
+      "head": "afdc434fb1f598719fe511e15a6158533dc113f0",
+      "typecheck": "PASS",
+      "testFiles": 14,
+      "tests": 92,
+      "legacySuites": 8,
+      "environment": "test-comments-model",
+      "rerunHere": false
+    },
+    "ci": {
+      "url": "https://github.com/rhanka/sentropic/pull/663",
+      "source": ".h2a/build/m1_fix_report.md",
+      "head": "afdc434fb1f598719fe511e15a6158533dc113f0",
+      "checks": 82,
+      "passed": 55,
+      "failed": 0,
+      "skipped": 27,
+      "pending": 0,
+      "independentlyRequeriedHere": false
+    },
+    "limits": "M1 in-memory/server evidence and the reviews' browser-safe-root assessment; no real PG transaction/reload, canonical HTTP, packed-install, actual-browser or host-authority qualification is claimed."
+  },
+  "reviewEvidence": [
+    {
+      "path": ".h2a/reviews/m1_gemini.md",
+      "sha256": "6d5ada472344bea48ab617d09443ee8ad7e295b4c70643eba4b8ced18ba7cbed",
+      "availability": "local ignored review; verdict and findings summarized here",
+      "reviewerDeclared": "Gemini 3.8 High",
+      "buildAuthorDeclared": "Vibe GLM 5.3",
+      "reviewedRangeAsReported": "90e7a9fd8..3bdfd4c5b",
+      "verdict": "GO avec réserves",
+      "findings": {
+        "major": [
+          "F-01 capacity descriptor"
+        ],
+        "minor": [
+          "F-02 commit size",
+          "F-03 checkbox cadence",
+          "F-04 ResolverOutcome export",
+          "F-05 recursive profile validation"
+        ]
+      },
+      "disposition": "Followed by fixes and the second review; not approval of this manifest."
+    },
+    {
+      "path": ".h2a/reviews/m1fix_gemini.md",
+      "sha256": "1a143f5ce2d9e07fcd07b261faf4fc5592dde5e96c7f952cf27957a57cf90730",
+      "availability": "local ignored review; verdict and findings summarized here",
+      "reviewerDeclared": "Gemini 3.8 High",
+      "buildAuthorDeclared": "Vibe GLM 5.3",
+      "reviewedRangeAsReported": "3bdfd4c5b..afdc434fb",
+      "verdict": "GO",
+      "findingsDisposition": "F-01 through F-05 resolved/recorded; M1 ready for contract-freeze authoring.",
+      "limitations": "Read-only source review relying on reported execution/CI; no new local tests. Manifest confirmation and host acknowledgement were explicitly still due. Operational-limit timing differs from SPEC section 4.6."
+    }
+  ],
+  "buildEvidence": [
+    {
+      "path": ".h2a/build/m1_report.md",
+      "sha256": "e3eba81875cf29765f849c4b3527517d5b3b65910dc0c4bc013bbcbee657b34e",
+      "availability": "local ignored report",
+      "reportedHead": "3bdfd4c5b",
+      "result": "M1 build: 14 test files, 84 tests; no freeze manifest."
+    },
+    {
+      "path": ".h2a/build/m1_fix_report.md",
+      "sha256": "a16bc1b9098bfb181d785a5b5950b73ea9a53977de6b5c005abc2b0b0c89b570",
+      "availability": "local ignored report",
+      "reportedHead": "afdc434fb1f598719fe511e15a6158533dc113f0",
+      "result": "Four fixes: capacity descriptor/tests, ResolverOutcome export, recursive semantic fields; 14 test files, 92 tests; no freeze manifest."
+    }
+  ],
+  "laterExports": [
+    {
+      "phase": "M2",
+      "status": "due",
+      "owner": "cluster-mesh module",
+      "surface": "Model storage, schema/migrations and transaction-capable adapter",
+      "contractArtifacts": [
+        "command-store",
+        "commands",
+        "revisions",
+        "lifecycle",
+        "revision-hash"
+      ],
+      "contractSymbols": [
+        "CanonicalCommandStore",
+        "CanonicalTransactionHandle",
+        "CanonicalStoreScope"
+      ],
+      "sourceDeclaration": {
+        "artifact": "command-store",
+        "symbol": "CanonicalStorageAdapterSurface",
+        "sourceStatus": "due-m2",
+        "placementStatus": "Superseded owner placement; the source declares a neutral cluster-mesh storage-port surface with no ./pg literal, and packages/comments/migrations/** is not a promise to deliver comments/pg."
+      },
+      "moduleEntrypoint": null,
+      "moduleEntrypointStatus": "due; exact cluster-mesh registration/export path is not declared in the supplied source",
+      "requirements": [
+        "Implement the comments-owned ports in a cluster-mesh module with injected host connection/clock/IDs.",
+        "Supply schema/migration assets and host migration-authority integration on the module side.",
+        "Record real persistence, canonical-byte reload, atomicity, replay, lifecycle and shared-corpus conformance against this contract."
+      ]
+    },
+    {
+      "phase": "M3",
+      "status": "due",
+      "owner": "cluster-mesh module",
+      "surface": "Canonical model API and common services",
+      "contractArtifacts": [
+        "command-store",
+        "commands",
+        "revisions",
+        "reviews",
+        "lifecycle",
+        "submissions",
+        "revision-hash"
+      ],
+      "contractSymbols": [
+        "CanonicalHttpPorts",
+        "CanonicalHttpCapability",
+        "CanonicalCommandEnvelope",
+        "DecisionEvidence",
+        "PreparedSubmissionManifest",
+        "PreparedSubmissionReceipt"
+      ],
+      "sourceDeclaration": {
+        "artifact": "command-store",
+        "symbol": "CanonicalHttpSurface",
+        "declaredRouterName": "createCanonicalCommentsRouter",
+        "sourceStatus": "due-m3",
+        "placementStatus": "The source's ./hono placement is superseded by the neutral canonical HTTP surface. The router name is a declaration marker with its CanonicalRouterFactory signature type declared; no router is implemented or exported here."
+      },
+      "moduleEntrypoint": null,
+      "moduleEntrypointStatus": "due on the cluster-mesh module side; no canonical comments/hono factory or concrete route path is asserted",
+      "requirements": [
+        "Compose store, capability, resource-resolver and decision ports through the cluster-mesh module.",
+        "Supply batch/import/export/correction and receipt-recovery services and unitary preparation with the common DTOs.",
+        "Record actual API/persistence conformance and scope/revocation checks; exact new signatures or wire DTOs follow the change protocol."
+      ]
+    }
+  ],
+  "temporaryLegacySurface": {
+    "status": "existing staging compatibility; outside the new canonical contract",
+    "rootSources": [
+      {
+        "path": "packages/comments/src/types.ts",
+        "sha256": "1fa667108233ef122f4158f329328d7c13118cdbdde6f6d646460dadbf6a83ec",
+        "publicTypes": [
+          "Comment",
+          "CommentAuthor",
+          "CommentProvenance",
+          "CommentState",
+          "CommentTarget",
+          "CommentTargetKind",
+          "CommentThreadSummary",
+          "LiveCommentTarget",
+          "NewComment",
+          "TargetQuery"
+        ],
+        "publicValues": [
+          "LIVE_RECORD_CONTEXT_TYPES",
+          "targetFromLive",
+          "targetToLive"
+        ]
+      },
+      {
+        "path": "packages/comments/src/events.ts",
+        "sha256": "7f900f37a0b7d4e1b4349688c63f317a8040cee9946994b24330c3eafe83d134",
+        "publicTypes": [
+          "CommentEvent",
+          "CommentEventEnvelope",
+          "CommentEventSink",
+          "CommentEventType"
+        ],
+        "publicValues": [
+          "CollectingCommentEventSink",
+          "noopCommentEventSink",
+          "toEventEnvelope"
+        ]
+      },
+      {
+        "path": "packages/comments/src/guards.ts",
+        "sha256": "e0ff9bceb6955d1d769cfd53af0d0d59c1f03f3db297b0970d6853652066e7d6",
+        "publicTypes": [],
+        "publicValues": [
+          "isComment",
+          "isCommentAuthor",
+          "isCommentEvent",
+          "isCommentEventType",
+          "isCommentState",
+          "isCommentTarget",
+          "isCommentTargetKind",
+          "isCommentThreadSummary"
+        ]
+      },
+      {
+        "path": "packages/comments/src/store.ts",
+        "sha256": "23b8d464f0971c7446cd9f206dd04889e583b26b6ae2a2efcf5e61df006cd1cf",
+        "publicTypes": [
+          "CommentStore"
+        ],
+        "publicValues": [
+          "CommentNotFoundError",
+          "ThreadNotFoundError"
+        ]
+      },
+      {
+        "path": "packages/comments/src/in-memory.ts",
+        "sha256": "7361a8b383f129320a4acbb5225b96902aee7f1f4e212d6099a481fc8d133432",
+        "publicTypes": [
+          "InMemoryCommentStoreOptions"
+        ],
+        "publicValues": [
+          "InMemoryCommentStore"
+        ]
+      }
+    ],
+    "hono": {
+      "path": "packages/comments/src/hono.ts",
+      "sha256": "bb285c82c9bcb311b019ca6697003086609654d0b7df5340eb9dae1da70e8193",
+      "entrypoint": "@sentropic/comments/hono",
+      "ports": {
+        "path": "packages/comments/src/hono-ports.ts",
+        "sha256": "31e5e16be40726ea030adda1505104ddb6a8b0b17f4cfb1fef34c5e7e74bda56"
+      },
+      "status": "existing legacy router, not the M3 canonical API"
+    },
+    "rule": "Preserved at the source commit for current application CI. No translator, mixed canonical writer or runtime fallback is authorized; P4-S removal and any shipped surface change require their own reviewed version."
+  },
+  "acceptance": {
+    "authoring": {
+      "agent": "Codex",
+      "requestedModel": "gpt-6-astra",
+      "requestedEffort": "max",
+      "requestEvidence": ".h2a/inputs/contract_freeze_brief.md",
+      "effectiveRoutingAttested": false
+    },
+    "implementationCrossReview": "GO in .h2a/reviews/m1fix_gemini.md",
+    "manifestConfirmation": {
+      "status": "due",
+      "reviewer": "identified Opus 5.5 max",
+      "requirement": "Record author treatment and reviewer convergence on this manifest's exact digest and contents under SPEC section 1; the build GO is not that confirmation."
+    },
+    "descriptorQualification": {
+      "status": "due",
+      "responsible": "comments contract maintainer with SPEC author/reviewer",
+      "requirement": "Complete and qualify capacity values and exact codec/profile descriptors required by SPEC section 4.6, or record a reviewed bounded treatment of the pre-freeze gate. Synthetic fixture values are not defaults."
+    },
+    "durableIndexing": {
+      "status": "due",
+      "responsible": "comments/interface maintainer",
+      "index": {
+        "path": "docs/comments-annotations/evidence/index.md",
+        "sha256": "6ef121c2e953b726a4a7ac0c5a136f43298446219767fa2db7aca4a5609a4332"
+      },
+      "receipt": "docs/comments-annotations/contract/freeze-receipt.md"
+    },
+    "hostAcknowledgement": {
+      "status": "due",
+      "responsible": "interface maintainer and receiving host",
+      "receiptDigest": null,
+      "erratum": {
+        "path": "docs/comments-annotations/evidence/interface-errata.md",
+        "sha256": "057d47922da4ffec6a99ecb0655be4d4dd623f771370cbc641983ddec20ba006"
+      },
+      "requirement": "Supply the accepted exact manifest/receipt and applicable interface erratum; record acknowledgement bound to their digests."
+    },
+    "ownerD1": {
+      "status": "not-yet-triggered",
+      "trigger": "Reviewed, converged, durably indexed P1 contract-freeze receipt acknowledged by the receiving host.",
+      "effect": "Synthetic host importer/API/UI preparation may begin before M2/M3 delivery, P5 candidate delivery, Sentropic conversion or U completion; no new owner authorization is implied or requested."
+    }
+  },
+  "notFrozen": [
+    "Cluster-mesh module implementation, exact registration/export paths, database schema/assets and real persistence/API acceptance.",
+    "Qualified numeric deployment limits, exact production codec/profile selections, host policy assignments and private domain content.",
+    "Packed package/prerelease identity, dependency closure, publication, deployment, actual OWNER-D2 delivery or real-data adoption.",
+    "New UI/drawing, actual-browser parity and chat ingress/message/job/history/provider binding.",
+    "Sentropic consumer conversion/cutover and receiving-host operational/data gates."
+  ],
+  "changeProtocol": {
+    "reference": {
+      "path": "spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md",
+      "sha256": "abf5b628063a93c92335ab660aeb68b23e40bc3c0c32233ce68b87be99a9ad9f",
+      "sections": [
+        "9.1 Contract freeze / OWNER-D1 trigger",
+        "6.2 Versioned conversion"
+      ]
+    },
+    "steps": [
+      "Any shared signature, wire rule, schema/hash/codec/profile rule, dependency boundary or undeclared export change gets a new contract manifest/version, even before real hashes exist.",
+      "Record author treatment and identified confirmation review on the changed bytes; rerun affected evidence.",
+      "Supply the new exact manifest/receipt and obtain acknowledged host realignment before dependent work uses it.",
+      "After real hashes exist, supply versioned linked conversion and receiver requalification; never rewrite existing chains or silently replace a baseline.",
+      "Additive M2/M3 implementation/wiring that exactly matches already frozen declarations records conformance and availability against the same manifest. An undeclared module signature or changed public placement is not automatically exempt."
+    ]
+  }
+}
