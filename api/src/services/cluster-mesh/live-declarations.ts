@@ -1,37 +1,53 @@
 import { and, eq } from 'drizzle-orm';
-import type {
-  LiveDeclarationStorePort,
-  LiveDeclarationWithdrawal,
-  LiveWorkspaceDeclaration,
-} from '@sentropic/cluster-mesh/live-storage/registration';
+import {
+  type LiveDeclarationStorePort,
+  type LiveDeclarationWithdrawal,
+  type LiveWorkspaceDeclaration,
+  validateWorkspaceDeclaration,
+} from '../../../../packages/cluster-mesh/src/live-storage/registration';
 import { db } from '../../db/client';
 import { liveGitDeclarations } from '../../db/control-schema';
 
-/**
- * Thin identity adapter typed against the engram-live L6a contract (mirrored
- * by the @sentropic/cluster-mesh live-storage registration DTOs).
- *
- * The contract identity fields are under revision: revocation will target a
- * unique declarationId attached to cloneId/worktreeId, with explicit
- * identity-uncertainty states and one canonical id derivation exported by the
- * contract. Until the revised contract lands, every identity derivation this
- * store needs goes through this adapter; swapping the identity model changes
- * this adapter only — not the control table, the migration or the port.
- */
+export {
+  deriveCloneIdentity,
+  deriveWorktreeIdentity,
+  deriveDeclarationIdentity,
+  validateWorkspaceDeclaration,
+  validateCloneIdentity,
+  validateWorktreeIdentity,
+  validateDeclarationRevocation,
+  validatePrivatePurgeRequest,
+  POLICY_VERSION,
+  EXPLICIT_LIVE_CAPABILITY,
+  INITIAL_DECLARATION_REVISION,
+  INITIAL_BINDING_REVISION,
+  IDENTITY_UNCERTAINTY_STATES,
+  NON_ACTIVATING_LIFECYCLE_KINDS,
+  type DeriveCloneIdentityInput,
+  type DeriveWorktreeIdentityInput,
+  type DeriveDeclarationIdentityInput,
+  type DeclarationIdentityDto,
+  type CloneIdentityDto,
+  type WorktreeIdentityDto,
+  type LiveWorkspaceDeclaration,
+  type LiveDeclarationWithdrawal,
+  type LiveDeclarationStorePort,
+} from '../../../../packages/cluster-mesh/src/live-storage/registration';
+
 export interface LiveDeclarationIdentityAdapter {
-  /** Canonical durable key of one declaration (control row primary key). */
   declarationKey(declaration: LiveWorkspaceDeclaration): string;
-  /** Same key as declarationKey, derived from a (tenant, hostFingerprint) lookup. */
-  lookupKey(tenant: string, hostFingerprint: string): string;
-  /** Key of the declaration a withdrawal targets. */
+  lookupKey(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): string;
   withdrawalKey(withdrawal: LiveDeclarationWithdrawal): string;
 }
 
-export const contractLiveDeclarationIdentity: LiveDeclarationIdentityAdapter = {
-  declarationKey: (declaration) => `${declaration.tenant}\0${declaration.hostFingerprint}`,
-  lookupKey: (tenant, hostFingerprint) => `${tenant}\0${hostFingerprint}`,
-  withdrawalKey: (withdrawal) => `${withdrawal.tenant}\0${withdrawal.hostFingerprint}`,
+export const canonicalLiveDeclarationIdentity: LiveDeclarationIdentityAdapter = {
+  declarationKey: (d) => `${d.tenant}#${d.declarationId}#${d.cloneId}#${d.worktreeId}`,
+  lookupKey: (tenant, declId, cloneId, wtId) =>
+    cloneId && wtId ? `${tenant}#${declId}#${cloneId}#${wtId}` : `${tenant}#${declId}`,
+  withdrawalKey: (w) => `${w.tenant}#${w.declarationId}#${w.cloneId}#${w.worktreeId}`,
 };
+
+export const contractLiveDeclarationIdentity = canonicalLiveDeclarationIdentity;
 
 /**
  * Postgres LiveDeclarationStorePort adapter over control.live_git_declarations.
@@ -50,8 +66,9 @@ export class PostgresLiveDeclarationStore implements LiveDeclarationStorePort {
   ) {}
 
   async save(declaration: LiveWorkspaceDeclaration): Promise<void> {
-    if (declaration.liveCapability !== 'live') {
-      throw new Error("live_git_declarations accepts the explicit 'live' capability only");
+    const checked = validateWorkspaceDeclaration(declaration);
+    if (!checked.ok) {
+      throw new Error(`invalid live workspace declaration: ${checked.errors.join('; ')}`);
     }
     const row = {
       declarationKey: this.identity.declarationKey(declaration),
@@ -71,13 +88,24 @@ export class PostgresLiveDeclarationStore implements LiveDeclarationStorePort {
     });
   }
 
-  async find(tenant: string, hostFingerprint: string): Promise<LiveWorkspaceDeclaration | null> {
-    const [row] = await db
+  async find(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<LiveWorkspaceDeclaration | null> {
+    if (cloneId && worktreeId) {
+      const [row] = await db
+        .select({ payload: liveGitDeclarations.payload })
+        .from(liveGitDeclarations)
+        .where(eq(liveGitDeclarations.declarationKey, this.identity.lookupKey(tenant, declarationId, cloneId, worktreeId)))
+        .limit(1);
+      return row ? (row.payload as LiveWorkspaceDeclaration) : null;
+    }
+    const rows = await db
       .select({ payload: liveGitDeclarations.payload })
       .from(liveGitDeclarations)
-      .where(eq(liveGitDeclarations.declarationKey, this.identity.lookupKey(tenant, hostFingerprint)))
-      .limit(1);
-    return row ? (row.payload as LiveWorkspaceDeclaration) : null;
+      .where(eq(liveGitDeclarations.tenantId, tenant));
+    const matched = rows.find((r) => {
+      const p = r.payload as LiveWorkspaceDeclaration;
+      return p.declarationId === declarationId || p.hostFingerprint === declarationId;
+    });
+    return matched ? (matched.payload as LiveWorkspaceDeclaration) : null;
   }
 
   async list(tenant?: string): Promise<readonly LiveWorkspaceDeclaration[]> {
@@ -98,13 +126,24 @@ export class PostgresLiveDeclarationStore implements LiveDeclarationStorePort {
     return rows.map((row) => row.payload as LiveWorkspaceDeclaration);
   }
 
-  async status(tenant: string, hostFingerprint: string): Promise<'declared' | 'withdrawn' | 'unknown'> {
-    const [row] = await db
-      .select({ status: liveGitDeclarations.status })
+  async status(tenant: string, declarationId: string, cloneId?: string, worktreeId?: string): Promise<'declared' | 'withdrawn' | 'unknown'> {
+    if (cloneId && worktreeId) {
+      const [row] = await db
+        .select({ status: liveGitDeclarations.status })
+        .from(liveGitDeclarations)
+        .where(eq(liveGitDeclarations.declarationKey, this.identity.lookupKey(tenant, declarationId, cloneId, worktreeId)))
+        .limit(1);
+      return row ? (row.status as 'declared' | 'withdrawn') : 'unknown';
+    }
+    const rows = await db
+      .select({ status: liveGitDeclarations.status, payload: liveGitDeclarations.payload })
       .from(liveGitDeclarations)
-      .where(eq(liveGitDeclarations.declarationKey, this.identity.lookupKey(tenant, hostFingerprint)))
-      .limit(1);
-    return row ? (row.status as 'declared' | 'withdrawn') : 'unknown';
+      .where(eq(liveGitDeclarations.tenantId, tenant));
+    const matched = rows.find((r) => {
+      const p = r.payload as LiveWorkspaceDeclaration;
+      return p.declarationId === declarationId || p.hostFingerprint === declarationId;
+    });
+    return matched ? (matched.status as 'declared' | 'withdrawn') : 'unknown';
   }
 
   async recordWithdrawal(withdrawal: LiveDeclarationWithdrawal, withdrawnAt: string): Promise<boolean> {
