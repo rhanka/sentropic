@@ -137,6 +137,8 @@ export const admitRoute = async (input: {
       ...input.route,
       requestedModel: input.requestedModel,
       requiredCapabilities: input.canonical.requiredCapabilities,
+      ...(input.canonical.requiredExecutionFeatures
+        ? { requiredExecutionFeatures: input.canonical.requiredExecutionFeatures } : {}),
       ceiling, now: new Date(clock()),
     });
   } catch (error) {

@@ -153,4 +153,48 @@ describe('route flow core', () => {
       reason: 'provider-5xx', retryable: false, healthScope: 'route',
     });
   });
+
+  it('forwards Responses execution features from validated input into plan input', async () => {
+    // Spec §16.3: the codec derives features (here an explicit output
+    // ceiling); the canonical entry point forwards them — no gateway table.
+    let captured: RoutePlanInput | undefined;
+    const routePlanner = {
+      async plan(_subject: VerifiedRoutingSubject, input: RoutePlanInput) {
+        captured = input;
+        return {
+          planRef: 'plan-features', expiresAt: '2026-08-08T12:01:00Z', candidateRefs: [],
+          policy: {
+            strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+            negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+            stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+          },
+          councilRevision: 'fixture', diagnostics: [],
+        };
+      },
+    } as unknown as RoutePlanner;
+    const config = {
+      ...stubGatewayConfig,
+      callerAuth: { async verify() {
+        return {
+          ok: true as const,
+          cost: {
+            tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'user-1',
+            ownerScopeRef: 'cli:stable-owner', source: 'test', correlationId: 'session-1',
+          },
+        };
+      } },
+    };
+
+    await prepareRouteFlow({
+      config, routePlanner, metering: { settleRoute() {} },
+    }, {
+      wire: 'openai-responses', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/responses', requestId: 'req-resp' },
+      model: 'gpt-6.1-sol', stream: false,
+      body: { model: 'gpt-6.1-sol', input: 'hello', max_output_tokens: 50 },
+    });
+
+    expect(captured?.requestedModel).toBe('gpt-6.1-sol');
+    expect(captured?.requiredExecutionFeatures).toEqual(['explicit-output-ceiling']);
+  });
 });
