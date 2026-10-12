@@ -1,4 +1,10 @@
 import { and, eq } from 'drizzle-orm';
+import {
+  createSessionWorkspaceBindingService,
+  SessionWorkspaceBindingError,
+  type SessionWorkspaceBinding,
+  type SessionWorkspaceBindingStore,
+} from '@sentropic/cluster-mesh';
 import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
 import { tenantMemberships, workspaces } from '../../db/schema';
@@ -18,6 +24,7 @@ export interface AdoptedSessionWorkspace {
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly tenantId: string;
+  readonly principalId?: string;
   readonly status: AdoptedSessionWorkspaceStatus;
 }
 
@@ -25,9 +32,11 @@ export type SessionWorkspaceErrorCode =
   | 'invalid_request' | 'workspace_not_found' | 'cross_tenant_refused' | 'workspace_rights_refused'
   | 'session_already_attached' | 'session_not_attached' | 'session_ended' | 'binding_not_found';
 
-export class SessionWorkspaceError extends Error {
-  constructor(readonly code: SessionWorkspaceErrorCode, message: string) {
-    super(message);
+export class SessionWorkspaceError extends SessionWorkspaceBindingError {
+  override readonly code: SessionWorkspaceErrorCode;
+  constructor(code: SessionWorkspaceErrorCode, message: string) {
+    super(code as any, message);
+    this.code = code;
     this.name = 'SessionWorkspaceError';
   }
 }
@@ -36,20 +45,48 @@ const requireId = (value: string | undefined, field: string): string => {
   if (!value?.trim()) throw new SessionWorkspaceError('invalid_request', `${field} is required`);
   return value;
 };
-const toRecord = (row: BindingRow): AdoptedSessionWorkspace => ({
-  bindingId: row.bindingId, sessionId: row.sessionId, workspaceId: row.workspaceId,
-  tenantId: row.tenantId, status: row.status as AdoptedSessionWorkspaceStatus,
+const toRecord = (b: SessionWorkspaceBinding | BindingRow): AdoptedSessionWorkspace => ({
+  bindingId: b.bindingId, sessionId: b.sessionId, workspaceId: b.workspaceId,
+  tenantId: b.tenantId, principalId: b.principalId ?? undefined,
+  status: b.status as AdoptedSessionWorkspaceStatus,
 });
-const loadBinding = async (sessionId: string, tenantId: string | null): Promise<BindingRow | undefined> => {
-  const [row] = await db.select().from(sessionWorkspaceBindings)
-    .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).limit(1);
-  if (row && tenantId && row.tenantId !== tenantId) {
-    throw new SessionWorkspaceError('cross_tenant_refused', 'session tenant does not match binding tenant');
-  }
-  return row;
+
+const drizzleBindingStore: SessionWorkspaceBindingStore = {
+  async findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null> {
+    const [row] = await db.select().from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).limit(1);
+    if (!row) return null;
+    return {
+      bindingId: row.bindingId, sessionId: row.sessionId, workspaceId: row.workspaceId,
+      tenantId: row.tenantId, principalId: row.principalId ?? '',
+      status: row.status as SessionWorkspaceBinding['status'],
+      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+      detachedAt: row.detachedAt ? row.detachedAt.toISOString() : undefined,
+      endedAt: row.endedAt ? row.endedAt.toISOString() : undefined,
+    };
+  },
+  async save(b: SessionWorkspaceBinding): Promise<void> {
+    await db.insert(sessionWorkspaceBindings).values({
+      bindingId: b.bindingId, sessionId: b.sessionId, workspaceId: b.workspaceId,
+      tenantId: b.tenantId, principalId: b.principalId, status: b.status,
+      createdAt: new Date(b.createdAt), updatedAt: new Date(b.updatedAt),
+      detachedAt: b.detachedAt ? new Date(b.detachedAt) : null,
+      endedAt: b.endedAt ? new Date(b.endedAt) : null,
+    }).onConflictDoUpdate({
+      target: sessionWorkspaceBindings.sessionId,
+      set: {
+        workspaceId: b.workspaceId, tenantId: b.tenantId, principalId: b.principalId,
+        status: b.status, updatedAt: new Date(b.updatedAt),
+        detachedAt: b.detachedAt ? new Date(b.detachedAt) : null,
+        endedAt: b.endedAt ? new Date(b.endedAt) : null,
+      },
+    });
+  },
 };
 
 export class SessionWorkspaceService {
+  private readonly mesh = createSessionWorkspaceBindingService(drizzleBindingStore);
+
   private async checkRights(tenantId: string, principalId: string): Promise<void> {
     const [membership] = await db.select({ status: tenantMemberships.status }).from(tenantMemberships)
       .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, principalId))).limit(1);
@@ -73,65 +110,56 @@ export class SessionWorkspaceService {
       { id, ownerUserId: principalId, name: create.name, type: create.type ?? 'code', tenantId });
     return id;
   }
+
   async adopt(input: AdoptSessionWorkspaceInput): Promise<AdoptedSessionWorkspace> {
     const sessionId = requireId(input.sessionId, 'sessionId');
     const tenantId = requireId(input.tenantId, 'tenantId');
     const principalId = requireId(input.principalId, 'principalId');
     await this.checkRights(tenantId, principalId);
     const workspaceId = await this.resolveWorkspaceId(tenantId, principalId, input.workspaceId, input.create);
-    const existing = await loadBinding(sessionId, tenantId);
-    if (!existing) {
-      const [created] = await db.insert(sessionWorkspaceBindings).values({
-        bindingId: crypto.randomUUID(), sessionId, workspaceId, tenantId, status: 'attached',
-      }).returning();
-      return toRecord(created!);
+    try {
+      const binding = await this.mesh.attach({
+        sessionId, workspaceId, sessionTenantId: tenantId,
+        workspaceTenantId: tenantId, principalId,
+      });
+      return toRecord(binding);
+    } catch (err) {
+      if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
+      throw err;
     }
-    if (existing.status === 'ended') {
-      throw new SessionWorkspaceError('session_ended', 'session is ended and keeps its workspace history');
-    }
-    if (existing.status === 'attached') {
-      if (existing.workspaceId === workspaceId) return toRecord(existing);
-      throw new SessionWorkspaceError('session_already_attached', 'session is already attached; detach or end it first');
-    }
-    const [reattached] = await db.update(sessionWorkspaceBindings)
-      .set({ workspaceId, status: 'attached', updatedAt: new Date(), detachedAt: null })
-      .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).returning();
-    return toRecord(reattached!);
   }
-  async detach(sessionId: string, tenantId: string): Promise<AdoptedSessionWorkspace> {
+
+  async detach(sessionId: string, tenantId: string, principalId?: string): Promise<AdoptedSessionWorkspace> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
-    const existing = await loadBinding(sessionId, tenantId);
-    if (!existing) throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
-    if (existing.status === 'ended') {
-      throw new SessionWorkspaceError('session_ended', 'session is ended and keeps its workspace history');
+    try {
+      const binding = await this.mesh.detach(sessionId, tenantId, principalId);
+      return toRecord(binding);
+    } catch (err) {
+      if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
+      throw err;
     }
-    if (existing.status !== 'attached') {
-      throw new SessionWorkspaceError('session_not_attached', 'session is not attached');
-    }
-    const [detached] = await db.update(sessionWorkspaceBindings)
-      .set({ status: 'detached', updatedAt: new Date(), detachedAt: new Date() })
-      .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).returning();
-    return toRecord(detached!);
   }
-  async end(sessionId: string, tenantId: string): Promise<AdoptedSessionWorkspace> {
+
+  async end(sessionId: string, tenantId: string, principalId?: string): Promise<AdoptedSessionWorkspace> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
-    const existing = await loadBinding(sessionId, tenantId);
-    if (!existing) throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
-    if (existing.status === 'ended') return toRecord(existing);
-    const [ended] = await db.update(sessionWorkspaceBindings)
-      .set({ status: 'ended', updatedAt: new Date(), endedAt: new Date() })
-      .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).returning();
-    return toRecord(ended!);
+    try {
+      const binding = await this.mesh.end(sessionId, tenantId, principalId);
+      return toRecord(binding);
+    } catch (err) {
+      if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
+      throw err;
+    }
   }
+
   async get(sessionId: string, tenantId: string): Promise<AdoptedSessionWorkspace | null> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
-    const existing = await loadBinding(sessionId, null);
-    if (!existing || existing.tenantId !== tenantId) return null;
-    return toRecord(existing);
+    const binding = await this.mesh.get(sessionId, tenantId);
+    return binding ? toRecord(binding) : null;
   }
 }
 
 export const sessionWorkspaceService = new SessionWorkspaceService();
+
