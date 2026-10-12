@@ -31,7 +31,7 @@ export const grantFor = (
 export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<void> => {
   const { store, grant, readGrant } = fixture;
 
-  const bound = store.bind(grant);
+  const bound = store.bindNew(grant);
   bound.appendChain('auth-chain', { id: 'x', bytes: '{}', hash: 'h1' }, { kind: 'absent', allocation: '0' });
 
   assert.throws(
@@ -41,12 +41,30 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
   );
 
   assert.throws(
+    () => store.bind(grantFor({ token: 'token-forged-unknown' })),
+    /unknown|denied/,
+    'K2aC-RED authority: a non-empty token never issued is denied',
+  );
+
+  assert.throws(
+    () => store.bind({ ...grant, operations: ['read', 'write', 'publish'] as const }),
+    /tampered|denied/,
+    'K2aC-RED authority: falsified operations on an issued grant are denied',
+  );
+
+  assert.throws(
+    () => store.bind({ ...grant, scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
+    /tampered|denied/,
+    'K2aC-RED authority: a falsified scope on an issued grant is denied',
+  );
+
+  assert.throws(
     () => store.bind(grantFor({ moduleId: 'engram-live' })),
     /wrong module/,
     'K2a-RED authority: a grant for another module is denied',
   );
 
-  const otherScope = store.bind(
+  const otherScope = store.bindNew(
     grantFor({ token: 'token-other-scope', scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
   );
   assert.equal(
@@ -55,7 +73,7 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
     'K2a-RED authority: a handle bound to another scope sees none of this scope data',
   );
 
-  const reader = store.bind(readGrant);
+  const reader = store.bindNew(readGrant);
   assert.throws(
     () => reader.appendChain('auth-chain-2', { id: 'y', bytes: '{}', hash: 'h2' }, { kind: 'absent', allocation: '0' }),
     /lacks write/,
@@ -66,7 +84,7 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
     token: 'token-lease-1',
     lifetime: { kind: 'lease', expiresAt: '2030-01-01T00:00:00.000Z' },
   });
-  const leasedBound = store.bind(leased);
+  const leasedBound = store.bindNew(leased);
   fixture.setNow('2031-06-01T00:00:00.000Z');
   assert.throws(
     () => leasedBound.readHead('auth-chain'),
@@ -76,7 +94,7 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
   fixture.setNow('2026-01-01T00:00:00.000Z');
 
   const doomed = grantFor({ token: 'token-revoked-1' });
-  const doomedBound = store.bind(doomed);
+  const doomedBound = store.bindNew(doomed);
   store.revoke('token-revoked-1');
   assert.throws(
     () => doomedBound.readHead('auth-chain'),
@@ -84,6 +102,6 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
     'K2a-RED authority: revocation before commit denies queued work',
   );
 
-  const fresh = store.bind(grantFor({ token: 'token-fresh-1' }));
+  const fresh = store.bindNew(grantFor({ token: 'token-fresh-1' }));
   assert.equal(fresh.readHead('auth-chain'), 'h1');
 };
