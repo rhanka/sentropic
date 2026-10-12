@@ -1,14 +1,125 @@
 // Live workspace declaration registration — engram plan L6a, S seat
 // (spec/SPEC_LIVE_GIT_INDEXING.md §§2–3, 10, 12; owner Q4 A).
 //
-// Durable registration semantics for explicit live declarations: a declaration
-// binds the public host fingerprint and a revision, replay after projection
-// loss resumes without renewed activation, and a withdrawal cancels deferred
-// work and requests a private purge while committed history is preserved.
-// This module owns ports and pure decisions only — concrete storage stays
-// host-owned (SQLite locally, Postgres in the app). The DTOs mirror the
-// engram-live L6a contract; this package carries no engram dependency until
-// R-S qualifies a packed prerelease.
+// Aligned on approved engram contract commit 70ebdfee9857ba381059896089e4f2d5c19363ea
+// (PR rhanka/engram#359, merge 3b311dfb). Canonical id derivations, exact validators,
+// explicit uncertainty states, product-binding trio coherence, and single-target revocation.
+
+import { createHash } from 'node:crypto';
+
+export const POLICY_VERSION = 'live-git-indexing/1';
+export const EXPLICIT_LIVE_CAPABILITY = 'live' as const;
+export const INITIAL_DECLARATION_REVISION = 1;
+export const INITIAL_BINDING_REVISION = 1;
+
+export const IDENTITY_UNCERTAINTY_STATES = ['missing_history', 'shallow_history'] as const;
+export type IdentityUncertaintyState = (typeof IDENTITY_UNCERTAINTY_STATES)[number];
+
+export const OID_ALGORITHMS = ['sha1', 'sha256'] as const;
+export type OidAlgorithm = (typeof OID_ALGORITHMS)[number];
+
+export const REVOCATION_REASONS = ['workspace-remove', 'owner-request', 'policy-withdrawn'] as const;
+export type RevocationReason = (typeof REVOCATION_REASONS)[number];
+
+export const ID_KINDS = ['clone', 'worktree', 'declaration'] as const;
+export type IdKind = (typeof ID_KINDS)[number];
+
+export const ID_PREFIXES: Readonly<Record<IdKind, string>> = {
+  clone: 'clone:',
+  worktree: 'wt:',
+  declaration: 'decl:',
+};
+
+export interface ValidationResult {
+  readonly ok: boolean;
+  readonly errors: readonly string[];
+}
+
+export interface CloneIdentityDto {
+  readonly hostScope: string;
+  readonly commonDirRealpath: string;
+  readonly commonDirProjectFingerprint?: string;
+  readonly cloneId: string;
+  readonly oidAlgorithm: OidAlgorithm;
+  readonly identityUncertainty: readonly IdentityUncertaintyState[];
+}
+
+export interface WorktreeIdentityDto {
+  readonly cloneId: string;
+  readonly worktreeId: string;
+  readonly worktreePath: string;
+  readonly gitDir: string;
+  readonly worktreeFingerprint?: string;
+  readonly identityUncertainty: readonly IdentityUncertaintyState[];
+}
+
+export interface DeclarationIdentityDto {
+  readonly declarationId: string;
+  readonly cloneId: string;
+  readonly worktreeId: string;
+}
+
+export interface DeriveCloneIdentityInput {
+  readonly hostScope: string;
+  readonly commonDirRealpath: string;
+  readonly commonDirProjectFingerprint?: string;
+  readonly identityUncertainty?: readonly IdentityUncertaintyState[];
+  readonly oidAlgorithm: OidAlgorithm;
+}
+
+export interface DeriveWorktreeIdentityInput {
+  readonly hostScope: string;
+  readonly clone: Pick<CloneIdentityDto, 'cloneId'>;
+  readonly worktreePath: string;
+  readonly gitDir: string;
+  readonly worktreeFingerprint?: string;
+  readonly identityUncertainty?: readonly IdentityUncertaintyState[];
+}
+
+export interface DeriveDeclarationIdentityInput {
+  readonly hostScope: string;
+  readonly clone: Pick<CloneIdentityDto, 'cloneId'>;
+  readonly worktree: Pick<WorktreeIdentityDto, 'worktreeId'>;
+}
+
+export const sha256Hex = (canonical: string): string =>
+  createHash('sha256').update(canonical, 'utf8').digest('hex');
+
+export function canonicalIdKey(kind: IdKind, components: readonly string[]): string {
+  if (!isIdKind(kind)) throw new Error(`canonicalIdKey requires a known id kind (${ID_KINDS.join(', ')})`);
+  for (const c of components) {
+    if (typeof c !== 'string') throw new Error('canonicalIdKey requires string components');
+    if (c.includes('\0')) throw new Error('canonicalIdKey refuses NUL in identity components');
+  }
+  return JSON.stringify([kind, ...components]);
+}
+
+export function normalizeCommonDirRealpath(realpath: string): string {
+  if (realpath.length > 1) {
+    const stripped = realpath.replace(/\/+$/, '');
+    return stripped.length === 0 ? '/' : stripped;
+  }
+  return realpath;
+}
+
+export function isIdKind(v: unknown): v is IdKind {
+  return typeof v === 'string' && (ID_KINDS as readonly string[]).includes(v);
+}
+
+export function isIdentityUncertaintyState(v: unknown): v is IdentityUncertaintyState {
+  return typeof v === 'string' && (IDENTITY_UNCERTAINTY_STATES as readonly string[]).includes(v);
+}
+
+export function isRevocationReason(v: unknown): v is RevocationReason {
+  return typeof v === 'string' && (REVOCATION_REASONS as readonly string[]).includes(v);
+}
+
+export function isSameClone(a: Pick<CloneIdentityDto, 'cloneId'>, b: Pick<CloneIdentityDto, 'cloneId'>): boolean {
+  if (typeof a?.cloneId !== 'string' || !a.cloneId.trim() || typeof b?.cloneId !== 'string' || !b.cloneId.trim()) {
+    throw new Error('isSameClone compares canonical clone ids: both references must carry a non-empty cloneId');
+  }
+  return a.cloneId === b.cloneId;
+}
 
 export interface LiveWorkspaceDeclaration {
   readonly tenant: string;
