@@ -5,10 +5,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildResponsesJson,
+  createResponsesAccumulator,
   DEFAULT_RESPONSES_LIMITS,
   functionCallItem,
   messageItem,
   reasoningItem,
+  ResponsesBoundError,
   responsesTerminal,
   responsesUsage,
 } from '../src/responses-egress.js';
@@ -71,5 +74,127 @@ describe('responses egress builders (spec §16.5)', () => {
 
   it('freezes the §16.7 engineering-default bounds', () => {
     expect(DEFAULT_RESPONSES_LIMITS).toEqual({ maxOutputItems: 1024, maxAccumulatedBytes: 8_388_608 });
+  });
+});
+
+describe('responses accumulator (spec §16.5)', () => {
+  const done = (finishReason: 'stop' | 'tool_calls' | 'length', usage?: { inputTokens: number; outputTokens: number; totalTokens: number }) => ({
+    type: 'done' as const,
+    data: { finishReason, ...(usage ? { usage } : {}) },
+  });
+
+  it('assembles ordered items with stable ids across text, tools and reasoning', () => {
+    const acc = createResponsesAccumulator();
+    acc.observe({ type: 'content_delta', data: { delta: 'hi' } });
+    acc.observe({ type: 'tool_call_start', data: {
+      toolCallId: 'c1', providerCallId: 'call_1', name: 'get_time', argumentsText: '',
+    } });
+    acc.observe({ type: 'reasoning_delta', data: { delta: 'thinking', kind: 'summary' } });
+    acc.observe({ type: 'tool_call_delta', data: { toolCallId: 'c1', delta: '{"x":1}' } });
+    acc.observe(done('tool_calls', { inputTokens: 4, outputTokens: 2, totalTokens: 6 }));
+    const snap = acc.snapshot();
+    expect(snap.items.map((item) => [item.type, item.id])).toEqual([
+      ['message', 'msg_0'], ['function_call', 'fc_0'], ['reasoning', 'rs_0'],
+    ]);
+    expect(snap.items[1]).toMatchObject({ call_id: 'call_1', arguments: '{"x":1}' });
+    expect(snap.terminal).toMatchObject({ finishReason: 'tool_calls' });
+    expect(snap.usage).toMatchObject({ inputTokens: 4, totalTokens: 6 });
+  });
+
+  it('lets completed snapshots win over fragments without duplication', () => {
+    const acc = createResponsesAccumulator();
+    acc.observe({ type: 'tool_call_start', data: {
+      toolCallId: 'c1', providerCallId: 'call_1', name: 'lookup', argumentsText: '',
+    } });
+    acc.observe({ type: 'tool_call_delta', data: { toolCallId: 'c1', delta: '{"id":' } });
+    acc.observe({ type: 'tool_call_start', data: {
+      toolCallId: 'c1', providerCallId: 'call_1', name: 'lookup', argumentsText: '{"id":1}',
+    } });
+    expect(acc.snapshot().items).toEqual([expect.objectContaining({ arguments: '{"id":1}' })]);
+  });
+
+  it('lets summary completions win and never renders hidden text', () => {
+    const acc = createResponsesAccumulator();
+    acc.observe({ type: 'reasoning_delta', data: { delta: 'partial', kind: 'summary' } });
+    acc.observe({ type: 'reasoning_delta', data: { delta: 'secret', kind: 'hidden' } });
+    acc.observe({ type: 'reasoning_delta', data: { delta: 'full summary', kind: 'summary_done' } });
+    expect(acc.snapshot().items).toEqual([expect.objectContaining({
+      summary: [{ type: 'summary_text', text: 'full summary' }],
+    })]);
+  });
+
+  it('fails deltas for unknown calls and overflowing output instead of truncating', () => {
+    const acc = createResponsesAccumulator();
+    expect(() => acc.observe({ type: 'tool_call_delta', data: { toolCallId: 'ghost', delta: 'x' } }))
+      .toThrowError(ResponsesBoundError);
+    const tiny = createResponsesAccumulator({ maxOutputItems: 1024, maxAccumulatedBytes: 8 });
+    expect(() => tiny.observe({ type: 'content_delta', data: { delta: 'way too long' } }))
+      .toThrowError(expect.objectContaining({ code: 'responses_overflow' }));
+  });
+
+  it('ingests one-shot JSON responses through the same buffers', () => {
+    const acc = createResponsesAccumulator();
+    acc.ingest({
+      id: 'resp-1', providerId: 'openai', modelId: 'gpt-6.1-sol',
+      message: { role: 'assistant', content: 'done' },
+      text: 'done', toolCalls: [], finishReason: 'stop',
+      usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4 },
+    });
+    const snap = acc.snapshot();
+    expect(snap.items).toEqual([messageItem('msg_0', 'done')]);
+    expect(snap.terminal).toMatchObject({ finishReason: 'stop' });
+  });
+});
+
+describe('responses JSON envelope (spec §16.5)', () => {
+  const base = {
+    responseId: 'resp_1', model: 'gpt-6.1-sol', createdAt: 1_700_000_000,
+    response: {
+      id: 'resp_1', providerId: 'openai' as const, modelId: 'gpt-6.1-sol',
+      message: { role: 'assistant' as const, content: 'hi' },
+      text: 'hi', toolCalls: [], finishReason: 'stop' as const,
+      usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+    },
+  };
+
+  it('emits the response envelope with ordered output and no fabricated counts', () => {
+    expect(buildResponsesJson(base)).toEqual({
+      id: 'resp_1', object: 'response', created_at: 1_700_000_000, model: 'gpt-6.1-sol',
+      status: 'completed', error: null, incomplete_details: null,
+      output: [messageItem('msg_0', 'hi')],
+      usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+      store: false,
+    });
+  });
+
+  it('emits incomplete and failed terminals without choices or invented output', () => {
+    const length = buildResponsesJson({ ...base, response: {
+      ...base.response, message: { role: 'assistant', content: '' }, text: '', finishReason: 'length',
+    } });
+    expect(length).toMatchObject({
+      status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [],
+    });
+    const refused = buildResponsesJson({
+      ...base, response: {
+        ...base.response, message: { role: 'assistant', content: 'no' }, text: 'no',
+        finishReason: 'content_filter',
+      },
+    });
+    expect(refused).toMatchObject({
+      status: 'incomplete', incomplete_details: { reason: 'content_filter' },
+      output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'no' }] }],
+    });
+    const failed = buildResponsesJson({
+      ...base, response: {
+        ...base.response, message: { role: 'assistant', content: '' }, text: '', finishReason: 'unknown',
+      },
+    });
+    expect(failed).toMatchObject({ status: 'failed', output: [] });
+    expect(failed).toHaveProperty('error');
+  });
+
+  it('reports null usage when nothing is known', () => {
+    const body = buildResponsesJson({ ...base, response: { ...base.response, usage: undefined } });
+    expect(body).toMatchObject({ usage: null });
   });
 });
