@@ -314,7 +314,11 @@ export function validateWorkspaceDeclaration(declaration: unknown): ValidationRe
 export interface LiveWorkspaceDeclaration {
   readonly tenant: string;
   readonly principal: string;
-  readonly hostFingerprint: string;
+  readonly hostFingerprint?: string;
+  readonly identityUncertainty: readonly IdentityUncertaintyState[];
+  readonly declarationId: string;
+  readonly cloneId: string;
+  readonly worktreeId: string;
   readonly authorizedRoots: readonly string[];
   readonly liveCapability: 'live';
   readonly policyVersion: string;
@@ -323,9 +327,10 @@ export interface LiveWorkspaceDeclaration {
   readonly serverIssuer?: string;
   readonly bindingRevision?: number;
 }
+export type WorkspaceDeclarationDto = LiveWorkspaceDeclaration;
 
-export const LIVE_REVOCATION_REASONS = ['workspace-remove', 'owner-request', 'policy-withdrawn'] as const;
-export type LiveRevocationReason = (typeof LIVE_REVOCATION_REASONS)[number];
+export const LIVE_REVOCATION_REASONS = REVOCATION_REASONS;
+export type LiveRevocationReason = RevocationReason;
 
 export interface LivePrivatePurgeRequest {
   readonly purgePrivateSnapshots: true;
@@ -333,14 +338,18 @@ export interface LivePrivatePurgeRequest {
   readonly revokeDecryptability: true;
   readonly preserveCommittedHistory: true;
 }
+export type PrivatePurgeRequestDto = LivePrivatePurgeRequest;
 
 export interface LiveDeclarationWithdrawal {
+  readonly declarationId: string;
   readonly tenant: string;
-  readonly hostFingerprint: string;
+  readonly cloneId: string;
+  readonly worktreeId: string;
   readonly declarationRevision: number;
   readonly reason: LiveRevocationReason;
   readonly requestPrivatePurge: LivePrivatePurgeRequest;
 }
+export type DeclarationRevocationDto = LiveDeclarationWithdrawal;
 
 export const NON_ACTIVATING_LIFECYCLE_KINDS = [
   'bind',
@@ -352,10 +361,110 @@ export const NON_ACTIVATING_LIFECYCLE_KINDS = [
 export type NonActivatingLifecycleKind = (typeof NON_ACTIVATING_LIFECYCLE_KINDS)[number];
 
 export function classifyLifecycleEvent(kind: NonActivatingLifecycleKind): 'no-activation-change' {
-  if (!(NON_ACTIVATING_LIFECYCLE_KINDS as readonly string[]).includes(kind)) {
+  if (!isNonActivatingLifecycleKind(kind)) {
     throw new Error(`unknown lifecycle kind: ${String(kind)}`);
   }
   return 'no-activation-change';
+}
+
+export interface CreateLiveDeclarationInput {
+  readonly tenant: string;
+  readonly principal: string;
+  readonly hostFingerprint?: string;
+  readonly identityUncertainty: readonly IdentityUncertaintyState[];
+  readonly declarationId: string;
+  readonly cloneId: string;
+  readonly worktreeId: string;
+  readonly authorizedRoots: readonly string[];
+  readonly liveCapability: 'live';
+  readonly policyVersion: string;
+  readonly serverWorkspaceId?: string;
+  readonly serverIssuer?: string;
+  readonly bindingRevision?: number;
+}
+
+export function createLiveDeclaration(input: CreateLiveDeclarationInput): LiveWorkspaceDeclaration {
+  if (!isRecord(input)) throw new Error('createLiveDeclaration requires a declaration input object');
+  const declaration: LiveWorkspaceDeclaration = {
+    tenant: input.tenant,
+    principal: input.principal,
+    ...(input.hostFingerprint !== undefined ? { hostFingerprint: input.hostFingerprint } : {}),
+    identityUncertainty: [...input.identityUncertainty],
+    declarationId: input.declarationId,
+    cloneId: input.cloneId,
+    worktreeId: input.worktreeId,
+    authorizedRoots: [...input.authorizedRoots],
+    liveCapability: input.liveCapability,
+    policyVersion: input.policyVersion,
+    declarationRevision: INITIAL_DECLARATION_REVISION,
+    ...(input.serverWorkspaceId !== undefined ? { serverWorkspaceId: input.serverWorkspaceId } : {}),
+    ...(input.serverIssuer !== undefined ? { serverIssuer: input.serverIssuer } : {}),
+    ...(input.bindingRevision !== undefined ? { bindingRevision: input.bindingRevision } : {}),
+  };
+  if (input.bindingRevision !== undefined && input.bindingRevision !== INITIAL_BINDING_REVISION) {
+    throw new Error(`createLiveDeclaration requires the first product binding to carry bindingRevision ${INITIAL_BINDING_REVISION}`);
+  }
+  const checked = validateWorkspaceDeclaration(declaration);
+  if (!checked.ok) throw new Error(`invalid live workspace declaration: ${checked.errors.join('; ')}`);
+  return declaration;
+}
+
+const PATCH_KEYS = ['authorizedRoots', 'policyVersion', 'serverWorkspaceId', 'serverIssuer', 'bindingRevision'] as const;
+export function reviseLiveDeclaration(previous: LiveWorkspaceDeclaration, patch: LiveDeclarationPatch): LiveWorkspaceDeclaration {
+  const previousCheck = validateWorkspaceDeclaration(previous);
+  if (!previousCheck.ok) throw new Error(`invalid previous declaration: ${previousCheck.errors.join('; ')}`);
+  if (!isRecord(patch)) throw new Error('reviseLiveDeclaration requires a patch object');
+  for (const k of Object.keys(patch)) {
+    if (!PATCH_KEYS.includes(k as never)) throw new Error(`reviseLiveDeclaration refuses patch key "${k}": identity fields are immutable across revisions`);
+  }
+  const workspaceChanged = patch.serverWorkspaceId !== undefined && patch.serverWorkspaceId !== previous.serverWorkspaceId;
+  const issuerChanged = patch.serverIssuer !== undefined && patch.serverIssuer !== previous.serverIssuer;
+  const bindingTouched = patch.bindingRevision !== undefined || workspaceChanged || issuerChanged;
+  let nextBindingRevision = previous.bindingRevision;
+  if (bindingTouched) {
+    if (patch.bindingRevision === undefined) throw new Error('reviseLiveDeclaration requires a fresh strictly increasing bindingRevision when the server workspace or issuer changes (revalidation)');
+    if (previous.bindingRevision === undefined) {
+      if (patch.bindingRevision !== INITIAL_BINDING_REVISION) throw new Error(`reviseLiveDeclaration requires the first product binding to carry bindingRevision ${INITIAL_BINDING_REVISION}`);
+    } else if (patch.bindingRevision <= previous.bindingRevision) {
+      throw new Error('reviseLiveDeclaration requires a strictly increasing bindingRevision (binding revisions are monotonic)');
+    }
+    nextBindingRevision = patch.bindingRevision;
+  }
+  const next: LiveWorkspaceDeclaration = {
+    ...previous,
+    authorizedRoots: patch.authorizedRoots !== undefined ? [...patch.authorizedRoots] : [...previous.authorizedRoots],
+    policyVersion: patch.policyVersion !== undefined ? patch.policyVersion : previous.policyVersion,
+    serverWorkspaceId: patch.serverWorkspaceId !== undefined ? patch.serverWorkspaceId : previous.serverWorkspaceId,
+    serverIssuer: patch.serverIssuer !== undefined ? patch.serverIssuer : previous.serverIssuer,
+    bindingRevision: nextBindingRevision,
+    declarationRevision: previous.declarationRevision + 1,
+  };
+  const checked = validateWorkspaceDeclaration(next);
+  if (!checked.ok) throw new Error(`invalid revised declaration: ${checked.errors.join('; ')}`);
+  return next;
+}
+
+export function revokeLiveDeclaration(declaration: LiveWorkspaceDeclaration, reason: RevocationReason): LiveDeclarationWithdrawal {
+  const checked = validateWorkspaceDeclaration(declaration);
+  if (!checked.ok) throw new Error(`invalid declaration: ${checked.errors.join('; ')}`);
+  if (!isRevocationReason(reason)) throw new Error(`invalid revocation reason: ${String(reason)}`);
+  const revocation: LiveDeclarationWithdrawal = {
+    declarationId: declaration.declarationId,
+    tenant: declaration.tenant,
+    cloneId: declaration.cloneId,
+    worktreeId: declaration.worktreeId,
+    declarationRevision: declaration.declarationRevision,
+    reason,
+    requestPrivatePurge: {
+      purgePrivateSnapshots: true,
+      purgeDerivedIndexes: true,
+      revokeDecryptability: true,
+      preserveCommittedHistory: true,
+    },
+  };
+  const revocationCheck = validateDeclarationRevocation(revocation);
+  if (!revocationCheck.ok) throw new Error(`invalid revocation: ${revocationCheck.errors.join('; ')}`);
+  return revocation;
 }
 
 export interface LiveDeclarationStorePort {
