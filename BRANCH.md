@@ -38,6 +38,7 @@
   - `api/src/services/llm-runtime/gateway-route-plane.ts` (BR662-EX5)
   - `api/tests/unit/gateway-count-tokens.test.ts` (BR662-EX5)
   - `packages/cluster-mesh/package.json` (BR662-EX6)
+  - `packages/cluster-mesh/README.md` (BR662-EX6, compatibility matrix follows the train)
   - `api/package.json` (BR662-EX6, workspace dep range follows the train)
   - `packages/cluster-mesh/src/modules/catalog.ts` (BR662-EX6)
   - `packages/cluster-mesh/tests/**` (BR662-EX4/BR662-EX6)
