@@ -83,7 +83,7 @@ export interface CreateGatewayRouterOptions {
    */
   readonly budget?: GatewayBudgetOptions;
   /**
-   * Host-owned provider count transport (spec §15.2 round 2): when present,
+   * Host-owned provider count transport (spec §15.2): when present,
    * `POST /v1/messages/count_tokens` relays the authenticated caller body and
    * returns the provider count verbatim (real counting, never an estimate).
    * Absent: explicit provider-shaped refusal — the client falls back to its
@@ -380,7 +380,7 @@ export const createGatewayRouter = (
   app.get('/v1/models', handleListModels);
   app.get('/muse-code/models', handleListModels);
 
-  // Token counting (spec §15.2 round 2, Claude Code). The gateway relays the
+  // Token counting (spec §15.2, Claude Code). The gateway relays the
   // authenticated, recognized request to the host-owned NativeCountTokensPort
   // and returns the provider count verbatim — real provider counting, never
   // an estimate (an estimate would corrupt Anthropic cache accounting).
@@ -388,8 +388,10 @@ export const createGatewayRouter = (
   // authentication; authenticated callers get the frozen unknown-model 404
   // only for unrecognized IDs. Without a port the route keeps an explicit
   // provider-shaped refusal (the client falls back to its own local
-  // counting). Authentication always precedes account/pool access. No lease
-  // is taken and nothing is metered on any count path.
+  // counting). Authentication always precedes account/pool access. The
+  // gateway itself takes no lease and meters nothing on any count path; the
+  // host port may acquire an advisory account lease whose outcome never
+  // degrades the account (spec §15.2).
   app.post('/v1/messages/count_tokens', async (c) => {
     const id = requestId();
     if (!routeFlowDeps && !flowDeps) {
