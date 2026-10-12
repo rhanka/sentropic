@@ -184,3 +184,59 @@ export const scopeKey = (scope: CanonicalScope): string =>
 export const resourceKey = (resource: ResourceRef): string =>
   `${resource.namespace}\u{0}${resource.kind}\u{0}${resource.id}`;
 
+/** Validate one anchor against the closed variant rules. */
+export const validateAnchor = (anchor: Anchor): Anchor => {
+  if (anchor.kind === 'capture') {
+    if (
+      !isNonEmptyString(anchor.blobId) ||
+      !isNonEmptyString(anchor.digest) ||
+      !isNonEmptyString(anchor.mimeType) ||
+      !isSafeInteger(anchor.intrinsicWidth) ||
+      anchor.intrinsicWidth <= 0 ||
+      !isSafeInteger(anchor.intrinsicHeight) ||
+      anchor.intrinsicHeight <= 0 ||
+      !isSafeInteger(anchor.capturedAt) ||
+      anchor.capturedAt < 0 ||
+      !isSourceVersionIndicator(anchor.source)
+    ) {
+      throw new AnchorValidationError('invalid-capture', 'Invalid capture anchor');
+    }
+    return anchor;
+  }
+  if (!isResourceRef(anchor.resource)) {
+    throw new AnchorValidationError('invalid-resource', 'Invalid resource reference');
+  }
+  if (!isSourceVersionIndicator(anchor.source)) {
+    throw new AnchorValidationError('invalid-indicator', 'Invalid source-version indicator');
+  }
+  if (anchor.kind === 'field') {
+    if (
+      (anchor.field.format !== 'stable-id' && anchor.field.format !== 'json-pointer') ||
+      !isNonEmptyString(anchor.field.value)
+    ) {
+      throw new AnchorValidationError('invalid-field', 'Invalid field selector');
+    }
+    return anchor;
+  }
+  if (anchor.kind === 'text') {
+    if (
+      !isSafeInteger(anchor.startOffset) ||
+      anchor.startOffset < 0 ||
+      !isSafeInteger(anchor.endOffset) ||
+      anchor.endOffset < anchor.startOffset
+    ) {
+      throw new AnchorValidationError('invalid-text-offsets', 'Invalid text anchor offsets');
+    }
+    return anchor;
+  }
+  if (anchor.kind === 'ui') {
+    if (!isNonEmptyString(anchor.surfaceKey) || !isNonEmptyString(anchor.renderVersion)) {
+      throw new AnchorValidationError('invalid-indicator', 'Invalid UI anchor');
+    }
+    return anchor;
+  }
+  if (anchor.kind !== 'data') {
+    throw new AnchorValidationError('unknown-kind', `Unknown anchor kind: ${String(anchor.kind)}`);
+  }
+  return anchor;
+};
