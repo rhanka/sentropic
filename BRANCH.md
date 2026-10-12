@@ -124,7 +124,7 @@
   - [x] Fix 5 forged-grant authenticity via issued grants.
   - [x] Fix 6 stable head-bound reads plus full encoded-byte budget.
   - [x] Fix 7a async atomic and chain corpus with structural ports.
-  - [ ] Fix 7b async read and authority corpus with injected fixtures.
+  - [x] Fix 7b async read and authority corpus with injected fixtures.
   - [ ] Fix 8 discriminating mutations preserving valid cases.
   - [x] Fix 9 branch file-budget exception recorded above.
 - [ ] Lot N — Final validation
