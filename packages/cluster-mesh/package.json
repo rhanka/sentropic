@@ -36,6 +36,10 @@
       "types": "./dist/integrations/llm-mesh/transport/cloud-code.d.ts",
       "import": "./dist/integrations/llm-mesh/transport/cloud-code.js"
     },
+    "./llm-mesh/judge": {
+      "types": "./dist/integrations/llm-mesh/judge.d.ts",
+      "import": "./dist/integrations/llm-mesh/judge.js"
+    },
     "./gateway": {
       "types": "./dist/integrations/gateway/index.d.ts",
       "import": "./dist/integrations/gateway/index.js"
@@ -67,6 +71,10 @@
     "./loaders/llm-mesh/transport/cloud-code": {
       "types": "./dist/loaders/llm-mesh/transport/cloud-code.d.ts",
       "import": "./dist/loaders/llm-mesh/transport/cloud-code.js"
+    },
+    "./loaders/llm-mesh/judge": {
+      "types": "./dist/loaders/llm-mesh/judge.d.ts",
+      "import": "./dist/loaders/llm-mesh/judge.js"
     },
     "./loaders/gateway": {
       "types": "./dist/loaders/gateway/index.d.ts",
