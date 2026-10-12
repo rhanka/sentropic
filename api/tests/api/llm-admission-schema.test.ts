@@ -28,14 +28,15 @@ const run = randomUUID().replace(/-/g, '').slice(0, 10);
 const rows = async <T>(query: ReturnType<typeof sql>): Promise<T[]> => (await db.execute(query)).rows as T[];
 
 describe('0008_llm_admission — expand-first shape', () => {
-  it('is the single journal entry after 0007 and is applied on this database', async () => {
-    const last = journal.entries.at(-1)!;
-    expect(journal.entries.map((entry) => entry.idx)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(last.tag).toBe('0008_llm_admission');
-    const [applied] = await rows<{ hash: string; created_at: string }>(sql`
-      SELECT hash, created_at FROM public.__drizzle_control_migrations ORDER BY created_at DESC LIMIT 1`);
-    expect(Number(applied!.created_at)).toBe(last.when);
-    expect(applied!.hash).toBe(createHash('sha256').update(migrationSql).digest('hex'));
+  it('sits directly after 0007 in the journal and is applied on this database', async () => {
+    const admission = journal.entries.find((entry) => entry.tag === '0008_llm_admission')!;
+    expect(admission.idx).toBe(8);
+    expect(journal.entries.map((entry) => entry.idx)).toEqual(journal.entries.map((_, index) => index));
+    const [applied] = await rows<{ created_at: string }>(sql`
+      SELECT created_at FROM public.__drizzle_control_migrations
+      WHERE hash = ${createHash('sha256').update(migrationSql).digest('hex')}`);
+    expect(applied).toBeDefined();
+    expect(Number(applied!.created_at)).toBe(admission.when);
   });
 
   it('only creates tables, adds nullable columns, NOT VALID CHECKs (no VALIDATE), one new-table FK, comments and indexes', () => {
@@ -251,7 +252,7 @@ describe('model_pricing non-overlap (B0-A4) on real Postgres', () => {
 
 // Disposable upgrade on scratch databases of this test Postgres only (never a shared database):
 // public stream + control 0000..0007, historical ledger rows, clone as the pre-migration backup,
-// upgrade to 0008, then restore the backup and re-upgrade it.
+// upgrade to 0008 (and any later control journal entries), then restore the backup and re-upgrade it.
 describe('0008_llm_admission — disposable upgrade and restore', () => {
   const names = { upgrade: `llm_adm_${run}_up`, backup: `llm_adm_${run}_bak`, copy: `llm_adm_${run}_copy` };
   const workDir = mkdtempSync(join(tmpdir(), 'llm-adm-'));
@@ -308,7 +309,7 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
     pool = open(names.upgrade);
     await migrate(drizzle(pool), control(CONTROL_DIR));
     const upgraded = await upgradedState(pool);
-    expect(upgraded).toEqual({ migrations: 9, tables: NEW_TABLES, newRows: 0, attributed: 0, ledger: history });
+    expect(upgraded).toEqual({ migrations: journal.entries.length, tables: NEW_TABLES, newRows: 0, attributed: 0, ledger: history });
     expect((await query(pool, `SELECT bool_or(convalidated) AS any FROM pg_constraint WHERE conname LIKE 'cost_ledger_%_check'
       AND conname <> 'cost_ledger_operation_check'`))[0].any).toBe(false);
 
