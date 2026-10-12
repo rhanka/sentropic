@@ -86,8 +86,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: add `packages/cluster-mesh/src/sessions/workspace-binding.ts` (pure binding behind narrow storage port for later L3a move)
   - [x] GREEN: export binding from `packages/cluster-mesh/src/index.ts`
   - [x] GREEN: bump `packages/cluster-mesh/package.json` to `0.16.0` (no publish)
-  - [ ] GREEN: extend `api/src/db/control-schema.ts` with `sessionWorkspaceBindings`
-  - [ ] GREEN: add `api/drizzle/control/0011_session_workspace_bindings.sql` (one migration, BR01-EX1)
+  - [x] GREEN: extend `api/src/db/control-schema.ts` with `sessionWorkspaceBindings`
+  - [x] GREEN: add `api/drizzle/control/0011_session_workspace_bindings.sql` (one migration, BR01-EX1)
   - [ ] GREEN: add `api/src/services/cluster-mesh/session-workspace.ts` (attach and create existing Sentropic workspace durably, reuse, keep after detach and end)
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
