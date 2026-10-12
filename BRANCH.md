@@ -192,7 +192,8 @@
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` needed (single-spec update).
 - [ ] **Lot R — Responses ingress + Vibe alias (§16 build)**
   - [x] Normative contract `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16 committed (design `.h2a/design/responses-route.md`, UAT evidence `904e8d8f3`).
-  - [ ] D16-A routed ingress: `openai-responses` wire, both POST mounts, identical admission.
+  - [x] D16-A package ingress: `openai-responses` wire, both POST mounts, identical admission.
+  - [ ] D16-A product mount: `/responses` + `/v1/responses` in `GW_PATHS`, caller bridge, fences.
   - [ ] D16-B strict Responses normalizer + lossless canonical mapping.
   - [ ] D16-C native Codex + translated Muse/Mistral execution; Muse/Mistral tool decoding fix.
   - [ ] D16-D shared accumulator, JSON/SSE encoders, delegation from canonical entry points.

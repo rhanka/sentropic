@@ -1,7 +1,9 @@
 /**
- * Gateway Hono router — the FROZEN v1 wire surface (spec §3, D7):
+ * Gateway Hono router — the FROZEN v1 wire surface (spec §3, D7, §16.2):
  *   POST /v1/messages            (Anthropic Messages compat)
  *   POST /v1/chat/completions    (OpenAI Chat Completions compat)
+ *   POST /responses              (OpenAI Responses compat, no redirect)
+ *   POST /v1/responses           (OpenAI Responses compat, same handler)
  *   GET  /v1/models              (filtered by caller/pool policy)
  *   GET  /muse-code/models       (Muse CLI catalog; same filtered list)
  *   GET  /healthz                (liveness — real)
@@ -340,6 +342,11 @@ export const createGatewayRouter = (
   // --- Provider-compat wire (FROZEN v1 surface) ---
   app.post('/v1/messages', handle('anthropic-messages'));
   app.post('/v1/chat/completions', handle('openai-chat-completions'));
+  // Responses ingress (spec §16.2): one routed handler on both aliases, no
+  // redirects. Caller admission, quota, budget and cancellation match the
+  // Messages/Chat flow; the wire only selects the normalizer and encoders.
+  app.post('/responses', handle('openai-responses'));
+  app.post('/v1/responses', handle('openai-responses'));
 
   // Caller-filtered model catalog (spec §3), shared by GET /v1/models and
   // GET /muse-code/models. The Muse CLI joins `/muse-code/models` to its
