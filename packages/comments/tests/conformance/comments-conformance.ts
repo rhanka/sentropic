@@ -87,3 +87,109 @@ export const conformanceProvenance = (
   registration: { principal, registeredAt },
   attribution: { variant: 'human', assertionClass: 'self-declared', evidence: 'user-account' },
 });
+
+import {
+  COMMAND_CAPABILITIES,
+  commandIdempotencyKey,
+  commandPayloadDigest,
+  computeProposedContentDigest,
+  defaultDenyCapabilityCheck,
+  resolveIdempotentReplay,
+  checkDecisionEvidence,
+  type CapabilityCheckPort,
+  type CommittedCommand,
+  type DecisionEvidence,
+} from '../../src/commands.js';
+import type { CanonicalCommandStore } from '../../src/command-store.js';
+import {
+  createAnnotationRevision,
+  createCommentRevision,
+  createThreadStructureRevision,
+} from '../../src/revisions.js';
+
+/**
+ * Run the canonical corpus against one store implementation. Every case throws
+ * a labeled `Conformance failure` when the implementation deviates.
+ */
+export const runCommentsConformance = async (store: CanonicalCommandStore): Promise<void> => {
+  const scope = conformanceScope();
+  const resource = conformanceResource(scope);
+  const input = (text: string, source: SourceVersionIndicator = observedSource()) => ({
+    scope,
+    annotationId: 'ann-1',
+    primary: conformanceTarget(resource, source),
+    secondary: [],
+    visualAnchors: [],
+    body: conformanceBody(text),
+    provenance: conformanceProvenance(),
+  });
+
+  const genesis = createAnnotationRevision(null, input('first'));
+  await store.appendAnnotationRevision(scope, 'ann-1', genesis, { kind: 'creation', aggregateVersion: 0 });
+  const winner = createAnnotationRevision(genesis, input('second'));
+  const loser = createAnnotationRevision(genesis, input('third'));
+  conformanceAssert(winner.hash !== loser.hash, 'cas: divergent edits hash differently');
+  await store.appendAnnotationRevision(scope, 'ann-1', winner, { kind: 'revision', revisionHash: genesis.hash });
+  await expectConformanceError(
+    () => store.appendAnnotationRevision(scope, 'ann-1', loser, { kind: 'revision', revisionHash: genesis.hash }),
+    'cas-conflict',
+    'cas: the second writer against the same head conflicts',
+  );
+  const chain = await store.getAnnotationChain(scope, 'ann-1');
+  conformanceAssert(chain.length === 2 && chain[1].hash === winner.hash, 'cas: exactly one winner');
+
+  const digest = commandPayloadDigest({ action: 'revise', text: 'second' });
+  const committed: CommittedCommand = { digest, resultIds: ['ann-1'], resultHash: winner.hash };
+  const key = commandIdempotencyKey('conformance-key-1');
+  await store.recordCommittedCommand(scope, key, committed);
+  const found = await store.findCommittedCommand(scope, key);
+  conformanceAssert(found !== null && found.resultHash === winner.hash, 'replay: the committed command is indexed');
+  conformanceAssert(resolveIdempotentReplay(committed, digest).result === committed, 'replay: unchanged replay returns the committed result');
+  await expectConformanceError(
+    () => resolveIdempotentReplay(committed, commandPayloadDigest({ action: 'revise', text: 'changed' })),
+    'idempotency-conflict',
+    'replay: a changed replay conflicts',
+  );
+  await expectConformanceError(
+    () => store.recordCommittedCommand(scope, key, { digest: commandPayloadDigest({ other: true }), resultIds: [], resultHash: null }),
+    'idempotency-conflict',
+    'replay: a conflicting index write is rejected',
+  );
+
+  for (const capability of COMMAND_CAPABILITIES) {
+    conformanceAssert(
+      (await defaultDenyCapabilityCheck.check('principal-1', capability, [resource])) === false,
+      'authority: an unconfigured capability denies by default',
+    );
+  }
+
+  const seen: ResourceRef[][] = [];
+  const recording: CapabilityCheckPort = {
+    check: async (_principal, _capability, targets) => {
+      seen.push([...targets]);
+      return true;
+    },
+  };
+  const secondary = conformanceResource(scope, 'res-2');
+  const allowed = await recording.check('principal-1', 'revise', [resource, secondary]);
+  conformanceAssert(allowed && seen[0].length === 2, 'authority: a capability check covers every target');
+
+  const otherWorkspace = conformanceScope('b');
+  conformanceAssert((await store.getAnnotationHead(otherWorkspace, 'ann-1')) === null, 'scope: another workspace sees no chain');
+  const otherTenant = { tenantId: 'tenant-other', workspaceId: 'ws-a' };
+  conformanceAssert((await store.getAnnotationHead(otherTenant, 'ann-1')) === null, 'scope: another tenant sees no chain');
+  await expectConformanceError(
+    () => store.appendAnnotationRevision(otherWorkspace, 'ann-1', winner, { kind: 'revision', revisionHash: genesis.hash }),
+    'invalid-command',
+    'scope: a cross-scope append is rejected',
+  );
+
+  const conversionBound = createAnnotationRevision(winner, input('fourth', conversionSource()));
+  await store.appendAnnotationRevision(scope, 'ann-1', conversionBound, { kind: 'revision', revisionHash: winner.hash });
+  const unknownBound = createAnnotationRevision(conversionBound, input('fifth', unknownSource()));
+  await store.appendAnnotationRevision(scope, 'ann-1', unknownBound, { kind: 'revision', revisionHash: conversionBound.hash });
+  conformanceAssert(
+    (await store.getAnnotationHead(scope, 'ann-1'))?.hash === unknownBound.hash,
+    'sources: observed, fixed-at-conversion and unknown indicators are all accepted',
+  );
+  const head = unknownBound;
