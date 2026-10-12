@@ -108,6 +108,68 @@ describe('Codex runtime client', () => {
     })]);
   });
 
+  it('lets the done-item argument snapshot win over fragments (no duplication)', async () => {
+    const fetchFn = vi.fn(async () => sseResponse([
+      {
+        type: 'response.output_item.added',
+        item: { type: 'function_call', id: 'item-9', call_id: 'call-9', name: 'lookup', arguments: '' },
+      },
+      {
+        type: 'response.function_call_arguments.delta', item_id: 'item-9', delta: '{"id":',
+      },
+      {
+        type: 'response.output_item.done',
+        item: {
+          type: 'function_call', id: 'item-9', call_id: 'call-9',
+          name: 'lookup', arguments: '{"id":1}',
+        },
+      },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'response-9', output: [{ type: 'function_call', id: 'item-9', call_id: 'call-9' }],
+          usage: { input_tokens: 4, output_tokens: 3, total_tokens: 7 },
+        },
+      },
+    ]));
+    const client = new CodexRuntimeClient({ fetch: fetchFn });
+
+    const response = await client.generate({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'look it up' }],
+    }, auth);
+
+    expect(response.finishReason).toBe('tool_calls');
+    expect(response.toolCalls).toEqual([{
+      toolCallId: 'item-9', providerCallId: 'call-9', name: 'lookup',
+      argumentsText: '{"id":1}',
+    }]);
+  });
+
+  it('reports incomplete terminals with usage instead of success', async () => {
+    const fetchFn = vi.fn(async () => sseResponse([
+      { type: 'response.output_text.delta', delta: 'cut off' },
+      {
+        type: 'response.incomplete',
+        response: {
+          id: 'response-10', incomplete_details: { reason: 'max_output_tokens' },
+          usage: { input_tokens: 4, output_tokens: 12, total_tokens: 16 },
+        },
+      },
+    ]));
+    const client = new CodexRuntimeClient({ fetch: fetchFn });
+
+    const response = await client.generate({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'go long' }],
+    }, auth);
+
+    expect(response).toMatchObject({
+      text: 'cut off', finishReason: 'length',
+      usage: { inputTokens: 4, outputTokens: 12, totalTokens: 16 },
+    });
+  });
+
   it('never accepts an absent executable Codex token', async () => {
     const fetchFn = vi.fn();
     const client = new CodexRuntimeClient({ fetch: fetchFn });

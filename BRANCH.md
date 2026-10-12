@@ -197,7 +197,7 @@
   - [x] D16-B mesh core: execution-feature contracts, predicate, plan/quote eligibility + quote binding.
   - [x] D16-B strict Responses normalizer + lossless canonical mapping + native carrier.
   - [ ] D16-C native Codex + translated Muse/Mistral execution; Muse/Mistral tool decoding fix.
-  - [x] D16-C slice done: translated projection (choice/parallel/effort) + Muse/Mistral tool decoding (JSON + SSE).
+  - [x] D16-C slice done: translated projection (choice/parallel/effort) + Muse/Mistral tool decoding (JSON + SSE) + native Codex item/terminal decoding.
   - [ ] D16-D shared accumulator, JSON/SSE encoders, delegation from canonical entry points.
   - [ ] D16-E lease/accounting/count neutrality; D16-F error shaping + shared limits.
   - [x] D16-G `mistral-vibe-cli-latest` alias via mesh; no gateway table, no duplicate profile.

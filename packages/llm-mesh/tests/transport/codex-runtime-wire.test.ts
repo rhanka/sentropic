@@ -72,6 +72,72 @@ describe('Codex runtime wire', () => {
     expect(buildCodexRuntimeRequest(request).body).not.toHaveProperty('max_output_tokens');
   });
 
+  it('treats output_item.done function calls as authoritative argument snapshots', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: {
+        type: 'function_call', id: 'item-1', call_id: 'call-1',
+        name: 'lookup', arguments: '{"id":1,"full":true}',
+      },
+    })).toEqual([{ type: 'tool_call_start', data: {
+      toolCallId: 'item-1', providerCallId: 'call-1', name: 'lookup',
+      argumentsText: '{"id":1,"full":true}',
+    } }]);
+  });
+
+  it('deduplicates completed text snapshots (deltas already carried the text)', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_text.done', item_id: 'msg-1', output_index: 0, text: 'hello',
+    })).toEqual([]);
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: {
+        type: 'message', id: 'msg-1',
+        content: [{ type: 'output_text', text: 'hello' }],
+      },
+    })).toEqual([]);
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: {
+        type: 'reasoning', id: 'rs-1',
+        summary: [{ type: 'summary_text', text: 'thought a bit' }],
+      },
+    })).toEqual([]);
+  });
+
+  it('decodes incomplete terminals with usage instead of reporting success', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'response-2', incomplete_details: { reason: 'max_output_tokens' },
+        usage: { input_tokens: 9, output_tokens: 12, total_tokens: 21 },
+      },
+    })).toEqual([{ type: 'done', data: {
+      finishReason: 'length', providerId: 'openai', providerResponseId: 'response-2',
+      usage: {
+        inputTokens: 9, outputTokens: 12, totalTokens: 21,
+        providerRawUsage: { input_tokens: 9, output_tokens: 12, total_tokens: 21 },
+      },
+    } }]);
+    const [filtered] = decodeCodexRuntimeEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'response-3', incomplete_details: { reason: 'content_filter' },
+        usage: { input_tokens: 9, output_tokens: 1, total_tokens: 10 },
+      },
+    });
+    expect(filtered).toMatchObject({ type: 'done', data: { finishReason: 'content_filter' } });
+  });
+
+  it('decodes failure terminals as errors with the provider message', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.failed',
+      response: { id: 'response-4', error: { message: 'boom', code: 'server_error' } },
+    })).toEqual([{ type: 'error', data: {
+      providerId: 'openai', message: 'boom', code: 'server_error', retryable: false,
+    } }]);
+  });
+
   it('maps Codex SSE events to ordered canonical events', () => {
     expect(decodeCodexRuntimeEvent({
       type: 'response.output_text.delta', delta: 'hello',
