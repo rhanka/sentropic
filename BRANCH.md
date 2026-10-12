@@ -222,6 +222,9 @@
     - [x] 1.20b: declare llm-mesh/judge/host module in provider catalog; update capabilities.spec.ts and judge-loading.spec.ts.
     - [x] 1.20c: declare llm-mesh/transport/jev module in provider catalog; update capabilities.spec.ts and judge-loading.spec.ts.
   - [ ] 1.21a–c: three separate cluster leaf/typed-loader/export commits; update tests/integrations/llm-surface.spec.ts and tests/modules/judge-loading.spec.ts for each; retain existing ranges.
+    - [x] 1.21a: add llm-mesh/judge static leaf, typed loader and package export; update llm-surface.spec.ts and judge-loading.spec.ts.
+    - [ ] 1.21b: add llm-mesh/judge/host static leaf, typed loader and package export; update llm-surface.spec.ts and judge-loading.spec.ts.
+    - [ ] 1.21c: add llm-mesh/transport/jev static leaf, typed loader and package export; update llm-surface.spec.ts and judge-loading.spec.ts.
   - [ ] 1.22: compose/llm-mesh optional host judge input, disabled path acquires nothing; new cluster tests/judge-compose.spec.ts.
   - [ ] 1.23: public-port receipt correlation/generation-policy refusal; new cluster tests/judge-receipts.spec.ts.
   - [ ] 1.25a…: bounded public consumer/host examples, normalization/privacy/failure semantics and tracked architecture consolidation; regress mesh tests/judge-public-surface.test.ts.
