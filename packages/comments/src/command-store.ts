@@ -29,6 +29,65 @@ import type {
   OperationAuditEventRecord,
   OperationAuditSubject,
 } from './lifecycle.js';
+import type { PreparedSubmissionManifest } from './submissions.js';
+
+/**
+ * Immutable import manifest record (kind `import-manifest`, SPEC §4.4/§7.2):
+ * a standalone genesis envelope binding one frozen, admissible source
+ * inventory. The digest is the caller's recomputed digest over the declared
+ * units; it never attests undisclosed external-source completeness.
+ */
+export type CanonicalImportManifest = {
+  readonly kind: 'import-manifest';
+  readonly scope: CanonicalStoreScope;
+  readonly importId: string;
+  readonly sourceUnitCount: number;
+  readonly admissibleManifestDigest: string;
+  readonly mappingVersion: string;
+  readonly hash: string;
+};
+
+/**
+ * Committed unit receipt (kind `unit-receipt`): a standalone genesis record
+ * binding one coherent unit to the manifest hash it was admitted under.
+ */
+export type CanonicalUnitReceipt = {
+  readonly kind: 'unit-receipt';
+  readonly scope: CanonicalStoreScope;
+  readonly unitId: string;
+  readonly manifestHash: string;
+  readonly issuedAt: number;
+  readonly hash: string;
+};
+
+/**
+ * Batch receipt snapshot (kind `batch-receipt-snapshot`): progress snapshots
+ * chain per scoped batch and each snapshot's digest covers the prior
+ * snapshots; committed receipts never mutate (SPEC §4.4).
+ */
+export type CanonicalBatchReceiptSnapshot = {
+  readonly kind: 'batch-receipt-snapshot';
+  readonly scope: CanonicalStoreScope;
+  readonly batchId: string;
+  readonly receiptCount: number;
+  readonly snapshotDigest: string;
+  readonly hash: string;
+};
+
+/**
+ * Conversion report record (kind `conversion-report`, SPEC §6.2): the
+ * host-declared aggregate bound to the frozen inventory; count-only source
+ * exclusions reconcile here and yield no per-row canonical content.
+ */
+export type CanonicalConversionReport = {
+  readonly kind: 'conversion-report';
+  readonly scope: CanonicalStoreScope;
+  readonly reportId: string;
+  readonly sourceUnitCount: number;
+  readonly completenessDeclared: boolean;
+  readonly admissibleManifestDigest: string;
+  readonly hash: string;
+};
 
 /** Scope shared by every canonical store operation. */
 export type CanonicalStoreScope = { readonly tenantId: string; readonly workspaceId: string };
@@ -113,6 +172,63 @@ export interface CanonicalCommandStore {
     record: OperationAuditEventRecord,
     expected: ExpectedState,
   ): Promise<OperationAuditEventRecord>;
+
+  /**
+   * Append a prepared submission manifest as an idempotent genesis: replaying
+   * the same submission ID with the same hash returns the stored record;
+   * the same ID with a different hash is an `idempotency-conflict`.
+   */
+  appendPreparedSubmissionManifest(
+    scope: CanonicalStoreScope,
+    submissionId: string,
+    manifest: PreparedSubmissionManifest,
+  ): Promise<PreparedSubmissionManifest>;
+
+  /**
+   * Append an import manifest as an idempotent genesis: replaying the same
+   * import ID with the same hash returns the stored record; a different
+   * hash under the same ID is an `idempotency-conflict`.
+   */
+  appendImportManifest(
+    scope: CanonicalStoreScope,
+    importId: string,
+    manifest: CanonicalImportManifest,
+  ): Promise<CanonicalImportManifest>;
+
+  /**
+   * Append a committed unit receipt as an idempotent genesis: replaying the
+   * same unit ID with the same hash returns the stored record; a different
+   * hash under the same ID is an `idempotency-conflict`.
+   */
+  appendUnitReceipt(
+    scope: CanonicalStoreScope,
+    unitId: string,
+    receipt: CanonicalUnitReceipt,
+  ): Promise<CanonicalUnitReceipt>;
+
+  /**
+   * Append a batch receipt snapshot, CAS-checked against the scoped batch's
+   * snapshot chain: `creation` binds the empty chain, `revision` binds the
+   * last snapshot hash.
+   */
+  appendBatchReceiptSnapshot(
+    scope: CanonicalStoreScope,
+    batchId: string,
+    snapshot: CanonicalBatchReceiptSnapshot,
+    expected: ExpectedState,
+  ): Promise<CanonicalBatchReceiptSnapshot>;
+
+  /**
+   * Append a conversion report, CAS-checked against the scoped report chain:
+   * report revisions link their predecessor through the expected-state hash
+   * (SPEC §6.2); the record itself carries no link field.
+   */
+  appendConversionReport(
+    scope: CanonicalStoreScope,
+    reportId: string,
+    report: CanonicalConversionReport,
+    expected: ExpectedState,
+  ): Promise<CanonicalConversionReport>;
 
   /** Current annotation head revision, or null when the annotation does not exist. */
   getAnnotationHead(
