@@ -3,10 +3,10 @@
  *
  * Captures/freezes the v1 public wire surface so ANY future change to it is
  * detected by a failing test (the freeze MECHANISM; the SIGN is the gate). The
- * frozen surface = spec §3 / §3b:
- *   - the route inventory (`/v1/messages`, `/v1/chat/completions`, `/v1/models`,
- *     `/muse-code/models`, `/v1/messages/count_tokens`, `/healthz`, `/readyz`)
- *     + methods,
+ * frozen surface = spec §3 / §3b + spec §16.2:
+ *   - the route inventory (`/v1/messages`, `/v1/chat/completions`, `/responses`,
+ *     `/v1/responses`, `/v1/models`, `/muse-code/models`,
+ *     `/v1/messages/count_tokens`, `/healthz`, `/readyz`) + methods,
  *   - the request/response/SSE FRAMING shapes (Anthropic event/data vs OpenAI
  *     `data:` + `[DONE]`; the `X-Sentropic-Request-Id` response header),
  *   - the §3b ERROR-MAPPING table (status + provider-shaped body type per wire).
@@ -43,6 +43,10 @@ const REQUEST_ID_HEADER = 'x-sentropic-request-id';
 const FROZEN_ROUTES = [
   { method: 'POST', path: '/v1/messages', wire: 'anthropic-messages' },
   { method: 'POST', path: '/v1/chat/completions', wire: 'openai-chat-completions' },
+  // Spec §16.2: one Responses ingress on both aliases (deliberate v1 surface
+  // extension in the same PR as the router change — see the file header).
+  { method: 'POST', path: '/responses', wire: 'openai-responses' },
+  { method: 'POST', path: '/v1/responses', wire: 'openai-responses' },
   { method: 'GET', path: '/v1/models' },
   { method: 'GET', path: '/muse-code/models' },
   { method: 'POST', path: '/v1/messages/count_tokens', wire: 'anthropic-messages' },
@@ -154,10 +158,12 @@ const actualRouterRoutes = (app: { routes: { method: string; path: string }[] })
 describe('BR-46 v1 wire contract snapshot — route inventory', () => {
   it('freezes the exact v1 route inventory + methods (spec §3)', () => {
     // The inventory itself is the snapshot: count + each (method, path) pair.
-    expect(FROZEN_ROUTES).toHaveLength(7);
+    expect(FROZEN_ROUTES).toHaveLength(9);
     expect(FROZEN_ROUTES.map((r) => `${r.method} ${r.path}`)).toEqual([
       'POST /v1/messages',
       'POST /v1/chat/completions',
+      'POST /responses',
+      'POST /v1/responses',
       'GET /v1/models',
       'GET /muse-code/models',
       'POST /v1/messages/count_tokens',
