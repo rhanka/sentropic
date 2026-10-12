@@ -119,14 +119,22 @@ import {
   type CommittedCommand,
   type DecisionEvidence,
 } from '../../src/commands.js';
-import type { CanonicalCommandStore } from '../../src/command-store.js';
+import type {
+  CanonicalBatchReceiptSnapshot,
+  CanonicalCommandStore,
+  CanonicalConversionReport,
+  CanonicalImportManifest,
+  CanonicalUnitReceipt,
+} from '../../src/command-store.js';
 import {
   createAnnotationRevision,
   createCommentRevision,
   createThreadStructureRevision,
 } from '../../src/revisions.js';
+import { hashRecord } from '../../src/revision-hash.js';
 import { createReviewEvent, projectReviewState } from '../../src/reviews.js';
 import { createLifecycleEvent, createOperationAuditEvent, projectLifecycleState } from '../../src/lifecycle.js';
+import { createPreparedSubmissionManifest } from '../../src/submissions.js';
 
 /**
  * Run the canonical corpus against one store implementation. Every case throws
@@ -403,4 +411,122 @@ export const runCommentsConformance = async (store: CanonicalCommandStore): Prom
     'pins: comments may pin different revisions of one annotation and coexist',
   );
 
+  const storedStructures = await store.getThreadStructureChain(scope, 'thread-plain');
+  conformanceAssert(
+    storedStructures.length === 1 && storedStructures[0].hash === plainThread.hash,
+    'structures: the thread chain is readable in order',
+  );
+
+  const submissionInput = {
+    scope,
+    submissionId: 'sub-1',
+    annotation: { annotationId: 'ann-1', revisionHash: head.hash },
+    selectedComments: [],
+    selectedStructures: [],
+    captureDigests: [],
+    contractVersion: 'contract-v1',
+    profileVersion: 'profile-v1',
+    preparedBy: { principal: 'author-1' },
+  };
+  const submission = createPreparedSubmissionManifest(submissionInput, capacity);
+  await store.appendPreparedSubmissionManifest(scope, 'sub-1', submission);
+  conformanceAssert(
+    (await store.appendPreparedSubmissionManifest(scope, 'sub-1', submission)).hash === submission.hash,
+    'submission: a genesis replay returns the stored manifest',
+  );
+  const divergentSubmission = createPreparedSubmissionManifest(
+    { ...submissionInput, annotation: { annotationId: 'ann-1', revisionHash: genesis.hash } },
+    capacity,
+  );
+  await expectConformanceError(
+    () => store.appendPreparedSubmissionManifest(scope, 'sub-1', divergentSubmission),
+    'idempotency-conflict',
+    'submission: a different manifest under the same submission id conflicts',
+  );
+
+  const importManifest: CanonicalImportManifest = {
+    kind: 'import-manifest',
+    scope,
+    importId: 'imp-1',
+    sourceUnitCount: 2,
+    admissibleManifestDigest: 'admissible-digest-1',
+    mappingVersion: 'mapping-v1',
+    hash: hashRecord('import-manifest', { scope, importId: 'imp-1', sourceUnitCount: 2, admissibleManifestDigest: 'admissible-digest-1', mappingVersion: 'mapping-v1' }),
+  };
+  conformanceAssert(
+    (await store.appendImportManifest(scope, 'imp-1', importManifest)).hash === importManifest.hash,
+    'import: a manifest genesis replay returns the stored record',
+  );
+  const unitReceipt: CanonicalUnitReceipt = {
+    kind: 'unit-receipt',
+    scope,
+    unitId: 'unit-1',
+    manifestHash: importManifest.hash,
+    issuedAt: 1_717_000_000_001,
+    hash: hashRecord('unit-receipt', { scope, unitId: 'unit-1', manifestHash: importManifest.hash, issuedAt: 1_717_000_000_001 }),
+  };
+  conformanceAssert(
+    (await store.appendUnitReceipt(scope, 'unit-1', unitReceipt)).hash === unitReceipt.hash,
+    'import: a receipt genesis replay returns the stored record',
+  );
+
+  const snapshotOne: CanonicalBatchReceiptSnapshot = {
+    kind: 'batch-receipt-snapshot',
+    scope,
+    batchId: 'batch-1',
+    receiptCount: 1,
+    snapshotDigest: 'snapshot-digest-1',
+    hash: hashRecord('batch-receipt-snapshot', { scope, batchId: 'batch-1', receiptCount: 1, snapshotDigest: 'snapshot-digest-1' }),
+  };
+  const snapshotTwo: CanonicalBatchReceiptSnapshot = {
+    kind: 'batch-receipt-snapshot',
+    scope,
+    batchId: 'batch-1',
+    receiptCount: 2,
+    snapshotDigest: 'snapshot-digest-2',
+    hash: hashRecord('batch-receipt-snapshot', { scope, batchId: 'batch-1', receiptCount: 2, snapshotDigest: 'snapshot-digest-2' }),
+  };
+  await store.appendBatchReceiptSnapshot(scope, 'batch-1', snapshotOne, { kind: 'creation', aggregateVersion: 0 });
+  await store.appendBatchReceiptSnapshot(scope, 'batch-1', snapshotTwo, { kind: 'revision', revisionHash: snapshotOne.hash });
+  await expectConformanceError(
+    () => store.appendBatchReceiptSnapshot(scope, 'batch-1', snapshotTwo, { kind: 'revision', revisionHash: snapshotOne.hash }),
+    'cas-conflict',
+    'batch: a stale snapshot append conflicts',
+  );
+
+  const reportOne: CanonicalConversionReport = {
+    kind: 'conversion-report',
+    scope,
+    reportId: 'cr-1',
+    sourceUnitCount: 2,
+    completenessDeclared: true,
+    admissibleManifestDigest: 'admissible-digest-1',
+    hash: hashRecord('conversion-report', { scope, reportId: 'cr-1', sourceUnitCount: 2, completenessDeclared: true, admissibleManifestDigest: 'admissible-digest-1' }),
+  };
+  await store.appendConversionReport(scope, 'cr-1', reportOne, { kind: 'creation', aggregateVersion: 0 });
+  conformanceAssert(
+    (await store.readChainPage(scope, { kind: 'conversion-reports', reportId: 'cr-1' }, { limit: 10, cursor: null })).records[0].hash === reportOne.hash,
+    'conversion: the report chain is readable',
+  );
+
+  const firstPage = await store.readChainPage(scope, { kind: 'annotation-revisions', annotationId: 'ann-1' }, { limit: 2, cursor: null });
+  conformanceAssert(
+    firstPage.outcome === 'page' && firstPage.records.length === 2 && firstPage.nextCursor !== null,
+    'pagination: a page is bounded with a continuation cursor',
+  );
+  const secondPage = await store.readChainPage(scope, { kind: 'annotation-revisions', annotationId: 'ann-1' }, { limit: 2, cursor: firstPage.nextCursor });
+  conformanceAssert(
+    secondPage.records.length === 2 && secondPage.nextCursor === null && secondPage.records[1].hash === head.hash,
+    'pagination: cursor continuation reaches exhaustion at the head',
+  );
+  await expectConformanceError(
+    () => store.readChainPage(scope, { kind: 'annotation-revisions', annotationId: 'ann-1' }, { limit: 0, cursor: null }),
+    'invalid-command',
+    'pagination: a non-positive limit is rejected',
+  );
+  const manifestPage = await store.readChainPage(scope, { kind: 'prepared-submission-manifests', submissionId: 'sub-1' }, { limit: 10, cursor: null });
+  conformanceAssert(
+    manifestPage.records.length === 1 && manifestPage.records[0].hash === submission.hash,
+    'pagination: a genesis record reads as one page',
+  );
 };
