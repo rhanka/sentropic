@@ -6,7 +6,7 @@ import type { AdmittedJudge } from './admission.js';
 import { parseJudgeAdapterResult } from './adapter-result.js';
 import { createJudgeError } from './errors.js';
 import { unreportedJudgeUsage } from './receipt.js';
-import { priceJudgeUsage } from './pricing.js';
+import * as pricing from './pricing.js';
 import { getSecretAuthMaterial } from '../auth.js';
 import { freezeJudgeData } from './descriptor-validation.js';
 
@@ -34,7 +34,7 @@ export async function dispatchJudge(execution: JudgeExecution, selection: Extrac
   receipt.servedModelId = result.servedModelId;
   if (result.providerRequestId) receipt.providerRequestId = result.providerRequestId;
   if (result.providerLatencyMs !== undefined) receipt.providerLatencyMs = result.providerLatencyMs;
-  const priced = priceJudgeUsage(result.usage, admitted.quote, !result.ok && result.error.code === 'SERVED_IDENTITY_MISMATCH');
+  const priced = pricing.priceJudgeUsage(result.usage, admitted.quote, !result.ok && result.error.code === 'SERVED_IDENTITY_MISMATCH');
   receipt.cost = priced.cost;
   receipt.budget = { state: priced.pending ? 'pending-reconciliation' : 'settled',
     reservedMicroUsd: admitted.quote.reservedMicroUsd, overrun: priced.overrun };
@@ -47,7 +47,7 @@ export async function dispatchJudge(execution: JudgeExecution, selection: Extrac
   catch {
     receipt.budget.state = 'pending-reconciliation';
     error = createJudgeError('SETTLEMENT_UNAVAILABLE', 'settlement');
+    closeJudgeReceipt(execution, error);
   }
-  error ??= judgeInterruption(execution, 'settlement') ?? undefined;
   return persistJudgeResult(execution, options.receipts, error, result.ok ? result.verdict : undefined);
 }

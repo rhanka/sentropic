@@ -57,22 +57,17 @@ export function copyJudgeReceipt(receipt: JudgeReceipt): JudgeReceipt { return f
 export async function persistJudgeResult(execution: JudgeExecution, sink: JudgeReceiptSink,
   error?: JudgeError, verdict?: JudgeVerdict): Promise<JudgeResult> {
   execution.phase = 'settlement';
-  const settledVerdict = Boolean(verdict && execution.receipt.budget.state === 'settled'
-    && (!error || ['TIMEOUT', 'CANCELLED'].includes(error.code)));
-  closeJudgeReceipt(execution, settledVerdict ? undefined : error);
+  if (error) closeJudgeReceipt(execution, error);
   try { await sink.persist(copyJudgeReceipt(execution.receipt)); }
-  catch { error = createJudgeError('RECEIPT_UNAVAILABLE', 'settlement'); }
+  catch {
+    error = createJudgeError('RECEIPT_UNAVAILABLE', 'settlement');
+    if (execution.receipt.attempts) execution.receipt.budget.state = 'pending-reconciliation';
+    closeJudgeReceipt(execution, error);
+  }
   // Persistence can complete after the caller's deadline; accounting is never replayed.
   error ??= judgeInterruption(execution, execution.receipt.attempts ? 'settlement' : 'preflight') ?? undefined;
   if (error) {
-    if (execution.receipt.attempts && ['RECEIPT_UNAVAILABLE', 'TIMEOUT', 'CANCELLED'].includes(error.code)) {
-      if (error.code === 'RECEIPT_UNAVAILABLE') {
-        execution.receipt.budget.state = 'pending-reconciliation';
-      }
-    }
-    if (!settledVerdict || error.code === 'RECEIPT_UNAVAILABLE') {
-      closeJudgeReceipt(execution, error);
-    }
+    closeJudgeReceipt(execution, error);
     return { kind: 'error', ok: false, error, receipt: copyJudgeReceipt(execution.receipt) };
   }
   if (!verdict) throw new Error('Judge result requires validated evidence.');
