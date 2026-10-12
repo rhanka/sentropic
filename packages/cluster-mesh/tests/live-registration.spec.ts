@@ -3,16 +3,19 @@ import {
   INITIAL_BINDING_REVISION,
   INITIAL_DECLARATION_REVISION,
   NON_ACTIVATING_LIFECYCLE_KINDS,
+  POLICY_VERSION,
   classifyLifecycleEvent,
   createLiveDeclarationRegistration,
   deriveCloneIdentity,
   deriveDeclarationIdentity,
   deriveWorktreeIdentity,
+  validateWorkspaceDeclaration,
   type LiveDeclarationReplaySink,
   type LiveDeclarationStorePort,
   type LiveDeclarationWithdrawal,
   type LiveDeferredWorkPort,
   type LivePrivatePurgePort,
+  type LiveProductBindingAuthorizationPort,
 } from '../src/live-storage/registration.js';
 
 // In-memory durable store fake: withdrawal marks the row but never deletes it.
@@ -454,5 +457,86 @@ describe('live registration', () => {
     expect(worktree.worktreeId).toBe('wt:3aea1f8cbce8363e2168b4422b9fde11aec8e984eec828236d08c8842a46e5a8');
     const declaration = deriveDeclarationIdentity({ hostScope: 'host:a', clone, worktree });
     expect(declaration.declarationId).toBe('decl:8a1205250845002fd2a8326d3514a5c6ce0b19d1d44e81641d1a3752b112f3b5');
+  });
+
+  it('rejects declaration when binding authorization port denies the product binding', async () => {
+    const { store } = memoryStore();
+    const work = deferredWorkFake(0);
+    const { port: purge } = purgeFake();
+    const bindingAuthorization: LiveProductBindingAuthorizationPort = {
+      authorizeProductBinding: vi.fn(async () => {
+        throw new Error('binding authorization denied: test refusal');
+      }),
+    };
+    const reg = createLiveDeclarationRegistration({
+      store,
+      deferredWork: work,
+      privatePurge: purge,
+      bindingAuthorization,
+    });
+    const clone = deriveCloneIdentity({
+      hostScope: 'host:a',
+      commonDirRealpath: '/srv/repo/.git',
+      oidAlgorithm: 'sha1',
+    });
+    const worktree = deriveWorktreeIdentity({
+      hostScope: 'host:a',
+      clone,
+      worktreePath: '/srv/repo',
+      gitDir: '/srv/repo/.git',
+    });
+    const declId = deriveDeclarationIdentity({ hostScope: 'host:a', clone, worktree });
+
+    await expect(
+      reg.declare({
+        tenant: 'tenant-a',
+        principal: 'principal-a',
+        hostScope: 'host:a',
+        clone,
+        worktree,
+        authorizedRoots: ['/srv/repo'],
+        serverWorkspaceId: 'ws-denied',
+        serverIssuer: 'https://auth.example.com',
+        bindingRevision: INITIAL_BINDING_REVISION,
+      }),
+    ).rejects.toThrow('binding authorization denied: test refusal');
+
+    expect(bindingAuthorization.authorizeProductBinding).toHaveBeenCalledWith({
+      tenant: 'tenant-a',
+      principal: 'principal-a',
+      serverWorkspaceId: 'ws-denied',
+      serverIssuer: 'https://auth.example.com',
+      bindingRevision: INITIAL_BINDING_REVISION,
+    });
+    expect(await store.find('tenant-a', declId.declarationId, clone.cloneId, worktree.worktreeId)).toBeNull();
+  });
+
+  it('rejects declaration with unknown policy version', () => {
+    const clone = deriveCloneIdentity({
+      hostScope: 'host:a',
+      commonDirRealpath: '/srv/repo/.git',
+      oidAlgorithm: 'sha1',
+    });
+    const worktree = deriveWorktreeIdentity({
+      hostScope: 'host:a',
+      clone,
+      worktreePath: '/srv/repo',
+      gitDir: '/srv/repo/.git',
+    });
+    const declId = deriveDeclarationIdentity({ hostScope: 'host:a', clone, worktree });
+    const invalid = {
+      tenant: 'tenant-a',
+      principal: 'principal-a',
+      declarationId: declId.declarationId,
+      cloneId: clone.cloneId,
+      worktreeId: worktree.worktreeId,
+      authorizedRoots: ['/srv/repo'],
+      liveCapability: 'live' as const,
+      policyVersion: 'unknown-policy/9' as never,
+      declarationRevision: INITIAL_DECLARATION_REVISION,
+    };
+    const check = validateWorkspaceDeclaration(invalid);
+    expect(check.ok).toBe(false);
+    expect(check.errors).toContain(`policyVersion must be ${POLICY_VERSION}`);
   });
 });
