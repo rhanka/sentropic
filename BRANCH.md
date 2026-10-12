@@ -43,6 +43,10 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - `acknowledge`: single additive table, rollback is DROP TABLE, no backfill
 - [x] `BR01-EX2`: regenerate root `package-lock.json` via `make lock-root` for cluster-mesh 0.16.0 lock-sync (CI changes job)
   - `acknowledge`: one version line sync, rollback is restore lock entry
+- [x] `BR01-EX3`: refresh `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` for the 0.16.0 bump (CI validate-cluster-mesh test-lazy-package ENOENT sentropic-cluster-mesh-0.13.3.tgz)
+  - `acknowledge`: fixture-only change, lock regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`, verified green via `test-lazy-package` (10 files / 63 tests), rollback is checkout both fixture files
+- [x] `BR01-EX4`: evolve `api/tests/api/llm-admission-schema.test.ts` frozen-journal assertions for the new `0011_session_workspace_bindings` journal entry (CI test-api-unit-integration endpoints 3)
+  - `acknowledge`: assertion-level evolution only, byte-identical to CI-green PR #664 pattern (0008 pinned at idx 8, applied row matched by hash, disposable upgrade expects journal.entries.length), 0008 semantics unchanged, rollback is checkout the test file
 
 ## AI Flaky tests
 - Acceptance rule:
