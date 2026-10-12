@@ -102,6 +102,27 @@ describe('judge admission and exactly one dispatch', () => {
       spy.mockRestore();
     }
   });
+  it('marks pending-reconciliation on returned receipt when clock exceeds deadline during persist', async () => {
+    const f = judgeServiceFixture();
+    const originalPersist = f.options.receipts.persist;
+    vi.mocked(f.options.receipts.persist).mockImplementationOnce(async (receipt) => {
+      f.state.now = 10001; // monotonic now >= deadline (default timeoutMs: 10000)
+      return originalPersist(receipt);
+    });
+    const result = await createJudgeService(f.options).judge(judgeRequest());
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'TIMEOUT', phase: 'settlement', retryable: false },
+      receipt: {
+        outcome: 'error',
+        errorCode: 'TIMEOUT',
+        budget: { state: 'pending-reconciliation' },
+      },
+    });
+    expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts[0].callId).toBe(result.receipt.callId);
+  });
   it('agrees on error between ledger and persisted receipt when adapter returns verdict after cancellation', async () => {
     const f = judgeServiceFixture();
     const controller = new AbortController();
