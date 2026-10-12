@@ -200,7 +200,8 @@
   - [ ] D16-D shared accumulator, JSON/SSE encoders, delegation from canonical entry points.
   - [ ] D16-E lease/accounting/count neutrality; D16-F error shaping + shared limits.
   - [x] D16-G `mistral-vibe-cli-latest` alias via mesh; no gateway table, no duplicate profile.
-  - [ ] Fixture capture (pinned Muse/Codex/Vibe) + replay tests; UAT P0 interceptor covers both paths.
+  - [x] Fixture capture (pinned Muse/Codex/Vibe initials + continuations, sanitized + manifest).
+  - [ ] Fixture replay tests; UAT P0 interceptor covers both Responses paths.
   - [ ] Live qualification: streamed text + tool continuation (Muse, Codex), Vibe default model.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint for impacted packages.
