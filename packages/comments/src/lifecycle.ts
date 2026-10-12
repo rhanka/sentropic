@@ -161,3 +161,73 @@ export const createLifecycleEvent = (
 
 export const projectLifecycleState = (chain: readonly LifecycleEventRecord[]): LifecycleProjection =>
   projectLifecycle(chain);
+
+/**
+ * Canonical operation audit contracts (SPEC §4.4). Operation audits form
+ * their own hash chains, one per scoped audit subject, separate from lifecycle
+ * chains: they record who performed an operation, for which audience, and
+ * never mutate content or availability.
+ */
+
+/** Closed operation-audit subject set. */
+export const OPERATION_AUDIT_SUBJECTS = [
+  'assignment',
+  'discussion-state',
+  'archive',
+  'account-association',
+] as const;
+
+export type OperationAuditSubject = (typeof OPERATION_AUDIT_SUBJECTS)[number];
+
+export const isOperationAuditSubject = (value: unknown): value is OperationAuditSubject =>
+  typeof value === 'string' && (OPERATION_AUDIT_SUBJECTS as readonly string[]).includes(value);
+
+/** Operation audit validation error with a closed reason code. */
+export class OperationAuditValidationError extends Error {
+  constructor(
+    public readonly code: 'invalid-subject' | 'invalid-audit',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'OperationAuditValidationError';
+  }
+}
+
+/** Immutable operation audit event (hashed record kind `operation-audit-event`). */
+export type OperationAuditEventRecord = {
+  readonly kind: 'operation-audit-event';
+  readonly scope: CanonicalStoreScope;
+  readonly subject: OperationAuditSubject;
+  readonly subjectId: string;
+  readonly link: { readonly sequence: number; readonly previousHash: string | null };
+  /** Closed operation names per subject; host policies extend, never shrink. */
+  readonly operation: string;
+  readonly principal: string;
+  readonly audience: readonly string[];
+  readonly detail: Record<string, unknown> | null;
+  readonly hash: string;
+};
+
+/** Create an operation audit event appended to its per-subject chain. */
+export const createOperationAuditEvent = (
+  chain: readonly OperationAuditEventRecord[],
+  input: Omit<OperationAuditEventRecord, 'kind' | 'link' | 'hash'>,
+): OperationAuditEventRecord => {
+  if (!isOperationAuditSubject(input.subject)) {
+    throw new OperationAuditValidationError('invalid-subject', `Unknown audit subject: ${String(input.subject)}`);
+  }
+  if (input.subjectId.length === 0 || input.principal.length === 0 || input.operation.length === 0) {
+    throw new OperationAuditValidationError('invalid-audit', 'Audit needs a subject id, principal and operation');
+  }
+  if (!Array.isArray(input.audience) || input.audience.some((member) => typeof member !== 'string' || member.length === 0)) {
+    throw new OperationAuditValidationError('invalid-audit', 'Audit audience is a list of non-empty principals');
+  }
+  const previous = chain.length > 0 ? chain[chain.length - 1] : null;
+  if (previous !== null && (previous.subject !== input.subject || previous.subjectId !== input.subjectId || previous.scope.tenantId !== input.scope.tenantId || previous.scope.workspaceId !== input.scope.workspaceId)) {
+    throw new OperationAuditValidationError('invalid-audit', 'Operation audit chain is scoped to one subject');
+  }
+  const link = { sequence: previous === null ? 1 : previous.link.sequence + 1, previousHash: previous === null ? null : previous.hash };
+  const envelope = { ...input, link };
+  const hash = hashRecord('operation-audit-event', envelope as unknown as Record<string, unknown>);
+  return { ...envelope, kind: 'operation-audit-event', hash };
+};
