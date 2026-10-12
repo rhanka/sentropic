@@ -210,6 +210,7 @@
   - [x] Emit `.h2a/build/judge_r0_report.md` (English) and stop before Lot 2.09.
 - [ ] **Lot 1D — Remote client, cluster surface and public docs**
   - [ ] 2.09 prerequisite: client.ts authenticated mesh-only caller, correlation, bounded envelopes, receipt-null connection failure and no retry; new mesh tests/judge-client.test.ts; update public-surface test.
+    - [x] Portable remote client (`client.ts`) without JEV key custody, correlation preservation, payload bounds and no automatic retry; consumer export.
     - [ ] Lot 1C handoff: unknown wire error code or phase is an invalid mesh response; return typed MESH_UNAVAILABLE/TRANSPORT_FAILED connection failure with callStatus unknown, never coerce through createJudgeError into preflight/not-sent/zero spend. Pin both refusals in judge-client.test.ts.
   - [ ] 1.20a–c: three separate cluster module/catalog commits after client exists; update tests/modules/capabilities.spec.ts and new/update tests/modules/judge-loading.spec.ts for each.
   - [ ] 1.21a–c: three separate cluster leaf/typed-loader/export commits; update tests/integrations/llm-surface.spec.ts and tests/modules/judge-loading.spec.ts for each; retain existing ranges.
