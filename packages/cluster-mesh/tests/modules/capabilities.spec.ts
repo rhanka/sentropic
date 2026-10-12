@@ -36,6 +36,7 @@ describe('module capability reporting', () => {
     expect(mesh.capabilities.modules?.['llm-mesh']).toEqual({ availability: 'gated', state: 'unprobed' });
     expect(mesh.capabilities.modules?.['llm-mesh/judge']).toEqual({ availability: 'gated', state: 'unprobed' });
     expect(mesh.capabilities.modules?.['llm-mesh/judge/host']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(mesh.capabilities.modules?.['llm-mesh/transport/jev']).toEqual({ availability: 'gated', state: 'unprobed' });
     await modules.probe();
     expect(mesh.capabilities.modules?.['llm-mesh']).toMatchObject({ availability: 'available', state: 'installed' });
     expect(mesh.capabilities.modules?.gateway).toMatchObject({ state: 'unavailable', reason: 'not_installed' });
@@ -52,11 +53,14 @@ describe('module capability reporting', () => {
     expect(modules.snapshot().gateway).toEqual({ availability: 'gated', state: 'unprobed' });
     expect(modules.snapshot()['llm-mesh/judge']).toEqual({ availability: 'gated', state: 'unprobed' });
     expect(modules.snapshot()['llm-mesh/judge/host']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['llm-mesh/transport/jev']).toEqual({ availability: 'gated', state: 'unprobed' });
     expect(modules.isEnabled('gateway')).toBe(true);
     expect(modules.isEnabled('llm-mesh/judge')).toBe(true);
     expect(modules.isEnabled('llm-mesh/judge/host')).toBe(true);
+    expect(modules.isEnabled('llm-mesh/transport/jev')).toBe(true);
     expect(createClusterMeshModules({ disabled: ['gateway'] }).isEnabled('gateway')).toBe(false);
     expect(createClusterMeshModules({ disabled: ['llm-mesh/judge'] }).isEnabled('llm-mesh/judge')).toBe(false);
     expect(createClusterMeshModules({ disabled: ['llm-mesh/judge/host'] }).isEnabled('llm-mesh/judge/host')).toBe(false);
+    expect(createClusterMeshModules({ disabled: ['llm-mesh/transport/jev'] }).isEnabled('llm-mesh/transport/jev')).toBe(false);
   });
 });
