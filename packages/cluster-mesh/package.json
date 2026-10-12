@@ -16,6 +16,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./live-storage/registration": {
+      "types": "./dist/live-storage/registration.d.ts",
+      "import": "./dist/live-storage/registration.js"
+    },
     "./llm-mesh": {
       "types": "./dist/integrations/llm-mesh/index.d.ts",
       "import": "./dist/integrations/llm-mesh/index.js"
