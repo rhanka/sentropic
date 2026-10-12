@@ -1,0 +1,140 @@
+{
+  "hashVersion": "revision-hash-v1",
+  "records": [
+    {
+      "id": "annotation-genesis",
+      "kind": "annotation-revision",
+      "envelope": {
+        "scope": {
+          "tenantId": "tnt_corpus",
+          "workspaceId": "wsp_corpus"
+        },
+        "annotationId": "ann_corpus_1",
+        "link": {
+          "sequence": 1,
+          "previousHash": null
+        },
+        "primary": {
+          "resource": {
+            "scope": {
+              "tenantId": "tnt_corpus",
+              "workspaceId": "wsp_corpus"
+            },
+            "namespace": "ns_corpus",
+            "kind": "document",
+            "id": "res_corpus_1"
+          },
+          "source": {
+            "variant": "observed",
+            "sourceVersion": "src_v1",
+            "evidence": "evidence_corpus_1"
+          }
+        },
+        "secondary": [],
+        "visualAnchors": [],
+        "body": {
+          "text": "corpus annotation body",
+          "codec": {
+            "format": "plain",
+            "codecId": "plain-v1",
+            "specDigest": "spec-digest-plain-1",
+            "extensions": []
+          }
+        },
+        "provenance": {
+          "registration": {
+            "principal": "author_corpus",
+            "registeredAt": 1717000000000
+          },
+          "attribution": {
+            "variant": "human",
+            "assertionClass": "self-declared",
+            "evidence": "account"
+          }
+        }
+      },
+      "canonical": "{\"annotationId\":\"ann_corpus_1\",\"body\":{\"codec\":{\"codecId\":\"plain-v1\",\"extensions\":[],\"format\":\"plain\",\"specDigest\":\"spec-digest-plain-1\"},\"text\":\"corpus annotation body\"},\"hashVersion\":\"revision-hash-v1\",\"kind\":\"annotation-revision\",\"link\":{\"previousHash\":null,\"sequence\":1},\"primary\":{\"resource\":{\"id\":\"res_corpus_1\",\"kind\":\"document\",\"namespace\":\"ns_corpus\",\"scope\":{\"tenantId\":\"tnt_corpus\",\"workspaceId\":\"wsp_corpus\"}},\"source\":{\"evidence\":\"evidence_corpus_1\",\"sourceVersion\":\"src_v1\",\"variant\":\"observed\"}},\"provenance\":{\"attribution\":{\"assertionClass\":\"self-declared\",\"evidence\":\"account\",\"variant\":\"human\"},\"registration\":{\"principal\":\"author_corpus\",\"registeredAt\":1717000000000}},\"scope\":{\"tenantId\":\"tnt_corpus\",\"workspaceId\":\"wsp_corpus\"},\"secondary\":[],\"visualAnchors\":[]}",
+      "digest": "42451a0808709bde5abc1f997540b6ee3a30e61b78813c15f0e30bca0bf28987"
+    },
+    {
+      "id": "thread-structure-genesis",
+      "kind": "thread-structure-revision",
+      "envelope": {
+        "scope": {
+          "tenantId": "tnt_corpus",
+          "workspaceId": "wsp_corpus"
+        },
+        "threadId": "thr_corpus_1",
+        "link": {
+          "sequence": 1,
+          "previousHash": null
+        },
+        "trigger": "initial-registration",
+        "primary": {
+          "resource": {
+            "scope": {
+              "tenantId": "tnt_corpus",
+              "workspaceId": "wsp_corpus"
+            },
+            "namespace": "ns_corpus",
+            "kind": "document",
+            "id": "res_corpus_1"
+          },
+          "source": {
+            "variant": "observed",
+            "sourceVersion": "src_v1",
+            "evidence": "evidence_corpus_1"
+          }
+        },
+        "annotationId": null,
+        "provenance": {
+          "registration": {
+            "principal": "author_corpus",
+            "registeredAt": 1717000000000
+          },
+          "attribution": {
+            "variant": "human",
+            "assertionClass": "self-declared",
+            "evidence": "account"
+          }
+        }
+      },
+      "canonical": "{\"annotationId\":null,\"hashVersion\":\"revision-hash-v1\",\"kind\":\"thread-structure-revision\",\"link\":{\"previousHash\":null,\"sequence\":1},\"primary\":{\"resource\":{\"id\":\"res_corpus_1\",\"kind\":\"document\",\"namespace\":\"ns_corpus\",\"scope\":{\"tenantId\":\"tnt_corpus\",\"workspaceId\":\"wsp_corpus\"}},\"source\":{\"evidence\":\"evidence_corpus_1\",\"sourceVersion\":\"src_v1\",\"variant\":\"observed\"}},\"provenance\":{\"attribution\":{\"assertionClass\":\"self-declared\",\"evidence\":\"account\",\"variant\":\"human\"},\"registration\":{\"principal\":\"author_corpus\",\"registeredAt\":1717000000000}},\"scope\":{\"tenantId\":\"tnt_corpus\",\"workspaceId\":\"wsp_corpus\"},\"threadId\":\"thr_corpus_1\",\"trigger\":\"initial-registration\"}",
+      "digest": "d443ce13ca1ee5fb92b77504b529c5a4f87df8e083e7bc8aea43f0800009ecf9"
+    },
+    {
+      "id": "comment-genesis",
+      "kind": "comment-revision",
+      "envelope": {
+        "scope": {
+          "tenantId": "tnt_corpus",
+          "workspaceId": "wsp_corpus"
+        },
+        "threadId": "thr_corpus_1",
+        "commentId": "cmt_corpus_1",
+        "link": {
+          "sequence": 1,
+          "previousHash": null
+        },
+        "parentCommentId": null,
+        "structureRevision": {
+          "id": "thr_corpus_1",
+          "hash": "d443ce13ca1ee5fb92b77504b529c5a4f87df8e083e7bc8aea43f0800009ecf9"
+        },
+        "annotationPin": {
+          "annotationId": "ann_corpus_1",
+          "revisionHash": "42451a0808709bde5abc1f997540b6ee3a30e61b78813c15f0e30bca0bf28987"
+        },
+        "body": {
+          "text": "corpus comment body",
+          "codec": {
+            "format": "plain",
+            "codecId": "plain-v1",
+            "specDigest": "spec-digest-plain-1",
+            "extensions": []
+          }
+        },
+        "provenance": {
+          "registration": {
+            "principal": "author_corpus",
+            "registeredAt": 1717000000000
