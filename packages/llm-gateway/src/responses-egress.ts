@@ -127,16 +127,18 @@ export const createResponsesAccumulator = (
   limits: ResponsesLimits = DEFAULT_RESPONSES_LIMITS,
 ): ResponsesAccumulator => {
   let text = '';
+  let summary = '';
   const calls = new Map<string, { providerCallId?: string; name: string; args: string }>();
-  const order: Array<{ kind: 'message' | 'tool'; key: string }> = [];
+  const order: Array<{ kind: 'message' | 'reasoning' | 'tool'; key: string }> = [];
   let bytes = 0;
   let messageCount = 0;
+  let reasoningCount = 0;
   let toolCount = 0;
   let terminal: { finishReason: FinishReason } = { finishReason: 'unknown' };
   let usage: TokenUsage | undefined;
   let failure: ResponsesSnapshot['failure'];
 
-  const itemCount = () => (text ? 1 : 0) + calls.size;
+  const itemCount = () => (text ? 1 : 0) + (summary ? 1 : 0) + calls.size;
 
   const checkBounds = (growth: number, extraItems: number): void => {
     if (itemCount() + extraItems > limits.maxOutputItems) {
@@ -154,6 +156,20 @@ export const createResponsesAccumulator = (
       checkBounds(event.data.delta.length, added);
       if (!text) order.push({ kind: 'message', key: '' });
       text += event.data.delta;
+    } else if (event.type === 'reasoning_delta') {
+      // Completed summaries replace streamed fragments (authoritative
+      // artifact, spec §16.4); hidden/signature kinds never render.
+      const kind = event.data.kind ?? 'summary';
+      if (kind === 'summary_done') {
+        checkBounds(event.data.delta.length, summary ? 0 : 1);
+        if (!summary) order.push({ kind: 'reasoning', key: '' });
+        bytes -= summary.length;
+        summary = event.data.delta;
+      } else if (kind === 'summary') {
+        checkBounds(event.data.delta.length, summary ? 0 : 1);
+        if (!summary) order.push({ kind: 'reasoning', key: '' });
+        summary += event.data.delta;
+      }
     } else if (event.type === 'tool_call_start') {
       const current = calls.get(event.data.toolCallId);
       const args = event.data.argumentsText ?? '';
@@ -204,6 +220,16 @@ export const createResponsesAccumulator = (
       if (!text) order.push({ kind: 'message', key: '' });
       text = incomingText;
     }
+    if (typeof content !== 'string') {
+      const incomingSummary = content
+        .map((part) => (part.type === 'reasoning' ? part.text : ''))
+        .join('');
+      if (incomingSummary) {
+        checkBounds(incomingSummary.length, summary ? 0 : 1);
+        if (!summary) order.push({ kind: 'reasoning', key: '' });
+        summary = incomingSummary;
+      }
+    }
     for (const call of response.toolCalls) {
       if (calls.has(call.toolCallId)) continue;
       checkBounds(call.argumentsText.length, 1);
@@ -224,6 +250,9 @@ export const createResponsesAccumulator = (
       if (entry.kind === 'message') {
         if (!text) continue;
         items.push(messageItem(`msg_${messageCount++}`, text));
+      } else if (entry.kind === 'reasoning') {
+        if (!summary) continue;
+        items.push(reasoningItem(`rs_${reasoningCount++}`, summary));
       } else {
         const call = calls.get(entry.key);
         if (!call) continue;
@@ -242,4 +271,48 @@ export const createResponsesAccumulator = (
   };
 
   return { observe, ingest, snapshot };
+};
+
+/**
+ * JSON envelope (spec §16.5): `object:"response"` with stable id,
+ * `created_at`, served model, ordered output, terminal status, usage and
+ * `store:false`. Content-filter keeps an actual refusal when the turn
+ * produced text; unknown/error termination is a failed envelope.
+ */
+export const buildResponsesJson = (input: {
+  responseId: string;
+  model: string;
+  createdAt: number;
+  response: GenerateResponse;
+  failure?: { message: string; code?: string; type?: string };
+  limits?: ResponsesLimits;
+}): Record<string, unknown> => {
+  const acc = createResponsesAccumulator(input.limits);
+  acc.ingest(input.response);
+  const snap = acc.snapshot();
+  const terminal = responsesTerminal(snap.terminal.finishReason);
+  const items = snap.items.map((item) => {
+    if (item.type === 'message' && snap.terminal.finishReason === 'content_filter') {
+      const text = (item.content as Array<Record<string, unknown>>)
+        .filter((part) => part.type === 'output_text')
+        .map((part) => String(part.text ?? ''))
+        .join('');
+      if (text) return { ...item, content: [{ type: 'refusal', refusal: text }] };
+    }
+    return item;
+  });
+  return {
+    id: input.responseId,
+    object: 'response',
+    created_at: input.createdAt,
+    model: input.model,
+    status: terminal.status,
+    error: terminal.status === 'failed'
+      ? snap.failure ?? input.failure ?? { message: 'response did not complete' }
+      : null,
+    incomplete_details: terminal.incomplete_details,
+    output: items,
+    usage: responsesUsage(snap.usage),
+    store: false,
+  };
 };
