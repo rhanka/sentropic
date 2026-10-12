@@ -141,8 +141,8 @@ export {
 export type {
   CanonicalStoreScope,
   CanonicalTransactionHandle,
-  CanonicalPgSurface,
-  CanonicalHonoSurface,
+  CanonicalStorageAdapterSurface,
+  CanonicalHttpSurface,
   CanonicalHttpPorts,
   CanonicalHttpCapability,
   CanonicalCommandStore,
