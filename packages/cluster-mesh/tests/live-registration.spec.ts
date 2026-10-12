@@ -208,7 +208,7 @@ describe('live registration', () => {
     // Committed history is preserved: the durable record is retained, only its status changes.
     await expect(live.status('tenant-b', id.declarationId, id.cloneId, id.worktreeId)).resolves.toBe('withdrawn');
     expect(rows.get(tripleKey('tenant-b', id.declarationId, id.cloneId, id.worktreeId))).toBeDefined();
-    // Removal is final: no delayed-work reactivation after withdrawal.
+    // Removal is final: no delayed-work reactivation after withdrawal; retry cancels deferred work and re-requests purge.
     await expect(live.withdraw({
       tenant: 'tenant-b',
       declarationId: id.declarationId,
@@ -216,8 +216,9 @@ describe('live registration', () => {
       worktreeId: id.worktreeId,
       reason: 'owner-request',
       withdrawnAt: '2026-10-12T13:01:00.000Z',
-    })).resolves.toMatchObject({ ok: false, reason: 'unknown_declaration' });
-    expect(work.cancelDeferredWork).toHaveBeenCalledTimes(1);
+    })).resolves.toMatchObject({ ok: true });
+    expect(work.cancelDeferredWork).toHaveBeenCalledTimes(2);
+    expect(purge.received).toHaveLength(2);
 
     // If recordWithdrawal fails (e.g. concurrent race), store fails durable record first: no cancel and no purge
     const idRace = sampleIdentity('host-b', 'race');
@@ -477,6 +478,7 @@ describe('live registration', () => {
     const clone = deriveCloneIdentity({
       hostScope: 'host:a',
       commonDirRealpath: '/srv/repo/.git',
+      commonDirProjectFingerprint: 'proj-fp-a',
       oidAlgorithm: 'sha1',
     });
     const worktree = deriveWorktreeIdentity({
@@ -515,6 +517,7 @@ describe('live registration', () => {
     const clone = deriveCloneIdentity({
       hostScope: 'host:a',
       commonDirRealpath: '/srv/repo/.git',
+      commonDirProjectFingerprint: 'proj-fp-a',
       oidAlgorithm: 'sha1',
     });
     const worktree = deriveWorktreeIdentity({
@@ -538,5 +541,106 @@ describe('live registration', () => {
     const check = validateWorkspaceDeclaration(invalid);
     expect(check.ok).toBe(false);
     expect(check.errors).toContain(`policyVersion must be ${POLICY_VERSION}`);
+  });
+
+  it('refuses to cancel deferred work or request purge if withdrawal record fails or declaration unknown', async () => {
+    const { store } = memoryStore();
+    const work = deferredWorkFake(5);
+    const { port: purge, received } = purgeFake();
+    const reg = registration(store, work, purge);
+
+    const unknownRes = await reg.withdraw({
+      tenant: 'tenant-missing',
+      declarationId: 'decl:unknown',
+      cloneId: 'clone:unknown',
+      worktreeId: 'wt:unknown',
+      reason: 'owner-request',
+      withdrawnAt: '2026-10-12T10:00:00Z',
+    });
+    expect(unknownRes).toEqual({ ok: false, reason: 'unknown_declaration' });
+    expect(received).toHaveLength(0);
+
+    const clone = deriveCloneIdentity({
+      hostScope: 'host:a',
+      commonDirRealpath: '/srv/repo/.git',
+      commonDirProjectFingerprint: 'proj-fp-a',
+      oidAlgorithm: 'sha1',
+    });
+    const worktree = deriveWorktreeIdentity({
+      hostScope: 'host:a',
+      clone,
+      worktreePath: '/srv/repo',
+      gitDir: '/srv/repo/.git',
+    });
+    const decl = await reg.declare({
+      tenant: 'tenant-a',
+      principal: 'principal-a',
+      hostScope: 'host:a',
+      clone,
+      worktree,
+      authorizedRoots: ['/srv/repo'],
+    });
+
+    vi.mocked(store.recordWithdrawal).mockResolvedValueOnce(false);
+    const failRes = await reg.withdraw({
+      tenant: decl.tenant,
+      declarationId: decl.declarationId,
+      cloneId: decl.cloneId,
+      worktreeId: decl.worktreeId,
+      reason: 'owner-request',
+      withdrawnAt: '2026-10-12T10:05:00Z',
+    });
+    expect(failRes).toEqual({ ok: false, reason: 'unknown_declaration' });
+    expect(received).toHaveLength(0);
+  });
+
+  it('retries cancellation and private purge when withdrawal was already recorded', async () => {
+    const { store } = memoryStore();
+    const work = deferredWorkFake(3);
+    const { port: purge, received } = purgeFake();
+    const reg = registration(store, work, purge);
+
+    const clone = deriveCloneIdentity({
+      hostScope: 'host:a',
+      commonDirRealpath: '/srv/repo/.git',
+      commonDirProjectFingerprint: 'proj-fp-a',
+      oidAlgorithm: 'sha1',
+    });
+    const worktree = deriveWorktreeIdentity({
+      hostScope: 'host:a',
+      clone,
+      worktreePath: '/srv/repo',
+      gitDir: '/srv/repo/.git',
+    });
+    const decl = await reg.declare({
+      tenant: 'tenant-a',
+      principal: 'principal-a',
+      hostScope: 'host:a',
+      clone,
+      worktree,
+      authorizedRoots: ['/srv/repo'],
+    });
+
+    const firstRes = await reg.withdraw({
+      tenant: decl.tenant,
+      declarationId: decl.declarationId,
+      cloneId: decl.cloneId,
+      worktreeId: decl.worktreeId,
+      reason: 'owner-request',
+      withdrawnAt: '2026-10-12T10:00:00Z',
+    });
+    expect(firstRes.ok).toBe(true);
+    expect(received).toHaveLength(1);
+
+    const retryRes = await reg.withdraw({
+      tenant: decl.tenant,
+      declarationId: decl.declarationId,
+      cloneId: decl.cloneId,
+      worktreeId: decl.worktreeId,
+      reason: 'owner-request',
+      withdrawnAt: '2026-10-12T10:01:00Z',
+    });
+    expect(retryRes.ok).toBe(true);
+    expect(received).toHaveLength(2);
   });
 });

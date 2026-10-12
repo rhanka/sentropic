@@ -629,19 +629,24 @@ export function createLiveDeclarationRegistration(input: {
         withdrawal.cloneId,
         withdrawal.worktreeId,
       );
-      if (!declaration
-        || await input.store.status(
-          withdrawal.tenant,
-          withdrawal.declarationId,
-          withdrawal.cloneId,
-          withdrawal.worktreeId,
-        ) !== 'declared') {
+      if (!declaration) {
+        return { ok: false, reason: 'unknown_declaration' };
+      }
+      const currentStatus = await input.store.status(
+        withdrawal.tenant,
+        withdrawal.declarationId,
+        withdrawal.cloneId,
+        withdrawal.worktreeId,
+      );
+      if (currentStatus === 'unknown') {
         return { ok: false, reason: 'unknown_declaration' };
       }
       const request = revokeLiveDeclaration(declaration, withdrawal.reason);
-      const recorded = await input.store.recordWithdrawal(request, withdrawal.withdrawnAt);
-      if (!recorded) {
-        return { ok: false, reason: 'unknown_declaration' };
+      if (currentStatus === 'declared') {
+        const recorded = await input.store.recordWithdrawal(request, withdrawal.withdrawnAt);
+        if (!recorded) {
+          return { ok: false, reason: 'unknown_declaration' };
+        }
       }
       const cancelledDeferredWork = await input.deferredWork.cancelDeferredWork({
         tenant: request.tenant,

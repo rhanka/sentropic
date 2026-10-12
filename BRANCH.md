@@ -111,8 +111,8 @@
   - [x] Write fix report .h2a/build/l6a_s_fix_report.md (m8).
 
 - [ ] **Lot 7 — Round-2 review remediation (Opus review N1, m1-m8)**
-  - [ ] Make withdrawal retryable on status withdrawn and support optional binding authorization input (m3).
-  - [x] Add missing cluster-mesh tests for binding authorizer and policyVersion (m2).
+  - [x] Make withdrawal retryable on status withdrawn and support optional binding authorization input (m3).
+  - [x] Add missing cluster-mesh tests for binding authorizer, policyVersion, and retryable withdrawal (m2, m3).
   - [ ] Decouple live declaration service from route module (m7).
   - [ ] Enforce allowed role, active account and approved tenant membership in binding authorizer (N1, m1).
   - [ ] Add refusal tests for viewer, inactive account, inactive/revoked membership, and unbound bypass (N1, m1).
