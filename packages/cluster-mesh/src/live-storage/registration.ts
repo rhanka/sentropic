@@ -125,6 +125,8 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 const isNonEmptyString = (v: unknown): v is string =>
   typeof v === 'string' && v.trim().length > 0;
+const isPositiveInteger = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 const hasNul = (v: unknown): boolean =>
   typeof v === 'string' && v.includes('\0');
 const isOpaqueId = (v: unknown, prefix: string): v is string =>
@@ -360,6 +362,13 @@ export const NON_ACTIVATING_LIFECYCLE_KINDS = [
 ] as const;
 export type NonActivatingLifecycleKind = (typeof NON_ACTIVATING_LIFECYCLE_KINDS)[number];
 
+export function isNonActivatingLifecycleKind(value: unknown): value is NonActivatingLifecycleKind {
+  return (
+    typeof value === 'string' &&
+    (NON_ACTIVATING_LIFECYCLE_KINDS as readonly string[]).includes(value)
+  );
+}
+
 export function classifyLifecycleEvent(kind: NonActivatingLifecycleKind): 'no-activation-change' {
   if (!isNonActivatingLifecycleKind(kind)) {
     throw new Error(`unknown lifecycle kind: ${String(kind)}`);
@@ -384,7 +393,7 @@ export interface CreateLiveDeclarationInput {
 }
 
 export function createLiveDeclaration(input: CreateLiveDeclarationInput): LiveWorkspaceDeclaration {
-  if (!isRecord(input)) throw new Error('createLiveDeclaration requires a declaration input object');
+  if (!isRecord(input as unknown)) throw new Error('createLiveDeclaration requires a declaration input object');
   const declaration: LiveWorkspaceDeclaration = {
     tenant: input.tenant,
     principal: input.principal,
@@ -413,7 +422,7 @@ const PATCH_KEYS = ['authorizedRoots', 'policyVersion', 'serverWorkspaceId', 'se
 export function reviseLiveDeclaration(previous: LiveWorkspaceDeclaration, patch: LiveDeclarationPatch): LiveWorkspaceDeclaration {
   const previousCheck = validateWorkspaceDeclaration(previous);
   if (!previousCheck.ok) throw new Error(`invalid previous declaration: ${previousCheck.errors.join('; ')}`);
-  if (!isRecord(patch)) throw new Error('reviseLiveDeclaration requires a patch object');
+  if (!isRecord(patch as unknown)) throw new Error('reviseLiveDeclaration requires a patch object');
   for (const k of Object.keys(patch)) {
     if (!PATCH_KEYS.includes(k as never)) throw new Error(`reviseLiveDeclaration refuses patch key "${k}": identity fields are immutable across revisions`);
   }
