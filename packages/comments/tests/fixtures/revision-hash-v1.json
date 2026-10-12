@@ -278,3 +278,153 @@
           "principal": "admin_corpus"
         },
         "reason": "retention-policy"
+      },
+      "canonical": "{\"action\":\"tombstone\",\"actor\":{\"principal\":\"admin_corpus\"},\"archiveKind\":null,\"hashVersion\":\"revision-hash-v1\",\"kind\":\"lifecycle-event\",\"link\":{\"previousHash\":null,\"sequence\":1},\"objectId\":\"ann_corpus_1\",\"objectKind\":\"annotation\",\"reason\":\"retention-policy\",\"scope\":{\"tenantId\":\"tnt_corpus\",\"workspaceId\":\"wsp_corpus\"}}",
+      "digest": "703c231c186d3987caea8b16160e1f80874b631c15cfb4170e5ffb528d122b02"
+    },
+    {
+      "id": "operation-audit-assignment",
+      "kind": "operation-audit-event",
+      "envelope": {
+        "scope": {
+          "tenantId": "tnt_corpus",
+          "workspaceId": "wsp_corpus"
+        },
+        "subject": "assignment",
+        "subjectId": "asg_corpus_1",
+        "link": {
+          "sequence": 1,
+          "previousHash": null
+        },
+        "operation": "assign",
+        "principal": "admin_corpus",
+        "audience": [
+          "principal_corpus_1"
+        ],
+        "detail": null
+      },
+      "canonical": "{\"audience\":[\"principal_corpus_1\"],\"detail\":null,\"hashVersion\":\"revision-hash-v1\",\"kind\":\"operation-audit-event\",\"link\":{\"previousHash\":null,\"sequence\":1},\"operation\":\"assign\",\"principal\":\"admin_corpus\",\"scope\":{\"tenantId\":\"tnt_corpus\",\"workspaceId\":\"wsp_corpus\"},\"subject\":\"assignment\",\"subjectId\":\"asg_corpus_1\"}",
+      "digest": "72de6e315b4018d0c77a65a9419551d620362a2db660a675f5c66e3d71bce84b"
+    },
+    {
+      "id": "conversion-report",
+      "kind": "conversion-report",
+      "envelope": {
+        "scope": {
+          "tenantId": "tnt_corpus",
+          "workspaceId": "wsp_corpus"
+        },
+        "reportId": "conv_corpus_1",
+        "sourceUnitCount": 3,
+        "completenessDeclared": true,
+        "admissibleManifestDigest": "admissible-digest-1"
+      },
+      "canonical": "{\"admissibleManifestDigest\":\"admissible-digest-1\",\"completenessDeclared\":true,\"hashVersion\":\"revision-hash-v1\",\"kind\":\"conversion-report\",\"reportId\":\"conv_corpus_1\",\"scope\":{\"tenantId\":\"tnt_corpus\",\"workspaceId\":\"wsp_corpus\"},\"sourceUnitCount\":3}",
+      "digest": "93a7b90fea4ea070b482a6db12570ccda0dd7f2cd4b91427c4722dd78a5f6632"
+    }
+  ],
+  "canonicalVectors": [
+    {
+      "id": "null-versus-absence",
+      "value": {
+        "a": null,
+        "b": 1
+      },
+      "canonical": "{\"a\":null,\"b\":1}",
+      "digest": "c0bf82ad036cb0a5a03d6759c1b7b8b1f70a39b32dd96ed3977c7f2831ee3b56"
+    },
+    {
+      "id": "key-sort-utf16",
+      "value": {
+        "b": 1,
+        "a": 2,
+        "C": 3
+      },
+      "canonical": "{\"C\":3,\"a\":2,\"b\":1}",
+      "digest": "27e01c26743085bff8e4a98d76dca93ebdb6c805f8136fae1216ee257d33f5c5"
+    },
+    {
+      "id": "zero",
+      "value": 0,
+      "canonical": "0",
+      "digest": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+    },
+    {
+      "id": "string-escapes",
+      "value": {
+        "k": "a\"b\\c\nd\te"
+      },
+      "canonical": "{\"k\":\"a\\\"b\\\\c\\nd\\te\"}",
+      "digest": "3f03d34684cffd9b06f22da7a3a058e7b523a4aa7ff4621c7d1cd71e8f287a63"
+    },
+    {
+      "id": "unicode-text",
+      "value": {
+        "text": "héllo — wörld"
+      },
+      "canonical": "{\"text\":\"héllo — wörld\"}",
+      "digest": "fb07b647ef29bcf39d9a5ccdf8554b95edff80ffa39e90476434c934c7176a75"
+    },
+    {
+      "id": "nested-arrays",
+      "value": [
+        [
+          1,
+          2
+        ],
+        [
+          null,
+          true,
+          "x"
+        ]
+      ],
+      "canonical": "[[1,2],[null,true,\"x\"]]",
+      "digest": "182be8e00d09d090c1728814265790661278b45f4c3238bd84bc71f34c8d638b"
+    }
+  ],
+  "geometry": [
+    {
+      "id": "tie-upward",
+      "input": "0.1234565",
+      "millionths": 123457
+    },
+    {
+      "id": "below-tie",
+      "input": "0.1234564",
+      "millionths": 123456
+    },
+    {
+      "id": "negative-tie-upward",
+      "input": "-0.1234565",
+      "millionths": -123456
+    },
+    {
+      "id": "negative-zero",
+      "input": "-0",
+      "millionths": 0
+    },
+    {
+      "id": "box-edges-200x100",
+      "frame": {
+        "width": 200,
+        "height": 100,
+        "digest": "frame-digest-1"
+      },
+      "input": {
+        "kind": "box",
+        "x": "0.25",
+        "y": "0.75",
+        "width": "0.5",
+        "height": "0.25"
+      },
+      "quantized": {
+        "kind": "box",
+        "x": 250000,
+        "y": 750000,
+        "width": 500000,
+        "height": 250000
+      }
+    },
+    {
+      "id": "box-full-frame",
+      "frame": {
