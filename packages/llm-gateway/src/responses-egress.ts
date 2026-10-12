@@ -369,7 +369,7 @@ export const envelopeFromSnapshot = (input: {
 export const buildResponsesJson = (input: {
   responseId: string;
   model: string;
-  createdAt: number;
+  createdAt?: number;
   response: GenerateResponse;
   failure?: { message: string; code?: string; type?: string };
   limits?: ResponsesLimits;
@@ -380,7 +380,7 @@ export const buildResponsesJson = (input: {
   return envelopeFromSnapshot({
     responseId: input.responseId,
     model: input.model,
-    createdAt: input.createdAt,
+    createdAt: input.createdAt ?? Math.floor(Date.now() / 1000),
     snap: snap.failure || !input.failure ? snap : { ...snap, failure: input.failure },
   });
 };
