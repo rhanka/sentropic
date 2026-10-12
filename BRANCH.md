@@ -41,6 +41,7 @@
 
 ## AI Flaky tests
 - [ ] Acceptance rule: none expected; no AI/provider-dependent test in scope. If a flaky failure appears, record command + failing file + signature here and treat as blocking when related to this branch.
+- [ ] Transient (resolved, not AI-related): first `make test-cluster-mesh ... ENV=test-live-l6a-s` full run failed 2 suites (`tests/integrations/gateway-surface.spec.ts`, `tests/modules/namespace-loading.spec.ts`) with `Could not resolve "@sentropic/llm-gateway[/auth]" imported by "@sentropic/cluster-mesh"` immediately after the target's own `build-llm-gateway` prerequisite rebuilt `packages/llm-gateway/dist`; the same command on the same commit passed on rerun (54 files / 401 tests green), and a scoped rerun of both suites passed. Signature: vite optional-peer resolution race against freshly rebuilt peer `dist`, unrelated to this branch's files.
 
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -87,9 +88,9 @@
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` used; nothing to consolidate.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & lint for impacted components.
-  - [ ] Retest scoped cluster-mesh suite (cf Lot 2) and scoped api suite (cf Lot 3).
-  - [ ] Bumped `packages/cluster-mesh/package.json` version for the changed `packages/cluster-mesh/src/**` (enforced by CI `enforce-package-bump`).
+  - [x] Typecheck & lint for impacted components: `make typecheck-cluster-mesh` (PASS), `make lint-cluster-mesh` (PASS), `make typecheck-api` (PASS), `make lint-api` (PASS, 0 errors / pre-existing warnings).
+  - [x] Retest scoped cluster-mesh suite (cf Lot 2): `make test-cluster-mesh SCOPE=... ENV=test-live-l6a-s` (3 passed) and full `make test-cluster-mesh ... ENV=test-live-l6a-s` (54 files / 401 tests passed, 34 skipped; one transient first run recorded under AI Flaky tests); scoped api suite (cf Lot 3): `make test-api-endpoints SCOPE=tests/api/cluster-mesh-migration.test.ts ... ENV=test-live-l6a-s` (16 passed).
+  - [x] Bumped `packages/cluster-mesh/package.json` version to `0.14.0` for the changed `packages/cluster-mesh/src/**` (enforced by CI `enforce-package-bump`).
   - [ ] Push branch `feat/live-git-l6a-s`; open DRAFT PR to `main` (never merge); verify CI.
   - [ ] `make down API_PORT=9455 UI_PORT=5655 MAILDEV_UI_PORT=1555 ENV=test-live-l6a-s`.
   - [ ] Report `.h2a/build/l6a_s_report.md`.
