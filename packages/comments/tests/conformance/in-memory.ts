@@ -19,6 +19,13 @@ import type {
   CommentRevisionRecord,
   ThreadStructureRevisionRecord,
 } from '../../src/revisions.js';
+import type { ReviewEventRecord } from '../../src/reviews.js';
+import type {
+  LifecycleEventRecord,
+  LifecycleObjectKind,
+  OperationAuditEventRecord,
+  OperationAuditSubject,
+} from '../../src/lifecycle.js';
 
 type Expected = { kind: 'revision'; revisionHash: string } | { kind: 'creation'; aggregateVersion: number };
 
@@ -30,6 +37,9 @@ export class InMemoryCanonicalStore implements CanonicalCommandStore {
   private readonly annotations = new Map<string, AnnotationRevisionRecord[]>();
   private readonly threads = new Map<string, ThreadStructureRevisionRecord[]>();
   private readonly comments = new Map<string, CommentRevisionRecord[]>();
+  private readonly reviews = new Map<string, ReviewEventRecord[]>();
+  private readonly lifecycle = new Map<string, LifecycleEventRecord[]>();
+  private readonly audits = new Map<string, OperationAuditEventRecord[]>();
   private readonly idempotency = new Map<string, { digest: string; resultIds: string[]; resultHash: string | null }>();
   private readonly allocations = new Map<string, number>();
 
@@ -101,6 +111,21 @@ export class InMemoryCanonicalStore implements CanonicalCommandStore {
     return Promise.resolve(this.append(this.comments, `${scope.tenantId}/${scope.workspaceId}/c/${commentId}`, record, expected));
   }
 
+  appendReviewEvent(scope: CanonicalStoreScope, annotationId: string, record: ReviewEventRecord, expected: Expected): Promise<ReviewEventRecord> {
+    if (!sameScope(record.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.append(this.reviews, `${scope.tenantId}/${scope.workspaceId}/r/${annotationId}`, record, expected));
+  }
+
+  appendLifecycleEvent(scope: CanonicalStoreScope, objectKind: LifecycleObjectKind, objectId: string, record: LifecycleEventRecord, expected: Expected): Promise<LifecycleEventRecord> {
+    if (!sameScope(record.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.append(this.lifecycle, `${scope.tenantId}/${scope.workspaceId}/l/${objectKind}/${objectId}`, record, expected));
+  }
+
+  appendOperationAuditEvent(scope: CanonicalStoreScope, subject: OperationAuditSubject, subjectId: string, record: OperationAuditEventRecord, expected: Expected): Promise<OperationAuditEventRecord> {
+    if (!sameScope(record.scope, scope)) throw new CanonicalCommandError('invalid-command', 'Record scope mismatch');
+    return Promise.resolve(this.append(this.audits, `${scope.tenantId}/${scope.workspaceId}/o/${subject}/${subjectId}`, record, expected));
+  }
+
   getAnnotationHead(scope: CanonicalStoreScope, annotationId: string): Promise<AnnotationRevisionRecord | null> {
     return Promise.resolve(this.head(this.annotations, `${scope.tenantId}/${scope.workspaceId}/a/${annotationId}`));
   }
@@ -111,6 +136,22 @@ export class InMemoryCanonicalStore implements CanonicalCommandStore {
 
   getThreadStructureHead(scope: CanonicalStoreScope, threadId: string): Promise<ThreadStructureRevisionRecord | null> {
     return Promise.resolve(this.head(this.threads, `${scope.tenantId}/${scope.workspaceId}/t/${threadId}`));
+  }
+
+  getThreadStructureChain(scope: CanonicalStoreScope, threadId: string): Promise<readonly ThreadStructureRevisionRecord[]> {
+    return Promise.resolve(this.threads.get(`${scope.tenantId}/${scope.workspaceId}/t/${threadId}`) ?? []);
+  }
+
+  getReviewChain(scope: CanonicalStoreScope, annotationId: string): Promise<readonly ReviewEventRecord[]> {
+    return Promise.resolve(this.reviews.get(`${scope.tenantId}/${scope.workspaceId}/r/${annotationId}`) ?? []);
+  }
+
+  getLifecycleChain(scope: CanonicalStoreScope, objectKind: LifecycleObjectKind, objectId: string): Promise<readonly LifecycleEventRecord[]> {
+    return Promise.resolve(this.lifecycle.get(`${scope.tenantId}/${scope.workspaceId}/l/${objectKind}/${objectId}`) ?? []);
+  }
+
+  getOperationAuditChain(scope: CanonicalStoreScope, subject: OperationAuditSubject, subjectId: string): Promise<readonly OperationAuditEventRecord[]> {
+    return Promise.resolve(this.audits.get(`${scope.tenantId}/${scope.workspaceId}/o/${subject}/${subjectId}`) ?? []);
   }
 
   getCommentHead(scope: CanonicalStoreScope, commentId: string): Promise<CommentRevisionRecord | null> {
