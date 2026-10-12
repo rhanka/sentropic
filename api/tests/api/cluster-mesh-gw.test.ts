@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { createGwNamespaceModule, GW_AUTHOR } from '../../src/routes/namespaces/gw';
+import { createGwNamespaceModule, GW_AUTHOR, GW_PATHS } from '../../src/routes/namespaces/gw';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import { insertModelPricing, routePartitionHash, type RoutePartitionConfig } from '../../src/services/llm-metering';
@@ -196,5 +196,69 @@ describe('cluster mesh gateway namespace', () => {
     }));
     expect((await app.request('/api/v1/gw/healthz')).status).toBe(404);
     expect(await store.find(key)).toBeNull();
+  });
+
+  it('serves both Responses aliases through the same fence, bridge and admission', async () => {
+    // Spec §16.2: `/api/v1/gw/responses` gets the same caller admission as
+    // `/api/v1/gw/v1/responses` — fence, auth, settlement mode and the
+    // one-shot caller bridge run on both aliases, exactly once per request.
+    expect(GW_PATHS).toContain('/responses');
+    expect(GW_PATHS).toContain('/v1/responses');
+    const cost = { tenantId: TENANT, workspaceId: `${TENANT}-ws`, principalId: 'user-1',
+      ownerScopeRef: `workspace:${TENANT}-ws:principal:user-1`, source: 'test', correlationId: 'request-1' };
+    const resolveCaller = vi.fn(() => cost);
+    const generate = vi.fn().mockResolvedValue({
+      id: 'gateway-response-1', providerId: 'openai', modelId: 'gpt-5.6-terra',
+      message: { role: 'assistant', content: 'candidate' }, text: 'candidate',
+      toolCalls: [], finishReason: 'stop',
+      usage: { inputTokens: 2, outputTokens: 1 },
+    });
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate, stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller,
+      })],
+    }));
+    await activate(R1);
+    const unknown = `uat_unknown_${run}`;
+    const responses = { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: unknown, input: 'hello' }) };
+    for (const path of ['/api/v1/gw/responses', '/api/v1/gw/v1/responses']) {
+      const response = await app.request(path, responses);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: 'model_not_found' } });
+    }
+    expect(generate).not.toHaveBeenCalled();
+    expect(resolveCaller).toHaveBeenCalledTimes(2);
+
+    const active = await store.find(key);
+    await store.rollback(key, active!.previousGenerationId!);
+    for (const path of ['/api/v1/gw/responses', '/api/v1/gw/v1/responses']) {
+      const blocked = await app.request(path, responses);
+      expect(blocked.status).toBe(503);
+      await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+    }
+  });
+
+  it('fails the unavailable gateway module closed on both Responses aliases', async () => {
+    const registry = createClusterMeshModules();
+    const broken = {
+      ...registry,
+      load: async () => { throw new Error('module unavailable'); },
+    } as unknown as ClusterMeshModules;
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({ modules: broken })],
+    }));
+    for (const path of ['/api/v1/gw/responses', '/api/v1/gw/v1/responses', '/api/v1/gw/v1/chat/completions']) {
+      const response = await app.request(path, { method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-5.6-terra', messages: [] }) });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({ error: 'gateway_module_unavailable' });
+    }
   });
 });

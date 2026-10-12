@@ -30,6 +30,9 @@ export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
   '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/messages/count_tokens',
   '/v1/chat/completions', '/muse-code/models',
+  // Spec §16.2: Responses ingress aliases. `/v1/responses` rides the `/v1/*`
+  // middleware below; `/responses` needs its own registrations (once each).
+  '/responses', '/v1/responses',
 ] as const;
 /** Default reserved output ceiling for a request without max tokens (the Claude code default). */
 export const GW_DEFAULT_OUTPUT_TOKENS = 4_096;
@@ -195,9 +198,13 @@ export const createGwNamespaceModule = async (
       createRouter: ({ gateway }) => {
         const router = new Hono();
         applyAuthorFence(router);
-        router.use('/v1/*', options.authenticate ?? requireAuth);
-        router.use('/v1/*', settlementModeMiddleware());
-        router.use('/v1/*', async (context, next) => {
+        const authenticate = options.authenticate ?? requireAuth;
+        const settlementMode = settlementModeMiddleware();
+        // One-shot caller bridge: resolves the verified product caller and
+        // hands it to the gateway caller-auth port via a single-use header
+        // token (consumed + cleaned up per request). Registered once per path
+        // prefix — `/v1/responses` matches `/v1/*` only, never both.
+        const bridgeCaller = async (context: Context, next: () => Promise<void>) => {
           const token = crypto.randomUUID();
           try {
             const cost = await resolveCaller(context);
@@ -211,7 +218,13 @@ export const createGwNamespaceModule = async (
           } finally {
             callers.delete(token);
           }
-        });
+        };
+        router.use('/v1/*', authenticate);
+        router.use('/v1/*', settlementMode);
+        router.use('/v1/*', bridgeCaller);
+        router.use('/responses', authenticate);
+        router.use('/responses', settlementMode);
+        router.use('/responses', bridgeCaller);
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
           nativeCountTokens: routePlane.nativeCountTokens,
