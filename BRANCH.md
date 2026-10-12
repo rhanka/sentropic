@@ -200,7 +200,7 @@
   - [x] D16-B mesh core: execution-feature contracts, predicate, plan/quote eligibility + quote binding.
   - [x] D16-B strict Responses normalizer + lossless canonical mapping + native carrier.
   - [x] D16-C native Codex + translated Muse/Mistral execution (projection, decoding, finish reasons, adapter preserve-or-refuse, feature table + plane enforcement).
-  - [x] D16-D slice done: Responses egress item/usage/terminal builders.
+  - [x] D16-D slice done: Responses egress item/usage/terminal builders + bounded accumulator and JSON envelope.
   - [ ] D16-D shared accumulator, JSON/SSE encoders, delegation from canonical entry points.
   - [ ] D16-E lease/accounting/count neutrality; D16-F error shaping + shared limits.
   - [x] D16-G `mistral-vibe-cli-latest` alias via mesh; no gateway table, no duplicate profile.
