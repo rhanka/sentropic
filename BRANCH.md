@@ -195,7 +195,7 @@
   - [x] D16-A package ingress: `openai-responses` wire, both POST mounts, identical admission.
   - [x] D16-A product mount: `/responses` + `/v1/responses` in `GW_PATHS`, caller bridge, fences.
   - [x] D16-B mesh core: execution-feature contracts, predicate, plan/quote eligibility + quote binding.
-  - [ ] D16-B strict Responses normalizer + lossless canonical mapping + native carrier.
+  - [x] D16-B strict Responses normalizer + lossless canonical mapping + native carrier.
   - [ ] D16-C native Codex + translated Muse/Mistral execution; Muse/Mistral tool decoding fix.
   - [ ] D16-D shared accumulator, JSON/SSE encoders, delegation from canonical entry points.
   - [ ] D16-E lease/accounting/count neutrality; D16-F error shaping + shared limits.

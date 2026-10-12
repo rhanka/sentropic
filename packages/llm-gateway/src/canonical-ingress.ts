@@ -1,12 +1,20 @@
 import type {
-  CapabilityRequirement, GenerateRequest, LlmMeshMessage, MessageContent, ToolDefinition,
+  CapabilityRequirement, ExecutionFeature, GenerateRequest, LlmMeshMessage, MessageContent, ToolDefinition,
   ToolCall, ToolChoice, ToolResultContent,
 } from '@sentropic/llm-mesh';
 import type { GatewayWire } from './ports/dispatch.js';
+import { GatewayError } from './router/errors.js';
+import { normalizeResponsesIngress, ResponsesIngressError } from './responses-ingress.js';
 
 export interface CanonicalIngressResult {
   readonly request: GenerateRequest;
   readonly requiredCapabilities: readonly CapabilityRequirement[];
+  /**
+   * Finer-than-capability execution requirements (spec §16.3), set only by
+   * the Responses codec from validated input. The canonical entry points
+   * forward them into plan/quote input.
+   */
+  readonly requiredExecutionFeatures?: readonly ExecutionFeature[];
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -258,6 +266,27 @@ export const normalizeGatewayIngress = (
   wire: GatewayWire,
   body: unknown,
 ): CanonicalIngressResult => {
+  // Responses has its own strict codec (spec §16.3) — never feed `input`
+  // through the permissive Chat `raw.messages` parser.
+  if (wire === 'openai-responses') {
+    try {
+      const result = normalizeResponsesIngress(body);
+      return {
+        request: result.request,
+        requiredCapabilities: result.requiredCapabilities,
+        requiredExecutionFeatures: result.requiredExecutionFeatures,
+      };
+    } catch (error) {
+      if (error instanceof ResponsesIngressError) {
+        throw new GatewayError(
+          'bad-request',
+          `responses ingress: ${error.fieldPath}`,
+          undefined, undefined, error.errorCode, error.fieldPath,
+        );
+      }
+      throw error;
+    }
+  }
   const raw = asRecord(body);
   if (!raw || typeof raw.model !== 'string') throw new Error('invalid gateway request');
   const messages = normalizeMessages(raw.messages);
