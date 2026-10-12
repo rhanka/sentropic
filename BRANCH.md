@@ -124,7 +124,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: enforce principalId and rights in packages/cluster-mesh/src/sessions/workspace-binding.ts
   - [x] Migration 0011 re-date after 0009/0010 and add principal_id column to schema
   - [x] RED: add API refusal and RBAC tests in api/tests/api/session-adoption.test.ts
-  - [ ] GREEN: implement RBAC, canonical workspace, and rights enforcement in api/src/services/cluster-mesh/session-workspace.ts
+  - [x] GREEN: integrate cluster-mesh storage port in session-workspace service
+  - [ ] GREEN: enforce workspace RBAC and canonical creation in session-workspace service
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
 - [ ] **Lot N — Final validation**
