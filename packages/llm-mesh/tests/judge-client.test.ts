@@ -308,6 +308,52 @@ describe('remote judge client', () => {
     }
   });
 
+  it('applies 1000ms grace margin to server default deadline (11000ms) and at 60000ms cap (61000ms)', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      }));
+      const client = createRemoteJudgeClient({ baseUrl: 'https://mesh.internal', fetch: fetch as unknown as typeof globalThis.fetch });
+      const p1 = client.judge(judgeRequest());
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(fetch).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(await p1).toMatchObject({ kind: 'connection-failure', error: { code: 'TIMEOUT', phase: 'dispatch' } });
+
+      const p2 = client.judge({ ...judgeRequest(), policy: { timeoutMs: 60_000 } });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(await p2).toMatchObject({ kind: 'connection-failure', error: { code: 'TIMEOUT', phase: 'dispatch' } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honors cancellation and deadline when token resolution is stalled in preflight', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn();
+      const client = createRemoteJudgeClient({
+        baseUrl: 'https://mesh.internal',
+        authToken: () => new Promise<string>(() => {}),
+        fetch: fetch as unknown as typeof globalThis.fetch,
+      });
+      const p1 = client.judge(judgeRequest());
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(await p1).toMatchObject({ kind: 'connection-failure', error: { code: 'TIMEOUT', phase: 'preflight' }, callStatus: 'not-sent' });
+      expect(fetch).not.toHaveBeenCalled();
+
+      const controller = new AbortController();
+      const p2 = client.judge(judgeRequest(), { signal: controller.signal });
+      controller.abort();
+      expect(await p2).toMatchObject({ kind: 'connection-failure', error: { code: 'CANCELLED', phase: 'preflight' }, callStatus: 'not-sent' });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('refuses body stream exceeding maxResponseBytes during chunk reading', async () => {
     let cancelled = false;
     const stream = new ReadableStream<Uint8Array>({
