@@ -86,7 +86,10 @@ describe('createGatewayCountTokensPort', () => {
     const request = countRequest();
     const result = await capability!.execute(request);
     expect(result).toEqual({ kind: 'json', status: 200, headers: {}, body: { input_tokens: 42 } });
-    expect(countTokens).toHaveBeenCalledWith(request.body, { signal: request.signal });
+    expect(countTokens).toHaveBeenCalledWith(request.body, {
+      signal: request.signal,
+      headers: { 'anthropic-beta': 'future', 'anthropic-version': '2023-06-01' },
+    });
   });
 
   it('refuses non-anthropic models before any credential resolution', async () => {
@@ -117,7 +120,10 @@ describe('createGatewayCountTokensPort', () => {
     const request = countRequest();
     expect((await capability!.execute(request)).body).toEqual({ input_tokens: 7 });
     expect(acquire).toHaveBeenCalledWith('user-1', { workspaceId: 'ws-1', modelId: 'claude-opus-5', requestId: 'req-count-1' });
-    expect(countTokens).toHaveBeenCalledWith(request.body, { signal: request.signal });
+    expect(countTokens).toHaveBeenCalledWith(request.body, {
+      signal: request.signal,
+      headers: { 'anthropic-beta': 'future', 'anthropic-version': '2023-06-01' },
+    });
     expect(recordOutcome).toHaveBeenCalledWith({ status: 'success' });
   });
 

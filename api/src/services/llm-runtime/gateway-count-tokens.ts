@@ -57,9 +57,20 @@ const claudeCodeFetch = (transport: { accessToken: string }): typeof fetch =>
 export type CountClient = {
   countTokens(
     body: Anthropic.MessageCountTokensParams,
-    options?: { signal?: AbortSignal | undefined },
+    options?: { signal?: AbortSignal | undefined; headers?: Record<string, string> },
   ): Promise<unknown>;
 };
+
+/**
+ * Same transport header contract as the native Messages relay (#633): the
+ * gateway-validated forwarded headers (anthropic-beta and friends) ride the
+ * SDK request with the negotiated anthropic-version, so a body that relies on
+ * beta fields is counted exactly as it will be served.
+ */
+const countTransportHeaders = (request: NativeCountTokensRequest): Record<string, string> => ({
+  ...request.headers.forwarded,
+  'anthropic-version': request.headers.anthropicVersion,
+});
 
 export type GatewayCountAuth =
   | { readonly kind: 'token'; readonly credential: string }
@@ -132,7 +143,8 @@ const executeCount = async (deps: GatewayCountDependencies, auth: GatewayCountAu
     const client = deps.createClient({ credential: auth.credential });
     try {
       const body = await client.countTokens(
-        request.body as unknown as Anthropic.MessageCountTokensParams, { signal: request.signal });
+        request.body as unknown as Anthropic.MessageCountTokensParams,
+        { signal: request.signal, headers: countTransportHeaders(request) });
       return { kind: 'json', status: 200, headers: {}, body: body as Record<string, unknown> };
     } catch (error) {
       throw toUpstreamError(error);
@@ -149,7 +161,8 @@ const executeCount = async (deps: GatewayCountDependencies, auth: GatewayCountAu
   try {
     const client = deps.createClient({ transport: { accessToken: lease.accessToken } });
     const body = await client.countTokens(
-      request.body as unknown as Anthropic.MessageCountTokensParams, { signal: request.signal });
+      request.body as unknown as Anthropic.MessageCountTokensParams,
+      { signal: request.signal, headers: countTransportHeaders(request) });
     return { kind: 'json', status: 200, headers: {}, body: body as Record<string, unknown> };
   } catch (error) {
     failure = error;
