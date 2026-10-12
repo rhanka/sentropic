@@ -236,6 +236,39 @@ describe('route stream flow', () => {
     expect(wire).not.toContain('SECRET'); expect(wire).not.toContain('[DONE]');
     expect(wire.match(/stream failed after commitment/g)).toHaveLength(1);
   });
+  it('streams Responses lifecycle frames with the tool_calls terminal preserved', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn();
+    const source = attempt(async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: 'tool_call_start', data: {
+        toolCallId: 'c1', providerCallId: 'call_1', name: 'get_time', argumentsText: '',
+      } };
+      yield { type: 'tool_call_delta', data: { toolCallId: 'c1', delta: '{}' } };
+      yield { type: 'done', data: {
+        finishReason: 'tool_calls', usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+      } };
+    }, hooks);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, {
+      ...request,
+      wire: 'openai-responses',
+      authContext: { method: "POST", url: "https://gateway.test/responses", requestId: "req-test" },
+      body: { model: 'gpt-5.6-terra', input: 'what time is it', stream: true },
+    });
+    const frames = parseSse(await collect(result.stream));
+    expect(frames.map((frame) => frame.event)).toEqual([
+      'response.created', 'response.in_progress',
+      'response.output_item.added', 'response.function_call_arguments.delta',
+      'response.function_call_arguments.done', 'response.output_item.done',
+      'response.completed',
+    ]);
+    expect(JSON.parse(frames[frames.length - 1]!.data)).toMatchObject({
+      type: 'response.completed',
+      response: { id: expect.any(String), status: 'completed',
+        output: [{ type: 'function_call', call_id: 'call_1' }],
+        usage: { total_tokens: 6 } },
+    });
+    expect(hooks).toContain('completed');
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
+  });
   it('retains only pre-commit string metadata headers', async () => {
     const source = attempt(async function* () {
       yield { type: 'status', data: { status: 'started', metadata: { responseHeaders: { 'X-Request-ID': 'early', count: 1 } } } };

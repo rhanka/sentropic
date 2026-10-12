@@ -32,6 +32,13 @@ const config = {
   } },
 };
 
+const responsesRequest = {
+  ...request,
+  wire: 'openai-responses' as const,
+  authContext: { method: "POST", url: "https://gateway.test/responses", requestId: "req-test" },
+  body: { model: 'gpt-5.6-terra', input: 'what time is it' },
+};
+
 const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
   async plan() {
     return {
@@ -501,6 +508,48 @@ describe('route JSON flow with budget admission', () => {
     expect(generate).not.toHaveBeenCalled();
     expect(hooks).toEqual(['cancelled']);
     expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'release:hold-1', 'settle']);
+  });
+  it('serves Responses JSON with the response envelope and settles once', async () => {
+    const source = { generate: vi.fn(async () => ({
+      id: 'resp_9', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'morning' }, text: 'morning',
+      toolCalls: [{
+        toolCallId: 'c1', providerCallId: 'call_1', name: 'get_time', argumentsText: '{}',
+      }],
+      finishReason: 'tool_calls' as const,
+      usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+    })), complete: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn();
+    const result = await runRouteJsonFlow(
+      { config, routePlanner: routePlanner([source]), metering: { settleRoute } }, responsesRequest,
+    );
+    expect(result.body).toMatchObject({
+      id: 'resp_9', object: 'response', model: 'gpt-5.6-terra', status: 'completed',
+      output: [
+        { type: 'message', id: 'msg_0' },
+        { type: 'function_call', id: 'fc_0', call_id: 'call_1' },
+      ],
+      usage: { total_tokens: 6 },
+    });
+    expect(result.body).not.toHaveProperty('choices');
+    expect(result.servedTarget).toMatchObject({ model: 'gpt-5.6-terra' });
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
+    expect(source.complete).toHaveBeenCalledTimes(1);
+  });
+  it('settles an encoding overflow once with a single lease outcome', async () => {
+    const big = 'x'.repeat(8_388_609);
+    const source = { generate: vi.fn(async () => ({
+      id: 'resp_big', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: big }, text: big,
+      toolCalls: [], finishReason: 'stop' as const,
+    })), complete: vi.fn(), recordOutcome: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn();
+    await expect(runRouteJsonFlow(
+      { config, routePlanner: routePlanner([source]), metering: { settleRoute } }, responsesRequest,
+    )).rejects.toThrow();
+    expect(source.recordOutcome).toHaveBeenCalledTimes(1);
+    expect(source.complete).not.toHaveBeenCalled();
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed' }));
   });
   it('never redispatches after a settlement sink failure', async () => {
     const generate = vi.fn(textResponse({ inputTokens: 1, outputTokens: 1 }));
