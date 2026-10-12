@@ -497,9 +497,9 @@ export function revokeLiveDeclaration(declaration: LiveWorkspaceDeclaration, rea
 export interface LiveProductBindingAuthorizationInput {
   readonly tenant: string;
   readonly principal: string;
-  readonly serverWorkspaceId: string;
-  readonly serverIssuer: string;
-  readonly bindingRevision: number;
+  readonly serverWorkspaceId?: string;
+  readonly serverIssuer?: string;
+  readonly bindingRevision?: number;
 }
 
 export interface LiveProductBindingAuthorizationPort {
