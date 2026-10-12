@@ -9,10 +9,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 
-const resolveCredential = vi.fn();
-const transportMode = vi.fn();
-const primaryAccount = vi.fn();
-const acquire = vi.fn();
+const { resolveCredential, transportMode, primaryAccount, acquire } = vi.hoisted(() => ({
+  resolveCredential: vi.fn(),
+  transportMode: vi.fn(),
+  primaryAccount: vi.fn(),
+  acquire: vi.fn(),
+}));
 
 vi.mock('../../src/services/provider-credentials', () => ({
   resolveProviderCredential: resolveCredential,
