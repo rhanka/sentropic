@@ -36,6 +36,13 @@ const MISTRAL_SERVING_PATH = '/v1/chat/completions';
 // re-encoded); provider-originated reasoning history is not a wire input.
 type WireContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 
+// Canonical ToolChoice uses { type: 'tool' }; the OpenAI-compat wire takes
+// { type: 'function' } (spec §16.4). Strings pass through untouched.
+const openAiToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
+  choice && typeof choice === 'object' && choice.type === 'tool'
+    ? { type: 'function', name: choice.name }
+    : choice;
+
 const toWireMessage = (message: LlmMeshMessage): Record<string, unknown> => {
   const content = typeof message.content === 'string'
     ? message.content
@@ -188,10 +195,17 @@ export class MistralRuntimeClient implements MistralAdapterClient {
       messages: request.messages.map(toWireMessage),
       ...(stream ? { stream: true } : {}),
       ...(openAiTools?.length ? { tools: openAiTools } : {}),
-      ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
+      ...(request.toolChoice ? { tool_choice: openAiToolChoice(request.toolChoice) } : {}),
+      ...(request.parallelToolCalls !== undefined
+        ? { parallel_tool_calls: request.parallelToolCalls } : {}),
       ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.topP !== undefined ? { top_p: request.topP } : {}),
+      // Proven slot: Vibe 2.26.1 itself sends reasoning_effort on this wire.
+      // 'none' means no reasoning — omit rather than send it. Summary has no
+      // Chat expression (validated upstream, never fabricated here).
+      ...(request.reasoning?.effort && request.reasoning.effort !== 'none'
+        ? { reasoning_effort: request.reasoning.effort } : {}),
     };
     const response = await this.fetchFn(`${this.baseUrl}${MISTRAL_SERVING_PATH}`, {
       method: 'POST',

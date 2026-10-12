@@ -232,4 +232,46 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     expect(done?.type).toBe('done');
     expect((done as { data: { usage: unknown } }).data.usage).toMatchObject({ inputTokens: 8, outputTokens: 5 });
   });
+
+  it('maps a named tool choice to the OpenAI function shape (spec §16.4)', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-2', choices: [{ message: { content: 'ok' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    }), { status: 200 }));
+    const client = new MistralRuntimeClient({ fetch: fetchFn });
+    await client.generate({
+      ...request,
+      tools: [{ type: 'function', name: 'get_time', inputSchema: { type: 'object' } }],
+      toolChoice: { type: 'tool', name: 'get_time' },
+      parallelToolCalls: false,
+    }, auth);
+    const [, init] = fetchFn.mock.calls[0]!;
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      tool_choice: { type: 'function', name: 'get_time' },
+      parallel_tool_calls: false,
+    });
+  });
+
+  it('forwards effort on the proven reasoning_effort slot and omits none (spec §16.4)', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-3', choices: [{ message: { content: 'ok' } }],
+    }), { status: 200 }));
+    const client = new MistralRuntimeClient({ fetch: fetchFn });
+    await client.generate({
+      ...request, reasoning: { effort: 'high', summary: 'auto' },
+    }, auth);
+    const body = JSON.parse(String(fetchFn.mock.calls[0]![1].body)) as Record<string, unknown>;
+    // Proven by Vibe 2.26.1 itself (reasoning_effort: "high" on this wire).
+    expect(body).toMatchObject({ reasoning_effort: 'high' });
+    expect(body).not.toHaveProperty('reasoning');
+
+    const noneFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-4', choices: [{ message: { content: 'ok' } }],
+    }), { status: 200 }));
+    await new MistralRuntimeClient({ fetch: noneFn }).generate({
+      ...request, reasoning: { effort: 'none' },
+    }, auth);
+    expect(JSON.parse(String(noneFn.mock.calls[0]![1].body)) as Record<string, unknown>)
+      .not.toHaveProperty('reasoning_effort');
+  });
 });

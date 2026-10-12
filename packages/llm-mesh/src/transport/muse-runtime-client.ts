@@ -28,6 +28,13 @@ const MUSE_SERVING_PATH = '/v1/chat/completions';
 const textOf = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
+// Canonical ToolChoice uses { type: 'tool' }; the OpenAI-compat wire takes
+// { type: 'function' } (spec §16.4). Strings pass through untouched.
+const openAiToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
+  choice && typeof choice === 'object' && choice.type === 'tool'
+    ? { type: 'function', name: choice.name }
+    : choice;
+
 const numOf = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
@@ -176,7 +183,9 @@ export class MuseRuntimeClient implements MuseAdapterClient {
       // so the stream reader yields nothing and ends done/unknown.
       ...(stream ? { stream: true } : {}),
       ...(openAiTools?.length ? { tools: openAiTools } : {}),
-      ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
+      ...(request.toolChoice ? { tool_choice: openAiToolChoice(request.toolChoice) } : {}),
+      ...(request.parallelToolCalls !== undefined
+        ? { parallel_tool_calls: request.parallelToolCalls } : {}),
       ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.topP !== undefined ? { top_p: request.topP } : {}),
