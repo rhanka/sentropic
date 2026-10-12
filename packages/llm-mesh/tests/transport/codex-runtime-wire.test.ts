@@ -29,7 +29,7 @@ describe('Codex runtime wire', () => {
           },
         },
       ],
-      tools: [{ type: 'function', name: 'lookup', inputSchema: { type: 'object' } }],
+      tools: [{ type: 'function', name: 'lookup', inputSchema: { type: 'object' }, strict: true }],
       toolChoice: { type: 'tool', name: 'lookup' },
       parallelToolCalls: false,
       reasoning: { effort: 'xhigh' },
@@ -39,7 +39,7 @@ describe('Codex runtime wire', () => {
       model: 'gpt-5.6-terra', stream: true, store: false,
       instructions: 'System instruction', reasoning: { effort: 'xhigh' },
       tool_choice: { type: 'function', name: 'lookup' }, parallel_tool_calls: false,
-      tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object' } }],
+      tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object' }, strict: true }],
       input: [
         { type: 'message', role: 'user', content: [
           { type: 'input_text', text: 'Inspect' },
