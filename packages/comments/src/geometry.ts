@@ -218,10 +218,11 @@ export const validateCircle = (frame: GeometryFrame, circle: CircleGeometryInput
   const shorter = BigInt(Math.min(frame.width, frame.height));
   // Before quantization: exact rational containment cx*W - r*min >= 0 etc.
   const exactContainment =
-    cx.n * BigInt(frame.width) - r.n * shorter >= 0n &&
-    cx.n * BigInt(frame.width) + r.n * shorter <= cx.d * BigInt(frame.width) &&
-    cy.n * BigInt(frame.height) - r.n * shorter >= 0n &&
-    cy.n * BigInt(frame.height) + r.n * shorter <= cy.d * BigInt(frame.height);
+    cx.n * BigInt(frame.width) * r.d - r.n * shorter * cx.d >= 0n &&
+    cx.n * BigInt(frame.width) * r.d + r.n * shorter * cx.d <= cx.d * BigInt(frame.width) * r.d &&
+    cy.n * BigInt(frame.height) * r.d - r.n * shorter * cy.d >= 0n &&
+    cy.n * BigInt(frame.height) * r.d + r.n * shorter * cy.d <=
+      cy.d * BigInt(frame.height) * r.d;
   if (!exactContainment) {
     throw new GeometryValidationError('circle-overflow', 'Circle disk is not fully inside the frame');
   }

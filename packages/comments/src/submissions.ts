@@ -117,7 +117,7 @@ export const createPreparedSubmissionManifest = (
 export const recoverPreparedSubmissionReceipt = (
   manifest: PreparedSubmissionManifest,
 ): PreparedSubmissionReceipt => {
-  const { hash: _hash, ...envelope } = manifest;
+  const { kind: _kind, hash: _hash, ...envelope } = manifest;
   return {
     manifestHash: manifest.hash,
     manifestDigest: sha256Hex(canonicalRecordBytes('prepared-submission-manifest', envelope)),
@@ -129,6 +129,6 @@ export const recoverPreparedSubmissionReceipt = (
  * compare. A mismatch (or a forged field) fails closed.
  */
 export const verifyPreparedSubmission = (manifest: PreparedSubmissionManifest): boolean => {
-  const { hash: _hash, ...envelope } = manifest;
+  const { kind: _kind, hash: _hash, ...envelope } = manifest;
   return hashRecord('prepared-submission-manifest', envelope) === manifest.hash;
 };
