@@ -252,4 +252,59 @@ describe('remote judge client', () => {
     expect(capturedInit?.redirect).toBe('manual');
     expect(fetch).toHaveBeenCalledOnce();
   });
+
+  it('returns typed not-sent connection failure on token resolution exception or abort', async () => {
+    const fetch = vi.fn();
+    const failingAuthClient = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      authToken: () => { throw new Error('vault unreachable'); },
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const result1 = await failingAuthClient.judge(judgeRequest());
+    expect(result1).toMatchObject({
+      kind: 'connection-failure', ok: false, error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' },
+      receipt: null, callStatus: 'not-sent',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+
+    const controller = new AbortController();
+    const abortingAuthClient = createRemoteJudgeClient({
+      baseUrl: 'https://mesh.internal',
+      authToken: async () => {
+        controller.abort();
+        return 'token';
+      },
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+    const result2 = await abortingAuthClient.judge(judgeRequest(), { signal: controller.signal });
+    expect(result2).toMatchObject({
+      kind: 'connection-failure', ok: false, error: { code: 'CANCELLED', phase: 'preflight' },
+      receipt: null, callStatus: 'not-sent',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('bounds client timeout with min when options.timeoutMs is strictly below server deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      }));
+      const client = createRemoteJudgeClient({
+        baseUrl: 'https://mesh.internal',
+        timeoutMs: 500,
+        fetch: fetch as unknown as typeof globalThis.fetch,
+      });
+      const req = { ...judgeRequest(), policy: { timeoutMs: 10_000 } };
+      const promise = client.judge(req);
+      await vi.advanceTimersByTimeAsync(500);
+      const result = await promise;
+      expect(result).toMatchObject({
+        kind: 'connection-failure', ok: false, error: { code: 'TIMEOUT', phase: 'dispatch' },
+        receipt: null, callStatus: 'unknown',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

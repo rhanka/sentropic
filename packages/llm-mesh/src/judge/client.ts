@@ -33,29 +33,48 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
 
   return {
     async judge(request: JudgeRequest, callOptions?: { signal?: AbortSignal }): Promise<JudgeResult | JudgeConnectionFailure> {
-      let correlationId = generate();
-      if (request.correlationId !== undefined) {
-        const validated = resolveJudgeCorrelationId(request.correlationId, generate);
-        if (!validated) {
+      let correlationId = 'unknown';
+      try {
+        const raw = request.correlationId !== undefined
+          ? resolveJudgeCorrelationId(request.correlationId, generate)
+          : resolveJudgeCorrelationId(generate(), () => globalThis.crypto.randomUUID());
+        if (!raw) {
           return { kind: 'connection-failure', ok: false, error: connectionError('MESH_UNAVAILABLE', 'preflight'),
-            receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId };
+            receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId: 'unknown' };
         }
-        correlationId = validated;
+        correlationId = raw;
+      } catch {
+        return { kind: 'connection-failure', ok: false, error: connectionError('MESH_UNAVAILABLE', 'preflight'),
+          receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId: 'unknown' };
       }
-      if (callOptions?.signal?.aborted) {
-        return { kind: 'connection-failure', ok: false, error: connectionError('CANCELLED', 'preflight'),
-          receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId };
-      }
+      const preflightFail = (code: ConnectionErrorCode): JudgeConnectionFailure => ({
+        kind: 'connection-failure', ok: false, error: connectionError(code, 'preflight'),
+        receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId,
+      });
+      if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
+
       const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
-      if (options.authToken) {
-        const token = typeof options.authToken === 'function' ? await options.authToken() : options.authToken;
-        if (token) headers.authorization = `Bearer ${token}`;
+      try {
+        if (options.authToken) {
+          const token = typeof options.authToken === 'function' ? await options.authToken() : options.authToken;
+          if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
+          if (token) headers.authorization = `Bearer ${token}`;
+        }
+        if (options.headers) {
+          const extra = typeof options.headers === 'function' ? await options.headers() : options.headers;
+          if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
+          if (extra) Object.assign(headers, extra);
+        }
+      } catch {
+        return preflightFail(callOptions?.signal?.aborted ? 'CANCELLED' : 'MESH_UNAVAILABLE');
       }
-      if (options.headers) {
-        const extra = typeof options.headers === 'function' ? await options.headers() : options.headers;
-        Object.assign(headers, extra);
-      }
-      const timeoutMs = Math.max(1, Math.min(60_000, request.policy?.timeoutMs ?? options.timeoutMs ?? 10_000));
+
+      const serverTimeout = request.policy?.timeoutMs;
+      const clientCap = options.timeoutMs;
+      const effectiveTimeout = clientCap !== undefined
+        ? Math.min(clientCap, serverTimeout !== undefined ? serverTimeout + 1_000 : clientCap)
+        : (serverTimeout !== undefined ? serverTimeout + 1_000 : 10_000);
+      const timeoutMs = Math.max(1, Math.min(60_000, effectiveTimeout));
       const controller = new AbortController();
       let timedOut = false;
       let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
