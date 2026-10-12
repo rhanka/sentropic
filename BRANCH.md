@@ -82,7 +82,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 
 - [ ] **Lot 1 — D1 durable session workspace binding**
   - [x] RED: add `packages/cluster-mesh/tests/session-workspace.spec.ts` (rights, idempotence, restart, cross-tenant refusal, reuse, keep after detach and end)
-  - [ ] RED: add `api/tests/api/session-adoption.test.ts` (attach existing, create new, reuse, keep project and history after detach and end, rights, idempotence, restart, cross-tenant refusal)
+  - [x] RED: add `api/tests/api/session-adoption.test.ts` (attach existing, create new, reuse, keep project and history after detach and end, rights, idempotence, restart, cross-tenant refusal)
   - [ ] GREEN: add `packages/cluster-mesh/src/sessions/workspace-binding.ts` (pure binding behind narrow storage port for later L3a move)
   - [ ] GREEN: export binding from `packages/cluster-mesh/src/index.ts`
   - [ ] GREEN: bump `packages/cluster-mesh/package.json` to `0.16.0` (no publish)
