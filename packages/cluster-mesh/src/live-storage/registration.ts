@@ -121,6 +121,128 @@ export function isSameClone(a: Pick<CloneIdentityDto, 'cloneId'>, b: Pick<CloneI
   return a.cloneId === b.cloneId;
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+const isNonEmptyString = (v: unknown): v is string =>
+  typeof v === 'string' && v.trim().length > 0;
+const hasNul = (v: unknown): boolean =>
+  typeof v === 'string' && v.includes('\0');
+const isOpaqueId = (v: unknown, prefix: string): v is string =>
+  isNonEmptyString(v) && !hasNul(v) && v.startsWith(prefix);
+const isUncertaintyList = (v: unknown): v is readonly IdentityUncertaintyState[] =>
+  Array.isArray(v) && v.every((s) => (IDENTITY_UNCERTAINTY_STATES as readonly string[]).includes(s));
+
+function rejectUnknown(val: Record<string, unknown>, allowed: readonly string[], path: string, errs: string[]): void {
+  for (const k of Object.keys(val)) {
+    if (!allowed.includes(k)) errs.push(`${path}.${k} is not a known key`);
+  }
+}
+
+const CLONE_KEYS = ['hostScope', 'commonDirRealpath', 'commonDirProjectFingerprint', 'cloneId', 'oidAlgorithm', 'identityUncertainty'] as const;
+export function validateCloneIdentity(identity: unknown): ValidationResult {
+  if (!isRecord(identity)) return { ok: false, errors: ['cloneIdentity must be an object'] };
+  const errors: string[] = [];
+  rejectUnknown(identity, CLONE_KEYS, 'cloneIdentity', errors);
+  if (!isNonEmptyString(identity.hostScope) || hasNul(identity.hostScope)) errors.push('cloneIdentity.hostScope must be a non-empty string without NUL');
+  if (!isNonEmptyString(identity.commonDirRealpath) || hasNul(identity.commonDirRealpath)) errors.push('cloneIdentity.commonDirRealpath must be a non-empty string without NUL');
+  if (identity.commonDirProjectFingerprint !== undefined && (!isNonEmptyString(identity.commonDirProjectFingerprint) || hasNul(identity.commonDirProjectFingerprint))) {
+    errors.push('cloneIdentity.commonDirProjectFingerprint, when present, must be a non-empty string without NUL');
+  } else if (identity.commonDirProjectFingerprint === undefined && (!isUncertaintyList(identity.identityUncertainty) || !identity.identityUncertainty.includes('missing_history'))) {
+    errors.push('cloneIdentity.commonDirProjectFingerprint is absent: identityUncertainty must explicitly contain "missing_history" (LIVE §12)');
+  }
+  if (!isOpaqueId(identity.cloneId, ID_PREFIXES.clone)) errors.push(`cloneIdentity.cloneId must be a non-empty opaque id starting with "${ID_PREFIXES.clone}"`);
+  if (identity.oidAlgorithm !== 'sha1' && identity.oidAlgorithm !== 'sha256') errors.push('cloneIdentity.oidAlgorithm must be "sha1" or "sha256"');
+  if (!isUncertaintyList(identity.identityUncertainty)) errors.push(`cloneIdentity.identityUncertainty must be an array of uncertainty states (${IDENTITY_UNCERTAINTY_STATES.join(', ')})`);
+  return { ok: errors.length === 0, errors };
+}
+
+const WORKTREE_KEYS = ['cloneId', 'worktreeId', 'worktreePath', 'gitDir', 'worktreeFingerprint', 'identityUncertainty'] as const;
+export function validateWorktreeIdentity(identity: unknown): ValidationResult {
+  if (!isRecord(identity)) return { ok: false, errors: ['worktreeIdentity must be an object'] };
+  const errors: string[] = [];
+  rejectUnknown(identity, WORKTREE_KEYS, 'worktreeIdentity', errors);
+  if (!isOpaqueId(identity.cloneId, ID_PREFIXES.clone)) errors.push(`worktreeIdentity.cloneId must be a non-empty opaque id starting with "${ID_PREFIXES.clone}"`);
+  if (!isOpaqueId(identity.worktreeId, ID_PREFIXES.worktree)) errors.push(`worktreeIdentity.worktreeId must be a non-empty opaque id starting with "${ID_PREFIXES.worktree}"`);
+  if (!isNonEmptyString(identity.worktreePath) || hasNul(identity.worktreePath)) errors.push('worktreeIdentity.worktreePath must be a non-empty string without NUL');
+  if (!isNonEmptyString(identity.gitDir) || hasNul(identity.gitDir)) errors.push('worktreeIdentity.gitDir must be a non-empty string without NUL');
+  if (identity.worktreeFingerprint !== undefined && (!isNonEmptyString(identity.worktreeFingerprint) || hasNul(identity.worktreeFingerprint))) {
+    errors.push('worktreeIdentity.worktreeFingerprint, when present, must be a non-empty string without NUL');
+  } else if (identity.worktreeFingerprint === undefined && (!isUncertaintyList(identity.identityUncertainty) || !identity.identityUncertainty.includes('missing_history'))) {
+    errors.push('worktreeIdentity.worktreeFingerprint is absent: identityUncertainty must explicitly contain "missing_history" (LIVE §12)');
+  }
+  if (!isUncertaintyList(identity.identityUncertainty)) errors.push(`worktreeIdentity.identityUncertainty must be an array of uncertainty states (${IDENTITY_UNCERTAINTY_STATES.join(', ')})`);
+  return { ok: errors.length === 0, errors };
+}
+
+export function deriveCloneIdentity(input: DeriveCloneIdentityInput): CloneIdentityDto {
+  if (!isRecord(input)) throw new Error('deriveCloneIdentity requires a clone input object');
+  if (!isNonEmptyString(input.hostScope)) throw new Error('deriveCloneIdentity requires a non-empty hostScope');
+  if (!isNonEmptyString(input.commonDirRealpath)) throw new Error('deriveCloneIdentity requires a non-empty commonDirRealpath');
+  const uncertainty = [...(input.identityUncertainty ?? [])];
+  if (uncertainty.some((s) => !isIdentityUncertaintyState(s))) throw new Error(`identity uncertainty states must be one of ${IDENTITY_UNCERTAINTY_STATES.join(', ')}`);
+  if (input.commonDirProjectFingerprint !== undefined && !isNonEmptyString(input.commonDirProjectFingerprint)) {
+    throw new Error('deriveCloneIdentity requires a non-empty commonDirProjectFingerprint when present');
+  }
+  if (input.commonDirProjectFingerprint === undefined && !uncertainty.includes('missing_history')) {
+    throw new Error('deriveCloneIdentity omits commonDirProjectFingerprint only under explicit "missing_history" uncertainty');
+  }
+  if (input.oidAlgorithm !== 'sha1' && input.oidAlgorithm !== 'sha256') throw new Error('deriveCloneIdentity requires oidAlgorithm "sha1" or "sha256"');
+  const normalizedRealpath = normalizeCommonDirRealpath(input.commonDirRealpath);
+  const canonical = canonicalIdKey('clone', [input.hostScope, normalizedRealpath, input.commonDirProjectFingerprint ?? '']);
+  const identity: CloneIdentityDto = {
+    hostScope: input.hostScope,
+    commonDirRealpath: normalizedRealpath,
+    ...(input.commonDirProjectFingerprint !== undefined ? { commonDirProjectFingerprint: input.commonDirProjectFingerprint } : {}),
+    cloneId: `${ID_PREFIXES.clone}${sha256Hex(canonical)}`,
+    oidAlgorithm: input.oidAlgorithm,
+    identityUncertainty: uncertainty,
+  };
+  const checked = validateCloneIdentity(identity);
+  if (!checked.ok) throw new Error(`invalid derived clone identity: ${checked.errors.join('; ')}`);
+  return identity;
+}
+
+export function deriveWorktreeIdentity(input: DeriveWorktreeIdentityInput): WorktreeIdentityDto {
+  if (!isRecord(input)) throw new Error('deriveWorktreeIdentity requires a worktree input object');
+  if (!isRecord(input.clone) || !isOpaqueId(input.clone.cloneId, ID_PREFIXES.clone)) throw new Error('deriveWorktreeIdentity requires a derived clone carrying a canonical cloneId');
+  if (!isNonEmptyString(input.hostScope)) throw new Error('deriveWorktreeIdentity requires a non-empty hostScope');
+  if (!isNonEmptyString(input.worktreePath)) throw new Error('deriveWorktreeIdentity requires a non-empty worktreePath');
+  if (!isNonEmptyString(input.gitDir)) throw new Error('deriveWorktreeIdentity requires a non-empty gitDir');
+  const uncertainty = [...(input.identityUncertainty ?? [])];
+  if (uncertainty.some((s) => !isIdentityUncertaintyState(s))) throw new Error(`identity uncertainty states must be one of ${IDENTITY_UNCERTAINTY_STATES.join(', ')}`);
+  if (input.worktreeFingerprint !== undefined && !isNonEmptyString(input.worktreeFingerprint)) {
+    throw new Error('deriveWorktreeIdentity requires a non-empty worktreeFingerprint when present');
+  }
+  if (input.worktreeFingerprint === undefined && !uncertainty.includes('missing_history')) {
+    throw new Error('deriveWorktreeIdentity omits worktreeFingerprint only under explicit "missing_history" uncertainty');
+  }
+  const canonical = canonicalIdKey('worktree', [input.hostScope, input.gitDir]);
+  const identity: WorktreeIdentityDto = {
+    cloneId: input.clone.cloneId,
+    worktreeId: `${ID_PREFIXES.worktree}${sha256Hex(canonical)}`,
+    worktreePath: input.worktreePath,
+    gitDir: input.gitDir,
+    ...(input.worktreeFingerprint !== undefined ? { worktreeFingerprint: input.worktreeFingerprint } : {}),
+    identityUncertainty: uncertainty,
+  };
+  const checked = validateWorktreeIdentity(identity);
+  if (!checked.ok) throw new Error(`invalid derived worktree identity: ${checked.errors.join('; ')}`);
+  return identity;
+}
+
+export function deriveDeclarationIdentity(input: DeriveDeclarationIdentityInput): DeclarationIdentityDto {
+  if (!isRecord(input)) throw new Error('deriveDeclarationIdentity requires a declaration identity input object');
+  if (!isRecord(input.clone) || !isOpaqueId(input.clone.cloneId, ID_PREFIXES.clone)) throw new Error('deriveDeclarationIdentity requires a derived clone carrying a canonical cloneId');
+  if (!isRecord(input.worktree) || !isOpaqueId(input.worktree.worktreeId, ID_PREFIXES.worktree)) throw new Error('deriveDeclarationIdentity requires a derived worktree carrying a canonical worktreeId');
+  if (!isNonEmptyString(input.hostScope)) throw new Error('deriveDeclarationIdentity requires a non-empty hostScope');
+  const canonical = canonicalIdKey('declaration', [input.hostScope, input.clone.cloneId, input.worktree.worktreeId]);
+  return {
+    declarationId: `${ID_PREFIXES.declaration}${sha256Hex(canonical)}`,
+    cloneId: input.clone.cloneId,
+    worktreeId: input.worktree.worktreeId,
+  };
+}
+
 export interface LiveWorkspaceDeclaration {
   readonly tenant: string;
   readonly principal: string;
