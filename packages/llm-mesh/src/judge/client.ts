@@ -56,47 +56,56 @@ export function createRemoteJudgeClient(options: RemoteJudgeClientOptions): Remo
         return { kind: 'connection-failure', ok: false, error: connectionError('MESH_UNAVAILABLE', 'preflight'),
           receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId: 'unknown' };
       }
-      const preflightFail = (code: ConnectionErrorCode): JudgeConnectionFailure => ({
-        kind: 'connection-failure', ok: false, error: connectionError(code, 'preflight'),
-        receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId,
-      });
+      const serverTimeout = request.policy?.timeoutMs ?? 10_000;
+      const serverWithMargin = serverTimeout + 1_000;
+      const effectiveTimeout = options.timeoutMs !== undefined ? Math.min(options.timeoutMs, serverWithMargin) : serverWithMargin;
+      const timeoutMs = Math.max(1, Math.min(61_000, effectiveTimeout));
+      const controller = new AbortController();
+      let timedOut = false;
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      const onAbort = () => { void reader?.cancel().catch(() => {}); controller.abort(); };
+      const timer = setTimeout(() => { timedOut = true; void reader?.cancel().catch(() => {}); controller.abort(); }, timeoutMs);
+      callOptions?.signal?.addEventListener('abort', onAbort, { once: true });
+
+      const preflightFail = (code: ConnectionErrorCode): JudgeConnectionFailure => {
+        clearTimeout(timer);
+        callOptions?.signal?.removeEventListener('abort', onAbort);
+        return {
+          kind: 'connection-failure', ok: false, error: connectionError(code, 'preflight'),
+          receipt: null, usage: unreportedJudgeUsage('not-dispatched'), callStatus: 'not-sent', correlationId,
+        };
+      };
       if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
+
+      const racePreflight = async <T>(promiseOrValue: T | Promise<T>): Promise<T> => {
+        if (controller.signal.aborted || callOptions?.signal?.aborted) throw new Error('preflight-interrupted');
+        const val = await Promise.race([
+          promiseOrValue,
+          new Promise<never>((_, reject) => {
+            const abort = () => reject(new Error('preflight-interrupted'));
+            controller.signal.addEventListener('abort', abort, { once: true });
+            callOptions?.signal?.addEventListener('abort', abort, { once: true });
+          }),
+        ]);
+        if (controller.signal.aborted || callOptions?.signal?.aborted) throw new Error('preflight-interrupted');
+        return val;
+      };
 
       const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
       try {
         if (options.authToken) {
-          const token = typeof options.authToken === 'function' ? await options.authToken() : options.authToken;
-          if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
+          const token = await racePreflight(typeof options.authToken === 'function' ? options.authToken() : options.authToken);
           if (token) headers.authorization = `Bearer ${token}`;
         }
         if (options.headers) {
-          const extra = typeof options.headers === 'function' ? await options.headers() : options.headers;
-          if (callOptions?.signal?.aborted) return preflightFail('CANCELLED');
+          const extra = await racePreflight(typeof options.headers === 'function' ? options.headers() : options.headers);
           if (extra) Object.assign(headers, extra);
         }
       } catch {
-        return preflightFail(callOptions?.signal?.aborted ? 'CANCELLED' : 'MESH_UNAVAILABLE');
+        return preflightFail(controller.signal.aborted || callOptions?.signal?.aborted ? (timedOut ? 'TIMEOUT' : 'CANCELLED') : 'MESH_UNAVAILABLE');
       }
+      if (controller.signal.aborted || callOptions?.signal?.aborted) return preflightFail(timedOut ? 'TIMEOUT' : 'CANCELLED');
 
-      const serverTimeout = request.policy?.timeoutMs;
-      const clientCap = options.timeoutMs;
-      const effectiveTimeout = clientCap !== undefined
-        ? Math.min(clientCap, serverTimeout !== undefined ? serverTimeout + 1_000 : clientCap)
-        : (serverTimeout !== undefined ? serverTimeout + 1_000 : 10_000);
-      const timeoutMs = Math.max(1, Math.min(60_000, effectiveTimeout));
-      const controller = new AbortController();
-      let timedOut = false;
-      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-      const onAbort = () => {
-        void reader?.cancel().catch(() => {});
-        controller.abort();
-      };
-      const timer = setTimeout(() => {
-        timedOut = true;
-        void reader?.cancel().catch(() => {});
-        controller.abort();
-      }, timeoutMs);
-      callOptions?.signal?.addEventListener('abort', onAbort, { once: true });
       const fail = (code: ConnectionErrorCode): JudgeConnectionFailure => ({
         kind: 'connection-failure', ok: false, error: connectionError(code, 'dispatch'),
         receipt: null, usage: unreportedJudgeUsage('unknown'), callStatus: 'unknown', correlationId,

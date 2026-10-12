@@ -104,6 +104,7 @@
 - [x] Lot 2.09 review resolution - part 3 (2026-10-12): resolved MINEUR-2 by returning typed preflight failure on correlation generation/token resolution exceptions and handling cancellation during preflight token resolution; resolved MINEUR-3 by bounding timeout with min and providing grace margin for server deadline.
 - [x] Lot 2.09 review resolution - part 4 (2026-10-12): resolved MINEUR-4 by validating full response shape (schemaVersion, callId, matching correlationId, budget, cost, parseJudgeUsage, outcome); resolved MINEUR-5 by testing body stream overflow during reading, environment JEV_API_KEY leak protection, and invalid response shapes.
 - [x] Lot 1.21 review resolution - MAJEUR-A (2026-10-12): resolved MAJEUR-A (31f81b398, execution.ts:60-62) so durable receipt and settlement ledger agree on exact transmitted issue (both error/TIMEOUT/CANCELLED without rewrite to verdict, or both verdict under pending-reconciliation); guaranteed service never returns error result whose receipt says verdict; added assertions for ledger == persisted receipt across provider deadline, cancellation, and pending-reconciliation.
+- [x] Lot 1.21 review resolution - MINEUR-A & MINEUR-B (2026-10-12): applied 1000ms grace margin to server default deadline (11000ms) and capped at 61000ms; started timer before preflight and raced token/header resolution against signal and deadline returning typed not-sent preflight failure; added margin and stalled preflight regressions in tests/judge-client.test.ts.
 
 
 ## AI Flaky tests
