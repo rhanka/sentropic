@@ -5,6 +5,7 @@ import {
   type LiveWorkspaceDeclaration,
   type LiveProductBindingAuthorizationPort,
   canonicalIdKey,
+  INITIAL_DECLARATION_REVISION,
   validateWorkspaceDeclaration,
 } from '../../../../packages/cluster-mesh/src/live-storage/registration';
 import { db } from '../../db/client';
