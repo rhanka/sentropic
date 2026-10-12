@@ -42,7 +42,9 @@ export interface JudgeReceipt {
   finishedAt: string;
   latencyMs: number;
   providerLatencyMs?: number;
+  /** Durable marker dispatch state; 'unknown' on ambiguous marker failure before provider call. */
   dispatch: 'not-started' | 'started' | 'completed' | 'unknown';
+  /** Number of provider invocation attempts (0 if marking failed before provider dispatch). */
   attempts: 0 | 1;
   usage: JudgeUsage;
   cost: JudgeCost;
