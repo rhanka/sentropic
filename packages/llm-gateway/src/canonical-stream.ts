@@ -1,5 +1,7 @@
 import type { GenerateRequest, MessageContent, StreamEvent } from '@sentropic/llm-mesh';
 import type { GatewayDispatchStreamEvent, GatewayWire } from './ports/dispatch.js';
+import { encodeResponsesStream } from './responses-stream.js';
+import type { ResponsesLimits } from './responses-egress.js';
 import { frameAnthropicEvent, frameOpenAiChunk, OPENAI_DONE } from './wire.js';
 
 const anthropicOutputUsage = (
@@ -94,12 +96,22 @@ export const encodeGatewayStream = (
   responseId: string,
   events: AsyncIterable<StreamEvent>,
   usageHints?: GatewayStreamUsageHints,
-): AsyncGenerator<GatewayDispatchStreamEvent, void, unknown> => wire === 'anthropic-messages'
-  ? encodeAnthropicStream(
-    requestedModel, responseId, events,
-    Math.max(0, Math.floor(usageHints?.anthropicInputTokens ?? 0)),
-  )
-  : encodeOpenAiStream(requestedModel, responseId, events);
+  responsesOptions?: { createdAt?: number; limits?: ResponsesLimits },
+): AsyncGenerator<GatewayDispatchStreamEvent, void, unknown> => {
+  if (wire === 'openai-responses') {
+    return encodeResponsesStream({
+      responseId, model: requestedModel, events,
+      createdAt: responsesOptions?.createdAt ?? Math.floor(Date.now() / 1000),
+      ...(responsesOptions?.limits ? { limits: responsesOptions.limits } : {}),
+    });
+  }
+  return wire === 'anthropic-messages'
+    ? encodeAnthropicStream(
+      requestedModel, responseId, events,
+      Math.max(0, Math.floor(usageHints?.anthropicInputTokens ?? 0)),
+    )
+    : encodeOpenAiStream(requestedModel, responseId, events);
+};
 
 const encodeAnthropicStream = async function* (
   model: string,
