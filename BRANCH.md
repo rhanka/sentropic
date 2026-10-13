@@ -130,6 +130,7 @@
     - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
 - [ ] **Lot 3 — Scope binding, kernel, index**
   - [x] Write `packages/cluster-mesh/src/storage/scope-runtime.ts`: grant bind with frozen copy, issued-token registry, revocation, per-operation revalidation, scope isolation, profiles advertisement.
+  - [x] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
   - [ ] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
   - [ ] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
   - [ ] Lot gate:
