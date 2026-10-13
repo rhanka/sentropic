@@ -105,12 +105,12 @@ const parseWireErrorCodes = (): readonly string[] => {
   return [...block.matchAll(/'([^']+)'/g)].map((m) => m[1]);
 };
 
-const listTsFiles = (dir: string): string[] => {
+const listFiles = (dir: string, suffixes = ['.ts']): string[] => {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = resolve(dir, entry.name);
-    if (entry.isDirectory()) out.push(...listTsFiles(abs));
-    else if (entry.isFile() && entry.name.endsWith('.ts')) out.push(abs);
+    if (entry.isDirectory()) out.push(...listFiles(abs, suffixes));
+    else if (entry.isFile() && suffixes.some((suffix) => entry.name.endsWith(suffix))) out.push(abs);
   }
   return out;
 };
@@ -133,6 +133,28 @@ const runtimeImportViolations = (file: string, source: string): string[] => {
     })
     .map((target) => file + ': ' + target);
 };
+
+const DOC_RESIDUE_RULES = [
+  ['m1-authoring', /being authored now|freeze authoring now|At P1 exit, comments maintainers produce|Before M2 relies[^\n]*establish this baseline|Lot 1 additionally freezes|Lot 1 must align/],
+  ['m1-inventory', /initial Lot 1 manifest|initial manifest directly (?:records|declares)|frozen manifest declares[^\n]*cluster-mesh implementation\/export mapping|src\/conformance\/index\.ts|includes the proposed\s+\x60?@sentropic\/comments\/conformance/],
+  ['m1-representation', /Replace \x60?specDigest\x60? with|\x60?specDigest\x60? replaced by|Add [^\n]*to \x60?CapacityDescriptor|Lot 1 (?:adds fragment|freezes the transport)/],
+  ['postgres-placement', /live-storage\/(?:port\.ts|\{postgres|postgres)|live-postgres-\{(?:contract|parity,recovery)|L3b-S and the proposed L3b-P/],
+  ['sqlite-gate', /fixtures\/comments\/\{sqlite,pg\}|(?:shared|neutral|real|same) SQLite\/Postgres|round-trip on SQLite\/Postgres|both shared backends|L3b-S qualification|qualified L3b-S|L3b-S\/L3b-P: SQLite\/Postgres/],
+  ['live-gate', /live-sqlite-runtime\.spec\.ts|live-store-\{contract,qualification|generation fencing(?:\/pinned reads| and common migration)|generations\/migrations|generation\/CAS change/],
+  ['invented-handoff', /freeze receipt and host acknowledgement exist|acknowledged freeze receipt \(2dabe25ce/],
+  ['confirmation-citation', /§17\.4 \(confirmation items G1–G5\)/],
+  ['mandatory-app-journal', /Sentropic binds to existing \x60control\.event_outbox|Bind the transactional change-log port to the existing outbox/],
+  ['unconditional-purge', /Record purge intent in the tombstone transaction/],
+] as const;
+
+const documentationViolations = (content: string): string[] =>
+  DOC_RESIDUE_RULES.filter(([, pattern]) => pattern.test(content)).map(([id]) => id);
+
+const listAlignmentDocuments = (): string[] => [
+  ...listFiles(resolve(REPO_ROOT, 'docs/comments-annotations'), ['.md', '.json'])
+    .filter((file) => ![CONTRACT_PATH, FREEZE_RECEIPT_PATH].some((frozen) => file === resolve(REPO_ROOT, frozen))),
+  resolve(REPO_ROOT, 'spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md'),
+];
 
 const readManifest = (): Record<string, unknown> =>
   JSON.parse(readFileSync(resolve(REPO_ROOT, MANIFEST_PATH), 'utf8')) as Record<string, unknown>;
@@ -382,8 +404,8 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
 
   it('production roots and storage stay decoupled while comments leaves may load their peer', () => {
     const files = [
-      ...listTsFiles(resolve(REPO_ROOT, 'packages/cluster-mesh/src')),
-      ...listTsFiles(resolve(REPO_ROOT, 'packages/comments/src')),
+      ...listFiles(resolve(REPO_ROOT, 'packages/cluster-mesh/src')),
+      ...listFiles(resolve(REPO_ROOT, 'packages/comments/src')),
     ];
     expect(files.flatMap((file) => runtimeImportViolations(file, readFileSync(file, 'utf8')))).toEqual([]);
   });
@@ -463,28 +485,65 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     ]);
   });
 
-  it('step-1 docs preserve frozen §18.2 alignment without forbidden phrases', () => {
-    const step1Docs = [
-      'spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md',
-      'docs/comments-annotations/plan/PLAN_COMMENTS_ANNOTATIONS.md',
-      'docs/comments-annotations/plan/PLAN_HANDOFF.md',
-      'docs/comments-annotations/plan/BRANCH_P1_TEMPLATE.md',
-    ];
-    const forbiddenPhrases = [
-      'being authored now',
-      'live-storage/port.ts',
-      'includes the proposed @sentropic/comments/conformance',
-      'L3b-S qualification',
-    ];
+  it.each([
+    ["m1-authoring","Lot 1 must align SPEC §4.6 before freeze"],
+    ["m1-representation","`specDigest` replaced by `specVersion`/`specSource`"],
+    ["m1-authoring","the freeze receipt and host acknowledgement are being authored now"],
+    ["m1-inventory","The initial Lot 1 manifest relies on the digest-pinned packaged conformance oracle"],
+    ["m1-inventory","includes the proposed `@sentropic/comments/conformance` export"],
+    ["m1-inventory","proposed `src/conformance/index.ts`, package exports/surface"],
+    ["m1-inventory","The frozen manifest declares the cluster-mesh implementation/export mapping"],
+    ["m1-representation","Replace `specDigest` with `specVersion`/`specSource`"],
+    ["m1-representation","Add `readonly paging: { ... }` to `CapacityDescriptor`"],
+    ["postgres-placement","`packages/cluster-mesh/src/live-storage/{postgres,postgres-executor,postgres-migrations}.ts`"],
+    ["postgres-placement","`live-postgres-{contract,parity,recovery,exports}.spec.ts`"],
+    ["sqlite-gate","| M2 | not L3b-S SQLite; prove shared SQLite/Postgres parity |"],
+    ["sqlite-gate","| M2 | fixtures/comments/{sqlite,pg}/** |"],
+    ["sqlite-gate","| M3 | round-trip on SQLite/Postgres |"],
+    ["sqlite-gate","L3b-S/L3b-P: SQLite/Postgres + migrations"],
+    ["live-gate","| M2 | generation fencing/pinned reads |"],
+    ["live-gate","Required upstream evidence: `tests/live-sqlite-runtime.spec.ts` before M2 entry"],
+    ["invented-handoff","the freeze receipt and host acknowledgement exist on feat/comments-annotations-model"],
+    ["confirmation-citation","§17.4 (confirmation items G1–G5)"],
+    ["mandatory-app-journal","Sentropic binds to existing `control.event_outbox`"],
+    ["unconditional-purge","Record purge intent in the tombstone transaction"],
+  ])('should detect %s in the original contradictory text: %s', (rule, original) => {
+    expect(documentationViolations(original)).toContain(rule);
+  });
 
-    for (const relPath of step1Docs) {
-      const content = readFileSync(resolve(REPO_ROOT, relPath), 'utf8');
-      for (const phrase of forbiddenPhrases) {
-        expect(
-          content.includes(phrase),
-          `Step-1 doc ${relPath} must not contain forbidden phrase "${phrase}" (contradicts frozen §18.2)`,
-        ).toBe(false);
-      }
+  it('should accept independent qualification and separate extension declarations', () => {
+    expect(documentationViolations([
+      'M2 requires the reviewed common contract and selected qualified Postgres profiles.',
+      'C3 separately qualifies comments on SQLite; live generations and Q do not gate PG delivery.',
+      'C0 declares unverified oracle packaging; @sentropic/comments/conformance is not an existing export.',
+      'Preserve specDigest and CapacityDescriptor; module settings and transport are separate.',
+      'The package journal is default; Sentropic outbox is an optional qualified M5-S binding.',
+      'Purge intent requires effective policy and purge authority.',
+      'Host acknowledgement remains due in the owner-closed receipt.',
+    ].join('\n'))).toEqual([]);
+  });
+
+  it('should keep every non-frozen comments document aligned with the frozen specification', () => {
+    const docs = listAlignmentDocuments();
+    expect(docs).toContain(resolve(REPO_ROOT, 'docs/comments-annotations/evidence/owner-decisions.md'));
+    expect(docs).toContain(resolve(REPO_ROOT, 'docs/comments-annotations/contract/storage-module-v1.json'));
+    expect(docs).not.toContain(resolve(REPO_ROOT, CONTRACT_PATH));
+    expect(docs).not.toContain(resolve(REPO_ROOT, FREEZE_RECEIPT_PATH));
+    const violations = docs.flatMap((file) =>
+      documentationViolations(readFileSync(file, 'utf8')).map((rule) => file + ': ' + rule));
+    expect(violations).toEqual([]);
+  });
+
+  it('should retain journal, projection and explicit C4 obligations in all three plans', () => {
+    const extensions = readManifest().extensions as { transport: { moduleOperations: string[] } };
+    for (const name of ['PLAN_COMMENTS_ANNOTATIONS.md', 'PLAN_HANDOFF.md', 'BRANCH_P1_TEMPLATE.md']) {
+      const content = readFileSync(resolve(REPO_ROOT, 'docs/comments-annotations/plan', name), 'utf8');
+      expect(content, name).toMatch(/package journal.{0,30}default|default package journal/i);
+      expect(content, name).toMatch(/outbox.{0,30}optional qualified|optional.{0,50}outbox/i);
+      expect(content, name).toContain('projection assets');
+      expect(content, name).toContain('host-history attachment');
+      expect(content, name).toContain('C4');
+      for (const operation of extensions.transport.moduleOperations) expect(content, name).toContain(operation);
     }
   });
 });
