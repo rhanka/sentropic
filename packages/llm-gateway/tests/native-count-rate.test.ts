@@ -10,6 +10,17 @@ import { GatewayError, NativeCountTokensRateLimiter, NativeCountTokensRefusal } 
 const identity = (principalId = 'principal-a') =>
   ({ tenantId: 'tenant-1', principalId });
 
+const refusalResponse = (call: () => unknown) => {
+  try {
+    call();
+  } catch (error) {
+    if (!(error instanceof NativeCountTokensRefusal)) throw error;
+    return error.response;
+  }
+  throw new Error('expected count refusal');
+};
+const refusalStatus = (call: () => unknown) => refusalResponse(call).status;
+
 describe('NativeCountTokensRateLimiter', () => {
   it('gives distinct principals independent limits', () => {
     const rate = new NativeCountTokensRateLimiter({ capacity: 1, maxInFlight: 1, now: () => 0 });
@@ -76,6 +87,89 @@ describe('NativeCountTokensRateLimiter', () => {
       expect(error).toBeInstanceOf(GatewayError);
       expect((error as GatewayError).kind).toBe('pooled-account-unavailable');
     }
+  });
+
+  it('allows the default ten-call burst and one refill per second without refund on release', () => {
+    let now = 0;
+    const rate = new NativeCountTokensRateLimiter({ now: () => now });
+    for (let index = 0; index < 10; index++) {
+      const done = rate.acquire(identity());
+      done();
+      done();
+    }
+    expect(refusalResponse(() => rate.acquire(identity()))).toEqual({ status: 429,
+      headers: { 'Retry-After': '1' },
+      body: { type: 'error', error: { type: 'rate_limit_error',
+        message: 'Token counting request limit exceeded.' } } });
+    now = 999;
+    expect(refusalStatus(() => rate.acquire(identity()))).toBe(429);
+    now = 1000;
+    rate.acquire(identity())();
+    expect(refusalStatus(() => rate.acquire(identity()))).toBe(429);
+  });
+
+  it('uses integer Retry-After from fractional refill and never mints tokens on clock reversal', () => {
+    let now = 1000;
+    const rate = new NativeCountTokensRateLimiter({ capacity: 1, refillPerSecond: 0.25, now: () => now });
+    rate.acquire(identity())();
+    now = 1500;
+    expect(refusalResponse(() => rate.acquire(identity())).headers).toEqual({ 'Retry-After': '4' });
+    now = 0;
+    expect(refusalStatus(() => rate.acquire(identity()))).toBe(429);
+    now = 4999;
+    expect(refusalStatus(() => rate.acquire(identity()))).toBe(429);
+    now = 5000;
+    rate.acquire(identity())();
+  });
+
+  it('bounds default concurrency at two and releases each call once', () => {
+    const rate = new NativeCountTokensRateLimiter({ now: () => 0 });
+    const first = rate.acquire(identity());
+    const second = rate.acquire(identity());
+    expect(refusalResponse(() => rate.acquire(identity())).headers).toEqual({ 'Retry-After': '1' });
+    first();
+    first();
+    const third = rate.acquire(identity());
+    expect(refusalStatus(() => rate.acquire(identity()))).toBe(429);
+    third();
+    second();
+    rate.acquire(identity())();
+  });
+
+  it('partitions by both tenant and principal, using an unambiguous tuple', () => {
+    const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => 0 });
+    for (const cost of [{ tenantId: 'a:b', principalId: 'c' }, { tenantId: 'a', principalId: 'b:c' },
+      { tenantId: 'a:b', principalId: 'd' }, { tenantId: 'z', principalId: 'c' }]) {
+      rate.acquire(cost)();
+      expect(refusalStatus(() => rate.acquire(cost))).toBe(429);
+    }
+  });
+
+  it('fails closed for new identities at map capacity and evicts only at ten idle minutes', () => {
+    let now = 0;
+    const rate = new NativeCountTokensRateLimiter({ maxKeys: 2, now: () => now });
+    rate.acquire(identity())();
+    rate.acquire(identity('second'))();
+    const third = identity('third');
+    expect(() => rate.acquire(third)).toThrowError(expect.objectContaining({ kind: 'pooled-account-unavailable' }));
+    now = 599_999;
+    expect(() => rate.acquire(third)).toThrow(GatewayError);
+    now = 600_000;
+    rate.acquire(third)();
+  });
+
+  it('never evicts live calls, and idle time starts again when their cleanup completes', () => {
+    let now = 0;
+    const rate = new NativeCountTokensRateLimiter({ maxKeys: 1, now: () => now });
+    const release = rate.acquire(identity());
+    const other = identity('other');
+    now = 600_000;
+    expect(() => rate.acquire(other)).toThrow(GatewayError);
+    release();
+    now = 1_199_999;
+    expect(() => rate.acquire(other)).toThrow(GatewayError);
+    now = 1_200_000;
+    rate.acquire(other)();
   });
 
   it('refuses invalid limits and invalid verified identities', () => {
