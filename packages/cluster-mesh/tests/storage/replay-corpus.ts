@@ -158,6 +158,32 @@ export const runReplayCorpus = async (
   await bound.journalCheckpoint('c1', 3, boundary.journalSeq);
   assert.equal((await bound.journalInspect('c1')).lag, 0);
 
+  await commitOne(bound, 'journal-f', 6);
+  await commitOne(bound, 'journal-g', 7);
+  const stallScan = await bound.journalRead('c-stall', 0, 10);
+  const poison6 = stallScan.events.find((event) => event.seq === 6)?.eventId;
+  assert.ok(poison6);
+  await bound.journalMarkPoison('c-stall', poison6, 'poison-stall');
+  assert.equal((await bound.journalInspect('c-stall')).status, 'stalled');
+  const stallCursor = (await bound.journalInspect('c-stall')).cursor;
+  const stallBoundary = await bound.journalResync('c-stall');
+  assert.equal(
+    (await bound.journalInspect('c-stall')).status,
+    'stalled',
+    'K2b-RED replay: resync never clears a poison stall',
+  );
+  assert.equal((await bound.journalInspect('c-stall')).cursor, stallCursor);
+  assert.equal((await bound.journalInspect('c-stall')).failedEvent, poison6);
+  await expectCode(
+    async () => bound.journalCheckpoint('c-stall', stallCursor, stallBoundary.journalSeq),
+    'invalid-command',
+    'K2b-RED replay: a checkpoint still cannot pass an undelivered poisoned event after resync',
+  );
+  await bound.journalRetry('c-stall', poison6);
+  assert.equal((await bound.journalInspect('c-stall')).status, 'running');
+  await bound.journalCheckpoint('c-stall', stallCursor, stallBoundary.journalSeq);
+  assert.equal((await bound.journalInspect('c-stall')).lag, 0);
+
   const sealing = await bound.beginStaged({
     operationKey: 'op-replay-sealed',
     inputDigest: 'input-sealed',
