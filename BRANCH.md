@@ -66,8 +66,8 @@
   - [x] Complete merge commit.
 
 - [ ] **Lot C0 — Compatibility manifest & M1 preservation test**
-  - [ ] Read §17 row C0 and confirmation `.h2a/l3a/l3a_v4_confirmation.md` (G1–G5).
-  - [ ] Test-first: implement `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts` pinning M1 source hashes and verifying compatibility manifest.
+  - [x] Read §17 row C0 and confirmation `.h2a/l3a/l3a_v4_confirmation.md` (G1–G5).
+  - [x] Test-first: implement `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts` pinning M1 source hashes.
   - [ ] Implement `docs/comments-annotations/contract/storage-module-v1.json`.
   - [ ] Implement `docs/comments-annotations/contract/storage-compatibility.md`.
   - [ ] Run typecheck and test targets: `make test-cluster-mesh SCOPE=tests/comments-contract-boundaries.spec.ts API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
