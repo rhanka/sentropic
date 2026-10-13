@@ -117,3 +117,35 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   assert.equal(missing.records.length, 0);
   assert.equal(missing.nextCursor, null);
 };
+
+// R3 remainder (§8.4, L3a v4.1 frozen): the returned cursor is part of the
+// encoded page. Backend-agnostic: only backend-minted cursors are passed
+// back; the budget check measures the observed JSON encoding.
+export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise<void> => {
+  const chainId = 'r3-cursor-budget';
+  for (let n = 0; n <= 10; n += 1) {
+    await bound.appendChain(
+      chainId,
+      { id: `r${n}`, bytes: 'x', hash: `h${n}` },
+      n === 0 ? { kind: 'absent', allocation: '0' } : { kind: 'head', hash: `h${n - 1}` },
+    );
+  }
+
+  const first = await bound.readPage(chainId, 9, null, 4096);
+  assert.equal(first.outcome, 'page');
+  assert.equal(first.records.length, 9);
+  assert.notEqual(first.nextCursor, null);
+
+  const resumed = await bound.readPage(chainId, 1, first.nextCursor, 115);
+  assert.equal(resumed.outcome, 'page');
+  assert.equal(resumed.records.length, 1);
+  assert.equal(resumed.records[0].id, 'r9');
+  const encodedBytes = Buffer.byteLength(
+    JSON.stringify({ outcome: resumed.outcome, records: resumed.records, nextCursor: resumed.nextCursor }),
+    'utf8',
+  );
+  assert.ok(
+    encodedBytes <= 115,
+    `K2aSPLIT-RED reads: the resumed page with its returned cursor fits the budget (got ${encodedBytes} bytes for 115)`,
+  );
+};
