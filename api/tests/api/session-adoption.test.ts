@@ -24,7 +24,7 @@ const sessionIds = [
   'sess-adopt-17', 'sess-adopt-18', 'sess-adopt-19', 'sess-adopt-20',
   'sess-adopt-21', 'sess-adopt-22', 'sess-adopt-23', 'sess-adopt-24',
   'sess-adopt-25', 'sess-adopt-26', 'sess-adopt-27', 'sess-adopt-28',
-  'sess-adopt-29',
+  'sess-adopt-29', 'sess-adopt-30',
 ];
 
 // One-shot forced-interleave hook for the API race tests (m1, m2): the next
@@ -54,6 +54,8 @@ describe('session adoption workspace binding', () => {
   let workspaceId: string;
 
   beforeEach(async () => {
+    await db.delete(sessionWorkspaceBindings)
+      .where(inArray(sessionWorkspaceBindings.sessionId, sessionIds));
     user = await createAuthenticatedUser('editor');
     await db.insert(tenants).values([
       { id: TENANT_A, name: TENANT_A, status: 'active' },
@@ -402,27 +404,74 @@ describe('session adoption workspace binding', () => {
     });
   });
 
-  it('should reject concurrent end when CAS loses the race and allow idempotent retry', async () => {
+  it('should reject concurrent end when CAS loses the race and allow idempotent retry (forced interleave)', async () => {
+    // Deterministic m1: the interleave is forced inside `hasWorkspaceRole`
+    // (no `Promise.allSettled` race). Outer end reads row at version 1; while
+    // resolving workspace rights, inner end commits version 2 (ended). Outer
+    // loses the CAS, re-authorizes against the winning state, and fails closed
+    // with session_not_attached.
     const service = new SessionWorkspaceService();
     await service.adopt({
       sessionId: 'sess-adopt-29', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
-    const results = await Promise.allSettled([
-      service.end('sess-adopt-29', TENANT_A, user.id),
-      service.end('sess-adopt-29', TENANT_A, user.id),
-    ]);
-    const fulfilled = results.filter((r): r is PromiseFulfilledResult<AdoptedSessionWorkspace> => r.status === 'fulfilled');
-    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
-    expect(fulfilled[0].value.status).toBe('ended');
-    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    for (const rej of rejected) {
-      expect(rej.reason).toMatchObject({
-        code: 'session_not_attached',
-        message: expect.stringContaining('retry the end'),
-      });
-    }
+    interleaveHook.current = async () => {
+      const inner = new SessionWorkspaceService();
+      await inner.end('sess-adopt-29', TENANT_A, user.id);
+    };
+    await expect(service.end('sess-adopt-29', TENANT_A, user.id)).rejects.toMatchObject({
+      code: 'session_not_attached',
+      message: expect.stringContaining('retry the end'),
+    });
+    // Idempotent replay with updated version returns the ended binding:
     const replay = await service.end('sess-adopt-29', TENANT_A, user.id);
     expect(replay.status).toBe('ended');
+    expect(replay.version).toBe(2);
+  });
+
+  it('should refuse a stale end when concurrent race changes binding owner (forced interleave)', async () => {
+    // Deterministic m1: forced interleave where concurrent race swaps workspace and owner.
+    // Outer end is invoked by original user; while resolving rights on wsA,
+    // inner sequence detaches wsA and adopts workspaceB with userB (v3).
+    // Outer loses CAS, re-authorizes against workspaceB/userB, and rejects
+    // with workspace_rights_refused.
+    const regularUser = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: regularUser.id, status: 'approved', role: 'member',
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId, userId: regularUser.id, role: 'editor',
+    });
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-30', tenantId: TENANT_A, principalId: regularUser.id, workspaceId,
+    });
+    const userB = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
+    });
+    const workspaceB = crypto.randomUUID();
+    await db.insert(workspaces).values({
+      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
+      type: 'code', tenantId: TENANT_A,
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId: workspaceB, userId: userB.id, role: 'admin',
+    });
+
+    interleaveHook.current = async () => {
+      const inner = new SessionWorkspaceService();
+      await inner.detach('sess-adopt-30', TENANT_A, regularUser.id);
+      await inner.adopt({
+        sessionId: 'sess-adopt-30', tenantId: TENANT_A, principalId: userB.id, workspaceId: workspaceB,
+      });
+    };
+    await expect(service.end('sess-adopt-30', TENANT_A, regularUser.id))
+      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
+
+    // The re-attached binding remains intact: workspaceB, userB, attached, v3.
+    await expect(service.get('sess-adopt-30', TENANT_A, userB.id)).resolves.toMatchObject({
+      workspaceId: workspaceB, principalId: userB.id, status: 'attached', version: 3,
+    });
   });
 
   it('should conflict concurrent adopts of different workspaces', async () => {

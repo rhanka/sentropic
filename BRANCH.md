@@ -183,9 +183,9 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] Sub-lot gate: test-cluster-mesh (428 pass), test-api-unit adoption (35/35), scope-check PASS
 - [x] **Lot 8 — Opus r7 minor fixes (m1..m3)**
   - [x] RED/GREEN domain: deterministic lost-CAS and rights-refusal race tests for end (m1)
-  - [ ] RED/GREEN API: deterministic forced-interleave lost-CAS and rights-refusal tests for end (m1)
-  - [ ] Docs: correct r7 report claims (m2) and clean BRANCH.md residues (m3)
-  - [ ] Sub-lot gate: test-cluster-mesh (429 pass / 31 scoped), test-api-unit adoption (36/36), scope-check PASS
+  - [x] RED/GREEN API: deterministic forced-interleave lost-CAS and rights-refusal tests for end (m1)
+  - [x] Docs: correct r7 report claims (m2) and clean BRANCH.md residues (m3)
+  - [x] Sub-lot gate: test-cluster-mesh (429 pass / 31 scoped), test-api-unit adoption (36/36), scope-check PASS
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
