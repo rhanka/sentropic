@@ -222,11 +222,136 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
   });
   assert.equal(fullReceipt.effectiveAppends, 1);
   assert.equal(await bound.readHead('chain-a'), 'hash-a-4');
-  assert.equal((await bound.readRecord('rec-1'))?.contentHash, 'h-rec-1');
-  assert.equal((await bound.readAggregate('agg-1'))?.version, 1);
+  assert.deepEqual(
+    await bound.readRecord('rec-1'),
+    { bytes: { format: 'utf8', data: 'hello' }, contentHash: 'h-rec-1' },
+    'K2aR3-RED atomic: persisted record values survive the commit',
+  );
+  assert.deepEqual(
+    await bound.readAggregate('agg-1'),
+    { version: 1, value: { format: 'utf8', data: 'v1' } },
+    'K2aR3-RED atomic: persisted aggregate values survive the commit',
+  );
   assert.deepEqual((await bound.indexGet('atomic-idx-1'))?.resultIds, ['r2']);
 
-  await assert.rejects(
+  const guardedReceipt = await bound.commitAtomic({
+    guards: [{ kind: 'aggregate-version', key: 'agg-1', version: 1 }],
+    records: [],
+    appends: [
+      {
+        chainId: 'chain-a',
+        record: record('a', 5),
+        expectation: { kind: 'head', hash: 'hash-a-4' },
+      },
+    ],
+    updates: [],
+    relationships: [],
+    barriers: [],
+    purgeIntents: [],
+    indexWrites: [],
+  });
+  assert.equal(guardedReceipt.effectiveAppends, 1);
+  assert.equal(await bound.readHead('chain-a'), 'hash-a-5');
+
+  await expectCode(
+    async () =>
+      bound.commitAtomic({
+        guards: [{ kind: 'aggregate-version', key: 'agg-1', version: 999 }],
+        records: [],
+        appends: [
+          {
+            chainId: 'chain-a',
+            record: record('a', 6),
+            expectation: { kind: 'head', hash: 'hash-a-5' },
+          },
+        ],
+        updates: [],
+        relationships: [],
+        barriers: [],
+        purgeIntents: [],
+        indexWrites: [],
+      }),
+    'cas-conflict',
+    'K2aR3-RED atomic: a false aggregate-version guard rolls back the whole unit',
+  );
+  assert.equal(await bound.readHead('chain-a'), 'hash-a-5');
+  assert.deepEqual(
+    await bound.readAggregate('agg-1'),
+    { version: 1, value: { format: 'utf8', data: 'v1' } },
+    'K2aR3-RED atomic: a failed version guard leaves no effects behind',
+  );
+
+  await expectCode(
+    async () =>
+      bound.commitAtomic({
+        guards: [{ kind: 'predicate', predicateId: 'pred-1', dependency: 'dep-1' }],
+        records: [],
+        appends: [
+          {
+            chainId: 'chain-a',
+            record: record('a', 6),
+            expectation: { kind: 'head', hash: 'hash-a-5' },
+          },
+        ],
+        updates: [],
+        relationships: [],
+        barriers: [],
+        purgeIntents: [],
+        indexWrites: [],
+      }),
+    'invalid-command',
+    'K2aR3-RED atomic: a predicate guard is explicitly rejected by the K2a reference',
+  );
+
+  await expectCode(
+    async () =>
+      bound.commitAtomic({
+        guards: [],
+        records: [],
+        appends: [],
+        updates: [],
+        relationships: [{ kind: 'add', relation: 'rel-1', from: 'a', to: 'b' }],
+        barriers: [],
+        purgeIntents: [],
+        indexWrites: [],
+      }),
+    'invalid-command',
+    'K2aR3-RED atomic: relationships are explicitly rejected by the K2a reference',
+  );
+
+  await expectCode(
+    async () =>
+      bound.commitAtomic({
+        guards: [],
+        records: [],
+        appends: [],
+        updates: [],
+        relationships: [],
+        barriers: [{ boundary: 'b1', reason: 'r1' }],
+        purgeIntents: [],
+        indexWrites: [],
+      }),
+    'unsupported-profile',
+    'K2aR3-RED atomic: barriers are explicitly rejected by the K2a reference',
+  );
+
+  await expectCode(
+    async () =>
+      bound.commitAtomic({
+        guards: [],
+        records: [],
+        appends: [],
+        updates: [],
+        relationships: [],
+        barriers: [],
+        purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'auth-1' }],
+        indexWrites: [],
+      }),
+    'unsupported-profile',
+    'K2aR3-RED atomic: purge intents are explicitly rejected by the K2a reference',
+  );
+
+  await expectCode(
     async () =>
       bound.commitAtomic({
         guards: [],
@@ -238,7 +363,7 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
         purgeIntents: [],
         indexWrites: [],
       }),
-    /empty/,
+    'invalid-command',
     'K2a-RED atomic: an empty unit is rejected',
   );
 };
