@@ -18,6 +18,7 @@ export * from './route-flow-core.js';
 export * from './route-attempt-dispatch.js';
 export * from './route-json-flow.js';
 export * from './route-stream-flow.js';
+export * from './native-sse.js';
 export * from './native-usage.js';
 export * from './native-count-tokens.js';
 export * from './native-count-rate.js';
