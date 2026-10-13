@@ -1,13 +1,14 @@
 // Test-only in-memory reference store for the K2a shared corpus.
-// Implements executable K1 semantics (§5, §4): CAS-first appends, idempotent
-// genesis, equal-digest index replacement, atomic units, authority checks.
-// No durability, no SQL, no backend claim.
+// Implements executable K1 semantics (L3a v4.1 frozen §5, §4): CAS-first
+// appends, idempotent genesis, equal-digest index replacement, atomic units,
+// authority checks. No durability, no SQL, no backend claim.
 
 import {
   StorageCasConflictError,
   StorageDeniedError,
   StorageIdempotencyConflictError,
   StorageInvalidCommandError,
+  UnsupportedProfileError,
 } from '../../src/storage/errors.js';
 import type { AtomicUnit, ChainExpectation, CommitOptions, CommitReceipt } from '../../src/storage/atomic.js';
 import type { ScopeGrant } from '../../src/storage/authority.js';
@@ -40,24 +41,48 @@ export interface ChainPageCursor {
 }
 
 export interface ChainPage {
-  readonly outcome: 'page' | 'incomplete';
+  readonly outcome: 'page' | 'incomplete' | 'inaccessible';
   readonly records: readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[];
   readonly nextCursor: ChainPageCursor | null;
 }
 
 const defaultClock: TestClock = () => new Date().toISOString();
 
+// Grants are JSON-serializable DTOs: the bound handle keeps a deeply frozen
+// copy so a caller-side mutation after binding can never escalate authority
+// or switch scope (§4.1, §4.3).
+const deepCopyGrant = (grant: ScopeGrant<unknown>): ScopeGrant<unknown> =>
+  JSON.parse(JSON.stringify(grant)) as ScopeGrant<unknown>;
+
+const deepFreeze = (value: unknown): void => {
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return;
+  for (const entry of Object.values(value)) deepFreeze(entry);
+  Object.freeze(value);
+};
+
+const encodedPageBytes = (
+  outcome: string,
+  records: readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[],
+  nextCursor: ChainPageCursor | null,
+): number => Buffer.byteLength(JSON.stringify({ outcome, records, nextCursor }), 'utf8');
+
 export class TestBoundStore {
-  private readonly commitsByKey = new Map<string, CommitReceipt>();
+  readonly grant: ScopeGrant<unknown>;
+  private readonly boundScope: { readonly tenantId: string; readonly workspaceId: string };
   private commitSeq = 0;
 
   constructor(
-    readonly grant: ScopeGrant<unknown>,
+    grant: ScopeGrant<unknown>,
     readonly moduleId: string,
     private readonly state: ReferenceState,
     private readonly revoked: Set<string>,
     private readonly clock: TestClock,
-  ) {}
+  ) {
+    const copy = deepCopyGrant(grant);
+    deepFreeze(copy);
+    this.grant = copy;
+    this.boundScope = { tenantId: copy.scope.tenantId, workspaceId: copy.scope.workspaceId };
+  }
 
   requireOperation(op: 'read' | 'write' | 'publish' | 'maintain'): void {
     const nowIso = this.clock();
@@ -66,12 +91,13 @@ export class TestBoundStore {
     if (this.revoked.has(this.grant.token)) throw new StorageDeniedError('grant revoked');
     if (!canOperate(this.grant, op)) throw new StorageDeniedError(`grant lacks ${op}`);
     const scopeMismatch =
-      this.grant.scope.tenantId !== this.scope.tenantId || this.grant.scope.workspaceId !== this.scope.workspaceId;
+      this.grant.scope.tenantId !== this.boundScope.tenantId ||
+      this.grant.scope.workspaceId !== this.boundScope.workspaceId;
     if (scopeMismatch) throw new StorageDeniedError('cross-scope handle');
   }
 
   get scope() {
-    return this.grant.scope;
+    return this.boundScope;
   }
 
   appendChain(chainId: string, record: ChainRecordInput, expectation: ChainExpectation): AppendOutcome {
@@ -152,33 +178,44 @@ export class TestBoundStore {
     return getScopeState(this.state, this.scope).chains.get(chainId)?.records ?? [];
   }
 
-  readPage(chainId: string, limit: number, cursor: ChainPageCursor | null, maxEncodedBytes: number): ChainPage {
+  readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number): ChainPage {
     this.requireOperation('read');
     if (!Number.isSafeInteger(limit) || limit <= 0) throw new StorageInvalidCommandError('invalid limit');
+    let start = 0;
+    let cursorHead: string | null = null;
+    let retained: ChainPageCursor | null = null;
+    if (cursor !== null && cursor !== undefined) {
+      if (typeof cursor !== 'object' || cursor === null) throw new StorageInvalidCommandError('invalid cursor');
+      const candidate = cursor as { readonly position?: unknown; readonly head?: unknown };
+      if (!Number.isSafeInteger(candidate.position) || (candidate.position as number) < 0) {
+        throw new StorageInvalidCommandError('invalid cursor');
+      }
+      if (typeof candidate.head !== 'string' || candidate.head.length === 0) {
+        throw new StorageInvalidCommandError('invalid cursor');
+      }
+      start = candidate.position as number;
+      cursorHead = candidate.head;
+      retained = { position: start, head: cursorHead };
+    }
     const scopeState = getScopeState(this.state, this.scope);
     const chain = scopeState.chains.get(chainId);
-    if (chain?.disposed) return { outcome: 'incomplete', records: [], nextCursor: cursor };
+    if (chain?.disposed) return { outcome: 'inaccessible', records: [], nextCursor: retained };
     const records = chain?.records ?? [];
-    const boundHead = cursor?.head ?? chain?.head ?? null;
-    const start = cursor?.position ?? 0;
+    const boundHead = cursorHead ?? chain?.head ?? null;
     const boundIdx = boundHead === null ? records.length : records.findIndex((entry) => entry.hash === boundHead);
     if (boundHead !== null && boundIdx === -1) {
-      return { outcome: 'incomplete', records: [], nextCursor: cursor };
+      return { outcome: 'incomplete', records: [], nextCursor: retained };
     }
     const visible = boundHead === null ? [] : records.slice(0, boundIdx + 1);
     const page: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[] = [];
-    let used = 0;
     for (const record of visible) {
       if (record.seq < start) continue;
-      const next: ChainPageCursor = { position: record.seq, head: boundHead };
+      const next: ChainPageCursor = { position: record.seq, head: boundHead as string };
       if (page.length >= limit) return { outcome: 'page', records: page, nextCursor: next };
-      const size = Buffer.byteLength(JSON.stringify(record), 'utf8');
-      if (size > maxEncodedBytes) {
+      if (encodedPageBytes('page', [...page, record], next) > maxEncodedBytes) {
         if (page.length === 0) return { outcome: 'incomplete', records: [], nextCursor: next };
         return { outcome: 'incomplete', records: page, nextCursor: next };
       }
-      if (used + size > maxEncodedBytes) return { outcome: 'incomplete', records: page, nextCursor: next };
-      used += size;
       page.push(record);
     }
     return { outcome: 'page', records: page, nextCursor: null };
@@ -194,10 +231,20 @@ export class TestBoundStore {
 
   commitAtomic(unit: AtomicUnit, options: CommitOptions = {}): CommitReceipt {
     this.requireOperation('write');
+    const scopeState = getScopeState(this.state, this.scope);
+    const unitHash = JSON.stringify(unit);
     if (options.idempotencyKey) {
-      const replayed = this.commitsByKey.get(options.idempotencyKey);
-      if (replayed) return replayed;
+      const stored = scopeState.commits.get(options.idempotencyKey);
+      if (stored) {
+        if (stored.unitHash === unitHash) return stored.receipt;
+        throw new StorageIdempotencyConflictError('idempotency key reused with a divergent unit');
+      }
     }
+    if (unit.relationships.length > 0) {
+      throw new StorageInvalidCommandError('relationships unsupported in the K2a reference');
+    }
+    if (unit.barriers.length > 0) throw new UnsupportedProfileError('visibility-barriers-v1');
+    if (unit.purgeIntents.length > 0) throw new UnsupportedProfileError('purge-jobs-v1');
     if (
       unit.records.length === 0 &&
       unit.appends.length === 0 &&
@@ -209,7 +256,6 @@ export class TestBoundStore {
     ) {
       throw new StorageInvalidCommandError('empty unit');
     }
-    const scopeState = getScopeState(this.state, this.scope);
     for (const guard of unit.guards) {
       if (guard.kind === 'head') {
         const head = scopeState.chains.get(guard.chainId)?.head ?? null;
@@ -217,6 +263,13 @@ export class TestBoundStore {
       }
       if (guard.kind === 'absent') {
         if (scopeState.chains.has(guard.chainId)) throw new StorageIdempotencyConflictError('guard absent violated');
+      }
+      if (guard.kind === 'aggregate-version') {
+        const stored = scopeState.aggregates.get(guard.key);
+        if (stored?.version !== guard.version) throw new StorageCasConflictError('guard aggregate version mismatch');
+      }
+      if (guard.kind === 'predicate') {
+        throw new StorageInvalidCommandError('predicate guards unsupported in the K2a reference');
       }
     }
     for (const append of unit.appends) {
@@ -271,6 +324,10 @@ export class TestBoundStore {
       stagedRecords.set(record.key, { bytes: record.bytes, contentHash: record.contentHash });
     }
     for (const update of unit.updates) {
+      const stored = stagedAggregates.get(update.key);
+      if (stored && update.version <= stored.version) {
+        throw new StorageCasConflictError('stale aggregate version at commit');
+      }
       stagedAggregates.set(update.key, { version: update.version, value: update.value });
     }
     applied += unit.records.length + unit.updates.length;
@@ -292,7 +349,7 @@ export class TestBoundStore {
       effectiveAppends: unit.appends.length,
       journalCursor: `cursor-${this.commitSeq}`,
     };
-    if (options.idempotencyKey) this.commitsByKey.set(options.idempotencyKey, receipt);
+    if (options.idempotencyKey) scopeState.commits.set(options.idempotencyKey, { receipt, unitHash });
     return receipt;
   }
 }
