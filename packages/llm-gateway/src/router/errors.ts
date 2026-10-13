@@ -173,18 +173,6 @@ const noRouteMessage = (requestedModel?: string, detail?: string): string => {
   return detail ? `${base} — ${detail}` : base;
 };
 
-const isValidValidationDetail = (
-  detail: unknown,
-): detail is NativeValidationPublicDetail =>
-  Boolean(
-    detail
-    && typeof detail === 'object'
-    && (detail as NativeValidationPublicDetail).type === 'invalid_request_error'
-    && typeof (detail as NativeValidationPublicDetail).message === 'string'
-    && (detail as NativeValidationPublicDetail).message.length > 0
-    && (detail as NativeValidationPublicDetail).message.length <= 4096,
-  );
-
 const isNativeMessagesUpstreamError = (
   error: unknown,
 ): error is {
@@ -292,11 +280,6 @@ export const mapGatewayError = (
     case 'bad-request': {
       // Spec §16.7: validated field code/path ride the OpenAI envelope;
       // the Anthropic shape and the no-field frozen shape stay exact.
-      if (isValidValidationDetail(validation)) {
-        return anthropic
-          ? anthropicError(400, validation.type, validation.message)
-          : openAiError(400, validation.type, validation.message, 'invalid_request');
-      }
       if (anthropic || !field) {
         return anthropic
           ? anthropicError(400, 'invalid_request_error', 'invalid request')
@@ -366,7 +349,9 @@ export const toProviderShapedError = (
     if (
       error.status === 400
       && (error.type === undefined || error.type === 'invalid_request_error')
-      && isValidValidationDetail(error.validation)
+      && error.validation
+      && typeof error.validation.type === 'string'
+      && typeof error.validation.message === 'string'
     ) {
       return wire === 'anthropic-messages'
         ? anthropicError(400, error.validation.type, error.validation.message)
