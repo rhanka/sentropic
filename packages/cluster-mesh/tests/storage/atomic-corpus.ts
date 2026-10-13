@@ -324,12 +324,20 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
     'K2aR3-RED atomic: a failed stale update leaves no effects behind',
   );
 
+  assert.equal(await bound.readHead('chain-a'), 'hash-a-5');
+
   await expectCode(
     async () =>
       bound.commitAtomic({
         guards: [],
         records: [],
-        appends: [],
+        appends: [
+          {
+            chainId: 'rel-chain',
+            record: record('rel', 1),
+            expectation: { kind: 'absent', allocation: '0' },
+          },
+        ],
         updates: [],
         relationships: [{ kind: 'add', relation: 'rel-1', from: 'a', to: 'b' }],
         barriers: [],
@@ -339,13 +347,24 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
     'invalid-command',
     'K2aR3-RED atomic: relationships are explicitly rejected by the K2a reference',
   );
+  assert.equal(
+    await bound.readHead('rel-chain'),
+    null,
+    'K2aR3-RED atomic: a rejected relationships unit leaves no carrier effects behind',
+  );
 
   await expectCode(
     async () =>
       bound.commitAtomic({
         guards: [],
         records: [],
-        appends: [],
+        appends: [
+          {
+            chainId: 'barrier-chain',
+            record: record('bar', 1),
+            expectation: { kind: 'absent', allocation: '0' },
+          },
+        ],
         updates: [],
         relationships: [],
         barriers: [{ boundary: 'b1', reason: 'r1' }],
@@ -355,13 +374,24 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
     'unsupported-profile',
     'K2aR3-RED atomic: barriers are explicitly rejected by the K2a reference',
   );
+  assert.equal(
+    await bound.readHead('barrier-chain'),
+    null,
+    'K2aR3-RED atomic: a rejected barriers unit leaves no carrier effects behind',
+  );
 
   await expectCode(
     async () =>
       bound.commitAtomic({
         guards: [],
         records: [],
-        appends: [],
+        appends: [
+          {
+            chainId: 'purge-chain',
+            record: record('p', 1),
+            expectation: { kind: 'absent', allocation: '0' },
+          },
+        ],
         updates: [],
         relationships: [],
         barriers: [],
@@ -370,6 +400,11 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
       }),
     'unsupported-profile',
     'K2aR3-RED atomic: purge intents are explicitly rejected by the K2a reference',
+  );
+  assert.equal(
+    await bound.readHead('purge-chain'),
+    null,
+    'K2aR3-RED atomic: a rejected purge unit leaves no carrier effects behind',
   );
 
   await expectCode(
