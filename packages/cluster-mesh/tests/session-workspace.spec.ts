@@ -423,30 +423,79 @@ describe('session workspace binding', () => {
   it('should reject concurrent end when CAS loses the race, and allow replay once ended', async () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
-    const initial = await service.attach(attachInput());
+    await service.attach(attachInput());
 
-    const ended1 = await service.end({
-      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
-      expectedVersion: initial.version,
-    });
-    expect(ended1.status).toBe('ended');
-    expect(ended1.version).toBe(2);
+    const originalFindBySession = store.findBySession.bind(store);
+    let raceTriggered = false;
+    store.findBySession = async (sessionId: string) => {
+      const row = await originalFindBySession(sessionId);
+      if (!raceTriggered && row?.status === 'attached') {
+        raceTriggered = true;
+        // Concurrent end wins the race between read and CAS:
+        await service.end({
+          sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+          expectedVersion: row.version,
+        });
+      }
+      return row;
+    };
 
-    // Concurrent end with stale expectedVersion fails closed:
+    // Outer end read row at v1 (passes pre-control), but loses CAS to inner end:
     await expect(service.end({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
-      expectedVersion: initial.version,
+      expectedVersion: 1,
     })).rejects.toMatchObject({
       code: 'session_not_attached',
       message: 'concurrent modification; retry the end',
     });
 
-    // Replay / retry with new version returns the ended binding idempotently:
+    // Replay / retry with current version returns the ended binding idempotently:
+    const current = await originalFindBySession('session-1');
+    expect(current?.status).toBe('ended');
+    expect(current?.version).toBe(2);
     const replayed = await service.end({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
-      expectedVersion: ended1.version,
+      expectedVersion: current!.version,
     });
     expect(replayed.status).toBe('ended');
     expect(replayed.version).toBe(2);
+  });
+
+  it('should prevent ABA end race from terminating a re-attached workspace with changed rights', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput({ workspaceId: 'workspace-1', principalId: 'user-1' }));
+
+    const originalFindBySession = store.findBySession.bind(store);
+    let raceTriggered = false;
+    store.findBySession = async (sessionId: string) => {
+      const row = await originalFindBySession(sessionId);
+      if (!raceTriggered && row?.status === 'attached' && row.workspaceId === 'workspace-1') {
+        raceTriggered = true;
+        await service.detach({
+          sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+          expectedVersion: 1,
+        });
+        await service.attach(attachInput({
+          workspaceId: 'workspace-2', principalId: 'user-2',
+        }));
+      }
+      return row;
+    };
+
+    // Outer end reads row at version 1 (user-1), but between read and CAS
+    // the row was detached and re-attached to workspace-2 by user-2 (v3).
+    // On CAS conflict, end re-authorizes against winning row and rejects with
+    // workspace_rights_refused instead of session_not_attached.
+    await expect(service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
+    })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+
+    const current = await originalFindBySession('session-1');
+    expect(current?.workspaceId).toBe('workspace-2');
+    expect(current?.principalId).toBe('user-2');
+    expect(current?.status).toBe('attached');
+    expect(current?.version).toBe(3);
   });
 });
