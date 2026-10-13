@@ -30,6 +30,7 @@
   - [ ] `packages/cluster-mesh/tests/storage/reference-staged.ts`
   - [ ] `packages/cluster-mesh/tests/storage/profile-mutations.spec.ts`
   - [ ] `.h2a/build/k2b_report.md`
+  - [ ] `.h2a/build/k2b_fix_report.md`
   - [ ] `packages/cluster-mesh/tests/storage/reference-store.ts` (BR-K2B-EX1 deferred K2a-2 only)
   - [ ] `packages/cluster-mesh/tests/storage/read-corpus.ts` (BR-K2B-EX1 deferred K2a-2 only)
   - [ ] `packages/cluster-mesh/tests/storage/atomic-corpus.ts` (BR-K2B-EX1 deferred K2a-2 only)
