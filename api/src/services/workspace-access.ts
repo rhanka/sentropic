@@ -6,8 +6,12 @@ export type WorkspaceType = 'neutral' | 'ai-priorities' | 'opportunity' | 'code'
 
 export type WorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
-export async function getWorkspaceRole(userId: string, workspaceId: string): Promise<WorkspaceRole | null> {
-  const [membership] = await db
+export type WorkspaceRoleClient = Pick<typeof db, 'select'>;
+
+export async function getWorkspaceRole(
+  userId: string, workspaceId: string, client: WorkspaceRoleClient = db,
+): Promise<WorkspaceRole | null> {
+  const [membership] = await client
     .select({ role: workspaceMemberships.role })
     .from(workspaceMemberships)
     .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, userId)))
@@ -20,9 +24,10 @@ export async function getWorkspaceRole(userId: string, workspaceId: string): Pro
 export async function hasWorkspaceRole(
   userId: string,
   workspaceId: string,
-  role: WorkspaceRole
+  role: WorkspaceRole,
+  client: WorkspaceRoleClient = db,
 ): Promise<boolean> {
-  const current = await getWorkspaceRole(userId, workspaceId);
+  const current = await getWorkspaceRole(userId, workspaceId, client);
   if (!current) return false;
 
   const rank: Record<WorkspaceRole, number> = { viewer: 1, commenter: 2, editor: 3, admin: 4 };
