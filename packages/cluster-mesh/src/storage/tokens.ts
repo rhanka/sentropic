@@ -1,11 +1,18 @@
 // K3 chain-boundary tokens and opaque identities (L3a v4.1 frozen §8.2).
-// G3: readChainPage uses the retained exact-head boundary provider below.
-// A server-side retained recipe replaces an oversized self-contained
-// boundary: cursors stay byte-identical to the K2a shape
-// ({position, head}) while module, scope, incarnation and selection stay
-// bound in the registry. Unknown, tampered or cross-chain cursors were
-// never issued for that selection and verify as null.
+// G3: readChainPage uses the HMAC exact-head boundary provider below.
+// Cursors are self-contained opaque strings: [version, position, head, mac]
+// base64url-encoded. Module, scope, incarnation, selection, ordering and the
+// exact head travel inside the MAC, never in the token, so verification binds
+// every field server-side and any alteration fails closed. Minting and
+// verification are pure: a thousand-page traversal leaves no pins, no
+// registry entries, no leases. Restart stability comes from the secret: two
+// kernels sharing moduleId, incarnation and cursorSecret verify each other's
+// cursors; without a configured secret each kernel mints with a fresh random
+// key. Tokens stay compact by construction (fixed-size MAC plus the
+// caller-sized head), so the §8.2 oversized server-side recipe is not needed.
 
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { StorageInvalidCommandError } from './errors.js';
 import type { StorageScope } from './contracts.js';
 
 export interface ChainCursor {
@@ -23,7 +30,7 @@ export interface ChainBoundaryRecord {
 }
 
 export interface ChainBoundaryProvider {
-  mint(record: ChainBoundaryRecord): ChainCursor;
+  mint(record: ChainBoundaryRecord): string;
   verify(
     selection: string,
     cursor: unknown,
@@ -31,11 +38,25 @@ export interface ChainBoundaryProvider {
   ): ChainCursor | null;
 }
 
-/** G3 designated provider for readChainPage: exact head, immutable. */
-export class RetainedExactHeadBoundaryProvider implements ChainBoundaryProvider {
-  private readonly issued = new Set<string>();
+const CURSOR_VERSION = 1;
+const CURSOR_ORDERING = 'seq-asc';
 
-  private static key(
+/** G3 designated provider for readChainPage: exact head, immutable. */
+export class HmacExactHeadBoundaryProvider implements ChainBoundaryProvider {
+  private readonly key: Buffer;
+
+  constructor(secret?: string) {
+    if (secret === undefined) {
+      this.key = randomBytes(32);
+      return;
+    }
+    if (typeof secret !== 'string' || secret.length === 0) {
+      throw new StorageInvalidCommandError('cursor secret must be a non-empty string');
+    }
+    this.key = createHash('sha256').update(secret, 'utf8').digest();
+  }
+
+  private mac(
     moduleId: string,
     scope: StorageScope,
     incarnation: string,
@@ -43,21 +64,38 @@ export class RetainedExactHeadBoundaryProvider implements ChainBoundaryProvider 
     position: number,
     head: string,
   ): string {
-    return JSON.stringify([moduleId, scope.tenantId, scope.workspaceId, incarnation, selection, position, head]);
+    return createHmac('sha256', this.key)
+      .update(
+        JSON.stringify([
+          'k3-cursor-v1',
+          moduleId,
+          scope.tenantId,
+          scope.workspaceId,
+          incarnation,
+          selection,
+          head,
+          CURSOR_ORDERING,
+          position,
+        ]),
+        'utf8',
+      )
+      .digest()
+      .subarray(0, 16)
+      .toString('base64url');
   }
 
-  mint(record: ChainBoundaryRecord): ChainCursor {
-    this.issued.add(
-      RetainedExactHeadBoundaryProvider.key(
-        record.moduleId,
-        record.scope,
-        record.incarnation,
-        record.selection,
-        record.position,
-        record.head,
-      ),
+  mint(record: ChainBoundaryRecord): string {
+    const tag = this.mac(
+      record.moduleId,
+      record.scope,
+      record.incarnation,
+      record.selection,
+      record.position,
+      record.head,
     );
-    return { position: record.position, head: record.head };
+    return Buffer.from(JSON.stringify([CURSOR_VERSION, record.position, record.head, tag]), 'utf8').toString(
+      'base64url',
+    );
   }
 
   verify(
@@ -65,15 +103,24 @@ export class RetainedExactHeadBoundaryProvider implements ChainBoundaryProvider 
     cursor: unknown,
     opts: { readonly moduleId: string; readonly scope: StorageScope; readonly incarnation: string },
   ): ChainCursor | null {
-    if (typeof cursor !== 'object' || cursor === null) return null;
-    const candidate = cursor as { readonly position?: unknown; readonly head?: unknown };
-    if (!Number.isSafeInteger(candidate.position) || (candidate.position as number) < 0) return null;
-    if (typeof candidate.head !== 'string' || candidate.head.length === 0) return null;
-    const position = candidate.position as number;
-    const head = candidate.head;
-    const key = RetainedExactHeadBoundaryProvider.key(opts.moduleId, opts.scope, opts.incarnation, selection, position, head);
-    if (!this.issued.has(key)) return null;
-    return { position, head };
+    if (typeof cursor !== 'string' || cursor.length === 0) return null;
+    let parts: unknown;
+    try {
+      parts = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    } catch {
+      return null;
+    }
+    if (!Array.isArray(parts) || parts.length !== 4) return null;
+    const [version, position, head, tag] = parts as readonly unknown[];
+    if (version !== CURSOR_VERSION) return null;
+    if (!Number.isSafeInteger(position) || (position as number) < 0) return null;
+    if (typeof head !== 'string' || head.length === 0) return null;
+    if (typeof tag !== 'string' || tag.length === 0) return null;
+    const expected = this.mac(opts.moduleId, opts.scope, opts.incarnation, selection, position as number, head);
+    const actual = Buffer.from(tag, 'utf8');
+    const wanted = Buffer.from(expected, 'utf8');
+    if (actual.length !== wanted.length || !timingSafeEqual(actual, wanted)) return null;
+    return { position: position as number, head };
   }
 }
 
