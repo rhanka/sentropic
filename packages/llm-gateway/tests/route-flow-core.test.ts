@@ -1,8 +1,40 @@
 import type { RoutePlanInput, RoutePlanner, VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
-import { classifyRouteError, prepareRouteFlow, terminalGatewayError } from '../src/route-flow-core.js';
-import { toProviderShapedError } from '../src/index.js';
+import { classifyRouteError, prepareRouteFlow, retainRouteBody, terminalGatewayError } from '../src/route-flow-core.js';
+import { CheckedGatewayBody, GatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
 import { stubGatewayConfig } from '../src/stubs.js';
+
+describe('route body retention (N07)', () => {
+  const leased = () => {
+    const pool = new GatewayBodyBytePool(64);
+    const lease = pool.acquire(); lease.extend(9);
+    return { pool, owner: new CheckedGatewayBody({ model: 'm' }, 9, lease) };
+  };
+  const preparedFor = () => ({
+    cost: { tenantId: 't', principalId: 'u', source: 'test', correlationId: 'c' },
+    subject: { principalRef: 'u', ownerScopeRef: 't:u', grants: [] },
+    canonical: { request: { modelId: 'claude-sonnet-5', messages: [{ role: 'user', content: 'hi' }] }, requiredCapabilities: [{ capability: 'reasoning', required: true }] },
+    plan: { planRef: 'p', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: [], policy: {}, councilRevision: 'r', diagnostics: [] },
+  });
+
+  it('scrubs the retry projection when the owner detaches, keeping it dispatchable', () => {
+    const { owner } = leased();
+    const prepared = preparedFor() as unknown as Parameters<typeof retainRouteBody>[0];
+    const request = { bodyLease: owner };
+    retainRouteBody(prepared, request as Parameters<typeof retainRouteBody>[1]);
+    expect(prepared.canonical.request.messages).toHaveLength(1);
+    owner.detach();
+    expect(prepared.canonical.request.messages).toEqual([]);
+    expect(prepared.canonical.requiredCapabilities).toEqual([]);
+    expect(prepared.canonical.requiredExecutionFeatures).toBeUndefined();
+  });
+
+  it('ignores requests without a checked owner', () => {
+    const prepared = preparedFor() as unknown as Parameters<typeof retainRouteBody>[0];
+    retainRouteBody(prepared, {} as Parameters<typeof retainRouteBody>[1]);
+    expect(prepared.canonical.request.messages).toHaveLength(1);
+  });
+});
 
 describe('route flow core', () => {
   it('derives routing ownership only from verified caller state', async () => {
