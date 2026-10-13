@@ -282,6 +282,7 @@
   - [x] **Lot N11b — native billing classifier + bounded 400 policy (`d64bf9492`)**: `src/native-errors.ts` (billing patterns, identifier neutralization, 64 KiB body ceiling, 4096-byte public bound) + index export.
   - [x] **Lot N11c — billing families + native error bounds test (`5c6d706da`)**: `tests/native-errors.test.ts` (15-family phrases, C0/C1 indicators, late-billing detection, 4096-byte bound, 64 KiB ceiling) 25/25 GREEN.
   - [x] **Lot N11d — negative identifier + mixed billing tests (`e9111c3a0`)**: fallback-credit/underscore identifiers relay unmasked, mixed with real billing masked 36/36 GREEN (documents held behavior, no src change).
+  - [x] **Lot N11e — linear scan work + underscore boundary tests (`48457bfed`)**: K7 one-check-per-run on 64 KiB adversarial, underscore word-char boundaries 38/38 GREEN (held behavior, no src change).
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).
