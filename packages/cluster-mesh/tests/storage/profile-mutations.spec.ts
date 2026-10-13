@@ -8,6 +8,7 @@ import { grantFor } from './authority-corpus.js';
 import { runStagedCorpus } from './staged-corpus.js';
 import { runReplayCorpus } from './replay-corpus.js';
 import { runBarrierCorpus } from './barrier-corpus.js';
+import { runLifecycleCorpus } from './lifecycle-corpus.js';
 import { TestStagedReferenceStore, type TestStagedStore } from './reference-staged.js';
 
 let tokenSeq = 0;
@@ -61,5 +62,15 @@ describe('K2b reference: barrier corpus', () => {
   it('K2b-RED coverage, G1 denial, absence and escape refusal hold', async () => {
     const { bound } = bindStaged();
     await runBarrierCorpus(bound);
+  });
+});
+
+describe('K2b reference: lifecycle corpus', () => {
+  it('K2b-RED separation, holds, sharing and completion hold', async () => {
+    const store = new TestStagedReferenceStore('comments');
+    const primary = store.bindStaged(stagedGrant());
+    await runLifecycleCorpus(primary, {
+      rebind: async () => store.bindStaged(stagedGrant()),
+    });
   });
 });
