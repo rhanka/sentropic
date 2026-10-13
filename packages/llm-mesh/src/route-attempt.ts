@@ -1,6 +1,7 @@
 import type { RankedRouteCandidate } from './route-selection.js';
 import type { StoredPlan } from './route-planner-state.js';
 import { RoutePlanError, subjectRef } from './route-planner-state.js';
+import { isPreparedNativeMessages } from './native-messages.js';
 import type {
   AccountDirectoryPort,
   Clock,
@@ -18,6 +19,7 @@ export const prepareStoredRouteAttempt = async (input: {
   readonly attemptIndex: number;
   readonly directory: AccountDirectoryPort;
   readonly clock: Clock;
+  readonly isNativeTarget?: (target: { readonly providerId: string; readonly modelId: string }) => boolean;
   readonly onOutcome: (
     stored: StoredPlan,
     candidate: RankedRouteCandidate,
@@ -60,10 +62,18 @@ export const prepareStoredRouteAttempt = async (input: {
     requestId: input.requestId,
     attemptIndex: input.attemptIndex,
   });
+  const nativeMessages = (
+    current.nativeMessages?.contractVersion === 1
+    && current.nativeMessages.protocol === 'anthropic-messages'
+    && input.isNativeTarget?.(candidate.target) === true
+    && isPreparedNativeMessages(attempt.nativeMessages)
+    && attempt.nativeMessages.modelId === candidate.target.modelId
+  ) ? attempt.nativeMessages : undefined;
   let committed = false;
   let terminal = false;
   return {
     attemptRef: attempt.attemptRef,
+    ...(nativeMessages ? { nativeMessages } : {}),
     generate: (request) => attempt.generate(request),
     stream: (request) => attempt.stream(request),
     recordOutcome: async (classification, usage) => {
