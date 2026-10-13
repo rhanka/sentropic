@@ -159,7 +159,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN domain: expectedVersion binding, shared CAS predicate, tenant-neutral oracle, scoped get
   - [x] RED API: stale workspace-admin guard, production CAS store, scoped get
   - [x] GREEN API (a): version-bound detach/end, tx-scoped roles, store export
-  - [ ] GREEN API (b): scoped get with owner/admin rights
+  - [x] GREEN API (b): scoped get with owner/admin rights
   - [ ] Shared workspace provisioning with notifications and role levels (BR01-EX5)
   - [ ] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check

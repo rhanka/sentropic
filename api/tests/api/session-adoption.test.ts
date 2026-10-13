@@ -8,8 +8,10 @@ import {
   agentDefinitions, tenantMemberships, tenants, viewTemplates, workflowDefinitions,
   workflowDefinitionTasks, workspaceMemberships, workspaces, workspaceTypeWorkflows,
 } from '../../src/db/schema';
-import { SessionWorkspaceService } from '../../src/services/cluster-mesh/session-workspace';
-import type { SessionWorkspaceBindingStore } from '@sentropic/cluster-mesh';
+import {
+  createDrizzleBindingStore,
+  SessionWorkspaceService,
+} from '../../src/services/cluster-mesh/session-workspace';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 
 const TENANT_A = 'sess-adopt-tenant-a';
@@ -472,13 +474,7 @@ describe('session adoption workspace binding', () => {
   });
 
   it('should reject a stale compareAndSet through the production Drizzle store', async () => {
-    const module = await import('../../src/services/cluster-mesh/session-workspace.js') as unknown as {
-      createDrizzleBindingStore?: (client: typeof db) => SessionWorkspaceBindingStore;
-    };
-    if (typeof module.createDrizzleBindingStore !== 'function') {
-      throw new Error('createDrizzleBindingStore is not exported (RED)');
-    }
-    const store = module.createDrizzleBindingStore(db);
+    const store = createDrizzleBindingStore(db);
     const service = new SessionWorkspaceService();
     await service.adopt({
       sessionId: 'sess-adopt-5', tenantId: TENANT_A, principalId: user.id, workspaceId,

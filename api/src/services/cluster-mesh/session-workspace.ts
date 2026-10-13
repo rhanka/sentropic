@@ -314,7 +314,10 @@ export class SessionWorkspaceService {
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
     await this.checkTenantMember(tenantId, principalId);
-    const binding = await this.mesh.get({ sessionId, tenantId, principalId });
+    const existing = await drizzleBindingStore.findBySession(sessionId);
+    if (!existing || existing.tenantId !== tenantId) return null;
+    const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
+    const binding = await this.mesh.get({ sessionId, tenantId, principalId, isAdmin });
     return binding ? toRecord(binding) : null;
   }
 }
