@@ -136,19 +136,24 @@ const runtimeImportViolations = (file: string, source: string): string[] => {
 
 const DOC_RESIDUE_RULES = [
   ['m1-authoring', /being authored now|freeze authoring now|At P1 exit, comments maintainers produce|Before M2 relies[^\n]*establish this baseline|Lot 1 additionally freezes|Lot 1 must align/],
-  ['m1-inventory', /initial Lot 1 manifest|initial manifest directly (?:records|declares)|frozen manifest declares[^\n]*cluster-mesh implementation\/export mapping|src\/conformance\/index\.ts|includes the proposed\s+\x60?@sentropic\/comments\/conformance/],
+  ['m1-inventory', /Lot 1 manifest|initial manifest directly (?:records|declares)|frozen manifest declares[^\n]*cluster-mesh implementation\/export mapping|src\/conformance\/index\.ts|includes the proposed\s+\x60?@sentropic\/comments\/conformance/],
   ['m1-representation', /Replace \x60?specDigest\x60? with|\x60?specDigest\x60? replaced by|Add [^\n]*to \x60?CapacityDescriptor|Lot 1 (?:adds fragment|freezes the transport)/],
-  ['postgres-placement', /live-storage\/(?:port\.ts|\{postgres|postgres)|live-postgres-\{(?:contract|parity,recovery)|L3b-S and the proposed L3b-P/],
-  ['sqlite-gate', /fixtures\/comments\/\{sqlite,pg\}|(?:shared|neutral|real|same) SQLite\/Postgres|round-trip on SQLite\/Postgres|both shared backends|L3b-S qualification|qualified L3b-S|L3b-S\/L3b-P: SQLite\/Postgres/],
-  ['live-gate', /live-sqlite-runtime\.spec\.ts|live-store-\{contract,qualification|generation fencing(?:\/pinned reads| and common migration)|generations\/migrations|generation\/CAS change/],
+  ['postgres-placement', /live-storage\/|live-postgres-\{(?:contract|parity,recovery)|L3b-S and the proposed L3b-P/],
+  ['sqlite-gate', /fixtures\/comments\/\{sqlite,pg\}|SQLite(?:\/|\s+and\s+)Postgres\s+parity|(?:shared|neutral|real|same) SQLite\/Postgres|round-trip on SQLite\/Postgres|both shared backends|L3b-S qualification|qualified L3b-S|L3b-S\/L3b-P: SQLite\/Postgres/],
+  ['live-gate', /live-sqlite-runtime\.spec\.ts|live-store-\{contract,qualification|live generation[^\n]*publication|(?:requires|entry requires|gate:?)\s+live generation|generation fencing(?:\/pinned reads| and common migration)|generations\/migrations|generation\/CAS change/],
   ['invented-handoff', /freeze receipt and host acknowledgement exist|acknowledged freeze receipt \(2dabe25ce/],
   ['confirmation-citation', /§17\.4 \(confirmation items G1–G5\)/],
   ['mandatory-app-journal', /Sentropic binds to existing \x60control\.event_outbox|Bind the transactional change-log port to the existing outbox/],
   ['unconditional-purge', /Record purge intent in the tombstone transaction/],
 ] as const;
 
-const documentationViolations = (content: string): string[] =>
-  DOC_RESIDUE_RULES.filter(([, pattern]) => pattern.test(content)).map(([id]) => id);
+const stripHistoricalExcerpts = (content: string): string =>
+  content.replace(/<!--\s*historical-excerpt-start\s*-->[\s\S]*?<!--\s*historical-excerpt-end\s*-->/g, '');
+
+const documentationViolations = (content: string): string[] => {
+  const clean = stripHistoricalExcerpts(content);
+  return DOC_RESIDUE_RULES.filter(([, pattern]) => pattern.test(clean)).map(([id]) => id);
+};
 
 const listAlignmentDocuments = (): string[] => [
   ...listFiles(resolve(REPO_ROOT, 'docs/comments-annotations'), ['.md', '.json'])
@@ -511,6 +516,36 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     expect(documentationViolations(original)).toContain(rule);
   });
 
+  it.each([
+    ["sqlite-gate", "| M2 | prove SQLite/Postgres parity before entry |"],
+    ["postgres-placement", "M2 entry requires packages/cluster-mesh/src/live-storage/index.ts"],
+    ["sqlite-gate", "M2 gate: SQLite and Postgres parity"],
+    ["live-gate", "M2 requires live generation publication"],
+    ["m1-inventory", "Lot 1 manifest declares the packaged oracle"],
+  ])('should detect %s in the reformulated probe: %s', (rule, probe) => {
+    expect(documentationViolations(probe)).toContain(rule);
+  });
+
+  it('should exclude explicitly marked historical review excerpts while detecting outside residues', () => {
+    const historicalBlock = [
+      '# Active section',
+      'Valid active text.',
+      '<!-- historical-excerpt-start -->',
+      '| M2 | prove SQLite/Postgres parity before entry |',
+      '<!-- historical-excerpt-end -->',
+    ].join('\n');
+    expect(documentationViolations(historicalBlock)).toEqual([]);
+
+    const contaminatedBlock = [
+      '# Active section',
+      'M2 gate: SQLite and Postgres parity',
+      '<!-- historical-excerpt-start -->',
+      'Historical quote',
+      '<!-- historical-excerpt-end -->',
+    ].join('\n');
+    expect(documentationViolations(contaminatedBlock)).toContain('sqlite-gate');
+  });
+
   it('should accept independent qualification and separate extension declarations', () => {
     expect(documentationViolations([
       'M2 requires the reviewed common contract and selected qualified Postgres profiles.',
@@ -523,12 +558,27 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     ].join('\n'))).toEqual([]);
   });
 
+  it('should accept reformulated safe text conforming to §18.2', () => {
+    expect(documentationViolations([
+      'M2 consumes selected qualified Postgres profiles; SQLite is qualified separately in C3.',
+      'Reusable storage resides under packages/cluster-mesh/src/storage/postgres/.',
+      'M2 entry requires pinned reviewed contracts; live generations are not a comments dependency.',
+      'C0 manifest declares extension points; oracle packaging remains unverified until M4-I.',
+      'Comments maintains domain semantics and default package journal.',
+    ].join('\n'))).toEqual([]);
+  });
+
   it('should keep every non-frozen comments document aligned with the frozen specification', () => {
     const docs = listAlignmentDocuments();
     expect(docs).toContain(resolve(REPO_ROOT, 'docs/comments-annotations/evidence/owner-decisions.md'));
     expect(docs).toContain(resolve(REPO_ROOT, 'docs/comments-annotations/contract/storage-module-v1.json'));
     expect(docs).not.toContain(resolve(REPO_ROOT, CONTRACT_PATH));
     expect(docs).not.toContain(resolve(REPO_ROOT, FREEZE_RECEIPT_PATH));
+    for (const file of docs) {
+      if (!file.includes('/evidence/')) {
+        expect(readFileSync(file, 'utf8'), file).not.toContain('historical-excerpt-start');
+      }
+    }
     const violations = docs.flatMap((file) =>
       documentationViolations(readFileSync(file, 'utf8')).map((rule) => file + ': ' + rule));
     expect(violations).toEqual([]);
