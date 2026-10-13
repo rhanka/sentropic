@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream';
 import { env } from '../../config/env';
+import { executeClaudeNative, type ClaudeNativeRequest } from '../llm-runtime/anthropic-native-http';
 import type {
   CredentialValidationResult,
   ModelCatalogEntry,
@@ -51,6 +52,10 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
 
   listModels(): ModelCatalogEntry[] {
     return listRuntimeModelsByProvider('anthropic');
+  }
+
+  nativeMessages(request: ClaudeNativeRequest) {
+    return executeClaudeNative({ ...request, credential: request.credential || env.ANTHROPIC_API_KEY });
   }
 
   validateCredential(credential?: string): CredentialValidationResult {

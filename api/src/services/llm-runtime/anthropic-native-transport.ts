@@ -29,11 +29,12 @@ export const createNativeUpload = (body: Readonly<Record<string, unknown>> | und
     start(value) { controller = value; },
     pull(value) {
       if (!sent) { sent = true; value.enqueue(bytes!); }
-      else { value.close(); detach(); }
+      else { value.close(); }
     },
     cancel() { detach(); },
   }, { highWaterMark: 0 });
   return { stream, requestBytes,
+    complete: detach,
     finish() {
       if (settled) return;
       // An early response is not upload completion. Erroring the producer cancels
