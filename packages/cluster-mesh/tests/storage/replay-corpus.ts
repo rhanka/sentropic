@@ -124,6 +124,18 @@ export const runReplayCorpus = async (
     'hash-j-9',
     'K2b-RED replay: other scopes continue while one consumer is stalled',
   );
+  const siblingRead = await bound.journalRead('c2', 0, 10);
+  assert.deepEqual(
+    siblingRead.events.map((event) => event.seq),
+    [1, 2, 3],
+    'K2b-RED replay: a sibling consumer still receives delivery while one consumer is stalled',
+  );
+  await bound.journalCheckpoint('c2', 0, 2);
+  assert.equal(
+    (await bound.journalInspect('c2')).cursor,
+    2,
+    'K2b-RED replay: a sibling consumer still checkpoints while one consumer is stalled',
+  );
   assert.equal(stalled.failedEvent, poisoned);
   await expectCode(
     async () => bound.journalCheckpoint('c1', 2, 3),
