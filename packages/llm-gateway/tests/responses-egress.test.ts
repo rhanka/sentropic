@@ -73,7 +73,10 @@ describe('responses egress builders (spec §16.5)', () => {
   });
 
   it('freezes the §16.7 engineering-default bounds', () => {
-    expect(DEFAULT_RESPONSES_LIMITS).toEqual({ maxOutputItems: 1024, maxAccumulatedBytes: 8_388_608 });
+    expect(DEFAULT_RESPONSES_LIMITS).toEqual({
+      maxBodyBytes: 16_777_216, maxInputItems: 4096, maxTools: 256,
+      maxOutputItems: 1024, maxSseEventBytes: 1_048_576, maxAccumulatedBytes: 8_388_608,
+    });
   });
 });
 
@@ -127,7 +130,7 @@ describe('responses accumulator (spec §16.5)', () => {
     const acc = createResponsesAccumulator();
     expect(() => acc.observe({ type: 'tool_call_delta', data: { toolCallId: 'ghost', delta: 'x' } }))
       .toThrowError(ResponsesBoundError);
-    const tiny = createResponsesAccumulator({ maxOutputItems: 1024, maxAccumulatedBytes: 8 });
+    const tiny = createResponsesAccumulator({ ...DEFAULT_RESPONSES_LIMITS, maxAccumulatedBytes: 8 });
     expect(() => tiny.observe({ type: 'content_delta', data: { delta: 'way too long' } }))
       .toThrowError(expect.objectContaining({ code: 'responses_overflow' }));
   });
