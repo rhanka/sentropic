@@ -22,7 +22,14 @@
 import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
 import { requestTooLargeDetail, type RequestSizeDetail } from '@sentropic/llm-mesh';
+import * as mesh from '@sentropic/llm-mesh';
+import type { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { NativeSseUpstreamError } from '../native-stream-errors.js';
+import {
+  detectNativeBillingError,
+  NATIVE_BILLING_MASKED_MESSAGE,
+  sanitizeNativeErrorMessage,
+} from '../native-errors.js';
 import { requestTooLargeMessage } from '../request-too-large.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 
@@ -173,19 +180,21 @@ const noRouteMessage = (requestedModel?: string, detail?: string): string => {
   return detail ? `${base} — ${detail}` : base;
 };
 
-const isNativeMessagesUpstreamError = (
-  error: unknown,
-): error is {
-  status: number;
-  type?: string;
-  validation?: NativeValidationPublicDetail;
-} =>
-  Boolean(
-    error
-    && typeof error === 'object'
-    && (error as { name?: unknown }).name === 'NativeMessagesUpstreamError'
-    && typeof (error as { status?: unknown }).status === 'number',
-  );
+const isNativeMessagesUpstreamError = (error: unknown): error is NativeMessagesUpstreamError => {
+  const ctor = (mesh as { NativeMessagesUpstreamError?: abstract new (...args: any[]) => any }).NativeMessagesUpstreamError;
+  return typeof ctor === 'function' && error instanceof ctor;
+};
+
+const extractNativeValidationDetail = (error: NativeMessagesUpstreamError): NativeValidationPublicDetail | undefined => {
+  const detail = error.validation;
+  if (!detail || typeof detail !== 'object' || typeof detail.message !== 'string') return undefined;
+  const rawMessage = detail.message;
+  if (rawMessage === NATIVE_BILLING_MASKED_MESSAGE || detectNativeBillingError(rawMessage)) {
+    return { type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE };
+  }
+  if (error.type !== 'invalid_request_error' || detail.type !== 'invalid_request_error') return undefined;
+  return { type: 'invalid_request_error', message: sanitizeNativeErrorMessage(rawMessage) };
+};
 
 /**
  * Map an internal failure class to a provider-shaped error for the wire. The
@@ -346,16 +355,14 @@ export const toProviderShapedError = (
       error.requestSize, error.validation);
   }
   if (isNativeMessagesUpstreamError(error)) {
-    if (
-      error.status === 400
-      && (error.type === undefined || error.type === 'invalid_request_error')
-      && error.validation
-      && typeof error.validation.type === 'string'
-      && typeof error.validation.message === 'string'
-    ) {
-      return wire === 'anthropic-messages'
-        ? anthropicError(400, error.validation.type, error.validation.message)
-        : openAiError(400, error.validation.type, error.validation.message, 'invalid_request');
+    if (error.status === 400) {
+      const detail = extractNativeValidationDetail(error);
+      if (detail) {
+        return wire === 'anthropic-messages'
+          ? anthropicError(400, detail.type, detail.message)
+          : openAiError(400, detail.type, detail.message, 'invalid_request');
+      }
+      return mapGatewayError(wire, 'bad-request');
     }
     if (error.status === 401 || error.status === 403 || error.type === 'authentication_error') {
       return mapGatewayError(wire, 'upstream-auth-failed');
