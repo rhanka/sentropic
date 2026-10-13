@@ -12,7 +12,9 @@ const TENANT_A = 'sess-adopt-tenant-a';
 const TENANT_B = 'sess-adopt-tenant-b';
 const sessionIds = [
   'sess-adopt-1', 'sess-adopt-2', 'sess-adopt-3', 'sess-adopt-4',
-  'sess-adopt-5', 'sess-adopt-6', 'sess-adopt-7',
+  'sess-adopt-5', 'sess-adopt-6', 'sess-adopt-7', 'sess-adopt-8',
+  'sess-adopt-9', 'sess-adopt-10', 'sess-adopt-11', 'sess-adopt-12',
+  'sess-adopt-13', 'sess-adopt-14', 'sess-adopt-15', 'sess-adopt-16',
 ];
 
 describe('session adoption workspace binding', () => {
@@ -89,12 +91,18 @@ describe('session adoption workspace binding', () => {
     expect(second.bindingId).toBe(first.bindingId);
   });
 
-  it('proves migration 0011 sorts after 0009 and 0010 in drizzle journal', () => {
+  it('keeps the control journal structurally ordered with 0011 last and no future when', () => {
     const journal = JSON.parse(readFileSync(join(process.cwd(), 'drizzle/control/meta/_journal.json'), 'utf8')) as {
-      entries: Array<{ when: number; tag: string }>;
+      entries: Array<{ idx: number; when: number; tag: string }>;
     };
-    const entry0011 = journal.entries.find((e) => e.tag === '0011_session_workspace_bindings');
-    expect(entry0011?.when).toBeGreaterThan(1791845400000);
+    const { entries } = journal;
+    expect(entries.length).toBeGreaterThan(0);
+    entries.forEach((entry, index) => {
+      expect(entry.idx).toBe(index);
+      if (index > 0) expect(entry.when).toBeGreaterThan(entries[index - 1]!.when);
+      expect(entry.when).toBeLessThanOrEqual(Date.now());
+    });
+    expect(entries[entries.length - 1]!.tag).toBe('0011_session_workspace_bindings');
   });
 
   it('should keep the project and history after detach and end', async () => {
@@ -157,6 +165,55 @@ describe('session adoption workspace binding', () => {
     })).rejects.toMatchObject({ code: 'invalid_request' });
     await db.delete(sessionWorkspaceBindings).where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-2'));
     await db.delete(workspaces).where(eq(workspaces.id, binding.workspaceId));
+  });
+
+  it('should refuse detach and end when principal is omitted', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-8', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    await expect(service.detach('sess-adopt-8', TENANT_A)).rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(service.end('sess-adopt-8', TENANT_A)).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('should refuse get when principal is omitted', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-9', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const getMissingPrincipal = service.get as unknown as (
+      sessionId: string, tenantId: string, principalId?: string,
+    ) => Promise<unknown>;
+    await expect(getMissingPrincipal('sess-adopt-9', TENANT_A)).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('should check tenant membership before revealing binding existence', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-10', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const outsider = await createAuthenticatedUser('editor');
+    await expect(service.detach('sess-adopt-unknown', TENANT_A, outsider.id))
+      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    const getAsOutsider = service.get as unknown as (
+      sessionId: string, tenantId: string, principalId: string,
+    ) => Promise<unknown>;
+    await expect(getAsOutsider('sess-adopt-10', TENANT_A, outsider.id))
+      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
+  });
+
+  it('should hide cross-tenant bindings as binding_not_found on adopt', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-11', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_B, userId: user.id, status: 'approved', role: 'member',
+    });
+    await expect(service.adopt({
+      sessionId: 'sess-adopt-11', tenantId: TENANT_B, principalId: user.id,
+      create: { name: 'Probe code project', type: 'code' },
+    })).rejects.toMatchObject({ code: 'binding_not_found' });
   });
 
   it('should recover the binding after restart', async () => {
