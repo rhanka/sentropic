@@ -103,14 +103,13 @@ export class NativeCumulativeUsageAccumulator {
       if (!isSafeNonNegativeInteger(o) || o < this.o) {
         this.est = true;
         outputValid = false;
-      }
+      } else this.o = o;
     }
     if (u == null && r == null && w == null && split == null) {
       if (!outputValid) {
         this.reason = this.reason || 'invalid_output';
         return false;
       }
-      if (o != null) this.o = o;
       return true;
     }
 

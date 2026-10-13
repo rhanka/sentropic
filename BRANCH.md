@@ -297,7 +297,7 @@
   - [x] **Lot N15a — attempt-lifetime revocation + decoupled input validation (`75bdf1af3`, early per R chronology)**: revocation no longer clears accepted counts; input/output validated independently 2/2 GREEN.
   - [x] **Lot N15b — safe arithmetic + physical anchoring + TTL separation (`7c980d900`, early)**: safe-int/overflow guards, physical anchor/lower-bound, reported-vs-inferred split; existing tests stay 2/2 GREEN.
   - [x] **Lot N14b-pre — safe-arithmetic/anchor/TTL tests (`0f17340a6`, unlisted in design table, found via history)**: +73 usage-test lines on the N15b src.
-  - [ ] Lot N14c (`55a09eed8` output independence) next.
+  - [x] **Lot N14c — retain cumulative output independently of input (`55a09eed8`)**: RED 1/5 pre-fix (R1 repro, proven on this tree) → output accepted before input checks; 6/6 GREEN, src+test byte-identical.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
