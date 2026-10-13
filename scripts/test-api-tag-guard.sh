@@ -137,7 +137,7 @@ test_moving_tags() {
   local invalid_tags=("main" "latest" "staging" "v1" "fa56b" "fa56b67" "fa56bg" "FA56B6")
   for tag in "${invalid_tags[@]}"; do
     ! run_guard absent "registry.test.example/sentropic" "$tag" || { echo "FAIL: invalid tag '$tag' should fail in publish-api-image" >&2; return 1; }
-    grep -Eq "Cannot use publish-api-image for moving tag|Invalid API_VERSION" "$scratch/output" || { echo "FAIL: missing tag refusal error for '$tag'" >&2; return 1; }
+    grep -q "Invalid API_VERSION" "$scratch/output" || { echo "FAIL: missing tag refusal error for '$tag'" >&2; return 1; }
     ! grep -q "push .*sentropic-api:$tag" "$scratch/calls" || { echo "FAIL: invalid tag '$tag' pushed through publish-api-image" >&2; return 1; }
   done
   echo "PASS: moving tags and invalid tag formats are rejected by publish-api-image"
