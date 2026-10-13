@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import type { NativeMessagesRequest, NativeMessagesResult, NativeUsageSnapshot } from '@sentropic/llm-mesh';
 import { budgetConfig, fixtureQuote, jsonAttempt, quotingPlanner, recordingBudget } from './budget.js';
 import { NATIVE_MODELS } from './native-usage.js';
+import { createGatewayRouter } from '../../src/router/index.js';
 
 export const nativeFrame = (type: string, fields: Record<string, unknown> = {}) =>
   new TextEncoder().encode(`event: ${type}\r\ndata: ${JSON.stringify({ type, ...fields })}\r\n\r\n`);
@@ -49,3 +50,11 @@ export const nativeHarness = (options: {
 export const nativeAmount = (usage: import('../../src/flow.js').SettleUsage): number =>
   Number(((BigInt(usage.nativeInputPriceUnits40 ?? usage.inputTokens * 40) + 39n) / 40n)
     + 2n * BigInt(usage.outputTokens));
+
+export const nativeRouter = (h: ReturnType<typeof nativeHarness>) => createGatewayRouter({
+  config: h.deps.config, routePlanner: h.deps.routePlanner, routeMetering: h.deps.metering,
+  budget: h.deps.budget, nativeMessagesEnabled: true, requestId: () => 'req-native',
+});
+export const sendNative = (h: ReturnType<typeof nativeHarness>, stream = false): Promise<Response> =>
+  Promise.resolve(nativeRouter(h).request('/v1/messages', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...h.request.body, stream }) }));
