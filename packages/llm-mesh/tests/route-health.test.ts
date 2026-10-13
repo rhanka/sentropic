@@ -23,6 +23,15 @@ const candidate = (modelId = 'gpt-5.6-sol') => ({
 });
 
 describe('route health cache', () => {
+  it('records no suppression for a non-retryable local bound failure (R4-MIN-2)', () => {
+    const health = new InMemoryRouteHealth({ now: () => new Date('2026-10-13T00:00:00Z') });
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: false, healthScope: 'route',
+    }, DEFAULT_ROUTE_POLICY);
+    expect(health.isSuppressed(candidate())).toBe(false);
+    expect(health.suppressedDegradable(candidate())).toBe(false);
+  });
+
   it('suppresses a retryable route only until its TTL expires', () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const health = new InMemoryRouteHealth({ now: () => new Date(now) });

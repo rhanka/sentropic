@@ -97,12 +97,13 @@ const finiteOrUndefined = (value: unknown): number | undefined =>
  * Provider usage mapped to the Responses shape with native detail preserved
  * through `providerRawUsage` (cached input tokens, reasoning output
  * tokens). Total is provider-reported or computed from known components.
- * Fully unknown usage is null — never a fabricated exact zero.
+ * Fully unknown usage is null, and a partially known usage carries only its
+ * known components — never a fabricated exact zero (spec §16.5, R4-MIN-4).
  */
 export const responsesUsage = (usage?: TokenUsage): {
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
   input_tokens_details?: { cached_tokens: number };
   output_tokens_details?: { reasoning_tokens: number };
 } | null => {
@@ -117,9 +118,9 @@ export const responsesUsage = (usage?: TokenUsage): {
     ?? (input !== undefined && output !== undefined ? input + output : undefined);
   if (input === undefined && output === undefined && total === undefined) return null;
   return {
-    input_tokens: input ?? 0,
-    output_tokens: output ?? 0,
-    total_tokens: total ?? (input ?? 0) + (output ?? 0),
+    ...(input !== undefined ? { input_tokens: input } : {}),
+    ...(output !== undefined ? { output_tokens: output } : {}),
+    ...(total !== undefined ? { total_tokens: total } : {}),
     ...(cached !== undefined ? { input_tokens_details: { cached_tokens: cached } } : {}),
     ...(reasoning !== undefined ? { output_tokens_details: { reasoning_tokens: reasoning } } : {}),
   };

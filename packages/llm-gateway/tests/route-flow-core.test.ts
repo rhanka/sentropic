@@ -2,6 +2,7 @@ import { RequestTooLargeError, RoutePlanError } from '@sentropic/llm-mesh';
 import type { RoutePlanInput, RoutePlanner, VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import { classifyRouteError, prepareRouteFlow, retainRouteBody, terminalGatewayError } from '../src/route-flow-core.js';
+import { ResponsesBoundError } from '../src/responses-egress.js';
 import { CheckedGatewayBody, GatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 
@@ -274,6 +275,17 @@ describe('route flow core', () => {
     expect(classifyRouteError({ code: 'invalid_api_key' })).toEqual({
       reason: 'provider-5xx', retryable: false, healthScope: 'route',
     });
+  });
+
+  it('keeps local Responses bound failures neutral: non-retryable, never account-scoped (R4-MIN-2)', () => {
+    // Neutrality proof continues in mesh `route-health.test.ts`: a
+    // non-retryable outcome records no suppression entry, so the same lone
+    // route stays eligible for the next request.
+    for (const code of ['responses_overflow', 'responses_protocol'] as const) {
+      expect(classifyRouteError(new ResponsesBoundError(code, 'local bound'))).toEqual({
+        reason: 'provider-5xx', retryable: false, healthScope: 'route',
+      });
+    }
   });
 
   it('forwards Responses execution features from validated input into plan input', async () => {

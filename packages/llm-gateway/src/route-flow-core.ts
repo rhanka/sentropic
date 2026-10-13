@@ -8,6 +8,7 @@ import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonica
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
+import { ResponsesBoundError } from './responses-egress.js';
 import { isRoutePlanError, isRouteQuoteError } from './internal/mesh-routing-error.js';
 import { authenticateCaller } from './internal/caller-auth.js';
 import type { RouteAttemptDispatchPort } from './ports/dispatch.js';
@@ -266,6 +267,13 @@ export const classifyRouteError = (
   // failures never become provider-auth/rate evidence. Full pre-byte
   // mapping and propagation land in N09.
   if (requestTooLargeDetail(error)) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
+  // R4-MIN-2: local Responses bound failures are neutral by construction —
+  // non-retryable (the health layer records no suppression entry) and never
+  // account-scoped (no auth/cooldown outcome). Pinned deliberately instead of
+  // falling through to the generic default below.
+  if (error instanceof ResponsesBoundError) {
+    return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
+  }
   const record = asRecord(error);
   const status = typeof record?.statusCode === 'number' ? record.statusCode
     : typeof record?.status === 'number' ? record.status : undefined;

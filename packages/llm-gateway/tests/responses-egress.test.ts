@@ -51,6 +51,12 @@ describe('responses egress builders (spec §16.5)', () => {
     });
   });
 
+  it('never fabricates an exact zero for an unknown usage component (R4-MIN-4)', () => {
+    expect(responsesUsage({ inputTokens: 5 })).toEqual({ input_tokens: 5 });
+    expect(responsesUsage({ outputTokens: 9 })).toEqual({ output_tokens: 9 });
+    expect(responsesUsage({ totalTokens: 12 })).toEqual({ total_tokens: 12 });
+  });
+
   it('builds message items with annotated text parts and nothing else', () => {
     expect(messageItem('msg_0', 'hi')).toEqual({
       type: 'message', id: 'msg_0', role: 'assistant',

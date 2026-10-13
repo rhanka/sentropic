@@ -28,6 +28,23 @@ const servedTargetFor = (diagnostic: {
   model: diagnostic.actualModelId,
 });
 
+/**
+ * A terminal `done` is a served attempt only for provider-completed reasons
+ * (spec §16.6): `unknown`/`error`/`cancelled` must not fall through the
+ * generic successful handling — e.g. a Codex `response.incomplete` with a
+ * reason other than length/content-filter decodes to `unknown` while the
+ * encoder emits `response.failed` (R4-MIN-1).
+ */
+const doneClassification = (
+  reason: string | undefined,
+): RouteFailureClassification => {
+  if (reason === 'cancelled') return { reason: 'cancelled', retryable: false, healthScope: 'route' };
+  if (reason === 'stop' || reason === 'tool_calls' || reason === 'length' || reason === 'content_filter') {
+    return { reason: 'success', retryable: false, healthScope: 'route' };
+  }
+  return { reason: 'provider-5xx', retryable: false, healthScope: 'route' };
+};
+
 /** Claim the terminal outcome before awaiting any callback or iterator cleanup. */
 const trackedExecution = (input: {
   attempt: PreparedRouteAttempt; iterator: AsyncIterator<StreamEvent>; first: StreamEvent;
@@ -85,7 +102,7 @@ const trackedExecution = (input: {
         if (event.type === 'error') throw event.data;
         if (event.type === 'done') {
           if (event.data.usage) reported = routeUsage(event.data.usage);
-          if (!priming) await finish({ reason: 'success', retryable: false, healthScope: 'route' });
+          if (!priming) await finish(doneClassification(event.data.finishReason));
           firstObserved = true;
           yield event;
           return;
@@ -146,7 +163,7 @@ const trackedExecution = (input: {
   };
   const commit = async () => {
     priming = false;
-    if (input.first.type === 'done') await finish({ reason: 'success', retryable: false, healthScope: 'route' });
+    if (input.first.type === 'done') await finish(doneClassification(input.first.data.finishReason));
   };
   return { encoded, expose, commit, get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
 };

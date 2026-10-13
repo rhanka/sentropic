@@ -270,6 +270,18 @@ describe('route stream flow', () => {
     expect(hooks).toContain('completed');
     expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
+  it('settles done/unknown as failed, never as a served success (R4-MIN-1)', async () => {
+    const hooks: string[] = []; const settleRoute = vi.fn();
+    const source = attempt(async function* () {
+      yield { type: 'content_delta', data: { delta: 'partial' } };
+      yield { type: 'done', data: { finishReason: 'unknown',
+        usage: { inputTokens: 9, outputTokens: 1, totalTokens: 10 } } };
+    }, hooks);
+    const result = await runRouteStreamFlow({ config, routePlanner: plannerFor([source]), metering: { settleRoute } }, request);
+    await collect(result.stream);
+    expect(hooks).toEqual(['committed', 'outcome:provider-5xx']);
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed' }));
+  });
   it('retains only pre-commit string metadata headers', async () => {
     const source = attempt(async function* () {
       yield { type: 'status', data: { status: 'started', metadata: { responseHeaders: { 'X-Request-ID': 'early', count: 1 } } } };
