@@ -18,6 +18,26 @@ const nativeReadWeight = (servedModelId: unknown): number | undefined =>
   typeof servedModelId === 'string' && Object.hasOwn(readUnits40, servedModelId)
     ? readUnits40[servedModelId] : undefined;
 
+/** Inspect actual outbound controls once; retain this boolean, never the request. */
+export const nativeDefaultTtlEligible = (body: Readonly<Record<string, unknown>>): boolean => {
+  const pending: unknown[] = [body];
+  const visited = new Set<object>();
+  while (pending.length) {
+    const value = pending.pop();
+    if (value === null || typeof value !== 'object') continue;
+    if (visited.has(value)) return false;
+    visited.add(value);
+    if (Object.hasOwn(value, 'cache_control')) {
+      const control = (value as Record<string, unknown>).cache_control;
+      if (!control || typeof control !== 'object' || Array.isArray(control)) return false;
+      const { type, ttl } = control as Record<string, unknown>;
+      if (type !== 'ephemeral' || (ttl !== undefined && ttl !== '5m')) return false;
+    }
+    pending.push(...Object.values(value));
+  }
+  return true;
+};
+
 export const validateNativeInputPriceUnits40 = (
   physicalInput: unknown, units40: unknown, servedModelId: unknown, policy: unknown,
 ): boolean => {
@@ -70,6 +90,7 @@ export class NativeCumulativeUsageAccumulator {
   private revoked = false; private est = false; private anchored = false; private startSeen = false;
   private raw: NativeUsageRaw = {};
   private decreased = false;
+  private defaultTtlEligible = false;
 
   private retainRaw(update: RawNativeUsageUpdate): void {
     const next = { ...this.raw };
@@ -101,6 +122,7 @@ export class NativeCumulativeUsageAccumulator {
       return false;
     }
     this.startSeen = true;
+    this.defaultTtlEligible = opts?.defaultTtlEligible === true;
     const isStart = opts?.isStart !== false;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: aggregate, cache_creation: split, output_tokens: o } = raw;
     let w = aggregate;
@@ -208,7 +230,7 @@ export class NativeCumulativeUsageAccumulator {
     } else if (w != null) {
       const resW = check(w, this.w); if (!resW.ok) return false;
       cw = resW.n!;
-      if (cw > this.w && !opts?.defaultTtlEligible) {
+      if (cw > this.w && !(opts?.defaultTtlEligible ?? this.defaultTtlEligible)) {
         const growth = BigInt(cw - this.w);
         const base = BigInt(this.i1 ?? (this.s1 ?? 0));
         const nextI1 = base + growth;
