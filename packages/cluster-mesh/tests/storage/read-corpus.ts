@@ -125,8 +125,8 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
 // R3 remainder (§8.4, L3a v4.1 frozen): the returned cursor is part of the
 // encoded page, so admission is measured with the effective returned cursor.
 // Backend-agnostic: only backend-minted cursors are passed back; budgets are
-// calibrated on the reference JSON envelope (same convention as the 49-byte
-// envelope case above); the budget check measures the observed JSON encoding.
+// derived from the observed encoding (measure E with a large budget, then
+// require E-1 to refuse and E to admit), never from hardcoded byte counts.
 export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   const chainId = 'r3-cursor-budget';
   for (let n = 0; n <= 10; n += 1) {
@@ -142,11 +142,21 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
   assert.equal(first.records.length, 9);
   assert.notEqual(first.nextCursor, null);
 
-  const tight = await bound.readPage(chainId, 1, first.nextCursor, 115);
+  const probe = await bound.readPage(chainId, 1, first.nextCursor, 4096);
+  assert.equal(probe.outcome, 'page');
+  assert.equal(probe.records.length, 1);
+  assert.equal(probe.records[0].id, 'r9');
+  const exact = Buffer.byteLength(
+    JSON.stringify({ outcome: probe.outcome, records: probe.records, nextCursor: probe.nextCursor }),
+    'utf8',
+  );
+  assert.ok(exact > 0);
+
+  const tight = await bound.readPage(chainId, 1, first.nextCursor, exact - 1);
   assert.equal(
     tight.outcome,
     'incomplete',
-    'K2b-RED reads: the 9 to 10 page measured with its returned cursor exceeds 115',
+    'K2b-RED reads: one byte under the observed encoding refuses the page',
   );
   assert.equal(tight.records.length, 0);
   assert.notEqual(
@@ -155,7 +165,7 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
     'K2b-RED reads: the over-budget page still carries a recovery cursor',
   );
 
-  const resumed = await bound.readPage(chainId, 1, first.nextCursor, 116);
+  const resumed = await bound.readPage(chainId, 1, first.nextCursor, exact);
   assert.equal(resumed.outcome, 'page');
   assert.equal(resumed.records.length, 1);
   assert.equal(resumed.records[0].id, 'r9');
@@ -164,8 +174,8 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
     'utf8',
   );
   assert.ok(
-    encodedBytes <= 116,
-    `K2b-RED reads: the resumed page with its returned cursor fits the budget (got ${encodedBytes} bytes for 116)`,
+    encodedBytes <= exact,
+    `K2b-RED reads: the resumed page with its returned cursor fits the observed budget (got ${encodedBytes} bytes for ${exact})`,
   );
 
   const tail = await bound.readPage(chainId, 2, resumed.nextCursor, 4096);
@@ -175,4 +185,63 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
     ['r10'],
   );
   assert.equal(tail.nextCursor, null);
+
+  await runReadResumeCorpus(bound);
+};
+
+// MAJ-1 (§8.4): a resume cursor never skips records. Under a tight byte
+// budget, paginate a 3-record chain to exhaustion and assert the exact full
+// record set with no gap and no duplicate. Backend-agnostic: the budget is
+// derived from the observed full-page encoding; only backend-minted cursors
+// flow back.
+export const runReadResumeCorpus = async (bound: ReadCorpusStore): Promise<void> => {
+  const chainId = 'r3-resume';
+  const ids = ['s0', 's1', 's2'];
+  for (let n = 0; n < ids.length; n += 1) {
+    await bound.appendChain(
+      chainId,
+      { id: ids[n], bytes: 'x', hash: `hs${n}` },
+      n === 0 ? { kind: 'absent', allocation: '0' } : { kind: 'head', hash: `hs${n - 1}` },
+    );
+  }
+  const full = await bound.readPage(chainId, 10, null, 4096);
+  assert.equal(full.outcome, 'page');
+  assert.equal(full.records.length, 3);
+  const fullBytes = Buffer.byteLength(
+    JSON.stringify({ outcome: full.outcome, records: full.records, nextCursor: full.nextCursor }),
+    'utf8',
+  );
+  let budget = fullBytes - 1;
+  let trimmed: typeof full | null = null;
+  while (budget > 0) {
+    const attempt = await bound.readPage(chainId, 10, null, budget);
+    assert.equal(attempt.outcome, 'incomplete');
+    if (attempt.records.length > 0 && attempt.records.length < 3) {
+      trimmed = attempt;
+      break;
+    }
+    if (attempt.records.length === 0) break;
+    budget -= 1;
+  }
+  assert.ok(
+    trimmed !== null && trimmed.records.length > 0,
+    'K2b-RED reads: a tight budget yields an incomplete page carrying records',
+  );
+  assert.notEqual(trimmed.nextCursor, null);
+  const collected: string[] = trimmed.records.map((entry) => entry.id);
+  let cursor: ReadCursor = trimmed.nextCursor;
+  let guard = 0;
+  while (cursor !== null && guard < 10) {
+    guard += 1;
+    const page = await bound.readPage(chainId, 10, cursor, budget);
+    assert.ok(page.outcome === 'page' || page.outcome === 'incomplete');
+    for (const entry of page.records) collected.push(entry.id);
+    cursor = page.nextCursor;
+    if (page.outcome === 'page' && page.nextCursor === null) break;
+  }
+  assert.deepEqual(
+    collected,
+    ids,
+    'K2b-RED reads: resuming from an incomplete page delivers the exact full record set with no gap and no duplicate',
+  );
 };
