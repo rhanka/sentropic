@@ -1,0 +1,111 @@
+{
+  "manifestVersion": 1,
+  "contractVersion": "storage-module-v1",
+  "status": "active",
+  "targetModule": "comments",
+  "scope": "Comments cluster-mesh generic storage port compatibility and extension manifest (L3a v4.1 frozen §17 row C0)",
+  "baseContract": {
+    "path": "docs/comments-annotations/contract/contract-v1.json",
+    "contractVersion": "contract-v1",
+    "hashVersion": "revision-hash-v1",
+    "sha256": "e027fdbb4a806df39809326697bf9b60ad5cb977eb1988af3be293da07161ba0",
+    "freezeCommit": "7b8e5daf022cc58819dfdfae43cd89a703a82f96",
+    "freezeReceipt": "docs/comments-annotations/contract/freeze-receipt.md",
+    "freezeReceiptSha256": "095e1d50f4c64ddc7254ca7e86f10582e4d1c2f153ec5173c79cb62818dc92cb"
+  },
+  "frozenM1Preservation": {
+    "rule": "Frozen M1 interfaces, 24 store methods, 11 canonical record kinds, zero-argument transaction callbacks, and router factory signature remain authoritative and unchanged. No contract-v2 or breaking changes to M1 representation.",
+    "methodsCount": 24,
+    "recordKindsCount": 11,
+    "unmodifiedSources": true,
+    "recordKinds": [
+      "annotation-revision",
+      "thread-structure-revision",
+      "comment-revision",
+      "review-event",
+      "prepared-submission-manifest",
+      "import-manifest",
+      "unit-receipt",
+      "batch-receipt-snapshot",
+      "lifecycle-event",
+      "operation-audit-event",
+      "conversion-report"
+    ],
+    "errorVocabulary": [
+      "invalid-command",
+      "unauthorized",
+      "stale-revision",
+      "conflict",
+      "not-found",
+      "denied",
+      "capacity-exceeded",
+      "internal-error"
+    ]
+  },
+  "profiles": {
+    "required": [
+      "atomic-units-v1",
+      "immutable-chains-v1",
+      "immutable-boundaries-v1"
+    ],
+    "operational": [
+      "atomic-units-v1",
+      "immutable-chains-v1",
+      "immutable-boundaries-v1",
+      "scope-outbox-v1",
+      "visibility-barriers-v1"
+    ],
+    "c4": [
+      "atomic-units-v1",
+      "immutable-chains-v1",
+      "immutable-boundaries-v1",
+      "scope-outbox-v1",
+      "visibility-barriers-v1",
+      "staged-units-v1"
+    ],
+    "purge": [
+      "atomic-units-v1",
+      "immutable-chains-v1",
+      "immutable-boundaries-v1",
+      "scope-outbox-v1",
+      "visibility-barriers-v1",
+      "purge-jobs-v1",
+      "fenced-writers-v1"
+    ]
+  },
+  "extensions": {
+    "transport": {
+      "version": "transport-v1",
+      "stagedUnitsProfile": "staged-units-v1",
+      "continuationEnvelopeExplicit": true,
+      "overloadFrozenDto": false,
+      "description": "Chained hash sub-units with invisible staging, all-at-once visibility at linearization root; separate continuation envelope without overloading snapshotBoundary, idempotencyKey, or exportId."
+    },
+    "queryProfiles": [
+      "by-resource",
+      "scope-chain-index",
+      "retained-headers"
+    ],
+    "queryProfilesDetails": {
+      "by-resource": "Discussions and annotations by complete resource tuple (tenant/workspace/namespace/kind/id), including primary and secondary targets; returns module query DTOs.",
+      "scope-chain-index": "Bounded enumeration of typed chain keys and heads for resync/export; immutable scope root.",
+      "retained-headers": "Authorized identity/link/review/audit inspection without claiming full payload availability; exact head/root plus current availability."
+    },
+    "capacityDescriptor": {
+      "status": "supplemental-module-settings",
+      "rule": "Do not mutate frozen M1 CapacityDescriptor. Module transport, admission, and paging settings declared separately in module configuration.",
+      "defaults": {
+        "defaultRecords": 50,
+        "cursorTtlSeconds": null,
+        "unitCapacity": "units"
+      }
+    },
+    "oraclePackaging": {
+      "conformancePackage": "@sentropic/comments",
+      "conformanceExport": "./conformance",
+      "digestPinnedArchiveRequired": true,
+      "mutatesFrozenM1Exports": false,
+      "description": "Conformance oracle is packaged as a digest-pinned tarball or separate export during installed qualification; frozen M1 exports in packages/comments/package.json remain unmutated."
+    }
+  }
+}
