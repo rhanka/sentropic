@@ -16,7 +16,7 @@ export interface NativeSseFrame {
   readonly comments: readonly string[];
 }
 
-const concatBytes = (parts: Uint8Array[]): Uint8Array => {
+export const concatBytes = (parts: Uint8Array[]): Uint8Array => {
   if (parts.length === 1) return parts[0]!;
   const out = new Uint8Array(parts.reduce((sum, p) => sum + p.length, 0));
   let pos = 0;
@@ -71,6 +71,8 @@ export class NativeSseFramer {
 
     const emitFrame = (end: number) => {
       const slice = chunk.subarray(segmentStart, end);
+      const frameBytes = this.pendingBytes + slice.length;
+      if (frameBytes > this.maxFrameBytes) throw new NativeSseFrameOverflowError();
       const parts = slice.length > 0 ? [...this.pendingSegments, slice] : this.pendingSegments;
       if (parts.length === 0) return;
       const rawBytes = concatBytes(parts);
@@ -82,10 +84,8 @@ export class NativeSseFramer {
 
     const endLine = (endIndex: number) => {
       if (this.lineLength === 0) {
-        if (this.hasContent) {
-          emitFrame(endIndex);
-          this.hasContent = false;
-        } else segmentStart = endIndex;
+        emitFrame(endIndex);
+        this.hasContent = false;
       } else {
         this.hasContent = true;
         this.lineLength = 0;
@@ -96,8 +96,20 @@ export class NativeSseFramer {
       const b = chunk[i]!;
       if (this.pendingCr) {
         this.pendingCr = false;
-        if (b === 0x0a) { endLine(i + 1); continue; }
+        if (b === 0x0a) {
+          if (this.pendingBytes + (i + 1 - segmentStart) > this.maxFrameBytes) {
+            throw new NativeSseFrameOverflowError();
+          }
+          endLine(i + 1);
+          continue;
+        }
+        if (this.pendingBytes + (i - segmentStart) > this.maxFrameBytes) {
+          throw new NativeSseFrameOverflowError();
+        }
         endLine(i);
+      }
+      if (this.pendingBytes + (i + 1 - segmentStart) > this.maxFrameBytes) {
+        throw new NativeSseFrameOverflowError();
       }
       if (b === 0x0d) this.pendingCr = true;
       else if (b === 0x0a) endLine(i + 1);
@@ -114,15 +126,23 @@ export class NativeSseFramer {
   }
 
   finish(): NativeSseFrame[] {
-    if (this.pendingCr && this.lineLength === 0 && this.hasContent && this.pendingSegments.length > 0) {
-      const rawBytes = concatBytes(this.pendingSegments);
-      this.pendingSegments = [];
-      this.pendingBytes = 0;
+    const frames: NativeSseFrame[] = [];
+    if (this.pendingCr) {
       this.pendingCr = false;
-      return [{ rawBytes, ...parseSseFrameText(rawBytes) }];
+      if (this.lineLength === 0) {
+        if (this.pendingBytes > this.maxFrameBytes) throw new NativeSseFrameOverflowError();
+        if (this.pendingSegments.length > 0) {
+          const rawBytes = concatBytes(this.pendingSegments);
+          this.pendingSegments = [];
+          this.pendingBytes = 0;
+          frames.push({ rawBytes, ...parseSseFrameText(rawBytes) });
+        }
+      } else {
+        this.lineLength = 0;
+        this.hasContent = true;
+      }
     }
-    this.pendingCr = false;
-    return [];
+    return frames;
   }
 }
 
