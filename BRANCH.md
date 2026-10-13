@@ -165,6 +165,16 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] Route and adoption service use the shared provisioning
   - [x] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
   - [x] Sub-lot gate: test-cluster-mesh (426 pass), test-api-unit adoption (27 pass), scope-check PASS
+- [ ] **Lot 6 — Opus r5 NO-GO fixes (MAJ-1, MAJ-2, m1..m6)**
+  - [x] RED API: one-predicate CAS tests (version/status/workspace/principal) in session-adoption.test.ts
+  - [ ] RED API: forced-interleave stale-admin/get tests + LISTEN notify test + second-end test
+  - [x] RED domain: expectedVersion omission test in session-workspace.spec.ts
+  - [ ] GREEN MAJ-2: idempotent second end via the API
+  - [ ] GREEN m3: required expectedVersion in domain detach/end inputs
+  - [ ] GREEN m2: re-authorized single-decision get on row move
+  - [ ] GREEN m4: CAS tuple doc corrected (Drizzle WHERE is the SQL projection)
+  - [ ] GREEN m5: shared seeds/notify via workspace-provisioning, route uses shared notify
+  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit adoption, scope-check
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)

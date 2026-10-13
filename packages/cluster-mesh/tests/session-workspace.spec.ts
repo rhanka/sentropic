@@ -159,6 +159,19 @@ describe('session workspace binding', () => {
     })).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
+  it('should refuse detach and end when expectedVersion is omitted', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    // `expectedVersion` is required like `isAdmin`: omitting it must fail
+    // closed instead of falling back to the unpinned behavior.
+    const withoutVersion = {
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    } as unknown as Parameters<typeof service.detach>[0];
+    await expect(service.detach(withoutVersion)).rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(service.end(withoutVersion)).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
   it('should refuse detach when tenant is omitted', async () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);

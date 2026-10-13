@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq, inArray } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { db } from '../../src/db/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { db, pool } from '../../src/db/client';
 import { sessionWorkspaceBindings } from '../../src/db/control-schema';
 import {
   agentDefinitions, tenantMemberships, tenants, viewTemplates, workflowDefinitions,
@@ -21,8 +21,32 @@ const sessionIds = [
   'sess-adopt-5', 'sess-adopt-6', 'sess-adopt-7', 'sess-adopt-8',
   'sess-adopt-9', 'sess-adopt-10', 'sess-adopt-11', 'sess-adopt-12',
   'sess-adopt-13', 'sess-adopt-14', 'sess-adopt-15', 'sess-adopt-16',
-  'sess-adopt-17', 'sess-adopt-18',
+  'sess-adopt-17', 'sess-adopt-18', 'sess-adopt-19', 'sess-adopt-20',
+  'sess-adopt-21', 'sess-adopt-22', 'sess-adopt-23', 'sess-adopt-24',
+  'sess-adopt-25', 'sess-adopt-26',
 ];
+
+// One-shot forced-interleave hook for the API race tests (m1, m2): the next
+// `hasWorkspaceRole` call runs the hook first, then answers normally. The
+// hook itself (a full adopt/detach sequence on another service instance) sees
+// no hook, so there is no recursion. `vi.mock` is file-scoped but the hook
+// is only armed inside the two tests below.
+const interleaveHook = vi.hoisted(() => ({ current: null as null | (() => Promise<void>) }));
+
+vi.mock('../../src/services/workspace-access', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../src/services/workspace-access')>();
+  return {
+    ...mod,
+    hasWorkspaceRole: async (...args: Parameters<typeof mod.hasWorkspaceRole>) => {
+      const hook = interleaveHook.current;
+      if (hook) {
+        interleaveHook.current = null;
+        await hook();
+      }
+      return mod.hasWorkspaceRole(...args);
+    },
+  };
+});
 
 describe('session adoption workspace binding', () => {
   let user: TestUser;
@@ -476,26 +500,80 @@ describe('session adoption workspace binding', () => {
     }
   });
 
-  it('should reject a stale compareAndSet through the production Drizzle store', async () => {
+  it('should reject a stale compareAndSet that differs only by version (pure ABA)', async () => {
+    // Mutation record: removing `eq(sessionWorkspaceBindings.version, …)`
+    // from the store WHERE lets this write through (returns true).
     const store = createDrizzleBindingStore(db);
     const service = new SessionWorkspaceService();
     await service.adopt({
-      sessionId: 'sess-adopt-5', tenantId: TENANT_A, principalId: user.id, workspaceId,
+      sessionId: 'sess-adopt-19', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
-    const stale = await store.findBySession('sess-adopt-5');
+    const stale = await store.findBySession('sess-adopt-19');
     expect(stale?.version).toBe(1);
-    // Concurrent mutation bumps the version directly in the row.
-    await db.update(sessionWorkspaceBindings).set({ version: 2, status: 'detached' })
-      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-5'));
+    // Concurrent commit advances ONLY the version (same status, workspace, principal).
+    await db.update(sessionWorkspaceBindings).set({ version: 2 })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-19'));
     const timestamp = new Date().toISOString();
     await expect(store.compareAndSet(stale!, {
       ...stale!, status: 'detached', version: 2, updatedAt: timestamp, detachedAt: timestamp,
     })).resolves.toBe(false);
-    // A fresh read still writes through the production store.
-    const fresh = await store.findBySession('sess-adopt-5');
-    await expect(store.compareAndSet(fresh!, {
-      ...fresh!, status: 'attached', version: 3, updatedAt: timestamp, detachedAt: undefined,
-    })).resolves.toBe(true);
+  });
+
+  it('should reject a stale compareAndSet that differs only by status', async () => {
+    // Mutation record: removing `eq(sessionWorkspaceBindings.status, …)`
+    // from the store WHERE lets this write through (returns true).
+    const store = createDrizzleBindingStore(db);
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-20', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const stale = await store.findBySession('sess-adopt-20');
+    expect(stale?.status).toBe('attached');
+    // Concurrent commit flips ONLY the status (same version, workspace, principal).
+    await db.update(sessionWorkspaceBindings).set({ status: 'detached' })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-20'));
+    const timestamp = new Date().toISOString();
+    await expect(store.compareAndSet(stale!, {
+      ...stale!, status: 'detached', version: 2, updatedAt: timestamp, detachedAt: timestamp,
+    })).resolves.toBe(false);
+  });
+
+  it('should reject a stale compareAndSet that differs only by workspace', async () => {
+    // Mutation record: removing `eq(sessionWorkspaceBindings.workspaceId, …)`
+    // from the store WHERE lets this write through (returns true).
+    const store = createDrizzleBindingStore(db);
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-21', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const stale = await store.findBySession('sess-adopt-21');
+    expect(stale?.workspaceId).toBe(workspaceId);
+    // Concurrent commit moves ONLY the workspace (same version, status, principal).
+    await db.update(sessionWorkspaceBindings).set({ workspaceId: crypto.randomUUID() })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-21'));
+    const timestamp = new Date().toISOString();
+    await expect(store.compareAndSet(stale!, {
+      ...stale!, status: 'detached', version: 2, updatedAt: timestamp, detachedAt: timestamp,
+    })).resolves.toBe(false);
+  });
+
+  it('should reject a stale compareAndSet that differs only by principal', async () => {
+    // Mutation record: removing `eq(sessionWorkspaceBindings.principalId, …)`
+    // from the store WHERE lets this write through (returns true).
+    const store = createDrizzleBindingStore(db);
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-22', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const stale = await store.findBySession('sess-adopt-22');
+    expect(stale?.principalId).toBe(user.id);
+    // Concurrent commit swaps ONLY the principal (same version, status, workspace).
+    await db.update(sessionWorkspaceBindings).set({ principalId: crypto.randomUUID() })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-22'));
+    const timestamp = new Date().toISOString();
+    await expect(store.compareAndSet(stale!, {
+      ...stale!, status: 'detached', version: 2, updatedAt: timestamp, detachedAt: timestamp,
+    })).resolves.toBe(false);
   });
 
   it('should hide the binding on get from a tenant member who is neither owner nor admin', async () => {
