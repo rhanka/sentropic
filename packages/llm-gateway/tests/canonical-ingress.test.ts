@@ -40,7 +40,27 @@ describe('canonical gateway ingress', () => {
       parallelToolCalls: false,
       reasoning: { enabled: true, budgetTokens: 1024 },
     });
+    // R4-MAJ-4: the refused tool controls surface as execution features so
+    // the application plane refuses pre-dispatch (no billed estimate).
+    expect(normalized.requiredExecutionFeatures).toEqual([
+      'named-tool-choice', 'parallel-tool-control',
+    ]);
     expect(normalized.request.providerOptions?.ingressBody).toBe(body);
+  });
+
+  it('derives no execution features without tool controls', () => {
+    const plain = normalizeGatewayIngress('openai-chat-completions', {
+      model: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(plain.requiredExecutionFeatures).toBeUndefined();
+    const autoChoice = normalizeGatewayIngress('openai-chat-completions', {
+      model: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'hi' }],
+      tool_choice: 'auto',
+    });
+    expect(autoChoice.request.toolChoice).toBe('auto');
+    expect(autoChoice.requiredExecutionFeatures).toBeUndefined();
   });
 
   it('preserves signed Anthropic thinking history as a distinct canonical part', () => {
