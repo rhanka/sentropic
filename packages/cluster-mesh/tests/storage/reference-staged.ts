@@ -275,10 +275,11 @@ export class TestStagedStore {
   }
 
   readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number): ChainPage {
-    const page = this.inner.readPage(chainId, limit, cursor, maxEncodedBytes);
-    if (this.isCovered(chainId)) return { outcome: 'inaccessible', records: [], nextCursor: page.nextCursor };
-    if (this.staged.disposed.has(chainId)) return { outcome: 'inaccessible', records: [], nextCursor: page.nextCursor };
-    return page;
+    // §8.4: denial carries no retained identity. An inaccessible page stops
+    // traversal with a null continuation, never the inner head hash.
+    if (this.isCovered(chainId)) return { outcome: 'inaccessible', records: [], nextCursor: null };
+    if (this.staged.disposed.has(chainId)) return { outcome: 'inaccessible', records: [], nextCursor: null };
+    return this.inner.readPage(chainId, limit, cursor, maxEncodedBytes);
   }
 
   disposeChain(chainId: string): void {
@@ -317,18 +318,21 @@ export class TestStagedStore {
         throw new StorageIdempotencyConflictError('idempotency key reused with a divergent unit');
       }
     }
+    // §5.2 atomicity: a divergent purge-intent reuse must fail before any
+    // effect is published, never after appends/records/updates are live.
+    for (const intent of unit.purgeIntents) {
+      const existing = this.staged.jobs.get(intent.intentId);
+      if (existing && existing.target !== intent.target) {
+        throw new StorageIdempotencyConflictError('purge intent reused for a divergent target');
+      }
+    }
     const receipt = this.inner.commitAtomic({ ...unit, barriers: [], purgeIntents: [] });
     for (const append of unit.appends) this.staged.chains.add(append.chainId);
     for (const barrier of unit.barriers) {
       this.staged.barriers.set(barrier.boundary, { reason: barrier.reason, createdAt: this.store.now() });
     }
     for (const intent of unit.purgeIntents) {
-      const existing = this.staged.jobs.get(intent.intentId);
-      if (existing) {
-        if (existing.target !== intent.target) {
-          throw new StorageIdempotencyConflictError('purge intent reused for a divergent target');
-        }
-      } else {
+      if (!this.staged.jobs.has(intent.intentId)) {
         this.staged.jobs.set(intent.intentId, {
           intentId: intent.intentId,
           target: intent.target,
