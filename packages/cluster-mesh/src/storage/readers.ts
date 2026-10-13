@@ -117,9 +117,15 @@ export const validateReadPage = (page: ReadPage, limits?: PageLimits): Validatio
     const validity = validatePageLimits(limits);
     if (!validity.ok) return validity;
     if (page.records.length > limits.maxRecords) errors.push('page exceeds maxRecords');
+    // §8.4: every page obeys the full encoded-byte limit. The minimal
+    // envelope (no records, null cursor) is the indivisible floor and is
+    // always accepted; any extra record or cursor bytes must fit the budget,
+    // so an empty page with an arbitrarily large cursor is rejected.
+    const encoded = Buffer.byteLength(JSON.stringify(page), 'utf8');
+    if (encoded > limits.maxEncodedBytes && (page.records.length > 0 || page.nextCursor !== null)) {
+      errors.push('page exceeds maxEncodedBytes');
+    }
     if (page.records.length > 0) {
-      const encoded = Buffer.byteLength(JSON.stringify(page), 'utf8');
-      if (encoded > limits.maxEncodedBytes) errors.push('page exceeds maxEncodedBytes');
       for (const record of page.records) {
         const single = Buffer.byteLength(
           JSON.stringify({ outcome: 'page', records: [record], nextCursor: null }),
