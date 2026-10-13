@@ -153,6 +153,28 @@
   - [x] Verify frozen M1 and engram L6a untouched.
   - [x] Write `.h2a/build/k3_report.md` with exit SHA, corpus evidence, G3 designation, neutrality proof.
   - [x] Push only this branch, open a DRAFT PR noting "stacked on #669", never merge.
+- [ ] **Lot 6 — Fix2 pass (opus r2 7 MAJEUR + 14 MINEUR, Sol co-review 7 MAJEUR, PR #670)**
+  - [x] Merge `origin/feat/cluster-mesh-storage-k2b` r3 (`361b3c9f8`) under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
+  - [x] R-MAJ-1 follow-up: K2b r3 floor (empty incomplete carries no retained cursor) in `record-runtime.ts`; r3 corpora green against K3.
+  - [ ] R-MAJ-2/m1/m14: cursor v2 binds (head, seq, allocation) with plaintext incarnation plus key id; unknown boundary returns explicit `incomplete`; default secret documented and tested.
+  - [ ] R-MAJ-3: `transact` on a closed overlay is refused; detached-`transact` test.
+  - [ ] R-MAJ-4/Sol-1: every `tx.*` read requires `read` plus revalidation; write-only and mid-callback-revocation tests.
+  - [ ] R-MAJ-5: `#deps`, no public constructor or deps export, scope-copy getter; handle-surface test.
+  - [ ] R-MAJ-6: predicates receive `(dependency, ctx)` with scope plus read-your-writes view; inter-scope and pending-write tests.
+  - [ ] R-MAJ-7: `findIdempotency(selector)` on the command index plus overlay; `readRecords(keys, limits)`; paginated-tx decision traced below.
+  - [ ] Sol-2: repeated-hash chains deliver every record (boundary by seq plus hash).
+  - [ ] Sol-3/m4: storage-boundary copies (records, values, index entries, genesis, receipts).
+  - [ ] Sol-4: single-`apply` dependent appends advance provisional heads sequentially.
+  - [ ] Sol-5: commit preflight (known guards, encoded records, merged-unit bytes) refuses without effects.
+  - [ ] Sol-6/m5: absent-boundary continuation only when it fits the budget.
+  - [ ] Sol-7/m10: same-chain CAS race test plus live K3M4 mutant kill.
+  - [ ] m2: joined receipts are frozen snapshots; provisional nature documented.
+  - [ ] m3: nested join keyed by module plus scope, not by handle instance.
+  - [ ] m6: O(1) page admission, dense-seq paging, clone-on-touch commits.
+  - [ ] m7: authority re-attested on every operation; default port documented.
+  - [ ] m8: semantic profile digests over documented definitions.
+  - [ ] m9: disposal zeroes chain payload bytes, retains status.
+  - [ ] m11/m12/m13: commits under 150 lines with `BRANCH.md` in-commit; accurate `.h2a/build/k3_fix2_report.md`.
 - [ ] **Lot 5 — Opus fix (6 MAJEUR, 9 MINEUR, PR #670)**
   - [x] Merge `origin/feat/cluster-mesh-storage-k2b` under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
   - [x] MAJEUR-1: recompute `start + delivered` on every trim in `record-runtime.ts`; full-sweep resume plus faithful mutant against K3.
