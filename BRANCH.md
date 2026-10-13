@@ -67,6 +67,8 @@
 - [x] `K2B-MIN4` — Read corpus cursor-integrity gaps deferred to K3 token semantics; header adjusted.
 - [ ] `BR-K2B-DISC2` — New `reference-staged.ts` core lands in one commit over 150 lines (single coherent test-support file, K1 `BR-K1R3-EX1` precedent for reference-scale files); all following commits stay under 150 lines.
 - [x] `K2B-REF1` — Staged reference core: wrapper delegates, coverage resolution, disposal mirror, purge-policy commits, journal emission.
+- [x] `K2B-REF2a` — Staged reference intake: begin, fragment sequencing, inspect.
+- [ ] `K2B-REF2b` — Staged reference publication: seal validation, base compare, idempotent commit, abort.
 - [ ] `K2B-RED1` — RED staged corpus versus the unextended reference (hidden state, gaps, conflicts, atomic publication, recovery).
 - [ ] `K2B-RED2` — RED replay corpus (ordering, watermark, checkpoint CAS, poison, resync, external interleave).
 - [ ] `K2B-RED3` — RED barrier corpus (G1 denial before/after disposal, absence distinct, raw tombstone neutral, over-limit coverage, concurrent insertion).
