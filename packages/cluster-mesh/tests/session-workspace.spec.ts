@@ -17,7 +17,13 @@ const memoryStore = (): SessionWorkspaceBindingStore & { rows: Map<string, Sessi
         rows.set(next.sessionId, next);
         return true;
       }
-      if (!existing || existing.status !== current.status) return false;
+      if (
+        !existing ||
+        existing.status !== current.status ||
+        existing.version !== current.version ||
+        existing.workspaceId !== current.workspaceId ||
+        existing.principalId !== current.principalId
+      ) return false;
       rows.set(next.sessionId, next);
       return true;
     },
@@ -236,5 +242,90 @@ describe('session workspace binding', () => {
     await expect(service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: true,
     })).rejects.toMatchObject({ code: 'session_ended' });
+  });
+
+  it('should increment version monotonically on state transitions', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const first = await service.attach(attachInput());
+    expect(first.version).toBe(1);
+
+    const detached = await service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    });
+    expect(detached.version).toBe(2);
+
+    const reattached = await service.attach(attachInput({ workspaceId: 'workspace-2' }));
+    expect(reattached.version).toBe(3);
+
+    const ended = await service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    });
+    expect(ended.version).toBe(4);
+  });
+
+  it('should prevent ABA detach race from overwriting a re-attached workspace', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput({ workspaceId: 'workspace-1', principalId: 'user-1' }));
+
+    const originalFindBySession = store.findBySession.bind(store);
+    let raceTriggered = false;
+    store.findBySession = async (sessionId: string) => {
+      const row = await originalFindBySession(sessionId);
+      if (!raceTriggered && row?.status === 'attached' && row.workspaceId === 'workspace-1') {
+        raceTriggered = true;
+        await service.detach({
+          sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+        });
+        await service.attach(attachInput({
+          workspaceId: 'workspace-2', principalId: 'user-2',
+        }));
+      }
+      return row;
+    };
+
+    await expect(service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+
+    const current = await originalFindBySession('session-1');
+    expect(current?.workspaceId).toBe('workspace-2');
+    expect(current?.principalId).toBe('user-2');
+    expect(current?.status).toBe('attached');
+  });
+
+  it('should reject compareAndSet when version does not match (ABA prevention)', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const initial = await service.attach(attachInput());
+
+    await service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    });
+    await service.attach(attachInput({ principalId: 'user-2' }));
+
+    const staleCasResult = await store.compareAndSet(initial, {
+      ...initial,
+      status: 'detached',
+    });
+    expect(staleCasResult).toBe(false);
+  });
+
+  it('should reject compareAndSet on identical row attributes when version changed (pure ABA)', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const initial = await service.attach(attachInput());
+
+    await service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    });
+    await service.attach(attachInput());
+
+    const staleCasResult = await store.compareAndSet(initial, {
+      ...initial,
+      status: 'detached',
+    });
+    expect(staleCasResult).toBe(false);
   });
 });
