@@ -6,40 +6,37 @@ mkdir -p .tmp
 scratch=$(mktemp -d .tmp/tag-guard-test.XXXXXX)
 trap 'rm -rf "$scratch"' EXIT
 
-cat > "$scratch/docker" <<'MOCK'
+REAL_DOCKER="$(command -v docker || echo /usr/bin/docker)"
+if [ ! -x "$REAL_DOCKER" ]; then
+  echo "Error: docker binary not found at '$REAL_DOCKER'. Docker-First test execution requires docker." >&2
+  exit 1
+fi
+
+cat > "$scratch/docker" <<MOCK
 #!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' "$*" >> "$DOCKER_CALL_LOG"
-case "$1" in
+REAL_DOCKER="$REAL_DOCKER"
+printf '%s\n' "\$*" >> "\$DOCKER_CALL_LOG"
+case "\$1" in
   login|push) exit 0 ;;
-  image) echo "$MOCK_LOCAL_DIGEST"; exit 0 ;;
+  image) echo "\$MOCK_LOCAL_DIGEST"; exit 0 ;;
   manifest)
-    case "$GUARD_SCENARIO" in
-      exists-different) printf '{"config":{"digest":"%s"}}\n' "$MOCK_REMOTE_DIGEST"; exit 0 ;;
-      exists-same) printf '{"config":{"digest":"%s"}}\n' "$MOCK_LOCAL_DIGEST"; exit 0 ;;
-      no-config-digest) printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}\n'; exit 0 ;;
+    case "\$GUARD_SCENARIO" in
+      exists-different) printf '{"config":{"digest":"%s"}}\n' "\$MOCK_REMOTE_DIGEST"; exit 0 ;;
+      exists-same) printf '{"config":{"digest":"%s"}}\n' "\$MOCK_LOCAL_DIGEST"; exit 0 ;;
+      no-config-digest) printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}]}\n'; exit 0 ;;
       absent) echo 'Error response from daemon: manifest unknown' >&2; exit 1 ;;
       stdout-manifest-unknown) echo 'Error response from daemon: manifest unknown'; exit 1 ;;
       case-variant-manifest-unknown) echo 'Error response from daemon: Manifest Unknown' >&2; exit 1 ;;
       auth-error) echo 'Error response from daemon: unauthorized: authentication required' >&2; exit 1 ;;
-      credential-helper-not-found) echo 'error getting credentials - err: exec: "docker-credential-desktop": executable file not found in $PATH' >&2; exit 1 ;;
+      credential-helper-not-found) echo 'error getting credentials - err: exec: "docker-credential-desktop": executable file not found in \$PATH' >&2; exit 1 ;;
       network-error) echo 'Get "https://registry.test.example/v2/": net/http: request canceled while waiting for connection (Client.Timeout exceeded)' >&2; exit 1 ;;
-      *) echo "Unknown test scenario: $GUARD_SCENARIO" >&2; exit 1 ;;
+      *) echo "Unknown test scenario: \$GUARD_SCENARIO" >&2; exit 1 ;;
     esac ;;
   run)
-    shift
-    if command -v node >/dev/null 2>&1; then
-      while [ "$#" -gt 0 ]; do [ "$1" = node ] && { shift; exec node "$@"; }; shift; done
-    else
-      awk '
-        BEGIN { RS="\""; d=0 }
-        $0 == "digest" && d==0 { d=1; next }
-        d==1 { if ($0 ~ /^sha256:/) { printf "%s", $0; exit } }
-      '
-    fi
-    exit 0
+    exec "\$REAL_DOCKER" "\$@"
     ;;
-  *) echo "Unexpected docker command: $*" >&2; exit 1 ;;
+  *) echo "Unexpected docker command: \$*" >&2; exit 1 ;;
 esac
 MOCK
 chmod +x "$scratch/docker"
