@@ -19,6 +19,8 @@ case "$1" in
       exists-same) printf '{"config":{"digest":"%s"}}\n' "$MOCK_LOCAL_DIGEST"; exit 0 ;;
       no-config-digest) printf '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}\n'; exit 0 ;;
       absent) echo 'Error response from daemon: manifest unknown' >&2; exit 1 ;;
+      stdout-manifest-unknown) echo 'Error response from daemon: manifest unknown'; exit 1 ;;
+      case-variant-manifest-unknown) echo 'Error response from daemon: Manifest Unknown' >&2; exit 1 ;;
       auth-error) echo 'Error response from daemon: unauthorized: authentication required' >&2; exit 1 ;;
       credential-helper-not-found) echo 'error getting credentials - err: exec: "docker-credential-desktop": executable file not found in $PATH' >&2; exit 1 ;;
       network-error) echo 'Get "https://registry.test.example/v2/": net/http: request canceled while waiting for connection (Client.Timeout exceeded)' >&2; exit 1 ;;
@@ -81,6 +83,21 @@ test_absent() {
   echo "PASS: absent tag publishes successfully"
 }
 
+test_stdout_manifest_unknown() {
+  ! run_guard stdout-manifest-unknown || { echo "FAIL: stdout-manifest-unknown should fail" >&2; return 1; }
+  grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on stdout-only manifest unknown" >&2; return 1; }
+  echo "PASS: manifest unknown on stdout is not treated as absent (stderr-only isolation)"
+}
+
+test_case_variant_manifest_unknown() {
+  ! run_guard case-variant-manifest-unknown || { echo "FAIL: case-variant-manifest-unknown should fail" >&2; return 1; }
+  grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
+  grep -q "Manifest Unknown" "$scratch/output" || { echo "FAIL: missing stderr case variant in output" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on case variant" >&2; return 1; }
+  echo "PASS: case variant (Manifest Unknown) is not treated as absent (case-sensitive matching)"
+}
+
 test_auth_error() {
   ! run_guard auth-error || { echo "FAIL: auth-error should fail" >&2; return 1; }
   grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
@@ -129,6 +146,8 @@ case "${1:-all}" in
   exists-different) test_exists_different ;;
   exists-same) test_exists_same ;;
   absent) test_absent ;;
+  stdout-manifest-unknown) test_stdout_manifest_unknown ;;
+  case-variant-manifest-unknown) test_case_variant_manifest_unknown ;;
   auth-error) test_auth_error ;;
   credential-helper-not-found) test_credential_helper_not_found ;;
   network-error) test_network_error ;;
@@ -139,6 +158,8 @@ case "${1:-all}" in
     test_exists_different
     test_exists_same
     test_absent
+    test_stdout_manifest_unknown
+    test_case_variant_manifest_unknown
     test_auth_error
     test_credential_helper_not_found
     test_network_error
@@ -146,5 +167,5 @@ case "${1:-all}" in
     test_empty_registry
     test_moving_tags
     ;;
-  *) echo "Expected exists-different, exists-same, absent, auth-error, credential-helper-not-found, network-error, no-config-digest, empty-registry, moving-tags, or all" >&2; exit 1 ;;
+  *) echo "Expected exists-different, exists-same, absent, stdout-manifest-unknown, case-variant-manifest-unknown, auth-error, credential-helper-not-found, network-error, no-config-digest, empty-registry, moving-tags, or all" >&2; exit 1 ;;
 esac
