@@ -7,6 +7,7 @@
 // the positives). Barriers ride with carrier appends (§10.1).
 
 import {
+  StorageCasConflictError,
   StorageDeniedError,
   StorageIdempotencyConflictError,
   StorageInvalidCommandError,
@@ -14,7 +15,18 @@ import {
 import type { AtomicUnit, ChainExpectation, CommitOptions, CommitReceipt } from '../../src/storage/atomic.js';
 import { validateAtomicUnit } from '../../src/storage/atomic.js';
 import type { ScopeGrant } from '../../src/storage/authority.js';
-import type { StorageScope } from '../../src/storage/contracts.js';
+import type { StorageScope, WorkLimits, WriterFence } from '../../src/storage/contracts.js';
+import { validateWriterFence } from '../../src/storage/contracts.js';
+import {
+  nextStagedState,
+  validateBeginInput,
+  validateCommitRoot,
+  validateFragmentInput,
+  validateFragmentSequence,
+  type FragmentReceipt,
+  type StagedCommitRoot,
+  type StagedUnitStatus,
+} from '../../src/storage/staged-units.js';
 import {
   TestBoundStore,
   TestReferenceStore,
@@ -63,7 +75,26 @@ interface PurgeJob extends PurgeJobView {
   readonly authorizedBy: string;
 }
 
+interface StagedFragment {
+  readonly ordinal: string;
+  readonly predecessorHash: string | null;
+  readonly fragmentDigest: string;
+  readonly effects: AtomicUnit;
+}
+
+interface StagedOp {
+  readonly unitId: string;
+  readonly operationKey: string;
+  readonly fragments: StagedFragment[];
+  state: 'staging' | 'sealed' | 'committed' | 'aborted';
+  seal?: { readonly unitId: string; readonly commitRoot: StagedCommitRoot };
+  base?: Map<string, { readonly head: string | null; readonly disposed: boolean }>;
+  receipt?: CommitReceipt;
+  abortReason?: string;
+}
+
 interface StagedScope {
+  readonly units: Map<string, StagedOp>;
   readonly chains: Set<string>;
   readonly disposed: Set<string>;
   readonly coverage: Map<string, string>;
@@ -79,6 +110,7 @@ interface StagedScope {
 }
 
 const createStagedScope = (): StagedScope => ({
+  units: new Map(),
   chains: new Set(),
   disposed: new Set(),
   coverage: new Map(),
@@ -287,5 +319,84 @@ export class TestStagedStore {
     } finally {
       this.pendingSegment = null;
     }
+  }
+
+  beginStaged(input: {
+    readonly operationKey: string;
+    readonly inputDigest: string;
+    readonly contractDigest: string;
+    readonly sourceBoundary: string;
+    readonly fence: WriterFence;
+  }): StagedHandle {
+    this.requireOperation('write');
+    const valid = validateBeginInput(input);
+    if (!valid.ok) throw new StorageInvalidCommandError(valid.errors.join('; '));
+    const existing = this.staged.units.get(input.operationKey);
+    if (existing) return { unitId: existing.unitId, operationKey: input.operationKey };
+    this.staged.unitSeq += 1;
+    const op: StagedOp = {
+      unitId: `unit-${this.staged.unitSeq}`,
+      operationKey: input.operationKey,
+      fragments: [],
+      state: 'staging',
+    };
+    this.staged.units.set(input.operationKey, op);
+    return { unitId: op.unitId, operationKey: op.operationKey };
+  }
+
+  stageFragment(input: {
+    readonly unit: StagedHandle;
+    readonly ordinal: string;
+    readonly predecessorHash: string | null;
+    readonly fragmentDigest: string;
+    readonly effects: AtomicUnit;
+    readonly fence: WriterFence;
+    readonly limits?: WorkLimits;
+  }): FragmentReceipt {
+    this.requireOperation('write');
+    const op = this.staged.units.get(input.unit.operationKey);
+    if (!op || op.unitId !== input.unit.unitId) throw new StorageInvalidCommandError('unknown staged unit');
+    if (op.state !== 'staging') throw new StorageInvalidCommandError('fragments only while staging');
+    const shape = validateFragmentInput(
+      {
+        unitId: op.unitId,
+        ordinal: input.ordinal,
+        predecessorHash: input.predecessorHash,
+        fragmentDigest: input.fragmentDigest,
+        effects: input.effects,
+        fence: input.fence,
+      },
+      input.limits,
+    );
+    if (!shape.ok) throw new StorageInvalidCommandError(shape.errors.join('; '));
+    const same = op.fragments.find((entry) => entry.ordinal === input.ordinal);
+    if (same) {
+      if (same.fragmentDigest === input.fragmentDigest) {
+        return { unitId: op.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
+      }
+      throw new StorageIdempotencyConflictError('changed bytes at an accepted ordinal conflict');
+    }
+    const sequence = validateFragmentSequence(
+      op.fragments.map((entry) => ({ ordinal: entry.ordinal, fragmentDigest: entry.fragmentDigest })),
+      { ordinal: input.ordinal, predecessorHash: input.predecessorHash, fragmentDigest: input.fragmentDigest },
+    );
+    if (!sequence.ok) throw new StorageInvalidCommandError(sequence.errors.join('; '));
+    op.fragments.push({
+      ordinal: input.ordinal,
+      predecessorHash: input.predecessorHash,
+      fragmentDigest: input.fragmentDigest,
+      effects: input.effects,
+    });
+    return { unitId: op.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
+  }
+
+  inspectStaged(operationKey: string): StagedUnitStatus {
+    this.requireOperation('read');
+    const op = this.staged.units.get(operationKey);
+    if (!op) throw new StorageInvalidCommandError('unknown staged operation');
+    if (op.state === 'staging') return { state: 'staging', acceptedFragments: String(op.fragments.length) };
+    if (op.state === 'sealed' && op.seal) return { state: 'sealed', seal: op.seal };
+    if (op.state === 'committed' && op.receipt) return { state: 'committed', commitId: op.receipt.commitId };
+    return { state: 'aborted', reason: op.abortReason ?? 'aborted' };
   }
 }
