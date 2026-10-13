@@ -13,7 +13,7 @@ import { canonicalFragmentEncoding, nextStagedState, validateFragmentSequence } 
 import { runAtomicCorpus } from './atomic-corpus.js';
 import { grantFor, runAuthorityCorpus } from './authority-corpus.js';
 import { runChainCorpus } from './chain-corpus.js';
-import { runReadCorpus } from './read-corpus.js';
+import { runReadCorpus, runReadCursorBudgetCorpus } from './read-corpus.js';
 import { TestReferenceStore } from './reference-store.js';
 
 const scope = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
@@ -51,6 +51,17 @@ describe('K2a reference: read corpus', () => {
   it('K2a-RED stable cursors, page bounds and explicit gaps hold', async () => {
     const store = new TestReferenceStore('comments');
     await runReadCorpus(store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] })));
+  });
+});
+
+describe('K2a split: R3 returned-cursor budget', () => {
+  // Skipped: R3 deferred to K2a-2. The returned cursor can make a read exceed
+  // the budget (Sol round 3: 116 bytes for a 115 budget, §8.4). Follow-up lot
+  // K2a-2 (R3 fix + Sol M11 + Opus r3 minors) owns the fix; this test is the
+  // RED proof and must be re-enabled there.
+  it.skip('R3 deferred to K2a-2: resumed page with its returned cursor fits the budget', async () => {
+    const store = new TestReferenceStore('comments');
+    await runReadCursorBudgetCorpus(store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] })));
   });
 });
 
