@@ -114,4 +114,99 @@ describe('session workspace binding', () => {
       sessionId: 'session-1', workspaceId: 'workspace-1', status: 'attached',
     });
   });
+
+  it('should refuse detach when principal is omitted', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    await expect(service.detach('session-1', 'tenant-a'))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('should refuse end when principal is omitted', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    await expect(service.end('session-1', 'tenant-a'))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('should refuse detach when tenant is omitted', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    const detachWithoutTenant = service.detach as unknown as (sessionId: string) => Promise<unknown>;
+    await expect(detachWithoutTenant('session-1'))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('should refuse end when tenant is omitted', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    const endWithoutTenant = service.end as unknown as (sessionId: string) => Promise<unknown>;
+    await expect(endWithoutTenant('session-1'))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('should require principal on get', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    const getWithoutPrincipal = service.get as unknown as (sessionId: string, tenantId: string) => Promise<unknown>;
+    await expect(getWithoutPrincipal('session-1', 'tenant-a'))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('should return the binding on get with tenant and principal', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    const getWithPrincipal = service.get as unknown as (
+      sessionId: string, tenantId: string, principalId: string,
+    ) => Promise<SessionWorkspaceBinding | null>;
+    await expect(getWithPrincipal('session-1', 'tenant-a', 'user-1')).resolves.toMatchObject({
+      sessionId: 'session-1', workspaceId: 'workspace-1', status: 'attached',
+    });
+  });
+
+  it('should hide cross-tenant bindings as binding_not_found on attach', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    await expect(service.attach(attachInput({ sessionTenantId: 'tenant-b', workspaceTenantId: 'tenant-b' })))
+      .rejects.toMatchObject({ code: 'binding_not_found' });
+  });
+
+  it('should conflict when two attaches race for different workspaces', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const outcomes = await Promise.allSettled([
+      service.attach(attachInput({ workspaceId: 'workspace-1' })),
+      service.attach(attachInput({ workspaceId: 'workspace-2' })),
+    ]);
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.filter((o) => o.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'session_already_attached' });
+  });
+
+  it('should converge concurrent attaches of the same workspace', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const [first, second] = await Promise.all([
+      service.attach(attachInput()),
+      service.attach(attachInput()),
+    ]);
+    expect(second.bindingId).toBe(first.bindingId);
+  });
+
+  it('should refuse detach on an ended session', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    await service.end('session-1', 'tenant-a', 'user-1', true);
+    await expect(service.detach('session-1', 'tenant-a', 'user-1', true))
+      .rejects.toMatchObject({ code: 'session_ended' });
+  });
 });
