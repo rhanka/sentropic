@@ -1,9 +1,11 @@
 // C0 gate: Comments contract boundaries, frozen-M1 preservation,
 // compatibility and extension manifest validation (L3a v4.1 frozen §17 row C0, §17.4).
-// This test pins the M1 source hashes and fails on any change.
+// Hash pins are DERIVED from docs/comments-annotations/contract/contract-v1.json
+// (frozen M1 corpus under packages/comments/); the error vocabulary is DERIVED
+// from the frozen M1 sources (commands.ts, command-store.ts). Any drift fails.
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -20,9 +22,17 @@ import {
   missingProfiles,
   satisfiesRequirements,
 } from '../src/storage/profiles.js';
+// Frozen M1 wire codes imported from the frozen source (test-only import;
+// production runtime in packages/cluster-mesh/src imports no comments code).
+import { CANONICAL_WIRE_ERROR_CODES } from '../../comments/src/command-store.js';
 
 // Resolve repository root from test location
 const REPO_ROOT = resolve(__dirname, '../../..');
+
+const CONTRACT_PATH = 'docs/comments-annotations/contract/contract-v1.json';
+const FREEZE_RECEIPT_PATH = 'docs/comments-annotations/contract/freeze-receipt.md';
+const MANIFEST_PATH = 'docs/comments-annotations/contract/storage-module-v1.json';
+const DOC_PATH = 'docs/comments-annotations/contract/storage-compatibility.md';
 
 const sha256File = (relPath: string): string => {
   const absPath = resolve(REPO_ROOT, relPath);
@@ -31,71 +41,128 @@ const sha256File = (relPath: string): string => {
 };
 
 /**
- * Pinned M1 source hashes as recorded in contract-v1.json and freeze-receipt.md
- * at frozen commit 7b8e5daf022cc58819dfdfae43cd89a703a82f96 (PR #663).
+ * Derive every frozen-M1 corpus pin from contract-v1.json. Only entries under
+ * packages/comments/ are collected: .h2a review/build evidence is local
+ * ignored provenance, and spec/plan/BRANCH references evolve on documentary
+ * branches. Composition: 1 package manifest + 19 src modules + 1 hash vector
+ * + 8 conformance files (2 runners + 6 suites) = 29 entries.
  */
-export const PINNED_M1_HASHES: Readonly<Record<string, string>> = Object.freeze({
-  // Package identity & export map
-  'packages/comments/package.json': '821786727350ec56d333b6c8a6199f278c3a72cf1d642c44aaaac25b4f419d08',
-  // Canonical TypeScript source modules
-  'packages/comments/src/index.ts': 'c12f9ecc2556fe16dd1766ce0ec40ce228d7efdb2829e47b2e1d9d4ef17bbdf0',
-  'packages/comments/src/anchors.ts': '83f238f8121cd66ad0a0f93881f4bebb3abb0614cc7631c99b54ef6e5046e49c',
-  'packages/comments/src/canonical-json.ts': 'b7dc124252de880ca21bf36caed8d76e7d24a10718e0c4954dc9f3675847d45f',
-  'packages/comments/src/command-store.ts': '912efa9278be93720887b58af75df91e4d2aad85f4a898faad6130a441616ec5',
-  'packages/comments/src/commands.ts': 'b4c0f9558a0130e4774cd6fa4a75ef077ee0e18abb8a50398ed430b17bcb798c',
-  'packages/comments/src/events.ts': '7f900f37a0b7d4e1b4349688c63f317a8040cee9946994b24330c3eafe83d134',
-  'packages/comments/src/geometry.ts': '75bf806ba5ade9dedb8f9b5f85685d70199a335866342589e050fbe48506fede',
-  'packages/comments/src/guards.ts': 'e0ff9bceb6955d1d769cfd53af0d0d59c1f03f3db297b0970d6853652066e7d6',
-  'packages/comments/src/hono-ports.ts': '31e5e16be40726ea030adda1505104ddb6a8b0b17f4cfb1fef34c5e7e74bda56',
-  'packages/comments/src/hono.ts': 'bb285c82c9bcb311b019ca6697003086609654d0b7df5340eb9dae1da70e8193',
-  'packages/comments/src/in-memory.ts': '7361a8b383f129320a4acbb5225b96902aee7f1f4e212d6099a481fc8d133432',
-  'packages/comments/src/lifecycle.ts': '1502a16733f2dfa6ba1abf6027066501a921fc646bea8752ec18b5f87904d2f3',
-  'packages/comments/src/reviews.ts': '940d14d3439c7d435f356f7ccc460a89267a0c17814ab44d2233c721c5b6853e',
-  'packages/comments/src/revision-hash.ts': '280e9cd22e2f748ec8989e3499acfc89fa9393db90825e8c9dddf32aa9c1069d',
-  'packages/comments/src/revisions.ts': '5e6e78efd130afa8456b60ac9dc0f7ec74c17b2926d9d737d6f1dd60cdded65c',
-  'packages/comments/src/sha256.ts': '23eeb9f8f479b111675c6d667f5f99a4c60ed76bfde822f2cdf6ae77e98619da',
-  'packages/comments/src/store.ts': '23b8d464f0971c7446cd9f206dd04889e583b26b6ae2a2efcf5e61df006cd1cf',
-  'packages/comments/src/submissions.ts': 'b9cce84efea5f9f5c9be6492c085250d5ade75303596f78d737baee5f906fe27',
-  'packages/comments/src/types.ts': '1fa667108233ef122f4158f329328d7c13118cdbdde6f6d646460dadbf6a83ec',
-  // Vectors & Conformance test fixtures
-  'packages/comments/tests/fixtures/revision-hash-v1.json': '26ee62b09d22f39438c344a9223564f08e696eeba95ddd0558f357407a40f0c0',
-  'packages/comments/tests/conformance/comments-conformance.ts': '26cdaf181afbc73c145c57974c6762230757bc101a0418f8da0654f505fb7b00',
-  'packages/comments/tests/conformance/in-memory.ts': '0b91befcb3b67418667ccda1a36bbd40a183fd37c38eeb40ddb8a1495d42f945',
-  // M1 freeze receipt & contract
-  'docs/comments-annotations/contract/contract-v1.json': 'e027fdbb4a806df39809326697bf9b60ad5cb977eb1988af3be293da07161ba0',
-  'docs/comments-annotations/contract/freeze-receipt.md': '095e1d50f4c64ddc7254ca7e86f10582e4d1c2f153ec5173c79cb62818dc92cb',
-});
+const collectM1CorpusPins = (): Readonly<Record<string, string>> => {
+  const contract = JSON.parse(readFileSync(resolve(REPO_ROOT, CONTRACT_PATH), 'utf8')) as unknown;
+  const pins: Record<string, string> = {};
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (node !== null && typeof node === 'object') {
+      const record = node as Record<string, unknown>;
+      if (
+        typeof record.path === 'string' &&
+        typeof record.sha256 === 'string' &&
+        record.path.startsWith('packages/comments/')
+      ) {
+        pins[record.path] = record.sha256;
+      }
+      for (const value of Object.values(record)) visit(value);
+    }
+  };
+  visit(contract);
+  return pins;
+};
+
+export const EXPECTED_M1_CORPUS_COUNT = 29;
+
+/** Real verification function: returns the rel paths whose bytes miss their pin. */
+export const verifyHashPins = (pins: Readonly<Record<string, string>>): readonly string[] => {
+  const mismatches: string[] = [];
+  for (const [relPath, expectedHash] of Object.entries(pins)) {
+    const absPath = resolve(REPO_ROOT, relPath);
+    if (!existsSync(absPath) || sha256File(relPath) !== expectedHash) mismatches.push(relPath);
+  }
+  return mismatches;
+};
+
+/** Parse the CanonicalCommandError code union out of the frozen commands.ts. */
+const parseCommandErrorCodes = (): readonly string[] => {
+  const src = readFileSync(resolve(REPO_ROOT, 'packages/comments/src/commands.ts'), 'utf8');
+  const anchor = 'public readonly code:';
+  const start = src.indexOf(anchor);
+  expect(start, 'CanonicalCommandError code union anchor in frozen commands.ts').toBeGreaterThanOrEqual(0);
+  const end = src.indexOf('message: string,', start);
+  const block = src.slice(start, end);
+  return [...block.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+};
+
+const listTsFiles = (dir: string): string[] => {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const abs = resolve(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listTsFiles(abs));
+    else if (entry.isFile() && entry.name.endsWith('.ts')) out.push(abs);
+  }
+  return out;
+};
+
+const readManifest = (): Record<string, unknown> =>
+  JSON.parse(readFileSync(resolve(REPO_ROOT, MANIFEST_PATH), 'utf8')) as Record<string, unknown>;
 
 describe('C0 exit proof: Frozen-M1 preservation', () => {
-  it('every pinned M1 source file exists and matches its exact recorded SHA-256 hash', () => {
-    for (const [relPath, expectedHash] of Object.entries(PINNED_M1_HASHES)) {
-      const absPath = resolve(REPO_ROOT, relPath);
-      expect(existsSync(absPath), `M1 file missing: ${relPath}`).toBe(true);
-      const computedHash = sha256File(relPath);
-      expect(
-        computedHash,
-        `M1 file modified! Pinned hash mismatch on ${relPath}:\n  expected: ${expectedHash}\n  actual:   ${computedHash}`
-      ).toBe(expectedHash);
+  it('pins the complete frozen M1 corpus derived from contract-v1.json', () => {
+    const pins = collectM1CorpusPins();
+    expect(Object.keys(pins)).toHaveLength(EXPECTED_M1_CORPUS_COUNT);
+    // All 8 conformance files hashed by contract-v1.json are pinned.
+    for (const suite of [
+      'packages/comments/tests/conformance/comments-conformance.ts',
+      'packages/comments/tests/conformance/in-memory.ts',
+      'packages/comments/tests/annotation-conformance.spec.ts',
+      'packages/comments/tests/revision-hash.spec.ts',
+      'packages/comments/tests/annotation-anchors.spec.ts',
+      'packages/comments/tests/annotation-revisions.spec.ts',
+      'packages/comments/tests/annotation-reviews.spec.ts',
+      'packages/comments/tests/annotation-retention.spec.ts',
+    ]) {
+      expect(pins, `conformance file missing from derived pins: ${suite}`).toHaveProperty(suite);
     }
+    expect(verifyHashPins(pins)).toEqual([]);
   });
 
-  it('fails if any M1 source hash is tampered with', () => {
-    const tampered = { ...PINNED_M1_HASHES, 'packages/comments/src/index.ts': '0000000000000000000000000000000000000000000000000000000000000000' };
-    const actual = sha256File('packages/comments/src/index.ts');
-    expect(actual).not.toBe(tampered['packages/comments/src/index.ts']);
+  it('manifest base-contract digests match the frozen contract file bytes', () => {
+    const manifest = readManifest();
+    const baseContract = manifest.baseContract as Record<string, unknown>;
+    expect(baseContract.sha256).toBe(sha256File(CONTRACT_PATH));
+    expect(baseContract.freezeReceiptSha256).toBe(sha256File(FREEZE_RECEIPT_PATH));
+    expect(baseContract.contractVersion).toBe('contract-v1');
+    expect(baseContract.freezeCommit).toBe('7b8e5daf022cc58819dfdfae43cd89a703a82f96');
   });
 
-  it('preserves M1 24 store methods, 11 record kinds and error vocabulary without mutation', () => {
-    const contractPath = resolve(REPO_ROOT, 'docs/comments-annotations/contract/contract-v1.json');
-    const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
+  it('verifyHashPins reports exactly the tampered entries', () => {
+    const pins = collectM1CorpusPins();
+    expect(verifyHashPins(pins)).toEqual([]);
+    const tampered = {
+      ...pins,
+      'packages/comments/src/index.ts': '0000000000000000000000000000000000000000000000000000000000000000',
+    };
+    expect(verifyHashPins(tampered)).toEqual(['packages/comments/src/index.ts']);
+    const missing = { ...pins };
+    delete missing['packages/comments/src/index.ts'];
+    expect(verifyHashPins({ ...missing, 'packages/comments/src/index.ts': pins['packages/comments/src/index.ts'] })).toEqual([]);
+    expect(verifyHashPins({ 'packages/comments/src/does-not-exist.ts': '00' })).toEqual([
+      'packages/comments/src/does-not-exist.ts',
+    ]);
+  });
 
+  it('preserves M1 24 store methods, 11 record kinds and derived error vocabulary', () => {
+    const contract = JSON.parse(readFileSync(resolve(REPO_ROOT, CONTRACT_PATH), 'utf8')) as {
+      contractVersion: string;
+      hashVersion: string;
+      status: string;
+      recordKinds: { kind: string }[];
+    };
     expect(contract.contractVersion).toBe('contract-v1');
     expect(contract.hashVersion).toBe('revision-hash-v1');
     expect(contract.status).toBe('frozen');
-    expect(contract.recordKinds).toHaveLength(11);
-    expect(contract.artifacts).toHaveLength(13);
 
-    // Verify 11 record kinds match frozen specification
     const expectedKinds = [
       'annotation-revision',
       'thread-structure-revision',
@@ -109,77 +176,147 @@ describe('C0 exit proof: Frozen-M1 preservation', () => {
       'operation-audit-event',
       'conversion-report',
     ];
-    const actualKinds = contract.recordKinds.map((r: { kind: string }) => r.kind);
-    for (const kind of expectedKinds) {
-      expect(actualKinds).toContain(kind);
-    }
+    expect(contract.recordKinds.map((r) => r.kind).sort()).toEqual([...expectedKinds].sort());
+
+    const manifest = readManifest();
+    const preservation = manifest.frozenM1Preservation as Record<string, unknown>;
+    expect(preservation.methodsCount).toBe(24);
+    expect(preservation.recordKindsCount).toBe(11);
+    expect(preservation.unmodifiedSources).toBe(true);
+    expect([...(preservation.recordKinds as string[])].sort()).toEqual([...expectedKinds].sort());
+
+    // B1: the manifest vocabulary is derived from the frozen M1 sources.
+    const vocabulary = preservation.errorVocabulary as {
+      commandErrors: string[];
+      wireErrors: string[];
+    };
+    expect([...parseCommandErrorCodes()].sort()).toEqual([...vocabulary.commandErrors].sort());
+    expect([...CANONICAL_WIRE_ERROR_CODES].sort()).toEqual([...vocabulary.wireErrors].sort());
+    expect(vocabulary.commandErrors).toEqual([
+      'cas-conflict',
+      'idempotency-conflict',
+      'denied',
+      'invalid-command',
+      'not-found',
+    ]);
+    expect(vocabulary.wireErrors).toEqual([
+      'unauthenticated',
+      'denied',
+      'not-found',
+      'conflict',
+      'invalid-request',
+      'capacity-exceeded',
+      'incomplete',
+    ]);
   });
 });
 
 describe('C0 exit proof: Storage compatibility and extension manifest', () => {
-  const manifestPath = resolve(REPO_ROOT, 'docs/comments-annotations/contract/storage-module-v1.json');
-  const docPath = resolve(REPO_ROOT, 'docs/comments-annotations/contract/storage-compatibility.md');
+  it('storage-module-v1.json declares the C0 manifest with K1 profile requirements', () => {
+    const manifest = readManifest();
+    expect(manifest.manifestVersion).toBe(1);
+    expect(manifest.contractVersion).toBe('storage-module-v1');
+    expect(manifest.targetModule).toBe('comments');
+    expect(manifest.status).toBe('unverified');
 
-  it('docs/comments-annotations/contract/storage-module-v1.json exists and is valid', () => {
-    expect(existsSync(manifestPath), 'storage-module-v1.json must exist').toBe(true);
-    const content = JSON.parse(readFileSync(manifestPath, 'utf8'));
-
-    expect(content.manifestVersion).toBe(1);
-    expect(content.contractVersion).toBe('storage-module-v1');
-    expect(content.targetModule).toBe('comments');
-    expect(content.status).toBe('active');
-
-    // Base contract reference
-    expect(content.baseContract.path).toBe('docs/comments-annotations/contract/contract-v1.json');
-    expect(content.baseContract.sha256).toBe(PINNED_M1_HASHES['docs/comments-annotations/contract/contract-v1.json']);
-    expect(content.baseContract.contractVersion).toBe('contract-v1');
-    expect(content.baseContract.freezeCommit).toBe('7b8e5daf022cc58819dfdfae43cd89a703a82f96');
-
-    // Frozen M1 preservation declaration
-    expect(content.frozenM1Preservation.methodsCount).toBe(24);
-    expect(content.frozenM1Preservation.recordKindsCount).toBe(11);
-    expect(content.frozenM1Preservation.unmodifiedSources).toBe(true);
-
-    // Profile requirements aligned with cluster-mesh
-    expect(content.profiles.required).toEqual(CONSUMER_REQUIREMENTS['m1-adapter']);
-    expect(content.profiles.operational).toEqual(CONSUMER_REQUIREMENTS['comments-operational']);
-    expect(content.profiles.c4).toEqual(CONSUMER_REQUIREMENTS['comments-c4']);
-    expect(content.profiles.purge).toEqual(CONSUMER_REQUIREMENTS['comments-purge']);
-
-    // Check all declared profiles exist in cluster-mesh
-    for (const profile of [
-      ...content.profiles.required,
-      ...content.profiles.operational,
-      ...content.profiles.c4,
-      ...content.profiles.purge,
-    ]) {
+    const profiles = manifest.profiles as Record<string, readonly string[]>;
+    expect(profiles.required).toEqual(CONSUMER_REQUIREMENTS['m1-adapter']);
+    expect(profiles.operational).toEqual(CONSUMER_REQUIREMENTS['comments-operational']);
+    expect(profiles.c4).toEqual(CONSUMER_REQUIREMENTS['comments-c4']);
+    expect(profiles.purge).toEqual(CONSUMER_REQUIREMENTS['comments-purge']);
+    for (const profile of [...profiles.required, ...profiles.operational, ...profiles.c4, ...profiles.purge]) {
       expect(isProfileId(profile)).toBe(true);
     }
 
-    // Transport and continuation extension declarations
-    expect(content.extensions.transport.version).toBe('transport-v1');
-    expect(content.extensions.transport.stagedUnitsProfile).toBe('staged-units-v1');
-    expect(content.extensions.transport.continuationEnvelopeExplicit).toBe(true);
-    expect(content.extensions.transport.overloadFrozenDto).toBe(false);
-
-    // Named query profiles (L3a v4.1 §9.5)
-    expect(content.extensions.queryProfiles).toEqual(['by-resource', 'scope-chain-index', 'retained-headers']);
-
-    // Oracle packaging declarations (§9.6, §14.5, §17 row C0)
-    expect(content.extensions.oraclePackaging.conformancePackage).toBe('@sentropic/comments');
-    expect(content.extensions.oraclePackaging.conformanceExport).toBe('./conformance');
-    expect(content.extensions.oraclePackaging.digestPinnedArchiveRequired).toBe(true);
-    expect(content.extensions.oraclePackaging.mutatesFrozenM1Exports).toBe(false);
+    const extensions = manifest.extensions as Record<string, Record<string, unknown>>;
+    expect(extensions.transport.version).toBe('transport-v1');
+    expect(extensions.transport.stagedUnitsProfile).toBe('staged-units-v1');
+    expect(extensions.transport.continuationEnvelopeExplicit).toBe(true);
+    expect(extensions.transport.overloadFrozenDto).toBe(false);
+    expect(extensions.queryProfiles).toEqual(['by-resource', 'scope-chain-index', 'retained-headers']);
   });
 
-  it('docs/comments-annotations/contract/storage-compatibility.md exists and documents boundaries', () => {
-    expect(existsSync(docPath), 'storage-compatibility.md must exist').toBe(true);
-    const doc = readFileSync(docPath, 'utf8');
+  it('transport declares the exact §11.3 limits, admission settings and module operations', () => {
+    const manifest = readManifest();
+    const transport = (manifest.extensions as Record<string, Record<string, unknown>>).transport as {
+      qualification: string;
+      limits: Record<string, number | null>;
+      admission: Record<string, number>;
+      incompatibilityRule: string;
+      moduleOperations: string[];
+    };
+    expect(transport.qualification).toBe('unverified');
+    expect(transport.limits).toEqual({
+      fragmentManifestOrUnitGroupRootBytes: 65536,
+      fragmentPayloadBytes: 524288,
+      prepareCommitItemsPerRequest: 50,
+      requestBatchManifestBytes: 262144,
+      completeEncodedRequestBytes: 1048576,
+      defaultPageCount: 50,
+      maxPageCount: 100,
+      completeEncodedPageBytes: 1048576,
+      commentsCursorTtlSeconds: null,
+    });
+    expect(transport.admission).toEqual({
+      segmentsPerBody: 64,
+      mentionsPerBody: 64,
+      profileDepth: 8,
+      targetsPerAnnotation: 32,
+      shapesPerAnnotation: 128,
+    });
+    expect(transport.incompatibilityRule).toContain('incompatibility');
+    expect(transport.moduleOperations).toEqual([
+      'prepareImportFragment',
+      'inspectPreparedImport',
+      'commitPreparedImport',
+      'prepareExportBoundary',
+      'continueExport',
+      'readExportFragments',
+      'recoverBatchReceipts',
+    ]);
 
+    const capacity = (
+      manifest.extensions as Record<string, Record<string, Record<string, unknown>>>
+    ).capacityDescriptor;
+    expect(capacity.status).toBe('supplemental-module-settings');
+    expect(capacity.defaults).toEqual({ defaultRecords: 50, cursorTtlSeconds: null });
+  });
+
+  it('oracle packaging claims no comments conformance export', () => {
+    const manifest = readManifest();
+    const oracle = (manifest.extensions as Record<string, Record<string, unknown>>)
+      .oraclePackaging as Record<string, unknown>;
+    expect(oracle.qualification).toBe('unverified');
+    expect(oracle.conformanceExportLocation).toBe('unverified');
+    expect(oracle.commentsConformanceExportClaimed).toBe(false);
+    expect(oracle.digestPinnedArchiveRequired).toBe(true);
+    expect(oracle.mutatesFrozenM1Exports).toBe(false);
+    expect(oracle).not.toHaveProperty('conformancePackage');
+    expect(oracle).not.toHaveProperty('conformanceExport');
+
+    // The frozen comments package map exposes no ./conformance export.
+    const commentsPackage = JSON.parse(
+      readFileSync(resolve(REPO_ROOT, 'packages/comments/package.json'), 'utf8'),
+    ) as { exports: Record<string, unknown> };
+    expect(commentsPackage.exports).not.toHaveProperty('./conformance');
+  });
+
+  it('storage-compatibility.md documents the frozen signatures and boundaries', () => {
+    const doc = readFileSync(resolve(REPO_ROOT, DOC_PATH), 'utf8');
     expect(doc).toContain('storage-module-v1');
     expect(doc).toContain('contract-v1.json');
     expect(doc).toContain('e027fdbb4a806df39809326697bf9b60ad5cb977eb1988af3be293da07161ba0');
-    expect(doc).toContain('comments');
+    expect(doc).toContain('CanonicalTransactionHandle');
+    expect(doc).toContain('run<T>(operation');
+    expect(doc).toContain('cas-conflict');
+    expect(doc).toContain('idempotency-conflict');
+    expect(doc).toContain('unauthenticated');
+    expect(doc).toContain('invalid-request');
+    expect(doc).toContain('incomplete');
+    expect(doc).toContain('64 KiB');
+    expect(doc).toContain('512 KiB');
+    expect(doc).toContain('not an existing export');
+    expect(doc).toContain('unverified');
     expect(doc).toContain('by-resource');
     expect(doc).toContain('scope-chain-index');
     expect(doc).toContain('retained-headers');
@@ -187,26 +324,30 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     expect(doc).toContain('staged-units-v1');
   });
 
-  it('validates a compliant cluster-mesh ModuleDescriptor for comments', () => {
+  it('production runtimes stay decoupled across the storage port', () => {
+    const clusterMeshSrc = resolve(REPO_ROOT, 'packages/cluster-mesh/src');
+    const commentsSrc = resolve(REPO_ROOT, 'packages/comments/src');
+    const clusterMeshOffenders = listTsFiles(clusterMeshSrc).filter((abs) =>
+      readFileSync(abs, 'utf8').includes('@sentropic/comments'),
+    );
+    expect(clusterMeshOffenders, 'cluster-mesh production import of @sentropic/comments').toEqual([]);
+    const commentsOffenders = listTsFiles(commentsSrc).filter((abs) =>
+      readFileSync(abs, 'utf8').includes('@sentropic/cluster-mesh'),
+    );
+    expect(commentsOffenders, 'frozen comments production import of cluster-mesh').toEqual([]);
+  });
+
+  it('validates a ModuleDescriptor over the 11 frozen kinds within transport bounds', () => {
+    const contract = JSON.parse(readFileSync(resolve(REPO_ROOT, CONTRACT_PATH), 'utf8')) as {
+      recordKinds: { kind: string }[];
+    };
     const descriptor: ModuleDescriptor = {
       contractVersion: 'contract-v1',
-      contractDigest: PINNED_M1_HASHES['docs/comments-annotations/contract/contract-v1.json'],
+      contractDigest: sha256File(CONTRACT_PATH),
       schemaVersions: ['1.0.0'],
       requiredProfiles: CONSUMER_REQUIREMENTS['m1-adapter'],
       optionalProfiles: ['scope-outbox-v1', 'visibility-barriers-v1', 'staged-units-v1', 'purge-jobs-v1', 'fenced-writers-v1'],
-      chainKinds: [
-        'revision',
-        'review',
-        'tombstone',
-        'purge-intent',
-        'purge-outcome',
-        'operation-audit',
-        'conversion-receipt',
-        'import-receipt',
-        'export-receipt',
-        'retention-hold',
-        'release-hold',
-      ],
+      chainKinds: contract.recordKinds.map((r) => r.kind),
       queryNames: ['by-resource', 'scope-chain-index', 'retained-headers'],
       boundaries: ['thread', 'annotation'],
       pageLimits: { maxRecords: 100, maxEncodedBytes: 1048576 },
