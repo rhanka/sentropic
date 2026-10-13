@@ -3,7 +3,7 @@ import { NativeMessagesUpstreamError, RequestTooLargeError,
 import { GATEWAY_MAX_REQUEST_BODY_BYTES } from '@sentropic/llm-gateway';
 import { confirmedNativeFetch } from './anthropic-native-upload';
 import { nativeReadiness } from './anthropic-native-readiness';
-import { createNativeUpload, nativeHttpError, nativeResponseBytes, nativeTransportHeaders,
+import { createNativeUpload, nativeHttpError, nativeResponseBytes, nativeTransportHeaders, readNativeJson,
   type NativeBodyProbe } from './anthropic-native-transport';
 
 export interface ClaudeNativeRequest extends NativeMessagesRequest {
@@ -53,7 +53,7 @@ export const executeClaudeNative = async (request: ClaudeNativeRequest | undefin
       exposed = true;
       return { kind: 'stream', status: 200, headers: responseHeaders, body, requestSize };
     }
-    const body: unknown = await readiness.race(response.json());
+    const body = await readNativeJson(response, readiness);
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
     }
