@@ -124,6 +124,12 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 413, type: 'request_too_large', message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
     openai: { status: 413, type: 'invalid_request_error', message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.', code: 'request_too_large' },
   },
+  // N03: retryable capacity 503; the golden mapper call carries no Retry-After
+  // so only status/body freeze here (headers asserted in request-body-limit.test.ts).
+  'request-body-capacity': {
+    anthropic: { status: 503, type: 'api_error', message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+    openai: { status: 503, type: 'api_error', message: 'Gateway request body capacity is temporarily exhausted; retry later.', code: 'request_body_capacity' },
+  },
 };
 
 /** Model-scoped failure kinds: the golden mapper calls supply the fixture model. */
