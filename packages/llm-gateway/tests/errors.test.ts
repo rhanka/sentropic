@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
 import {
   GatewayError,
   mapGatewayError,
@@ -513,6 +513,46 @@ describe('Responses field errors (spec §16.7)', () => {
     expect(shaped.body).toEqual({ error: {
       message: 'invalid request', type: 'invalid_request_error', code: 'invalid_request',
     } });
+  });
+
+  it('maps native-unavailable and structural refusals to safeguards 400 on both wires', () => {
+    for (const error of [
+      new GatewayError('native-unavailable', 'native route unavailable'),
+      new RoutePlanError('native unavailable', 'native-unavailable'),
+      new RouteQuoteError('native unavailable', 'native-unavailable'),
+    ]) {
+      const a = toProviderShapedError('anthropic-messages', error);
+      expect(a.status).toBe(400);
+      expect(a.body).toEqual({
+        type: 'error', error: { type: 'invalid_request_error',
+          message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+      });
+      const o = toProviderShapedError('openai-chat-completions', error);
+      expect(o.status).toBe(400);
+      expect(o.body).toEqual({
+        error: { type: 'invalid_request_error', code: 'invalid_request',
+          message: 'safeguards requires the Anthropic Messages endpoint.' },
+      });
+    }
+  });
+
+  it('maps typed native validation public detail without leaking internal error message', () => {
+    const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
+    const gwError = new GatewayError('bad-request', 'secret internal log message',
+      undefined, undefined, undefined, undefined, undefined, detail);
+    const upstreamError = new NativeMessagesUpstreamError({ status: 400, validation: detail });
+
+    for (const error of [gwError, upstreamError]) {
+      const a = toProviderShapedError('anthropic-messages', error);
+      expect(a.status).toBe(400);
+      expect(a.body).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'provider validation failure' } });
+      expect(JSON.stringify(a)).not.toContain('secret internal log message');
+
+      const o = toProviderShapedError('openai-chat-completions', error);
+      expect(o.status).toBe(400);
+      expect(o.body).toEqual({ error: { type: 'invalid_request_error', message: 'provider validation failure', code: 'invalid_request' } });
+      expect(JSON.stringify(o)).not.toContain('secret internal log message');
+    }
   });
 
   it('never renders code/param on other failure kinds or the Anthropic wire', () => {

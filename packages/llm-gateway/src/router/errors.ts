@@ -48,11 +48,17 @@ export type GatewayFailureKind =
   | 'bad-request'
   | 'native-required'
   | 'native-max-tokens-required'
+  | 'native-unavailable'
   | 'unknown-model'
   | 'no-route'
   | 'request-too-large'
   | 'request-body-capacity'
   | 'cross-user-disabled';
+
+export interface NativeValidationPublicDetail {
+  readonly type: string;
+  readonly message: string;
+}
 
 export class GatewayError extends Error {
   constructor(
@@ -78,6 +84,8 @@ export class GatewayError extends Error {
     readonly param?: string,
     /** Trusted measured size for `request-too-large`; never caller text. */
     readonly requestSize?: RequestSizeDetail,
+    /** Public validation detail for native 400 fidelity; excluded from logs/ledgers. */
+    readonly validation?: NativeValidationPublicDetail,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -183,9 +191,16 @@ export const mapGatewayError = (
   field?: FieldError,
   /** Trusted measured size, `request-too-large` only. */
   requestSize?: RequestSizeDetail,
+  /** Native validation public detail; a typed 400 on any kind. */
+  validation?: NativeValidationPublicDetail,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
+  if (validation) {
+    return anthropic
+      ? anthropicError(400, validation.type, validation.message)
+      : openAiError(400, validation.type, validation.message, 'invalid_request');
+  }
 
   switch (kind) {
     case 'caller-auth-failed':
@@ -238,7 +253,8 @@ export const mapGatewayError = (
         ? anthropicError(400, 'invalid_request_error', 'request not permitted')
         : openAiError(400, 'invalid_request_error', 'request not permitted', 'unsupported');
 
-    case 'native-required': {
+    case 'native-required':
+    case 'native-unavailable': {
       const message = anthropic
         ? 'safeguards is not supported by this gateway route; retry without safeguards.'
         : 'safeguards requires the Anthropic Messages endpoint.';
@@ -317,7 +333,15 @@ export const toProviderShapedError = (
       ? { code: error.code, param: error.param }
       : undefined;
     return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, undefined, field,
-      error.requestSize);
+      error.requestSize, error.validation);
+  }
+  const validation = error && typeof error === 'object' && 'validation' in error
+    ? (error as { validation?: NativeValidationPublicDetail }).validation
+    : undefined;
+  if (validation && typeof validation.type === 'string' && typeof validation.message === 'string') {
+    return wire === 'anthropic-messages'
+      ? anthropicError(400, validation.type, validation.message)
+      : openAiError(400, validation.type, validation.message, 'invalid_request');
   }
   // N02: typed 413 evidence survives wrapping (callbacks, settlement, SDK
   // adapters) and maps before auth/rate/overload handling below.
@@ -354,6 +378,9 @@ export const toProviderShapedError = (
   // quote-mismatch and unclassified errors stay on the generic 503 below.
   if (isRoutePlanError(error, 'unknown-model') || isRouteQuoteError(error, 'unknown-model')) {
     return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
+  }
+  if (isRoutePlanError(error, 'native-unavailable') || isRouteQuoteError(error, 'native-unavailable')) {
+    return mapGatewayError(wire, 'native-unavailable');
   }
   // BR-REL-Q7: every known-model no-route without an enrollment diagnostic
   // (checked above) becomes the non-retryable 503. Lot 7: the per-transport
