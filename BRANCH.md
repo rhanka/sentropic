@@ -40,6 +40,7 @@
   - [x] `packages/cluster-mesh/tests/storage/mutations.spec.ts`
   - [x] `.h2a/build/k1_k2a_report.md`
   - [x] `.h2a/build/k1_corev_report.md`
+  - [x] `.h2a/build/k1_r3_report.md`
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -52,7 +53,8 @@
   - [x] `packages/cluster-mesh/src/comments/**`
   - [x] `packages/cluster-mesh/src/modules/**`
   - [x] `packages/cluster-mesh/src/runtime/**`
-  - [x] `.h2a/**`
+  - [x] `.h2a/inputs/**`
+  - [x] `.h2a/reviews/**`
   - [x] `.env`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] `.github/workflows/**`
@@ -64,6 +66,8 @@
 ## Feedback Loop
 - [x] `CI-666-1` — validate-cluster-mesh ENOENT on stale `file:../sentropic-cluster-mesh-0.13.3.tgz` after the 0.15.0 proposal; fixture and lock re-pointed to 0.15.0 via `refresh-lazy-package-lock`, `test-lazy-package` 63/63 green locally.
 - [x] `BR-K1C-EX1` — K1+K2a share one branch with 22 files vs twelve-file §17.4 budget; combined review requested in one pass; rollback by splitting K1C follow-ups per lot if required.
+- [x] `BR-K1C-EX1-RAT` — BR-K1C-EX1 ratified: combined review delivered in one pass (engram Sol rounds 1-2, Opus review of PR #666); no split required.
+- [x] `BR-K1R3-EX1` — Historical discipline deviations already pushed (5 commits over 150 lines: 36c70c715, 325eb11fc, 56acb484a, 6e3bd68fe, fd8134101; 9 K1 commits without BRANCH.md from 09770777a to 6e3bd68fe); history immutable after push; all R3 commits stay under 150 lines with BRANCH.md in-commit; rollback not applicable.
 
 ## AI Flaky tests
 - [x] No AI flaky tests in scope.
@@ -127,6 +131,22 @@
   - [x] Fix 7b async read and authority corpus with injected fixtures.
   - [x] Fix 8 discriminating mutations preserving valid cases.
   - [x] Fix 9 branch file-budget exception recorded above.
+- [ ] Lot R3 — Round-3 fixes for engram Sol-2 REJECT and Opus NO-GO
+  - [ ] R1 persisted record and aggregate values asserted in full.
+  - [ ] R2 bound grant and scope deep-copied and frozen at bind.
+  - [ ] R3 budget measured on full encoded page including envelope.
+  - [ ] R4 disposal resume from a retained non-null boundary.
+  - [ ] MAJEUR-1 opaque cursors plus typed code and outcome assertions.
+  - [ ] MAJEUR-2 disposed chain reads return inaccessible.
+  - [ ] MAJEUR-3 aggregate-version and predicate guards plus unsupported-effect rejection.
+  - [ ] MAJEUR-4 mutations M6-M15 recorded, M5 propagation claim corrected.
+  - [ ] MINEUR-1 page validator allows absent continuation and full encoding.
+  - [ ] MINEUR-2 unparseable nowIso refused for grants and snapshots.
+  - [ ] MINEUR-3 triangle rejects blank and NUL identities per L6a.
+  - [ ] MINEUR-4 scope-level idempotency with divergent-content conflict.
+  - [ ] MINEUR-5 bound-scope snapshot comparison in the reference.
+  - [ ] MINEUR-6 discipline deviations recorded under BR-K1R3-EX1.
+  - [ ] MINEUR-7 BRANCH gates, v4.1 headers and allowed paths fixed.
 - [ ] Lot N — Final validation
   - [ ] Typecheck and Lint
   - [ ] Retest cluster-mesh
