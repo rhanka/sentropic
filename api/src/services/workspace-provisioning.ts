@@ -3,6 +3,8 @@ import type { db } from '../db/client';
 import { workspaceMemberships, workspaces } from '../db/schema';
 import { createId } from '../utils/id';
 import { getDefaultGateConfig } from './gate-service';
+import { todoOrchestrationService } from './todo-orchestration';
+import { viewTemplateService } from './view-template-service';
 import type { WorkspaceType } from './workspace-access';
 
 export type ProvisionWorkspaceClient = Pick<typeof db, 'insert'>;
@@ -84,3 +86,33 @@ export async function notifyWorkspaceCreated(workspaceId: string, userId: string
   await notifyWorkspaceEvent(workspaceId, { action: 'created' });
   await notifyWorkspaceMembershipEvent(workspaceId, userId, { action: 'added', role: 'admin' });
 }
+
+export interface SeedWorkspaceTypeResourcesInput {
+  readonly userId: string;
+  readonly role: string;
+  readonly workspaceId: string;
+  readonly type: WorkspaceType;
+}
+
+/**
+ * Post-commit seeds for a workspace of a given type: workflows/agents and
+ * view templates. Each step is non-fatal (logs and continues), exactly like
+ * the canonical product route. Shared by the route and session adoption so
+ * both creation paths seed identically.
+ */
+export const seedWorkspaceTypeResources = async (
+  input: SeedWorkspaceTypeResourcesInput,
+): Promise<void> => {
+  try {
+    await todoOrchestrationService.seedWorkflowsForType(
+      { userId: input.userId, role: input.role, workspaceId: input.workspaceId }, input.type,
+    );
+  } catch (seedErr) {
+    console.error('Failed to seed workflows for workspace type', input.type, seedErr);
+  }
+  try {
+    await viewTemplateService.seedForWorkspace(input.workspaceId, input.type);
+  } catch (seedErr) {
+    console.error('Failed to seed view templates for workspace type', input.type, seedErr);
+  }
+};
