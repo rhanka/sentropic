@@ -49,6 +49,9 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
     'K2a-RED reads: unrelated writes do not move an exact-head cursor',
   );
 
+  const window = await bound.readPage('readable', 4, null, 4096);
+  assert.deepEqual(hashes(window.records), ['hash-e-1', 'hash-e-2', 'hash-e-3', 'hash-e-4']);
+
   await bound.appendChain('readable', { id: 'e6', bytes: '{"n":6}', hash: 'hash-e-6' }, { kind: 'head', hash: 'hash-e-5' });
   const continued = await bound.readPage('readable', 10, second.nextCursor, 4096);
   assert.deepEqual(
@@ -57,10 +60,12 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
     'K2aC-RED reads: a retained head boundary never picks up later appends',
   );
 
-  const window = await bound.readPage('readable', 4, null, 4096);
-  assert.deepEqual(hashes(window.records), ['hash-e-1', 'hash-e-2', 'hash-e-3', 'hash-e-4']);
   const tail = await bound.readPage('readable', 10, window.nextCursor, 4096);
-  assert.deepEqual(hashes(tail.records), ['hash-e-5']);
+  assert.deepEqual(
+    hashes(tail.records),
+    ['hash-e-5'],
+    'K2aR3-RED reads: a retained window boundary still ends at its own head',
+  );
   const exhausted = await bound.readPage('readable', 10, null, 1);
   assert.equal(exhausted.outcome, 'incomplete');
 
