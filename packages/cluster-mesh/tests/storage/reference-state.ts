@@ -1,5 +1,8 @@
-// Test-only reference state for the K2a shared corpus (L3a v4, §16.1, §17.1).
-// No durability claim: plain in-memory maps scoped by module/tenant/workspace.
+// Test-only reference state for the K2a shared corpus (L3a v4.1 frozen,
+// §16.1, §17.1). No durability claim: plain in-memory maps scoped by
+// module/tenant/workspace.
+
+import type { CommitReceipt } from '../../src/storage/atomic.js';
 
 export interface TestRecord {
   readonly id: string;
@@ -36,6 +39,11 @@ export interface TestAggregate {
   readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string };
 }
 
+export interface TestIdempotencyEntry {
+  readonly receipt: CommitReceipt;
+  readonly unitHash: string;
+}
+
 export interface TestScopeState {
   readonly chains: Map<string, TestChainState>;
   readonly genesis: Map<string, TestGenesisState>;
@@ -43,6 +51,7 @@ export interface TestScopeState {
   readonly records: Map<string, TestAtomicRecord>;
   readonly aggregates: Map<string, TestAggregate>;
   readonly receipts: Map<string, unknown>;
+  readonly commits: Map<string, TestIdempotencyEntry>;
 }
 
 export interface ReferenceState {
@@ -65,6 +74,7 @@ export const getScopeState = (state: ReferenceState, scope: { readonly tenantId:
     records: new Map(),
     aggregates: new Map(),
     receipts: new Map(),
+    commits: new Map(),
   };
   state.scopes.set(key, created);
   return created;
