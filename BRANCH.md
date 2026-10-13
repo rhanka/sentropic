@@ -247,3 +247,4 @@
 - [ ] **Lot N02 — Trusted size evidence (fold)**
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
+  - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).

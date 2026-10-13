@@ -118,6 +118,12 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 503, type: 'api_error', message: 'No route available for model: "no-such-model"' },
     openai: { status: 503, type: 'server_error', message: 'No route available for model: "no-such-model"', code: 'no_route' },
   },
+  // N02: terminal 413 without measured evidence reports unavailable size;
+  // measured sizes are asserted in request-too-large.test.ts.
+  'request-too-large': {
+    anthropic: { status: 413, type: 'request_too_large', message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+    openai: { status: 413, type: 'invalid_request_error', message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.', code: 'request_too_large' },
+  },
 };
 
 /** Model-scoped failure kinds: the golden mapper calls supply the fixture model. */
