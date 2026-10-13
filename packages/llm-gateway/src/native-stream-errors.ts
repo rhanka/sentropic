@@ -1,4 +1,5 @@
-import { NativeMessagesUpstreamError, type NativeMessagesProviderErrorType } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, requestTooLargeDetail,
+  type NativeMessagesProviderErrorType, type RequestSizeDetail } from '@sentropic/llm-mesh';
 import type { NativeSseFrame } from './native-sse.js';
 import { parseNativeErrorDetail } from './native-errors.js';
 import { toProviderShapedError } from './router/errors.js';
@@ -12,6 +13,7 @@ export class NativeSseUpstreamError extends NativeMessagesUpstreamError {}
 /** Preserve only a known class and the bounded native validation channel. */
 export const nativeFrameError = (frame: NativeSseFrame, features: {
   readonly requestSafeguards: boolean; readonly sentBetas: readonly string[];
+  readonly requestSize?: RequestSizeDetail;
 }): NativeSseUpstreamError | undefined => {
   let data: { type?: unknown; error?: { type?: unknown } } | undefined;
   try { data = JSON.parse(frame.data ?? ''); } catch { /* Unknown error frames are protocol failures. */ }
@@ -25,14 +27,16 @@ export const nativeFrameError = (frame: NativeSseFrame, features: {
   if (status === 400) {
     try { validation = parseNativeErrorDetail(frame.data ?? '', status, features); } catch { /* Fixed public text. */ }
   }
-  return new NativeSseUpstreamError({ status, type: type as NativeMessagesProviderErrorType, validation });
+  return new NativeSseUpstreamError({ status, type: type as NativeMessagesProviderErrorType, validation,
+    ...(status === 413 ? { requestSize: features.requestSize } : {}) });
 };
 
 export const nativeLateErrorBytes = (error: unknown): Uint8Array => {
   const known = error instanceof NativeMessagesUpstreamError && error.type && Object.hasOwn(statuses, error.type);
-  const type = known ? error.type : 'api_error';
+  const tooLarge = requestTooLargeDetail(error);
+  const type = tooLarge ? 'request_too_large' : known ? error.type : 'api_error';
   let message = 'stream failed after commitment';
-  if (known && (error.status === 400 || error.status === 413)) {
+  if (tooLarge || (known && error.status === 400)) {
     const mapped = toProviderShapedError('anthropic-messages', error);
     message = (mapped.body as { error: { message: string } }).error.message;
   }
