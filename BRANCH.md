@@ -269,6 +269,9 @@
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
+  - [x] R4-MIN-1: stream `done` with `unknown`/`error`/`cancelled` settles failed/cancelled, never success (`route-stream-flow.ts` + test).
+  - [x] R4-MIN-2: local Responses bound failures classify explicitly neutral (non-retryable, route-scope, no account outcome) + no-suppression proof (`route-health.test.ts`).
+  - [x] R4-MIN-4: partially known Responses usage carries only known components, never exact-zero fill (`responses-egress.ts` + test).
   - [x] R4-MAJ-1: nested Chat `tool_choice` on muse/mistral clients.
   - [x] R4-MAJ-4: pre-dispatch refusal for Messages/Chat tool controls (no billed estimate).
   - [x] R4-MAJ-2: Muse history projection (`toWireMessage` equivalent).
