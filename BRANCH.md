@@ -108,16 +108,16 @@
   - [x] Cluster-mesh typecheck passed; full suite: 487 passed / 35 existing opt-in or reference skips; Make scope check passed.
   - [x] Write `.h2a/build/c0_docs_astra_report.md` and prepare branch-only publication; final push/CI evidence is recorded in that report; never merge.
 
-- [ ] **Lot C0FIX3 — Opus r4 remediation (m1–m3)**
+- [x] **Lot C0FIX3 — Opus r4 remediation (m1–m3)**
   - [x] Broaden boundary test residue rules to class motifs, exclude explicitly marked historical excerpts, and add reformulation test cases (m1).
   - [x] Correct section citations from §9.3 to §9.2 in storage-compatibility.md and storage-alignment.md (m2).
   - [x] Restore verbatim historical alternatives in owner-decisions.md with distinct current allocation (m3).
   - [x] Restore verbatim historical review verdicts in evidence index with distinct current dispositions and refreshed document digests (m3).
-  - [ ] Correct c0_docs_astra_report.md and generate c0_fix3_report.md (m3).
+  - [x] Correct c0_docs_astra_report.md and generate c0_fix3_report.md (m3).
 
-- [ ] **Lot N — Final validation & PR**
-  - [ ] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
-  - [ ] Push `feat/comments-cm-c0` to origin: `git push origin feat/comments-cm-c0`.
-  - [ ] Open draft PR with stacked note ("depends on #663 and #666") (#667).
-  - [ ] Generate `.h2a/build/c0_report.md` (untracked).
-  - [ ] Stop after C0.
+- [x] **Lot N — Final validation & PR**
+  - [x] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
+  - [x] Push `feat/comments-cm-c0` to origin: `git push origin feat/comments-cm-c0`.
+  - [x] Open draft PR with stacked note ("depends on #663 and #666") (#667).
+  - [x] Generate `.h2a/build/c0_report.md` (untracked).
+  - [x] Stop after C0.
