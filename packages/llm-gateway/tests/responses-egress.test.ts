@@ -135,6 +135,12 @@ describe('responses accumulator (spec §16.5)', () => {
       .toThrowError(expect.objectContaining({ code: 'responses_overflow' }));
   });
 
+  it('rejects a single event beyond maxSseEventBytes', () => {
+    const acc = createResponsesAccumulator({ ...DEFAULT_RESPONSES_LIMITS, maxSseEventBytes: 8 });
+    expect(() => acc.observe({ type: 'content_delta', data: { delta: 'way too long' } }))
+      .toThrowError(expect.objectContaining({ code: 'responses_overflow' }));
+  });
+
   it('ingests one-shot JSON responses through the same buffers', () => {
     const acc = createResponsesAccumulator();
     acc.ingest({

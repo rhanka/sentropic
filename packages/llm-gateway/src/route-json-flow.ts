@@ -70,7 +70,7 @@ export const runRouteJsonFlow = async (
       } });
       if (response.usage) observedUsage = routeUsage(response.usage);
       signal?.throwIfAborted();
-      encoded = encodeGatewayResponse(request.wire, response);
+      encoded = encodeGatewayResponse(request.wire, response, request.responsesLimits);
     } catch (error) {
       if (error instanceof BudgetDispatchMarkError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));

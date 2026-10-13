@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import type { StreamEvent } from '@sentropic/llm-mesh';
 
 import { encodeResponsesStream } from '../src/responses-stream.js';
+import type { ResponsesLimits } from '../src/responses-egress.js';
+import { DEFAULT_RESPONSES_LIMITS } from '../src/responses-egress.js';
 
 const text = (delta: string): StreamEvent => ({ type: 'content_delta', data: { delta } });
 const done = (finishReason: 'stop' | 'tool_calls' | 'length', usage?: Record<string, number>): StreamEvent => ({
@@ -19,10 +21,11 @@ async function* feed(events: StreamEvent[]): AsyncGenerator<StreamEvent> {
   for (const event of events) yield event;
 }
 
-const collect = async (events: StreamEvent[]) => {
+const collect = async (events: StreamEvent[], limits?: ResponsesLimits) => {
   const frames: Array<{ event: string; data: Record<string, unknown>; raw: string }> = [];
   const gen = encodeResponsesStream({
     responseId: 'resp_1', model: 'gpt-6.1-sol', createdAt: 1_700_000_000, events: feed(events),
+    ...(limits ? { limits } : {}),
   });
   for await (const frame of gen) {
     const lines = frame.raw.split('\n');
@@ -113,6 +116,17 @@ describe('responses SSE lifecycle (spec §16.5)', () => {
     expect(terminal.event).toBe('response.failed');
     expect(terminal.data).toMatchObject({
       response: { status: 'failed', error: { message: 'boom' } },
+    });
+    expect(frames.filter((frame) => frame.event === 'response.failed')).toHaveLength(1);
+  });
+
+  it('fails neutrally on an over-cap event without truncating', async () => {
+    const frames = await collect([text('way too long for the cap')],
+      { ...DEFAULT_RESPONSES_LIMITS, maxSseEventBytes: 8 });
+    const terminal = frames[frames.length - 1]!;
+    expect(terminal.event).toBe('response.failed');
+    expect(terminal.data).toMatchObject({
+      response: { status: 'failed', error: expect.objectContaining({ code: 'responses_overflow' }) },
     });
     expect(frames.filter((frame) => frame.event === 'response.failed')).toHaveLength(1);
   });

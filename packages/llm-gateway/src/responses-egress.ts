@@ -217,6 +217,18 @@ export const createResponsesAccumulator = (
   };
 
   const observe = (event: StreamEvent): ResponsesAllocation | undefined => {
+    // Spec §16.7: a single content-carrying event above the cap aborts
+    // upstream — no partial buffering of an unbounded frame, no silent
+    // truncation. Terminal and control events (done/error/status) are
+    // bookkeeping, never buffered output, so the encoder's own terminal
+    // failure always fits through.
+    if (event.type === 'content_delta' || event.type === 'reasoning_delta'
+      || event.type === 'tool_call_start' || event.type === 'tool_call_delta') {
+      const eventSize = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+      if (eventSize > limits.maxSseEventBytes) {
+        throw new ResponsesBoundError('responses_overflow', 'responses event size cap exceeded');
+      }
+    }
     if (event.type === 'content_delta') {
       const isNew = !text;
       checkBounds(event.data.delta.length, isNew ? 1 : 0);
