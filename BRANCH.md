@@ -134,8 +134,8 @@
   - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/manifest.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
   - [ ] Lot gate: specs fail on missing runtime (RED), no other files touched.
 - [ ] **Lot 2 — Visibility root and stage validation**
-  - [ ] Write `packages/cluster-mesh/src/storage/visibility-root.ts`: scope visibility root/version, base capture and comparison, single publication point.
-  - [ ] Write `packages/cluster-mesh/src/storage/stage-validation.ts`: bounded seal validation steps with validating/sealed states and resume.
+  - [x] Write `packages/cluster-mesh/src/storage/visibility-root.ts`: scope visibility root/version, base capture and comparison, single publication point.
+  - [x] Write `packages/cluster-mesh/src/storage/stage-validation.ts`: bounded seal validation steps with validating/sealed states and resume.
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
     - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
