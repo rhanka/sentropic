@@ -46,6 +46,22 @@
   - `api/tests/**` (GWV-EX4)
   - `api/src/services/llm-runtime/gateway-wire-adapter.ts` (BR662-EX7)
   - `api/tests/unit/gateway-wire-adapter.test.ts` (BR662-EX7)
+  - `api/src/services/llm-runtime/anthropic-native*.ts` (BR662-EX8)
+  - `api/src/services/llm-runtime/gateway-native-config.ts` (BR662-EX8)
+  - `api/src/services/llm-runtime/gateway-package-version.ts` (BR662-EX8)
+  - `api/src/services/llm-runtime/standalone-ports.ts` (BR662-EX8)
+  - `api/src/services/providers/claude-provider.ts` (BR662-EX8)
+  - `api/src/services/llm-metering/budget-admission.ts` (BR662-EX9)
+  - `api/src/services/llm-metering/route-settlement.ts` (BR662-EX9)
+  - `api/src/services/llm-metering/cost-ledger-sink.ts` (BR662-EX9)
+  - `api/src/services/llm-runtime/gw-native-qualification-*.ts` (BR662-EX10)
+  - `api/tests/ai/gw-native-qualification*` (BR662-EX10)
+  - `api/tests/unit/gateway-route-plane-native.test.ts` (BR662-EX10)
+  - `api/tests/unit/gateway-package-version.test.ts` (BR662-EX10)
+  - `packages/llm-gateway/README.md` (BR662-EX11)
+  - `packages/llm-gateway/CHANGELOG.md` (BR662-EX11)
+  - `packages/llm-mesh/CHANGELOG.md` (BR662-EX11)
+  - `packages/cluster-mesh/CHANGELOG.md` (BR662-EX11)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` (harness grammar; this branch historically used `GWV-EXn`, round 3 declares `BR662-EXn` IDs) in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -65,7 +81,7 @@
 - `GWV-EX3`: root `package-lock.json` refresh via `make lock-root` only (mesh 0.26.0 + gateway 0.20.0 + gateway dep `^0.26.0`). Reason: version bumps desync the lock; CI `npm ci` requires sync. Impact: lock entries for the two bumped workspace packages only. Rollback: `git checkout HEAD -- package-lock.json` + revert bumps.
 - `GWV-EX4`: downstream CI-contract repairs owned by build subagent `gw-build-ci` — `api/src/routes/namespaces/gw.ts` (fence `GW_PATHS`, non-`packages/` so no bump gate), `api/tests/**` (fence + mistral-provider + models + llm-runtime-stream fixtures), `packages/cluster-mesh/tests/**` (version pins 0.26.0/0.20.0). Reason: PR #662 CI red lists exactly these files; all api paths are `allowed but conditional` per §B(b). Impact: fence allowlist + test pins/fixtures only, zero published-version cascade (bump gate scans `packages/*/src` only; api is not under `packages/`; no `packages/*/src` touched). Rollback: `git checkout HEAD -- api packages/cluster-mesh`.
 - `attention`: cloud-code (agy) added to this branch scope on owner request (avoid a repeat request later): verify the agy CLI path through the gateway, fix gaps, cover with tests.
-- `attention`: auto-mode free classifier billing (forward `anthropic-beta` + `safeguards` verbatim, return `safeguard_results` untouched, keep tool-use IDs, forward error bodies unmodified) is EXCLUDED from this branch on owner request — separate later PR, gateway must keep managing (metering/leases/auth + opt-out). Findings so far: request bodies already relayed verbatim; client headers rebuilt at dispatch (beta headers dropped); upstream errors wrapped in gateway envelope (breaks client retry matching).
+- `attention`: auto-mode free classifier billing (forward `anthropic-beta` + `safeguards` verbatim, return `safeguard_results` untouched, keep tool-use IDs, forward error bodies unmodified) was EXCLUDED from this branch on owner request — SUPERSEDED for the native fold by owner decision 2026-10-12 option C (BR662-EX8): native `safeguards` selection/relay and `safeguard_results` preservation land here; no free-billing/subsidy policy is introduced.
 - `attention`: URGENT owner brief via `agent:conductor:38f44695f2ad` (`env:send:0fd2a7cf`, 02:44 UTC) — codex device-flow poll loop has zero network tolerance: 1 ETIMEDOUT aborts enrollment (owner failed 4x in a row, ~10% flaky network). Fixed as Lot 9 (retry 3 + backoff on poll and token exchange, cause+URL on exhaustion). Equal priority to mute-503 Lot 7.
 - `acknowledge`: `GWV-EX4` verified 2026-10-11 — api fence 67/67, mistral-provider 16/16, models 4/4, stream 139/140 (1 pre-existing conditional `skipIf`), cluster-mesh surfaces 9/9 + 7/7, `install-internal-packages` green after repair. Stack `ENV=test-gw-wires` (ports 8792/5192/1092, `REGISTRY=local`) healthy 4/4.
 - `attention`: env worktree — `packages/llm-mesh/node_modules` root-owned (stale `.vite` Oct 10, out of scope) moved aside to `node_modules.root-bak-20261011/` (uncommitted, owner removes with sudo); missing `docker buildx` installed under `~/.docker/cli-plugins`; worktree has no `.env` (normal, gitignored) — `REGISTRY=local` passed as a make variable.
@@ -217,3 +233,11 @@
   - [ ] Final gate step 3: once UAT + CI `OK`, commit removal of `BRANCH.md`, push, merge.
   - [ ] Publish via CI OIDC (`publish-llm-mesh`, `publish-llm-gateway`, `publish-cluster-mesh`); verify npm versions 0.26.0 / 0.20.0 / 0.14.0.
   - [ ] Mark loop `gw-muse-vibe-wires` done; reply to `agent:conductor:38f44695f2ad`.
+- `BR662-EX8`: native runtime/provider/composition — `api/src/services/llm-runtime/anthropic-native{,-http,-transport,-upload,-readiness,-lease,-observation}.ts`, `gateway-native-config.ts`, `gateway-package-version.ts`, `standalone-ports.ts`, `api/src/services/providers/claude-provider.ts`; extends EX5/EX7 (`gateway-count-tokens.ts`, `gateway-route-plane.ts`, `gateway-wire-adapter.ts`) and GWV-EX4 (`api/src/routes/namespaces/gw.ts`). Reason: host auth, raw execution, canonical SDK guard, composition. Impact: host runtime/namespace behavior; no caller-selected transport. Rollback: revert the fold slices as a coherent set; OFF removes activation, not ordinary count/body changes.
+- `BR662-EX9`: metering/body-parser contracts — `api/src/services/llm-metering/budget-admission.ts`, `route-settlement.ts`, `cost-ledger-sink.ts`. Reason: checked-body settlement inspection, exact native prices, role-separated observation/audit. Impact: financial contract under existing DB fences; no migration. Rollback: coordinated with usage/host slices, never mixed price contracts.
+- `BR662-EX10`: qualification/API tests — `api/src/services/llm-runtime/gw-native-qualification-{cap,observer,plan,transport}.ts`, `api/tests/ai/gw-native-qualification-{http,ledger,readiness,receipts,run}.ts` + entry, `api/tests/unit/gateway-route-plane-native.test.ts`, `gateway-package-version.test.ts`, gateway/mesh native unit tests. Reason: inert-by-default tooling, isolated fixtures, no provider traffic. Rollback: revert tooling/imports together; preserve sanitized records from a later owner run.
+- `BR662-EX11`: release docs — `packages/llm-gateway/README.md`, `CHANGELOG.md`, `packages/llm-mesh/CHANGELOG.md`, `packages/cluster-mesh/CHANGELOG.md` (spec already allowed). Reason: native release/gating/compatibility docs. Impact: docs only. Rollback: revert added sections. Extends EX6/GWV-EX3 rationale to the combined candidate train (mesh 0.26.0 / gateway 0.20.0 / cluster-mesh 0.14.0); no new versions.
+- `acknowledge` (N00 baseline 2026-10-12): branch `fix/llm-gateway-muse-vibe-wires` HEAD `c06589b75` verified; R source `feat/llm-gateway-native-relay` `9055406f0` read-only, never pushed; coverage SHA-256 `81ecae2e…288bb`; native stays OFF by default; versions frozen 0.26.0/0.20.0/0.14.0; no R manifests/locks/versions transplanted. Test gates: `typecheck-llm-mesh`, `typecheck-llm-gateway`, `typecheck-api`, `typecheck-cluster-mesh`, `lint-llm-mesh`, `lint-llm-gateway`, `lint-api`, `lint-cluster-mesh`, `test-llm-mesh`, `test-llm-gateway`, `test-api-unit`, `test-api-endpoints`, `test-cluster-mesh`, `check-llm-model-equivalences`; env `ENV=test-gw-wires` last with ports 9470/5670/1570 (9470/1570 confirmed owned by this project's `test-gw-wires` stack); one Docker build at a time; no Opus `pr662_opus_r4.md` present, no BLOQUANT/MAJEUR to fix.
+- [ ] **Lot N00 — Scope and baseline (native fold)**
+  - [ ] EX8–EX11 declared above; classifier exclusion superseded; count/metering scope narrowed to EX8/EX9.
+  - [ ] Spec §17 committed in capped slices; no R plan/history or version literals imported.
