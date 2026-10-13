@@ -300,6 +300,20 @@ export const createGatewayRouter = (
     } catch (error) {
       return sendError(c, toProviderShapedError(wire, error, model), id);
     }
+    // Spec §16.2: a legacy/scaffold-only router answers an authenticated
+    // OpenAI-shaped 501 for this wire without calling its legacy Chat
+    // Completions dispatch.
+    if (wire === 'openai-responses' && !routeFlowDeps) {
+      try {
+        const auth = await authenticateCaller(config.callerAuth, headers, authContext);
+        if (!auth.ok || !auth.cost) {
+          throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
+        }
+      } catch (error) {
+        return sendError(c, toProviderShapedError(wire, error, model), id);
+      }
+      return sendError(c, notImplemented(wire), id);
+    }
     const flowRequest = {
       wire, headers, body, model, stream, authContext,
       signal: c.req.raw.signal,
