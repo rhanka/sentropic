@@ -120,12 +120,12 @@
   - [x] Implement packages/cluster-mesh/tests/storage/read-corpus.ts.
   - [x] Implement packages/cluster-mesh/tests/storage/reference.spec.ts executing the corpus against the reference.
   - [x] Implement packages/cluster-mesh/tests/storage/mutations.spec.ts with discriminating recorded mutations.
-  - [ ] Lot gate:
-    - [ ] make typecheck-cluster-mesh API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
-    - [ ] make test-cluster-mesh API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
+  - [x] Lot gate:
+    - [x] make typecheck-cluster-mesh API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
+    - [x] make test-cluster-mesh API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
     - [x] K2a corpus executed against the test reference.
     - [x] Discriminating mutations recorded.
-    - [ ] K2a exit commit recorded.
+    - [x] K2a exit commit recorded.
 - [ ] Lot K1C — Co-review fixes for K1/K2a rejection
   - [x] Fix 1 local live without product triplet plus partial-triplet rejection.
   - [x] Fix 2 parsed-instant expiry for grants and leased snapshots.
@@ -155,8 +155,8 @@
   - [x] MINEUR-6 discipline deviations recorded under BR-K1R3-EX1.
   - [x] MINEUR-7 BRANCH gates, v4.1 headers and allowed paths fixed.
 - [ ] Lot N — Final validation
-  - [ ] Typecheck and Lint
-  - [ ] Retest cluster-mesh
+  - [x] Typecheck and Lint
+  - [x] Retest cluster-mesh
   - [x] Bumped packages/cluster-mesh/package.json version to 0.15.0 (proposal, not published).
   - [x] make scope-check API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
   - [x] Final gate step 1: push branch and open DRAFT PR to main using BRANCH.md text as PR body (never merge).
