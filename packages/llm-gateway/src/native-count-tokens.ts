@@ -105,7 +105,14 @@ export const runNativeCountTokens = async (options: {
   try {
     const result = await capability.execute({ body: { ...body },
       headers: { forwarded: headers, anthropicVersion: version }, signal: request.signal, requestId: request.requestId });
-    if (!Number.isSafeInteger(result.body.input_tokens) || (result.body.input_tokens as number) < 0) {
+    // Same envelope discipline as native Messages (`assertNativeMessagesResult`):
+    // a non-JSON kind, non-200 status or misshapen headers/body is a 503,
+    // never a verbatim 200 with a corrupt count.
+    if (!result || result.kind !== 'json' || result.status !== 200 || !result.headers
+      || typeof result.headers !== 'object' || Array.isArray(result.headers)
+      || !Object.values(result.headers).every(value => typeof value === 'string')
+      || !result.body || typeof result.body !== 'object' || Array.isArray(result.body)
+      || !Number.isSafeInteger(result.body.input_tokens) || (result.body.input_tokens as number) < 0) {
       throw new NativeCountUpstreamError(anthropicError(503, 'api_error',
         'counting service temporarily unavailable'));
     }

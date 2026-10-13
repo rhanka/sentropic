@@ -14,8 +14,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { InMemoryRoutePlanner, type VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 
 import {
-  createGatewayRouter, NativeCountTokensRateLimiter, NativeCountUpstreamError,
-  PersonalPassthroughCallerAuth, stubGatewayConfig, VerifiedCostContextResolver,
+  createGatewayRouter, GatewayError, NativeCountTokensRateLimiter, NativeCountUpstreamError,
+  PersonalPassthroughCallerAuth, runNativeCountTokens, stubGatewayConfig, VerifiedCostContextResolver,
+  type NativeCountTokensResult,
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
 import { authHeaders, buildHarness } from './fixtures/harness.js';
@@ -361,6 +362,86 @@ describe('POST /v1/messages/count_tokens', () => {
       }
     });
 
+    it.each([-1, 0.5, Number.MAX_SAFE_INTEGER + 1, '2', undefined, null, NaN, Infinity])(
+      'rejects invalid successful input_tokens %s without dispatch side effects', async inputTokens => {
+        const h = countHarness({}, async () => ({ kind: 'json', status: 200, headers: {},
+          body: { input_tokens: inputTokens } }));
+        const res = await sendCount(h);
+        expect(h.execute).toHaveBeenCalledTimes(1);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({
+          type: 'error', error: { type: 'api_error', message: 'counting service temporarily unavailable' },
+        });
+        expect(res.headers.has('x-sentropic-relay')).toBe(false);
+        expect(h.h.metering.settlements).toHaveLength(0);
+      });
+
+    it('clones only the top level, preserves nested identity and prepares exactly once', async () => {
+      // Direct call (no JSON round-trip): identity only holds before parsing.
+      const h = countHarness();
+      const body = Object.freeze({ model: COUNT_MODEL, messages: [{ role: 'user', content: 'ping' }],
+        system: [{ text: 'system' }], tools: [{ name: 'tool', future: ['unknown'] }], unknown: { ordered: [2, 1] } });
+      const before = JSON.stringify(body);
+      const signal = new AbortController().signal;
+      const cost = { tenantId: 't', principalId: 'p', source: 'test', correlationId: 'c' };
+      const result = await runNativeCountTokens({ port: h.port, rate: h.rate },
+        { body, cost, headers: {}, signal, requestId: 'server-id' });
+      const sent = h.execute.mock.calls[0]![0];
+      expect(sent.body).toEqual(body);
+      expect(sent.body).not.toBe(body);
+      for (const key of ['messages', 'system', 'tools', 'unknown']) {
+        expect(sent.body[key]).toBe(body[key as keyof typeof body]);
+      }
+      expect(JSON.stringify(body)).toBe(before);
+      expect(Object.keys(sent.body).sort()).toEqual(Object.keys(body).sort());
+      expect(sent).toEqual({ body, signal, requestId: 'server-id',
+        headers: { forwarded: {}, anthropicVersion: '2023-06-01' } });
+      expect(result).toBe(await h.execute.mock.results[0]!.value);
+      expect(h.prepare).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts version-only requests with no beta, stream or ceiling insertion', async () => {
+      const h = countHarness();
+      const body = { model: COUNT_MODEL, messages: [], future: { kept: true } };
+      const res = await sendCount(h, body, { 'anthropic-version': '2023-06-01' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ input_tokens: 17 });
+      expect(h.execute.mock.calls[0]![0].body).toEqual(body);
+      expect(h.execute.mock.calls[0]![0].headers.forwarded).toEqual({ 'anthropic-version': '2023-06-01' });
+      expect(res.headers.get('x-sentropic-relay')).toBe('native');
+      expect(res.headers.has('x-sentropic-served')).toBe(false);
+    });
+
+    it('keeps supplied stream/ceiling fields opaque and always responds with JSON', async () => {
+      const h = countHarness();
+      const body = { model: COUNT_MODEL, stream: true, max_tokens: 'upstream-validates', future: [1] };
+      const res = await sendCount(h, body);
+      expect(h.execute.mock.calls[0]![0].body).toEqual(body);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('application/json');
+    });
+
+    it('refuses a Connection-nominated version instead of silently replacing it', async () => {
+      const h = countHarness();
+      const res = await sendCount(h, countBody(), { connection: 'Anthropic-Version', 'anthropic-version': '2023-06-01' });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual(NOT_SUPPORTED_FOR_REQUEST);
+      expect(h.execute).not.toHaveBeenCalled();
+    });
+
+    it.each([{ kind: 'stream' }, { status: 201 }, { body: [] }, { headers: null },
+      { headers: { secret: 3 } }])('rejects malformed successful envelopes %j', async patch => {
+      const h = countHarness({}, async () => ({ kind: 'json', status: 200, headers: {},
+        body: { input_tokens: 2 }, ...patch }) as unknown as NativeCountTokensResult);
+      const res = await sendCount(h);
+      expect(h.execute).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({
+        type: 'error', error: { type: 'api_error', message: 'counting service temporarily unavailable' },
+      });
+      expect(h.h.metering.settlements).toHaveLength(0);
+    });
+
     it('never plans, quotes or meters on the count path', async () => {
       const h = countHarness();
       await sendCount(h);
@@ -399,6 +480,38 @@ describe('POST /v1/messages/count_tokens', () => {
         const res = await sendCount(h);
         expect(res.status).toBe(400);
         expect(h.prepare).not.toHaveBeenCalled();
+        expect(h.execute).not.toHaveBeenCalled();
+      });
+
+      it.each([null, [], {}, { model: '' }, { model: 2 }])('rejects a malformed count body %j before the port', async body => {
+        const h = countHarness();
+        const res = await sendCount(h, body);
+        expect(res.status).toBe(400);
+        expect(h.prepare).not.toHaveBeenCalled();
+        expect(h.execute).not.toHaveBeenCalled();
+      });
+
+      it('refuses a capability from another provider without dispatching', async () => {
+        const h = countHarness();
+        h.prepare.mockResolvedValue({ ...h.capability, providerId: 'openai' });
+        const res = await sendCount(h);
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual(NOT_SUPPORTED_FOR_REQUEST);
+        expect(h.execute).not.toHaveBeenCalled();
+      });
+
+      it('keeps a port-reported unknown model at the frozen 404', async () => {
+        const h = countHarness();
+        // Recognized by the catalog, rejected by the port: the rejection —
+        // not the catalog verdict — must still surface the frozen 404.
+        h.prepare.mockRejectedValue(new GatewayError('unknown-model', 'secret catalog'));
+        const res = await sendCount(h);
+        expect(h.prepare).toHaveBeenCalledTimes(1);
+        expect(res.status).toBe(404);
+        expect(await res.json()).toEqual({
+          type: 'error',
+          error: { type: 'not_found_error', message: `Unknown model: "${COUNT_MODEL}"` },
+        });
         expect(h.execute).not.toHaveBeenCalled();
       });
     });
