@@ -304,6 +304,7 @@
   - [x] **Lot N15c — served-model/fallback/iterations latches (`7cbdbfe40`)**: `observeResponse` model verification + mismatch latches in JSON/SSE paths; 15/15 GREEN (M-family regression tests land with `4e35b20fe`).
   - [x] **Lot N16a — served-model units40 pricing (`750f755b7`, early per R build order: N15d is authored on it)**: `NATIVE_CACHE_PRICING_POLICY` + read-weight table + `validateNativeInputPriceUnits40`/`nativeCacheInputPriceUnits40` + snapshot wiring; 15/15 GREEN.
   - [x] **Lot N15d — cumulative input proof validation (`589118b24`, on N16a per R build order)**: proof-accepted gate before finality; typecheck clean, 15/15 GREEN (proof regression tests land with `4e35b20fe`).
+  - [x] **Lot N15e — re-review regressions (`4e35b20fe`)**: M1–M7/N5 families (SSE overflow/boundaries, accumulator malformed/decreasing/overflow, served-model latches) 21/21 GREEN.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
