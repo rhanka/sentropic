@@ -26,10 +26,9 @@ import * as mesh from '@sentropic/llm-mesh';
 import type { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { NativeSseUpstreamError } from '../native-stream-errors.js';
 import {
-  detectNativeBillingError,
   isProcessedNativeValidationDetail,
   NATIVE_BILLING_MASKED_MESSAGE,
-  sanitizeNativeErrorMessage,
+  parseNativeErrorDetail,
 } from '../native-errors.js';
 import { requestTooLargeMessage } from '../request-too-large.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
@@ -187,16 +186,16 @@ const isNativeMessagesUpstreamError = (error: unknown): error is NativeMessagesU
 };
 
 const extractNativeValidationDetail = (error: NativeMessagesUpstreamError): NativeValidationPublicDetail | undefined => {
-  const detail = error.validation;
+  let detail = error.validation;
   if (!detail || typeof detail !== 'object' || typeof detail.message !== 'string') return undefined;
-  const rawMessage = detail.message;
-  const isBilling = rawMessage === NATIVE_BILLING_MASKED_MESSAGE ||
-    (!isProcessedNativeValidationDetail(detail) && detectNativeBillingError(rawMessage));
-  if (isBilling) {
-    return { type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE };
+  if (!isProcessedNativeValidationDetail(detail)) {
+    try {
+      detail = parseNativeErrorDetail(JSON.stringify({ error: { type: detail.type, message: detail.message } }), 400);
+    } catch { return undefined; }
   }
+  if (detail.message === NATIVE_BILLING_MASKED_MESSAGE) return detail;
   if (error.type !== 'invalid_request_error' || detail.type !== 'invalid_request_error') return undefined;
-  return { type: 'invalid_request_error', message: sanitizeNativeErrorMessage(rawMessage) };
+  return detail;
 };
 
 /**
