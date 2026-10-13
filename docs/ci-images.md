@@ -51,19 +51,23 @@ Production tag inputs include API migrations and compiled IdP/screen sources.
 
 Publication (`make publish-api-image` / `scripts/publish-api-image.sh`) verifies the
 receipt and inspects the remote registry manifest (`docker manifest inspect`) before pushing:
-- **Absent**: If the target tag does not exist in the registry, publication proceeds normally.
+- **Absent**: If the target tag does not exist in the registry (identified strictly by an exact, case-sensitive missing-manifest signal on inspect stderr), publication proceeds normally.
 - **Exists with identical digest**: If the tag exists and its remote config digest matches the local artifact (`API_IMAGE_REF`), push is skipped idempotently without re-pushing or overwriting.
 - **Exists with different digest (collision)**: If the tag exists and points to a different config digest, publication immediately FAILS with a non-zero exit code and an explicit collision error. Immutable release tags must never be overwritten.
-- **Registry inspect error**: Any other inspection failure (such as authorization or network failures) fails closed and halts publication.
+- **Registry inspect error**: Any other inspection failure (such as credential helper, network, or authorization failures) fails closed and halts publication.
+
+This provides local artifact/config identity, not a complete OCI manifest digest or a deployed Pod imageID proof. Registry digest receipts, registry-enforced immutable tags and deployment evidence remain follow-ups. Clear the generated receipt when intentionally returning a checkout to tag-based use.
+
+Because remote registries may lack native immutable tag enforcement, an inspect-then-push sequence contains an inherent time-of-check to time-of-use (TOCTOU) window. In CI, this window is serialized by the GitHub Actions concurrency group `concurrency: api-image-publication` (`.github/workflows/ci.yml:1592-1594`).
 
 ### Moving tags vs immutable release tags
 
 - **Immutable release tags**: Canonical content-addressed tags (`API_VERSION` hashes) represent immutable production releases. The collision guard strictly prevents overwriting existing tags with different digests and ensures idempotency when tags already exist with the same digest.
-- **Moving / alias tags**: Pointers such as `main` and `latest` are designed to advance across builds and promotions. They bypass the immutable collision check. The `main` alias is promoted directly from the verified local ID via `make publish-api-main-image` without re-pulling.
+- **Moving / alias tags**: Pointers such as `main` are designed to advance across builds and promotions. `scripts/publish-api-image.sh` strictly refuses moving tag aliases. The `main` alias is promoted directly from the verified local ID via `make publish-api-main-image` without re-pulling.
 
 ### Historical incident context
 
-Tag collision detection was initially introduced in commit `ec018720d` ("ci: carry the qualified API artifact through E2E and publication") to guard against artifact drift. The guard has been formalized into `scripts/publish-api-image.sh` and regressed mechanically via `make test-ci-api-tag-guard` (`scripts/test-api-tag-guard.sh`) to guarantee idempotent skipping on matching digests, strict rejection on mismatching digests, and explicit moving tags semantics.
+Tag collision detection was initially introduced in commit `ec018720d` ("ci: carry the qualified API artifact through E2E and publication") to guard against artifact drift. The guard has been formalized into `scripts/publish-api-image.sh` and regressed mechanically via `make test-ci-api-tag-guard` (`scripts/test-api-tag-guard.sh`) to guarantee idempotent skipping on matching digests, strict rejection on mismatching digests, failsafe closure on inspection or network errors, and explicit moving tags semantics.
 
 ## Local checks and security
 
