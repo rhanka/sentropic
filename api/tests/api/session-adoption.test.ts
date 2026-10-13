@@ -184,9 +184,11 @@ describe('session adoption workspace binding', () => {
     await service.adopt({
       sessionId: 'sess-adopt-9', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
-    const getMissingPrincipal = service.get as unknown as (
-      sessionId: string, tenantId: string, principalId?: string,
-    ) => Promise<unknown>;
+    const getMissingPrincipal = (
+      service.get as unknown as (
+        sessionId: string, tenantId: string, principalId?: string,
+      ) => Promise<unknown>
+    ).bind(service);
     await expect(getMissingPrincipal('sess-adopt-9', TENANT_A)).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
@@ -198,9 +200,11 @@ describe('session adoption workspace binding', () => {
     const outsider = await createAuthenticatedUser('editor');
     await expect(service.detach('sess-adopt-unknown', TENANT_A, outsider.id))
       .rejects.toMatchObject({ code: 'workspace_rights_refused' });
-    const getAsOutsider = service.get as unknown as (
-      sessionId: string, tenantId: string, principalId: string,
-    ) => Promise<unknown>;
+    const getAsOutsider = (
+      service.get as unknown as (
+        sessionId: string, tenantId: string, principalId: string,
+      ) => Promise<unknown>
+    ).bind(service);
     await expect(getAsOutsider('sess-adopt-10', TENANT_A, outsider.id))
       .rejects.toMatchObject({ code: 'workspace_rights_refused' });
   });
@@ -265,6 +269,98 @@ describe('session adoption workspace binding', () => {
     await expect(service.adopt(attempt)).rejects.toMatchObject({ code: 'workspace_rights_refused' });
     await db.update(workspaceMemberships).set({ role: 'editor' }).where(scope);
     await expect(service.adopt(attempt)).resolves.toMatchObject({ status: 'attached' });
+  });
+
+  it('should allow a tenant admin to detach a session they do not own', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-15', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const admin = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: admin.id, status: 'approved', role: 'admin',
+    });
+    await expect(service.detach('sess-adopt-15', TENANT_A, admin.id))
+      .resolves.toMatchObject({ status: 'detached' });
+  });
+
+  it('should keep ended sessions immutable via the API', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-16', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    await service.end('sess-adopt-16', TENANT_A, user.id);
+    await expect(service.adopt({
+      sessionId: 'sess-adopt-16', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    })).rejects.toMatchObject({ code: 'session_ended' });
+    await expect(service.detach('sess-adopt-16', TENANT_A, user.id))
+      .rejects.toMatchObject({ code: 'session_ended' });
+    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
+    expect(ws?.id).toBe(workspaceId);
+  });
+
+  it('should conflict concurrent adopts of different workspaces', async () => {
+    const service = new SessionWorkspaceService();
+    const secondWorkspaceId = crypto.randomUUID();
+    await db.insert(workspaces).values({
+      id: secondWorkspaceId, ownerUserId: user.id, name: 'Second code project',
+      type: 'code', tenantId: TENANT_A,
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId: secondWorkspaceId, userId: user.id, role: 'admin',
+    });
+    const outcomes = await Promise.allSettled([
+      service.adopt({ sessionId: 'sess-adopt-12', tenantId: TENANT_A, principalId: user.id, workspaceId }),
+      service.adopt({
+        sessionId: 'sess-adopt-12', tenantId: TENANT_A, principalId: user.id, workspaceId: secondWorkspaceId,
+      }),
+    ]);
+    const fulfilled = outcomes.filter((o) => o.status === 'fulfilled');
+    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled[0]).toMatchObject({ status: 'fulfilled', value: { status: 'attached' } });
+    const rejected = outcomes.filter((o) => o.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'session_already_attached' });
+  });
+
+  it('should leave no orphan workspace when concurrent creates race', async () => {
+    const service = new SessionWorkspaceService();
+    const countTenantWorkspaces = async (): Promise<number> => (
+      await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.tenantId, TENANT_A))
+    ).length;
+    const before = await countTenantWorkspaces();
+    const outcomes = await Promise.allSettled([
+      service.adopt({
+        sessionId: 'sess-adopt-13', tenantId: TENANT_A, principalId: user.id,
+        create: { name: 'Race A project', type: 'code' },
+      }),
+      service.adopt({
+        sessionId: 'sess-adopt-13', tenantId: TENANT_A, principalId: user.id,
+        create: { name: 'Race B project', type: 'code' },
+      }),
+    ]);
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.filter((o) => o.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'session_already_attached' });
+    expect(await countTenantWorkspaces() - before).toBe(1);
+  });
+
+  it('should scope get to the tenant for approved members', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-9', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_B, userId: user.id, status: 'approved', role: 'member',
+    });
+    const getAsMember = (
+      service.get as unknown as (
+        sessionId: string, tenantId: string, principalId: string,
+      ) => Promise<unknown>
+    ).bind(service);
+    await expect(getAsMember('sess-adopt-9', TENANT_A, user.id)).resolves.toMatchObject({ workspaceId });
+    await expect(getAsMember('sess-adopt-9', TENANT_B, user.id)).resolves.toBeNull();
   });
 
   it('should recover the binding after restart', async () => {
