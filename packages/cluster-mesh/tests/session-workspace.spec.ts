@@ -68,6 +68,7 @@ describe('session workspace binding', () => {
     await service.attach(attachInput());
     const detached = await service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
     });
     expect(detached.status).toBe('detached');
     expect(detached.workspaceId).toBe('workspace-1');
@@ -81,6 +82,7 @@ describe('session workspace binding', () => {
     await service.attach(attachInput());
     const ended = await service.end({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
     });
     expect(ended.status).toBe('ended');
     expect(ended.workspaceId).toBe('workspace-1');
@@ -100,9 +102,11 @@ describe('session workspace binding', () => {
     await service.attach(attachInput({ principalId: 'user-1' }));
     await expect(service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: false,
+      expectedVersion: 1,
     })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
     const detached = await service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: true,
+      expectedVersion: 1,
     });
     expect(detached.status).toBe('detached');
   });
@@ -113,9 +117,11 @@ describe('session workspace binding', () => {
     await service.attach(attachInput({ principalId: 'user-1' }));
     await expect(service.end({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: false,
+      expectedVersion: 1,
     })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
     const ended = await service.end({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: true,
+      expectedVersion: 1,
     });
     expect(ended.status).toBe('ended');
   });
@@ -145,7 +151,7 @@ describe('session workspace binding', () => {
     await service.attach(attachInput());
     await expect(service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a',
-      principalId: undefined as unknown as string, isAdmin: false,
+      principalId: undefined as unknown as string, isAdmin: false, expectedVersion: 1,
     })).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
@@ -155,7 +161,7 @@ describe('session workspace binding', () => {
     await service.attach(attachInput());
     await expect(service.end({
       sessionId: 'session-1', tenantId: 'tenant-a',
-      principalId: undefined as unknown as string, isAdmin: false,
+      principalId: undefined as unknown as string, isAdmin: false, expectedVersion: 1,
     })).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
@@ -249,6 +255,7 @@ describe('session workspace binding', () => {
         raceTriggered = true;
         await service.detach({
           sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+          expectedVersion: 1,
         });
         await service.attach(attachInput({ workspaceId: 'workspace-2', principalId: 'user-2' }));
       }
@@ -298,9 +305,11 @@ describe('session workspace binding', () => {
     await service.attach(attachInput());
     await service.end({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: true,
+      expectedVersion: 1,
     });
     await expect(service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: true,
+      expectedVersion: 2,
     })).rejects.toMatchObject({ code: 'session_ended' });
   });
 
@@ -312,6 +321,7 @@ describe('session workspace binding', () => {
 
     const detached = await service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
     });
     expect(detached.version).toBe(2);
 
@@ -320,6 +330,7 @@ describe('session workspace binding', () => {
 
     const ended = await service.end({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 3,
     });
     expect(ended.version).toBe(4);
   });
@@ -337,6 +348,7 @@ describe('session workspace binding', () => {
         raceTriggered = true;
         await service.detach({
           sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+          expectedVersion: 1,
         });
         await service.attach(attachInput({
           workspaceId: 'workspace-2', principalId: 'user-2',
@@ -347,6 +359,7 @@ describe('session workspace binding', () => {
 
     await expect(service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
     })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
 
     const current = await originalFindBySession('session-1');
@@ -362,6 +375,7 @@ describe('session workspace binding', () => {
 
     await service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
     });
     await service.attach(attachInput({ principalId: 'user-2' }));
 
@@ -379,6 +393,7 @@ describe('session workspace binding', () => {
 
     await service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
     });
     await service.attach(attachInput());
 
@@ -395,6 +410,7 @@ describe('session workspace binding', () => {
     const initial = await service.attach(attachInput());
     await service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: 1,
     });
     const reattached = await service.attach(attachInput());
     expect(isExpectedBindingState(initial, initial)).toBe(true);

@@ -171,9 +171,9 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] RED API: forced-interleave stale-admin detach test (replaces racy Promise.allSettled test)
   - [x] RED domain: expectedVersion omission test in session-workspace.spec.ts
   - [x] GREEN MAJ-2: idempotent second end via the API
-  - [ ] GREEN m3: required expectedVersion in domain detach/end inputs
+  - [x] GREEN m3: required expectedVersion in domain detach/end inputs
   - [ ] GREEN m2: re-authorized single-decision get on row move
-  - [ ] GREEN m4: CAS tuple doc corrected (Drizzle WHERE is the SQL projection)
+  - [x] GREEN m4: CAS tuple doc corrected (Drizzle WHERE is the SQL projection, pinned per-predicate)
   - [ ] GREEN m5: shared seeds/notify via workspace-provisioning, route uses shared notify
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit adoption, scope-check
 - [ ] **Lot N — Final validation**
