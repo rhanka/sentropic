@@ -12,8 +12,6 @@ CREATE TABLE IF NOT EXISTS "control"."session_workspace_bindings" (
 	CONSTRAINT "session_workspace_bindings_status_check" CHECK ("control"."session_workspace_bindings"."status" IN ('attached', 'detached', 'ended'))
 );
 --> statement-breakpoint
-ALTER TABLE "control"."session_workspace_bindings" ADD COLUMN IF NOT EXISTS "principal_id" text;
---> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "session_workspace_bindings_session_unique" ON "control"."session_workspace_bindings" USING btree ("session_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "session_workspace_bindings_tenant_workspace_idx" ON "control"."session_workspace_bindings" USING btree ("tenant_id","workspace_id");

@@ -15,7 +15,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 - All new text in English.
 - No D2 content consent or mirror, no UI.
 - Cluster-mesh version coordination tuple: #662 is 0.14.0, #666 is 0.15.0, #664 moves to next free at rebase; this branch proposes 0.16.0.
-- Migration recalage rule: `0011_session_workspace_bindings` has `when: 1791900000000` strictly after 0009 cowork (`1791632933743`) and 0010 live-git (`1791845400000`). If rebased, re-verify contiguous `idx` and `when > last.when`.
+- Migration recalage rule: `0011_session_workspace_bindings` has `when: 1791855645000` strictly after 0009 cowork (`1791632933743`) and 0010 live-git (`1791845400000`) and not in the future. If rebased, re-verify contiguous `idx` and `when > last.when`.
 - History semantics: "Keep project and history after detach/end" guarantees that the Sentropic workspace data (files, commits, history) is preserved across session detachment and termination.
 - Session registry dependency: session ID validity against the session registry is gated on PR #664 (L6a contract).
 
@@ -32,8 +32,6 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - `api/tests/api/llm-admission-schema.test.ts`
   - `api/drizzle/control/0011_session_workspace_bindings.sql`
   - `api/drizzle/control/meta/_journal.json`
-  - `.h2a/build/app_cm_lot1_report.md`
-  - `.h2a/build/app_cm_lot1_fix_report.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -90,7 +88,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] Confirm scope and guardrails
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR01-EX1`
   - [x] Environment mapping: `ENV=test-session-ws`, `API_PORT=9490`, `UI_PORT=5690`, `MAILDEV_UI_PORT=1590`
-  - [x] cluster-mesh version: propose `0.16.0` (0.14.0 taken by #662, next minor by #664), do not publish
+  - [x] cluster-mesh version: propose `0.16.0` (#662 is 0.14.0, #666 is 0.15.0, #664 moves to next free at rebase), do not publish
   - [x] Lot gate:
     - [x] `make ps-all API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
     - [x] `make scope-check API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
@@ -111,7 +109,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
       - [x] Update `api/tests/api/session-adoption.test.ts` (new)
       - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
       - [x] Sub-lot gate: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
-      - [x] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-session-ws` and document status/signature in `BRANCH.md`
+      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-session-ws` and document status/signature in `BRANCH.md`
     - [x] **UI tests (TypeScript only)**
       - [x] No UI changes in LOT1
       - [x] Sub-lot gate: `make test-ui ENV=test-session-ws`
@@ -139,6 +137,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: global editor, canonical seeds (API)
   - [x] GREEN: tx-scoped drizzle store, unconditional save removed (API)
   - [x] GREEN: englobing transaction for creation and binding (API)
+  - [x] GREEN: clean 0011 migration, re-date journal, BRANCH minors
   - [ ] GREEN: clean 0011 migration, re-date journal, BRANCH minors
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
