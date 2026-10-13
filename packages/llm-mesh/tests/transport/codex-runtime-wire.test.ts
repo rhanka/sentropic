@@ -57,6 +57,36 @@ describe('Codex runtime wire', () => {
     });
   });
 
+  it('projects the Responses carrier: custom tools, context, verbosity, cache key, reasoning', () => {
+    const prepared = buildCodexRuntimeRequest({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoning: { effort: 'low' },
+      providerOptions: { responses: {
+        customTools: [{ type: 'custom', name: 'exec', description: 'run js', namespace: 'functions' }],
+        functionToolRefs: [],
+        reasoningArtifacts: [{ itemId: 'rs-1', summary: 'considered', encryptedContent: 'e30=' }],
+        reasoningContext: 'all_turns',
+        verbosity: 'low',
+        promptCacheKey: 'pc-1',
+        itemIds: ['at-1', 'rs-1'],
+      } },
+    });
+
+    expect(prepared.body).toMatchObject({
+      reasoning: { effort: 'low', context: 'all_turns' },
+      text: { verbosity: 'low' },
+      prompt_cache_key: 'pc-1',
+    });
+    const input = prepared.body.input as Record<string, unknown>[];
+    expect(input[0]).toMatchObject({ type: 'additional_tools',
+      tools: [{ type: 'namespace', name: 'functions',
+        tools: [{ type: 'custom', name: 'exec' }] }] });
+    expect(input[1]).toMatchObject({ type: 'reasoning', id: 'rs-1',
+      summary: 'considered', encrypted_content: 'e30=' });
+    expect(input[input.length - 1]).toMatchObject({ type: 'message', role: 'user' });
+  });
+
   it('omits the maximum output token cap (rejected by the Codex backend)', () => {
     const request = {
       providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
