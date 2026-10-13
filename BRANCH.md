@@ -143,9 +143,9 @@
   - [x] MAJEUR-2 disposed chain reads return inaccessible.
   - [x] MAJEUR-3 aggregate-version and predicate guards plus unsupported-effect rejection.
   - [ ] MAJEUR-4 mutations M6-M15 recorded, M5 propagation claim corrected.
-  - [ ] MINEUR-1 page validator allows absent continuation and full encoding.
-  - [ ] MINEUR-2 unparseable nowIso refused for grants and snapshots.
-  - [ ] MINEUR-3 triangle rejects blank and NUL identities per L6a.
+  - [x] MINEUR-1 page validator allows absent continuation and full encoding.
+  - [x] MINEUR-2 unparseable nowIso refused for grants and snapshots.
+  - [x] MINEUR-3 triangle rejects blank and NUL identities per L6a.
   - [x] MINEUR-4 scope-level idempotency with divergent-content conflict.
   - [x] MINEUR-5 bound-scope snapshot comparison in the reference.
   - [ ] MINEUR-6 discipline deviations recorded under BR-K1R3-EX1.
