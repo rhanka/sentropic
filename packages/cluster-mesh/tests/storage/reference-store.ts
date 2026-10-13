@@ -66,6 +66,22 @@ const encodedPageBytes = (
   nextCursor: ChainPageCursor | null,
 ): number => Buffer.byteLength(JSON.stringify({ outcome, records, nextCursor }), 'utf8');
 
+// R3 (§8.4): every emitted response is measured with its effective cursor.
+// An over-budget response sheds undelivered records down to an empty
+// incomplete page; the surviving cursor is always a recovery position for
+// the first undelivered record, never a promise of an advancing next page.
+const fitIncomplete = (
+  records: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[],
+  recovery: ChainPageCursor | null,
+  maxEncodedBytes: number,
+): ChainPage => {
+  const trimmed = [...records];
+  while (trimmed.length > 0 && encodedPageBytes('incomplete', trimmed, recovery) > maxEncodedBytes) {
+    trimmed.pop();
+  }
+  return { outcome: 'incomplete', records: trimmed, nextCursor: recovery };
+};
+
 export class TestBoundStore {
   readonly grant: ScopeGrant<unknown>;
   private readonly boundScope: { readonly tenantId: string; readonly workspaceId: string };
@@ -208,15 +224,21 @@ export class TestBoundStore {
     }
     const visible = boundHead === null ? [] : records.slice(0, boundIdx + 1);
     const page: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[] = [];
+    let admitted: ChainPageCursor | null = retained;
     for (const record of visible) {
       if (record.seq < start) continue;
       const next: ChainPageCursor = { position: record.seq, head: boundHead as string };
-      if (page.length >= limit) return { outcome: 'page', records: page, nextCursor: next };
+      if (page.length >= limit) {
+        if (encodedPageBytes('page', page, next) > maxEncodedBytes) {
+          return fitIncomplete(page, admitted ?? retained ?? next, maxEncodedBytes);
+        }
+        return { outcome: 'page', records: page, nextCursor: next };
+      }
       if (encodedPageBytes('page', [...page, record], next) > maxEncodedBytes) {
-        if (page.length === 0) return { outcome: 'incomplete', records: [], nextCursor: next };
-        return { outcome: 'incomplete', records: page, nextCursor: next };
+        return fitIncomplete(page, next, maxEncodedBytes);
       }
       page.push(record);
+      admitted = next;
     }
     return { outcome: 'page', records: page, nextCursor: null };
   }
