@@ -929,6 +929,10 @@ export const sessionWorkspaceBindings = controlSchema.table(
       'session_workspace_bindings_status_check',
       sql`${table.status} IN ('attached', 'detached', 'ended')`,
     ),
+    versionCheck: check(
+      'session_workspace_bindings_version_check',
+      sql`${table.version} >= 1`,
+    ),
   }),
 );
 
