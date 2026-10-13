@@ -279,7 +279,8 @@
   - [x] Recorded in spec §14.4b + mesh CHANGELOG Unreleased.
 - [ ] **Lots N11→N32 (fold remainder)** — not started this resume (scope: ~35 R commits on `feat/llm-gateway-native-relay` after `50dd4cf08`: N11 validation policy → N12/N13 mesh feasibility + prepared dispatch → N14–N18 native HTTP + lifecycle + SSE → N19–N29 usage/pricing/proof → N30 relay/settlement; native stays OFF by default). Handoff: port lot-by-lot in design order with the same test-first discipline.
   - [x] **Lot N11a — typed native validation error contract (`661e732d3`)**: `NativeValidationPublicDetail` (400 `invalid_request_error` passthrough) + `native-unavailable` mesh refused reason + gateway branches; `errors.test.ts` 41/41, `contract-snapshot.test.ts` 22/22 GREEN.
-  - [ ] Lot N11b (`d64bf9492` billing classifier) + N11c (`5c6d706da` bounds) next.
+  - [x] **Lot N11b — native billing classifier + bounded 400 policy (`d64bf9492`)**: `src/native-errors.ts` (billing patterns, identifier neutralization, 64 KiB body ceiling, 4096-byte public bound) + index export.
+  - [ ] Lot N11c (`5c6d706da` bounds test) next.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
