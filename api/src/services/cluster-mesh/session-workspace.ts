@@ -7,9 +7,12 @@ import {
 } from '@sentropic/cluster-mesh';
 import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
-import { tenantMemberships, workspaceMemberships, workspaces } from '../../db/schema';
+import { tenantMemberships, users, workspaceMemberships, workspaces } from '../../db/schema';
 import { getDefaultGateConfig } from '../gate-service';
+import { todoOrchestrationService } from '../todo-orchestration';
+import { viewTemplateService } from '../view-template-service';
 import { hasWorkspaceRole, type WorkspaceType } from '../workspace-access';
+import { createId } from '../../utils/id';
 
 export type AdoptedSessionWorkspaceStatus = 'attached' | 'detached' | 'ended';
 
@@ -125,6 +128,60 @@ export class SessionWorkspaceService {
     return false;
   }
 
+  /**
+   * Global creation guard, mirroring the canonical route's `requireEditor`
+   * middleware (same role levels: admin_app/admin_org/editor pass, guest fails).
+   * Returns the caller's global role for seeding.
+   */
+  private async requireGlobalEditor(principalId: string): Promise<string> {
+    const [row] = await db.select({ role: users.role }).from(users)
+      .where(eq(users.id, principalId)).limit(1);
+    const role = row?.role ?? 'guest';
+    const levels: Record<string, number> = { admin_app: 4, admin_org: 3, editor: 2, guest: 1 };
+    if ((levels[role] ?? 0) < (levels.editor ?? 2)) {
+      throw new SessionWorkspaceError('workspace_rights_refused', 'global editor role required to create a workspace');
+    }
+    return role;
+  }
+
+  /**
+   * Canonical workspace creation, mirroring the product workspaces route:
+   * creator becomes admin member, then workflows/agents and view templates are
+   * seeded for the type (seed failures are non-fatal, exactly like the route).
+   */
+  private async createWorkspace(
+    tenantId: string, principalId: string, globalRole: string,
+    create: { readonly name: string; readonly type?: string },
+  ): Promise<string> {
+    const name = create.name.trim();
+    const type = (create.type ?? 'ai-priorities') as WorkspaceType;
+    const id = createId();
+    const now = new Date();
+    const gateConfig = getDefaultGateConfig(type);
+    await db.transaction(async (tx) => {
+      await tx.insert(workspaces).values({
+        id, ownerUserId: principalId, name, type,
+        gateConfig: gateConfig ?? undefined, tenantId, createdAt: now, updatedAt: now,
+      });
+      await tx.insert(workspaceMemberships).values({
+        workspaceId: id, userId: principalId, role: 'admin', createdAt: now,
+      });
+    });
+    try {
+      await todoOrchestrationService.seedWorkflowsForType(
+        { userId: principalId, role: globalRole, workspaceId: id }, type,
+      );
+    } catch (seedErr) {
+      console.error('Failed to seed workflows for workspace type', type, seedErr);
+    }
+    try {
+      await viewTemplateService.seedForWorkspace(id, type);
+    } catch (seedErr) {
+      console.error('Failed to seed view templates for workspace type', type, seedErr);
+    }
+    return id;
+  }
+
   private async resolveWorkspaceId(tenantId: string, principalId: string, wId?: string, create?: { name: string; type?: string }): Promise<string> {
     if (wId) {
       const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, wId)).limit(1);
@@ -140,25 +197,15 @@ export class SessionWorkspaceService {
     if (!create?.name?.trim()) throw new SessionWorkspaceError('invalid_request', 'either workspaceId or create is required');
     const name = create.name.trim();
     if (name.length > 128) throw new SessionWorkspaceError('invalid_request', 'workspace name too long');
-    const rawType = create.type ?? 'code';
+    const rawType = create.type ?? 'ai-priorities';
     const allowedTypes: WorkspaceType[] = ['code', 'ai-priorities', 'opportunity'];
     if (!allowedTypes.includes(rawType as WorkspaceType)) {
       throw new SessionWorkspaceError('invalid_request', `invalid workspace type: ${rawType}`);
     }
-    const type = rawType as WorkspaceType;
-    const id = crypto.randomUUID();
-    const now = new Date();
-    const gateConfig = getDefaultGateConfig(type);
-    await db.transaction(async (tx) => {
-      await tx.insert(workspaces).values({
-        id, ownerUserId: principalId, name, type,
-        gateConfig: gateConfig ?? undefined, tenantId, createdAt: now, updatedAt: now,
-      });
-      await tx.insert(workspaceMemberships).values({
-        workspaceId: id, userId: principalId, role: 'admin', createdAt: now,
-      });
-    });
-    return id;
+    const globalRole = await this.requireGlobalEditor(principalId);
+    return await this.createWorkspace(
+      tenantId, principalId, globalRole, { name, type: create.type },
+    );
   }
 
   async adopt(input: AdoptSessionWorkspaceInput): Promise<AdoptedSessionWorkspace> {

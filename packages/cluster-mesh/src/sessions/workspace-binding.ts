@@ -75,7 +75,7 @@ export class SessionWorkspaceBindingError extends Error {
   }
 }
 
-const requireId = (value: unknown, field: string): asserts value is string => {
+const requireId: (value: unknown, field: string) => asserts value is string = (value, field) => {
   if (typeof value !== 'string' || !value.trim()) {
     throw new SessionWorkspaceBindingError('invalid_request', `${field} is required`);
   }
