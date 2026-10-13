@@ -3,7 +3,7 @@ import { NATIVE_MAX_ERROR_BODY_BYTES, parseNativeErrorDetail, NativeSseFramer } 
 import type { NativeReadiness } from './anthropic-native-readiness';
 
 /** Test instrumentation observes actual holders, never request contents. */
-export type NativeBodyProbe = (holder: 'body' | 'serialization' | 'upload', retained: boolean) => void;
+export type NativeBodyProbe = (holder: 'request' | 'body' | 'serialization' | 'upload', retained: boolean) => void;
 
 /** A zero-prefetch upload: completion/cancellation clears every host-owned body holder. */
 export const createNativeUpload = (body: Readonly<Record<string, unknown>> | undefined, probe?: NativeBodyProbe) => {
@@ -17,15 +17,14 @@ export const createNativeUpload = (body: Readonly<Record<string, unknown>> | und
     probe?.('upload', true);
   } finally {
     body = undefined;
-    serialized = undefined;
     probe?.('body', false);
-    probe?.('serialization', false);
+    if (serialized !== undefined) { serialized = undefined; probe?.('serialization', false); }
   }
   const requestBytes = bytes!.byteLength;
   let controller: ReadableStreamDefaultController<Uint8Array>;
   let sent = false;
   let settled = false;
-  const detach = () => { settled = true; bytes = undefined; probe?.('upload', false); };
+  const detach = () => { if (settled) return; settled = true; bytes = undefined; probe?.('upload', false); };
   const stream = new ReadableStream<Uint8Array>({
     start(value) { controller = value; },
     pull(value) {

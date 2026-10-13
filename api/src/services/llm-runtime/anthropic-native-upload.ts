@@ -22,6 +22,12 @@ export const confirmedNativeFetch = async (url: string, init: RequestInit): Prom
   let done!: () => void;
   const uploaded = new Promise<void>(resolve => { done = resolve; });
   const response = await context.run(done, () => fetch(url, init));
-  await uploaded;
-  return response;
+  try {
+    await uploaded;
+    init.signal?.throwIfAborted();
+    return response;
+  } catch (error) {
+    await response.body?.cancel().catch(() => undefined);
+    throw error;
+  }
 };

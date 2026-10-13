@@ -61,6 +61,14 @@ const mockNativeResponse = (response: Response) => vi.stubGlobal('fetch', vi.fn(
   channel('undici:request:bodySent').publish({ request });
   return response;
 }));
+const referenceProbe = () => {
+  const held = new Set<string>(); const seen = new Set<string>(); const releases = new Map<string, number>();
+  const probe = (holder: string, retained: boolean) => {
+    if (retained) { expect(held.has(holder)).toBe(false); seen.add(holder); held.add(holder); }
+    else { expect(held.delete(holder)).toBe(true); releases.set(holder, (releases.get(holder) ?? 0) + 1); }
+  };
+  return { held, seen, releases, probe };
+};
 
 describe('ClaudeProviderRuntime', () => {
   let runtime: ClaudeProviderRuntime;
@@ -212,6 +220,64 @@ describe('ClaudeProviderRuntime', () => {
     await expect(runtime.nativeCountTokens(nativeRequest({ padding: 'x'.repeat(32_000_000) })))
       .rejects.toMatchObject({ status: 413, requestSize: { limitBytes: 32_000_000, source: 'gateway' } });
     expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it('native_stream_drops_upload_holders_before_commit', async () => {
+    const cancelled = vi.fn();
+    mockNativeResponse(new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('event: message_start\ndata: {}\n\n')); },
+      cancel: cancelled,
+    })));
+    const references = referenceProbe();
+    const result = await runtime.nativeMessages({ ...nativeRequest(), stream: true, bodyProbe: references.probe });
+    expect(references.held.size).toBe(0);
+    expect([...references.seen].sort()).toEqual(['body', 'request', 'serialization', 'upload']);
+    expect([...references.releases.values()]).toEqual([1, 1, 1, 1]);
+    if (result.kind !== 'stream') throw new Error('Expected stream');
+    const iterator = result.body[Symbol.asyncIterator]();
+    expect((await iterator.next()).done).toBe(false);
+    expect(references.held.size).toBe(0); // Response is still open.
+    await iterator.return?.();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['messages', 'count_tokens'] as const)('native_json_and_count_drop_upload_holders: %s', async operation => {
+    mockNativeResponse(Response.json({ input_tokens: 123 }));
+    const references = referenceProbe(); const finalize = vi.fn();
+    const request = { ...nativeRequest(), bodyProbe: references.probe, finalize };
+    await (operation === 'messages' ? runtime.nativeMessages(request) : runtime.nativeCountTokens(request));
+    expect(references.held.size).toBe(0);
+    expect([...references.releases.values()]).toEqual([1, 1, 1, 1]);
+    expect(finalize).not.toHaveBeenCalled();
+  });
+
+  it('native_early_response_cancels_upload_before_release', async () => {
+    const caller = new AbortController(); const references = referenceProbe();
+    let notifyHeaders!: () => void; let notifyResponseClosed!: () => void;
+    const headers = new Promise<void>(resolve => { notifyHeaders = resolve; });
+    const responseClosed = new Promise<void>(resolve => { notifyResponseClosed = resolve; });
+    const response = new Response(new ReadableStream({ cancel() { notifyResponseClosed(); } }));
+    vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+      const request = {}; channel('undici:request:create').publish({ request });
+      const reader = (init.body as ReadableStream<Uint8Array>).getReader();
+      init.signal!.addEventListener('abort', () => {
+        void reader.cancel().then(() => { reader.releaseLock(); channel('undici:request:error').publish({ request }); });
+      }, { once: true });
+      notifyHeaders();
+      return response;
+    }));
+    let exposed = false;
+    const result = runtime.nativeMessages({ ...nativeRequest(), stream: true, signal: caller.signal,
+      bodyProbe: references.probe }).then(value => { exposed = true; return value; }, error => error);
+    await headers;
+    expect([...references.held]).toEqual(['upload']);
+    expect(exposed).toBe(false);
+    caller.abort();
+    expect(await result).toMatchObject({ name: 'AbortError' });
+    await responseClosed;
+    expect(references.held.size).toBe(0);
+    expect([...references.releases.values()]).toEqual([1, 1, 1, 1]);
+    expect(exposed).toBe(false);
   });
 
   it.each(['messages', 'count_tokens'] as const)('relays native %s JSON through fake HTTP after upload completion', async operation => {
