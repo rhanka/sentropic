@@ -114,7 +114,7 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
 
 - [ ] **Lot 5 — Review remediation r2 (Opus PR #668 findings)**
   - [x] Address m1 in `scripts/test-api-tag-guard.sh` (test stderr-only isolation and case-sensitive matching).
-  - [ ] Address m3 in `scripts/test-api-tag-guard.sh` (Docker-First containerized digest extraction in mock docker, cover manifest index with child digest).
+  - [x] Address m3 in `scripts/test-api-tag-guard.sh` (Docker-First containerized digest extraction in mock docker, cover manifest index with child digest).
   - [ ] Address m2 in `scripts/publish-api-image.sh` and `scripts/test-api-tag-guard.sh` (enforce canonical 6-hex API_VERSION whitelist, reject moving aliases and invalid tag formats).
   - [ ] Update `docs/ci-images.md` (document 6-hex tag format whitelist, generalize concurrency reference).
   - [ ] Address m4 across review commits (maintain atomic commits, TDD RED->GREEN progression, document trace in BRANCH.md).
