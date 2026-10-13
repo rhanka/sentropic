@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { encodeGatewayResponse } from '../src/canonical-egress.js';
+import {
+  DEFAULT_RESPONSES_LIMITS,
+  ResponsesBoundError,
+} from '../src/responses-egress.js';
 
 const response = {
   id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
@@ -53,6 +57,12 @@ describe('canonical gateway egress', () => {
     expect(encoded.headers).toEqual({
       'retry-after': '4', 'x-request-id': 'provider-request-1',
     });
+  });
+
+  it('fails neutrally when the response breaches host output caps', () => {
+    expect(() => encodeGatewayResponse('openai-responses', response,
+      { ...DEFAULT_RESPONSES_LIMITS, maxAccumulatedBytes: 4 }))
+      .toThrowError(ResponsesBoundError);
   });
 
   it('encodes an OpenAI completion with native usage and finish reason', () => {

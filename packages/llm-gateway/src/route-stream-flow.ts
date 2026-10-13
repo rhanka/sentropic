@@ -112,7 +112,9 @@ const trackedExecution = (input: {
   })();
   const encoded = encodeGatewayStream(request.wire, target.model, input.responseId, tracked,
     request.wire === 'anthropic-messages'
-      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) } : undefined);
+      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) } : undefined,
+    request.wire === 'openai-responses' && request.responsesLimits
+      ? { limits: request.responsesLimits } : undefined);
   const expose = (buffered: readonly GatewayDispatchStreamEvent[]) => {
     signal?.addEventListener('abort', onAbort, { once: true });
     if (signal?.aborted) onAbort();
