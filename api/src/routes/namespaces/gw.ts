@@ -199,7 +199,11 @@ export const createGwNamespaceModule = async (
         const router = new Hono();
         applyAuthorFence(router);
         const authenticate = options.authenticate ?? requireAuth;
-        const settlementMode = settlementModeMiddleware();
+        // Spec §17.4: one checked-body policy shared by settlement middleware
+        // and the gateway router under the trusted product mount prefix, so a
+        // gateway body is parsed once and the router reuses the same owner.
+        const gatewayBodyOptions = { mountPrefix: '/api/v1/gw' };
+        const settlementMode = settlementModeMiddleware(gatewayBodyOptions);
         // One-shot caller bridge: resolves the verified product caller and
         // hands it to the gateway caller-auth port via a single-use header
         // token (consumed + cleaned up per request). Registered once per path
@@ -229,6 +233,7 @@ export const createGwNamespaceModule = async (
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
           nativeCountTokens: routePlane.nativeCountTokens,
           budget: { port: budget, defaultOutputTokens: options.defaultOutputTokens ?? GW_DEFAULT_OUTPUT_TOKENS },
+          requestBody: gatewayBodyOptions,
         }));
         return router;
       },
