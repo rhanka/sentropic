@@ -1,4 +1,4 @@
-// K1 error compatibility (L3a v4 §15). Frozen comments vocabulary is
+// K1 error compatibility (L3a v4.1 frozen §15). Frozen comments vocabulary is
 // preserved; transport/operational failures never masquerade as canonical codes.
 
 export const KERNEL_CONDITIONS = [

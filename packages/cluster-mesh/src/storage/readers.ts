@@ -1,4 +1,4 @@
-// K1 read boundaries and continuation (L3a v4 §8). Three separate
+// K1 read boundaries and continuation (L3a v4.1 frozen §8). Three separate
 // lifetimes: authority, continuation identity, retention/pin. Data-pure.
 
 import {
