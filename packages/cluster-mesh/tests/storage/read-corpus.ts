@@ -119,8 +119,10 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
 };
 
 // R3 remainder (§8.4, L3a v4.1 frozen): the returned cursor is part of the
-// encoded page. Backend-agnostic: only backend-minted cursors are passed
-// back; the budget check measures the observed JSON encoding.
+// encoded page, so admission is measured with the effective returned cursor.
+// Backend-agnostic: only backend-minted cursors are passed back; budgets are
+// calibrated on the reference JSON envelope (same convention as the 49-byte
+// envelope case above); the budget check measures the observed JSON encoding.
 export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   const chainId = 'r3-cursor-budget';
   for (let n = 0; n <= 10; n += 1) {
@@ -136,7 +138,20 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
   assert.equal(first.records.length, 9);
   assert.notEqual(first.nextCursor, null);
 
-  const resumed = await bound.readPage(chainId, 1, first.nextCursor, 115);
+  const tight = await bound.readPage(chainId, 1, first.nextCursor, 115);
+  assert.equal(
+    tight.outcome,
+    'incomplete',
+    'K2b-RED reads: the 9 to 10 page measured with its returned cursor exceeds 115',
+  );
+  assert.equal(tight.records.length, 0);
+  assert.notEqual(
+    tight.nextCursor,
+    null,
+    'K2b-RED reads: the over-budget page still carries a recovery cursor',
+  );
+
+  const resumed = await bound.readPage(chainId, 1, first.nextCursor, 116);
   assert.equal(resumed.outcome, 'page');
   assert.equal(resumed.records.length, 1);
   assert.equal(resumed.records[0].id, 'r9');
@@ -145,7 +160,15 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
     'utf8',
   );
   assert.ok(
-    encodedBytes <= 115,
-    `K2aSPLIT-RED reads: the resumed page with its returned cursor fits the budget (got ${encodedBytes} bytes for 115)`,
+    encodedBytes <= 116,
+    `K2b-RED reads: the resumed page with its returned cursor fits the budget (got ${encodedBytes} bytes for 116)`,
   );
+
+  const tail = await bound.readPage(chainId, 2, resumed.nextCursor, 4096);
+  assert.equal(tail.outcome, 'page');
+  assert.deepEqual(
+    tail.records.map((entry) => entry.id),
+    ['r10'],
+  );
+  assert.equal(tail.nextCursor, null);
 };
