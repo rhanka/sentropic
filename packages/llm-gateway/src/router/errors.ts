@@ -22,6 +22,7 @@
 import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
 import { requestTooLargeDetail, type RequestSizeDetail } from '@sentropic/llm-mesh';
+import { NativeSseUpstreamError } from '../native-stream-errors.js';
 import { requestTooLargeMessage } from '../request-too-large.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 
@@ -409,6 +410,11 @@ export const toProviderShapedError = (
   const upstreamCode = error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
     ? (error as { code: string }).code : undefined;
   if (upstreamCode === 'native_protocol_error') return anthropicError(503, 'api_error', 'upstream protocol failure');
+  if (error instanceof NativeSseUpstreamError && (upstreamStatus === 500 || upstreamStatus === 529)) {
+    return wire === 'anthropic-messages'
+      ? anthropicError(upstreamStatus, upstreamStatus === 500 ? 'api_error' : 'overloaded_error', 'upstream request failed')
+      : openAiError(upstreamStatus, 'server_error', 'upstream request failed');
+  }
   if (upstreamStatus === 404) return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
   if (upstreamStatus === 429) {
     const retryAfterMs = error && typeof error === 'object'
