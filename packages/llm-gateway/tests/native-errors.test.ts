@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  detectNativeBillingError, NATIVE_BILLING_MASKED_MESSAGE, neutralizeFeatureIdentifiers,
-  parseNativeErrorDetail, sanitizeNativeErrorMessage,
+  CLASSIFIER_BETA, DANGEROUS_TOOL_BETA, detectNativeBillingError,
+  NATIVE_BILLING_MASKED_MESSAGE, neutralizeFeatureIdentifiers,
+  parseNativeErrorDetail, SAFEGUARDS_NOT_SUPPORTED_MESSAGE, sanitizeNativeErrorMessage,
 } from '../src/native-errors.js';
 
 describe('native error billing classifier and bounding', () => {
@@ -123,4 +124,88 @@ describe('native error billing classifier and bounding', () => {
     expect(neutralizeFeatureIdentifiers(text, stats)).toBe(text);
     expect(detectNativeBillingError(text)).toBe(false);
   });
+
+  it('rewrites official V-2 unknown-beta error for sent classifier beta when safeguards present', () => {
+    const message = `Unexpected value(s) \`${CLASSIFIER_BETA}\` for the \`anthropic-beta\` header. Please consult our documentation at platform.claude.com/docs or try again without the header.`;
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: true, sentBetas: [CLASSIFIER_BETA] });
+    expect(detail).toEqual({
+      type: 'invalid_request_error',
+      message: SAFEGUARDS_NOT_SUPPORTED_MESSAGE,
+    });
+  });
+
+  it.each([
+    `Unsupported beta: ${CLASSIFIER_BETA}`,
+    `Beta not supported: ${CLASSIFIER_BETA}`,
+    `Unrecognized beta: ${CLASSIFIER_BETA}`,
+    `Unknown beta: ${CLASSIFIER_BETA}`,
+    `Invalid beta: ${CLASSIFIER_BETA}`,
+    `Unexpected value: ${CLASSIFIER_BETA}`,
+  ])('rewrites classifier rejection keyword: %s', (message) => {
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: true, sentBetas: ['other-header', CLASSIFIER_BETA] });
+    expect(detail).toEqual({
+      type: 'invalid_request_error',
+      message: SAFEGUARDS_NOT_SUPPORTED_MESSAGE,
+    });
+  });
+
+  it.each([
+    `Unsupported beta: ${DANGEROUS_TOOL_BETA}`,
+    `Unexpected value(s) \`${DANGEROUS_TOOL_BETA}\` for the \`anthropic-beta\` header. Please consult our documentation at platform.claude.com/docs or try again without the header.`,
+  ])('preserves dangerous-tool-use rejection verbatim for client memory: %s', (message) => {
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: true, sentBetas: [CLASSIFIER_BETA, DANGEROUS_TOOL_BETA] });
+    expect(detail).toEqual({ type: 'invalid_request_error', message });
+  });
+
+  it.each([
+    'messages.0.content.0.safeguards: invalid value',
+    `Unsupported beta: ${CLASSIFIER_BETA}; safeguards validation failed`,
+  ])('preserves messages containing safeguards word verbatim: %s', (message) => {
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: true, sentBetas: [CLASSIFIER_BETA] });
+    expect(detail).toEqual({ type: 'invalid_request_error', message });
+  });
+
+  it('preserves classifier rejection verbatim if classifier beta was not sent', () => {
+    const message = `Unsupported beta: ${CLASSIFIER_BETA}`;
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: true, sentBetas: ['message-threads-2026-08-12'] });
+    expect(detail).toEqual({ type: 'invalid_request_error', message });
+  });
+
+  it('preserves classifier rejection verbatim if request does not own safeguards', () => {
+    const message = `Unsupported beta: ${CLASSIFIER_BETA}`;
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: false, sentBetas: [CLASSIFIER_BETA] });
+    expect(detail).toEqual({ type: 'invalid_request_error', message });
+  });
+
+  it('preserves unrelated beta rejection verbatim even when request owns safeguards', () => {
+    const message = 'Unsupported beta: message-threads-2026-08-12';
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: true, sentBetas: [CLASSIFIER_BETA, 'message-threads-2026-08-12'] });
+    expect(detail).toEqual({ type: 'invalid_request_error', message });
+  });
+
+  it('prioritizes billing masking over safeguards rewrite when both present', () => {
+    const message = `Unexpected value(s) \`${CLASSIFIER_BETA}\` for the \`anthropic-beta\` header. Account credit balance is low.`;
+    const detail = parseNativeErrorDetail(JSON.stringify({
+      error: { type: 'invalid_request_error', message },
+    }), 400, { requestSafeguards: true, sentBetas: [CLASSIFIER_BETA] });
+    expect(detail).toEqual({
+      type: 'invalid_request_error',
+      message: NATIVE_BILLING_MASKED_MESSAGE,
+    });
+  });
 });
+
