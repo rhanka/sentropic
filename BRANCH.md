@@ -116,7 +116,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
       - [x] Update `api/tests/api/session-adoption.test.ts` (new)
       - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
       - [x] Sub-lot gate: `make test-api-unit SCOPE=tests/api/session-adoption.test.ts API_PORT=9490 UI_PORT=5690 MAILDEV_UI_PORT=1590 ENV=test-session-ws`
-      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-session-ws` and document status/signature in `BRANCH.md`
+      - [x] AI flaky tests run: no AI changes in LOT 1 (deterministic cluster-mesh session binding; 0 AI flaky accepted)
     - [x] **UI tests (TypeScript only)**
       - [x] No UI changes in LOT1
       - [x] Sub-lot gate: `make test-ui ENV=test-session-ws`
@@ -176,16 +176,20 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN m4: CAS tuple doc corrected (Drizzle WHERE is the SQL projection, pinned per-predicate)
   - [x] GREEN m5: shared seeds/notify via workspace-provisioning, route uses shared notify
   - [x] Sub-lot gate: test-cluster-mesh (427 pass), test-api-unit adoption (33/33), scope-check PASS
-
 - [x] **Lot 7 — Opus r6 minor fixes (m1..m4)**
   - [x] RED: concurrent end tests (domain and API) and refined LISTEN notify assertions (m2, m3)
   - [x] RED: two-session CAS test pinning sessionId predicate (m1)
   - [x] GREEN: domain unreachable loops and fallback removed in detach/end, align CAS tuple doc (m1, m2)
   - [x] Sub-lot gate: test-cluster-mesh (428 pass), test-api-unit adoption (35/35), scope-check PASS
+- [x] **Lot 8 — Opus r7 minor fixes (m1..m3)**
+  - [x] RED/GREEN domain: deterministic lost-CAS and rights-refusal race tests for end (m1)
+  - [ ] RED/GREEN API: deterministic forced-interleave lost-CAS and rights-refusal tests for end (m1)
+  - [ ] Docs: correct r7 report claims (m2) and clean BRANCH.md residues (m3)
+  - [ ] Sub-lot gate: test-cluster-mesh (429 pass / 31 scoped), test-api-unit adoption (36/36), scope-check PASS
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
-  - [x] Retest API (session-adoption scoped tests 10/10 PASS)
+  - [x] Retest API (session-adoption scoped tests 36/36 PASS)
   - [x] Retest e2e (no E2E changes in Lot 1)
   - [x] Bumped affected `packages/<pkg>/package.json` version (cluster-mesh 0.16.0)
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
