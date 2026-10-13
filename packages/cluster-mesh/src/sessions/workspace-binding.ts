@@ -58,10 +58,11 @@ export interface SessionWorkspaceGetInput {
  * Production CAS tuple definition: the stored row still matches the expected
  * state only when the session, the monotonic version and the full expected
  * state (status, workspace, principal) agree. The Drizzle store implements
- * this tuple as its SQL WHERE clause predicate-for-predicate; the
- * per-predicate Postgres tests pin each predicate, so a removed predicate
- * fails its test. The memory double in the spec file delegates here instead
- * of reimplementing the tuple.
+ * this tuple as its SQL WHERE clause predicate-for-predicate; the 5
+ * per-predicate Postgres tests pin each predicate (sessionId, version,
+ * status, workspaceId, principalId), so a removed predicate fails its test.
+ * The memory double in the spec file delegates here instead of
+ * reimplementing the tuple.
  */
 export const isExpectedBindingState = (
   existing: SessionWorkspaceBinding | null,
@@ -199,41 +200,37 @@ export const createSessionWorkspaceBindingService = (
   };
 
   const detach = async (input: SessionWorkspaceDetachInput): Promise<SessionWorkspaceBinding> => {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const existing = await authorize(input);
-      if (existing.version !== input.expectedVersion) {
-        throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the detach');
-      }
-      if (existing.status === 'ended') {
-        throw new SessionWorkspaceBindingError('session_ended', 'session is ended and keeps its workspace history');
-      }
-      if (existing.status !== 'attached') {
-        throw new SessionWorkspaceBindingError('session_not_attached', 'session is not attached');
-      }
-      const timestamp = now().toISOString();
-      const detached: SessionWorkspaceBinding = {
-        ...existing, status: 'detached', version: existing.version + 1, updatedAt: timestamp, detachedAt: timestamp,
-      };
-      if (await store.compareAndSet(existing, detached)) return detached;
+    const existing = await authorize(input);
+    if (existing.version !== input.expectedVersion) {
+      throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the detach');
     }
+    if (existing.status === 'ended') {
+      throw new SessionWorkspaceBindingError('session_ended', 'session is ended and keeps its workspace history');
+    }
+    if (existing.status !== 'attached') {
+      throw new SessionWorkspaceBindingError('session_not_attached', 'session is not attached');
+    }
+    const timestamp = now().toISOString();
+    const detached: SessionWorkspaceBinding = {
+      ...existing, status: 'detached', version: existing.version + 1, updatedAt: timestamp, detachedAt: timestamp,
+    };
+    if (await store.compareAndSet(existing, detached)) return detached;
+    await authorize(input);
     throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the detach');
   };
 
   const end = async (input: SessionWorkspaceEndInput): Promise<SessionWorkspaceBinding> => {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const existing = await authorize(input);
-      if (existing.version !== input.expectedVersion) {
-        throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the end');
-      }
-      if (existing.status === 'ended') return existing;
-      const timestamp = now().toISOString();
-      const ended: SessionWorkspaceBinding = {
-        ...existing, status: 'ended', version: existing.version + 1, updatedAt: timestamp, endedAt: timestamp,
-      };
-      if (await store.compareAndSet(existing, ended)) return ended;
+    const existing = await authorize(input);
+    if (existing.version !== input.expectedVersion) {
+      throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the end');
     }
-    const latest = await store.findBySession(input.sessionId);
-    if (latest && latest.tenantId === input.tenantId && latest.status === 'ended') return latest;
+    if (existing.status === 'ended') return existing;
+    const timestamp = now().toISOString();
+    const ended: SessionWorkspaceBinding = {
+      ...existing, status: 'ended', version: existing.version + 1, updatedAt: timestamp, endedAt: timestamp,
+    };
+    if (await store.compareAndSet(existing, ended)) return ended;
+    await authorize(input);
     throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the end');
   };
 
