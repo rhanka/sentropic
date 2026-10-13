@@ -32,9 +32,9 @@ The baseline contract for comments is frozen at commit `7b8e5daf022cc58819dfdfae
 ### Invariants Preserved Without Modification
 1. **Store Methods**: All 24 methods on `CanonicalCommandStore` remain unchanged.
 2. **Record Kinds**: All 11 canonical record kinds (`annotation-revision`, `thread-structure-revision`, `comment-revision`, `review-event`, `prepared-submission-manifest`, `import-manifest`, `unit-receipt`, `batch-receipt-snapshot`, `lifecycle-event`, `operation-audit-event`, `conversion-report`) remain unchanged.
-3. **Transaction Callback**: Zero-argument transaction signature `transaction<T>(fn: () => Promise<T>): Promise<T>` is preserved.
+3. **Transaction Handle**: Driver-agnostic `CanonicalTransactionHandle` opened by `transaction()` with `run<T>(operation: () => Promise<T>)` (`packages/comments/src/command-store.ts:151-154`) is preserved.
 4. **Router Factory Signature**: `CanonicalRouterFactory` entrypoint is preserved without change.
-5. **Error Vocabulary**: Closed frozen error set (`invalid-command`, `unauthorized`, `stale-revision`, `conflict`, `not-found`, `denied`, `capacity-exceeded`, `internal-error`) is preserved.
+5. **Error Vocabulary**: Two exact frozen sets are preserved — command errors `cas-conflict`, `idempotency-conflict`, `denied`, `invalid-command`, `not-found` (`packages/comments/src/commands.ts: CanonicalCommandError`) and wire errors `unauthenticated`, `denied`, `not-found`, `conflict`, `invalid-request`, `capacity-exceeded`, `incomplete` (`packages/comments/src/command-store.ts: CANONICAL_WIRE_ERROR_CODES`). Transport failures use the transport boundary, never an undeclared `CanonicalWireError` code (§9.6, §15).
 6. **No Contract-v2**: No mandatory lifecycle `contract-v2` is required or introduced; operational service policies live outside the raw persistence layer.
 
 ---
@@ -64,9 +64,13 @@ As defined in `packages/cluster-mesh/src/storage/profiles.ts`, comments declares
 - **`comments-c4`**: `comments-operational` + `staged-units-v1`
 - **`comments-purge`**: `comments-operational` + `purge-jobs-v1`, `fenced-writers-v1`
 
-### 4.2 Transport and Continuation Protocol (`transport-v1`)
+### 4.2 Transport and Continuation Protocol (`transport-v1`, qualification `unverified`)
 - **Staged Units**: Large units (threads exceeding 512 KiB or 1 MiB) are split into hash-chained sub-units. Staged sub-units remain invisible to all readers until an atomic linearization root publication point.
 - **Explicit Continuation**: Paged export and resync use an explicit continuation envelope. Transport continuation fields must **not** be smuggled into or overload frozen M1 DTO fields (`snapshotBoundary`, `exportId`, `idempotencyKey`).
+- **Transport Limits** (adopted CA values, frozen L3a v4.1 §11.3): fragment manifest or unit/group root 64 KiB; fragment payload 512 KiB; prepare/commit items per request 50; request batch manifest 256 KiB; complete encoded request 1 MiB; default page count 50; maximum page count 100; complete encoded page 1 MiB; time-based comments cursor TTL none.
+- **Module Admission Settings** (§11.3): 64 segments/body, 64 mentions/body, profile depth 8, 32 targets/annotation, 128 shapes/annotation. These declarations add no fields to frozen M1.
+- **Incompatibility Rule**: A smaller deployment limit must be advertised as incompatibility with this profile, not silently redefine it.
+- **Module Extension Operations** (§11.2, proposed — not additions to `CanonicalCommandStore`): `prepareImportFragment`, `inspectPreparedImport`, `commitPreparedImport`, `prepareExportBoundary`, `continueExport`, `readExportFragments`, `recoverBatchReceipts`.
 
 ### 4.3 Named Query Profiles (L3a §9.5)
 Three named projection queries are registered for module access:
@@ -77,11 +81,12 @@ Three named projection queries are registered for module access:
 These queries return module query DTOs and do not substitute for frozen full-record DTOs.
 
 ### 4.4 Capacity Descriptor Policy
-The 10-field frozen `CapacityDescriptor` in `@sentropic/comments` is not mutated. Additional transport settings (such as `defaultRecords = 50`, `cursorTtlSeconds = null`, and `unitCapacity = 'units'`) are declared as supplemental module configuration outside the canonical record.
+The frozen `CapacityDescriptor` in `@sentropic/comments` is not mutated. Supplemental module paging settings (`defaultRecords = 50`, `cursorTtlSeconds = null`) are declared as module configuration outside the canonical record.
 
-### 4.5 Packaging and Conformance Oracle
-- The test conformance runner and vectors are packaged as a digest-pinned oracle artifact (`@sentropic/comments/conformance`).
-- Installed consumer proofs (`M4-I`) import the packaged oracle rather than local file checkouts, verifying isolation and dependency closure without modifying frozen M1 exports.
+### 4.5 Packaging and Conformance Oracle (qualification `unverified`)
+- The test conformance runner and vectors are consumed as a digest-pinned packaged oracle artifact for installed qualification.
+- `@sentropic/comments/conformance` is not an existing export (frozen L3a v4.1 §9.6); its export location and executable packaging are `unverified` (§17.4). Any new comments-package export follows its change protocol separately.
+- Installed consumer proofs (`M4-I`) import the packaged oracle rather than local file checkouts, verifying isolation and dependency closure without modifying frozen M1 exports (`mutatesFrozenM1Exports: false`).
 
 ---
 
