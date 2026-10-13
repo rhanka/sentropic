@@ -1753,3 +1753,141 @@ Wire event names and completed-item semantics follow the
 [official OpenAI Responses streaming reference](https://developers.openai.com/api/reference/resources/responses/streaming-events).
 Transport availability and limitations above are grounded in this checkout's
 runtime clients and UAT, not inferred from that API reference.
+
+## 17. PR #662 native Anthropic fold (option C)
+
+Owner decision, 2026-10-12: integrate the uncovered native Anthropic relay from
+[PR #633](https://github.com/rhanka/sentropic/pull/633) into
+[PR #662](https://github.com/rhanka/sentropic/pull/662), with one release at
+**llm-mesh 0.26.0 / llm-gateway 0.20.0 / cluster-mesh 0.14.0**. This section
+defines the combined implementation contract; it does not report a completed
+build, qualification, release or activation.
+
+The executable plan, source-commit/file manifest, scope exceptions and ordered
+test-first lots are in [native-fold.md](../.h2a/design/native-fold.md). Source
+is `feat/llm-gateway-native-relay` at
+`9055406f060084ea4212df05cd0432ba4fcbea3b`; destination was inspected at
+`95a0219f49cb3a6b15e73307eacf663144d40347`. The owner's coverage input has
+SHA-256 `81ecae2e3bfc7dbb27a9d91386dabf259376100d608f7cf21ec984750ed288bb`.
+Its earlier destination cutoff predates the Responses egress, fixture replay
+and limits now present in #662; those newer changes remain the baseline.
+
+Final observed destination head `c06589b758604db0a5c6d5d4b5d4e52278d54895`
+adds only a selected-fixture sibling-integrity refresh. It does not change
+these runtime/spec contracts or supply final artifacts for the future fold.
+
+Port C1–C8 and C10–C14 semantically, retaining the already shared C3 header
+helpers and C9 ordinary counting instead of duplicating them. C15's native
+documentation is consolidated here and in later release documentation; its
+old manifests, locks, versions and archive receipts are not source artifacts
+to reuse. Where contracts overlap, this section supersedes §15.2's SDK count
+transport and unconditional safeguards refusal, and §16.7's separate body
+reader. Other §15/§16 behavior and acceptance remain binding.
+
+### 17.1 D17-A — Separate release and native activation
+
+Resolve `LLM_GATEWAY_NATIVE_MESSAGES` once when constructing the API/router:
+only the exact string `enabled` enables native Messages. Unset, `true`, `1`,
+case changes and surrounding whitespace remain OFF. Reconfiguration requires
+reconstruction; no request header/body may alter the switch or qualified list.
+The shared router also defaults to native disabled unless explicitly enabled
+by its trusted host.
+
+`NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS` remains empty until model-specific live
+qualification and owner disposition. A trusted code/test override must contain
+exact catalogued Anthropic model IDs, never exclusive launch aliases or a
+caller/environment-supplied model list. Switch ON with an empty list enables
+no native inference or safeguards count. Do not populate it from the full
+catalog, a beta name or an account's mere availability.
+
+Record the switch and the version of the actually loaded gateway module at
+startup. Module identity/manifest validation failure yields
+`version_unverified`, not a workspace/package-lock version presented as
+running proof. Production activation requires separate evidence and owner GO.
+Turning native OFF preserves ordinary #662 counting, canonical Messages/Chat,
+Responses, Muse/Vibe aliases and diagnostics. It is not rollback of the shared
+body-reader or ordinary count transport changes.
+
+### 17.2 D17-B — One count path with explicit safeguards gating
+
+There is one gateway count handler and one host count factory:
+`packages/llm-gateway/src/native-count-tokens.ts` and
+`api/src/services/llm-runtime/gateway-count-tokens.ts`. Keep the latter's trusted
+credential precedence, catalog-based exact-model preparation and advisory
+account lease. Replace its SDK invocation with the shared single-attempt raw
+Anthropic HTTP count operation; remove the superseded SDK implementation.
+Do not introduce a second count factory through `AnthropicNativePort`.
+
+The count port's model list is the exact Anthropic catalog. Native inference
+uses the separately qualified subset. Both consumers receive the same resolved
+native switch/qualified-list configuration; count does not call inference
+preparation or construct an inference observation as an eligibility probe.
+
+| Count condition, after existing parse/model/caller-auth checks | Required behavior |
+|---|---|
+| Ordinary count, including beta/version headers | Available independently of native switch/qualified list when the existing catalog, trusted auth and prepared API-version checks pass. |
+| Own top-level `safeguards`, including null/empty | Relay unchanged only when native is enabled, the exact model is qualified, and count preparation/provider/model/version checks pass. Otherwise safeguards-specific 400; no send. |
+| Unknown model | Existing account-independent model-not-found 404; an empty/unready pool must not invent it. |
+| Known model without usable count capability | Existing explicit unsupported-count refusal; no estimate or inference fallback. |
+
+Count preserves unknown/nested request fields, inserts no output ceiling or
+stream control, and executes JSON-only. Return the entire provider JSON object
+after validating nonnegative safe-integer `input_tokens`. Preserve version/beta
+and safe success headers through the common filters; omit served-model
+diagnostics. Count never creates a generation plan, hold, budget debit,
+dispatch marker, financial settlement or usage observation. One host advisory
+reservation completes once; every counting failure, including 401/403/429,
+is neutral to account authentication/cooldown.
+
+Retain the process-wide verified tenant/principal limiter: burst 10, refill
+1/second, two in flight, ten-minute idle eviction excluding active calls,
+10,000-key bound. Capacity and rate refusal happen before transport send;
+cancellation does not refund a dispatch token. The raw operation has no hidden
+retry, shares readiness/body-detachment safeguards, and returns one result.
+Existing count public error behavior remains: 401/403→generic 401, bounded
+429/Retry-After, sanitized network/5xx. Apply the native trusted validation
+policy and typed 413 mapping where relevant; internal shared error types do
+not bypass this count-specific neutral outcome/public boundary.
+
+### 17.3 D17-C — Native feasibility composes with execution features
+
+`RoutePlanInput.nativeMessages?: true` and its quote input mean required
+native execution. Keep #662's `requiredExecutionFeatures` and existing
+capabilities, caller constraints, diagnostics, admission subject, affinity
+repair and committed-failure suppression. Both mesh planning/quoting and the
+API catalog-quote/route-plane wrappers must enforce this conjunction:
+
+```text
+existing target/account/policy eligibility
+AND every required execution feature is actually supported
+AND (native not required OR exact qualified Anthropic target + native contract)
+```
+
+Bind the native flag and sorted execution requirements into quote identity
+and revalidate at plan/preparation; absence of both preserves the canonical
+identity. Apply native feasibility before sticky selection, health suppression
+and candidate truncation. Do not mutate an ineligible stored affinity merely
+to find native support. An unknown model is still 404; known native denial is
+an explicit native refusal; genuine lack of an available route retains #662's
+no-route/enrollment diagnostics. Capability/required-native refusals occur
+before provider dispatch, releasing any already admitted hold under existing
+rules without inventing a charged attempt.
+
+The product application runtime currently advertises no §16 execution
+features. Adding native Messages must not bypass that refusal or claim
+Responses reasoning/tool controls it cannot preserve. Its `withCatalogQuote`
+path must gain the same requirement checks and identity binding as planning;
+a native-only quote wrapper cannot replace the feature wrapper.
+
+Messages classification runs once after checked parsing/caller authentication
+and before quote/admission. Plain/version-only requests stay canonical. Beta
+presence, even an empty value, makes native optional. An own top-level
+`safeguards` property makes native required. OFF, wrong model/version,
+missing prepared capability or invalid effective output ceiling causes the
+explicit required-mode refusal. Optional mode may choose canonical only
+before native invocation; an upstream native failure never reconstructs a
+canonical attempt. Recheck fresh account advertisement, prepared protocol and
+contract version, exact model, supported API version and admitted ceiling
+before marking dispatch.
+
+Native body construction shallow-copies the object and changes only selected
