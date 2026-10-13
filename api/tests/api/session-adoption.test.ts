@@ -9,6 +9,7 @@ import {
   workflowDefinitionTasks, workspaceMemberships, workspaces, workspaceTypeWorkflows,
 } from '../../src/db/schema';
 import { SessionWorkspaceService } from '../../src/services/cluster-mesh/session-workspace';
+import type { SessionWorkspaceBindingStore } from '@sentropic/cluster-mesh';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 
 const TENANT_A = 'sess-adopt-tenant-a';
@@ -420,5 +421,93 @@ describe('session adoption workspace binding', () => {
     expect(current?.workspaceId).toBe(workspaceB);
     expect(current?.principalId).toBe(userB.id);
     expect(current?.status).toBe('attached');
+  });
+
+  it('should never let a stale workspace admin detach a re-attached workspace', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-6', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    // Workspace admin of wsA only (approved tenant member, not tenant admin).
+    const workspaceAdmin = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: workspaceAdmin.id, status: 'approved', role: 'member',
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId, userId: workspaceAdmin.id, role: 'admin',
+    });
+    const userB = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
+    });
+    const workspaceB = crypto.randomUUID();
+    await db.insert(workspaces).values({
+      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
+      type: 'code', tenantId: TENANT_A,
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId: workspaceB, userId: userB.id, role: 'admin',
+    });
+
+    await Promise.allSettled([
+      service.detach('sess-adopt-6', TENANT_A, workspaceAdmin.id),
+      (async () => {
+        await service.detach('sess-adopt-6', TENANT_A, user.id);
+        await service.adopt({
+          sessionId: 'sess-adopt-6', tenantId: TENANT_A, principalId: userB.id, workspaceId: workspaceB,
+        });
+      })(),
+    ]);
+
+    const [row] = await db.select().from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-6'));
+    expect(row).toBeDefined();
+    // Either the race stayed on wsA (detached by a legitimate party) or it
+    // moved to wsB (attached to userB); wsB must never end up detached/ended.
+    expect(row.workspaceId === workspaceId || row.status === 'attached').toBe(true);
+    if (row.workspaceId === workspaceB) {
+      expect(row.status).toBe('attached');
+      expect(row.principalId).toBe(userB.id);
+    }
+  });
+
+  it('should reject a stale compareAndSet through the production Drizzle store', async () => {
+    const module = await import('../../src/services/cluster-mesh/session-workspace.js') as unknown as {
+      createDrizzleBindingStore?: (client: typeof db) => SessionWorkspaceBindingStore;
+    };
+    if (typeof module.createDrizzleBindingStore !== 'function') {
+      throw new Error('createDrizzleBindingStore is not exported (RED)');
+    }
+    const store = module.createDrizzleBindingStore(db);
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-5', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const stale = await store.findBySession('sess-adopt-5');
+    expect(stale?.version).toBe(1);
+    // Concurrent mutation bumps the version directly in the row.
+    await db.update(sessionWorkspaceBindings).set({ version: 2, status: 'detached' })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-5'));
+    const timestamp = new Date().toISOString();
+    await expect(store.compareAndSet(stale!, {
+      ...stale!, status: 'detached', version: 2, updatedAt: timestamp, detachedAt: timestamp,
+    })).resolves.toBe(false);
+    // A fresh read still writes through the production store.
+    const fresh = await store.findBySession('sess-adopt-5');
+    await expect(store.compareAndSet(fresh!, {
+      ...fresh!, status: 'attached', version: 3, updatedAt: timestamp, detachedAt: undefined,
+    })).resolves.toBe(true);
+  });
+
+  it('should hide the binding on get from a tenant member who is neither owner nor admin', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-3', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const member = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: member.id, status: 'approved', role: 'member',
+    });
+    await expect(service.get('sess-adopt-3', TENANT_A, member.id)).resolves.toBeNull();
   });
 });
