@@ -34,6 +34,16 @@ export type SessionWorkspaceEndInput = SessionWorkspaceActionInput;
 export interface SessionWorkspaceBindingStore {
   findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null>;
   save(binding: SessionWorkspaceBinding): Promise<void>;
+  /**
+   * Conditional write: persist `next` only when the stored row still matches
+   * `current` (`null` = no row must exist; otherwise same `sessionId` and
+   * `status`). Returns `false` on conflict; the caller must re-read and map
+   * the winning state instead of overwriting it.
+   */
+  compareAndSet(
+    current: SessionWorkspaceBinding | null,
+    next: SessionWorkspaceBinding,
+  ): Promise<boolean>;
 }
 
 export type SessionWorkspaceBindingErrorCode =
@@ -75,36 +85,43 @@ export const createSessionWorkspaceBindingService = (
     if (input.sessionTenantId !== input.workspaceTenantId) {
       throw new SessionWorkspaceBindingError('cross_tenant_refused', 'workspace tenant does not match session tenant');
     }
-    const existing = await store.findBySession(input.sessionId);
-    if (existing) {
-      if (existing.tenantId !== input.sessionTenantId) {
-        throw new SessionWorkspaceBindingError('cross_tenant_refused', 'session tenant does not match binding tenant');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const existing = await store.findBySession(input.sessionId);
+      if (existing) {
+        // Uniform refusal: a caller probing another tenant's session learns
+        // nothing about the binding (same error as a missing binding).
+        if (existing.tenantId !== input.sessionTenantId) {
+          throw new SessionWorkspaceBindingError('binding_not_found', 'no binding for session');
+        }
+        if (existing.status === 'ended') {
+          throw new SessionWorkspaceBindingError('session_ended', 'session is ended and keeps its workspace history');
+        }
+        if (existing.status === 'attached') {
+          if (existing.workspaceId === input.workspaceId) return existing;
+          throw new SessionWorkspaceBindingError(
+            'session_already_attached',
+            'session is already attached; detach or end it first',
+          );
+        }
+        const reattached: SessionWorkspaceBinding = {
+          ...existing, workspaceId: input.workspaceId, principalId: input.principalId,
+          status: 'attached', updatedAt: now().toISOString(), detachedAt: undefined,
+        };
+        if (await store.compareAndSet(existing, reattached)) return reattached;
+        continue;
       }
-      if (existing.status === 'ended') {
-        throw new SessionWorkspaceBindingError('session_ended', 'session is ended and keeps its workspace history');
-      }
-      if (existing.status === 'attached') {
-        if (existing.workspaceId === input.workspaceId) return existing;
-        throw new SessionWorkspaceBindingError(
-          'session_already_attached',
-          'session is already attached; detach or end it first',
-        );
-      }
-      const reattached: SessionWorkspaceBinding = {
-        ...existing, workspaceId: input.workspaceId, principalId: input.principalId,
-        status: 'attached', updatedAt: now().toISOString(), detachedAt: undefined,
+      const timestamp = now().toISOString();
+      const binding: SessionWorkspaceBinding = {
+        bindingId: newId(), sessionId: input.sessionId, workspaceId: input.workspaceId,
+        tenantId: input.sessionTenantId, principalId: input.principalId, status: 'attached',
+        createdAt: timestamp, updatedAt: timestamp,
       };
-      await store.save(reattached);
-      return reattached;
+      if (await store.compareAndSet(null, binding)) return binding;
     }
-    const timestamp = now().toISOString();
-    const binding: SessionWorkspaceBinding = {
-      bindingId: newId(), sessionId: input.sessionId, workspaceId: input.workspaceId,
-      tenantId: input.sessionTenantId, principalId: input.principalId, status: 'attached',
-      createdAt: timestamp, updatedAt: timestamp,
-    };
-    await store.save(binding);
-    return binding;
+    throw new SessionWorkspaceBindingError(
+      'session_already_attached',
+      'session is already attached; detach or end it first',
+    );
   };
 
   const findAndAuthorize = async (
