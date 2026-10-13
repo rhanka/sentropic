@@ -295,6 +295,7 @@
   - [x] **Prerequisite SSE framer tests (`86614300c`)**: CR/LF/CRLF, split UTF-8, chunk boundaries, comments, 1 MiB overflow 6/6 GREEN on the base framer.
   - [x] **Prerequisite SSE cumulative bound (`7f9dbaad4`)**: cumulative frame bound + relayed-bytes preservation (delta tests pass pre/post — behavior already held; fix pinned byte-identical) 7/7 GREEN.
   - [x] **Lot N15a — attempt-lifetime revocation + decoupled input validation (`75bdf1af3`, early per R chronology)**: revocation no longer clears accepted counts; input/output validated independently 2/2 GREEN.
+  - [x] **Lot N15b — safe arithmetic + physical anchoring + TTL separation (`7c980d900`, early)**: safe-int/overflow guards, physical anchor/lower-bound, reported-vs-inferred split; existing tests stay 2/2 GREEN.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
