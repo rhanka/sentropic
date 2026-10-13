@@ -1,5 +1,7 @@
 # C6 review and author treatment
 
+**Historical evidence.** Verdicts, pending conditions and hashes below describe their recorded revision. The [frozen storage alignment](storage-alignment.md) governs current work: M1 is owner-closed with carried reserves and unprovided handoff evidence; C0/module extensions and selected PG qualification remain separate. No historical proposal authorizes rewriting M1.
+
 C6 reviews SPEC `c6c3c749b5aacc5e5593ef581c0385f21b44cc315e301372f9235c913100617d`. Review SHA-256: `dc3ea551f3d75ff923b7ef6fd2b72f6c4736f9c4f6596dcd316e85ad52e90edb`. Historical verdict: GO with reservations, 0 blocking, 10 major, 9 minor; M-1/M-2/M-3 and plan alignment required treatment before M1.
 
 Reviewer declaration: Claude Opus 5.5, `claude-opus-5-5`, max, read-only; not the SPEC/log author. Same model family as SO/CROSS, effective independence unverifiable. Author treatment was requested by TREAT `b8ca9c06dbf0343e6c100af4c14e9613341d5e4a3b099bcc6ad3790a74bc86d0`; [AUTHOR-C6](author-metadata.md) supplies its CLI declaration and hashed log.
