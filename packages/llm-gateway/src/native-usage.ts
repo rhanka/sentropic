@@ -50,6 +50,10 @@ export class NativeCumulativeUsageAccumulator {
     if (r !== undefined) this.hasRawR = true;
     if (w !== undefined) this.hasRawW = true;
     if (o !== undefined) this.hasRawO = true;
+    if (o != null) {
+      if (!isSafeNonNegativeInteger(o)) { this.est = true; this.reason = 'invalid_output'; }
+      else this.o = o;
+    }
     if (!isSafeNonNegativeInteger(u) || !isSafeNonNegativeInteger(r) || !isSafeNonNegativeInteger(w)) {
       this.revoke(u === undefined || r === undefined || w === undefined ? 'incomplete_input' : 'invalid_input');
       return false;
@@ -80,15 +84,10 @@ export class NativeCumulativeUsageAccumulator {
       this.anchored = isStart;
       return false;
     }
-    if (o != null) {
-      if (!isSafeNonNegativeInteger(o)) { this.est = true; this.reason = 'invalid_output'; return false; }
-      this.o = o;
-    }
     this.u = u; this.r = r; this.w = w; this.s5 = s5; this.s1 = s1;
     this.p = Number(sumP); this.plb = this.p; this.valid = true;
     this.source = isStart ? 'message_start' : 'json'; this.anchored = isStart;
-    this.est = false;
-    return true;
+    return !this.est;
   }
 
   applyDelta(delta?: RawNativeUsageUpdate | null, opts?: { defaultTtlEligible?: boolean }): boolean {
@@ -102,6 +101,7 @@ export class NativeCumulativeUsageAccumulator {
     if (o != null) {
       if (!isSafeNonNegativeInteger(o) || o < this.o) {
         this.est = true;
+        this.reason = this.reason || 'invalid_output';
         outputValid = false;
       } else this.o = o;
     }
@@ -180,10 +180,6 @@ export class NativeCumulativeUsageAccumulator {
     if (this.revoked) {
       this.valid = false;
       this.p = this.plb;
-    } else if (!outputValid) {
-      this.valid = false;
-      this.p = candP;
-      return false;
     } else {
       this.valid = true;
       this.p = candP;
