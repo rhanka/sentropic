@@ -411,12 +411,14 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
 describe('K2b discriminating mutations: disposal and base', () => {
   it('B3-disposal-blind-barrier is killed by the barrier corpus', async () => {
     const { bound } = bindStaged(new DisposalBlindStore('comments'));
-    await expect(runBarrierCorpus(bound)).rejects.toThrow(/without coverage throws denied|stays denied after/);
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/disposed content without coverage throws denied/);
   });
 
   it('T1-rival-blind-base is killed by the staged corpus', async () => {
     const { store, bound } = bindStaged(new RivalBlindStore('comments'));
-    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(/changed base|without publication/);
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /a changed base produces a conflict without publication/,
+    );
   });
 
   it('records every K2b discriminating mutation as killed', () => {
