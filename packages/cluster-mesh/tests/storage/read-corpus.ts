@@ -159,10 +159,10 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
     'K2b-RED reads: one byte under the observed encoding refuses the page',
   );
   assert.equal(tight.records.length, 0);
-  assert.notEqual(
+  assert.equal(
     tight.nextCursor,
     null,
-    'K2b-RED reads: the over-budget page still carries a recovery cursor',
+    'K2b-RED reads: an empty incomplete page carries no retained cursor',
   );
 
   const resumed = await bound.readPage(chainId, 1, first.nextCursor, exact);
@@ -189,11 +189,18 @@ export const runReadCursorBudgetCorpus = async (bound: ReadCorpusStore): Promise
   await runReadResumeCorpus(bound);
 };
 
-// MAJ-1 (§8.4): a resume cursor never skips records. Under a tight byte
-// budget, paginate a 3-record chain to exhaustion and assert the exact full
-// record set with no gap and no duplicate. Backend-agnostic: the budget is
-// derived from the observed full-page encoding; only backend-minted cursors
-// flow back.
+// MAJ-1 (§8.4): a resume cursor never skips records. Sweep every budget
+// from the observed full-page encoding down to the floor, paginating to
+// exhaustion from each truncated first page and asserting the exact full
+// record set with no gap and no duplicate. The same sweep runs with
+// limit 10 (byte-trim path) and limits 1-2 (limit-reached path,
+// reference-store.ts:235-237). Backend-agnostic: budgets derive from the
+// observed encoding; only backend-minted cursors flow back; a byte-truncated
+// page carrying records may be `page` with a continuation or `incomplete`
+// (§8.4 reserves `incomplete` for the indivisible case, so both shapes are
+// accepted here). A resume step that delivers no new record with an
+// identical continuation fails as no-progress rather than as a record-set
+// mismatch.
 export const runReadResumeCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   const chainId = 'r3-resume';
   const ids = ['s0', 's1', 's2'];
@@ -211,37 +218,58 @@ export const runReadResumeCorpus = async (bound: ReadCorpusStore): Promise<void>
     JSON.stringify({ outcome: full.outcome, records: full.records, nextCursor: full.nextCursor }),
     'utf8',
   );
-  let budget = fullBytes - 1;
-  let trimmed: typeof full | null = null;
-  while (budget > 0) {
-    const attempt = await bound.readPage(chainId, 10, null, budget);
-    assert.equal(attempt.outcome, 'incomplete');
-    if (attempt.records.length > 0 && attempt.records.length < 3) {
-      trimmed = attempt;
-      break;
+  for (const limit of [10, 2, 1]) {
+    for (let budget = fullBytes - 1; budget > 0; budget -= 1) {
+      const first = await bound.readPage(chainId, limit, null, budget);
+      assert.ok(
+        first.outcome === 'page' || first.outcome === 'incomplete',
+        `K2b-RED reads: budget ${budget} limit ${limit} yields a typed page`,
+      );
+      if (first.records.length === 0) {
+        assert.equal(
+          first.outcome,
+          'incomplete',
+          `K2b-RED reads: budget ${budget} limit ${limit} with no records is incomplete`,
+        );
+        assert.equal(
+          first.nextCursor,
+          null,
+          'K2b-RED reads: an empty incomplete page carries no retained cursor',
+        );
+        continue;
+      }
+      if (first.records.length >= 3) continue;
+      assert.ok(first.records.length === 1 || first.records.length === 2);
+      assert.ok(first.outcome === 'page' || first.outcome === 'incomplete');
+      assert.notEqual(first.nextCursor, null);
+      const collected: string[] = first.records.map((entry) => entry.id);
+      let cursor: ReadCursor = first.nextCursor;
+      let guard = 0;
+      let prevCursor = JSON.stringify(cursor);
+      let prevCount = collected.length;
+      while (cursor !== null && guard < 10) {
+        guard += 1;
+        const page = await bound.readPage(chainId, limit, cursor, budget);
+        assert.ok(page.outcome === 'page' || page.outcome === 'incomplete');
+        const cursorJson = JSON.stringify(page.nextCursor);
+        if (page.records.length === 0 && cursorJson === prevCursor) {
+          assert.fail('K2b-RED reads: resume makes no progress (empty page with identical cursor)');
+        }
+        for (const entry of page.records) collected.push(entry.id);
+        if (collected.length === prevCount && cursorJson === prevCursor) {
+          assert.fail('K2b-RED reads: resume makes no progress (no new records and identical cursor)');
+        }
+        prevCursor = cursorJson;
+        prevCount = collected.length;
+        cursor = page.nextCursor;
+        if (page.outcome === 'page' && page.nextCursor === null) break;
+        if (page.outcome === 'incomplete' && page.nextCursor === null && page.records.length === 0) break;
+      }
+      assert.deepEqual(
+        collected,
+        ids,
+        'K2b-RED reads: resuming from an incomplete page delivers the exact full record set with no gap and no duplicate',
+      );
     }
-    if (attempt.records.length === 0) break;
-    budget -= 1;
   }
-  assert.ok(
-    trimmed !== null && trimmed.records.length > 0,
-    'K2b-RED reads: a tight budget yields an incomplete page carrying records',
-  );
-  assert.notEqual(trimmed.nextCursor, null);
-  const collected: string[] = trimmed.records.map((entry) => entry.id);
-  let cursor: ReadCursor = trimmed.nextCursor;
-  let guard = 0;
-  while (cursor !== null && guard < 10) {
-    guard += 1;
-    const page = await bound.readPage(chainId, 10, cursor, budget);
-    assert.ok(page.outcome === 'page' || page.outcome === 'incomplete');
-    for (const entry of page.records) collected.push(entry.id);
-    cursor = page.nextCursor;
-    if (page.outcome === 'page' && page.nextCursor === null) break;
-  }
-  assert.deepEqual(
-    collected,
-    ids,
-    'K2b-RED reads: resuming from an incomplete page delivers the exact full record set with no gap and no duplicate',
-  );
 };
