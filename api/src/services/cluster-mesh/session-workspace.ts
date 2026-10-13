@@ -76,7 +76,7 @@ const toBinding = (row: BindingRow): SessionWorkspaceBinding => ({
   endedAt: row.endedAt ? row.endedAt.toISOString() : undefined,
 });
 
-const createDrizzleBindingStore = (client: BindingDbClient): SessionWorkspaceBindingStore => ({
+export const createDrizzleBindingStore = (client: BindingDbClient): SessionWorkspaceBindingStore => ({
   async findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null> {
     const [row] = await client.select().from(sessionWorkspaceBindings)
       .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).limit(1);
@@ -127,7 +127,7 @@ export class SessionWorkspaceService {
     const [tMember] = await client.select({ role: tenantMemberships.role, status: tenantMemberships.status }).from(tenantMemberships)
       .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, principalId))).limit(1);
     if (tMember?.status === 'approved' && tMember.role === 'admin') return true;
-    if (workspaceId) return await hasWorkspaceRole(principalId, workspaceId, 'admin');
+    if (workspaceId) return await hasWorkspaceRole(principalId, workspaceId, 'admin', client);
     return false;
   }
 
@@ -211,7 +211,7 @@ export class SessionWorkspaceService {
         if (!ws || ws.tenantId !== tenantId) {
           throw new SessionWorkspaceError('workspace_not_found', 'workspace does not exist');
         }
-        if (!(await hasWorkspaceRole(principalId, ws.id, 'editor'))) {
+        if (!(await hasWorkspaceRole(principalId, ws.id, 'editor', tx))) {
           throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient workspace rights');
         }
         workspaceId = ws.id;
@@ -266,9 +266,11 @@ export class SessionWorkspaceService {
       }
       const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
       try {
-        const binding = await mesh.detach({ sessionId, tenantId, principalId, isAdmin });
-        if (binding.workspaceId !== existing.workspaceId && !isAdmin) {
-          throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient rights for session');
+        const binding = await mesh.detach({
+          sessionId, tenantId, principalId, isAdmin, expectedVersion: existing.version,
+        });
+        if (binding.version !== existing.version + 1 || binding.workspaceId !== existing.workspaceId) {
+          throw new SessionWorkspaceError('session_not_attached', 'concurrent modification; retry the detach');
         }
         return toRecord(binding);
       } catch (err) {
@@ -293,9 +295,11 @@ export class SessionWorkspaceService {
       }
       const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
       try {
-        const binding = await mesh.end({ sessionId, tenantId, principalId, isAdmin });
-        if (binding.workspaceId !== existing.workspaceId && !isAdmin) {
-          throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient rights for session');
+        const binding = await mesh.end({
+          sessionId, tenantId, principalId, isAdmin, expectedVersion: existing.version,
+        });
+        if (binding.version !== existing.version + 1 || binding.workspaceId !== existing.workspaceId) {
+          throw new SessionWorkspaceError('session_not_attached', 'concurrent modification; retry the end');
         }
         return toRecord(binding);
       } catch (err) {
