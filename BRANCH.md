@@ -98,8 +98,9 @@
   - [x] Align SPEC contract/ownership/transport boundaries and add a tracked frozen-source reference.
   - [x] Align SPEC and two-lane plan phase gates, C4 inventory, diagram and installed PG acceptance.
   - [x] Align model branch template and handoff with frozen M1 and literal C1/C2/C4/M2-W/M4-I scopes.
+  - [x] Correct active owner/evidence extracts for closed M1, C0 oracle ownership and frozen K/P allocation.
   - [ ] Sweep every non-frozen comments document and SPEC against the frozen source; preserve historical evidence and M1 bytes (R3-MAJ-1, R3-m6).
-  - [ ] Correct confirmation citations, report claims and checklist state (R3-m3–m5).
+  - [x] Correct confirmation citations, report claims and checklist state (R3-m3–m5).
   - [ ] Prove the document guard detects original backticked phrases and every discovered residue class (R3-m1).
   - [ ] Run scoped C0 tests, cluster-mesh typecheck/full tests and scope checks through Make; verify frozen bytes.
   - [ ] Write `.h2a/build/c0_docs_astra_report.md`, push only this branch and record final PR checks; never merge.

@@ -1,5 +1,7 @@
 # Earlier reviews and generic revision treatment
 
+**Historical evidence.** Verdicts, pending conditions and hashes below describe their recorded revision. The [frozen storage alignment](storage-alignment.md) governs current work: M1 is owner-closed with carried reserves and unprovided handoff evidence; C0/module extensions and selected PG qualification remain separate. No historical proposal authorizes rewriting M1.
+
 English extracts of SO, CROSS and their treatment in LOG. Findings are historical, not current open counts. No private host review text or domain choices are reproduced.
 
 | Source | Original SHA-256 | Historical result / limit |
