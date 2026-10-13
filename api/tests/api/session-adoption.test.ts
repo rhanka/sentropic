@@ -498,10 +498,14 @@ describe('session adoption workspace binding', () => {
     expect(current?.status).toBe('attached');
   });
 
-  it('should never let a stale workspace admin detach a re-attached workspace', async () => {
+  it('should refuse a stale workspace-admin detach after a re-attach (forced interleave)', async () => {
+    // Deterministic m1: the interleave is forced inside `hasWorkspaceRole`
+    // (no `Promise.allSettled` race). Mutation record: removing both
+    // `expectedVersion: existing.version` and the `version === read + 1`
+    // post-control from `detach` lets this detach workspaceB (no rejection).
     const service = new SessionWorkspaceService();
     await service.adopt({
-      sessionId: 'sess-adopt-6', tenantId: TENANT_A, principalId: user.id, workspaceId,
+      sessionId: 'sess-adopt-24', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
     // Workspace admin of wsA only (approved tenant member, not tenant admin).
     const workspaceAdmin = await createAuthenticatedUser('editor');
@@ -524,26 +528,22 @@ describe('session adoption workspace binding', () => {
       workspaceId: workspaceB, userId: userB.id, role: 'admin',
     });
 
-    await Promise.allSettled([
-      service.detach('sess-adopt-6', TENANT_A, workspaceAdmin.id),
-      (async () => {
-        await service.detach('sess-adopt-6', TENANT_A, user.id);
-        await service.adopt({
-          sessionId: 'sess-adopt-6', tenantId: TENANT_A, principalId: userB.id, workspaceId: workspaceB,
-        });
-      })(),
-    ]);
+    // Forced interleave: while the outer detach resolves rights on wsA, the
+    // owner detaches wsA and userB re-attaches workspaceB (v3) first.
+    interleaveHook.current = async () => {
+      const inner = new SessionWorkspaceService();
+      await inner.detach('sess-adopt-24', TENANT_A, user.id);
+      await inner.adopt({
+        sessionId: 'sess-adopt-24', tenantId: TENANT_A, principalId: userB.id, workspaceId: workspaceB,
+      });
+    };
+    await expect(service.detach('sess-adopt-24', TENANT_A, workspaceAdmin.id))
+      .rejects.toMatchObject({ code: 'session_not_attached' });
 
-    const [row] = await db.select().from(sessionWorkspaceBindings)
-      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-6'));
-    expect(row).toBeDefined();
-    // Either the race stayed on wsA (detached by a legitimate party) or it
-    // moved to wsB (attached to userB); wsB must never end up detached/ended.
-    expect(row.workspaceId === workspaceId || row.status === 'attached').toBe(true);
-    if (row.workspaceId === workspaceB) {
-      expect(row.status).toBe('attached');
-      expect(row.principalId).toBe(userB.id);
-    }
+    // The re-attached binding is intact: workspaceB, userB, attached, v3.
+    await expect(service.get('sess-adopt-24', TENANT_A, userB.id)).resolves.toMatchObject({
+      workspaceId: workspaceB, principalId: userB.id, status: 'attached', version: 3,
+    });
   });
 
   it('should never disclose a re-attached binding to an admin of the previous workspace', async () => {
