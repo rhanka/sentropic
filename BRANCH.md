@@ -41,6 +41,7 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
 - **BR62-EX1** (status: `accepted`): Conditional `Makefile` change to route `publish-api-image` to `scripts/publish-api-image.sh` and add `test-ci-api-tag-guard`. Reason: implement tag collision guard and Make-only test target. Impact: ensures publish-api-image checks registry manifest before pushing and allows local/CI test execution. Rollback: revert Makefile targets to previous revision.
 - **BR62-EX2** (status: `accepted`): Conditional `.github/workflows/ci.yml` change to wire `test-ci-api-tag-guard` into `build-api-image` and update `changes` global filters. Reason: automate tag-guard regression testing in PR CI. Impact: CI fails if tag guard regresses. Rollback: revert ci.yml edits.
 - **BR62-R2-TRACE** (status: `accepted`): Review r2 findings remediation trace. Findings m1 (stderr-only isolation and case-sensitivity tests in scripts/test-api-tag-guard.sh), m2 (content-addressed 6-hex whitelist in scripts/publish-api-image.sh and rejection of moving/invalid tags with TDD RED->GREEN commits), and m3 (Docker-First hermetic mock container execution and index test with child manifest) resolved. Finding m4 (atomicity and RED progression) traced: previous revision bundled commits in add36caef, while r2 remediation enforces strict atomic commits per finding (85dc539dd for m1, 4189056ff for m3, 95cfdf155 for m2 RED, 886bcf0b6 for m2 GREEN, 4244b6b91 for docs).
+- **BR62-R3-TRACE** (status: `accepted`): Review r3 findings remediation trace. Finding m1 (scripts/test-api-tag-guard.sh:140 accepted legacy message "Cannot use publish-api-image for moving tag") resolved by narrowing assertion to current "Invalid API_VERSION" error message, removing dead compatibility fallback.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -121,4 +122,11 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
   - [x] Update `docs/ci-images.md` (document 6-hex tag format whitelist, generalize concurrency reference).
   - [x] Address m4 across review commits (maintain atomic commits, TDD RED->GREEN progression, document trace in BRANCH.md).
   - [x] Validate locally with `make test-ci-api-tag-guard`, `make check-ci-version-filters`, and `make scope-check`.
+
+- [x] **Lot 6 — Review remediation r3 (Opus PR #668 findings)**
+  - [x] Address m1 in `scripts/test-api-tag-guard.sh` (remove legacy fallback message from moving-tags assertion, strictly checking `Invalid API_VERSION`).
+  - [x] Validate locally with `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+  - [x] Verify `make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+  - [x] Check version filters with `make check-ci-version-filters API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+
 
