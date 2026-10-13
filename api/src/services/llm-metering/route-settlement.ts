@@ -9,6 +9,7 @@
 import { sql } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
 import type { CallerAuthPort, CostContext, RouteAttemptSettlement, RouteMeteringSink, RouteRequestSettlement } from '@sentropic/llm-gateway';
+import { ensureCheckedGatewayBody, gatewayRequestBodyLimit, isGatewayBodyPath } from '@sentropic/llm-gateway';
 
 import { createId } from '../../utils/id';
 import { outboxWriter } from '../outbox/outbox-writer';
@@ -21,9 +22,21 @@ const SETTLEMENT_MODE_HEADER = 'x-sentropic-internal-settlement-mode';
 const modes = new WeakMap<object, 'generate' | 'stream'>();
 
 /** Records the wire mode on a trusted internal header; any client-supplied value is discarded. */
-export const settlementModeMiddleware = (): MiddlewareHandler => async (context, next) => {
+export const settlementModeMiddleware = (options: { readonly mountPrefix?: string } = {}): MiddlewareHandler => async (context, next) => {
   const headers = context.req.raw.headers;
   headers.delete(SETTLEMENT_MODE_HEADER);
+  if (isGatewayBodyPath(context.req.raw, options.mountPrefix)) {
+    // Also protects standalone hosts whose settlement middleware precedes the shared router:
+    // the same checked owner (same pool/policy) is reused downstream, never cloned or re-read.
+    const bodyOptions = { ...(options.mountPrefix ? { mountPrefix: options.mountPrefix } : {}) };
+    return gatewayRequestBodyLimit(bodyOptions)(context, async () => {
+      if (!new URL(context.req.raw.url).pathname.endsWith('/messages/count_tokens')) {
+        const body = (await ensureCheckedGatewayBody(context.req.raw, bodyOptions)).body as { stream?: unknown } | null;
+        headers.set(SETTLEMENT_MODE_HEADER, body?.stream === true ? 'stream' : 'generate');
+      }
+      await next();
+    });
+  }
   let stream = false;
   if (context.req.method === 'POST') {
     try {
