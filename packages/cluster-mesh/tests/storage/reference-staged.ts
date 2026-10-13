@@ -107,7 +107,18 @@ interface StagedOp {
   base?: Map<string, { readonly head: string | null; readonly disposed: boolean }>;
   receipt?: CommitReceipt;
   abortReason?: string;
+  beginFence?: WriterFence;
 }
+
+const compareEpoch = (current: string, begin: string): number => {
+  const numeric = /^\d+$/;
+  if (numeric.test(current) && numeric.test(begin)) {
+    const a = BigInt(current);
+    const b = BigInt(begin);
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  return current < begin ? -1 : current > begin ? 1 : 0;
+};
 
 interface StagedScope {
   readonly units: Map<string, StagedOp>;
@@ -394,6 +405,7 @@ export class TestStagedStore {
       operationKey: input.operationKey,
       fragments: [],
       state: 'staging',
+      beginFence: { ...input.fence },
     };
     this.staged.units.set(input.operationKey, op);
     return { unitId: op.unitId, operationKey: op.operationKey };
@@ -436,11 +448,14 @@ export class TestStagedStore {
       { ordinal: input.ordinal, predecessorHash: input.predecessorHash, fragmentDigest: input.fragmentDigest },
     );
     if (!sequence.ok) throw new StorageInvalidCommandError(sequence.errors.join('; '));
+    // Buffers are immutable after acceptance: deep-copy the effects so a
+    // caller-side mutation after staging can never rewrite the accepted unit.
+    const frozenEffects = JSON.parse(JSON.stringify(input.effects)) as AtomicUnit;
     op.fragments.push({
       ordinal: input.ordinal,
       predecessorHash: input.predecessorHash,
       fragmentDigest: input.fragmentDigest,
-      effects: input.effects,
+      effects: frozenEffects,
     });
     return { unitId: op.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
   }
@@ -492,6 +507,17 @@ export class TestStagedStore {
     const op = [...this.staged.units.values()].find((entry) => entry.unitId === input.seal.unitId);
     if (!op) throw new StorageInvalidCommandError('unknown staged seal');
     if (op.state === 'committed' && op.receipt) return op.receipt;
+    // §7.5 step 2 + §13.4: a successful CAS does not authorize a stale
+    // writer. The commit fence must match the begin fence and must not
+    // regress to an earlier epoch.
+    if (op.beginFence) {
+      if (input.fence.fenceId !== op.beginFence.fenceId) {
+        throw new StorageInvalidCommandError('stale writer cannot publish');
+      }
+      if (compareEpoch(input.fence.epoch, op.beginFence.epoch) < 0) {
+        throw new StorageInvalidCommandError('stale writer cannot publish');
+      }
+    }
     if (op.state !== 'sealed' || !op.seal || !op.base) throw new StorageInvalidCommandError('unstaged commit');
     if (JSON.stringify(op.seal) !== JSON.stringify(input.seal)) {
       throw new StorageInvalidCommandError('seal substitution rejected');
