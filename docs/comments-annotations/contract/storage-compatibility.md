@@ -67,7 +67,11 @@ As defined in `packages/cluster-mesh/src/storage/profiles.ts`, comments declares
 ### 4.2 Transport and Continuation Protocol (`transport-v1`, qualification `unverified`)
 - **Staged Units**: Large units (threads exceeding 512 KiB or 1 MiB) are split into hash-chained sub-units. Staged sub-units remain invisible to all readers until an atomic linearization root publication point.
 - **Explicit Continuation**: Paged export and resync use an explicit continuation envelope. Transport continuation fields must **not** be smuggled into or overload frozen M1 DTO fields (`snapshotBoundary`, `exportId`, `idempotencyKey`).
-- **Transport Limits** (adopted CA values, frozen L3a v4.1 §11.3): fragment manifest or unit/group root 64 KiB; fragment payload 512 KiB; prepare/commit items per request 50; request batch manifest 256 KiB; complete encoded request 1 MiB; default page count 50; maximum page count 100; complete encoded page 1 MiB; time-based comments cursor TTL none.
+- **Transport Limits** (adopted CA values, frozen L3a v4.1 §11.3): fragment manifest or unit/group root 64 KiB canonical bytes; fragment payload 512 KiB canonical bytes; prepare/commit items per request 50; request batch manifest 256 KiB canonical bytes; complete encoded request 1 MiB; default page count 50; maximum page count 100; complete encoded page 1 MiB; time-based comments cursor TTL none.
+- **Byte Units & Record Framing** (§11.3): Byte limits are in canonical bytes. Whole histories have no fragment-sized ceiling. A record plus required framing must fit an individual fragment.
+- **Paging Semantics** (§11.3): Ordinary pages count canonical records; fragment pages count complete fragment envelopes. Both count the full response envelope and cursor toward byte limits.
+- **Proposed Host-Injected Bounds** (§11.3): Existing M1 body/segment/profile bounds remain host-injected; CA proposed values are 64 KiB, 16 KiB, and 16 KiB respectively.
+- **Transport Qualification Requirement** (§11.3): Transport qualification must include escaping and multibyte encoding.
 - **Module Admission Settings** (§11.3): 64 segments/body, 64 mentions/body, profile depth 8, 32 targets/annotation, 128 shapes/annotation. These declarations add no fields to frozen M1.
 - **Incompatibility Rule**: A smaller deployment limit must be advertised as incompatibility with this profile, not silently redefine it.
 - **Module Extension Operations** (§11.2, proposed — not additions to `CanonicalCommandStore`): `prepareImportFragment`, `inspectPreparedImport`, `commitPreparedImport`, `prepareExportBoundary`, `continueExport`, `readExportFragments`, `recoverBatchReceipts`.
@@ -92,7 +96,7 @@ The frozen `CapacityDescriptor` in `@sentropic/comments` is not mutated. Supplem
 
 ## 5. Confirmation Deltas (G1–G5 Alignment)
 
-This specification incorporates the findings resolved in `.h2a/l3a/l3a_v4_confirmation.md`:
+This specification incorporates the confirmation deltas resolved in frozen L3a v4.1 §17 row C0, §17.4 (confirmation items G1–G5):
 - **G1**: Getters on barrier-covered or eliminated content throw `CanonicalCommandError('denied')`; `readChainPage` yields `inaccessible`.
 - **G2**: Canonical HTTP router routes through operational services; no direct `appendLifecycleEvent` exposure.
 - **G3**: C0 exit evidence explicitly requires compatibility manifest and unchanged M1 source hashes.
