@@ -49,7 +49,7 @@ export const countHarness = (
   // Fresh limiter per harness (R row 47b parity): tests stay isolated; pass
   // `nativeCountRate: undefined` explicitly to exercise the shared default.
   const rate = new NativeCountTokensRateLimiter();
-  const app = createGatewayRouter({
+  const options: CreateGatewayRouterOptions = {
     config: h.config,
     resolveTarget: createStaticTargetResolver({
       mappings: {
@@ -65,8 +65,9 @@ export const countHarness = (
     nativeCountTokens: port,
     nativeCountRate: rate,
     ...overrides,
-  });
-  return { h, transport, model: COUNT_MODEL, execute, prepare, port, capability, rate, app };
+  };
+  const app = createGatewayRouter(options);
+  return { h, transport, model: COUNT_MODEL, execute, prepare, port, capability, rate, options, app };
 };
 
 export const sendCount = (

@@ -605,5 +605,104 @@ describe('POST /v1/messages/count_tokens', () => {
         expect(h.h.metering.settlements).toHaveLength(0);
       });
     });
+
+    describe('count HTTP limits and absence of generation side effects (N24 rows 49-2/49-2b)', () => {
+      const deferred = () => {
+        let resolve!: () => void;
+        const promise = new Promise<void>(done => { resolve = done; });
+        return { promise, resolve };
+      };
+      const noGeneration = (h: ReturnType<typeof countHarness>) => {
+        expect(h.h.metering.settlements).toHaveLength(0);
+        expect(h.transport.seenBodies).toHaveLength(0);
+      };
+
+      it('shares the default two-live-call limit across router instances and restores concurrency', async () => {
+        const entered = deferred();
+        const done = deferred();
+        let calls = 0;
+        const h = countHarness({ nativeCountRate: undefined }, async () => {
+          if (++calls === 2) entered.resolve();
+          await done.promise;
+          return { kind: 'json', status: 200, headers: {}, body: { input_tokens: 999_999 } };
+        });
+        const other = { ...h, app: createGatewayRouter(h.options) };
+        const first = sendCount(h);
+        const second = sendCount(other);
+        await entered.promise;
+        const excess = await sendCount(other);
+        expect(excess.status).toBe(429);
+        expect(excess.headers.get('retry-after')).toBe('1');
+        expect(await excess.json()).toEqual({ type: 'error', error: { type: 'rate_limit_error',
+          message: 'Token counting request limit exceeded.' } });
+        expect(h.execute).toHaveBeenCalledTimes(2);
+        done.resolve();
+        expect((await first).status).toBe(200);
+        expect((await second).status).toBe(200);
+        expect((await sendCount(other)).status).toBe(200);
+        noGeneration(h);
+      });
+
+      it('charges dispatch tokens despite cancellation and releases concurrency without a generation event', async () => {
+        const entered = deferred();
+        let now = 0;
+        const abort = new AbortController();
+        const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => now });
+        const h = countHarness({ nativeCountRate: rate }, async request => {
+          entered.resolve();
+          await new Promise<void>((_, reject) => request.signal.addEventListener('abort',
+            () => reject(request.signal.reason), { once: true }));
+          throw new Error('unexpected count continuation');
+        });
+        const pending = sendCount(h, countBody(), {}, abort.signal);
+        await entered.promise;
+        abort.abort(new Error('cancelled'));
+        expect((await pending).status).toBe(503);
+        expect((await sendCount(h)).status).toBe(429);
+        expect(h.execute).toHaveBeenCalledTimes(1);
+        h.execute.mockResolvedValue({ kind: 'json', status: 200, headers: {}, body: { input_tokens: 2 } });
+        now = 1000;
+        expect((await sendCount(h)).status).toBe(200);
+        noGeneration(h);
+      });
+
+      it('charges failed dispatches, but does not consume tokens for eligibility refusals', async () => {
+        const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => 0 });
+        const h = countHarness({ nativeCountRate: rate }, async () => { throw new Error('transport secret'); });
+        expect((await sendCount(h, countBody(), { 'anthropic-version': 'unsupported' })).status).toBe(400);
+        expect((await sendCount(h)).status).toBe(503);
+        expect((await sendCount(h)).status).toBe(429);
+        expect(h.execute).toHaveBeenCalledTimes(1);
+        noGeneration(h);
+      });
+
+      it('fails closed for a new authenticated principal when the active map is full, before upstream call', async () => {
+        const rate = new NativeCountTokensRateLimiter({ maxKeys: 1, now: () => 0 });
+        const h = countHarness({ nativeCountRate: rate });
+        expect((await sendCount(h)).status).toBe(200);
+        const res = await Promise.resolve(h.app.request('/v1/messages/count_tokens', {
+          method: 'POST',
+          body: JSON.stringify(countBody()),
+          headers: { 'content-type': 'application/json', authorization: 'Bearer valid-other' },
+        }));
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ type: 'error', error: { type: 'overloaded_error',
+          message: 'account service temporarily unavailable' } });
+        expect(h.execute).toHaveBeenCalledTimes(1);
+        noGeneration(h);
+      });
+
+      it('uses verified identity for limits despite caller-owned tenant, principal, workspace and auth fields', async () => {
+        const rate = new NativeCountTokensRateLimiter({ capacity: 1, now: () => 0 });
+        const h = countHarness({ nativeCountRate: rate });
+        expect((await sendCount(h)).status).toBe(200);
+        const forged = { ...countBody(), tenantId: 'other', principalId: 'other', workspaceId: 'other',
+          cost: { tenantId: 'other', principalId: 'other' }, authContext: { requestId: 'spoof' } };
+        expect((await sendCount(h, forged)).status).toBe(429);
+        expect(h.execute).toHaveBeenCalledTimes(1);
+        expect(h.prepare.mock.calls[1]![0]).toEqual(h.prepare.mock.calls[0]![0]);
+        noGeneration(h);
+      });
+    });
   });
 });
