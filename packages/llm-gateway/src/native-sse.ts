@@ -66,6 +66,11 @@ export class NativeSseFramer {
   constructor(private readonly maxFrameBytes = NATIVE_MAX_SSE_FRAME_BYTES) {}
 
   push(chunk: Uint8Array): NativeSseFrame[] {
+    return [...this.frames(chunk)];
+  }
+
+  /** Yield each completed frame before inspecting later bytes in the transport chunk. */
+  *frames(chunk: Uint8Array): Generator<NativeSseFrame> {
     const frames: NativeSseFrame[] = [];
     let segmentStart = 0;
 
@@ -101,18 +106,23 @@ export class NativeSseFramer {
             throw new NativeSseFrameOverflowError();
           }
           endLine(i + 1);
+          if (frames.length) yield frames.pop()!;
           continue;
         }
         if (this.pendingBytes + (i - segmentStart) > this.maxFrameBytes) {
           throw new NativeSseFrameOverflowError();
         }
         endLine(i);
+        if (frames.length) yield frames.pop()!;
       }
       if (this.pendingBytes + (i + 1 - segmentStart) > this.maxFrameBytes) {
         throw new NativeSseFrameOverflowError();
       }
       if (b === 0x0d) this.pendingCr = true;
-      else if (b === 0x0a) endLine(i + 1);
+      else if (b === 0x0a) {
+        endLine(i + 1);
+        if (frames.length) yield frames.pop()!;
+      }
       else this.lineLength += 1;
     }
 
@@ -122,7 +132,6 @@ export class NativeSseFramer {
       this.pendingBytes += slice.length;
       if (this.pendingBytes > this.maxFrameBytes) throw new NativeSseFrameOverflowError();
     }
-    return frames;
   }
 
   finish(): NativeSseFrame[] {
@@ -151,7 +160,8 @@ export async function* parseNativeSseStream(
 ): AsyncGenerator<NativeSseFrame, void, undefined> {
   const framer = new NativeSseFramer(maxFrameBytes);
   for await (const chunk of source) {
-    for (const frame of framer.push(chunk)) yield frame;
+    if (!(chunk instanceof Uint8Array)) throw new TypeError('Invalid native stream chunk');
+    yield* framer.frames(chunk);
   }
   for (const frame of framer.finish()) yield frame;
 }

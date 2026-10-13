@@ -314,6 +314,7 @@
   - [x] **Lot N18a — body-free native transport helpers (`2e30e0d08`/`303d06ecb`)**: `api/src/services/llm-runtime/anthropic-native-transport.ts` upload/detach + headers + bounded readers.
   - [x] **Lot N19a — native HTTP + confirmed upload (`e26cfc8f9`)**: `anthropic-native-http.ts`/`-upload.ts`, provider `nativeMessages`, fake-HTTP relay test; N08 boundary evolved (inference present, count stays N24) 19/19 GREEN.
   - [x] **Lot N24a-early — raw non-billable count (`7cfcf9749`, prerequisite for N18b)**: `count_tokens` operation + provider `nativeCountTokens` + body guard + 413 passthrough; RED 1/20 pre-src, boundary evolved (transport count present) 20/20 GREEN.
+  - [x] **Prerequisite framer generator (`59702820a` framer hunk only; stream-errors stays in its lot)**: `NativeSseFramer.frames()` generator, `push()` preserved; SSE suites stay GREEN (7 + 21).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
