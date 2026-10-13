@@ -6,7 +6,7 @@
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   isStorageModuleId,
@@ -23,8 +23,8 @@ import {
   satisfiesRequirements,
 } from '../src/storage/profiles.js';
 // Frozen M1 error vocabularies are parsed from the frozen sources
-// (commands.ts, command-store.ts); production runtime in packages/cluster-mesh/src
-// imports no comments code or checkout paths.
+// (commands.ts, command-store.ts). Root/storage stay domain-neutral;
+// the selected comments leaf may load its optional peer (§14.5).
 
 // Resolve repository root from test location
 const REPO_ROOT = resolve(__dirname, '../../..');
@@ -113,6 +113,25 @@ const listTsFiles = (dir: string): string[] => {
     else if (entry.isFile() && entry.name.endsWith('.ts')) out.push(abs);
   }
   return out;
+};
+
+const runtimeImportViolations = (file: string, source: string): string[] => {
+  const mesh = resolve(REPO_ROOT, 'packages/cluster-mesh');
+  const comments = resolve(REPO_ROOT, 'packages/comments');
+  const within = (path: string, dir: string): boolean => path === dir || path.startsWith(dir + '/');
+  const inMesh = within(file, mesh);
+  const protectedMesh = file === resolve(mesh, 'src/index.ts') || within(file, resolve(mesh, 'src/storage'));
+  return [...source.matchAll(/\b(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)['"]([^'"]+)['"]/g)]
+    .map((match) => match[1])
+    .filter((target) => {
+      const resolved = target.startsWith('.') ? resolve(dirname(file), target) : '';
+      const peer = inMesh ? '@sentropic/comments' : '@sentropic/cluster-mesh';
+      const peerImport = target === peer || target.startsWith(peer + '/');
+      // Checkout imports cross package ownership regardless of the selected leaf.
+      const checkoutImport = within(resolved, inMesh ? comments : mesh);
+      return checkoutImport || (peerImport && (!inMesh || protectedMesh));
+    })
+    .map((target) => file + ': ' + target);
 };
 
 const readManifest = (): Record<string, unknown> =>
@@ -361,28 +380,35 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     expect(doc).toContain('frozen L3a v4.1 §17 row C0, §17.4');
   });
 
-  it('production runtimes stay decoupled across the storage port', () => {
-    const clusterMeshSrc = resolve(REPO_ROOT, 'packages/cluster-mesh/src');
-    const commentsSrc = resolve(REPO_ROOT, 'packages/comments/src');
-    const crossPackageImportPattern = (pkgName: string): RegExp =>
-      new RegExp(`(?:from\\s+['"]|import\\s*\\(['"]|import\\s+['"])(?:@sentropic\\/${pkgName}\\b|(?:\\.\\.\\/)+${pkgName}\\b)`);
+  it('production roots and storage stay decoupled while comments leaves may load their peer', () => {
+    const files = [
+      ...listTsFiles(resolve(REPO_ROOT, 'packages/cluster-mesh/src')),
+      ...listTsFiles(resolve(REPO_ROOT, 'packages/comments/src')),
+    ];
+    expect(files.flatMap((file) => runtimeImportViolations(file, readFileSync(file, 'utf8')))).toEqual([]);
+  });
 
-    const clusterMeshOffenders = listTsFiles(clusterMeshSrc).filter((abs) => {
-      const content = readFileSync(abs, 'utf8');
-      return (
-        content.includes('@sentropic/comments') ||
-        crossPackageImportPattern('comments').test(content)
-      );
-    });
-    expect(clusterMeshOffenders, 'cluster-mesh production import of comments').toEqual([]);
-    const commentsOffenders = listTsFiles(commentsSrc).filter((abs) => {
-      const content = readFileSync(abs, 'utf8');
-      return (
-        content.includes('@sentropic/cluster-mesh') ||
-        crossPackageImportPattern('cluster-mesh').test(content)
-      );
-    });
-    expect(commentsOffenders, 'frozen comments production import of cluster-mesh').toEqual([]);
+  it.each([
+    ['cluster-mesh/src/index.ts', '@sentropic/comments', true],
+    ['cluster-mesh/src/storage/kernel.ts', '@sentropic/comments', true],
+    ['cluster-mesh/src/storage/postgres/index.ts', '../../../../comments/src/index.js', true],
+    ['cluster-mesh/src/comments/index.ts', '../../../comments/src/index.js', true],
+    ['comments/src/index.ts', '@sentropic/cluster-mesh/storage', true],
+    ['comments/src/index.ts', '../../cluster-mesh/src/storage/index.js', true],
+    ['cluster-mesh/src/comments/index.ts', '@sentropic/comments', false],
+    ['cluster-mesh/src/loaders/comments/index.ts', '../../comments/module.js', false],
+    ['cluster-mesh/src/compose/comments.ts', '../comments/index.js', false],
+    ['cluster-mesh/src/storage/kernel.ts', './contracts.js', false],
+  ])('should classify the import from %s to %s by its resolved boundary', (file, target, blocked) => {
+    for (const source of [
+      "import { value } from '" + target + "';",
+      'export { value } from "' + target + '";',
+      "const value = import('" + target + "');",
+      "import '" + target + "';",
+      "const value = require('" + target + "');",
+    ]) {
+      expect(runtimeImportViolations(resolve(REPO_ROOT, 'packages', file), source).length > 0).toBe(blocked);
+    }
   });
 
   it('validates a ModuleDescriptor over the 11 frozen kinds within transport bounds', () => {

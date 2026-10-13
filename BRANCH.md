@@ -34,6 +34,7 @@
   - `api/drizzle/*.sql`
   - `.github/workflows/**`
   - `docs/comments-annotations/plan/**`
+  - `docs/comments-annotations/evidence/**`
   - `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
@@ -41,10 +42,11 @@
 
 ## Feedback Loop
 - [x] `BR00-EX1` (`BR-C0-EX1`) — Merge commit contains incoming files from K1/K2a (PR #666) and spec promotion; verified frozen M1 files are untouched.
-- [x] `BR00-EX2` (`BR-C0-EX2`) — Re-merge `origin/feat/cluster-mesh-storage-k1` at `471628c19` (C0 Opus m7) and spec `§18.2` alignment (C0 Opus M6; local `1daad605c`, `d5cada404`, carried into this branch by merge, spec branch not pushed). Conflict resolution limited to `BRANCH.md` (kept C0 side); frozen M1 files verified untouched after each merge.
+- [x] `BR00-EX2` (`BR-C0-EX2`) — Re-merge `origin/feat/cluster-mesh-storage-k1` at `471628c19` (C0 Opus m7) and spec `§18.2` alignment (C0 Opus M6; local `1daad605c`, `d5cada404`, carried into this branch by merge, spec branch subsequently pushed at `c3518c2de`). Conflict resolution limited to `BRANCH.md` (kept C0 side); frozen M1 files verified untouched after each merge.
 - [x] `BR00-EX3` (`BR-C0-EX3`) — C0 Opus remediation (B1, M1-M6, m1-m4): manifest error vocabulary derived from frozen M1 sources, `unverified` oracle/transport qualification, exact §11.3 limits/admission/operations, corrected transaction signature, derived hash pins incl. all conformance suites, executable G3 import scans. Rationale: review NO-GO findings. Impact: 4 files (manifest, doc, test, BRANCH.md). Rollback: revert the remediation commits.
 - [x] `BR00-EX4` (`BR-C0-EX4`) — Commit `2faca3916` modified 391 lines in `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts` exceeding the 150-line limit (C0 Opus r2 a-m1). Rationale: atomic update of the boundary test suite to test all derived hash pins and frozen error vocabulary in a single coherent test file without intermediate broken test states. Impact: 1 test file only. Rollback: revert commit 2faca3916. All subsequent commits remain strictly under 150 lines.
-- [x] `BR00-EX5` (`BR-C0-EX5`) — Re-merge `spec/comments-annotations-port` at `c3518c2de` (C0 Opus r2 MAJ-1, a-m7); resolves remaining §18.2 contradictory passages in step-1 docs (plan and spec files). Conflict resolution limited to `BRANCH.md` (kept C0 side); frozen M1 files verified untouched.
+- [x] `BR00-EX5` (`BR-C0-EX5`) — Re-merge `spec/comments-annotations-port` at `c3518c2de` (C0 Opus r2 MAJ-1, a-m7); partially addresses §18.2; r3 identifies remaining contradictory passages in step-1 docs (plan and spec files). Conflict resolution limited to `BRANCH.md` (kept C0 side); frozen M1 files verified untouched.
+- [x] `BR00-EX6` (`BR-C0-EX6`) — Owner-requested full C0 documentation sweep on this branch: plans, evidence extracts and `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` may change to align frozen L3a v4.1 §§9.6/11.3/17/18.2. Impact: documentation and the existing C0 guard only; frozen M1 remains byte-identical. Rollback: revert this remediation series. No merge or other-branch push.
 - [x] `DEBT-TEST-FIRST` — Git commit history shows manifest/doc committed before boundary tests (`4318dca02` before `c6f57bb8a` in initial C0; `e9a1e2951` before `2faca3916` in r1 remediation) (C0 Opus r2 a-m6). Acknowledged technical debt: all subsequent fixes are test-verified before commit.
 
 ## AI Flaky tests
@@ -89,7 +91,15 @@
   - [x] Add transport semantics §11.3 (canonical bytes, paging semantics, whole history rule, proposed host bounds, escaping/multibyte requirement) in manifest and doc (a-m5).
   - [x] Correct paths and document test-first debt / BR-C0-EX4 in BRANCH.md (a-m1, a-m6).
   - [x] Replace local file reference in storage-compatibility.md with normative frozen spec reference (a-m8).
-  - [ ] Validate tests, push, monitor CI, generate `.h2a/build/c0_fix2_report.md`.
+  - [x] Historical validation/push/report completed at `300dc5a40`; r3 supersedes the report's alignment claims (corrected by C0DOCS).
+
+- [ ] **Lot C0DOCS — Complete r3 documentation and guard remediation**
+  - [x] Restrict root/storage import guards while allowing the optional comments leaf (R3-m2).
+  - [ ] Sweep every non-frozen comments document and SPEC against the frozen source; preserve historical evidence and M1 bytes (R3-MAJ-1, R3-m6).
+  - [ ] Correct confirmation citations, report claims and checklist state (R3-m3–m5).
+  - [ ] Prove the document guard detects original backticked phrases and every discovered residue class (R3-m1).
+  - [ ] Run scoped C0 tests, cluster-mesh typecheck/full tests and scope checks through Make; verify frozen bytes.
+  - [ ] Write `.h2a/build/c0_docs_astra_report.md`, push only this branch and record final PR checks; never merge.
 
 - [x] **Lot N — Final validation & PR**
   - [x] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
