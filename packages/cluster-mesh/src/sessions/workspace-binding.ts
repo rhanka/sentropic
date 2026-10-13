@@ -33,11 +33,12 @@ export interface SessionWorkspaceDetachInput {
    */
   readonly isAdmin: boolean;
   /**
-   * Version read by the caller before invoking detach/end. While set, the
-   * operation only proceeds while the stored row still carries that version,
-   * so rights evaluated on the read state can never apply to a newer binding.
+   * Version read by the caller before invoking detach/end. Required (like
+   * `isAdmin`): the operation only proceeds while the stored row still
+   * carries that version, so rights evaluated on the read state can never
+   * apply to a newer binding. Omitting it fails closed.
    */
-  readonly expectedVersion?: number;
+  readonly expectedVersion: number;
 }
 export type SessionWorkspaceEndInput = SessionWorkspaceDetachInput;
 
@@ -54,9 +55,13 @@ export interface SessionWorkspaceGetInput {
 }
 
 /**
- * Production CAS tuple comparison shared by every store: the stored row
- * still matches the expected state only when the session, the monotonic
- * version and the full expected state (status, workspace, principal) agree.
+ * Production CAS tuple definition: the stored row still matches the expected
+ * state only when the session, the monotonic version and the full expected
+ * state (status, workspace, principal) agree. The Drizzle store implements
+ * this tuple as its SQL WHERE clause predicate-for-predicate; the
+ * per-predicate Postgres tests pin each predicate, so a removed predicate
+ * fails its test. The memory double in the spec file delegates here instead
+ * of reimplementing the tuple.
  */
 export const isExpectedBindingState = (
   existing: SessionWorkspaceBinding | null,
@@ -179,6 +184,9 @@ export const createSessionWorkspaceBindingService = (
     if (typeof input?.isAdmin !== 'boolean') {
       throw new SessionWorkspaceBindingError('invalid_request', 'isAdmin is required');
     }
+    if (typeof input?.expectedVersion !== 'number') {
+      throw new SessionWorkspaceBindingError('invalid_request', 'expectedVersion is required');
+    }
     // Uniform refusal: existence and tenant match are hidden behind one error.
     const existing = await store.findBySession(input.sessionId);
     if (!existing || existing.tenantId !== input.tenantId) {
@@ -193,7 +201,7 @@ export const createSessionWorkspaceBindingService = (
   const detach = async (input: SessionWorkspaceDetachInput): Promise<SessionWorkspaceBinding> => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const existing = await authorize(input);
-      if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
+      if (existing.version !== input.expectedVersion) {
         throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the detach');
       }
       if (existing.status === 'ended') {
@@ -214,7 +222,7 @@ export const createSessionWorkspaceBindingService = (
   const end = async (input: SessionWorkspaceEndInput): Promise<SessionWorkspaceBinding> => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const existing = await authorize(input);
-      if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
+      if (existing.version !== input.expectedVersion) {
         throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the end');
       }
       if (existing.status === 'ended') return existing;
