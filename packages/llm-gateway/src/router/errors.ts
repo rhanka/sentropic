@@ -21,6 +21,8 @@
 
 import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
+import { requestTooLargeDetail, type RequestSizeDetail } from '@sentropic/llm-mesh';
+import { requestTooLargeMessage } from '../request-too-large.js';
 import { isRoutePlanError, isRouteQuoteError } from '../internal/mesh-routing-error.js';
 
 export interface ProviderShapedError {
@@ -46,6 +48,7 @@ export type GatewayFailureKind =
   | 'bad-request'
   | 'unknown-model'
   | 'no-route'
+  | 'request-too-large'
   | 'cross-user-disabled';
 
 export class GatewayError extends Error {
@@ -68,6 +71,8 @@ export class GatewayError extends Error {
      * only for `bad-request` on OpenAI-shaped wires.
      */
     readonly param?: string,
+    /** Trusted measured size for `request-too-large`; never caller text. */
+    readonly requestSize?: RequestSizeDetail,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -166,6 +171,8 @@ export const mapGatewayError = (
   detail?: string,
   /** Spec §16.7: validated field code/path, `bad-request` only. */
   field?: FieldError,
+  /** Trusted measured size, `request-too-large` only. */
+  requestSize?: RequestSizeDetail,
 ): ProviderShapedError => {
   const anthropic = wire === 'anthropic-messages';
   const retry = retryAfterHeader(retryAfterSeconds);
@@ -240,6 +247,17 @@ export const mapGatewayError = (
         ? anthropicError(404, 'not_found_error', unknownModelMessage(requestedModel))
         : openAiError(404, 'invalid_request_error', unknownModelMessage(requestedModel), 'model_not_found');
 
+    case 'request-too-large': {
+      // N02: terminal 413 carries only measured numeric evidence with the
+      // effective known limit; unknown upstream limits stay unavailable.
+      // Non-retryable on every wire, even when wrapped by callbacks.
+      const message = requestTooLargeMessage(requestSize);
+      const headers = { 'x-should-retry': 'false' };
+      return anthropic
+        ? anthropicError(413, 'request_too_large', message, headers)
+        : openAiError(413, 'invalid_request_error', message, 'request_too_large', headers);
+    }
+
     case 'no-route': {
       // BR-REL-Q7: non-retryable 503 with an explicit no-retry header and no
       // Retry-After. Never overloaded_error/rate_limit_error.
@@ -263,7 +281,15 @@ export const toProviderShapedError = (
     const field = error.code !== undefined || error.param !== undefined
       ? { code: error.code, param: error.param }
       : undefined;
-    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, undefined, field);
+    return mapGatewayError(wire, error.kind, error.retryAfterSeconds, requestedModel, undefined, field,
+      error.requestSize);
+  }
+  // N02: typed 413 evidence survives wrapping (callbacks, settlement, SDK
+  // adapters) and maps before auth/rate/overload handling below.
+  const tooLarge = requestTooLargeDetail(error);
+  if (tooLarge) {
+    return mapGatewayError(wire, 'request-too-large', undefined, requestedModel, undefined, undefined,
+      tooLarge.requestSize);
   }
   const record = error && typeof error === 'object'
     ? (error as { diagnostic?: {
