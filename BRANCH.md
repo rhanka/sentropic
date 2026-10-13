@@ -83,12 +83,12 @@
 - [x] **Lot C0FIX2 — Opus r2 remediation**
   - [x] Align step-1 docs on `spec/comments-annotations-port` (commits `6bbc2f959`, `c3518c2de`), push to origin (a-m7).
   - [x] Merge `spec/comments-annotations-port` into `feat/comments-cm-c0` (MAJ-1).
-  - [ ] Remove vacant missing sub-case in boundary test (a-m2).
-  - [ ] Enhance G3 decoupled runtimes scan to check relative cross-package imports (a-m3).
-  - [ ] Replace direct import of frozen comments source in boundary test with file parsing (a-m4).
-  - [ ] Add transport semantics §11.3 (canonical bytes, paging semantics, whole history rule, proposed host bounds, escaping/multibyte requirement) in manifest and doc (a-m5).
-  - [ ] Correct paths and document test-first debt / BR-C0-EX4 in BRANCH.md (a-m1, a-m6).
-  - [ ] Replace local file reference in storage-compatibility.md with normative frozen spec reference (a-m8).
+  - [x] Remove vacant missing sub-case in boundary test (a-m2).
+  - [x] Enhance G3 decoupled runtimes scan to check relative cross-package imports (a-m3).
+  - [x] Replace direct import of frozen comments source in boundary test with file parsing (a-m4).
+  - [x] Add transport semantics §11.3 (canonical bytes, paging semantics, whole history rule, proposed host bounds, escaping/multibyte requirement) in manifest and doc (a-m5).
+  - [x] Correct paths and document test-first debt / BR-C0-EX4 in BRANCH.md (a-m1, a-m6).
+  - [x] Replace local file reference in storage-compatibility.md with normative frozen spec reference (a-m8).
   - [ ] Validate tests, push, monitor CI, generate `.h2a/build/c0_fix2_report.md`.
 
 - [x] **Lot N — Final validation & PR**
