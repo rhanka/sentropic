@@ -521,6 +521,14 @@ describe('canonical model targets', () => {
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-spark-1.3-contributor',
     });
+    expect(resolve('muse-wonder-1.0')).toEqual({
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-wonder-1.0',
+    });
+    expect(resolve('muse-wonder-1.0-full')).toEqual({
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-wonder-1.0-full',
+    });
     expect(resolve('mistral-medium-3.5')).toMatchObject({ transportProviderId: 'mistral-vibe' });
     expect(resolve('gemini-3.8-flash')).toEqual({
       providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',

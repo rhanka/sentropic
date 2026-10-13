@@ -46,6 +46,12 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'muse-spark-1.3-contributor': {
     providerId: 'muse', transportProviderId: 'muse', model: MUSE_CONTRIBUTOR_MODEL,
   },
+  'muse-wonder-1.0': {
+    providerId: 'muse', transportProviderId: 'muse', model: 'muse-wonder-1.0',
+  },
+  'muse-wonder-1.0-full': {
+    providerId: 'muse', transportProviderId: 'muse', model: 'muse-wonder-1.0-full',
+  },
   'claude-sonnet-5': {
     providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-5',
   },

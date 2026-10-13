@@ -269,6 +269,11 @@
 - [x] **Lot N10b — Selection follow-through + opaque body (fold)**
   - [x] `src/route-native.ts` `buildNativeMessagesBody` (shallow dispatch overrides, opaque nesting preserved) + `tests/native-body.test.ts` (RED missing-module → GREEN 28/28).
   - [x] Native threading: `nativeMessagesEnabled` construction switch, `nativeFeatures` on the prepared flow, `nativeMessages` plan/quote inputs with host-injection guard (`route-flow-core.ts`, `router/index.ts` + flow test); Chat-only `max_completion_tokens` ceiling (`canonical-ingress.ts` + test).
+- [x] **Owner request 2026-10-13 — Muse Wonder + Wonder Full**
+  - [x] Catalog (`muse-wonder-1.0` exact per local CLI config; `-full` pattern-derived, owner to confirm), `muse`/`muse` routing targets, council listing, gateway default unchanged (no api change).
+  - [x] Responses-wire compat via transport-keyed `muse` execution set; replay proves 200 + usage on both Wonder ids; effort passes through (no per-model table); accounting model-agnostic.
+  - [x] Recorded in spec §14.4b + mesh CHANGELOG Unreleased.
+- [ ] **Lots N11→N32 (fold remainder)** — not started this resume (scope: ~35 R commits on `feat/llm-gateway-native-relay` after `50dd4cf08`: N11 validation policy → N12/N13 mesh feasibility + prepared dispatch → N14–N18 native HTTP + lifecycle + SSE → N19–N29 usage/pricing/proof → N30 relay/settlement; native stays OFF by default). Handoff: port lot-by-lot in design order with the same test-first discipline; next slice is N11 (`661e732d3` typed validation error contract + `d64bf9492` billing classifier + `5c6d706da` bounds).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).

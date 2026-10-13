@@ -12,6 +12,10 @@
   on all three Responses adapters.
 - `mistral-vibe-cli-latest` alias resolving to the pinned
   `mistral:mistral-medium-3.5`/`mistral-vibe` target (no duplicate profile).
+- Muse Wonder (`muse-wonder-1.0`) + Wonder Full (`muse-wonder-1.0-full`)
+  catalog entries, `muse`/`muse` routing targets and council listing
+  (owner request 2026-10-13); same transport-keyed Responses execution set
+  as Spark, gateway default unchanged.
 
 ## 0.24.1
 
