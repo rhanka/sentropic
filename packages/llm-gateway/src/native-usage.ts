@@ -240,10 +240,33 @@ export class NativeUsageObserver {
   readonly accumulator = new NativeCumulativeUsageAccumulator();
   private stopped = false;
   private finalCandidate = false;
+  private servedModelId?: string;
+  private modelReason?: NativeUsageUncertainty;
+  private fallbackPresent = false;
+  private iterationsPresent = false;
 
   constructor(readonly selectedModelId: string, private readonly defaultTtlEligible = false) {}
 
+  private observeResponse(response: Readonly<Record<string, unknown>>, requireModel = false): void {
+    if (requireModel || Object.hasOwn(response, 'model')) {
+      const id = response.model;
+      if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(id)) {
+        this.modelReason ??= 'served_model_unverified';
+      } else {
+        this.servedModelId = id;
+        if (id !== this.selectedModelId) this.modelReason = 'served_model_mismatch';
+      }
+    }
+    const content = Array.isArray(response.content) ? response.content : [];
+    this.fallbackPresent ||= content.some(block => nativeRecord(block)?.type === 'fallback')
+      || nativeRecord(response.content_block)?.type === 'fallback';
+    const iterations = nativeRecord(response.usage)?.iterations;
+    this.iterationsPresent ||= iterations != null && (!Array.isArray(iterations) || iterations.length > 0);
+    if (this.fallbackPresent || this.iterationsPresent) this.modelReason = 'served_model_mismatch';
+  }
+
   observeJson(body: Readonly<Record<string, unknown>>): void {
+    this.observeResponse(body, true);
     const usage = nativeRecord(body.usage);
     if (!usage) { this.accumulator.revoke('missing_usage'); return; }
     this.accumulator.acceptStart(usage as RawNativeUsageUpdate,
@@ -257,9 +280,12 @@ export class NativeUsageObserver {
     let event: Record<string, unknown> | undefined;
     try { event = nativeRecord(JSON.parse(frame.data)); } catch { return; }
     if (!event) return;
+    this.observeResponse(event);
     const type = frame.event ?? event.type;
     if (type === 'message_start') {
-      const usage = nativeRecord(nativeRecord(event.message)?.usage);
+      const message = nativeRecord(event.message) ?? {};
+      this.observeResponse(message, true);
+      const usage = nativeRecord(message.usage);
       if (!usage) { this.accumulator.revoke('missing_usage'); return; }
       this.accumulator.acceptStart(usage as RawNativeUsageUpdate, { defaultTtlEligible: this.defaultTtlEligible });
     } else if (type === 'message_delta') {
@@ -279,7 +305,8 @@ export class NativeUsageObserver {
     const input = state.inputUsageValidated || state.physicalLowerBound > 0 ? state.physicalInput : undefined;
     const output = raw.output_tokens;
     const finalOutputObserved = termination === 'completed' && this.stopped && this.finalCandidate;
-    const estimated = state.estimated || !state.inputUsageValidated || !finalOutputObserved
+    const inputValidated = state.inputUsageValidated && !this.modelReason && this.servedModelId === this.selectedModelId;
+    const estimated = state.estimated || !inputValidated || !finalOutputObserved
       || !input || !output;
     const total = input !== undefined && output !== undefined ? BigInt(input) + BigInt(output) : undefined;
     return Object.freeze({
@@ -287,9 +314,10 @@ export class NativeUsageObserver {
       ...(output !== undefined ? { outputTokens: output } : {}),
       ...(total !== undefined && total <= BigInt(Number.MAX_SAFE_INTEGER) ? { totalTokens: Number(total) } : {}),
       rawUsage: raw, estimated, finalOutputObserved, termination,
-      nativeSelectedModelId: this.selectedModelId, fallbackPresent: false, iterationsPresent: false,
-      nativeInputUsageValidated: state.inputUsageValidated, nativeInputUsageSource: state.inputUsageSource,
-      nativeUsageUncertainty: state.uncertaintyReason ?? (estimated ? 'incomplete_output' : undefined),
+      nativeSelectedModelId: this.selectedModelId, nativeServedModelId: this.servedModelId,
+      fallbackPresent: this.fallbackPresent, iterationsPresent: this.iterationsPresent,
+      nativeInputUsageValidated: inputValidated, nativeInputUsageSource: state.inputUsageSource,
+      nativeUsageUncertainty: this.modelReason ?? state.uncertaintyReason ?? (estimated ? 'incomplete_output' : undefined),
       nativeCacheWriteSplitReason: state.cacheWriteSplitReason,
     });
   }
