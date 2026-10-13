@@ -45,10 +45,9 @@ export const executeClaudeNative = async (request: ClaudeNativeRequest | undefin
     response = await readiness.race(confirmedNativeFetch(`${base.replace(/\/+$/, '')}${path}`, {
       method: 'POST', headers, body: upload.stream, signal: readiness.signal,
       duplex: 'half', redirect: 'error',
-    } as RequestInit));
+    } as RequestInit, operation === 'messages' ? onResponseStarted : undefined));
     upload.complete();
     if (response.status !== 200) throw await readiness.race(nativeHttpError(response, upload.requestBytes, features));
-    if (operation === 'messages') onResponseStarted?.();
     const responseHeaders = Object.fromEntries(response.headers);
     const requestSize = { requestBytes: upload.requestBytes, source: 'upstream' as const };
     if (operation === 'messages' && stream) {
