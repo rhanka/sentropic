@@ -1,235 +1,104 @@
-# Feature: Cluster-mesh storage-port lot K3 (L3a v4.1 frozen)
+# Feature: Tag-Collision Guard for publish-api-image Job
 
 ## Objective
-- [x] Deliver the K3 neutral runtime (validation, tokens, binding, ordinary transactions, exact-head immutable chain boundaries) on the K1/K2 corpora.
-- [x] Designate the chain-boundary provider used by readChainPage (G3) for the engram adapter.
-- [x] Fix the opus r2 findings (7 MAJEUR, 14 MINEUR) plus Sol co-review (7 MAJEUR) on draft PR #670 (fix2 pass, Lot 6).
-- [ ] Fix the opus r3 findings (1 BLOQUANT, 2 MAJEUR, 9 MINEUR) on draft PR #670 with CI green and no reserves (fix3 pass, Lot 7).
+Guard the publish-api-image CI job against release tag collisions and overwrites by inspecting registry manifests before push, failing on different digests, and skipping idempotently on matching digests.
 
 ## Scope / Guardrails
-- [x] Scope limited to K3 runtime files and K3 specs plus the K3 report (merge-only intakes via BR-K3-EX1/EX2).
-- [x] Make-only workflow, no direct Docker commands.
-- [x] Root workspace ~/src/sentropic is reserved for user dev/UAT (ENV=dev) and must remain stable.
-- [x] Branch development happens in worktree tmp/worktrees/cluster-mesh-storage-k3.
-- [x] Automated test campaigns run on ENV=test-cm-k3, never on dev.
-- [x] In every make command, ENV=test-cm-k3 passed as last argument with API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615.
-- [x] One Docker build at a time.
-- [x] All new text in English.
-- [x] Zero Python.
-- [x] Kernel stays neutral: no pg, no drizzle, no engram imports; public types documented.
-- [x] Frozen M1 and merged engram L6a 70ebdfee untouched.
-- [x] No version bump.
-- [x] K2a/K2b corpora run against the K3 runtime where applicable (ordinary only; staged/journal/barrier/lifecycle stay K4/S/P).
+- Scope limited to CI publication guard in Makefile, scripts/publish-api-image.sh, scripts/test-api-tag-guard.sh, .github/workflows/ci.yml, docs/ci-images.md.
+- One migration max in `api/drizzle/*.sql` (if applicable).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/ci-tag-guard`.
+- Automated test campaigns must run on dedicated environments (`ENV=test-ci-tag-guard`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**:
-  - [ ] `BRANCH.md`
-  - [ ] `packages/cluster-mesh/src/storage/tokens.ts`
-  - [ ] `packages/cluster-mesh/src/storage/backend.ts`
-  - [ ] `packages/cluster-mesh/src/storage/record-runtime.ts`
-  - [ ] `packages/cluster-mesh/src/storage/scope-runtime.ts`
-  - [ ] `packages/cluster-mesh/src/storage/kernel.ts`
-  - [ ] `packages/cluster-mesh/src/storage/index.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/kernel.spec.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`
-  - [ ] `.h2a/build/k3_report.md`
-  - [ ] `.h2a/build/k3_fix_report.md` (BR-K3-EX1 opus fix report)
-  - [ ] `.h2a/build/k3_fix2_report.md` (BR-K3 Lot 6 opus-r2 plus Sol fix2 report)
-  - [ ] `.h2a/build/k3_fix3_report.md` (BR-K3 Lot 7 opus-r3 fix3 report)
-- [ ] **Forbidden Paths (must not change in this branch)**:
-  - [ ] `Makefile`
-  - [ ] `docker-compose*.yml`
-  - [ ] `.cursor/rules/**`
-  - [ ] `plan/NN-BRANCH_*.md` (except this branch file)
-  - [ ] `packages/comments/**`
-  - [ ] `docs/comments-annotations/**`
-  - [ ] `packages/cluster-mesh/src/live*/**`
-  - [ ] `packages/cluster-mesh/src/comments/**`
-  - [ ] `packages/cluster-mesh/src/modules/**`
-  - [ ] `packages/cluster-mesh/src/runtime/**`
-  - [ ] `packages/cluster-mesh/src/storage/contracts.ts`
-  - [ ] `packages/cluster-mesh/src/storage/authority.ts`
-  - [ ] `packages/cluster-mesh/src/storage/atomic.ts`
-  - [ ] `packages/cluster-mesh/src/storage/profiles.ts`
-  - [ ] `packages/cluster-mesh/src/storage/descriptor.ts`
-  - [ ] `packages/cluster-mesh/src/storage/staged-units.ts`
-  - [ ] `packages/cluster-mesh/src/storage/readers.ts`
-  - [ ] `packages/cluster-mesh/src/storage/errors.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/atomic-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/authority-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/chain-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/read-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/staged-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/replay-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/barrier-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/lifecycle-corpus.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/reference-store.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/reference-state.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/reference-staged.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/reference.spec.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/mutations.spec.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/profile-mutations.spec.ts`
-  - [ ] `.h2a/inputs/**`
-  - [ ] `.h2a/reviews/**`
-  - [ ] `.env`
-- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [ ] `.github/workflows/**`
-- [ ] Exception process:
-  - [ ] Declare exception ID `BRxx-EXn` in Feedback Loop before touching any conditional/forbidden path.
-  - [ ] Include reason, impact, and rollback strategy.
-  - [ ] Mirror the same exception in this file under Feedback Loop.
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `Makefile`
+  - `.github/workflows/**`
+  - `scripts/publish-api-image.sh`
+  - `scripts/test-api-tag-guard.sh`
+  - `docs/ci-images.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `packages/**`
+  - `api/**`
+  - `ui/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [x] `BR-K3-DISC1` — One-time BRANCH.md rewrite (K2b content to K3 content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
-- [x] `BR-K3-G3` — G3 designation: readChainPage uses the HMAC exact-head boundary provider (self-contained opaque cursors, no registry; supersedes the retained registry after the opus review); decision recorded in kernel.ts plus the K3 fix report.
-- [x] `BR-K3-DISC2` — K3 runtime files land as one coherent file per commit when they exceed 150 lines (single review unit per §17.4 file; K1 `BR-K1R3-EX1` and K2b `BR-K2B-DISC2` precedent for reference-scale files); all other commits stay under 150 lines.
-- [x] `BR-K3-EX1` — Merge-only intake of `origin/feat/cluster-mesh-storage-k2b` (#669 r2, opus §1). Reason: K3 is stacked on K2b and must carry the R3 resume fix, the `readers.ts` envelope floor, the disposal evidence and the corpus deltas; `readers.ts` is otherwise forbidden on K3. Impact: K2b-owned files only (`readers.ts`, `reference-store.ts`, `read-corpus.ts`, `atomic-corpus.ts`, staged/replay/barrier/lifecycle corpora, `mutations.spec.ts`, `profile-mutations.spec.ts`, `reference.spec.ts`, `reference-staged.ts`); no K3 runtime hand-edits outside allowed paths; `BRANCH.md` conflict resolved by keeping the K3 version. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
-- [ ] `BR-K3-DISC3` — Opus fix files land as one coherent file per commit when they exceed 150 lines (single review unit per finding; `BR-K3-DISC2` precedent); all other fix commits stay under 150 lines with `BRANCH.md` in-commit.
-- [ ] `BR-K3-EX2` — Merge-only intake of `origin/main` into K3 (opus r3 M1; PR #670 `CONFLICTING`). Reason: the PR targets `main` and needs PR CI plus mergeability. Impact: `Makefile` plus `.github/workflows/ci.yml` taken verbatim from `main` with no hand-edits (forbidden paths); `BRANCH.md` conflict resolved by keeping the K3 version; all other main files merged normally. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
-- [ ] `BR-K3-CI-R3` — CI run `38490269426` (`workflow_dispatch`, HEAD `1d2bfea8e`): `validate-cluster-mesh` failure is branch-related (B1 unhandled rejection, `StorageInvalidCommandError: transaction closed` from `kernel.spec.ts:655`), fixed in Lot 7, never flaky-accepted.
-- [ ] `BR-K3-CI-AI` — CI run `38490269426`: `test-api-unit-integration (ai, chat-sync,executive-summary-auto,comment-assistant)` failure is provider/model nondeterminism on the AI flaky list (`rules/testing.md`); K3 touches no API file; recorded pending owner sign-off before merge.
+- **BR62-EX1** (status: `accepted`): Conditional `Makefile` change to route `publish-api-image` to `scripts/publish-api-image.sh` and add `test-ci-api-tag-guard`. Reason: implement tag collision guard and Make-only test target. Impact: ensures publish-api-image checks registry manifest before pushing and allows local/CI test execution. Rollback: revert Makefile targets to previous revision.
+- **BR62-EX2** (status: `accepted`): Conditional `.github/workflows/ci.yml` change to wire `test-ci-api-tag-guard` into `build-api-image` and update `changes` global filters. Reason: automate tag-guard regression testing in PR CI. Impact: CI fails if tag guard regresses. Rollback: revert ci.yml edits.
 
 ## AI Flaky tests
-- [ ] Acceptance rule:
-  - [ ] Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - [ ] Non-systematic means at least one success on the same commit and same command.
-  - [ ] Never amend tests with additive timeouts.
-  - [ ] If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - [ ] Capture explicit user sign-off before merge.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] Multi-branch (only if sub-workstreams require independent CI or long-running validation)
-- [ ] Rationale: single stacked branch on feat/cluster-mesh-storage-k2b; one final test cycle.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single focused CI debt task on dedicated worktree
 
 ## UAT Management (in orchestration context)
-- [x] **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- [x] Multi-branch: no UAT on sub-branches; UAT happens only after integration on the main branch.
-- [x] UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- [x] K3 has no UI changes: no user UAT applies; automated gates plus corpus evidence replace UAT.
-- [x] Execution flow (mandatory):
-  - [x] Develop and run tests in `tmp/worktrees/cluster-mesh-storage-k3`.
-  - [x] Push only this branch before any handoff.
-  - [x] No `ENV=dev` runs from the root workspace (storage branch, no UI surface).
-  - [x] Stay in `tmp/worktrees/cluster-mesh-storage-k3` after the gates.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/ci-tag-guard`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/ci-tag-guard` after UAT.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `README.md`.
-  - [x] Confirm worktree `tmp/worktrees/cluster-mesh-storage-k3` on branch `feat/cluster-mesh-storage-k3` stacked at `4da5b52ca`.
-  - [x] Read frozen spec `L3a-spec-v4.1-frozen.md` §17 row K3 plus file table (K/T).
-  - [x] Rewrite `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` (this file).
-  - [x] Confirm command style: `make ... API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` with `ENV` last.
-  - [x] Confirm scope boundaries and `BR-K3-DISC1`.
-  - [x] Baseline: `make test-cluster-mesh SCOPE=tests/storage/reference.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` green.
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [x] **Lot 1 — Test-first K3 specs (failing)**
-  - [x] Write `packages/cluster-mesh/tests/storage/kernel.spec.ts`: atomic + chain + read + cursor-budget corpora against the K3 runtime; predicate-positive acceptance; transact overlay/rollback/isolation/closed-context/nested-join; token tamper and cross-chain refusal; forged cursor refusal.
-  - [x] Write `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`: authority corpus against the K3 runtime; frozen-grant mutation check; revalidation on expiry and revocation; capability advertisement.
-  - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-  - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-  - [x] Lot gate: specs fail on missing runtime (RED), no other files touched.
-- [x] **Lot 2 — Tokens, backend, record runtime**
-  - [x] Write `packages/cluster-mesh/src/storage/tokens.ts`: retained exact-head boundary registry (G3 provider), opaque id minting, documented public types.
-  - [x] Write `packages/cluster-mesh/src/storage/backend.ts`: neutral in-memory backend state per scope (chains, genesis, index, records, aggregates, commits, cursors).
-  - [x] Write `packages/cluster-mesh/src/storage/record-runtime.ts`: ordinary commit staging with CAS-first appends, allocation, disposal guards, idempotent genesis/index, aggregate versions, predicate-positive acceptance, barrier/purge/relationship refusal, full rollback, R3 effective-cursor paging.
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [x] **Lot 3 — Scope binding, kernel, index**
-  - [x] Write `packages/cluster-mesh/src/storage/scope-runtime.ts`: grant bind with frozen copy, issued-token registry, revocation, per-operation revalidation, scope isolation, profiles advertisement, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal).
-  - [x] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, G3 provider wiring, documented public types.
-  - [x] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] **API tests**
-      - [x] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` (new K3 ordinary runtime proof)
-      - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` (new K3 binding proof)
-      - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-      - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-      - [x] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [x] **Lot 4 — Final validation, report, draft PR**
-  - [x] Typecheck and lint full package.
-  - [x] Retest storage: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
-  - [x] Retest package: `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
-  - [x] Verify neutrality: no pg, no drizzle, no engram imports in `packages/cluster-mesh/src/storage/`.
-  - [x] Verify frozen M1 and engram L6a untouched.
-  - [x] Write `.h2a/build/k3_report.md` with exit SHA, corpus evidence, G3 designation, neutrality proof.
-  - [x] Push only this branch, open a DRAFT PR noting "stacked on #669", never merge.
-- [x] **Lot 6 — Fix2 pass (opus r2 7 MAJEUR + 14 MINEUR, Sol co-review 7 MAJEUR, PR #670)**
-  - [x] Merge `origin/feat/cluster-mesh-storage-k2b` r3 (`361b3c9f8`) under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
-  - [x] R-MAJ-1 follow-up: K2b r3 floor (empty incomplete carries no retained cursor) in `record-runtime.ts`; r3 corpora green against K3.
-  - [x] R-MAJ-2/m1/m14: cursor v2 binds (head, seq, allocation) with plaintext incarnation plus key id; unknown boundary returns explicit `incomplete`; default secret documented and tested.
-  - [x] R-MAJ-3: `transact` on a closed overlay is refused; detached-`transact` test.
-  - [x] R-MAJ-4/Sol-1: every `tx.*` read requires `read` plus revalidation; write-only and mid-callback-revocation tests.
-  - [x] R-MAJ-5: `#deps`, no public constructor or deps export, scope-copy getter; handle-surface test.
-  - [x] R-MAJ-6: predicates receive `(dependency, ctx)` with scope plus read-your-writes view; inter-scope and pending-write tests.
-  - [x] R-MAJ-7: `findIdempotency(selector)` on the command index plus overlay; `readRecords(keys, limits)`; paginated-tx decision traced below.
-  - [x] Sol-2: repeated-hash chains deliver every record (boundary by seq plus hash).
-  - [x] Sol-3/m4: storage-boundary copies (records, values, index entries, genesis, receipts).
-  - [x] Sol-4: single-`apply` dependent appends advance provisional heads sequentially.
-  - [x] Sol-5: commit preflight (known guards, encoded records, merged-unit bytes) refuses without effects.
-  - [x] Sol-6/m5: absent-boundary continuation only when it fits the budget.
-  - [x] Sol-7/m10: same-chain CAS race test plus live K3M4 mutant kill.
-  - [x] m2: joined receipts are frozen snapshots; provisional nature documented.
-  - [x] m3: nested join keyed by module plus scope, not by handle instance.
-  - [x] m6: O(1) page admission, dense-seq paging, clone-on-touch commits.
-  - [x] m7: authority re-attested on every operation; default port documented.
-  - [x] m8: semantic profile digests over documented definitions.
-  - [x] m9: disposal zeroes chain payload bytes, retains status.
-  - [x] K3M1 mutant re-simulated as frozen input cursor; K3 sweep enlarged to 9 records (v2 token economics).
-  - [x] Paginated-tx decision: no `tx.readChainPage`; the tx boundary is unsealed until commit so paging would bind a movable boundary; pending appends stay readable via `tx.readChain`, committed pages via `readPage`.
-  - [x] m11/m12/m13: accurate `.h2a/build/k3_fix2_report.md` with exit SHA; this lot's core commit is one atomic green unit (token format times runtime times proofs cannot split green).
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (red: B1 unhandled rejection in `kernel.spec.ts`)
-    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (red: same B1 error, exit 1)
-    - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] CI green on PR #670 (HEAD `1d2bfea8e` is `CONFLICTING`; `workflow_dispatch` run `38490269426` has branch-related `validate-cluster-mesh` failure B1 plus listed AI flaky failure).
-- [ ] **Lot 5 — Opus fix (6 MAJEUR, 9 MINEUR, PR #670)**
-  - [x] Merge `origin/feat/cluster-mesh-storage-k2b` under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
-  - [x] MAJEUR-1: recompute `start + delivered` on every trim in `record-runtime.ts`; full-sweep resume plus faithful mutant against K3.
-  - [x] MAJEUR-2: bounded HMAC cursor token in `tokens.ts` (no per-record state, restart-stable via secret, opaque string cursors).
-  - [x] MAJEUR-3: sequential commit validation, async-context transaction isolation, nested rollback-only, frozen units in `scope-runtime.ts` plus `record-runtime.ts`.
-  - [x] MAJEUR-4: evaluate registered predicates, refuse unknown ones explicitly in `record-runtime.ts`.
-  - [x] MAJEUR-5: deny disposed getters, null continuation on `inaccessible`, disposal tail corpus against K3.
-  - [x] MAJEUR-6: authority port plus root/adapter handle split with server-side rights in `kernel.ts`.
-  - [x] MINEUR-2: measure admission with the effective cursor; validator-clean floor in `record-runtime.ts`.
-  - [x] MINEUR-3: reserve the commit id upfront; refuse empty transactions; no fabricated receipts.
-  - [x] MINEUR-4: copy canonical state on every read in `scope-runtime.ts` plus `record-runtime.ts`.
-  - [x] MINEUR-5: reuse the K1 `ProfileClaim` type with a real digest in `scope-runtime.ts`.
-  - [x] MINEUR-6: refuse `CommitOptions.fence` explicitly in `record-runtime.ts`.
-  - [x] MINEUR-7: discriminating K3 tests plus mutants in `kernel.spec.ts` plus `scope-runtime.spec.ts`.
-  - [x] MINEUR-8: commits under 150 lines (`BR-K3-DISC3`), no duplicated lines, checked boxes.
-  - [x] MINEUR-9: accurate `.h2a/build/k3_fix_report.md` with exit SHA.
-  - [ ] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] CI green on PR #670 with no reserves; re-merge K2b if it advances.
-- [ ] **Lot 7 — Fix3 pass (opus r3 1 BLOQUANT + 2 MAJEUR + 9 MINEUR, PR #670)**
-  - [x] B1: handler attached inside the deferred callback in `kernel.spec.ts`; `make test-cluster-mesh` exits 0; report corrected.
-  - [ ] M1: merge `origin/main` under `BR-K3-EX2` (`Makefile` plus `ci.yml` verbatim from `main`, K3 `BRANCH.md` kept); PR mergeable plus PR CI green.
-  - [x] M2: `tx.readChain` paginated (`RecordPage`) plus `tx.readRecords` with mandatory `limits` and byte budget, per FROZEN §5.2; local paginated-tx decision removed.
-  - [x] m1: MAC verified before the plaintext incarnation/key check (unknown `keyId` only skips the MAC); incarnation plus `keyId` alteration tests.
-  - [x] m2: no constant default incarnation (random per kernel unless configured); restart tests pin explicit incarnations.
-  - [x] m3: every joined grant revalidated at commit; revocation-of-B test.
-  - [x] m4: joined calls share the final outer receipt; outer-failure receipt test.
-  - [x] m5: versioned K3M4 race test plus MAC module/scope binding tests.
-  - [ ] m6: every fix3 commit atomic (under 150 lines) with `BRANCH.md` in-commit.
-  - [ ] m7: coherent `BRANCH.md` (true boxes checked, CI failures recorded, gates per lot).
-  - [ ] m8: accurate `.h2a/build/k3_fix3_report.md` with exit SHA (no `all gates green` without exit 0).
-  - [x] m9: proscribed word removed from code, specs and reports; factual terms only.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] CI green on PR #670 with no reserves; owner sign-off on the listed AI flaky failure.
+  - [x] Confirm isolated worktree `tmp/worktrees/ci-tag-guard` and branch `fix/ci-publish-api-image-tag-guard`.
+  - [x] Check branch alignment with origin/main (`harness check branch`).
+  - [x] Create `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` with explicit scope exceptions BR62-EX1 and BR62-EX2.
+  - [x] Verify baseline version filters (`make check-ci-version-filters API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`).
+  - [x] Verify baseline scope check (`make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`).
+
+- [ ] **Lot 1 — Publish guard implementation**
+  - [ ] Create `scripts/publish-api-image.sh` enforcing registry manifest inspect before push.
+  - [ ] Handle `exists-different` with exit 1 and tag collision error.
+  - [ ] Handle `exists-same` with idempotent push skip and exit 0.
+  - [ ] Handle `absent` with push and exit 0.
+  - [ ] Explicitly document and preserve moving tags behavior (`main`, `latest`).
+  - [ ] Update `publish-api-image` target in `Makefile` to call `scripts/publish-api-image.sh`.
+
+- [ ] **Lot 2 — Automated test suite**
+  - [ ] Create `scripts/test-api-tag-guard.sh` with isolated mock docker CLI.
+  - [ ] Implement test cases: `exists-different`, `exists-same`, `absent`, registry fatal error, and moving tags.
+  - [ ] Add `test-ci-api-tag-guard` target to `Makefile`.
+  - [ ] Run and pass test suite locally via `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+
+- [ ] **Lot 3 — CI workflow wiring**
+  - [ ] Update `.github/workflows/ci.yml` `changes` filter `global` to include new scripts.
+  - [ ] Add `make test-ci-api-tag-guard ENV=test-ci-api` step in `build-api-image` job.
+  - [ ] Verify `make check-ci-version-filters API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Update `docs/ci-images.md` to document immutable release tag collision guard and moving tags policy.
+  - [ ] Document CI history reference for the original incident (commit `ec018720d`).
+
+- [ ] **Lot N — Final validation**
+  - [ ] Run `make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+  - [ ] Run `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+  - [ ] Run `make check-ci-version-filters API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+  - [ ] Push branch `fix/ci-publish-api-image-tag-guard` to origin.
+  - [ ] Open a draft PR for review.
+  - [ ] Generate `.h2a/build/ci_tag_guard_report.md` (untracked).
