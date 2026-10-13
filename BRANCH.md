@@ -273,4 +273,5 @@
   - [x] R4-MAJ-2: Muse history projection (`toWireMessage` equivalent).
   - [x] R4-BLQ-1a: native Codex carrier projection (`reasoning.context`, `text.verbosity`, `prompt_cache_key`, namespaced custom tools, ordered reasoning items) in `codex-runtime-wire.ts` + wire test (RED/GREEN via real-planner replay).
   - [x] R4-BLQ-1b: execution-feature table declarations (codex +context/verbosity/custom-tools, muse +reasoning-controls/ceiling/strict, vibe +strict) + bounded §16.3/§16.4 amendments (muse reasoning accepted-not-forwarded, strict forwarded-visibly); replay test next.
+  - [x] R4-BLQ-1c: replay through the REAL mesh planner (`tests/responses-real-planner.test.ts`, 7/7, no mocked plan — RED 6x400 pre-fix, GREEN post-fix) + Codex-ceiling negative test; R4-BLQ-1 closed.
   - [x] R4-MAJ-3: bare→qualified egress requalification via carrier refs (helper + Codex/Muse/Mistral adapters + tests; Codex custom-tool return shape stays owner-UAT-bound under BLQ-3).
