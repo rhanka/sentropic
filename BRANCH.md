@@ -15,25 +15,19 @@
 - [x] Report `.h2a/build/c0_report.md` in the new worktree (untracked).
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
+- **Allowed Paths (implementation scope, frozen L3a v4.1 §17.4 row C0 plus shared branch files)**:
   - `BRANCH.md`
   - `docs/comments-annotations/contract/storage-module-v1.json`
   - `docs/comments-annotations/contract/storage-compatibility.md`
   - `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts`
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
-  - `packages/cluster-mesh/src/storage/**`
-  - `packages/cluster-mesh/tests/storage/**`
-  - `packages/cluster-mesh/tests/packaging/**`
-  - `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md`
-  - `docs/comments-annotations/**`
-  - `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `docs/comments-annotations/contract/contract-v1.json`
-  - `docs/comments-annotations/freeze-receipt.md`
+  - `docs/comments-annotations/contract/freeze-receipt.md`
   - `packages/comments/src/**`
   - `packages/comments/tests/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
@@ -45,6 +39,8 @@
 
 ## Feedback Loop
 - [x] `BR-C0-EX1` — Merge commit contains incoming files from K1/K2a (PR #666) and spec promotion; verified frozen M1 files are untouched.
+- [x] `BR-C0-EX2` — Re-merge `origin/feat/cluster-mesh-storage-k1` at `471628c19` (C0 Opus m7) and spec `§18.2` alignment (C0 Opus M6; local `1daad605c`, `d5cada404`, carried into this branch by merge, spec branch not pushed). Conflict resolution limited to `BRANCH.md` (kept C0 side); frozen M1 files verified untouched after each merge.
+- [x] `BR-C0-EX3` — C0 Opus remediation (B1, M1-M6, m1-m4): manifest error vocabulary derived from frozen M1 sources, `unverified` oracle/transport qualification, exact §11.3 limits/admission/operations, corrected transaction signature, derived hash pins incl. all conformance suites, executable G3 import scans. Rationale: review NO-GO findings. Impact: 4 files (manifest, doc, test, BRANCH.md). Rollback: revert the remediation commits.
 
 ## AI Flaky tests
 - [x] No AI flaky tests in scope.
@@ -72,6 +68,12 @@
   - [x] Implement `docs/comments-annotations/contract/storage-compatibility.md`.
   - [x] Run typecheck and test targets: `make test-cluster-mesh SCOPE=tests/comments-contract-boundaries.spec.ts API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
   - [x] Verify existing comments and cluster-mesh test suites pass.
+
+- [x] **Lot C0FIX — Opus NO-GO remediation**
+  - [x] Re-merge `origin/feat/cluster-mesh-storage-k1` at `471628c19` (m7).
+  - [x] Align step-1 docs with frozen L3a v4.1 §18.2 on `spec/comments-annotations-port` (`1daad605c`, `d5cada404`), re-merge into C0 (M6).
+  - [x] Fix manifest/doc/BRANCH.md (B1, M1, M2, M4, m2-m4).
+  - [x] Fix boundary test (B1, M1-M3, M5, m1-m2), validate via Make, push, CI green, write `.h2a/build/c0_fix_report.md`.
 
 - [x] **Lot N — Final validation & PR**
   - [x] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
