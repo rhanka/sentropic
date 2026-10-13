@@ -12,15 +12,50 @@ import type {
   ToolCall,
 } from '@sentropic/llm-mesh';
 
-/** Engineering-default output bounds (spec §16.7); a stricter host limit wins. */
+/** Engineering-default operation bounds (spec §16.7); a stricter host limit wins. */
 export interface ResponsesLimits {
+  readonly maxBodyBytes: number;
+  readonly maxInputItems: number;
+  readonly maxTools: number;
   readonly maxOutputItems: number;
+  readonly maxSseEventBytes: number;
   readonly maxAccumulatedBytes: number;
 }
 
 export const DEFAULT_RESPONSES_LIMITS: ResponsesLimits = {
+  maxBodyBytes: 16_777_216,
+  maxInputItems: 4096,
+  maxTools: 256,
   maxOutputItems: 1024,
+  maxSseEventBytes: 1_048_576,
   maxAccumulatedBytes: 8_388_608,
+};
+
+const LIMIT_KEYS = [
+  'maxBodyBytes', 'maxInputItems', 'maxTools',
+  'maxOutputItems', 'maxSseEventBytes', 'maxAccumulatedBytes',
+] as const satisfies readonly (keyof ResponsesLimits)[];
+
+/**
+ * Resolve validated host overrides against the spec defaults. Each field
+ * takes the stricter (lower) of the default and the override; a
+ * non-finite or non-positive override fails fast at router construction.
+ * Unknown keys are ignored.
+ */
+export const resolveResponsesLimits = (
+  overrides?: { readonly [key: string]: unknown },
+): ResponsesLimits => {
+  if (!overrides) return { ...DEFAULT_RESPONSES_LIMITS };
+  const resolved = { ...DEFAULT_RESPONSES_LIMITS };
+  for (const key of LIMIT_KEYS) {
+    const value = overrides[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      throw new Error(`responsesLimits.${key} must be a finite positive number`);
+    }
+    resolved[key] = Math.min(DEFAULT_RESPONSES_LIMITS[key], value);
+  }
+  return resolved;
 };
 
 /** Overflow or protocol breach: aborts upstream and fails neutrally, never truncates silently. */
