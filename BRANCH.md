@@ -87,6 +87,7 @@
 ## Feedback Loop
 - [ ] `BR-K4-DISC1` — One-time BRANCH.md rewrite (K3 content to K4 content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
 - [ ] `BR-K4-G5` — G5 where it touches staged units: a staged unit carrying a tombstoned record plus its barrier publishes both in one commit; the payload is never ordinarily readable between publication and barrier application; proof in staged-units.spec.ts plus the K4 report.
+- [ ] `BR-K4-DISC2` — K4 K/T files land as one coherent file per commit when they exceed 150 lines (single review unit per §17.4 file; K3 `BR-K3-DISC2` and K2b `BR-K2B-DISC2/DISC3` precedent); all other commits stay under 150 lines with BRANCH.md in-commit.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -125,9 +126,9 @@
     - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
     - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
 - [ ] **Lot 1 — Test-first K4 specs (failing)**
-  - [ ] Write `packages/cluster-mesh/tests/storage/staged-units.spec.ts`: staged/replay/barrier/lifecycle corpora against the K4 runtime plus G5 same-unit tombstone/barrier proof.
-  - [ ] Write `packages/cluster-mesh/tests/storage/visibility.spec.ts`: root versions, base conflicts, rebase, denial without cursor leaks.
-  - [ ] Write `packages/cluster-mesh/tests/storage/manifest.spec.ts`: canonical manifest round-trip, unknown/tampered digest refusal, terminal completeness.
+  - [x] Write `packages/cluster-mesh/tests/storage/staged-units.spec.ts`: staged/replay/barrier/lifecycle corpora against the K4 runtime plus G5 same-unit tombstone/barrier proof.
+  - [x] Write `packages/cluster-mesh/tests/storage/visibility.spec.ts`: root versions, base conflicts, rebase, denial without cursor leaks.
+  - [x] Write `packages/cluster-mesh/tests/storage/manifest.spec.ts`: canonical manifest round-trip, unknown/tampered digest refusal, terminal completeness.
   - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/staged-units.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
   - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/visibility.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
   - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/manifest.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
