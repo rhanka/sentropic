@@ -158,10 +158,10 @@
     - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
     - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
 - [ ] **Lot 5 — Final validation, report, draft PR**
-  - [ ] Typecheck and lint full package.
-  - [ ] Retest storage: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`.
-  - [ ] Retest package: `make test-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`.
-  - [ ] Verify neutrality: no pg, no drizzle, no engram imports in `packages/cluster-mesh/src/storage/`.
-  - [ ] Verify frozen M1 and engram L6a untouched.
+  - [x] Typecheck and lint full package.
+  - [x] Retest storage: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`.
+  - [x] Retest package: `make test-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`.
+  - [x] Verify neutrality: no pg, no drizzle, no engram imports in `packages/cluster-mesh/src/storage/`.
+  - [x] Verify frozen M1 and engram L6a untouched.
   - [ ] Write `.h2a/build/k4_report.md` with exit SHA, corpus evidence, G5 proof, neutrality proof.
   - [ ] Push only this branch, open a DRAFT PR noting "stacked on #670", never merge.
