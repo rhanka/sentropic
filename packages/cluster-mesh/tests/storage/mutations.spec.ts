@@ -1,4 +1,4 @@
-// K2a discriminating mutations (L3a v4 §16.1): each mutant breaks one
+// K2a discriminating mutations (L3a v4.1 frozen §16.1): each mutant breaks one
 // executable semantic; the shared corpus must kill it. Recorded below.
 
 import { describe, expect, it } from 'vitest';

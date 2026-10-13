@@ -1,4 +1,4 @@
-// K1 staged coherent units and groups (L3a v4 §7). Protocol types plus
+// K1 staged coherent units and groups (L3a v4.1 frozen §7). Protocol types plus
 // data-pure fragment/state validators. Hidden-state and publication
 // machinery arrive in K4; no backend here.
 

@@ -1,4 +1,4 @@
-// K1 scope, authority and L6a identity accommodation (L3a v4 §4).
+// K1 scope, authority and L6a identity accommodation (L3a v4.1 frozen §4).
 // The merged L6a triangle is consumed structurally; engram stays neutral:
 // this module never imports engram-live.
 
