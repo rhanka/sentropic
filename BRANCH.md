@@ -134,7 +134,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] RED: API editor role and canonical seeds coverage in session-adoption.test.ts
   - [x] RED: API concurrency/admin/ended/get coverage in session-adoption.test.ts
   - [x] GREEN: conditional binding writes in cluster-mesh domain (compare-and-set)
-  - [ ] GREEN: required principal object inputs on detach/end/get (API + domain)
+  - [x] GREEN: required principal object inputs on detach/end/get (domain)
   - [ ] GREEN: rights order, global editor, canonical seeds, englobing transaction
   - [ ] GREEN: clean 0011 migration, re-date journal, BRANCH minors
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check

@@ -65,7 +65,9 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    const detached = await service.detach('session-1');
+    const detached = await service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    });
     expect(detached.status).toBe('detached');
     expect(detached.workspaceId).toBe('workspace-1');
     const reattached = await service.attach(attachInput({ workspaceId: 'workspace-2' }));
@@ -76,7 +78,9 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    const ended = await service.end('session-1');
+    const ended = await service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    });
     expect(ended.status).toBe('ended');
     expect(ended.workspaceId).toBe('workspace-1');
     await expect(service.attach(attachInput())).rejects.toMatchObject({ code: 'session_ended' });
@@ -93,9 +97,12 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput({ principalId: 'user-1' }));
-    await expect(service.detach('session-1', 'tenant-a', 'user-2', false))
-      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
-    const detached = await service.detach('session-1', 'tenant-a', 'user-2', true);
+    await expect(service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: false,
+    })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    const detached = await service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: true,
+    });
     expect(detached.status).toBe('detached');
   });
 
@@ -103,9 +110,12 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput({ principalId: 'user-1' }));
-    await expect(service.end('session-1', 'tenant-a', 'user-2', false))
-      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
-    const ended = await service.end('session-1', 'tenant-a', 'user-2', true);
+    await expect(service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: false,
+    })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    const ended = await service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: true,
+    });
     expect(ended.status).toBe('ended');
   });
 
@@ -121,7 +131,9 @@ describe('session workspace binding', () => {
     const before = createSessionWorkspaceBindingService(store);
     await before.attach(attachInput());
     const after = createSessionWorkspaceBindingService(store);
-    await expect(after.get('session-1')).resolves.toMatchObject({
+    await expect(after.get({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1',
+    })).resolves.toMatchObject({
       sessionId: 'session-1', workspaceId: 'workspace-1', status: 'attached',
     });
   });
@@ -130,16 +142,20 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    await expect(service.detach('session-1', 'tenant-a'))
-      .rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a',
+      principalId: undefined as unknown as string, isAdmin: false,
+    })).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
   it('should refuse end when principal is omitted', async () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    await expect(service.end('session-1', 'tenant-a'))
-      .rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a',
+      principalId: undefined as unknown as string, isAdmin: false,
+    })).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
   it('should refuse detach when tenant is omitted', async () => {
@@ -173,10 +189,9 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    const getWithPrincipal = service.get as unknown as (
-      sessionId: string, tenantId: string, principalId: string,
-    ) => Promise<SessionWorkspaceBinding | null>;
-    await expect(getWithPrincipal('session-1', 'tenant-a', 'user-1')).resolves.toMatchObject({
+    await expect(service.get({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1',
+    })).resolves.toMatchObject({
       sessionId: 'session-1', workspaceId: 'workspace-1', status: 'attached',
     });
   });
@@ -216,8 +231,11 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    await service.end('session-1', 'tenant-a', 'user-1', true);
-    await expect(service.detach('session-1', 'tenant-a', 'user-1', true))
-      .rejects.toMatchObject({ code: 'session_ended' });
+    await service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: true,
+    });
+    await expect(service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: true,
+    })).rejects.toMatchObject({ code: 'session_ended' });
   });
 });
