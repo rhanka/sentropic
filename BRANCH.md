@@ -97,6 +97,7 @@
   - [x] Restrict root/storage import guards while allowing the optional comments leaf (R3-m2).
   - [x] Align SPEC contract/ownership/transport boundaries and add a tracked frozen-source reference.
   - [x] Align SPEC and two-lane plan phase gates, C4 inventory, diagram and installed PG acceptance.
+  - [x] Align model branch template and handoff with frozen M1 and literal C1/C2/C4/M2-W/M4-I scopes.
   - [ ] Sweep every non-frozen comments document and SPEC against the frozen source; preserve historical evidence and M1 bytes (R3-MAJ-1, R3-m6).
   - [ ] Correct confirmation citations, report claims and checklist state (R3-m3–m5).
   - [ ] Prove the document guard detects original backticked phrases and every discovered residue class (R3-m1).
