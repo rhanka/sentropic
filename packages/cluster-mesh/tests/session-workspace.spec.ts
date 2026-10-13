@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createSessionWorkspaceBindingService,
+  isExpectedBindingState,
   type SessionWorkspaceBinding,
   type SessionWorkspaceBindingStore,
 } from '../src/sessions/workspace-binding.js';
@@ -17,13 +18,8 @@ const memoryStore = (): SessionWorkspaceBindingStore & { rows: Map<string, Sessi
         rows.set(next.sessionId, next);
         return true;
       }
-      if (
-        !existing ||
-        existing.status !== current.status ||
-        existing.version !== current.version ||
-        existing.workspaceId !== current.workspaceId ||
-        existing.principalId !== current.principalId
-      ) return false;
+      // Same production tuple comparison as every store (MAJ-B).
+      if (!isExpectedBindingState(existing, current)) return false;
       rows.set(next.sessionId, next);
       return true;
     },
@@ -137,7 +133,7 @@ describe('session workspace binding', () => {
     await before.attach(attachInput());
     const after = createSessionWorkspaceBindingService(store);
     await expect(after.get({
-      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1',
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
     })).resolves.toMatchObject({
       sessionId: 'session-1', workspaceId: 'workspace-1', status: 'attached',
     });
@@ -195,7 +191,7 @@ describe('session workspace binding', () => {
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
     await expect(service.get({
-      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1',
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
     })).resolves.toMatchObject({
       sessionId: 'session-1', workspaceId: 'workspace-1', status: 'attached',
     });
@@ -213,10 +209,7 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    const get = service.get as (
-      input: Record<string, unknown>,
-    ) => ReturnType<typeof service.get>;
-    await expect(get({
+    await expect(service.get({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: false,
     })).resolves.toBeNull();
   });
@@ -225,10 +218,7 @@ describe('session workspace binding', () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
-    const get = service.get as (
-      input: Record<string, unknown>,
-    ) => ReturnType<typeof service.get>;
-    await expect(get({
+    await expect(service.get({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: true,
     })).resolves.toMatchObject({ sessionId: 'session-1', status: 'attached' });
   });
@@ -254,10 +244,7 @@ describe('session workspace binding', () => {
 
     // Caller administers the originally read workspace only; the stale
     // detach must not touch the re-attached binding.
-    const detach = service.detach as (
-      input: Record<string, unknown>,
-    ) => ReturnType<typeof service.detach>;
-    await expect(detach({
+    await expect(service.detach({
       sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-3',
       isAdmin: true, expectedVersion: 1,
     })).rejects.toMatchObject({ code: 'session_not_attached' });
@@ -390,16 +377,6 @@ describe('session workspace binding', () => {
   });
 
   it('should compare the full CAS tuple through the production predicate', async () => {
-    const module = await import('../src/sessions/workspace-binding.js') as unknown as {
-      isExpectedBindingState?: (
-        existing: SessionWorkspaceBinding | null,
-        current: SessionWorkspaceBinding | null,
-      ) => boolean;
-    };
-    if (typeof module.isExpectedBindingState !== 'function') {
-      throw new Error('isExpectedBindingState is not exported (RED)');
-    }
-    const { isExpectedBindingState } = module;
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     const initial = await service.attach(attachInput());
