@@ -1,8 +1,8 @@
 # Feature: Comments cluster-mesh storage port — Lot C0
 
 ## Objective
-- [ ] Implement C0 of the FROZEN L3a v4.1 storage-port spec: compatibility and extension manifest, frozen-M1 preservation test pinning M1 source hashes, exact transport and oracle packaging declarations.
-- [ ] Merge frozen M1 (PR #663), promoted spec (origin/spec/comments-annotations-port), and cluster-mesh storage K1/K2a (PR #666) cleanly without modifying frozen M1 files.
+- [x] Implement C0 of the FROZEN L3a v4.1 storage-port spec: compatibility and extension manifest, frozen-M1 preservation test pinning M1 source hashes, exact transport and oracle packaging declarations.
+- [x] Merge frozen M1 (PR #663), promoted spec (origin/spec/comments-annotations-port), and cluster-mesh storage K1/K2a (PR #666) cleanly without modifying frozen M1 files.
 
 ## Scope / Guardrails
 - [x] Branch `feat/comments-cm-c0` in `tmp/worktrees/comments-cm-c0`, branched from `origin/feat/comments-annotations-model` (frozen M1, PR #663, freeze 2dabe25ce).
@@ -65,7 +65,7 @@
   - [x] Verify frozen M1 files are unchanged (`docs/comments-annotations/contract/contract-v1.json`, `docs/comments-annotations/freeze-receipt.md`, `packages/comments/src/**`, `packages/comments/tests/**`).
   - [x] Complete merge commit.
 
-- [ ] **Lot C0 — Compatibility manifest & M1 preservation test**
+- [x] **Lot C0 — Compatibility manifest & M1 preservation test**
   - [x] Read §17 row C0 and confirmation `.h2a/l3a/l3a_v4_confirmation.md` (G1–G5).
   - [x] Test-first: implement `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts` pinning M1 source hashes and verifying compatibility manifest.
   - [x] Implement `docs/comments-annotations/contract/storage-module-v1.json`.
@@ -74,7 +74,7 @@
   - [x] Verify existing comments and cluster-mesh test suites pass.
 
 - [ ] **Lot N — Final validation & PR**
-  - [ ] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
+  - [x] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
   - [ ] Push `feat/comments-cm-c0` to origin: `git push origin feat/comments-cm-c0`.
   - [ ] Open draft PR with stacked note ("depends on #663 and #666").
   - [ ] Generate `.h2a/build/c0_report.md` (untracked).
