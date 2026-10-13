@@ -301,6 +301,7 @@
   - [x] **Lot N22-row34g — malformed-input fallback (`2d87167d0`)**: malformed native input fallback cases 220/220 GREEN (held behavior, no src change).
   - [x] **Lot N22-row35 — safeguards + failure relay (`1e991ac48`)**: RED 4 (json 1, stream 3) pre-src → native failures stay native-shaped (`NativeMessagesUpstreamError` 503 instead of generic terminal) json 47/47, stream 244/244, sse 8/8 GREEN (W-adapted: cause arg kept on the canonical path).
   - [x] **Lot N22-row35b — malformed reader closing (`1828f6a9f`)**: RED 2 pre-src → returned readers closed once before exposing json/stream contract refusals 2/2 GREEN, mechanical apply.
+  - [x] **Lot N23a — response header policy (`c5348ddc`, row 36)**: native forward via shared `buildNativeResponseHeaders` (already present) + served-identity matrix 5/5 GREEN (held behavior; test extracted byte-exact).
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).
