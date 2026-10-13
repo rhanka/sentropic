@@ -150,6 +150,36 @@ class AbortKeptStore extends TestStagedReferenceStore {
   }
 }
 
+class StaleBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.commitStaged.bind(bound);
+    bound.commitStaged = (input) =>
+      inner({ seal: input.seal, fence: { fenceId: 'fence-k2b', epoch: '1' } });
+    return bound;
+  }
+}
+
+class MutableBufferStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.stageFragment.bind(bound);
+    bound.stageFragment = async (input) => {
+      const receipt = await inner(input);
+      const staged = (
+        bound as unknown as {
+          staged: { units: Map<string, { fragments: { ordinal: string; effects: unknown }[] }> };
+        }
+      ).staged;
+      const op = staged.units.get(input.unit.operationKey);
+      const fragment = op?.fragments.find((entry) => entry.ordinal === input.ordinal);
+      if (fragment) (fragment as { effects: unknown }).effects = input.effects;
+      return receipt;
+    };
+    return bound;
+  }
+}
+
 class NoCheckpointCasStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -216,6 +246,20 @@ describe('K2b discriminating mutations: staged', () => {
   it('S5-abort-kept-effects is killed by the staged corpus', async () => {
     const { store, bound } = bindStaged(new AbortKeptStore('comments'));
     await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(/report abortion/);
+  });
+
+  it('S6-stale-blind-staging is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new StaleBlindStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /a stale writer cannot publish/,
+    );
+  });
+
+  it('S7-mutable-buffer is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new MutableBufferStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /buffers are immutable after acceptance/,
+    );
   });
 });
 
@@ -396,6 +440,8 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'S3-changed-bytes-staging', brokenSemantic: 'changed bytes at an accepted ordinal pass silently', corpus: 'staged', verdict: 'killed' },
   { id: 'S4-unstable-receipt', brokenSemantic: 'fragment receipts fork on retry', corpus: 'staged', verdict: 'killed' },
   { id: 'S5-abort-kept-effects', brokenSemantic: 'aborted units keep publishable effects', corpus: 'staged', verdict: 'killed' },
+  { id: 'S6-stale-blind-staging', brokenSemantic: 'stale writers publish without fence revalidation', corpus: 'staged', verdict: 'killed' },
+  { id: 'S7-mutable-buffer', brokenSemantic: 'caller buffers mutate accepted staged effects', corpus: 'staged', verdict: 'killed' },
   { id: 'J1-no-checkpoint-cas', brokenSemantic: 'checkpoints skip CAS protection', corpus: 'replay', verdict: 'killed' },
   { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
   { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
@@ -423,6 +469,8 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
+      'killed',
       'killed',
       'killed',
       'killed',
