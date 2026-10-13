@@ -311,6 +311,7 @@
   - [x] **Lot N16e — pricing policy + overflow bounds (`ef627491b`)**: RED 1/60 pre-fix (stack-limit on wide arrays) → loop push; 60/60 GREEN, byte-identical.
   - [x] **Lot N17a — validated native input in settlement (`ac71a7155`)**: `SettleUsage` extends pricing, proof-preserving `unmeasuredUsage` floor in admission; settlement suites stay GREEN (21 + 12).
   - [x] **Lot N17b — measured/interrupted settlement pins (`96e576b76`)**: per-model cost pins, N4 no-allowance-floor, interrupted floors 9/9 GREEN.
+  - [x] **Lot N18a — body-free native transport helpers (`2e30e0d08`/`303d06ecb`)**: `api/src/services/llm-runtime/anthropic-native-transport.ts` upload/detach + headers + bounded readers.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
