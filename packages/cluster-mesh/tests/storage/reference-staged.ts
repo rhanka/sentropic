@@ -143,6 +143,8 @@ const createStagedScope = (): StagedScope => ({
 
 export class TestStagedReferenceStore extends TestReferenceStore {
   private readonly stagedScopes = new Map<string, StagedScope>();
+  private readonly externalLog: StagedJournalEvent[] = [];
+  private externalSeq = 0;
   private purgePolicy: PurgePolicy = 'optional';
   private readonly stagedClock: TestClock;
 
@@ -176,6 +178,21 @@ export class TestStagedReferenceStore extends TestReferenceStore {
   bindStaged(grant: ScopeGrant<unknown>): TestStagedStore {
     const inner = super.bind(super.issueGrant(grant));
     return new TestStagedStore(inner, this.stagedScope(inner.scope), this);
+  }
+
+  appendExternal(entry: Omit<StagedJournalEvent, 'seq' | 'eventId'>): StagedJournalEvent {
+    this.externalSeq += 1;
+    const stored: StagedJournalEvent = { ...entry, seq: this.externalSeq, eventId: `xevt-${this.externalSeq}` };
+    this.externalLog.push(stored);
+    return stored;
+  }
+
+  readExternal(after: number): readonly StagedJournalEvent[] {
+    return this.externalLog.filter((event) => event.seq > after);
+  }
+
+  externalWatermark(): number {
+    return this.externalSeq;
   }
 }
 
@@ -312,13 +329,20 @@ export class TestStagedStore {
     }
     this.staged.journalSeq += 1;
     const seq = this.staged.journalSeq;
+    const segment = this.pendingSegment ? { operationKey: this.pendingSegment, from: seq, to: seq } : undefined;
     this.staged.journal.push({
       seq,
       eventId: `evt-${seq}`,
       scope: { ...this.scope },
       commitId: receipt.commitId,
       operationKey: options.idempotencyKey,
-      segment: this.pendingSegment ? { operationKey: this.pendingSegment, from: seq, to: seq } : undefined,
+      segment,
+    });
+    this.store.appendExternal({
+      scope: { ...this.scope },
+      commitId: receipt.commitId,
+      operationKey: options.idempotencyKey,
+      segment,
     });
     if (options.idempotencyKey) {
       this.staged.commits.set(options.idempotencyKey, { receipt, unitHash: JSON.stringify(unit) });
@@ -497,6 +521,15 @@ export class TestStagedStore {
     op.state = 'aborted';
     op.abortReason = 'aborted by caller';
     op.fragments.length = 0;
+  }
+
+  externalRead(after: number, limit: number): JournalReadResult {
+    this.requireOperation('read');
+    if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
+      throw new StorageInvalidCommandError('external reader requires a valid window');
+    }
+    const events = this.store.readExternal(after).slice(0, limit);
+    return { events, watermark: this.store.externalWatermark() };
   }
 
   journalRead(consumer: string, after: number, limit: number): JournalReadResult {
