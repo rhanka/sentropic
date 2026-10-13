@@ -170,6 +170,20 @@ class PoisonBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class ResyncAdvancingStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.journalResync.bind(bound);
+    bound.journalResync = async (consumer) => {
+      const boundary = await inner(consumer);
+      const view = await bound.journalInspect(consumer);
+      await bound.journalCheckpoint(consumer, view.cursor, boundary.journalSeq);
+      return boundary;
+    };
+    return bound;
+  }
+}
+
 const stagedHooks = (store: TestStagedReferenceStore, bound: TestStagedStore) => ({
   breakAuthority: async () => {
     store.revoke(bound.grant.token);
@@ -232,6 +246,14 @@ describe('K2b discriminating mutations: replay', () => {
     await expect(
       runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
     ).rejects.toThrow(/poison stalls the consumer/);
+  });
+
+  it('J3-resync-advancing-checkpoint is killed by the replay corpus', async () => {
+    const store = new ResyncAdvancingStore('comments');
+    const { primary, foreign } = bindReplayPair(store);
+    await expect(
+      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+    ).rejects.toThrow(/without advancing the checkpoint/);
   });
 });
 
