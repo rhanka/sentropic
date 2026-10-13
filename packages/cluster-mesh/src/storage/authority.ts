@@ -83,16 +83,27 @@ export interface LiveIdentityTriangle {
   readonly serverIssuer?: string;
 }
 
+// L6a-compatible opaque identity syntax (engram-live/contracts at 70ebdfee):
+// trimmed non-empty, NUL-free, prefixed. Syntax only; derivation and
+// authorization stay with the neutral engram contract.
+const hasNul = (value: unknown): boolean => typeof value === 'string' && value.includes('\0');
+
+const isOpaqueIdentity = (value: unknown, prefix: string): value is string =>
+  typeof value === 'string' && value.trim().length > 0 && !hasNul(value) && value.startsWith(prefix);
+
+const isIdentityField = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0 && !hasNul(value);
+
 export const validateLiveIdentityTriangle = (triangle: unknown): ValidationResult => {
   if (typeof triangle !== 'object' || triangle === null) return errResult('triangle must be an object');
   const candidate = triangle as Record<string, unknown>;
-  if (!isNonEmptyString(candidate['declarationId']) || !candidate['declarationId'].startsWith('decl:')) {
+  if (!isOpaqueIdentity(candidate['declarationId'], 'decl:')) {
     return errResult('triangle requires a decl: declarationId');
   }
-  if (!isNonEmptyString(candidate['cloneId']) || !candidate['cloneId'].startsWith('clone:')) {
+  if (!isOpaqueIdentity(candidate['cloneId'], 'clone:')) {
     return errResult('triangle requires a clone: cloneId');
   }
-  if (!isNonEmptyString(candidate['worktreeId']) || !candidate['worktreeId'].startsWith('wt:')) {
+  if (!isOpaqueIdentity(candidate['worktreeId'], 'wt:')) {
     return errResult('triangle requires a wt: worktreeId');
   }
   if (!Number.isSafeInteger(candidate['declarationRevision']) || (candidate['declarationRevision'] as number) < 1) {
@@ -104,10 +115,10 @@ export const validateLiveIdentityTriangle = (triangle: unknown): ValidationResul
   const hasWorkspace = serverWorkspaceId !== undefined;
   const hasIssuer = serverIssuer !== undefined;
   const hasBinding = bindingRevision !== undefined;
-  if (hasWorkspace && !isNonEmptyString(serverWorkspaceId)) {
+  if (hasWorkspace && !isIdentityField(serverWorkspaceId)) {
     return errResult('serverWorkspaceId must be non-empty when present');
   }
-  if (hasIssuer && !isNonEmptyString(serverIssuer)) {
+  if (hasIssuer && !isIdentityField(serverIssuer)) {
     return errResult('serverIssuer must be non-empty when present');
   }
   if (hasBinding && (!Number.isSafeInteger(bindingRevision) || (bindingRevision as number) < 1)) {
