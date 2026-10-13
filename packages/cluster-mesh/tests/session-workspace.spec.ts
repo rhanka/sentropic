@@ -11,6 +11,17 @@ const memoryStore = (): SessionWorkspaceBindingStore & { rows: Map<string, Sessi
     rows,
     async findBySession(sessionId: string) { return rows.get(sessionId) ?? null; },
     async save(binding: SessionWorkspaceBinding) { rows.set(binding.sessionId, binding); },
+    async compareAndSet(current: SessionWorkspaceBinding | null, next: SessionWorkspaceBinding) {
+      const existing = rows.get(next.sessionId) ?? null;
+      if (current === null) {
+        if (existing) return false;
+        rows.set(next.sessionId, next);
+        return true;
+      }
+      if (!existing || existing.status !== current.status) return false;
+      rows.set(next.sessionId, next);
+      return true;
+    },
   };
 };
 
