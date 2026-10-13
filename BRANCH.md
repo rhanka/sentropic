@@ -161,7 +161,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN API (a): version-bound detach/end, tx-scoped roles, store export
   - [x] GREEN API (b): scoped get with owner/admin rights
   - [x] Shared workspace provisioning module with notifications and role levels (BR01-EX5)
-  - [ ] Route and adoption service use the shared provisioning
+  - [x] Route and adoption service use the shared provisioning
   - [ ] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 - [ ] **Lot N — Final validation**
