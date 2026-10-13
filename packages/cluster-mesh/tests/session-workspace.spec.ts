@@ -419,4 +419,34 @@ describe('session workspace binding', () => {
     expect(isExpectedBindingState({ ...initial, status: 'detached' }, initial)).toBe(false);
     expect(isExpectedBindingState(null, initial)).toBe(false);
   });
+
+  it('should reject concurrent end when CAS loses the race, and allow replay once ended', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const initial = await service.attach(attachInput());
+
+    const ended1 = await service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: initial.version,
+    });
+    expect(ended1.status).toBe('ended');
+    expect(ended1.version).toBe(2);
+
+    // Concurrent end with stale expectedVersion fails closed:
+    await expect(service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: initial.version,
+    })).rejects.toMatchObject({
+      code: 'session_not_attached',
+      message: 'concurrent modification; retry the end',
+    });
+
+    // Replay / retry with new version returns the ended binding idempotently:
+    const replayed = await service.end({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+      expectedVersion: ended1.version,
+    });
+    expect(replayed.status).toBe('ended');
+    expect(replayed.version).toBe(2);
+  });
 });
