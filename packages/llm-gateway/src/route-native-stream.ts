@@ -1,5 +1,5 @@
 import type { NativeMessagesRequest, NativeUsageTermination, PreparedRouteAttempt, RouteFailureClassification } from '@sentropic/llm-mesh';
-import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, readRequestSizeDetail, type RequestSizeDetail } from '@sentropic/llm-mesh';
 import type { ResolvedTarget } from './flow.js';
 import { classifyRouteError, attemptUsage, type RouteAttemptSettlement } from './route-flow-core.js';
 import { NativeUsageObserver } from './native-usage.js';
@@ -21,6 +21,7 @@ export const nativeStreamExecution = (input: {
   settle: (outcome: 'success' | 'failed' | 'cancelled') => Promise<void>;
 }) => {
   let raw: AsyncIterator<Uint8Array> | undefined;
+  let requestSize: RequestSizeDetail | undefined;
   let frames: AsyncGenerator<NativeSseFrame, void, undefined> | undefined;
   let first: NativeSseFrame | undefined;
   let stopped = false;
@@ -48,7 +49,7 @@ export const nativeStreamExecution = (input: {
     return next.value;
   };
   const observe = (frame: NativeSseFrame) => {
-    const error = nativeFrameError(frame, input.features);
+    const error = nativeFrameError(frame, { ...input.features, requestSize });
     if (error) throw error;
     input.observer.observeFrame(frame);
     let type = frame.event;
@@ -89,8 +90,9 @@ export const nativeStreamExecution = (input: {
   };
   input.signal?.addEventListener('abort', onAbort, { once: true });
   if (input.signal?.aborted) onAbort();
-  const attach = (reader: AsyncIterator<Uint8Array>) => {
+  const attach = (reader: AsyncIterator<Uint8Array>, measuredSize?: RequestSizeDetail) => {
     raw = reader;
+    requestSize = readRequestSizeDetail(measuredSize);
     frames = parseNativeSseStream({ [Symbol.asyncIterator]: () => ({
       next: () => raw!.next(), return: async () => { await closeRaw(); return { done: true as const, value: undefined }; },
     }) });
