@@ -377,7 +377,7 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     expect(doc).toContain('canonical bytes');
     expect(doc).toContain('record plus required framing');
     expect(doc).toContain('escaping and multibyte encoding');
-    expect(doc).toContain('frozen L3a v4.1 §17 row C0, §17.4');
+    expect(doc).toContain('frozen L3a v4.1 §17.2 row C0');
   });
 
   it('production roots and storage stay decoupled while comments leaves may load their peer', () => {
