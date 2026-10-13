@@ -229,7 +229,10 @@ export const createRouteSettlement = (options: RouteSettlementOptions): RouteMet
         ${values.attempts}::jsonb)
       ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`);
     const auditOverrun = async (charged: bigint): Promise<void> => {
-      if ((settlement.overrun?.length ?? 0) === 0 && charged <= hold.liability) return;
+      // A served-model mismatch audits even below liability (R fixup c5f3df63f);
+      // silence otherwise when nothing overran and the hold covers the charge.
+      const mismatch = attempts.some(attempt => attempt.nativeUsageUncertainty === 'served_model_mismatch');
+      if (!mismatch && (settlement.overrun?.length ?? 0) === 0 && charged <= hold.liability) return;
       await tx.execute(sql`INSERT INTO control.blocked_attempts (id, request_id, tenant_id, workspace_id, principal_kind,
           principal_key, budget_strategy_id, reason, requested_model, hold_id, quote_ref, liability_micro_usd)
         VALUES (${createId()}, ${requestId}, ${hold.tenantId}, ${hold.workspaceId}, ${principal.kind}, ${principal.key},

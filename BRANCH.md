@@ -357,6 +357,8 @@
   - [x] **Lot N28j — physical observations vs floors (`a6d7ad8c1`)**: byte-exact port, GREEN-held 49/49 in-container.
   - [x] **Lot N28k — cumulative + web-search counts (`acfffab3f`)**: byte-exact port, GREEN-held 85/85 in-container.
   - [x] **Lot N28l — one-hour cumulative pricing (`c12ba32c0`)**: hand-placed (anchor drift from N28k), GREEN-held 170/170 in-container.
+  - [x] **Lot N28m-link — output latches + terminal parity (`34f6f9f98`)**: true parent of N28l/m, hand-placed in R order (malformed, oneHour, latches, growing); ride-along: N26c audit fixup (mismatch-aware `auditOverrun` per R `c5f3df63f` — my first port took R's broken intermediate).
+  - [x] **Lot N28m — full-rate charge after malformed input (`4f3e188d8`)**: hand-placed ditto; combined 248/248 GREEN in-container.
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).

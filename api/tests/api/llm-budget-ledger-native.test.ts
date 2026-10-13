@@ -1,7 +1,9 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import { NativeUsageObserver } from '@sentropic/llm-gateway';
 import { recordLlmUsage } from '../../src/services/llm-metering';
 import { sql } from 'drizzle-orm';
 import { withNativeLedger, MODELS, mixed, nativeStart, nativeFrame } from './native-ledger-fixture';
+afterEach(() => vi.restoreAllMocks());
 it('joins opaque HTTP response, physical observation and exactly one priced financial row by server request ID', async () => {
   await withNativeLedger({}, async h => {
     const response = await h.router.request('/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -16,6 +18,48 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
     expect(financial.pricing_version).toBe(h.pricingId);
     expect(await h.rows(sql`SELECT reserved_micro_usd, spent_micro_usd FROM control.budgets WHERE tenant_id = ${h.cost.tenantId}`))
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
+  });
+});
+const malformedDelta = (value: number | 'nonfinite') => {
+  const bytes = nativeFrame('message_delta', { usage: { input_tokens: value, cache_read_input_tokens: 10000,
+    cache_creation_input_tokens: 200, output_tokens: 500 } });
+  // JSON numeric overflow reaches the observer as Infinity; JSON.stringify(Infinity) would become null.
+  return value === 'nonfinite' ? new TextEncoder().encode(new TextDecoder().decode(bytes).replace('"nonfinite"', '1e400')) : bytes;
+};
+it.each(MODELS.flatMap(model => [10000.5, 'nonfinite', Number.MAX_SAFE_INTEGER + 1].flatMap(value =>
+  [false, true].map(clean => [model, value as number | 'nonfinite', clean] as const))))
+('malformed_one_hour_delta_charges_74300 (%s %s clean=%s)', async (model, value, clean) => {
+  await withNativeLedger({ model, allowanceInput: 10300, allowanceOutput: 32000,
+    chunks: [nativeStart(model, oneHour), malformedDelta(value), ...(clean ? [nativeFrame('message_stop')] : [])] }, async h => {
+    await h.run(true);
+    const row = await h.financial(), obs = await h.observation(), snapshot = h.snapshots[0]!;
+    expect(Number(row.cost_micro_usd)).toBe(74300); expect(row).toMatchObject({ input_tokens: 10300, output_tokens: 32000 });
+    expect(row.attempts[0]).toMatchObject({ estimated: true, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+    expect(row.attempts[0].nativeInputPriceUnits40).toBeUndefined();
+    expect(snapshot).toMatchObject({ inputTokens: 10300, outputTokens: 500, totalTokens: 10800,
+      estimated: true, nativeInputUsageValidated: false, nativeUsageUncertainty: 'invalid_input' });
+    expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+    expect(obs).toMatchObject({ input_tokens: 10300, output_tokens: 500, total_tokens: 10800, cost_micro_usd: null });
+    expect(obs.usage_raw).toMatchObject({ input_tokens: 100, input_usage_validated: false,
+      uncertainty_reason: 'invalid_input', estimated: true, final_output_observed: clean });
+    expect(h.record).toHaveBeenCalledOnce(); expect(h.settled).toHaveLength(1); expect(h.close).toHaveBeenCalledOnce();
+  });
+});
+it.each(MODELS.flatMap(model => [false, true].map(clean => [model, clean] as const)))
+('latched_nullable_delta_advances_physical_lower_bound_once (%s clean=%s)', async (model, clean) => {
+  const grown = nativeFrame('message_delta', { usage: { input_tokens: null, cache_read_input_tokens: null,
+    cache_creation_input_tokens: 300, output_tokens: 500 } });
+  await withNativeLedger({ model, allowanceInput: 10300, allowanceOutput: 32000,
+    chunks: [nativeStart(model, oneHour), malformedDelta(10000.5), grown, grown,
+      nativeFrame('message_delta', { usage: { cache_creation_input_tokens: 299 } }), malformedDelta(10000.5),
+      ...(clean ? [nativeFrame('message_stop')] : [])] }, async h => {
+    await h.run(true); const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe(74400); expect(row).toMatchObject({ input_tokens: 10400, output_tokens: 32000 });
+    expect(row.attempts[0].nativeInputPriceUnits40).toBeUndefined();
+    expect(obs).toMatchObject({ input_tokens: 10400, output_tokens: 500, total_tokens: 10900 });
+    expect(obs.usage_raw).toMatchObject({ input_tokens: 100, cache_creation_input_tokens: 300,
+      cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 }, input_usage_validated: false,
+      uncertainty_reason: 'invalid_input', estimated: true });
   });
 });
 const oneHour = { ...mixed, cache_creation_input_tokens: 200,
@@ -92,6 +136,56 @@ it('accepts later explicit split against reported TTL counts rather than inferre
     await h.run(true); expect(Number((await h.financial()).cost_micro_usd)).toBe(2625);
     expect((await h.observation()).usage_raw).toMatchObject({ estimated: false, input_usage_validated: true,
       cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 } });
+  });
+});
+const iterationCases = [undefined, null, [], [{}], {}, 'fixture-value', 1, true];
+it.each(MODELS.flatMap((model, index) => iterationCases.flatMap((iterations, kind) => [false, true].map(stream =>
+  [model, index, iterations, kind, stream] as const))))('applies K4 iterations policy (%s #%s %s #%s stream=%s)', async (model, index, iterations, kind, stream) => {
+  const usage = { ...mixed, output_tokens: 500, ...(kind === 0 ? {} : { iterations }) };
+  await withNativeLedger({ model, usage, chunks: [nativeStart(model, usage),
+    nativeFrame('message_delta', { usage: { output_tokens: 500 } }), nativeFrame('message_stop')],
+    allowanceInput: 10350, allowanceOutput: 32000 }, async h => {
+    await h.run(stream);
+    const row = await h.financial(), obs = await h.observation(), latch = kind >= 3;
+    expect(Number(row.cost_micro_usd)).toBe(latch ? 74350 : index === 2 ? 1700 : 2450);
+    expect(row.output_tokens).toBe(latch ? 32000 : 500); expect(row.attempts[0].estimated).toBe(latch);
+    expect(obs.output_tokens).toBe(500); expect(obs.usage_raw.iterations_present).toBe(latch);
+    expect(obs.usage_raw.iterations).toBeUndefined(); expect(await h.audit()).toHaveLength(latch ? 1 : 0);
+    if (latch) expect(row.output_tokens / obs.output_tokens).toBe(64);
+  });
+});
+it.each(['mismatch', 'fallback'].flatMap(kind => [false, true].map(stream => [kind, stream] as const)))
+('pins realistic 64× output floor for %s (stream=%s)', async (kind, stream) => {
+  const model = MODELS[0]!, served = kind === 'mismatch' ? MODELS[1]! : model;
+  const usage = { ...mixed, output_tokens: 500 };
+  const fallback = { type: 'fallback', token: 'fixture-private' };
+  await withNativeLedger({ served, usage, body: kind === 'fallback' ? { content: [fallback] } : {},
+    chunks: [nativeStart(served, usage), ...(kind === 'fallback' ? [nativeFrame('content_block_start', { content_block: fallback })] : []),
+      nativeFrame('message_stop')], allowanceInput: 10350, allowanceOutput: 32000 }, async h => {
+    await h.run(stream); expect(Number((await h.financial()).cost_micro_usd)).toBe(74350);
+    expect((await h.financial()).output_tokens).toBe(32000); expect((await h.observation()).output_tokens).toBe(500);
+    expect(await h.audit()).toHaveLength(1);
+  });
+});
+it.each(['cancel', 'commit-failure'] as const)('hands one immutable terminal snapshot to DB observation and settlement on %s', async terminal => {
+  const snapshotSpy = vi.spyOn(NativeUsageObserver.prototype, 'snapshot');
+  await withNativeLedger({ allowanceInput: 20000, allowanceOutput: 32000,
+    chunks: [nativeStart(MODELS[0]!, { ...mixed, output_tokens: 500 }), nativeFrame('message_stop')] }, async h => {
+    await h.run(true, terminal);
+    const snapshot = h.snapshots[0]!, obs = await h.observation(), row = await h.financial();
+    expect(snapshotSpy).toHaveBeenCalledOnce(); expect(snapshotSpy.mock.results[0]!.value).toBe(snapshot);
+    expect(Object.isFrozen(snapshot)).toBe(true); expect(Object.isFrozen(snapshot.rawUsage)).toBe(true);
+    expect(h.record).toHaveBeenCalledOnce(); expect(h.settled).toHaveLength(1); expect(h.close).toHaveBeenCalledOnce();
+    expect(snapshot.termination).toBe(terminal === 'cancel' ? 'cancelled' : 'commit_failed');
+    expect(obs).toMatchObject({ input_tokens: snapshot.inputTokens, output_tokens: snapshot.outputTokens, total_tokens: snapshot.totalTokens });
+    expect(obs.usage_raw).toMatchObject({ estimated: snapshot.estimated, termination: snapshot.termination,
+      final_output_observed: snapshot.finalOutputObserved, input_usage_validated: snapshot.nativeInputUsageValidated,
+      input_usage_source: snapshot.nativeInputUsageSource });
+    expect(row.attempts[0].nativeInputPriceUnits40).toBe(snapshot.nativeInputPriceUnits40);
+    expect(row).toMatchObject({ input_tokens: 10350, output_tokens: 32000 });
+    expect(Number(row.cost_micro_usd)).toBe(65450); expect(obs.output_tokens).toBe(500);
+    await h.settlement.settleRoute(h.settled[0]!); await h.attempt.nativeMessages!.finalize!(snapshot);
+    expect(await h.ledger()).toHaveLength(2); expect(h.record).toHaveBeenCalledOnce();
   });
 });
 const growingStart = { input_tokens: 100, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0, output_tokens: 1 };
