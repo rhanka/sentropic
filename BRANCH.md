@@ -175,7 +175,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN m2: re-authorized get when the row moved between reads
   - [x] GREEN m4: CAS tuple doc corrected (Drizzle WHERE is the SQL projection, pinned per-predicate)
   - [x] GREEN m5: shared seeds/notify via workspace-provisioning, route uses shared notify
-  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit adoption, scope-check
+  - [x] Sub-lot gate: test-cluster-mesh (427 pass), test-api-unit adoption (33/33), scope-check PASS
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
