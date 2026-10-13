@@ -149,5 +149,5 @@
   - [x] Retest package: `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
   - [x] Verify neutrality: no pg, no drizzle, no engram imports in `packages/cluster-mesh/src/storage/`.
   - [x] Verify frozen M1 and engram L6a untouched.
-  - [ ] Write `.h2a/build/k3_report.md` with exit SHA, corpus evidence, G3 designation, neutrality proof.
-  - [ ] Push only this branch, open a DRAFT PR noting "stacked on #669", never merge.
+  - [x] Write `.h2a/build/k3_report.md` with exit SHA, corpus evidence, G3 designation, neutrality proof.
+  - [x] Push only this branch, open a DRAFT PR noting "stacked on #669", never merge.
