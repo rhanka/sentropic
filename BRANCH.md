@@ -73,6 +73,7 @@
 - [x] `K2B-RED1` — Staged corpus fails without staged support and passes on the staged reference (issuance root cause fixed, per-behavior kills in `K2B-MUTB`).
 - [x] `K2B-REF3` — Staged reference journal consumers: read, checkpoint CAS, poison, retry, resync.
 - [x] `K2B-REF4` — Staged reference lifecycle: coverage, holds, purge completion, shared blobs.
+- [x] `K2B-REF5` — Staged reference external log: cross-scope mirror with own watermark.
 - [ ] `K2B-RED2` — RED replay corpus (ordering, watermark, checkpoint CAS, poison, resync, external interleave).
 - [ ] `K2B-RED3` — RED barrier corpus (G1 denial before/after disposal, absence distinct, raw tombstone neutral, over-limit coverage, concurrent insertion).
 - [ ] `K2B-RED4` — RED lifecycle corpus (unconfigured denial, conditional intent atomicity, holds, shared objects, crash-safe completion).
