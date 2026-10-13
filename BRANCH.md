@@ -288,6 +288,7 @@
   - [x] **Lot N13a — prepared native forwarding (`de1441c7b`)**: `route-attempt.ts` fresh-descriptor/model guard + planner `isNativeTarget` wiring + forwarding test 52/52 GREEN.
   - [x] **Lot N13b — native dispatch + prepared eligibility gate (`91b1a7253`)**: `ports/dispatch.ts` native method, `route-attempt-dispatch.ts` validate/delegate, `route-native.ts` `prepareNativeMessages`/`NativeAttemptRefusal`, auth-subpaths qualifies workspace mesh.
   - [x] **Lot N13c — required-mode native refusal in flows (`c4dc3da72`)**: `refuseNativeAttempt` + `prepareNativeMessages` gate/`NativeAttemptRefusal` catch in JSON and stream flows.
+  - [x] **Lot N13d — dispatch delegator + contract types (`534218e5d`)**: native dispatch validity cases, selection/refusal lifecycle (W selection has no `forwarded` map) 2/2 + 7/7 GREEN.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
