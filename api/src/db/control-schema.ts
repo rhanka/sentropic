@@ -909,6 +909,7 @@ export const sessionWorkspaceBindings = controlSchema.table(
     tenantId: text('tenant_id').notNull(),
     principalId: text('principal_id').notNull(),
     status: text('status').notNull().default('attached'),
+    version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
     detachedAt: timestamp('detached_at', { withTimezone: true }),

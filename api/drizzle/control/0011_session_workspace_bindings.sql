@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS "control"."session_workspace_bindings" (
 	"tenant_id" text NOT NULL,
 	"principal_id" text NOT NULL,
 	"status" text DEFAULT 'attached' NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"detached_at" timestamp with time zone,

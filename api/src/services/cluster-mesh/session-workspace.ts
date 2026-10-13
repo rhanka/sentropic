@@ -31,6 +31,7 @@ export interface AdoptedSessionWorkspace {
   readonly tenantId: string;
   readonly principalId?: string;
   readonly status: AdoptedSessionWorkspaceStatus;
+  readonly version: number;
 }
 
 export type SessionWorkspaceErrorCode =
@@ -54,10 +55,12 @@ const toRecord = (b: SessionWorkspaceBinding | BindingRow): AdoptedSessionWorksp
   bindingId: b.bindingId, sessionId: b.sessionId, workspaceId: b.workspaceId,
   tenantId: b.tenantId, principalId: b.principalId ?? undefined,
   status: b.status as AdoptedSessionWorkspaceStatus,
+  version: b.version,
 });
 const toRow = (b: SessionWorkspaceBinding) => ({
   bindingId: b.bindingId, sessionId: b.sessionId, workspaceId: b.workspaceId,
   tenantId: b.tenantId, principalId: b.principalId, status: b.status,
+  version: b.version,
   createdAt: new Date(b.createdAt), updatedAt: new Date(b.updatedAt),
   detachedAt: b.detachedAt ? new Date(b.detachedAt) : null,
   endedAt: b.endedAt ? new Date(b.endedAt) : null,
@@ -67,6 +70,7 @@ const toBinding = (row: BindingRow): SessionWorkspaceBinding => ({
   bindingId: row.bindingId, sessionId: row.sessionId, workspaceId: row.workspaceId,
   tenantId: row.tenantId, principalId: row.principalId,
   status: row.status as SessionWorkspaceBinding['status'],
+  version: row.version,
   createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
   detachedAt: row.detachedAt ? row.detachedAt.toISOString() : undefined,
   endedAt: row.endedAt ? row.endedAt.toISOString() : undefined,
@@ -90,12 +94,15 @@ const createDrizzleBindingStore = (client: BindingDbClient): SessionWorkspaceBin
     }
     const updated = await client.update(sessionWorkspaceBindings).set({
       workspaceId: next.workspaceId, tenantId: next.tenantId, principalId: next.principalId,
-      status: next.status, updatedAt: new Date(next.updatedAt),
+      status: next.status, version: next.version, updatedAt: new Date(next.updatedAt),
       detachedAt: next.detachedAt ? new Date(next.detachedAt) : null,
       endedAt: next.endedAt ? new Date(next.endedAt) : null,
     }).where(and(
       eq(sessionWorkspaceBindings.sessionId, next.sessionId),
+      eq(sessionWorkspaceBindings.version, current.version),
       eq(sessionWorkspaceBindings.status, current.status),
+      eq(sessionWorkspaceBindings.workspaceId, current.workspaceId),
+      eq(sessionWorkspaceBindings.principalId, current.principalId),
     )).returning({ bindingId: sessionWorkspaceBindings.bindingId });
     return updated.length > 0;
   },
@@ -114,10 +121,12 @@ export class SessionWorkspaceService {
     }
   }
 
-  private async checkIsAdmin(tenantId: string, principalId: string, workspaceId: string): Promise<boolean> {
-    const [tMember] = await db.select({ role: tenantMemberships.role, status: tenantMemberships.status }).from(tenantMemberships)
+  private async checkIsAdmin(
+    tenantId: string, principalId: string, workspaceId: string, client: BindingDbClient = db,
+  ): Promise<boolean> {
+    const [tMember] = await client.select({ role: tenantMemberships.role, status: tenantMemberships.status }).from(tenantMemberships)
       .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, principalId))).limit(1);
-    if (tMember?.status === 'approved' && (tMember.role === 'admin' || tMember.role === 'owner')) return true;
+    if (tMember?.status === 'approved' && tMember.role === 'admin') return true;
     if (workspaceId) return await hasWorkspaceRole(principalId, workspaceId, 'admin');
     return false;
   }
@@ -198,7 +207,7 @@ export class SessionWorkspaceService {
       } | null = null;
       let workspaceId: string;
       if (input.workspaceId) {
-        const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, input.workspaceId)).limit(1);
+        const [ws] = await tx.select().from(workspaces).where(eq(workspaces.id, input.workspaceId)).limit(1);
         if (!ws || ws.tenantId !== tenantId) {
           throw new SessionWorkspaceError('workspace_not_found', 'workspace does not exist');
         }
@@ -248,18 +257,25 @@ export class SessionWorkspaceService {
     requireId(principalId, 'principalId');
     // Membership first: a non-member learns nothing about binding existence.
     await this.checkTenantMember(tenantId, principalId);
-    const existing = await drizzleBindingStore.findBySession(sessionId);
-    if (!existing || existing.tenantId !== tenantId) {
-      throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
-    }
-    const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
-    try {
-      const binding = await this.mesh.detach({ sessionId, tenantId, principalId, isAdmin });
-      return toRecord(binding);
-    } catch (err) {
-      if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
-      throw err;
-    }
+    return await db.transaction(async (tx) => {
+      const store = createDrizzleBindingStore(tx);
+      const mesh = createSessionWorkspaceBindingService(store);
+      const existing = await store.findBySession(sessionId);
+      if (!existing || existing.tenantId !== tenantId) {
+        throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
+      }
+      const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
+      try {
+        const binding = await mesh.detach({ sessionId, tenantId, principalId, isAdmin });
+        if (binding.workspaceId !== existing.workspaceId && !isAdmin) {
+          throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient rights for session');
+        }
+        return toRecord(binding);
+      } catch (err) {
+        if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
+        throw err;
+      }
+    });
   }
 
   async end(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace> {
@@ -268,18 +284,25 @@ export class SessionWorkspaceService {
     requireId(principalId, 'principalId');
     // Membership first: a non-member learns nothing about binding existence.
     await this.checkTenantMember(tenantId, principalId);
-    const existing = await drizzleBindingStore.findBySession(sessionId);
-    if (!existing || existing.tenantId !== tenantId) {
-      throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
-    }
-    const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
-    try {
-      const binding = await this.mesh.end({ sessionId, tenantId, principalId, isAdmin });
-      return toRecord(binding);
-    } catch (err) {
-      if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
-      throw err;
-    }
+    return await db.transaction(async (tx) => {
+      const store = createDrizzleBindingStore(tx);
+      const mesh = createSessionWorkspaceBindingService(store);
+      const existing = await store.findBySession(sessionId);
+      if (!existing || existing.tenantId !== tenantId) {
+        throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
+      }
+      const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
+      try {
+        const binding = await mesh.end({ sessionId, tenantId, principalId, isAdmin });
+        if (binding.workspaceId !== existing.workspaceId && !isAdmin) {
+          throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient rights for session');
+        }
+        return toRecord(binding);
+      } catch (err) {
+        if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
+        throw err;
+      }
+    });
   }
 
   async get(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace | null> {
