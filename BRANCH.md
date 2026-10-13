@@ -103,12 +103,12 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
   - [x] Open a draft PR for review.
   - [x] Generate `.h2a/build/ci_tag_guard_report.md` (untracked).
 
-- [ ] **Lot 4 — Review remediation (Opus PR #668 findings)**
+- [x] **Lot 4 — Review remediation (Opus PR #668 findings)**
   - [x] Address MAJ-1, m1, m2, m3 in `scripts/publish-api-image.sh` (exact manifest-unknown signal on stderr, fail closed on empty REGISTRY, reject moving tags, Docker-First containerized digest extraction).
   - [x] Address m5, m6, and MAJ-1 test requirements in `scripts/test-api-tag-guard.sh` (use `.tmp/`, add tests for credential helper not found, network error, no config digest, empty registry, moving tag refusal).
   - [x] Address m4 in `docs/ci-images.md` (restore TOCTOU window, serialization, and architectural limits from `main`).
   - [x] Address m7 in `BRANCH.md` (restrict `.github/workflows/**` to `.github/workflows/ci.yml`).
   - [x] Validate locally with `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
   - [x] Verify `make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
-  - [ ] Generate fix report in `.h2a/build/ci_tag_guard_fix_report.md`.
+  - [x] Generate fix report in `.h2a/build/ci_tag_guard_fix_report.md`.
 
