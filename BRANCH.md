@@ -323,6 +323,7 @@
   - [x] **Lot N20b — prepare execution ports (`f9cb5086a`)**: `createAnthropicNativePort` exact capability binding + count port; RED 2 (not-a-function) pre-src → 2/2 GREEN, src byte-identical.
   - [x] **Lot N20c — finalized-snapshot observation (`2c0ba89c9`; design `e941c8533`/`d36b94330` absent from this repo)**: `anthropic-native-observation.ts` joined-call identity, ledger comment; RED 1/3 pre-src → 3/3 GREEN, byte-identical.
   - [x] **Lot N21a — exact native route/count composition (`95f77f12b`)**: quote native filter/hash, plane `nativeMessages`/`nativePort` options + `feasible`/`validateRequired` gates, standalone `nativeRequired` prepare; count port stays always-on (W divergence from R); plane+sink suites GREEN (1 + 8).
+  - [x] **Lot N27a-wire — construction-time switch (`8ba95935c`, early per build order)**: `CreateGwNamespaceModuleOptions.nativeMessagesEnabled` (env `LLM_GATEWAY_NATIVE_MESSAGES`) → plane + router; settlement/config/body-test already W-supersets; 56/56 unit GREEN.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
