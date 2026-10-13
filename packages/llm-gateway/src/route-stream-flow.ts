@@ -235,6 +235,7 @@ export const runRouteStreamFlow = async (
         committingNative = true;
         await preparedAttempt.markCommitted();
         signal?.throwIfAborted();
+        request.bodyLease?.detach();
         return { relay: 'native', servedTarget: servedTargetFor(diagnostic), headers: result.headers,
           stream: nativeExecution.expose() };
       }
