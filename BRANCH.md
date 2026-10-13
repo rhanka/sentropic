@@ -325,6 +325,7 @@
   - [x] **Lot N27a — exact native route/count composition (`95f77f12b`)**: quote native filter/hash, plane `nativeMessages`/`nativePort` options + `feasible`/`validateRequired` gates, standalone `nativeRequired` prepare; count port stays always-on (W divergence from R); plane+sink suites GREEN (1 + 8).
   - [x] **Lot N27b — construction-time switch (`8ba95935c`, early per build order)**: `CreateGwNamespaceModuleOptions.nativeMessagesEnabled` (env `LLM_GATEWAY_NATIVE_MESSAGES`) → plane + router; settlement/config/body-test already W-supersets; 56/56 unit GREEN.
   - [x] **Lot N21a — native JSON relay (`2fa2eedca`)**: `buildNativeMessagesRequest`/`assertNativeMessagesResult` + flow dispatch/usage/terminal relay + upstream mapping (`forwarded:{}`: W selection carries no forwarded map).
+  - [x] **Lot N21b — lifecycle in JSON flow (`13405b90f`)**: `nativeLifecycle` finalize-once, invoked-guard, termination mapping; 40/40 with N21c tests.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
