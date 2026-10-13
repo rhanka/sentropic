@@ -370,7 +370,7 @@ export const MUTATION_RECORDS: readonly MutationRecord[] = [
   { id: 'M15-drop-unsupported-effects', brokenSemantic: 'atomic commits silently drop unsupported effects', corpus: 'atomic', verdict: 'killed' },
   { id: 'M16-accept-stale-update', brokenSemantic: 'atomic commits accept stale aggregate versions', corpus: 'atomic', verdict: 'killed' },
   { id: 'M17-frozen-resume-cursor', brokenSemantic: 'over-budget pages freeze the resume cursor past the first undelivered record', corpus: 'read', verdict: 'killed' },
-  { id: 'M18-candidate-cursor-budget', brokenSemantic: 'read pages measure admission with the candidate page cursor', corpus: 'read', verdict: 'killed' },
+  { id: 'M18-candidate-cursor-budget', brokenSemantic: "read pages measure admission as 'page' (6 bytes smaller than 'incomplete')", corpus: 'read', verdict: 'killed' },
 ];
 
 describe('K2a discriminating mutations', () => {
@@ -488,12 +488,16 @@ describe('K2a discriminating mutations', () => {
 
   it('M17-frozen-resume-cursor is killed by the read resume corpus', async () => {
     const { bound } = bindFresh(new FrozenResumeCursorStore('comments'));
-    await expect(runReadCursorBudgetCorpus(bound)).rejects.toThrow(/exact full record set/);
+    await expect(runReadCursorBudgetCorpus(bound)).rejects.toThrow(
+      /resuming from an incomplete page delivers the exact full record set/,
+    );
   });
 
   it('M18-candidate-cursor-budget is killed by the read budget corpus', async () => {
     const { bound } = bindFresh(new CandidateCursorBudgetStore('comments'));
-    await expect(runReadCursorBudgetCorpus(bound)).rejects.toThrow(/one byte under|refuses the page/);
+    await expect(runReadCursorBudgetCorpus(bound)).rejects.toThrow(
+      /one byte under the observed encoding refuses the page/,
+    );
   });
 
   it('records every discriminating mutation as killed', () => {
