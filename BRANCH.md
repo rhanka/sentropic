@@ -128,6 +128,15 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: enforce workspace RBAC and canonical creation in session-workspace service
   - [x] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
+- [ ] **Lot 3 — Opus r2 NO-GO fixes (r3)**
+  - [x] RED: domain principal/CAS/uniform coverage in session-workspace.spec.ts
+  - [ ] RED: API principal/order/editor/seeds/concurrency/journal coverage in session-adoption.test.ts
+  - [ ] GREEN: conditional binding writes in cluster-mesh domain (compare-and-set)
+  - [ ] GREEN: required principal object inputs on detach/end/get (API + domain)
+  - [ ] GREEN: rights order, global editor, canonical seeds, englobing transaction
+  - [ ] GREEN: clean 0011 migration, re-date journal, BRANCH minors
+  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
+
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
