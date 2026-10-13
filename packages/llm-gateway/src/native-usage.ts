@@ -1,6 +1,8 @@
 import type {
   NativeUsageRaw, NativeUsageUncertainty, NativeCacheWriteSplitReason, NativeInputUsageSource,
+  NativeUsageSnapshot, NativeUsageTermination,
 } from '@sentropic/llm-mesh';
+import type { NativeSseFrame } from './native-sse.js';
 
 export function isSafeNonNegativeInteger(n: unknown): n is number {
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
@@ -22,6 +24,7 @@ export interface NativeCumulativeUsageState {
   readonly inputUsageValidated: boolean; readonly inputUsageSource?: NativeInputUsageSource;
   readonly uncertaintyReason?: NativeUsageUncertainty; readonly cacheWriteSplitReason?: NativeCacheWriteSplitReason;
   readonly proofRevoked: boolean; readonly estimated: boolean;
+  readonly messageDeltaInputDecreased: boolean;
 }
 
 export class NativeCumulativeUsageAccumulator {
@@ -30,6 +33,7 @@ export class NativeCumulativeUsageAccumulator {
   private reason?: NativeUsageUncertainty; private splitReason?: NativeCacheWriteSplitReason;
   private revoked = false; private est = false; private anchored = false; private startSeen = false;
   private raw: NativeUsageRaw = {};
+  private decreased = false;
 
   private retainRaw(update: RawNativeUsageUpdate): void {
     const next = { ...this.raw };
@@ -107,6 +111,10 @@ export class NativeCumulativeUsageAccumulator {
   applyDelta(delta?: RawNativeUsageUpdate | null, opts?: { defaultTtlEligible?: boolean }): boolean {
     if (!delta) return true;
     const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = delta;
+    const supplied = [u, r, w, split?.ephemeral_5m_input_tokens, split?.ephemeral_1h_input_tokens];
+    const accepted = [this.u, this.r, this.w, this.s5, this.s1];
+    this.decreased ||= supplied.some((value, index) => typeof value === 'number' && Number.isFinite(value)
+      && accepted[index] !== undefined && value < accepted[index]!);
     this.retainRaw(delta);
     let outputValid = true;
     if (o != null) {
@@ -211,6 +219,7 @@ export class NativeCumulativeUsageAccumulator {
       acceptedOutputTokens: this.o, physicalInput: this.p, physicalLowerBound: this.plb,
       inputUsageValidated: this.valid, inputUsageSource: this.source, uncertaintyReason: this.reason,
       cacheWriteSplitReason: this.splitReason, proofRevoked: this.revoked, estimated: this.est,
+      messageDeltaInputDecreased: this.decreased,
     };
   }
 
@@ -219,5 +228,69 @@ export class NativeCumulativeUsageAccumulator {
       ...this.raw,
       ...(this.raw.cache_creation ? { cache_creation: { ...this.raw.cache_creation } } : {}),
     };
+  }
+}
+
+const nativeRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : undefined;
+
+/** Sole native usage fold; terminal ownership and financial floors belong to the flow. */
+export class NativeUsageObserver {
+  readonly accumulator = new NativeCumulativeUsageAccumulator();
+  private stopped = false;
+  private finalCandidate = false;
+
+  constructor(readonly selectedModelId: string, private readonly defaultTtlEligible = false) {}
+
+  observeJson(body: Readonly<Record<string, unknown>>): void {
+    const usage = nativeRecord(body.usage);
+    if (!usage) { this.accumulator.revoke('missing_usage'); return; }
+    this.accumulator.acceptStart(usage as RawNativeUsageUpdate,
+      { isStart: false, defaultTtlEligible: this.defaultTtlEligible });
+    this.finalCandidate = isSafeNonNegativeInteger(usage.output_tokens);
+    this.stopped = true;
+  }
+
+  observeFrame(frame: NativeSseFrame): void {
+    if (!frame.data) return;
+    let event: Record<string, unknown> | undefined;
+    try { event = nativeRecord(JSON.parse(frame.data)); } catch { return; }
+    if (!event) return;
+    const type = frame.event ?? event.type;
+    if (type === 'message_start') {
+      const usage = nativeRecord(nativeRecord(event.message)?.usage);
+      if (!usage) { this.accumulator.revoke('missing_usage'); return; }
+      this.accumulator.acceptStart(usage as RawNativeUsageUpdate, { defaultTtlEligible: this.defaultTtlEligible });
+    } else if (type === 'message_delta') {
+      const usage = nativeRecord(event.usage);
+      const previousOutput = this.accumulator.getState().acceptedOutputTokens;
+      this.accumulator.applyDelta(usage as RawNativeUsageUpdate | undefined,
+        { defaultTtlEligible: this.defaultTtlEligible });
+      if (isSafeNonNegativeInteger(usage?.output_tokens) && usage.output_tokens >= previousOutput) this.finalCandidate = true;
+    } else if (type === 'message_stop') this.stopped = true;
+  }
+
+  snapshot(termination: NativeUsageTermination): NativeUsageSnapshot {
+    const state = this.accumulator.getState();
+    const raw = this.accumulator.getRawUsage();
+    if (raw.cache_creation) Object.freeze(raw.cache_creation);
+    Object.freeze(raw);
+    const input = state.inputUsageValidated || state.physicalLowerBound > 0 ? state.physicalInput : undefined;
+    const output = raw.output_tokens;
+    const finalOutputObserved = termination === 'completed' && this.stopped && this.finalCandidate;
+    const estimated = state.estimated || !state.inputUsageValidated || !finalOutputObserved
+      || !input || !output;
+    const total = input !== undefined && output !== undefined ? BigInt(input) + BigInt(output) : undefined;
+    return Object.freeze({
+      ...(input !== undefined ? { inputTokens: input } : {}),
+      ...(output !== undefined ? { outputTokens: output } : {}),
+      ...(total !== undefined && total <= BigInt(Number.MAX_SAFE_INTEGER) ? { totalTokens: Number(total) } : {}),
+      rawUsage: raw, estimated, finalOutputObserved, termination,
+      nativeSelectedModelId: this.selectedModelId, fallbackPresent: false, iterationsPresent: false,
+      nativeInputUsageValidated: state.inputUsageValidated, nativeInputUsageSource: state.inputUsageSource,
+      nativeUsageUncertainty: state.uncertaintyReason ?? (estimated ? 'incomplete_output' : undefined),
+      nativeCacheWriteSplitReason: state.cacheWriteSplitReason,
+    });
   }
 }
