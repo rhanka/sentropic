@@ -1,5 +1,5 @@
 // K2a gate: the shared corpus executed against the test-only reference
-// (L3a v4 §16.1, §17.1) plus K1 data-pure validator checks.
+// (L3a v4.1 frozen §16.1, §17.1) plus K1 data-pure validator checks.
 
 import { describe, expect, it } from 'vitest';
 import { validateAtomicUnit } from '../../src/storage/atomic.js';
