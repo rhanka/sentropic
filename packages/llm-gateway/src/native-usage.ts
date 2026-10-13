@@ -102,7 +102,13 @@ export class NativeCumulativeUsageAccumulator {
     }
     this.startSeen = true;
     const isStart = opts?.isStart !== false;
-    const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: w, cache_creation: split, output_tokens: o } = raw;
+    const { input_tokens: u, cache_read_input_tokens: r, cache_creation_input_tokens: aggregate, cache_creation: split, output_tokens: o } = raw;
+    let w = aggregate;
+    if (w == null && isSafeNonNegativeInteger(split?.ephemeral_5m_input_tokens)
+      && isSafeNonNegativeInteger(split?.ephemeral_1h_input_tokens)) {
+      const sum = BigInt(split.ephemeral_5m_input_tokens) + BigInt(split.ephemeral_1h_input_tokens);
+      if (sum <= BigInt(Number.MAX_SAFE_INTEGER)) w = Number(sum);
+    }
     this.retainRaw(raw);
     if (o != null) {
       if (!isSafeNonNegativeInteger(o)) { this.est = true; this.reason = 'invalid_output'; }
@@ -178,11 +184,16 @@ export class NativeCumulativeUsageAccumulator {
 
     const cu = check(u, this.u); if (!cu.ok) { if (!outputValid) this.reason = this.reason || 'invalid_output'; return false; }
     const cr = check(r, this.r); if (!cr.ok) { if (!outputValid) this.reason = this.reason || 'invalid_output'; return false; }
+    if (w != null && !check(w, this.w).ok) return false;
     let cw = this.w, c5 = this.s5, c1 = this.s1, ci1 = this.i1, csplit = this.splitReason;
 
     if (split != null) {
       if (typeof split !== 'object') { this.revoke('invalid_input'); return false; }
       const s5 = split.ephemeral_5m_input_tokens, s1 = split.ephemeral_1h_input_tokens;
+      if ([s5, s1].some((value, index) => typeof value === 'number' && Number.isFinite(value)
+        && [this.s5, this.s1][index] !== undefined && value < [this.s5, this.s1][index]!)) {
+        this.revoke('input_breakdown_changed'); return false;
+      }
       if (!isSafeNonNegativeInteger(s5) || !isSafeNonNegativeInteger(s1)) { this.revoke('invalid_input'); return false; }
       const splitSum = BigInt(s5) + BigInt(s1);
       if (splitSum > BigInt(Number.MAX_SAFE_INTEGER)) { this.revoke('invalid_input'); return false; }
@@ -280,8 +291,15 @@ export class NativeUsageObserver {
   private modelReason?: NativeUsageUncertainty;
   private fallbackPresent = false;
   private iterationsPresent = false;
+  private inputModelId?: string;
 
   constructor(readonly selectedModelId: string, private readonly defaultTtlEligible = false) {}
+
+  private validateInputPrice(): void {
+    const state = this.accumulator.getState();
+    if (!this.modelReason && nativeReadWeight(this.servedModelId) !== undefined && state.inputUsageValidated
+      && nativeCacheInputPriceUnits40(state, this.servedModelId) === undefined) this.accumulator.revoke('invalid_input');
+  }
 
   private observeResponse(response: Readonly<Record<string, unknown>>, requireModel = false): void {
     if (requireModel || Object.hasOwn(response, 'model')) {
@@ -307,6 +325,7 @@ export class NativeUsageObserver {
     if (!usage) { this.accumulator.revoke('missing_usage'); return; }
     this.accumulator.acceptStart(usage as RawNativeUsageUpdate,
       { isStart: false, defaultTtlEligible: this.defaultTtlEligible });
+    this.validateInputPrice();
     this.finalCandidate = isSafeNonNegativeInteger(usage.output_tokens);
     this.stopped = true;
   }
@@ -323,12 +342,16 @@ export class NativeUsageObserver {
       this.observeResponse(message, true);
       const usage = nativeRecord(message.usage);
       if (!usage) { this.accumulator.revoke('missing_usage'); return; }
+      this.inputModelId ??= this.servedModelId;
       this.accumulator.acceptStart(usage as RawNativeUsageUpdate, { defaultTtlEligible: this.defaultTtlEligible });
+      this.validateInputPrice();
     } else if (type === 'message_delta') {
       const usage = nativeRecord(event.usage);
       const previousOutput = this.accumulator.getState().acceptedOutputTokens;
-      this.accumulator.applyDelta(usage as RawNativeUsageUpdate | undefined,
+      const sameInputModel = this.servedModelId === this.inputModelId;
+      this.accumulator.applyDelta((sameInputModel ? usage : { output_tokens: usage?.output_tokens }) as RawNativeUsageUpdate | undefined,
         { defaultTtlEligible: this.defaultTtlEligible });
+      this.validateInputPrice();
       if (isSafeNonNegativeInteger(usage?.output_tokens) && usage.output_tokens >= previousOutput) this.finalCandidate = true;
     } else if (type === 'message_stop') this.stopped = true;
   }
