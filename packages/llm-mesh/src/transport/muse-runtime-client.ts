@@ -1,5 +1,6 @@
 import { getSecretAuthMaterial } from '../auth.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from '../generation.js';
+import type { LlmMeshMessage } from '../messages.js';
 import type { MuseAdapterClient } from '../adapters.js';
 import type { ProviderRuntimeContext } from '../registry.js';
 import type { FinishReason, StreamEvent, TokenUsage } from '../streaming.js';
@@ -108,6 +109,47 @@ const openAiToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
 
 const numOf = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+// Canonical history onto the Chat Completions wire (spec §16.4, R4-MAJ-2):
+// same projection rules as the Mistral translated client — developer maps to
+// system, reasoning parts have no wire slot and are dropped, images map to
+// the OpenAI-compat image_url shape, assistant tool calls project to
+// { id, type: 'function', function: { name, arguments } }, tool results
+// carry tool_call_id. Canonical extras (metadata.ingress, providerCallId,
+// arguments object) never reach the wire.
+type WireContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+
+const toWireMessage = (message: LlmMeshMessage): Record<string, unknown> => {
+  const content = typeof message.content === 'string'
+    ? message.content
+    : message.content
+        .map((part): WireContentPart | null => {
+          if (part.type === 'text') return { type: 'text', text: part.text };
+          if (part.type === 'reasoning') return null;
+          if (part.type === 'image') {
+            const url = part.url ?? `data:${part.mediaType ?? 'image/png'};base64,${part.data ?? ''}`;
+            return { type: 'image_url', image_url: { url } };
+          }
+          return null;
+        })
+        .filter((part): part is WireContentPart => part !== null);
+  const wire: Record<string, unknown> = {
+    role: message.role === 'developer' ? 'system' : message.role,
+    content,
+  };
+  if (message.name !== undefined) wire.name = message.name;
+  if (message.role === 'assistant' && message.toolCalls?.length) {
+    wire.tool_calls = message.toolCalls.map((call) => ({
+      id: call.toolCallId,
+      type: 'function' as const,
+      function: { name: call.name, arguments: call.argumentsText },
+    }));
+  }
+  if (message.role === 'tool' && message.toolResult) {
+    wire.tool_call_id = message.toolResult.toolCallId;
+  }
+  return wire;
+};
 
 const extractText = (payload: unknown): string => {
   if (typeof payload === 'string') return payload;
@@ -248,7 +290,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     }));
     const body: Record<string, unknown> = {
       model: request.modelId ?? 'muse-spark-1.3',
-      messages: request.messages,
+      messages: request.messages.map(toWireMessage),
       // Live-probed 2026-09-22: without stream:true Meta answers 200 with a
       // full JSON completion (content-type application/json) — no SSE frames,
       // so the stream reader yields nothing and ends done/unknown.
