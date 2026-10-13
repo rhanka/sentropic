@@ -195,6 +195,57 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
     });
   });
 
+  it('projects tool history onto the Chat wire shape (spec §16.4, R4-MAJ-2)', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ output_text: 'hi' }), { status: 200 }));
+    const client = new MuseRuntimeClient({ fetch: fetchFn });
+
+    await client.generate({
+      ...request,
+      messages: [
+        { role: 'developer', content: 'Be brief.' },
+        { role: 'user', content: [
+          { type: 'text', text: 'What time is it?' },
+          { type: 'image', url: 'https://example.test/clock.png' },
+        ] },
+        {
+          role: 'assistant', content: [{ type: 'text', text: 'Checking.' }],
+          toolCalls: [{
+            toolCallId: 'call_1', providerCallId: 'call_1', name: 'get_time',
+            argumentsText: '{"x":1}',
+          }],
+          metadata: { ingress: { raw: 'canonical-noise' } },
+        },
+        {
+          role: 'tool', content: '{"value":42}',
+          toolResult: {
+            toolCallId: 'call_1', providerCallId: 'call_1', name: 'get_time',
+            output: '{"value":42}',
+          },
+          metadata: { ingress: { raw: 'canonical-noise' } },
+        },
+      ],
+    }, auth);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    const body = JSON.parse(String(init.body));
+    expect(body.messages).toEqual([
+      { role: 'system', content: 'Be brief.' },
+      { role: 'user', content: [
+        { type: 'text', text: 'What time is it?' },
+        { type: 'image_url', image_url: { url: 'https://example.test/clock.png' } },
+      ] },
+      {
+        role: 'assistant', content: [{ type: 'text', text: 'Checking.' }],
+        tool_calls: [{
+          id: 'call_1', type: 'function',
+          function: { name: 'get_time', arguments: '{"x":1}' },
+        }],
+      },
+      { role: 'tool', content: '{"value":42}', tool_call_id: 'call_1' },
+    ]);
+    expect(JSON.stringify(body.messages)).not.toContain('ingress');
+  });
+
   it('decodes message tool calls instead of dropping them (spec §16.4)', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       id: 'resp-tc', choices: [{
