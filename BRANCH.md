@@ -74,6 +74,7 @@
 - [x] `K2B-REF3` — Staged reference journal consumers: read, checkpoint CAS, poison, retry, resync.
 - [x] `K2B-REF4` — Staged reference lifecycle: coverage, holds, purge completion, shared blobs.
 - [x] `K2B-REF5` — Staged reference external log: cross-scope mirror with own watermark.
+- [x] `K2B-REF6` — Committed effects cannot escape a barrier (appends, records, updates).
 - [x] `K2B-RED2` — Replay corpus green after two reference root causes (poison `>=`, segment key propagation); per-behavior kills in `K2B-MUTB`.
 - [ ] `K2B-RED3` — RED barrier corpus (G1 denial before/after disposal, absence distinct, raw tombstone neutral, over-limit coverage, concurrent insertion).
 - [ ] `K2B-RED4` — RED lifecycle corpus (unconfigured denial, conditional intent atomicity, holds, shared objects, crash-safe completion).
