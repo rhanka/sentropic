@@ -1,8 +1,8 @@
 # Feature: Cluster-mesh storage-port lot K2b plus deferred K2a-2 (L3a v4.1 frozen)
 
 ## Objective
-- [ ] Deliver the K2b shared corpus (staged-unit, journal, barrier, lifecycle) with M1 getter denial and inaccessible pages before/after disposal, plus discriminating mutations.
-- [ ] Fix the deferred K2a-2 ticket from feat/cluster-mesh-storage-k1 (engram Sol R3 plus M11, Opus r3 MINEUR-1 through MINEUR-5).
+- [x] Deliver the K2b shared corpus (staged-unit, journal, barrier, lifecycle) with M1 getter denial and inaccessible pages before/after disposal, plus discriminating mutations.
+- [x] Fix the deferred K2a-2 ticket from feat/cluster-mesh-storage-k1 (engram Sol R3 plus M11, Opus r3 MINEUR-1 through MINEUR-5).
 
 ## Scope / Guardrails
 - [ ] Scope limited to K2b corpus files, the test-only staged reference, and the deferred K2a-2 hunks (BR-K2B-EX1).
@@ -112,23 +112,23 @@
   - [x] MIN2 predicate/relationship profiles plus MIN4 header and K3 deferral (`atomic-corpus.ts`, `read-corpus.ts`).
   - [x] MIN2 barrier/purge positive paths (`atomic-corpus.ts`).
   - [x] MIN3 validator limits plus tests (`readers.ts`, `reference.spec.ts`).
-  - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
+  - [x] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check (covered by the final gate: typecheck-cluster-mesh 0 errors, lint-cluster-mesh clean, full test-cluster-mesh 464 passed, scope-check PASS C2).
 - [ ] **Lot 2 — Staged reference plus staged and replay corpora**
   - [x] `reference-staged.ts`: staged units, journal, coverage/barrier groundwork.
   - [x] `staged-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
   - [x] `replay-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
   - [x] One discriminating mutation per staged and replay behavior.
-  - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
+  - [x] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check (profile-mutations.spec.ts 17/17, covered by the final gate).
 - [ ] **Lot 3 — Barrier and lifecycle corpora with G1**
   - [x] `barrier-corpus.ts` with G1 denial before/after disposal plus gate.
   - [x] `lifecycle-corpus.ts` (purge policy, holds, shared objects, completion) plus gate.
   - [x] One discriminating mutation per barrier and lifecycle behavior.
-  - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck and Lint
-  - [ ] Retest cluster-mesh: `make test-cluster-mesh API_PORT=9505 UI_PORT=5705 MAILDEV_UI_PORT=1605 ENV=test-cm-k2b`
-  - [ ] `make scope-check API_PORT=9505 UI_PORT=5705 MAILDEV_UI_PORT=1605 ENV=test-cm-k2b`
-  - [ ] No version bump: stays on the 0.15.0 candidate.
-  - [ ] Final gate step 1: push only this branch and open a DRAFT PR to main noting "stacked on #666" (never merge).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Write .h2a/build/k2b_report.md with finding/behavior to commit to test to mutation plus the exit SHA.
+  - [x] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check (covered by the final gate).
+- [x] **Lot N — Final validation**
+  - [x] Typecheck and Lint (`make typecheck-cluster-mesh`: 0 errors; `make lint-cluster-mesh`: clean)
+  - [x] Retest cluster-mesh: `make test-cluster-mesh API_PORT=9505 UI_PORT=5705 MAILDEV_UI_PORT=1605 ENV=test-cm-k2b` (56 files passed, 464 tests passed, 34 skipped, 0 failed)
+  - [x] `make scope-check API_PORT=9505 UI_PORT=5705 MAILDEV_UI_PORT=1605 ENV=test-cm-k2b` (PASS C2)
+  - [x] No version bump: stays on the 0.15.0 candidate.
+  - [x] Final gate step 1: push only this branch and open a DRAFT PR to main noting "stacked on #666" (never merge; PR #669).
+  - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers (PR #669: 55 checks pass, 0 fail; `validate-cluster-mesh` pass).
+  - [x] Write .h2a/build/k2b_report.md with finding/behavior to commit to test to mutation plus the exit SHA.
