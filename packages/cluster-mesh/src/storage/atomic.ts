@@ -1,4 +1,4 @@
-// K1 atomic units, CAS/allocation and replay rules (L3a v4 §5).
+// K1 atomic units, CAS/allocation and replay rules (L3a v4.1 frozen §5).
 // Types plus data-pure validators; no transaction machinery (K3).
 
 import {

@@ -1,4 +1,4 @@
-// K1 profile catalogue and capability negotiation (L3a v4 §3).
+// K1 profile catalogue and capability negotiation (L3a v4.1 frozen §3).
 // Data-pure: no backend, no enforcement; enforcement lives in K3/composition.
 
 import { errResult, okResult, type ValidationResult } from './contracts.js';

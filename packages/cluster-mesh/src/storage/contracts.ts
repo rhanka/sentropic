@@ -1,4 +1,4 @@
-// K1 shared contract primitives (L3a v4 §2.3, §4.1). Data-pure: no I/O,
+// K1 shared contract primitives (L3a v4.1 frozen §2.3, §4.1). Data-pure: no I/O,
 // no clock, no crypto. All validators are total functions.
 
 export interface ValidationResult {

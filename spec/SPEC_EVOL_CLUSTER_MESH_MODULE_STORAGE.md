@@ -3,8 +3,9 @@
 ## Status
 
 K1 adds data-pure contract types and validators only. No backend, no
-runtime, no SQL. Frozen comments M1 and the merged engram L6a identity
-contract are unchanged and accommodated, never modified.
+runtime, no SQL. Spec of record: L3a v4.1 frozen. Frozen comments M1 and
+the merged engram L6a identity contract are unchanged and accommodated,
+never modified.
 
 ## K1 files
 
