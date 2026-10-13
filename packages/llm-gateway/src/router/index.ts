@@ -336,6 +336,7 @@ export const createGatewayRouter = (
     const flowRequest = {
       wire, headers, body, model, stream, authContext,
       signal: c.req.raw.signal,
+      ...(wire === 'openai-responses' ? { responsesLimits } : {}),
     };
 
     if (!stream) {

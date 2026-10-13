@@ -7,7 +7,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 
-import { createGatewayRouter, stubGatewayConfig } from '../src/index.js';
+import {
+  createGatewayRouter,
+  PersonalPassthroughCallerAuth,
+  stubGatewayConfig,
+  VerifiedCostContextResolver,
+} from '../src/index.js';
 import { WIRE_BY_PATH } from '../src/wire.js';
 
 const scaffoldApp = () => createGatewayRouter({ config: stubGatewayConfig });
@@ -110,5 +115,29 @@ describe('Responses body cap (D16-F 413)', () => {
       body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'hi' }),
     });
     expect(res.status).toBe(401);
+  });
+
+  it.each(['/responses', '/v1/responses'])('enforces host tool bounds at ingress: %s', async (path) => {
+    const verify = vi.fn(() => ({ tenantId: 't', principalId: 'p', source: 'test', ownerScopeRef: 'p' }));
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig,
+        callerAuth: new PersonalPassthroughCallerAuth({ verifyToken: { verify },
+          costContextResolver: new VerifiedCostContextResolver() }) },
+      routePlanner: {} as unknown as RoutePlanner,
+      routeMetering: { settleRoute: vi.fn() },
+      responsesLimits: { maxTools: 1 },
+    });
+    const tools = [0, 1].map((index) => ({
+      type: 'function', name: `t${index}`, parameters: { type: 'object' },
+    }));
+    const res = await app.request(path, {
+      method: 'POST',
+      headers: { 'x-api-key': 'trusted-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'hi', tools }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code?: string; param?: string } };
+    expect(body.error.code).toBe('bad_request');
+    expect(body.error.param).toBe('tools');
   });
 });
