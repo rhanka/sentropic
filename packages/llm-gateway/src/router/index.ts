@@ -40,8 +40,11 @@ import {
   type ProviderShapedError,
 } from './errors.js';
 import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
-import { openAiError } from './errors.js';
 import { resolveResponsesLimits, type ResponsesLimits } from '../responses-egress.js';
+import {
+  ensureCheckedGatewayBody, gatewayRequestBodyLimit,
+  type CheckedGatewayBody, type RequestBodyLimitOptions,
+} from '../request-body-limit.js';
 import { authenticateCaller, validateAuthContext } from '../internal/caller-auth.js';
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 import type { GatewayBudgetOptions } from '../ports/budget.js';
@@ -102,6 +105,12 @@ export interface CreateGatewayRouterOptions {
    * Only the Responses wire enforces them; other wires stay frozen.
    */
   readonly responsesLimits?: Partial<ResponsesLimits>;
+  /**
+   * Trusted host body policy (spec §17.4): shared pool, host byte caps and
+   * mount prefix. Absent means the process-wide bounded default; the
+   * resolved Responses maxBodyBytes always bounds the Responses paths.
+   */
+  readonly requestBody?: RequestBodyLimitOptions;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -172,47 +181,6 @@ const readHeaders = (raw: Headers): Record<string, string> => {
   return headers;
 };
 
-/** Over-cap Responses body: short-circuits to the spec §16.7 413, never dispatch. */
-class ResponsesBodyTooLarge extends Error {
-  constructor() {
-    super('responses request body exceeds maxBodyBytes');
-    this.name = 'ResponsesBodyTooLarge';
-  }
-}
-
-/**
- * Parse a Responses JSON body under the byte cap (spec §16.7). A declared
- * Content-Length above the cap refuses without reading; a missing or false
- * length still meets the incremental bound while streaming. Throws
- * ResponsesBodyTooLarge on overflow, SyntaxError on malformed JSON.
- */
-const readBoundedJson = async (req: Request, maxBytes: number): Promise<unknown> => {
-  const declared = Number(req.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maxBytes) throw new ResponsesBodyTooLarge();
-  if (!req.body) return req.json();
-  const reader = req.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  try {
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      bytes += next.value.byteLength;
-      if (bytes > maxBytes) throw new ResponsesBodyTooLarge();
-      chunks.push(next.value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const merged = new Uint8Array(bytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return JSON.parse(new TextDecoder().decode(merged));
-};
-
 /** Send a provider-shaped error with any mapped headers (spec §3b). */
 const sendError = (
   c: import('hono').Context,
@@ -249,7 +217,15 @@ export const createGatewayRouter = (
   const requestId = options.requestId ?? defaultRequestId;
   // Spec §16.7: invalid host bounds fail fast here, before any route serves.
   const responsesLimits = resolveResponsesLimits(options.responsesLimits);
+  // Spec §17.4: one checked-body policy for middleware and router; the
+  // resolved Responses cap always bounds the Responses paths.
+  const requestBodyOptions: RequestBodyLimitOptions = {
+    ...options.requestBody,
+    ...(options.requestBody?.responsesLimitBytes === undefined
+      ? { responsesLimitBytes: responsesLimits.maxBodyBytes } : {}),
+  };
   const app = new Hono();
+  app.use('*', gatewayRequestBodyLimit(requestBodyOptions, requestId));
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
     try {
       const context = {
@@ -298,26 +274,17 @@ export const createGatewayRouter = (
       return sendError(c, notImplemented(wire), id);
     }
 
-    // Parse the provider-native body (bad JSON -> provider-shaped 400, §3b).
-    // The Responses wire reads under its byte cap (over-cap -> 413 §16.7);
-    // every other wire keeps its frozen unbounded read.
-    let body: unknown;
-    if (wire === 'openai-responses') {
-      try {
-        body = await readBoundedJson(c.req.raw, responsesLimits.maxBodyBytes);
-      } catch (error) {
-        if (error instanceof ResponsesBodyTooLarge) {
-          return sendError(c, openAiError(413, 'invalid_request_error', 'request too large', 'request_too_large'), id);
-        }
-        return sendError(c, mapGatewayError(wire, 'bad-request'), id);
-      }
-    } else {
-      try {
-        body = await c.req.json();
-      } catch {
-        return sendError(c, mapGatewayError(wire, 'bad-request'), id);
-      }
+    // Spec §17.4: the checked owner supplies the sole parsed object; no
+    // second req.json(), clone or merged raw buffer. Malformed, over-cap and
+    // capacity refusals map here (bad JSON keeps the frozen 400; over-cap is
+    // now the numeric 413 on every wire, including both Responses aliases).
+    let owner: CheckedGatewayBody;
+    try {
+      owner = await ensureCheckedGatewayBody(c.req.raw, requestBodyOptions);
+    } catch (error) {
+      return sendError(c, toProviderShapedError(wire, error, undefined), id);
     }
+    const body = owner.body;
 
     const model = readModel(body);
     if (!model) {
@@ -469,12 +436,15 @@ export const createGatewayRouter = (
     if (!routeFlowDeps && !flowDeps) {
       return sendError(c, notImplemented('anthropic-messages'), id);
     }
-    let body: unknown;
+    // Count reads through the same checked owner (no second parse) and
+    // skips every financial hook below; malformed/refused bodies release.
+    let countOwner: CheckedGatewayBody;
     try {
-      body = await c.req.json();
-    } catch {
-      return sendError(c, mapGatewayError('anthropic-messages', 'bad-request'), id);
+      countOwner = await ensureCheckedGatewayBody(c.req.raw, requestBodyOptions);
+    } catch (error) {
+      return sendError(c, toProviderShapedError('anthropic-messages', error, undefined), id);
     }
+    const body = countOwner.body;
     const model = readModel(body);
     if (!model) {
       return sendError(c, mapGatewayError('anthropic-messages', 'bad-request'), id);

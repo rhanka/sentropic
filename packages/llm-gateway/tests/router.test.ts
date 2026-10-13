@@ -3,6 +3,7 @@ import type { RoutePlanner } from '@sentropic/llm-mesh';
 
 import {
   createGatewayRouter,
+  GatewayBodyBytePool,
   notImplemented,
   stubGatewayConfig,
   type AuthzMode,
@@ -240,5 +241,26 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     expect(codexServed).toBe('provider=openai; model=gpt-5.6-terra; transport=codex');
     expect(cloudCodeServed).toBe('provider=openai; model=gpt-5.6-terra; transport=cloud-code');
     expect(codexServed).not.toBe(cloudCodeServed);
+  });
+});
+
+describe('router checked-body admission (N06)', () => {
+  const bigBody = JSON.stringify({ model: 'claude-opus-5-high', max_tokens: 8, messages: [{ role: 'user', content: 'x'.repeat(64) }] });
+
+  it.each(['/v1/messages', '/v1/chat/completions'] as const)('refuses an over-limit %s body with 413 before parsing', async (path) => {
+    const pool = new GatewayBodyBytePool(128);
+    const app = createGatewayRouter({ config: stubGatewayConfig, requestBody: { pool, limitBytes: 32 } });
+    const res = await app.request(path, { method: 'POST', body: bigBody });
+    expect(res.status).toBe(413);
+    expect(res.headers.get('x-should-retry')).toBe('false');
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+
+  it('keeps the bodyless scaffold 501 with the checked owner', async () => {
+    const pool = new GatewayBodyBytePool(128);
+    const app = createGatewayRouter({ config: stubGatewayConfig, requestBody: { pool, limitBytes: 32 } });
+    const res = await app.request('/v1/messages', { method: 'POST' });
+    expect(res.status).toBe(501);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
   });
 });
