@@ -249,8 +249,8 @@
   - [x] `packages/llm-gateway/src/request-body-pool.ts` + `tests/request-body-limit.test.ts` pool slice (+ `request-body-capacity` kind/case/golden; reader stays N05).
 - [x] **Lot N04 — Checked owner (fold)**
   - [x] `packages/llm-gateway/src/request-body-retention.ts` + owner slice in `tests/request-body-limit.test.ts` (router/flow lifetimes stay N06/N07).
-- [ ] **Lot N05 — Reader and path resolver (fold)**
-  - [ ] `packages/llm-gateway/src/request-body-limit.ts` + reader slices in `tests/request-body-limit.test.ts` (router/settlement composition stays N06).
+- [x] **Lot N05 — Reader and path resolver (fold)**
+  - [x] `packages/llm-gateway/src/request-body-limit.ts` + reader slices in `tests/request-body-limit.test.ts` (router/settlement composition stays N06).
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
   - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).
