@@ -78,6 +78,7 @@
 - [x] `K2B-RED2` — Replay corpus green after two reference root causes (poison `>=`, segment key propagation); per-behavior kills in `K2B-MUTB`.
 - [x] `K2B-RED3` — Barrier corpus green after the commit-escape root cause; G1 denial before/after disposal, absence distinct, raw tombstone neutral, over-limit coverage, concurrent insertion.
 - [x] `K2B-RED4` — Lifecycle corpus green first run on the verified reference; per-behavior kills in `K2B-MUTB`.
+- [x] `K2B-MUTB-S` — Staged mutants S1-S5 killed at their targeted assertions.
 - [ ] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions.
 
 ## AI Flaky tests

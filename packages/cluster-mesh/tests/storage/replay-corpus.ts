@@ -117,7 +117,7 @@ export const runReplayCorpus = async (
   const poisoned = reread.events[2].eventId;
   await bound.journalMarkPoison('c1', poisoned, 'poison-k2b');
   const stalled = await bound.journalInspect('c1');
-  assert.equal(stalled.status, 'stalled');
+  assert.equal(stalled.status, 'stalled', 'K2b-RED replay: poison stalls the consumer');
   assert.equal(stalled.failedEvent, poisoned);
   await expectCode(
     async () => bound.journalCheckpoint('c1', 2, 3),
