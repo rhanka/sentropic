@@ -84,18 +84,26 @@ Cluster-mesh owns K/P reusable infrastructure, co-reviewed by engram and comment
 
 ## Question owner
 
+### Current allocation (frozen v4.1 §17)
+
 **Historical assignment question, superseded by frozen v4.1 §17.** Cluster-mesh is accountable for reusable PG; engram co-reviews, and comments reviews consumed capabilities. This is one backend at `packages/cluster-mesh/src/storage/postgres/*.ts`, exported through the proposed storage/postgres leaf. Hosts inject drivers and sole migration scheduling; they are not assigned backend implementation.
 
 **Facts and scope.** Earlier engram plan placement needs the §18.1 Core/application amendment. No actual staffing, amended plan or qualification is inferred from the allocation. These execution receipts remain due; accountable ownership is no longer an open owner vote.
 
-**Historical alternatives considered before the frozen allocation:**
+The frozen allocation replaces the earlier A/B question; do not request another ownership choice. Actual staffing and coordinated upstream amendments remain unverified. One backend, one asset inventory and consumed-profile/installed-host evidence prevent duplication. This extract records no new owner answer.
+
+### Historical alternatives considered before the frozen allocation (2026-10-12)
+
+<!-- historical-excerpt-start -->
+**Who should lead implementation of this reusable module and the coordinated L3b-P amendment: A, the storage team, or B, the comments team?**
 
 | Option | Work and benefit | Cost / consequence |
 |---|---|---|
-| A — Storage team leads; comments supplies consumed-profile review | Consistent with §17's accountable cluster-mesh ownership. | Actual staffing and qualification receipts remain due. |
-| B — Comments supplies a separately scoped contribution | Contributions may be coordinated under the same cluster-mesh ownership. | No second backend, migration authority or transfer of accountability. |
+| A — Storage team leads; comments team co-reviews and supplies conformance cases | Keeps the shared port, backend, generations and migration assets with one implementing team. | Adds this reusable delivery to L3b-P's workload; M2 waits for that team's qualified artifact. |
+| B — Comments team leads a separately scoped contribution; storage team co-reviews and integrates it into L3b-P | Lets the team delivering Immo's module produce the missing dependency while storage keeps architectural ownership. | Diverts comments implementation capacity and needs explicit cross-track scope/review coordination; M2 still waits for the same qualified artifact. |
 
-The frozen allocation replaces the earlier A/B question; do not request another ownership choice. Actual staffing and coordinated upstream amendments remain unverified. One backend, one asset inventory and consumed-profile/installed-host evidence prevent duplication. This extract records no new owner answer.
+Both options deliver the same module and gates; neither imports the app or requires Immo to write a backend. Available capacity/scheduling is not evidenced, so no team is selected here. The choice affects cross-team workload, not model ownership or OWNER-D2. Reassignment before implementation is reversible; after implementation, keep one shared backend and migration history. The main failure risk is duplicated SQL/assets or an unqualified binding: prevent it with one L3b-P amendment and shared parity/installed-consumer receipts. This files-only presenter has no implementation-workload preference. Record the owner's answer and the storage-maintainer handoff before M2 entry; this section records the question only.
+<!-- historical-excerpt-end -->
 
 ## Authorized register statements
 
