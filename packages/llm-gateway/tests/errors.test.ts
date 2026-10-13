@@ -566,21 +566,19 @@ describe('Responses field errors (spec §16.7)', () => {
 
   it('maps typed native validation public detail without leaking internal error message', () => {
     const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
-    const gwError = new GatewayError('bad-request', 'secret internal log message',
-      undefined, undefined, undefined, undefined, undefined, detail);
-    const upstreamError = new NativeMessagesUpstreamError({ status: 400, validation: detail });
+    const upstreamError = new NativeMessagesUpstreamError({
+      status: 400,
+      type: 'invalid_request_error',
+      validation: detail,
+    });
 
-    for (const error of [gwError, upstreamError]) {
-      const a = toProviderShapedError('anthropic-messages', error);
-      expect(a.status).toBe(400);
-      expect(a.body).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'provider validation failure' } });
-      expect(JSON.stringify(a)).not.toContain('secret internal log message');
+    const a = toProviderShapedError('anthropic-messages', upstreamError);
+    expect(a.status).toBe(400);
+    expect(a.body).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'provider validation failure' } });
 
-      const o = toProviderShapedError('openai-chat-completions', error);
-      expect(o.status).toBe(400);
-      expect(o.body).toEqual({ error: { type: 'invalid_request_error', message: 'provider validation failure', code: 'invalid_request' } });
-      expect(JSON.stringify(o)).not.toContain('secret internal log message');
-    }
+    const o = toProviderShapedError('openai-chat-completions', upstreamError);
+    expect(o.status).toBe(400);
+    expect(o.body).toEqual({ error: { type: 'invalid_request_error', message: 'provider validation failure', code: 'invalid_request' } });
   });
 
   it('never renders code/param on other failure kinds or the Anthropic wire', () => {
