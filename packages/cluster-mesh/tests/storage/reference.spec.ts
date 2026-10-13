@@ -54,12 +54,10 @@ describe('K2a reference: read corpus', () => {
   });
 });
 
-describe('K2a split: R3 returned-cursor budget', () => {
-  // Skipped: R3 deferred to K2a-2. The returned cursor can make a read exceed
-  // the budget (Sol round 3: 116 bytes for a 115 budget, §8.4). Follow-up lot
-  // K2a-2 (R3 fix + Sol M11 + Opus r3 minors) owns the fix; this test is the
-  // RED proof and must be re-enabled there.
-  it.skip('R3 deferred to K2a-2: resumed page with its returned cursor fits the budget', async () => {
+describe('K2a R3 returned-cursor budget', () => {
+  // K2b fixed R3 here: admission is measured with the effective returned
+  // cursor (Sol round 3: 116 bytes for a 115 budget, §8.4).
+  it('K2b-RED resumed page measured with its returned cursor fits the budget', async () => {
     const store = new TestReferenceStore('comments');
     await runReadCursorBudgetCorpus(store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] })));
   });
