@@ -268,6 +268,7 @@
   - [x] `native-required`/`native-max-tokens-required` in `src/router/errors.ts` + `tests/contract-snapshot.test.ts` golden (deliberate same-PR edit).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
+  - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
   - [x] R4-MAJ-1: nested Chat `tool_choice` on muse/mistral clients.
   - [x] R4-MAJ-4: pre-dispatch refusal for Messages/Chat tool controls (no billed estimate).
   - [x] R4-MAJ-2: Muse history projection (`toWireMessage` equivalent).
