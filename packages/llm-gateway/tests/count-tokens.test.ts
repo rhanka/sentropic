@@ -13,9 +13,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryRoutePlanner, type VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import {
-  createGatewayRouter, GatewayError, NativeCountTokensRateLimiter, NativeCountUpstreamError,
-  PersonalPassthroughCallerAuth, runNativeCountTokens, stubGatewayConfig, VerifiedCostContextResolver,
+  CLASSIFIER_BETA, createGatewayRouter, DANGEROUS_TOOL_BETA, GatewayError, NATIVE_BILLING_MASKED_MESSAGE,
+  NativeCountTokensRateLimiter, NativeCountUpstreamError, parseNativeErrorDetail,
+  PersonalPassthroughCallerAuth, runNativeCountTokens, SAFEGUARDS_NOT_SUPPORTED_MESSAGE,
+  stubGatewayConfig, VerifiedCostContextResolver,
   type NativeCountTokensResult,
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
@@ -529,6 +532,78 @@ describe('POST /v1/messages/count_tokens', () => {
       });
       expect(h.execute).toHaveBeenCalledTimes(1);
       expect(h.h.metering.settlements).toHaveLength(0);
+    });
+
+    describe('count native errors are terminal and sanitized (N24 rows 48c/48c2)', () => {
+      it.each([
+        ['messages.0.content.0.clear_at: invalid value', undefined, 'messages.0.content.0.clear_at: invalid value'],
+        [`Unsupported beta: ${DANGEROUS_TOOL_BETA}`, DANGEROUS_TOOL_BETA, `Unsupported beta: ${DANGEROUS_TOOL_BETA}`],
+        [`Unexpected value(s) ${CLASSIFIER_BETA} for the anthropic-beta header`, CLASSIFIER_BETA,
+          `Unexpected value(s) ${CLASSIFIER_BETA} for the anthropic-beta header`],
+        [`Unsupported beta: ${CLASSIFIER_BETA}`, 'other-beta', `Unsupported beta: ${CLASSIFIER_BETA}`],
+        ['Your credit balance is too low; purchase credits', undefined, NATIVE_BILLING_MASKED_MESSAGE],
+        ['Your organization does not have access to fallback-credit-2026-06-01', undefined,
+          'Your organization does not have access to fallback-credit-2026-06-01'],
+        ['bad\u0000 field\nvalue', undefined, 'bad fieldvalue'],
+      ] as const)('reuses bounded native validation policy: %s', async (message, beta, expected) => {
+        const h = countHarness({}, async request => {
+          const validation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message } }), 400,
+            { requestSafeguards: Object.hasOwn(request.body, 'safeguards'), sentBetas: [request.headers.forwarded['anthropic-beta'] ?? ''] });
+          throw new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation });
+        });
+        const res = await sendCount(h, countBody(), beta === undefined ? {} : { 'anthropic-beta': beta });
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({ type: 'error',
+          error: { type: 'invalid_request_error', message: expected } });
+        expect(h.execute).toHaveBeenCalledTimes(1);
+        expect(res.headers.has('x-sentropic-relay')).toBe(false);
+        expect(h.h.metering.settlements).toHaveLength(0);
+      });
+
+      it('prefers the safeguards refusal over a safeguards-related upstream validation error', async () => {
+        // W fail-closed deviation: safeguards never reach the port, so the
+        // classifier rewrite (which needs requestSafeguards) cannot be
+        // observed on the count path — the refusal preempts dispatch.
+        const h = countHarness({}, async () => {
+          throw new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error',
+            validation: parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error',
+              message: `Unexpected value(s) ${CLASSIFIER_BETA} for the anthropic-beta header` } }), 400,
+              { requestSafeguards: true, sentBetas: [CLASSIFIER_BETA] }) });
+        });
+        const res = await sendCount(h, countBody({ safeguards: {} }), { 'anthropic-beta': CLASSIFIER_BETA });
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({ type: 'error',
+          error: { type: 'invalid_request_error', message: SAFEGUARDS_NOT_SUPPORTED_MESSAGE } });
+        expect(h.execute).not.toHaveBeenCalled();
+      });
+
+      it.each([401, 403, 404, 413, 429, 500, 503, 529])('makes one call for upstream %s with no error-header forwarding', async status => {
+        const h = countHarness({}, async () => {
+          const error = new NativeMessagesUpstreamError({ status, retryAfterMs: 2500,
+            ...(status === 413 ? { requestSize: { requestBytes: 50, limitBytes: 32, source: 'gateway' as const, sizeIsLowerBound: false } } : {}) });
+          Object.assign(error, { headers: { 'anthropic-organization-id': 'secret-org', 'x-sentropic-request-id': 'spoof',
+            'set-cookie': 'secret-cookie', 'retry-after': '999' } });
+          throw error;
+        });
+        const res = await sendCount(h);
+        const expectedStatus = status === 403 ? 401 : status >= 500 ? 503 : status;
+        expect(res.status).toBe(expectedStatus);
+        const body = await res.json() as { error: { type: string; message: string } };
+        expect(body.error.type).toBe(status === 401 || status === 403 ? 'authentication_error'
+          : status === 404 ? 'not_found_error' : status === 413 ? 'request_too_large'
+            : status === 429 ? 'rate_limit_error' : 'overloaded_error');
+        if (status === 413) expect(body.error.message).toBe('Request size 50 bytes exceeds limit 32 bytes.');
+        if (status === 404) expect(body.error.message).toBe(`Unknown model: ${JSON.stringify(COUNT_MODEL)}`);
+        expect(res.headers.get('retry-after')).toBe(status === 429 ? '3' : null);
+        expect(res.headers.get('x-should-retry')).toBe(status === 413 ? 'false' : null);
+        expect(res.headers.get('x-sentropic-request-id')).toBe('count-req');
+        for (const name of ['anthropic-organization-id', 'set-cookie', 'x-sentropic-relay', 'x-sentropic-served']) {
+          expect(res.headers.has(name)).toBe(false);
+        }
+        expect(h.execute).toHaveBeenCalledTimes(1);
+        expect(h.transport.seenBodies).toHaveLength(0);
+        expect(h.h.metering.settlements).toHaveLength(0);
+      });
     });
   });
 });
