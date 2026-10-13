@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Responses execution features: per-transport support table
+  (`reasoning-context`, `custom-tools`, `verbosity` on Codex;
+  `reasoning-controls`, `explicit-output-ceiling`, `strict-schema` on Muse;
+  `strict-schema` on Mistral Vibe) with fail-closed planning/quoting
+  eligibility, plus the native Responses carrier (`customTools`,
+  `functionToolRefs`, reasoning artifacts, context, verbosity, cache hints)
+  projected by the Codex adapter and bare→qualified tool-name requalification
+  on all three Responses adapters.
+- `mistral-vibe-cli-latest` alias resolving to the pinned
+  `mistral:mistral-medium-3.5`/`mistral-vibe` target (no duplicate profile).
+
 ## 0.24.1
 
 - Replace the exclusive `claude-opus-5-5` alias with standard multi-candidate

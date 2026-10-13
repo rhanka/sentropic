@@ -38,7 +38,11 @@ export const encodeResponsesStream = (input: {
   function* open(): Generator<GatewayDispatchStreamEvent> {
     if (opened) return;
     opened = true;
-    const response = { id: input.responseId, object: 'response', model: input.model };
+    // The created/in_progress announcement carries the full initial
+    // response snapshot (status, created_at, empty output), not just the
+    // identity triple — real CLI parsers read it (R4-MIN-5).
+    const response = { id: input.responseId, object: 'response', model: input.model,
+      status: 'in_progress', created_at: input.createdAt, output: [] as unknown[] };
     yield frame('response.created', { response });
     yield frame('response.in_progress', { response });
   }
@@ -59,6 +63,7 @@ export const encodeResponsesStream = (input: {
       } else if (seen.kind === 'reasoning') {
         const item = byId.get(itemId);
         const text = item ? (item.summary as Array<Record<string, unknown>>).map((part) => String(part.text ?? '')).join('') : '';
+        yield frame('response.reasoning_summary_text.done', { item_id: itemId, output_index: seen.outputIndex, summary_index: 0, text });
         yield frame('response.reasoning_summary_part.done', { item_id: itemId, output_index: seen.outputIndex, summary_index: 0,
           part: { type: 'summary_text', text } });
         if (item) yield frame('response.output_item.done', { output_index: seen.outputIndex, item });
