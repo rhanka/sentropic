@@ -372,3 +372,56 @@ describe('K2b page validator: byte limits bind every record-carrying page', () =
     ).toBe(false);
   });
 });
+
+describe('K2b R2 reference pages satisfy the validator', () => {
+  it('K2b-RED every reference page fits its budget under validateReadPage', async () => {
+    const store = new TestReferenceStore('comments');
+    const bound = store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+    for (let n = 0; n < 3; n += 1) {
+      await bound.appendChain(
+        'r2-cross',
+        { id: `s${n}`, bytes: 'x', hash: `hs${n}` },
+        n === 0 ? { kind: 'absent', allocation: '0' } : { kind: 'head', hash: `hs${n - 1}` },
+      );
+    }
+    const full = await bound.readPage('r2-cross', 10, null, 4096);
+    const fullBytes = Buffer.byteLength(
+      JSON.stringify({ outcome: full.outcome, records: full.records, nextCursor: full.nextCursor }),
+      'utf8',
+    );
+    for (const limit of [10, 2, 1]) {
+      for (let budget = fullBytes - 1; budget > 0; budget -= 1) {
+        const page = await bound.readPage('r2-cross', limit, null, budget);
+        const validity = validateReadPage(
+          page as unknown as Parameters<typeof validateReadPage>[0],
+          { maxRecords: 10, maxEncodedBytes: budget },
+        );
+        expect(validity.ok).toBe(true);
+        if (page.nextCursor !== null) {
+          const resumed = await bound.readPage('r2-cross', limit, page.nextCursor, budget);
+          const resumedValidity = validateReadPage(
+            resumed as unknown as Parameters<typeof validateReadPage>[0],
+            { maxRecords: 10, maxEncodedBytes: budget },
+          );
+          expect(resumedValidity.ok).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('K2b-RED the last record is measured with a null cursor', async () => {
+    const store = new TestReferenceStore('comments');
+    const bound = store.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+    for (let n = 0; n < 3; n += 1) {
+      await bound.appendChain(
+        'r2-last',
+        { id: `s${n}`, bytes: 'x', hash: `hs${n}` },
+        n === 0 ? { kind: 'absent', allocation: '0' } : { kind: 'head', hash: `hs${n - 1}` },
+      );
+    }
+    const fromS2 = await bound.readPage('r2-last', 10, { position: 2, head: 'hs2' }, 100);
+    expect(fromS2.outcome).toBe('page');
+    expect(fromS2.records.map((entry) => entry.id)).toEqual(['s2']);
+    expect(fromS2.nextCursor).toBe(null);
+  });
+});
