@@ -247,7 +247,7 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     }, auth);
     const [, init] = fetchFn.mock.calls[0]!;
     expect(JSON.parse(String(init.body))).toMatchObject({
-      tool_choice: { type: 'function', name: 'get_time' },
+      tool_choice: { type: 'function', function: { name: 'get_time' } },
       parallel_tool_calls: false,
     });
   });
