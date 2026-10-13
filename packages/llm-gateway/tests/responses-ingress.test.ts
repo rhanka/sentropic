@@ -10,6 +10,7 @@ import {
   normalizeResponsesIngress,
   ResponsesIngressError,
 } from '../src/responses-ingress.js';
+import { DEFAULT_RESPONSES_LIMITS } from '../src/responses-egress.js';
 
 const ingress = (body: unknown) => normalizeResponsesIngress(body);
 
@@ -262,6 +263,38 @@ describe('responses ingress media, formats and controls', () => {
     expect(result.requiredExecutionFeatures).toEqual([]);
     expect(bad(minimal({ metadata: 'nope' }))).toMatchObject({ fieldPath: 'metadata' });
     expect(bad(minimal({ client_metadata: [1] }))).toMatchObject({ fieldPath: 'client_metadata' });
+  });
+});
+
+describe('responses ingress bounds (spec §16.7)', () => {
+  const tool = (name: string) => ({ type: 'function', name, parameters: { type: 'object' } });
+
+  it('rejects input arrays beyond maxInputItems', () => {
+    const items = Array.from({ length: 4097 }, (_, index) => ({ role: 'user', content: `m${index}` }));
+    expect(bad(minimal({ input: items }))).toMatchObject({ fieldPath: 'input', errorCode: 'bad_request' });
+  });
+
+  it('accepts an input array at exactly maxInputItems', () => {
+    const items = Array.from({ length: 4096 }, (_, index) => ({ role: 'user', content: `m${index}` }));
+    expect(() => ingress(minimal({ input: items }))).not.toThrow();
+  });
+
+  it('rejects tool lists beyond maxTools', () => {
+    const tools = Array.from({ length: 257 }, (_, index) => tool(`t${index}`));
+    expect(bad(minimal({ input: 'hi', tools }))).toMatchObject({ fieldPath: 'tools', errorCode: 'bad_request' });
+  });
+
+  it('honors tighter host bounds passed with the body', () => {
+    const body = minimal({ input: 'hi', tools: [tool('a'), tool('b')] });
+    const limits = { ...DEFAULT_RESPONSES_LIMITS, maxTools: 1 };
+    try {
+      normalizeResponsesIngress(body, limits);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResponsesIngressError);
+      expect((error as ResponsesIngressError).fieldPath).toBe('tools');
+      return;
+    }
+    throw new Error('Expected ResponsesIngressError');
   });
 });
 

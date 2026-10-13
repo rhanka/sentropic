@@ -43,6 +43,10 @@ import {
   resolveToolName,
 } from './responses-ingress-tools.js';
 import { mapInputItem, type MappedInput } from './responses-ingress-content.js';
+import {
+  DEFAULT_RESPONSES_LIMITS,
+  type ResponsesLimits,
+} from './responses-egress.js';
 
 export type { ResponsesIngressErrorCode } from './responses-ingress-tools.js';
 export { ResponsesIngressError } from './responses-ingress-tools.js';
@@ -167,7 +171,10 @@ const TOP_LEVEL_KEYS = new Set([
   'truncation', 'previous_response_id', 'conversation',
 ]);
 
-export const normalizeResponsesIngress = (body: unknown): ResponsesIngressResult => {
+export const normalizeResponsesIngress = (
+  body: unknown,
+  limits: ResponsesLimits = DEFAULT_RESPONSES_LIMITS,
+): ResponsesIngressResult => {
   const raw = asRecord(body);
   if (!raw) fail('body', 'bad_request', 'request must be a JSON object');
   const root = raw as JsonRecord;
@@ -187,6 +194,9 @@ export const normalizeResponsesIngress = (body: unknown): ResponsesIngressResult
     features: new Set(), namespaces: new Map(),
   };
   if (root.tools !== undefined) collectTools(root.tools, 'tools', undefined, collected);
+  if (collected.definitions.length + collected.customTools.length > limits.maxTools) {
+    fail('tools', 'bad_request', `at most ${limits.maxTools} tools are served`);
+  }
 
   if (root.input === undefined) fail('input', 'bad_request', 'input must be set');
   const messages: LlmMeshMessage[] = [];
@@ -202,6 +212,9 @@ export const normalizeResponsesIngress = (body: unknown): ResponsesIngressResult
     mapped.messages.push({ role: 'user', content: root.input, metadata: { ingress: root.input } });
   } else if (Array.isArray(root.input)) {
     (root.input as unknown[]).forEach((item, index) => mapInputItem(item, index, collected, mapped));
+    if (root.input.length > limits.maxInputItems) {
+      fail('input', 'bad_request', `at most ${limits.maxInputItems} input items are served`);
+    }
   } else {
     fail('input', 'bad_request', 'input must be a string or an item array');
   }

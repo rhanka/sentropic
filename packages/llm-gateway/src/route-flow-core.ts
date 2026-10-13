@@ -109,7 +109,7 @@ export const prepareRouteFlow = async (
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
-  const canonical = normalizeGatewayIngress(request.wire, request.body);
+  const canonical = normalizeGatewayIngress(request.wire, request.body, request.responsesLimits);
   const subject = routingSubjectForCost(auth.cost);
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).

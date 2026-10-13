@@ -26,6 +26,7 @@ import type { AccountTransportOutcome } from '@sentropic/llm-mesh';
 import type { GatewayConfig } from './config.js';
 import type { CostContext } from './ports/cost-context.js';
 import type { CallerAuthRequestContext } from './ports/caller-auth.js';
+import type { ResponsesLimits } from './responses-egress.js';
 import { authenticateCaller } from './internal/caller-auth.js';
 import type {
   GatewayDispatchRequest,
@@ -109,6 +110,11 @@ export interface GatewayFlowRequest {
   readonly model: string;
   readonly stream: boolean;
   readonly signal?: AbortSignal;
+  /**
+   * Router-resolved Responses bounds (spec §16.7). Present only on the
+   * Responses wire; codecs fall back to the spec defaults when absent.
+   */
+  readonly responsesLimits?: ResponsesLimits;
 }
 
 const DEFAULT_USAGE: SettleUsage = { inputTokens: 0, outputTokens: 0, estimated: true };

@@ -5,6 +5,7 @@ import type {
 import type { GatewayWire } from './ports/dispatch.js';
 import { GatewayError } from './router/errors.js';
 import { normalizeResponsesIngress, ResponsesIngressError } from './responses-ingress.js';
+import { DEFAULT_RESPONSES_LIMITS, type ResponsesLimits } from './responses-egress.js';
 
 export interface CanonicalIngressResult {
   readonly request: GenerateRequest;
@@ -265,12 +266,15 @@ const normalizeReasoning = (raw: JsonRecord): GenerateRequest['reasoning'] | und
 export const normalizeGatewayIngress = (
   wire: GatewayWire,
   body: unknown,
+  responsesLimits?: ResponsesLimits,
 ): CanonicalIngressResult => {
   // Responses has its own strict codec (spec §16.3) — never feed `input`
   // through the permissive Chat `raw.messages` parser.
   if (wire === 'openai-responses') {
     try {
-      const result = normalizeResponsesIngress(body);
+      const result = normalizeResponsesIngress(
+        body, responsesLimits ?? DEFAULT_RESPONSES_LIMITS,
+      );
       return {
         request: result.request,
         requiredCapabilities: result.requiredCapabilities,
