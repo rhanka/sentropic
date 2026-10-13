@@ -89,6 +89,8 @@ export interface CreateGatewayRouterOptions {
    * and `routeMetering`; construction fails otherwise. Absent: no quote call.
    */
   readonly budget?: GatewayBudgetOptions;
+  /** Trusted construction-time switch; absent hosts rely on capability gates. */
+  readonly nativeMessagesEnabled?: boolean;
   /**
    * Host-owned provider count transport (spec §15.2): when present,
    * `POST /v1/messages/count_tokens` relays the authenticated caller body and
@@ -263,6 +265,7 @@ export const createGatewayRouter = (
         ...(options.routeDispatch ? { dispatch: options.routeDispatch } : {}),
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
         ...(options.budget ? { budget: options.budget } : {}),
+        nativeMessagesEnabled: options.nativeMessagesEnabled,
       }
     : undefined;
 

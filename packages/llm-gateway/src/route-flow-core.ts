@@ -5,6 +5,7 @@ import type {
 import { requestTooLargeDetail } from '@sentropic/llm-mesh';
 import type { GatewayConfig } from './config.js';
 import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonical-ingress.js';
+import { classifyNativeFeatures, type NativeFeatureSelection } from './native-features.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
 import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
@@ -56,9 +57,11 @@ export interface RouteFlowDeps {
     readonly cost: CostContext;
     readonly request: GatewayFlowRequest;
     readonly canonical: CanonicalIngressResult;
-  }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities'>;
+  }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities' | 'nativeMessages'>;
   /** Opt-in budget admission; absent means no quote and no reservation. */
   readonly budget?: GatewayBudgetOptions;
+  /** Trusted construction-time switch; absent hosts rely on capability gates. */
+  readonly nativeMessagesEnabled?: boolean;
 }
 
 export interface PreparedRouteFlow {
@@ -66,6 +69,7 @@ export interface PreparedRouteFlow {
   readonly subject: VerifiedRoutingSubject;
   canonical: CanonicalIngressResult;
   readonly plan: RoutePlan;
+  readonly nativeFeatures: NativeFeatureSelection;
   /** Present only when budget admission admitted the request. */
   readonly admission?: AdmittedRoute;
 }
@@ -121,11 +125,14 @@ export const prepareRouteFlow = async (
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
   const canonical = normalizeGatewayIngress(request.wire, request.body, request.responsesLimits);
+  const nativeFeatures = classifyNativeFeatures(request.wire, request.headers, request.body, canonical, {
+    budget: deps.budget, nativeMessagesEnabled: deps.nativeMessagesEnabled,
+  });
   const subject = routingSubjectForCost(auth.cost);
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
-    return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, bounded);
+    return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, bounded, nativeFeatures);
   }
   try {
     const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
@@ -141,8 +148,9 @@ export const prepareRouteFlow = async (
         ? { requiredExecutionFeatures: canonical.requiredExecutionFeatures } : {}),
       workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost: auth.cost, subject, canonical, plan };
+    return { cost: auth.cost, subject, canonical, plan, nativeFeatures };
   } catch (error) {
     if (isRecognizedPlanningRefusal(error)) {
       try {
@@ -175,6 +183,7 @@ const prepareAdmittedRouteFlow = async (
   cost: CostContext,
   subject: VerifiedRoutingSubject,
   canonical: CanonicalIngressResult,
+  nativeFeatures: NativeFeatureSelection,
 ): Promise<PreparedRouteFlow> => {
   assertBudgetRouteDeps(deps.routePlanner, true, deps.budget);
   const routeInput = deps.routeInput?.({ cost, request, canonical });
@@ -188,6 +197,7 @@ const prepareAdmittedRouteFlow = async (
       ...(routeInput?.policyProfile ? { policyProfile: routeInput.policyProfile } : {}),
       ...(routeInput?.policyOverride ? { policyOverride: routeInput.policyOverride } : {}),
       ...(routeInput?.explicit ? { explicit: routeInput.explicit } : {}),
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : {}),
     },
   });
   try {
@@ -200,8 +210,9 @@ const prepareAdmittedRouteFlow = async (
       workspaceId: routeInput?.workspaceId ?? cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? cost.correlationId,
       quote: admission.quote,
+      ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost, subject, canonical, plan, admission };
+    return { cost, subject, canonical, plan, admission, nativeFeatures };
   } catch (error) {
     // The admitted request's one zero-usage settlement, with hold release
     // (release-before-metering inside settleRouteRequest). A ledger failure
