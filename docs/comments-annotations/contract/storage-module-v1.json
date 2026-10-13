@@ -1,7 +1,8 @@
 {
   "manifestVersion": 1,
   "contractVersion": "storage-module-v1",
-  "status": "active",
+  "status": "unverified",
+  "qualification": "Transport profile (§11.3) and oracle packaging (§17.4) are adopted CA values with qualification unverified, per frozen L3a v4.1.",
   "targetModule": "comments",
   "scope": "Comments cluster-mesh generic storage port compatibility and extension manifest (L3a v4.1 frozen §17 row C0)",
   "baseContract": {
@@ -14,7 +15,7 @@
     "freezeReceiptSha256": "095e1d50f4c64ddc7254ca7e86f10582e4d1c2f153ec5173c79cb62818dc92cb"
   },
   "frozenM1Preservation": {
-    "rule": "Frozen M1 interfaces, 24 store methods, 11 canonical record kinds, zero-argument transaction callbacks, and router factory signature remain authoritative and unchanged. No contract-v2 or breaking changes to M1 representation.",
+    "rule": "Frozen M1 interfaces, 24 store methods, 11 canonical record kinds, driver-agnostic transaction handle, and router factory signature remain authoritative and unchanged. No contract-v2 or breaking changes to M1 representation.",
     "methodsCount": 24,
     "recordKindsCount": 11,
     "unmodifiedSources": true,
@@ -31,16 +32,27 @@
       "operation-audit-event",
       "conversion-report"
     ],
-    "errorVocabulary": [
-      "invalid-command",
-      "unauthorized",
-      "stale-revision",
-      "conflict",
-      "not-found",
-      "denied",
-      "capacity-exceeded",
-      "internal-error"
-    ]
+    "errorVocabulary": {
+      "rule": "Preserve the frozen vocabulary; transport failures use the transport boundary, never an undeclared CanonicalWireError code (frozen L3a v4.1 §9.6, §15).",
+      "commandErrors": [
+        "cas-conflict",
+        "idempotency-conflict",
+        "denied",
+        "invalid-command",
+        "not-found"
+      ],
+      "commandErrorsSource": "packages/comments/src/commands.ts: CanonicalCommandError code union",
+      "wireErrors": [
+        "unauthenticated",
+        "denied",
+        "not-found",
+        "conflict",
+        "invalid-request",
+        "capacity-exceeded",
+        "incomplete"
+      ],
+      "wireErrorsSource": "packages/comments/src/command-store.ts: CANONICAL_WIRE_ERROR_CODES"
+    }
   },
   "profiles": {
     "required": [
@@ -76,10 +88,40 @@
   "extensions": {
     "transport": {
       "version": "transport-v1",
+      "qualification": "unverified",
       "stagedUnitsProfile": "staged-units-v1",
       "continuationEnvelopeExplicit": true,
       "overloadFrozenDto": false,
-      "description": "Chained hash sub-units with invisible staging, all-at-once visibility at linearization root; separate continuation envelope without overloading snapshotBoundary, idempotencyKey, or exportId."
+      "description": "Chained hash sub-units with invisible staging, all-at-once visibility at linearization root; separate continuation envelope without overloading snapshotBoundary, idempotencyKey, or exportId. Current CA values adopted as the proposed comments module transport profile (frozen L3a v4.1 §11.3).",
+      "limits": {
+        "fragmentManifestOrUnitGroupRootBytes": 65536,
+        "fragmentPayloadBytes": 524288,
+        "prepareCommitItemsPerRequest": 50,
+        "requestBatchManifestBytes": 262144,
+        "completeEncodedRequestBytes": 1048576,
+        "defaultPageCount": 50,
+        "maxPageCount": 100,
+        "completeEncodedPageBytes": 1048576,
+        "commentsCursorTtlSeconds": null
+      },
+      "admission": {
+        "segmentsPerBody": 64,
+        "mentionsPerBody": 64,
+        "profileDepth": 8,
+        "targetsPerAnnotation": 32,
+        "shapesPerAnnotation": 128
+      },
+      "incompatibilityRule": "A smaller deployment limit must be advertised as incompatibility with this profile, not silently redefine it.",
+      "moduleOperations": [
+        "prepareImportFragment",
+        "inspectPreparedImport",
+        "commitPreparedImport",
+        "prepareExportBoundary",
+        "continueExport",
+        "readExportFragments",
+        "recoverBatchReceipts"
+      ],
+      "moduleOperationsNote": "Proposed module operations (frozen L3a v4.1 §11.2), not additions to CanonicalCommandStore."
     },
     "queryProfiles": [
       "by-resource",
@@ -96,16 +138,17 @@
       "rule": "Do not mutate frozen M1 CapacityDescriptor. Module transport, admission, and paging settings declared separately in module configuration.",
       "defaults": {
         "defaultRecords": 50,
-        "cursorTtlSeconds": null,
-        "unitCapacity": "units"
+        "cursorTtlSeconds": null
       }
     },
     "oraclePackaging": {
-      "conformancePackage": "@sentropic/comments",
-      "conformanceExport": "./conformance",
+      "qualification": "unverified",
+      "conformanceArtifact": "digest-pinned packaged oracle tarball for installed qualification",
+      "conformanceExportLocation": "unverified",
+      "commentsConformanceExportClaimed": false,
       "digestPinnedArchiveRequired": true,
       "mutatesFrozenM1Exports": false,
-      "description": "Conformance oracle is packaged as a digest-pinned tarball or separate export during installed qualification; frozen M1 exports in packages/comments/package.json remain unmutated."
+      "description": "Installed consumer proofs (M4-I) import the digest-pinned packaged oracle rather than local file checkouts. @sentropic/comments/conformance is not an existing export (frozen L3a v4.1 §9.6); its export location and executable packaging are unverified (§17.4). Any new comments-package export follows its change protocol separately; frozen M1 exports in packages/comments/package.json remain unmutated."
     }
   }
 }
