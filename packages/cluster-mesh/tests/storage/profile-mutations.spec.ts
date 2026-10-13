@@ -234,3 +234,49 @@ describe('K2b discriminating mutations: replay', () => {
     ).rejects.toThrow(/poison stalls the consumer/);
   });
 });
+
+class BarrierBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    bound.isCovered = () => false;
+    return bound;
+  }
+}
+
+class EscapeOpenStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const covered = bound.isCovered.bind(bound);
+    const innerAppend = bound.appendChain.bind(bound);
+    const innerCommit = bound.commitAtomic.bind(bound);
+    bound.appendChain = (chainId, record, expectation) => {
+      bound.isCovered = () => false;
+      try {
+        return innerAppend(chainId, record, expectation);
+      } finally {
+        bound.isCovered = covered;
+      }
+    };
+    bound.commitAtomic = (unit, options) => {
+      bound.isCovered = () => false;
+      try {
+        return innerCommit(unit, options);
+      } finally {
+        bound.isCovered = covered;
+      }
+    };
+    return bound;
+  }
+}
+
+describe('K2b discriminating mutations: barrier', () => {
+  it('B1-denial-blind-barrier is killed by the barrier corpus', async () => {
+    const { bound } = bindStaged(new BarrierBlindStore('comments'));
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/throws denied before purge/);
+  });
+
+  it('B2-escape-open-barrier is killed by the barrier corpus', async () => {
+    const { bound } = bindStaged(new EscapeOpenStore('comments'));
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/cannot escape its barrier/);
+  });
+});
