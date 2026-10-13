@@ -279,6 +279,38 @@ describe('session adoption workspace binding', () => {
     expect(views.length).toBeGreaterThan(0);
   });
 
+  it('should emit workspace creation notifications on adopt-create', async () => {
+    // m5: observes the NOTIFY emission directly (LISTEN on both channels).
+    const client = await pool.connect();
+    try {
+      await client.query('LISTEN workspace_events');
+      await client.query('LISTEN workspace_membership_events');
+      const seen: Array<{ channel: string; payload: string }> = [];
+      const drained = new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 3000);
+        client.on('notification', (msg) => {
+          seen.push({ channel: msg.channel, payload: msg.payload ?? '' });
+          if (seen.some((s) => s.channel === 'workspace_events')
+            && seen.some((s) => s.channel === 'workspace_membership_events')) {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+      });
+      const service = new SessionWorkspaceService();
+      const binding = await service.adopt({
+        sessionId: 'sess-adopt-25', tenantId: TENANT_A, principalId: user.id,
+        create: { name: 'Notified code project', type: 'code' },
+      });
+      await drained;
+      expect(seen.map((s) => s.channel)).toContain('workspace_events');
+      expect(seen.map((s) => s.channel)).toContain('workspace_membership_events');
+      expect(seen.some((s) => s.payload.includes(binding.workspaceId))).toBe(true);
+    } finally {
+      client.release();
+    }
+  });
+
   it('should enforce editor threshold on attach for workspace members', async () => {
     const service = new SessionWorkspaceService();
     const member = await createAuthenticatedUser('editor');
@@ -325,6 +357,20 @@ describe('session adoption workspace binding', () => {
       .rejects.toMatchObject({ code: 'session_ended' });
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
     expect(ws?.id).toBe(workspaceId);
+  });
+
+  it('should return the already-ended binding on a second end (idempotent)', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-23', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const first = await service.end('sess-adopt-23', TENANT_A, user.id);
+    expect(first.status).toBe('ended');
+    // Replaying `end` after a timeout must return the ended binding, not an error.
+    const second = await service.end('sess-adopt-23', TENANT_A, user.id);
+    expect(second).toMatchObject({
+      bindingId: first.bindingId, status: 'ended', version: first.version,
+    });
   });
 
   it('should conflict concurrent adopts of different workspaces', async () => {
@@ -498,6 +544,44 @@ describe('session adoption workspace binding', () => {
       expect(row.status).toBe('attached');
       expect(row.principalId).toBe(userB.id);
     }
+  });
+
+  it('should never disclose a re-attached binding to an admin of the previous workspace', async () => {
+    // Deterministic m2: same forced interleave through `get`. The caller
+    // administers wsA only; the row moves to workspaceB mid-read, so `get`
+    // must observe nothing (not the workspaceB binding with its principalId).
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-26', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const workspaceAdmin = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: workspaceAdmin.id, status: 'approved', role: 'member',
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId, userId: workspaceAdmin.id, role: 'admin',
+    });
+    const userB = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
+    });
+    const workspaceB = crypto.randomUUID();
+    await db.insert(workspaces).values({
+      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
+      type: 'code', tenantId: TENANT_A,
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId: workspaceB, userId: userB.id, role: 'admin',
+    });
+
+    interleaveHook.current = async () => {
+      const inner = new SessionWorkspaceService();
+      await inner.detach('sess-adopt-26', TENANT_A, user.id);
+      await inner.adopt({
+        sessionId: 'sess-adopt-26', tenantId: TENANT_A, principalId: userB.id, workspaceId: workspaceB,
+      });
+    };
+    await expect(service.get('sess-adopt-26', TENANT_A, workspaceAdmin.id)).resolves.toBeNull();
   });
 
   it('should reject a stale compareAndSet that differs only by version (pure ABA)', async () => {
