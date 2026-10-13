@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream';
 import { env } from '../../config/env';
-import { executeClaudeNative, type ClaudeNativeRequest } from '../llm-runtime/anthropic-native-http';
+import { executeClaudeNative, type ClaudeNativeRequest, type ClaudeNativeCountRequest } from '../llm-runtime/anthropic-native-http';
 import type {
   CredentialValidationResult,
   ModelCatalogEntry,
@@ -56,6 +56,11 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
 
   nativeMessages(request: ClaudeNativeRequest) {
     return executeClaudeNative({ ...request, credential: request.credential || env.ANTHROPIC_API_KEY });
+  }
+
+  nativeCountTokens(request: ClaudeNativeCountRequest) {
+    return executeClaudeNative({ ...request, stream: false, finalize: undefined, onResponseStarted: undefined,
+      credential: request.credential || env.ANTHROPIC_API_KEY }, 'count_tokens');
   }
 
   validateCredential(credential?: string): CredentialValidationResult {
