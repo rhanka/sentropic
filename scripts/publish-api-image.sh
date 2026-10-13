@@ -23,16 +23,15 @@ fi
 
 TARGET_TAG="${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
 
-# Moving tags policy:
-# publish-api-image is dedicated strictly to immutable, content-addressed release tags.
-# Moving tags and aliases (such as 'main' or 'latest') must NOT be published through
-# this script; they must be promoted via publish-api-main-image.
-case "$API_VERSION" in
-  main|latest)
-    echo "❌ Error: Cannot use publish-api-image for moving tag '$API_VERSION'. Moving tag aliases must be promoted via publish-api-main-image." >&2
-    exit 1
-    ;;
-esac
+# Tag format whitelist:
+# publish-api-image is dedicated strictly to immutable, content-addressed release tags
+# matching exactly 6 lowercase hexadecimal characters (^[0-9a-f]{6}$).
+# Moving tag aliases ('main', 'latest', 'staging', 'v1') or non-canonical formats must NOT
+# be published through this script; 'main' must be promoted via publish-api-main-image.
+if ! [[ "$API_VERSION" =~ ^[0-9a-f]{6}$ ]]; then
+  echo "❌ Error: Invalid API_VERSION '$API_VERSION'. publish-api-image requires a canonical 6-character hex content-addressed tag (^[0-9a-f]{6}$). Moving tag aliases ('main', 'latest', 'staging', 'v1') and non-canonical formats are rejected." >&2
+  exit 1
+fi
 
 # Resolve local immutable artifact identity (config digest)
 if [ -z "$API_IMAGE_REF" ]; then
