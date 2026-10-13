@@ -12,8 +12,9 @@ import { sql } from 'drizzle-orm';
 import {
   isNativeMessagesTarget, validateNativeModelAllowlist, modelProfiles, providerProfiles, RoutePlanError, RouteQuoteError,
   type QuotedRouteCandidate, type RoutePlanner, type RouteQuote,
-  type RouteQuoteInput, type RouteUsageCeiling,
+  type RouteQuoteInput, type RouteUsageCeiling, type NativeUsagePricing,
 } from '@sentropic/llm-mesh';
+import { validateNativeInputPriceUnits40 } from '@sentropic/llm-gateway';
 import type {
   BudgetAdmissionDecision, BudgetAdmissionPort, BudgetAdmissionRequest, CallerAuthPort, CostContext,
 } from '@sentropic/llm-gateway';
@@ -33,6 +34,9 @@ export const DEFAULT_UNENFORCED_OUTPUT_TOKENS = 128_000;
 
 export interface PricingRow {
   readonly id: string;
+  /** Database identity; optional only for existing canonical callers/fixtures. */
+  readonly providerId?: string;
+  readonly modelId?: string;
   readonly input: bigint;
   readonly output: bigint;
   readonly reasoning: bigint;
@@ -49,16 +53,46 @@ const perMtok =(tokens: number, rate: bigint): bigint => (BigInt(Math.max(0, Mat
 
 /** Pricing row in force at `at` for one provider/model, or undefined (fail closed). */
 export const loadPricing = async (tx: LedgerTx, providerId: string, modelId: string, at: Date): Promise<PricingRow | undefined> => {
-  const [row] = (await tx.execute(sql`SELECT id, input_micro_usd_per_mtok, output_micro_usd_per_mtok,
+  const [row] = (await tx.execute(sql`SELECT id, provider_id, model_id, input_micro_usd_per_mtok, output_micro_usd_per_mtok,
       reasoning_micro_usd_per_mtok, image_micro_usd_per_unit, tool_call_micro_usd_per_unit, min_charge_micro_usd
     FROM control.model_pricing WHERE provider_id = ${providerId} AND model_id = ${modelId}
       AND effective_from <= ${at} AND (effective_to IS NULL OR effective_to > ${at})
     ORDER BY effective_from DESC LIMIT 1`)).rows as Array<Record<string, unknown>>;
   return row ? {
+    providerId: typeof row.provider_id === 'string' ? row.provider_id : undefined,
+    modelId: typeof row.model_id === 'string' ? row.model_id : undefined,
     id: String(row.id), input: big(row.input_micro_usd_per_mtok), output: big(row.output_micro_usd_per_mtok),
     reasoning: big(row.reasoning_micro_usd_per_mtok), image: big(row.image_micro_usd_per_unit),
     toolCall: big(row.tool_call_micro_usd_per_unit), minCharge: big(row.min_charge_micro_usd),
   } : undefined;
+};
+
+/** Exact pinned lookup is separate from selecting the costliest row, even when IDs/rates match. */
+export interface AttemptPricingContext {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly pricingMatch: 'exact' | 'costliest';
+}
+
+export interface PricedUsage extends NativeUsagePricing {
+  inputTokens: number; outputTokens: number; imageUnits?: number; toolCalls?: number;
+}
+
+/** Trusted exact pinned identity and gateway proof, never inferred from rates or selected IDs. */
+export const nativePricingEligible = (price: PricingRow, usage: PricedUsage, context?: AttemptPricingContext): boolean => {
+  if (!context || context.pricingMatch !== 'exact' || context.providerId !== 'anthropic'
+    || price.providerId !== context.providerId || price.modelId !== context.modelId
+    || usage.nativeServedModelId !== context.modelId
+    || !validateNativeInputPriceUnits40(usage.inputTokens, usage.nativeInputPriceUnits40,
+      usage.nativeServedModelId, usage.nativePricingPolicy)) return false;
+  // Output uncertainty does not revoke a still-valid input proof (RQ-2).
+  const reason = usage.nativeUsageUncertainty;
+  if (usage.nativeInputUsageValidated === true
+    && ['json', 'message_start', 'message_delta'].includes(usage.nativeInputUsageSource ?? '')
+    && (reason === undefined || reason === 'incomplete_output' || reason === 'invalid_output')) return true;
+  // An unknown TTL split may retain a premium, but can never discount the charged physical floor.
+  return reason === 'cache_write_split_unknown' && usage.nativeInputUsageValidated === false
+    && BigInt(usage.nativeInputPriceUnits40!) >= 40n * BigInt(usage.inputTokens);
 };
 
 /**
@@ -80,13 +114,14 @@ export const attemptLiability = (price: PricingRow, allowance: RouteUsageCeiling
  * via the gateway; this helper adds them only when supplied alongside positive token usage.
  * Product /gw activation restrictions and mesh/gateway follow-ups are in spec §12.8.
  */
-export const usageCost = (price: PricingRow, usage: {
-  inputTokens: number; outputTokens: number; imageUnits?: number; toolCalls?: number;
-}): bigint => {
+export const usageCost = (price: PricingRow, usage: PricedUsage, context?: AttemptPricingContext): bigint => {
   if (usage.inputTokens <= 0 && usage.outputTokens <= 0) return 0n;
   const outputRate = price.reasoning > price.output ? price.reasoning : price.output;
   const units = (value: number | undefined) => BigInt(Number.isSafeInteger(value) && value! > 0 ? value! : 0);
-  const total = perMtok(usage.inputTokens, price.input) + perMtok(usage.outputTokens, outputRate)
+  const input = nativePricingEligible(price, usage, context)
+    ? (BigInt(usage.nativeInputPriceUnits40!) * price.input + 39_999_999n) / 40_000_000n
+    : perMtok(usage.inputTokens, price.input);
+  const total = input + perMtok(usage.outputTokens, outputRate)
     + units(usage.imageUnits) * price.image + units(usage.toolCalls) * price.toolCall;
   return total > price.minCharge ? total : price.minCharge;
 };
