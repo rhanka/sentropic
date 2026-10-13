@@ -40,6 +40,7 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
 ## Feedback Loop
 - **BR62-EX1** (status: `accepted`): Conditional `Makefile` change to route `publish-api-image` to `scripts/publish-api-image.sh` and add `test-ci-api-tag-guard`. Reason: implement tag collision guard and Make-only test target. Impact: ensures publish-api-image checks registry manifest before pushing and allows local/CI test execution. Rollback: revert Makefile targets to previous revision.
 - **BR62-EX2** (status: `accepted`): Conditional `.github/workflows/ci.yml` change to wire `test-ci-api-tag-guard` into `build-api-image` and update `changes` global filters. Reason: automate tag-guard regression testing in PR CI. Impact: CI fails if tag guard regresses. Rollback: revert ci.yml edits.
+- **BR62-R2-TRACE** (status: `accepted`): Review r2 findings remediation trace. Findings m1 (stderr-only isolation and case-sensitivity tests in scripts/test-api-tag-guard.sh), m2 (content-addressed 6-hex whitelist in scripts/publish-api-image.sh and rejection of moving/invalid tags with TDD RED->GREEN commits), and m3 (Docker-First hermetic mock container execution and index test with child manifest) resolved. Finding m4 (atomicity and RED progression) traced: previous revision bundled commits in add36caef, while r2 remediation enforces strict atomic commits per finding (85dc539dd for m1, 4189056ff for m3, 95cfdf155 for m2 RED, 886bcf0b6 for m2 GREEN, 4244b6b91 for docs).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -112,12 +113,12 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
   - [x] Verify `make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
   - [x] Generate fix report in `.h2a/build/ci_tag_guard_fix_report.md`.
 
-- [ ] **Lot 5 — Review remediation r2 (Opus PR #668 findings)**
+- [x] **Lot 5 — Review remediation r2 (Opus PR #668 findings)**
   - [x] Address m1 in `scripts/test-api-tag-guard.sh` (test stderr-only isolation and case-sensitive matching).
   - [x] Address m3 in `scripts/test-api-tag-guard.sh` (Docker-First containerized digest extraction in mock docker, cover manifest index with child digest).
   - [x] Address m2 RED test in `scripts/test-api-tag-guard.sh` (add failing regression test for canonical 6-hex whitelist and invalid formats).
   - [x] Address m2 GREEN fix in `scripts/publish-api-image.sh` (enforce canonical 6-hex API_VERSION whitelist ^[0-9a-f]{6}$).
   - [x] Update `docs/ci-images.md` (document 6-hex tag format whitelist, generalize concurrency reference).
-  - [ ] Address m4 across review commits (maintain atomic commits, TDD RED->GREEN progression, document trace in BRANCH.md).
-  - [ ] Validate locally with `make test-ci-api-tag-guard`, `make check-ci-version-filters`, and `make scope-check`.
+  - [x] Address m4 across review commits (maintain atomic commits, TDD RED->GREEN progression, document trace in BRANCH.md).
+  - [x] Validate locally with `make test-ci-api-tag-guard`, `make check-ci-version-filters`, and `make scope-check`.
 
