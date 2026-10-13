@@ -116,3 +116,135 @@ describe('C0 exit proof: Frozen-M1 preservation', () => {
   });
 });
 
+describe('C0 exit proof: Storage compatibility and extension manifest', () => {
+  const manifestPath = resolve(REPO_ROOT, 'docs/comments-annotations/contract/storage-module-v1.json');
+  const docPath = resolve(REPO_ROOT, 'docs/comments-annotations/contract/storage-compatibility.md');
+
+  it('docs/comments-annotations/contract/storage-module-v1.json exists and is valid', () => {
+    expect(existsSync(manifestPath), 'storage-module-v1.json must exist').toBe(true);
+    const content = JSON.parse(readFileSync(manifestPath, 'utf8'));
+
+    expect(content.manifestVersion).toBe(1);
+    expect(content.contractVersion).toBe('storage-module-v1');
+    expect(content.targetModule).toBe('comments');
+    expect(content.status).toBe('active');
+
+    // Base contract reference
+    expect(content.baseContract.path).toBe('docs/comments-annotations/contract/contract-v1.json');
+    expect(content.baseContract.sha256).toBe(PINNED_M1_HASHES['docs/comments-annotations/contract/contract-v1.json']);
+    expect(content.baseContract.contractVersion).toBe('contract-v1');
+    expect(content.baseContract.freezeCommit).toBe('7b8e5daf022cc58819dfdfae43cd89a703a82f96');
+
+    // Frozen M1 preservation declaration
+    expect(content.frozenM1Preservation.methodsCount).toBe(24);
+    expect(content.frozenM1Preservation.recordKindsCount).toBe(11);
+    expect(content.frozenM1Preservation.unmodifiedSources).toBe(true);
+
+    // Profile requirements aligned with cluster-mesh
+    expect(content.profiles.required).toEqual(CONSUMER_REQUIREMENTS['m1-adapter']);
+    expect(content.profiles.operational).toEqual(CONSUMER_REQUIREMENTS['comments-operational']);
+    expect(content.profiles.c4).toEqual(CONSUMER_REQUIREMENTS['comments-c4']);
+    expect(content.profiles.purge).toEqual(CONSUMER_REQUIREMENTS['comments-purge']);
+
+    // Check all declared profiles exist in cluster-mesh
+    for (const profile of [
+      ...content.profiles.required,
+      ...content.profiles.operational,
+      ...content.profiles.c4,
+      ...content.profiles.purge,
+    ]) {
+      expect(isProfileId(profile)).toBe(true);
+    }
+
+    // Transport and continuation extension declarations
+    expect(content.extensions.transport.version).toBe('transport-v1');
+    expect(content.extensions.transport.stagedUnitsProfile).toBe('staged-units-v1');
+    expect(content.extensions.transport.continuationEnvelopeExplicit).toBe(true);
+    expect(content.extensions.transport.overloadFrozenDto).toBe(false);
+
+    // Named query profiles (L3a v4.1 §9.5)
+    expect(content.extensions.queryProfiles).toEqual(['by-resource', 'scope-chain-index', 'retained-headers']);
+
+    // Oracle packaging declarations (§9.6, §14.5, §17 row C0)
+    expect(content.extensions.oraclePackaging.conformancePackage).toBe('@sentropic/comments');
+    expect(content.extensions.oraclePackaging.conformanceExport).toBe('./conformance');
+    expect(content.extensions.oraclePackaging.digestPinnedArchiveRequired).toBe(true);
+    expect(content.extensions.oraclePackaging.mutatesFrozenM1Exports).toBe(false);
+  });
+
+  it('docs/comments-annotations/contract/storage-compatibility.md exists and documents boundaries', () => {
+    expect(existsSync(docPath), 'storage-compatibility.md must exist').toBe(true);
+    const doc = readFileSync(docPath, 'utf8');
+
+    expect(doc).toContain('storage-module-v1');
+    expect(doc).toContain('contract-v1.json');
+    expect(doc).toContain('e027fdbb4a806df39809326697bf9b60ad5cb977eb1988af3be293da07161ba0');
+    expect(doc).toContain('comments');
+    expect(doc).toContain('by-resource');
+    expect(doc).toContain('scope-chain-index');
+    expect(doc).toContain('retained-headers');
+    expect(doc).toContain('transport-v1');
+    expect(doc).toContain('staged-units-v1');
+  });
+
+  it('validates a compliant cluster-mesh ModuleDescriptor for comments', () => {
+    const descriptor: ModuleDescriptor = {
+      contractVersion: 'contract-v1',
+      contractDigest: PINNED_M1_HASHES['docs/comments-annotations/contract/contract-v1.json'],
+      schemaVersions: ['1.0.0'],
+      requiredProfiles: CONSUMER_REQUIREMENTS['m1-adapter'],
+      optionalProfiles: ['scope-outbox-v1', 'visibility-barriers-v1', 'staged-units-v1', 'purge-jobs-v1', 'fenced-writers-v1'],
+      chainKinds: [
+        'revision',
+        'review',
+        'tombstone',
+        'purge-intent',
+        'purge-outcome',
+        'operation-audit',
+        'conversion-receipt',
+        'import-receipt',
+        'export-receipt',
+        'retention-hold',
+        'release-hold',
+      ],
+      queryNames: ['by-resource', 'scope-chain-index', 'retained-headers'],
+      boundaries: ['thread', 'annotation'],
+      pageLimits: { maxRecords: 100, maxEncodedBytes: 1048576 },
+    };
+
+    const res = validateModuleDescriptor(descriptor);
+    expect(res.ok).toBe(true);
+    expect(res.errors).toEqual([]);
+  });
+
+  it('cluster-mesh storage contracts register comments as a known storage module', () => {
+    expect(isStorageModuleId('comments')).toBe(true);
+    expect(STORAGE_MODULE_IDS).toContain('comments');
+  });
+
+  it('cluster-mesh profiles satisfy m1-adapter, operational, and c4 consumer claims', () => {
+    const fullAdvertised = [
+      'atomic-units-v1',
+      'immutable-chains-v1',
+      'immutable-boundaries-v1',
+      'scope-outbox-v1',
+      'visibility-barriers-v1',
+      'staged-units-v1',
+      'purge-jobs-v1',
+      'fenced-writers-v1',
+    ] as const;
+
+    expect(satisfiesRequirements(fullAdvertised, 'm1-adapter')).toBe(true);
+    expect(satisfiesRequirements(fullAdvertised, 'comments-operational')).toBe(true);
+    expect(satisfiesRequirements(fullAdvertised, 'comments-c4')).toBe(true);
+    expect(satisfiesRequirements(fullAdvertised, 'comments-purge')).toBe(true);
+
+    const minimal = ['atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1'] as const;
+    expect(satisfiesRequirements(minimal, 'm1-adapter')).toBe(true);
+    expect(satisfiesRequirements(minimal, 'comments-operational')).toBe(false);
+    expect(missingProfiles(minimal, CONSUMER_REQUIREMENTS['comments-operational'])).toEqual([
+      'scope-outbox-v1',
+      'visibility-barriers-v1',
+    ]);
+  });
+});
