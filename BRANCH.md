@@ -87,6 +87,7 @@
 - [x] `K2B-FIX-MAJ1` — R3 resume cursor recomputed on first undelivered record; resume pagination asserts the exact full set; M17 frozen-cursor mutant killed.
 - [x] `K2B-FIX2-MAJ1` — Resume sweeps every budget with limits 10/2/1, accepts page/incomplete with progress guard; empty incomplete is null; last record measured with null.
 - [x] `K2B-FIX2-M17` — M17 is the faithful frozen-cursor revert (pre-trim position, skips s1 at 161-166); killed on the exact full record set.
+- [x] `K2B-FIX2-R2` — Single page-size rule (empty incomplete is null, last record measured with null); reference pages cross-checked through validateReadPage.
 - [x] `K2B-FIX-MAJ2` — Resync no longer advances the checkpoint (§13.2 consume-then-acknowledge); J3 advancing-resync mutant killed.
 - [x] `K2B-FIX-MAJ3` — Abort asserts the typed state only; reference abort reason is the caller operation key, never an English sentence.
 - [x] `K2B-FIX-MIN` — Budgets derived from observed encoding (M18), empty-page envelope floor, retained-cursor and disposal evidence, staged index/seal/fence coverage, replay scope decoupling, divergent-intent atomicity, cursor-leak nulls.
