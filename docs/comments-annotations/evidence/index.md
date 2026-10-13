@@ -12,7 +12,7 @@ The [convergence receipt](convergence.md) resolves the complete predecessor/resu
 | [Two-lane plan](../plan/PLAN_COMMENTS_ANNOTATIONS.md) | `be9d8263eeded6131ff042c754fcae7bd4d7219eda0c25743d2dd6b0dfd3a386` |
 | [Model template](../plan/BRANCH_P1_TEMPLATE.md) | `ac5ce92b64379a9b6ca4b2890b24094e6d67f056097aead9cf103140400ac34c` |
 | [Plan handoff](../plan/PLAN_HANDOFF.md) | `c69ab3014f5c5b10d97ed205a1f7d16f0d69ddade66a64d3c94c1019787dcad8` |
-| [owner-decisions](owner-decisions.md) | `a0cfe0fa96e0640e4cf5f105c8f9ff3ddf326e22972f4f8369c22f1153c08262` |
+| [owner-decisions](owner-decisions.md) | `d2c37f82e82f2e39aa36d9e1359898a71e15128a240fd60f840132282b14dff2` |
 | [author-metadata](author-metadata.md) | `4c16c5f4ce86be137f227a8a9be2cadfa6863b5edccff884af7914e33c924450` |
 | [interface-errata](interface-errata.md) | `37a0faa1e8b4ff8b467f1e6f2916c61592d20da7f75fbf4be29ee09853ae4a1b` |
 | [review-history](review-history.md) | `9cf6559953745bb1f707799125dce0b59d6be268049c03ac91c259ef57ee9967` |
@@ -20,9 +20,9 @@ The [convergence receipt](convergence.md) resolves the complete predecessor/resu
 | [review-confirmations](review-confirmations.md) | `8449f8f0ccf84a46329b9e0fbec92fe8aa74b9fb26d2354aad6bd331006b0618` |
 | [treatment-promotion](treatment-promotion.md) | `b20008bb8a5cce19dc0ce48bf082d03a951881bec83e6fb9ffc7bd8a9adfd06f` |
 | [convergence](convergence.md) | `85ca30dccc40d4ebbd694caad80fcdc90f0264a84944fdd3d42983caf1a171bd` |
-| [storage-alignment](storage-alignment.md) | `2ff7f1ad0fcf43f120b7a20dd511b248ba6b14fe1c263831d81fd554cf41e41c` |
+| [storage-alignment](storage-alignment.md) | `f03090f73c3c9ca842d780eaad1b0031c744a740d37b0de4ad6e7605a3527c24` |
 | [storage-module-v1](../contract/storage-module-v1.json) | `02114383aaac4dfe701da2b637776dfc1bd91669ed6d47eab3d6194e13e21a46` |
-| [storage-compatibility](../contract/storage-compatibility.md) | `833498551011f0e7935f833a0b73f56a2dfbb424ad6ae04ebd05fef28c8159a9` |
+| [storage-compatibility](../contract/storage-compatibility.md) | `4ea4ba63a92a9b0cfd33d3880b2fc550fd2e04a8bbb3429f164724dd762ca6ae` |
 
 The [documentary BRANCH.md](../../../BRANCH.md) link refers to its state at the LAST promotion-series anchor commit, whose actual SHA will be recorded in the subsequent model BRANCH.md. The model branch replaces that checklist at Lot 0 and the merge workflow later deletes it; the durable summary below preserves its exceptions and series. Its checkboxes evolve, so this index does not pin their changing digest. This index's own digest is supplied in the files-only handoff, not embedded recursively.
 
@@ -42,15 +42,31 @@ Historical reviews/extracts below remain unchanged and do not confirm the result
 
 M2-REVIEW (Opus 5.5, requested max), SHA-256 `a8d41f628e29d243d2d2fc5e2954fe6085408a591ea1d856d6f93dab29a9a65f`, confirmed the incoming M2 delta with reservations: 0 blocking, 2 major and 5 minor. Current M2-TREAT, SHA-256 `1f74b3f734204392be788b57a6b78ea7720b6b921b2dd5b28b2f7da23aa6473a`, includes CORRECTION OF CONTEXT and supersedes the earlier treatment's MAJ-1 premise. On 2026-10-12 the documents are aligned with D4=C and the engram storage-port decision; [readable source extracts and exact digests](owner-decisions.md#shared-storage-context-correction) distinguish shared ownership from backend placement and qualification still due. The historical all-ACCEPTED treatment remains in the append-only log, superseded only where this correction differs. The review does not confirm these new bytes; effective model routing/effort and PR #663 are not independently verified here.
 
-| Finding | Disposition and reason | Applied documentation / remaining implementation gate |
+### Historical review excerpt (Opus 5.5, 2026-10-11)
+
+<!-- historical-excerpt-start -->
+| Finding | Original verdict and reason | Original treatment / gate |
 |---|---|---|
-| MAJ-1 — architecture/registry compatibility | Historical PARTIAL rejects a comments-only persistence exception and retains local registry compatibility. | Frozen v4.1 now allocates shared K/P infrastructure and selected PG entry profiles; C3/live qualifications are separate. Preserve comments catalogue ownership, gated typing and modules/h2a conformance. |
-| MAJ-2 — M1 code is not a frozen artifact | Historical requirement is superseded by owner-closed M1 with carried reserves. | Preserve the exact manifest/receipt. It pins neutral declarations/internal corpus, not module mapping or packaged oracle; host acknowledgement and manifest confirmation are unprovided. |
-| m-1 — conflicting domain/loader paths | Preserve domain/loader/registry separation. | Frozen §17.4 C1/C2/M2-W paths supersede the earlier proposed module filenames; see the tracked alignment reference. |
+| MAJ-1 — architecture/registry compatibility | PARTIAL: reject the absence-of-persistence premise and comments-only architectural exception. D4=C and the newer engram decision already establish the shared abstraction; comments stays domain authority. Accept the additive local registry and compatibility findings. | SPEC §3 and template Lot 2 depend on L3a/L3b-S/L3b-P, reuse the same port, SQLite/Postgres backends, generations/migrations and coordinate comments support/reusable host binding with storage maintainers. They own README correction. M2 adds local resolution without transferring GATED_OWNERS.comments.owner or removing 'comments' from the gated ID/type. Require shared-backend conformance plus modules/** and h2a-contract.spec.ts N/N-1 checks. |
+| MAJ-2 — reported M1 code is not a frozen artifact | ACCEPTED: reported code completion cannot establish a manifest, receipt or host acknowledgement. | SPEC §9.1 and all plans mark contract-v1.json, reviewed freeze receipt and host acknowledgement as being authored now on feat/comments-annotations-model per M2-TREAT, still due at Lot 1 exit before M2 reliance. The initial manifest directly declares comments adapter/HTTP contracts, reviewed conformance export and cluster-mesh implementation mapping; comments/interface maintainers close the gate. |
+| m-1 — conflicting domain/loader paths | ACCEPTED: keep registry infrastructure separate and follow the existing loader convention. | SPEC §7.1, plan M.B/M.C and template Lots 2/3 use src/comments/{module,storage-adapter,storage-schema,import,export,receipts,submissions}.ts and src/loaders/comments/index.ts; integrations and compose retain their established locations. |
 | m-2 — undefined direct Immo composition | ACCEPTED: the Hono plugin requires a ClusterMeshRuntime and passes only context/receipts to createRouter. | Propose createCommentsNamespaceModule with the qualified shared storage binding and comments ports captured by closure. Immo supplies a full cluster-mesh runtime (generation/config/admission, verified context, registration, invocation receipts) and mounts through createClusterMeshPlugin without the Sentropic app. M4's installed neutral fixture exercises that exact path. |
 | m-3 — dependency kind and packed leaves | ACCEPTED as a proposal for surface review: an optional comments peer preserves installations that do not select comments. | Lot 2 proposes peerDependencies plus optional peer metadata, compatible plain semver, enabled preflight, root/disabled independence, the shared storage track's registered migration assets and existing integration/loader/compose sideEffects coverage. M4 qualifies absent/incompatible/compatible peer cases and locked resolution. |
 | m-4 — stale F6 implementation owner | ACCEPTED: align adoption wording with the explicit storage/API amendment. | SPEC F6 now defines the model in Sentropic comments and implements it in the cluster-mesh comments module. |
-| m-5 — unpackaged conformance oracle | Installed proof cannot import another package's checkout tests. | §9.6/§17.4 supersede the earlier public-export proposal: unchanged M1 internal corpus; separate C0 digest-pinned oracle requirement, distribution/export unverified until M4-I. |
+| m-5 — unpackaged conformance oracle | ACCEPTED as an explicit export proposal: M4 cannot import another package's tests from installed archives. | Lot 1 reviews src/conformance/index.ts → @sentropic/comments/conformance, JS/types/assets and surface inventory, reusing the runner-neutral oracle without changing its behavior. M2 consumes that export; M4 executes its installed bytes on the same full-runtime fixture, without source/tests imports. |
+<!-- historical-excerpt-end -->
+
+### Current disposition under frozen v4.1
+
+| Finding | Current disposition under frozen v4.1 | Responsible gate |
+|---|---|---|
+| MAJ-1 | Frozen v4.1 now allocates shared K/P infrastructure and selected PG entry profiles; C3/live qualifications are separate. Preserve comments catalogue ownership, gated typing and modules/h2a conformance. | M2/C1/C2 entry |
+| MAJ-2 | Historical requirement is superseded by owner-closed M1 with carried reserves. Preserve the exact manifest/receipt; host acknowledgement and manifest confirmation are unprovided. | C0 baseline |
+| m-1 | Preserve domain/loader/registry separation. Frozen §17.4 C1/C2/M2-W paths supersede the earlier proposed module filenames; see the tracked alignment reference. | C1 implementation |
+| m-2 | ACCEPTED: the Hono plugin requires a ClusterMeshRuntime and passes only context/receipts to createRouter. Immo supplies a full runtime/plugin without the Sentropic app; M4 installed neutral fixture exercises that exact path. | M4 installed test |
+| m-3 | ACCEPTED: an optional comments peer preserves installations that do not select comments. Root/storage and disabled imports evaluate neither peer nor backend drivers (§14.5). | M4 qualification |
+| m-4 | ACCEPTED: align adoption wording with explicit storage/API amendment. SPEC F6 defines model in Sentropic comments and implements it in cluster-mesh comments module. | SPEC F6 |
+| m-5 | §9.6/§17.4 supersede earlier public-export proposal: unchanged M1 internal corpus; separate C0 digest-pinned oracle requirement, distribution/export unverified until M4-I. | M4-I oracle |
 
 All seven findings are treated in text: six ACCEPTED and MAJ-1 PARTIAL, with its superseded premise rejected on the cited decisions. This records dispositions, not reviewer convergence or green runtime results. Read-only inspection added the D4 dossier/synthesis and engram SPEC/plan to the earlier module/oracle evidence. Only the six authorized documents and appended local log change; no Git, Make, build, runtime test, subagent, external message or Track write is run. All incoming log bytes remain unchanged; final file hashes are supplied with the handoff.
 
@@ -82,14 +98,29 @@ The capacity-only predecessor was `28b6db62731a8373f415e11dfbd8c20ccad4588d72b81
 
 M2-CAP-REVIEW is the bounded Opus 5.5 confirmation in `.h2a/reviews/m2_capacity_opus.md`, SHA-256 `c967d2da798bf41229c0b6ef7ad47eb348ad5ca75fd85c3a95a96d804be6165c`: **confirmed with reservations, 0 blocking, 2 major, 4 minor**. It inspected incoming SPEC `a5bb9d496ec00d05547ff40a5d51af14e22ef60a119092d881f20422c31adf12` and the incoming plan/evidence identities recorded in the append-only log. M2-CAP-TREAT, `.h2a/inputs/m2cap_treatment_brief.md`, SHA-256 `1ac3d2625b9de64f7ee2824cc964ffeea18c39d32604d797a334244312a8cbf9`, mandates this files-only treatment and the single assignment question if needed. Requested author/effort: Astra max; effective routing is not independently attested. The incoming confirmation does not accept these new bytes.
 
-| Finding | Disposition and reason | Applied result / responsible gate |
+### Historical review excerpt (Opus 5.5, 2026-10-12)
+
+<!-- historical-excerpt-start -->
+| Finding | Original verdict and reason | Original result / responsible gate |
 |---|---|---|
-| MAJ-A — unbounded history versus atomic payload | Preserve complete logical histories through staged chains. | C4/M3 owns separate transport declarations and PG long-history/atomic-group/barrier proof; M4-I repeats installed evidence, C3 separately qualifies SQLite. This does not add fragment/root fields to M1. |
-| MAJ-B — reusable Postgres scope | Frozen §17 replaces the old placement and assignment proposal. | Single backend at packages/cluster-mesh/src/storage/postgres/*.ts; tests/storage/postgres-*.spec.ts, assets/storage/postgres/. Cluster-mesh owns it; staffing/upstream amendments/qualification remain due. |
-| m-A — seven missing type forms | Historical proposal is superseded by §9.6/§11.3. | Five counts and paging are separate module settings; preserve M1 CapacityDescriptor. Operational bound qualification remains carried. |
-| m-B — CommonMark qualification and descriptor | Qualify a parser/codec profile without changing M1 representation. | Preserve specDigest and hashes; supplemental version/source metadata is external. Parser selection/integrity and literal/mention proof remain due under separate scope. |
-| m-C — stale plan pins | Current document identities are listed above; historical identities stay historical. | Refresh current pins after the full C0 alignment. Reviews attest only the bytes they actually examined. |
+| MAJ-A — unbounded history versus atomic payload | ACCEPTED: choose hash-chained staged sub-units, not revision/comment-count write limits that would block long legacy threads. | SPEC §§4.6/7.2 bound each prepared fragment at 512 KiB plus its manifest, with a bounded root, resumable invisible staging and atomic unit/group visibility. No complete-history size ceiling; no complete export/receipt before terminal verification. Lot 1 freezes the transport contract; M2/M3 test long histories above 512 KiB and 1 MiB on SQLite/Postgres, bounds/continuation, chain failures, replay/crash, revocation/fences and all-or-none publication. M4 repeats from installed bytes. |
+| MAJ-B — reusable Postgres implementation unscoped | ACCEPTED as a concrete proposal with an open assignment, not a claimed upstream change. | SPEC §3 and template Lot 2 propose the shared `src/live-storage/{postgres,postgres-executor,postgres-migrations}.ts` module and `@sentropic/cluster-mesh/storage/postgres` leaf, with injected executor and no app/pg/Drizzle imports. Amend engram plan 09 L3b-P and SPEC §9 placement/forbidden clauses; keep host driver/composition/operation and one migration authority. [Question owner](owner-decisions.md#question-owner) presents storage-team versus comments-team lead, joint review in either case. Assignment, recorded amendment, exact qualified artifacts and installed neutral/Immo evidence are M2 entry conditions. |
+| m-A — seven missing type forms | ACCEPTED: use existing count units and a separate paging object. | Five positive safe-integer CapacityBounds in `units`; `paging.defaultRecords: number = 50` and `paging.cursorTtlSeconds: number \| null = null`. Validate default <= pageRecords.limit, fields/units/types and frozen TTL before Lot 1 exit; numeric TTL would measure seconds under a future version. No new CapacityUnit variants or prose-name aliases. |
+| m-B — CommonMark qualification and descriptor | ACCEPTED: make parser choice and literal-region validation explicit. | Propose micromark 4.x, exact release/integrity pinned after Lot 1 surface review and qualification. Official 0.31.2 code-span/block and raw-HTML examples plus Unicode/segment cases qualify mention rejection; keep source bytes and code-point offsets. Replace specDigest with specVersion/specSource, update plain/CommonMark variants and vectors, and retain browser-safe root. No parser execution or conformance is claimed here. |
+| m-C — stale plan pins | ACCEPTED: active plans must identify the current SPEC bytes. | PLAN_COMMENTS_ANNOTATIONS, BRANCH_P1_TEMPLATE and PLAN_HANDOFF now pin the prepared SPEC SHA above; their own hashes and owner-decisions are refreshed in this index. Historical predecessor identities remain historical. |
 | m-D — NOTIFY citation | ACCEPTED: the approximately 8 KB line is event-bus.ts:37. | Correct SPEC §4.6; append an explicit correction to the prior log citation at :32 without rewriting historical log bytes. |
+<!-- historical-excerpt-end -->
+
+### Current disposition under frozen v4.1
+
+| Finding | Current disposition under frozen v4.1 | Responsible gate |
+|---|---|---|
+| MAJ-A | Preserve complete logical histories through staged chains. C4/M3 owns separate transport declarations and PG long-history/atomic-group/barrier proof; M4-I repeats installed evidence, C3 separately qualifies SQLite. This does not add fragment/root fields to M1. | C4/M3/M4-I |
+| MAJ-B | Frozen §17 replaces the old placement and assignment proposal: single backend at packages/cluster-mesh/src/storage/postgres/*.ts; tests/storage/postgres-*.spec.ts, assets/storage/postgres/. Cluster-mesh owns it; staffing/upstream amendments/qualification remain due. | §17 K/P lots |
+| m-A | Historical proposal is superseded by §9.6/§11.3: five counts and paging are separate module settings; preserve M1 CapacityDescriptor. Operational bound qualification remains carried. | Module settings |
+| m-B | Qualify a parser/codec profile without changing M1 representation. Preserve specDigest and hashes; supplemental version/source metadata is external. Parser selection/integrity and literal/mention proof remain due under separate scope. | Parser profile |
+| m-C | Current document identities are listed in the table above; historical identities stay historical. Refresh current pins after full C0 alignment. Reviews attest only the bytes they actually examined. | Evidence index |
+| m-D | ACCEPTED: the approximately 8 KB line is event-bus.ts:37. Correct SPEC §4.6; append an explicit correction to the prior log citation at :32 without rewriting historical log bytes. | SPEC §4.6 |
 
 The six historical findings retain their provenance, with current dispositions above reflecting frozen v4.1. M1 is closed; operational/transport/installed qualification and upstream plan amendments remain due at their own gates. No host acknowledgement, green runtime or new review verdict is claimed by this extract.
 
