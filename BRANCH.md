@@ -69,7 +69,7 @@
 - [x] `K2B-REF1` — Staged reference core: wrapper delegates, coverage resolution, disposal mirror, purge-policy commits, journal emission.
 - [x] `K2B-REF2a` — Staged reference intake: begin, fragment sequencing, inspect.
 - [x] `K2B-REF2b` — Staged reference publication: seal validation, base compare, idempotent commit, abort.
-- [ ] `BR-K2B-DISC3` — Corpus files land as one review-unit commit each when they exceed 150 lines (staged-corpus here; K1 precedent for corpus-scale files); replay, barrier, lifecycle and mutation deltas stay under 150 lines.
+- [x] `BR-K2B-DISC3` — Corpus files land as one review-unit commit each when they exceed 150 lines (staged-corpus 407, replay 317, barrier 229, lifecycle 187; K1 precedent for corpus-scale files); corrected: the earlier "deltas stay under 150" claim was wrong.
 - [x] `K2B-RED1` — Staged corpus fails without staged support and passes on the staged reference (issuance root cause fixed, per-behavior kills in `K2B-MUTB`).
 - [x] `K2B-REF3` — Staged reference journal consumers: read, checkpoint CAS, poison, retry, resync.
 - [x] `K2B-REF4` — Staged reference lifecycle: coverage, holds, purge completion, shared blobs.
@@ -79,10 +79,14 @@
 - [x] `K2B-RED3` — Barrier corpus green after the commit-escape root cause; G1 denial before/after disposal, absence distinct, raw tombstone neutral, over-limit coverage, concurrent insertion.
 - [x] `K2B-RED4` — Lifecycle corpus green first run on the verified reference; per-behavior kills in `K2B-MUTB`.
 - [x] `K2B-MUTB-S` — Staged mutants S1-S5 killed at their targeted assertions.
-- [x] `K2B-MUTB-J` — Replay mutants J1-J2 killed at their targeted assertions.
-- [x] `K2B-MUTB-B` — Barrier mutants B1-B2 killed at their targeted assertions.
+- [x] `K2B-MUTB-J` — Replay mutants J1-J3 killed at their targeted assertions.
+- [x] `K2B-MUTB-B` — Barrier mutants B1-B3 killed at their targeted assertions.
 - [x] `K2B-MUTB-L` — Lifecycle mutants L1-L3 killed at their targeted assertions.
-- [x] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions.
+- [x] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions (`K2B_MUTATION_RECORDS`, 15 entries incl. J3/B3/T1).
+- [x] `K2B-FIX-MAJ1` — R3 resume cursor recomputed on first undelivered record; resume pagination asserts the exact full set; M17 frozen-cursor mutant killed.
+- [x] `K2B-FIX-MAJ2` — Resync no longer advances the checkpoint (§13.2 consume-then-acknowledge); J3 advancing-resync mutant killed.
+- [x] `K2B-FIX-MAJ3` — Abort asserts the typed state only; reference abort reason is the caller operation key, never an English sentence.
+- [x] `K2B-FIX-MIN` — Budgets derived from observed encoding (M18), empty-page envelope floor, retained-cursor and disposal evidence, staged index/seal/fence coverage, replay scope decoupling, divergent-intent atomicity, cursor-leak nulls.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -106,20 +110,20 @@
   - [x] Verify branch feat/cluster-mesh-storage-k2b at base 471628c19424812584fd2496474ef82ee3072d4a, stacked on feat/cluster-mesh-storage-k1 (PR #666).
   - [x] Read L3a-spec-v4.1-frozen §17 row K2b, G1 confirmation, K1 BRANCH K2a-2 ticket, engram Sol R3, Opus r3 minors.
   - [x] Create this BRANCH.md from plan/BRANCH_TEMPLATE.md.
-- [ ] **Lot 1 — Deferred R3 and mutation fixes (BR-K2B-EX1)**
+- [x] **Lot 1 — Deferred R3 and mutation fixes (BR-K2B-EX1)**
   - [x] R3: effective-cursor measurement in `reference-store.ts` plus 9 to 10 coverage in `read-corpus.ts`; un-skip the cursor-budget test in `reference.spec.ts`.
   - [x] M6 dies on the guard-rollback assertion; M11 replaced by the record-counting mutant dying on the envelope assertion (`mutations.spec.ts`, `atomic-corpus.ts` message).
   - [x] MIN2 predicate/relationship profiles plus MIN4 header and K3 deferral (`atomic-corpus.ts`, `read-corpus.ts`).
   - [x] MIN2 barrier/purge positive paths (`atomic-corpus.ts`).
   - [x] MIN3 validator limits plus tests (`readers.ts`, `reference.spec.ts`).
   - [x] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check (covered by the final gate: typecheck-cluster-mesh 0 errors, lint-cluster-mesh clean, full test-cluster-mesh 464 passed, scope-check PASS C2).
-- [ ] **Lot 2 — Staged reference plus staged and replay corpora**
+- [x] **Lot 2 — Staged reference plus staged and replay corpora**
   - [x] `reference-staged.ts`: staged units, journal, coverage/barrier groundwork.
   - [x] `staged-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
   - [x] `replay-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
   - [x] One discriminating mutation per staged and replay behavior.
   - [x] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check (profile-mutations.spec.ts 17/17, covered by the final gate).
-- [ ] **Lot 3 — Barrier and lifecycle corpora with G1**
+- [x] **Lot 3 — Barrier and lifecycle corpora with G1**
   - [x] `barrier-corpus.ts` with G1 denial before/after disposal plus gate.
   - [x] `lifecycle-corpus.ts` (purge policy, holds, shared objects, completion) plus gate.
   - [x] One discriminating mutation per barrier and lifecycle behavior.
