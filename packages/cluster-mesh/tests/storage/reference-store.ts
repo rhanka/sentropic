@@ -69,17 +69,21 @@ const encodedPageBytes = (
 // R3 (§8.4): every emitted response is measured with its effective cursor.
 // An over-budget response sheds undelivered records down to an empty
 // incomplete page; the surviving cursor is always a recovery position for
-// the first undelivered record, never a promise of an advancing next page.
+// the first undelivered record (start + delivered count), never a frozen
+// pre-trim position that would skip records.
 const fitIncomplete = (
   records: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[],
-  recovery: ChainPageCursor | null,
+  start: number,
+  head: string | null,
   maxEncodedBytes: number,
 ): ChainPage => {
   const trimmed = [...records];
-  while (trimmed.length > 0 && encodedPageBytes('incomplete', trimmed, recovery) > maxEncodedBytes) {
+  const recoveryFor = (delivered: number): ChainPageCursor | null =>
+    head === null ? null : { position: start + delivered, head };
+  while (trimmed.length > 0 && encodedPageBytes('incomplete', trimmed, recoveryFor(trimmed.length)) > maxEncodedBytes) {
     trimmed.pop();
   }
-  return { outcome: 'incomplete', records: trimmed, nextCursor: recovery };
+  return { outcome: 'incomplete', records: trimmed, nextCursor: recoveryFor(trimmed.length) };
 };
 
 export class TestBoundStore {
@@ -224,21 +228,19 @@ export class TestBoundStore {
     }
     const visible = boundHead === null ? [] : records.slice(0, boundIdx + 1);
     const page: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[] = [];
-    let admitted: ChainPageCursor | null = retained;
     for (const record of visible) {
       if (record.seq < start) continue;
       const next: ChainPageCursor = { position: record.seq, head: boundHead as string };
       if (page.length >= limit) {
         if (encodedPageBytes('page', page, next) > maxEncodedBytes) {
-          return fitIncomplete(page, admitted ?? retained ?? next, maxEncodedBytes);
+          return fitIncomplete(page, start, boundHead, maxEncodedBytes);
         }
         return { outcome: 'page', records: page, nextCursor: next };
       }
       if (encodedPageBytes('page', [...page, record], next) > maxEncodedBytes) {
-        return fitIncomplete(page, next, maxEncodedBytes);
+        return fitIncomplete(page, start, boundHead, maxEncodedBytes);
       }
       page.push(record);
-      admitted = next;
     }
     return { outcome: 'page', records: page, nextCursor: null };
   }
