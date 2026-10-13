@@ -10,7 +10,6 @@ const memoryStore = (): SessionWorkspaceBindingStore & { rows: Map<string, Sessi
   return {
     rows,
     async findBySession(sessionId: string) { return rows.get(sessionId) ?? null; },
-    async save(binding: SessionWorkspaceBinding) { rows.set(binding.sessionId, binding); },
     async compareAndSet(current: SessionWorkspaceBinding | null, next: SessionWorkspaceBinding) {
       const existing = rows.get(next.sessionId) ?? null;
       if (current === null) {

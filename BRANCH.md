@@ -137,7 +137,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: required principal object inputs on detach/end/get (domain)
   - [x] GREEN: rights order, required principals, uniform refusals (API)
   - [x] GREEN: global editor, canonical seeds (API)
-  - [ ] GREEN: englobing transaction, conditional drizzle writes (API)
+  - [x] GREEN: tx-scoped drizzle store, unconditional save removed (API)
+  - [ ] GREEN: englobing transaction for creation and binding (API)
   - [ ] GREEN: clean 0011 migration, re-date journal, BRANCH minors
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
