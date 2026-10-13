@@ -319,6 +319,7 @@
   - [x] **Lot N18c — HTTP auth/refusal tests (`712121c81`)**: trusted auth, no-retry statuses, bounded 400 policy, invalid count results 36/36 GREEN (only W N08 boundary differs from R).
   - [x] **Lot N19b — owned JSON reader + readiness (`59a8dda15`)**: `readNativeJson` cancels pending reads on timeout; RED 2/42 pre-src → 42/42 GREEN, src byte-identical.
   - [x] **Lot N19c — body detachment proof (`055eec7af`)**: request-holder probes, guarded serialization clear, abort-aware confirmed fetch; RED 4/46 pre-src → 46/46 GREEN, src byte-identical.
+  - [x] **Lot N20a — trusted auth + lease (`0023ef419`)**: `anthropic-native.ts` auth resolution/port + `anthropic-native-lease.ts` account lease; typecheck clean (2 pre-existing).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
