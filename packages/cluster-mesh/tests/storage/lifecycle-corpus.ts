@@ -102,7 +102,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   });
   await bound.holdTarget('held-target', 'legal-hold-1');
   const held = await bound.completePurge('intent-held-1');
-  assert.equal(held.state, 'held');
+  assert.equal(held.state, 'held', 'K2b-RED lifecycle: a held target stalls completion');
   assert.equal(held.outcomeId, null);
   assert.equal((await bound.purgeProgress('intent-held-1')).state, 'held');
   await bound.releaseHold('held-target');
