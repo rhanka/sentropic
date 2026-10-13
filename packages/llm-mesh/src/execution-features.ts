@@ -51,20 +51,28 @@ export const EXECUTION_FEATURES: readonly ExecutionFeature[] = [
  * required feature. Never a model route map — transport keys only.
  *
  * D16-C proofs: Codex projects named choice, parallel control, reasoning
- * and strict schemas natively (it cannot enforce an explicit output
- * ceiling — no `max_output_tokens` slot, spec §16.4 — and carries custom
- * tools, reasoning context and replay opaquely at most). The translated
- * Chat clients project named choice and parallel control with tests;
- * Mistral additionally forwards the Vibe-proven `reasoning_effort` slot.
- * Meta has no reasoning slot (asymmetry, spec §16.4) and neither
- * translated client forwards strict schemas.
+ * (including `reasoning.context`), strict schemas, `text.verbosity`,
+ * `prompt_cache_key`, custom tools with their namespace and completed
+ * reasoning items natively (it cannot enforce an explicit output ceiling —
+ * no `max_output_tokens` slot, spec §16.4). The translated Chat clients
+ * project named choice and parallel control with tests; Mistral
+ * additionally forwards the Vibe-proven `reasoning_effort` slot. Meta has
+ * no reasoning slot (asymmetry, spec §16.4): `reasoning-controls` on `muse`
+ * is accepted-validated but not forwarded (bounded §16.3/§16.4 amendment —
+ * Muse always sends reasoning, so fail-closed would refuse 100% of Muse
+ * traffic); `max_tokens` is projected, so `explicit-output-ceiling` holds.
+ * Both translated clients forward the validated `strict` flag on function
+ * tools (standard OpenAI function shape); a provider that rejects it fails
+ * visibly as a provider 400, never as a silent drop.
  */
 const TRANSPORT_EXECUTION_FEATURES: Readonly<
   Record<string, readonly ExecutionFeature[]>
 > = {
-  codex: ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema'],
-  muse: ['named-tool-choice', 'parallel-tool-control'],
-  'mistral-vibe': ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls'],
+  codex: ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema',
+    'reasoning-context', 'custom-tools', 'verbosity'],
+  muse: ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'explicit-output-ceiling',
+    'strict-schema'],
+  'mistral-vibe': ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema'],
 };
 
 /** Mesh-known support for a transport; empty when unknown (fail closed). */

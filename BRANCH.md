@@ -272,5 +272,5 @@
   - [x] R4-MAJ-4: pre-dispatch refusal for Messages/Chat tool controls (no billed estimate).
   - [x] R4-MAJ-2: Muse history projection (`toWireMessage` equivalent).
   - [x] R4-BLQ-1a: native Codex carrier projection (`reasoning.context`, `text.verbosity`, `prompt_cache_key`, namespaced custom tools, ordered reasoning items) in `codex-runtime-wire.ts` + wire test (RED/GREEN via real-planner replay).
-  - [ ] R4-BLQ-1b: execution-feature table declarations + real-planner replay green (in progress; supersedes the owner-decision reserve — resume brief orders the fix with bounded §16.3/§16.4 amendments).
+  - [x] R4-BLQ-1b: execution-feature table declarations (codex +context/verbosity/custom-tools, muse +reasoning-controls/ceiling/strict, vibe +strict) + bounded §16.3/§16.4 amendments (muse reasoning accepted-not-forwarded, strict forwarded-visibly); replay test next.
   - [x] R4-MAJ-3: bare→qualified egress requalification via carrier refs (helper + Codex/Muse/Mistral adapters + tests; Codex custom-tool return shape stays owner-UAT-bound under BLQ-3).
