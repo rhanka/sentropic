@@ -18,6 +18,7 @@ const sessionIds = [
   'sess-adopt-5', 'sess-adopt-6', 'sess-adopt-7', 'sess-adopt-8',
   'sess-adopt-9', 'sess-adopt-10', 'sess-adopt-11', 'sess-adopt-12',
   'sess-adopt-13', 'sess-adopt-14', 'sess-adopt-15', 'sess-adopt-16',
+  'sess-adopt-17', 'sess-adopt-18',
 ];
 
 describe('session adoption workspace binding', () => {
@@ -364,5 +365,60 @@ describe('session adoption workspace binding', () => {
     await expect(after.get('sess-adopt-1', TENANT_A, user.id)).resolves.toMatchObject({
       sessionId: 'sess-adopt-1', status: 'attached',
     });
+  });
+
+  it('should track monotonic version on bindings through state transitions', async () => {
+    const service = new SessionWorkspaceService();
+    const binding = await service.adopt({
+      sessionId: 'sess-adopt-17', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    expect((binding as { version?: number }).version).toBe(1);
+
+    const detached = await service.detach('sess-adopt-17', TENANT_A, user.id);
+    expect((detached as { version?: number }).version).toBe(2);
+
+    const reattached = await service.adopt({
+      sessionId: 'sess-adopt-17', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    expect((reattached as { version?: number }).version).toBe(3);
+
+    const ended = await service.end('sess-adopt-17', TENANT_A, user.id);
+    expect((ended as { version?: number }).version).toBe(4);
+  });
+
+  it('should prevent ABA detach race from overwriting a re-attached workspace', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-18', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+
+    const userB = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
+    });
+    const workspaceB = crypto.randomUUID();
+    await db.insert(workspaces).values({
+      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
+      type: 'code', tenantId: TENANT_A,
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId: workspaceB, userId: userB.id, role: 'admin',
+    });
+
+    // Interleave detach by user and re-attach by userB
+    await service.detach('sess-adopt-18', TENANT_A, user.id);
+    await service.adopt({
+      sessionId: 'sess-adopt-18', tenantId: TENANT_A, principalId: userB.id, workspaceId: workspaceB,
+    });
+
+    // Stale detach from original user (who has no rights on workspace B) must be refused
+    await expect(service.detach('sess-adopt-18', TENANT_A, user.id))
+      .rejects.toMatchObject({ code: 'workspace_rights_refused' });
+
+    // The current binding must still point to workspaceB and userB
+    const current = await service.get('sess-adopt-18', TENANT_A, userB.id);
+    expect(current?.workspaceId).toBe(workspaceB);
+    expect(current?.principalId).toBe(userB.id);
+    expect(current?.status).toBe('attached');
   });
 });

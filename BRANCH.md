@@ -143,7 +143,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 - [ ] **Lot 4 — MAJ-1 ABA compare-and-set fix (r3 GO avec réserves)**
   - [x] RED: domain ABA race and monotonic version tests in session-workspace.spec.ts
   - [x] GREEN: domain monotonic version and full-row CAS in workspace-binding.ts
-  - [ ] RED: API ABA race and version CAS tests in session-adoption.test.ts
+  - [x] RED: API ABA race and version CAS tests in session-adoption.test.ts
   - [ ] GREEN: API version column, tx-scoped detach/end CAS in session-workspace.ts and control-schema.ts
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
