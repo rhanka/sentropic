@@ -2,6 +2,7 @@ import { RequestTooLargeError, RoutePlanError } from '@sentropic/llm-mesh';
 import type { RoutePlanInput, RoutePlanner, VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import { classifyRouteError, prepareRouteFlow, retainRouteBody, terminalGatewayError } from '../src/route-flow-core.js';
+import { recordingBudget } from './fixtures/budget.js';
 import { ResponsesBoundError } from '../src/responses-egress.js';
 import { CheckedGatewayBody, GatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
 import { stubGatewayConfig } from '../src/stubs.js';
@@ -330,5 +331,69 @@ describe('route flow core', () => {
 
     expect(captured?.requestedModel).toBe('gpt-6.1-sol');
     expect(captured?.requiredExecutionFeatures).toEqual(['explicit-output-ceiling']);
+  });
+
+  it('threads nativeMessages into plan and quote for required native and guards against host injection', async () => {
+    let capturedPlan: RoutePlanInput | undefined;
+    let capturedQuote: unknown;
+    const routePlanner = {
+      quote(input: unknown) {
+        capturedQuote = input;
+        return { quoteRef: 'q-1', requestedModel: 'claude-sonnet-5',
+          candidates: [{ providerId: 'anthropic', modelId: 'claude-sonnet-5', reason: 'exact',
+            allowance: { inputTokens: 100, outputTokens: 64 }, outputCeilingEnforced: true }],
+          maxAttempts: 1, quotedAt: '2026-08-08T12:00:00Z', policyRevision: 'default', councilRevision: 'fixture' };
+      },
+      async plan(_subject: VerifiedRoutingSubject, input: RoutePlanInput) {
+        capturedPlan = input;
+        return {
+          planRef: 'plan-1', expiresAt: '2026-08-08T12:01:00Z', candidateRefs: [],
+          policy: {
+            strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+            negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+            stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+          },
+          councilRevision: 'fixture', diagnostics: [],
+        };
+      },
+    } as unknown as RoutePlanner;
+    const config = {
+      ...stubGatewayConfig,
+      callerAuth: { async verify() {
+        return {
+          ok: true as const,
+          cost: { tenantId: 't-1', workspaceId: 'w-1', principalId: 'u-1', ownerScopeRef: 'scope', source: 'test', correlationId: 'c-1' },
+        };
+      } },
+    };
+
+    await prepareRouteFlow({ config, routePlanner, metering: { settleRoute() {} } }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-1' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64, safeguards: null },
+    });
+    expect(capturedPlan?.nativeMessages).toBe(true);
+
+    await prepareRouteFlow({
+      config, routePlanner, metering: { settleRoute() {} },
+      routeInput: () => ({ nativeMessages: true } as unknown as Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities' | 'nativeMessages'>),
+    }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-2' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64 },
+    });
+    expect(capturedPlan?.nativeMessages).toBeUndefined();
+
+    const recorder = recordingBudget();
+    await prepareRouteFlow({ config, routePlanner, metering: recorder.metering, budget: recorder.options }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-3' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64, safeguards: null },
+    });
+    expect(capturedPlan?.nativeMessages).toBe(true);
+    expect((capturedQuote as { nativeMessages?: boolean })?.nativeMessages).toBe(true);
   });
 });
