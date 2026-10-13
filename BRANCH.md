@@ -317,6 +317,7 @@
   - [x] **Prerequisite framer generator (`59702820a` framer hunk only; stream-errors stays in its lot)**: `NativeSseFramer.frames()` generator, `push()` preserved; SSE suites stay GREEN (7 + 21).
   - [x] **Lot N18b — readiness + cancellation bound (`ce1b1a42f`)**: `anthropic-native-readiness.ts` 55s race, transport readiness-aware bytes, http race/close wiring; RED import-error pre-src → 21/21 GREEN (gateway dist rebuilt for container).
   - [x] **Lot N18c — HTTP auth/refusal tests (`712121c81`)**: trusted auth, no-retry statuses, bounded 400 policy, invalid count results 36/36 GREEN (only W N08 boundary differs from R).
+  - [x] **Lot N19b — owned JSON reader + readiness (`59a8dda15`)**: `readNativeJson` cancels pending reads on timeout; RED 2/42 pre-src → 42/42 GREEN, src byte-identical.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
