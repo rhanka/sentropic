@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { NativeCumulativeUsageAccumulator } from '../src/native-usage.js';
+import { NativeCumulativeUsageAccumulator, NativeUsageObserver, nativeDefaultTtlEligible } from '../src/native-usage.js';
+import { CACHE_START, NATIVE_MODELS, nativeUsageTurn } from './fixtures/native-usage.js';
 
 describe('native usage accumulator', () => {
   const validStart = {
@@ -181,5 +182,67 @@ describe('native usage accumulator', () => {
       ephemeral_5m_input_tokens: 0,
       ephemeral_1h_input_tokens: 200,
     });
+  });
+});
+
+describe('native cache pricing and TTL evidence', () => {
+  it.each(NATIVE_MODELS)('should price physical read/write categories at sourced weights for served %s', model => {
+    const cases = [
+      { usage: { input_tokens: 100, cache_read_input_tokens: 10000, cache_creation_input_tokens: 0 }, units: [44000, 14000] },
+      { usage: { input_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 200,
+        cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 0 } }, units: [14000, 14000] },
+      { usage: { input_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 200,
+        cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } }, units: [20000, 20000] },
+      { usage: { input_tokens: 100, cache_read_input_tokens: 10000, cache_creation_input_tokens: 250,
+        cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 } }, units: [58000, 28000] },
+    ];
+    for (const fixture of cases) {
+      const observer = new NativeUsageObserver(model);
+      observer.observeJson({ model, usage: { ...fixture.usage, output_tokens: 20 } });
+      const snapshot = observer.snapshot('completed');
+      expect(snapshot).toMatchObject({ estimated: false, nativeInputUsageValidated: true,
+        nativeInputUsageSource: 'json', nativeServedModelId: model,
+        nativeInputPriceUnits40: fixture.units[model === NATIVE_MODELS[2] ? 1 : 0] });
+      expect(snapshot.inputTokens).toBe(fixture.usage.input_tokens
+        + fixture.usage.cache_read_input_tokens + fixture.usage.cache_creation_input_tokens);
+      expect(snapshot.rawUsage?.input_tokens).toBe(100);
+      expect(Object.isFrozen(snapshot.rawUsage)).toBe(true);
+    }
+  });
+
+  it.each([undefined, '5m', '1h', 'future', null])('should inspect actual outbound TTL %s', ttl => {
+    const body = { messages: [{ content: [{ cache_control: { type: 'ephemeral', ttl } }] }] };
+    expect(nativeDefaultTtlEligible(body)).toBe(ttl === undefined || ttl === '5m');
+    expect(nativeDefaultTtlEligible({ messages: [] })).toBe(true);
+    expect(nativeDefaultTtlEligible({ tools: [{ cache_control: { type: 'future' } }] })).toBe(false);
+  });
+
+  it('should infer default write growth without manufacturing reported TTL evidence', () => {
+    const { cache_creation: _split, ...start } = CACHE_START;
+    const observer = nativeUsageTurn(NATIVE_MODELS[0], start,
+      { input_tokens: null, cache_read_input_tokens: null, cache_creation_input_tokens: 300, output_tokens: 500 }, true, true);
+    expect(observer.snapshot('completed')).toMatchObject({ inputTokens: 10400, estimated: false,
+      nativeInputPriceUnits40: 59000, nativeInputUsageValidated: true });
+    expect(observer.snapshot('completed').rawUsage?.cache_creation).toBeUndefined();
+    const acc = new NativeCumulativeUsageAccumulator(start, { defaultTtlEligible: true });
+    acc.applyDelta({ cache_creation_input_tokens: 300 });
+    expect(acc.getState().inferredCacheCreation1h).toBeUndefined();
+  });
+
+  it('should price only unknown-TTL growth at 2x and preserve the reported split', () => {
+    const observer = nativeUsageTurn(NATIVE_MODELS[0], CACHE_START, { cache_creation_input_tokens: 300, output_tokens: 500 });
+    expect(observer.snapshot('completed')).toMatchObject({ inputTokens: 10400, nativeInputPriceUnits40: 68000,
+      estimated: false, nativeCacheWriteSplitReason: 'cache_write_split_inferred' });
+    expect(observer.snapshot('completed').rawUsage?.cache_creation?.ephemeral_1h_input_tokens).toBe(200);
+    observer.accumulator.applyDelta({ cache_creation_input_tokens: 300 });
+    expect(observer.snapshot('completed').inputTokens).toBe(10400);
+  });
+
+  it('should retain physical evidence but disable unknown initial split pricing', () => {
+    const { cache_creation: _split, ...start } = CACHE_START;
+    const snapshot = nativeUsageTurn(NATIVE_MODELS[0], start).snapshot('completed');
+    expect(snapshot).toMatchObject({ inputTokens: 10300, estimated: true,
+      nativeInputUsageValidated: false, nativeUsageUncertainty: 'cache_write_split_unknown' });
+    expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
   });
 });
