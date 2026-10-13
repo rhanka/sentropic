@@ -2028,3 +2028,141 @@ Valid start-anchored deltas inherit absent/null fields. Equal aggregate writes
 retain accepted TTL allocation; growth alone receives five-minute weight when
 outbound cache controls establish that eligibility, otherwise a conservative
 2x bound. Inferred growth is marked separately from provider-reported TTL.
+A consistent later split reconciles reported evidence, not an invented raw
+split. Decreasing/conflicting/fractional/nonfinite/unsafe input rejects the
+update atomically and permanently revokes proof; later valid frames or repeated
+starts never restore it. Safe physical lower bounds survive. Valid input and
+invalid output are handled independently.
+
+Port policy `anthropic-cache-2026-10-02` with safe integer units40:
+`40U + 50W5m + 80W1h + rR`, where the sourced policy has r=4 for Sonnet 5/Opus 5
+and r=1 for Fable 5.1. Validate safe arithmetic, policy/model identity and
+physical bounds. Served-model mismatch/unverified identity, fallback or
+substantive/malformed iterations permanently disables discount proof;
+missing/null/empty-array iterations are absent. Never sum iterations or use
+latest-wins identity to repair an earlier mismatch.
+
+Clean positive measured completion has no allowance floor. Interrupted SSE
+with usable same-model input proof retains latest accepted input and floors
+output only; missing/revoked proof floors both and uses selected-model full
+physical pricing. Unknown initial TTL may retain a conservative premium, never
+a discount below charged physical input. Output uncertainty alone does not
+revoke valid input proof. Observations retain physical pre-floor counts even
+when the financial output rises from 500 to the 32,000 allowance.
+
+Host price eligibility requires an exact pinned provider/model/pricing row,
+matching served identity, recognized policy and valid units/proof. A costliest
+fallback lookup does not qualify even with matching-looking IDs/rates. Round
+integer rational input after multiplying by the pinned input rate, using
+`ceil(units40 * input_micro_usd_per_mtok / 40,000,000)`; retain existing output,
+minimum-charge and allowance rules. Failed validation uses conservative full
+selected-model pricing and closed uncertainty/mismatch audit under the existing
+settlement fence. No free classifier/subsidy policy is introduced.
+
+Exactly one aggregate financial row settles all dispatched attempts, protected
+by existing request/hold/tenant idempotency, reserve/spend and outbox rules.
+Each started native inference attempt may emit one body-free physical
+observation, with a separate call ID, null hold/cost and the gateway request ID
+as response ID. Readers distinguish roles and never sum both token sets.
+Count emits neither role. Finalize runs once from the same frozen snapshot,
+with a one-second hook deadline; rejection, timeout or late completion cannot
+block cleanup/settlement, retry the observation or replace the wire failure.
+
+Required regressions include M1–M7/N5 revocation, cache growth/equal one-hour
+split, missing physical anchor, interrupted output, pinned exact amounts and
+rounding, selected-versus-served price mismatch, exact-versus-costliest lookup,
+observation/financial replay fencing, and request retention/never-read streams.
+The detailed file/commit and numeric fixture matrix is in the build plan.
+
+### 17.8 Ordered build, release scope and acceptance
+
+Every implementation slice is test-first: behavioral RED, smallest GREEN,
+then an atomic commit with **fewer than 150 added plus deleted lines**, including
+tests/exports/`BRANCH.md` (target ≤140). The numbered work lots below contain
+explicit smaller slice boundaries in the build plan; split again as needed,
+never import a large source file in one commit or drop regressions to fit.
+
+| Ordered lots | Work and required evidence |
+|---|---|
+| N00–N02 | Scope/baseline, native public contracts, typed numeric size errors; pure contract and envelope assertions first. |
+| N03–N09 | Shared pool/owner/reader, five-path middleware, flow/SDK retention and terminal 413 across all wires. |
+| N10–N13 | Feature/body classifier, trusted validation, conjunctive quote/planner feasibility and fresh prepared dispatch guards. |
+| N14–N17 | Physical/output fold, irreversible proof, cache growth/pricing and separate financial floors. |
+| N18–N24 | Raw HTTP, upload/readiness, auth/lease, native JSON/SSE, headers and the single reconciled count path. |
+| N25–N29 | Observation role, exact host prices, OFF product composition/version proof, API ledger and #662 compatibility matrices. |
+| N30–N31 | Pending keepalive implementation and inert bounded qualification harness; deterministic fake transport/clock tests only. |
+| N32 | Consolidated release documentation, unchanged selected version tuple, regenerated exact artifacts and final gates. |
+
+Before build edits, declare `BR662-EX8` for native runtime/provider/composition
+files, `BR662-EX9` for metering/body-parser contracts, `BR662-EX10` for
+qualification/API tests and `BR662-EX11` for package release documentation,
+with the exact paths/rationale/impact/rollback in the build plan. Extend the
+existing count/adapter/namespace and packaging exceptions; supersede the old
+native-classifier exclusion. `BRANCH.md` is not changed by this design task.
+No schema, Makefile, Compose, workflow, deployment/edge, judge or unused API
+lock change is included.
+
+Retain gateway mesh dependency `^0.26.0`, cluster mesh peers
+`>=0.22.0 <0.27.0` and gateway peers `>=0.19.0 <0.21.0`, API gateway dependency
+`^0.20.0`, and matching catalog/matrix/fixtures. Regenerate root lock and
+guarded exact sibling/selected packed fixtures from the final combined source;
+old #633 manifests, mesh 0.23.0 literals and interim archive integrities cannot
+be copied. Recheck registry availability before release; already published
+different contents requires conductor renumbering, never overwrite. A later
+source edit invalidates final artifact receipts and requires regeneration.
+
+Combined deterministic acceptance requires current-SHA mesh/gateway/API
+typecheck, lint and applicable full unit/endpoint suites, cluster compatibility
+and guarded exact-artifact tests, equivalence checks, both Responses-alias
+fixture replay, and the native ON/OFF × five-path matrix. Preserve ordinary
+count neutrality, caller ownership, no pre-dispatch debit, exactly-once
+settlement, affinity/health/expiry behavior, existing aliases and enrollment
+retry. All automated tests use isolated `test-*`/`e2e-*` environments and
+existing Make targets in the build run; historical branch results are not
+new acceptance evidence.
+
+The owner/operator still controls live qualification and activation:
+
+1. Obtain sourced sanitized safeguards/classifier/server-tool fixtures and two
+   distinct real-login principals in one isolated tenant, with distinct owner
+   scopes, grants, valid sessions, budget/pricing/reaper readiness and exact
+   feature/UAT/edge source records. Never invent missing fixture semantics.
+2. Authorize a fresh native campaign capped at 13 actual upstream sends:
+   SSE/JSON/canonical/count for each of the three source qualification models,
+   plus one sourced native server-tool/WebSearch growth call. Preserve the
+   durable cap, origin/body/auth binding, zero retries, first-failure seal,
+   bounded receipts and SELECT-only ledger joins. Additional cases require a
+   new owner disposition, not a hidden extra send. The harness stays inert
+   without deliberate arming; no provider calls occur in this design task.
+3. Require positive physical/cache/cumulative, exact-price, observation/one
+   settlement and measured retention/resource evidence. A real server-tool
+   result with native cumulative growth is necessary for N7; absence/equality,
+   decrease, local/canonical or mismatched evidence is not PASS. Unresolved
+   substantive iterations or source evidence stays explicitly unresolved.
+4. Complete #662's real Muse/Codex text and tool-continuation, Vibe default,
+   Cloud Code no-repeat and Claude Code counting gates. Keep native OFF
+   baseline and authorized ON qualification distinct. The no-dispatch UAT
+   interceptor covers both Responses aliases. Empty-pool 503 and fixture tests
+   do not prove successful live CLI execution.
+5. Qualify keepalives and actual production memory/body/proxy/timeouts. Source
+   evidence records L4 idle 50 s, Traefik read 60 s, nginx body 1 MiB and proxy
+   60 s. Post-commit keepalives cannot repair pre-commit silence longer than
+   the edge idle limit; the 55 s readiness bound therefore needs explicit
+   edge-owner reconciliation. Deployment changes remain separate scope.
+6. Record separate release and native activation dispositions. A release with
+   native disabled may describe its remaining activation gates only with the
+   owner's acceptance; it may not claim native production qualification.
+   Nonempty qualified defaults and activation require evidence and owner GO.
+   Repack after any pre-release list change; post-publication source changes
+   require a properly versioned later release.
+
+The release conductor replaces the judge's literal “#633 merged” prerequisite
+with the landed combined #662 baseline and coordinates its subsequent tuple
+and #664's later release. Judge 2.12, migration generation, 1.26a/b and
+TUPLE/packed qualification remain independent gates, not completed by this fold.
+
+**Closing note:** Once the fold lands, close draft #633 with a link to
+[#662](https://github.com/rhanka/sentropic/pull/662), its landed commit and this
+design/spec, retaining source provenance and the recorded native activation
+disposition. Closure alone proves neither native qualification nor judge
+readiness.
