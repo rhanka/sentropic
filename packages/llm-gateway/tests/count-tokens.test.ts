@@ -370,6 +370,39 @@ describe('POST /v1/messages/count_tokens', () => {
       expect(h.prepare).toHaveBeenCalledTimes(2);
     });
 
+    describe('native count mount parity (N24 rows 47/48b)', () => {
+      it('marks native count success with the relay marker and native response exclusions', async () => {
+        const h = countHarness({}, async () => ({
+          kind: 'json', status: 200, headers: {
+            'anthropic-organization-id': 'accepted-org', 'anthropic-future': 'kept', 'request-id': 'upstream-id',
+            connection: 'anthropic-hop', 'anthropic-hop': 'dropped', authorization: 'secret', 'set-cookie': 'secret',
+            'content-length': '9999', 'unlisted-response': 'dropped',
+          }, body: { input_tokens: 123 },
+        }));
+        const res = await sendCount(h);
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ input_tokens: 123 });
+        expect(res.headers.get('x-sentropic-relay')).toBe('native');
+        expect(res.headers.get('x-sentropic-request-id')).toBe('count-req');
+        expect(res.headers.get('anthropic-organization-id')).toBe('accepted-org');
+        expect(res.headers.get('anthropic-future')).toBe('kept');
+        expect(res.headers.get('request-id')).toBe('upstream-id');
+        for (const name of ['anthropic-hop', 'authorization', 'set-cookie', 'content-length',
+          'unlisted-response', 'connection']) {
+          expect(res.headers.has(name)).toBe(false);
+        }
+      });
+
+      it('refuses the count when the cross-user partition is disabled, before the port', async () => {
+        const h = countHarness();
+        Object.assign(h.h.config, { mode: 'cross-user-pool', crossUserPoolEnabled: false });
+        const res = await sendCount(h);
+        expect(res.status).toBe(400);
+        expect(h.prepare).not.toHaveBeenCalled();
+        expect(h.execute).not.toHaveBeenCalled();
+      });
+    });
+
     it('applies the per-principal count rate limit with Retry-After', async () => {
       const rate = new NativeCountTokensRateLimiter({ capacity: 1, maxInFlight: 1, now: () => 0 });
       const h = countHarness({ nativeCountRate: rate });
