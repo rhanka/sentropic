@@ -530,7 +530,7 @@ export class TestStagedStore {
     if (op.state === 'committed') throw new StorageInvalidCommandError('committed units cannot abort');
     if (op.state === 'aborted') return;
     op.state = 'aborted';
-    op.abortReason = 'aborted by caller';
+    op.abortReason = op.operationKey;
     op.fragments.length = 0;
   }
 
