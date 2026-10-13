@@ -151,7 +151,7 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
   assert.equal(await bound.readHead('chain-a'), 'hash-a-3');
 
   const before = (await bound.readChain('chain-a')).length;
-  await assert.rejects(
+  await expectCode(
     async () =>
       bound.commitAtomic({
         guards: [{ kind: 'head', chainId: 'chain-a', hash: 'wrong-head' }],
@@ -169,7 +169,7 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
         purgeIntents: [],
         indexWrites: [],
       }),
-    /guard/,
+    'cas-conflict',
     'K2a-RED atomic: a failing guard rolls back the whole unit',
   );
   assert.equal((await bound.readChain('chain-a')).length, before);
@@ -177,7 +177,7 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
   await bound.indexPut('atomic-idx-1', { digest: 'd1', resultIds: ['r1'], resultHash: null });
   const headBeforeLate = await bound.readHead('chain-a');
   const lenBeforeLate = (await bound.readChain('chain-a')).length;
-  await assert.rejects(
+  await expectCode(
     async () =>
       bound.commitAtomic({
         guards: [],
@@ -195,7 +195,7 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
         purgeIntents: [],
         indexWrites: [{ key: 'atomic-idx-1', digest: 'd2', resultIds: ['r2'], resultHash: null }],
       }),
-    /conflict/,
+    'idempotency-conflict',
     'K2aC-RED atomic: a late index conflict rolls back appends, records and updates',
   );
   assert.equal(await bound.readHead('chain-a'), headBeforeLate);
