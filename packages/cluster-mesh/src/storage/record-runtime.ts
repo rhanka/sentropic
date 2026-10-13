@@ -129,6 +129,11 @@ export const readPageFromScope = (
     while (trimmed.length > 0 && pageBytes('incomplete', trimmed, recoveryFor(trimmed.length)) > maxEncodedBytes) {
       trimmed.pop();
     }
+    // K2b r3 floor (reference-store.ts): an emptied page carries no retained
+    // cursor. The caller already holds its resume position (the recovery for
+    // zero delivered records is the input cursor), so echoing it adds no
+    // recovery information and risks exceeding the byte floor.
+    if (trimmed.length === 0) return { outcome: 'incomplete', records: trimmed, nextCursor: null };
     let recovery = recoveryFor(trimmed.length);
     if (recovery !== null && pageBytes('incomplete', trimmed, recovery) > maxEncodedBytes) recovery = null;
     return { outcome: 'incomplete', records: trimmed, nextCursor: recovery };
