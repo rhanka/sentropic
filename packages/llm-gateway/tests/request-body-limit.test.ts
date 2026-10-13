@@ -551,7 +551,7 @@ describe('N2 pre-dispatch refusal matrix (row 44b2)', () => {
       const h = nativeHarness(); const pool = new GatewayBodyBytePool(4096); const owners: CheckedGatewayBody[] = [];
       const generate = vi.fn(h.attempt.generate); const dispatchStream = vi.fn(h.attempt.stream);
       h.attempt.generate = generate; h.attempt.stream = dispatchStream;
-      const overrides: Partial<CreateGatewayRouterOptions> = {};
+      const overrides: { -readonly [K in keyof CreateGatewayRouterOptions]?: CreateGatewayRouterOptions[K] } = {};
       const controller = new AbortController(); const body: Record<string, unknown> = { ...h.request.body, stream };
       switch (row.name) {
         case 'caller_auth': case 'partition':
@@ -676,7 +676,8 @@ describe('default byte pool overlap on one replica (row 44c)', () => {
       expect(openOwners.map(owner => owner.lease.bytes)).toEqual(enabled ? [0, 4096] : [4096, 4096]);
       const allEntered = deferred(); const allow = deferred(); let entered = 0;
       const enter = async () => { if (++entered === 64) allEntered.resolve(); await allow.promise; };
-      const h = nativeHarness(); h.attempt.generate = textResponse({ inputTokens: 2, outputTokens: 1 });
+      const h = nativeHarness();
+      h.attempt.generate = textResponse({ inputTokens: 2, outputTokens: 1 }) as typeof h.attempt.generate;
       const config = { ...h.deps.config, callerAuth: { async verify() { await enter(); return h.deps.config.callerAuth.verify(); } } };
       const apps = Array.from({ length: 4 }, () =>
         // Count handler is an ingress-only stub; row 49a owns the actual count refusal matrix.

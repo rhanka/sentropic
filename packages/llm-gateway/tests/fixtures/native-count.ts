@@ -10,6 +10,7 @@ import { vi } from 'vitest';
 import {
   createGatewayRouter,
   createStaticTargetResolver,
+  NativeCountTokensRateLimiter,
   type CreateGatewayRouterOptions,
   type NativeCountTokensPort,
   type NativeCountTokensRequest,
@@ -45,6 +46,9 @@ export const countHarness = (
   };
   const prepare = vi.fn<NativeCountTokensPort['prepare']>(async () => capability);
   const port: NativeCountTokensPort = { modelIds: [COUNT_MODEL], prepare };
+  // Fresh limiter per harness (R row 47b parity): tests stay isolated; pass
+  // `nativeCountRate: undefined` explicitly to exercise the shared default.
+  const rate = new NativeCountTokensRateLimiter();
   const app = createGatewayRouter({
     config: h.config,
     resolveTarget: createStaticTargetResolver({
@@ -59,9 +63,10 @@ export const countHarness = (
     metering: h.metering,
     requestId: () => 'count-req',
     nativeCountTokens: port,
+    nativeCountRate: rate,
     ...overrides,
   });
-  return { h, transport, model: COUNT_MODEL, execute, prepare, port, capability, app };
+  return { h, transport, model: COUNT_MODEL, execute, prepare, port, capability, rate, app };
 };
 
 export const sendCount = (

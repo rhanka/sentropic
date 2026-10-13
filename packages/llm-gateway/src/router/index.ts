@@ -507,6 +507,13 @@ export const createGatewayRouter = (
         id,
       );
     }
+    if (config.mode === 'cross-user-pool' && !config.crossUserPoolEnabled) {
+      return sendError(
+        c,
+        mapGatewayError('anthropic-messages', 'cross-user-disabled'),
+        id,
+      );
+    }
     if (flowDeps) {
       if (!flowDeps.resolveTarget(model)) {
         return sendError(
@@ -541,8 +548,9 @@ export const createGatewayRouter = (
         cost: auth.cost, body, headers: readHeaders(c.req.raw.headers),
         signal: c.req.raw.signal, requestId: id,
       });
-      forwardProviderHeaders(c, result.headers);
+      forwardProviderHeaders(c, result.headers, true);
       c.header(REQUEST_ID_HEADER, id);
+      c.header('X-Sentropic-Relay', 'native');
       return c.json(result.body as object, 200);
     } catch (error) {
       if (error instanceof NativeCountTokensRefusal || error instanceof NativeCountUpstreamError) {
