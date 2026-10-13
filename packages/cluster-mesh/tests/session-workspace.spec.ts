@@ -201,12 +201,72 @@ describe('session workspace binding', () => {
     });
   });
 
-  it('should hide cross-tenant bindings as binding_not_found on attach', async () => {
+  it('should refuse cross-tenant attach on a bound session without leaking the tenant', async () => {
     const store = memoryStore();
     const service = createSessionWorkspaceBindingService(store);
     await service.attach(attachInput());
     await expect(service.attach(attachInput({ sessionTenantId: 'tenant-b', workspaceTenantId: 'tenant-b' })))
-      .rejects.toMatchObject({ code: 'binding_not_found' });
+      .rejects.toMatchObject({ code: 'session_already_attached' });
+  });
+
+  it('should hide the binding on get from a member who is neither owner nor admin', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    const get = service.get as (
+      input: Record<string, unknown>,
+    ) => ReturnType<typeof service.get>;
+    await expect(get({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: false,
+    })).resolves.toBeNull();
+  });
+
+  it('should expose the binding on get to an admin who does not own it', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput());
+    const get = service.get as (
+      input: Record<string, unknown>,
+    ) => ReturnType<typeof service.get>;
+    await expect(get({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-2', isAdmin: true,
+    })).resolves.toMatchObject({ sessionId: 'session-1', status: 'attached' });
+  });
+
+  it('should refuse a stale workspace-admin detach bound to the read version', async () => {
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    await service.attach(attachInput({ workspaceId: 'workspace-1', principalId: 'user-1' }));
+
+    const originalFindBySession = store.findBySession.bind(store);
+    let raceTriggered = false;
+    store.findBySession = async (sessionId: string) => {
+      const row = await originalFindBySession(sessionId);
+      if (!raceTriggered && row?.status === 'attached' && row.workspaceId === 'workspace-1') {
+        raceTriggered = true;
+        await service.detach({
+          sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+        });
+        await service.attach(attachInput({ workspaceId: 'workspace-2', principalId: 'user-2' }));
+      }
+      return row;
+    };
+
+    // Caller administers the originally read workspace only; the stale
+    // detach must not touch the re-attached binding.
+    const detach = service.detach as (
+      input: Record<string, unknown>,
+    ) => ReturnType<typeof service.detach>;
+    await expect(detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-3',
+      isAdmin: true, expectedVersion: 1,
+    })).rejects.toMatchObject({ code: 'session_not_attached' });
+
+    const current = await originalFindBySession('session-1');
+    expect(current?.workspaceId).toBe('workspace-2');
+    expect(current?.principalId).toBe('user-2');
+    expect(current?.status).toBe('attached');
+    expect(current?.version).toBe(3);
   });
 
   it('should conflict when two attaches race for different workspaces', async () => {

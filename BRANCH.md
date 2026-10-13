@@ -54,6 +54,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - `acknowledge`: fixture-only change, lock regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`, verified green via `test-lazy-package` (10 files / 63 tests), rollback is checkout both fixture files
 - [x] `BR01-EX4`: evolve `api/tests/api/llm-admission-schema.test.ts` frozen-journal assertions for the new `0011_session_workspace_bindings` journal entry (CI test-api-unit-integration endpoints 3)
   - `acknowledge`: assertion-level evolution only, byte-identical to CI-green PR #664 pattern (0008 pinned at idx 8, applied row matched by hash, disposable upgrade expects journal.entries.length), 0008 semantics unchanged, rollback is checkout the test file
+- [x] `BR01-EX5`: shared provisioning `api/src/services/workspace-provisioning.ts` (+) + edits `api/src/middleware/rbac.ts` (export role levels), `api/src/routes/namespaces/workspaces/product-workspaces.ts` (use shared), `api/src/services/workspace-access.ts` (tx-aware client param)
+  - `acknowledge`: creation/notify dedup only, route behavior unchanged (no tenantId), rollback is checkout touched + delete new file
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -147,6 +149,15 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: API version column, tx-scoped detach/end CAS in session-workspace.ts and control-schema.ts
   - [x] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
+- [ ] **Lot 5 — Opus r4 NO-GO fixes (MAJ-A, MAJ-B, b-m1..b-m8)**
+  - [x] RED domain: stale workspace-admin detach, cross-tenant oracle, scoped get
+  - [ ] RED domain: production CAS predicate tests
+  - [ ] GREEN domain: expectedVersion binding, shared CAS predicate, tenant-neutral oracle, scoped get
+  - [ ] RED API: stale workspace-admin guard, production CAS store, scoped get
+  - [ ] GREEN API: version-bound detach/end, tx-scoped roles, scoped get, store export
+  - [ ] Shared workspace provisioning with notifications and role levels (BR01-EX5)
+  - [ ] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
+  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
