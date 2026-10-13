@@ -81,7 +81,8 @@
 - [x] `K2B-MUTB-S` — Staged mutants S1-S5 killed at their targeted assertions.
 - [x] `K2B-MUTB-J` — Replay mutants J1-J2 killed at their targeted assertions.
 - [x] `K2B-MUTB-B` — Barrier mutants B1-B2 killed at their targeted assertions.
-- [ ] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions.
+- [x] `K2B-MUTB-L` — Lifecycle mutants L1-L3 killed at their targeted assertions.
+- [x] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -116,12 +117,12 @@
   - [x] `reference-staged.ts`: staged units, journal, coverage/barrier groundwork.
   - [x] `staged-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
   - [x] `replay-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
-  - [ ] One discriminating mutation per staged and replay behavior.
+  - [x] One discriminating mutation per staged and replay behavior.
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot 3 — Barrier and lifecycle corpora with G1**
   - [x] `barrier-corpus.ts` with G1 denial before/after disposal plus gate.
   - [x] `lifecycle-corpus.ts` (purge policy, holds, shared objects, completion) plus gate.
-  - [ ] One discriminating mutation per barrier and lifecycle behavior.
+  - [x] One discriminating mutation per barrier and lifecycle behavior.
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck and Lint

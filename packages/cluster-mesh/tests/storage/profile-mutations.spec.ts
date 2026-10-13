@@ -280,3 +280,70 @@ describe('K2b discriminating mutations: barrier', () => {
     await expect(runBarrierCorpus(bound)).rejects.toThrow(/cannot escape its barrier/);
   });
 });
+
+class HoldBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    bound.holdTarget = () => undefined;
+    bound.releaseHold = () => undefined;
+    return bound;
+  }
+}
+
+class DivergentShareStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.shareBlob.bind(bound);
+    bound.shareBlob = (blobId, owner, bytes) => {
+      try {
+        inner(blobId, owner, bytes);
+      } catch (error) {
+        if (isStorageError(error) && error.code === 'idempotency-conflict') return;
+        throw error;
+      }
+    };
+    return bound;
+  }
+}
+
+class ForkingOutcomeStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.completePurge.bind(bound);
+    let forks = 0;
+    bound.completePurge = (intentId) => {
+      const view = inner(intentId);
+      if (view.state === 'complete' && view.outcomeId !== null) {
+        forks += 1;
+        return { state: 'complete' as const, outcomeId: `${view.outcomeId}-fork-${forks}` };
+      }
+      return view;
+    };
+    return bound;
+  }
+}
+
+describe('K2b discriminating mutations: lifecycle', () => {
+  const bindLifecycle = (store: TestStagedReferenceStore) => {
+    const primary = store.bindStaged(stagedGrant());
+    return { primary, hooks: { rebind: async () => store.bindStaged(stagedGrant()) } };
+  };
+
+  it('L1-hold-blind-lifecycle is killed by the lifecycle corpus', async () => {
+    const store = new HoldBlindStore('comments');
+    const { primary, hooks } = bindLifecycle(store);
+    await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(/stalls completion/);
+  });
+
+  it('L2-divergent-share is killed by the lifecycle corpus', async () => {
+    const store = new DivergentShareStore('comments');
+    const { primary, hooks } = bindLifecycle(store);
+    await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(/conflict when divergent/);
+  });
+
+  it('L3-forking-outcome is killed by the lifecycle corpus', async () => {
+    const store = new ForkingOutcomeStore('comments');
+    const { primary, hooks } = bindLifecycle(store);
+    await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(/exactly one operational outcome/);
+  });
+});
