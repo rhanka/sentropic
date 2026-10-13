@@ -97,11 +97,13 @@ const MUSE_SERVING_PATH = '/v1/chat/completions';
 const textOf = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
-// Canonical ToolChoice uses { type: 'tool' }; the OpenAI-compat wire takes
-// { type: 'function' } (spec §16.4). Strings pass through untouched.
+// Canonical ToolChoice uses { type: 'tool' }; the Chat Completions wire
+// takes the nested OpenAI shape { type: 'function', function: { name } }
+// (spec §16.4) — the flat { type: 'function', name } form is Responses-only.
+// Strings pass through untouched.
 const openAiToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
   choice && typeof choice === 'object' && choice.type === 'tool'
-    ? { type: 'function', name: choice.name }
+    ? { type: 'function', function: { name: choice.name } }
     : choice;
 
 const numOf = (value: unknown): number | undefined =>
