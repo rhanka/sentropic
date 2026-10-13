@@ -150,6 +150,26 @@ class AbortKeptStore extends TestStagedReferenceStore {
   }
 }
 
+class NoCheckpointCasStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.journalCheckpoint.bind(bound);
+    bound.journalCheckpoint = async (consumer, _expected, next) => {
+      const view = await bound.journalInspect(consumer);
+      return inner(consumer, view.cursor, next);
+    };
+    return bound;
+  }
+}
+
+class PoisonBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    bound.journalMarkPoison = async () => undefined;
+    return bound;
+  }
+}
+
 const stagedHooks = (store: TestStagedReferenceStore, bound: TestStagedStore) => ({
   breakAuthority: async () => {
     store.revoke(bound.grant.token);
@@ -182,5 +202,35 @@ describe('K2b discriminating mutations: staged', () => {
   it('S5-abort-kept-effects is killed by the staged corpus', async () => {
     const { store, bound } = bindStaged(new AbortKeptStore('comments'));
     await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(/report abortion/);
+  });
+});
+
+describe('K2b discriminating mutations: replay', () => {
+  const bindReplayPair = (store: TestStagedReferenceStore) => {
+    const primary = store.bindStaged(stagedGrant());
+    const foreign = store.bindStaged(
+      grantFor({
+        token: `token-k2b-foreign-${(tokenSeq += 1)}`,
+        operations: ['read', 'write', 'maintain'],
+        scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' },
+      }),
+    );
+    return { primary, foreign };
+  };
+
+  it('J1-no-checkpoint-cas is killed by the replay corpus', async () => {
+    const store = new NoCheckpointCasStore('comments');
+    const { primary, foreign } = bindReplayPair(store);
+    await expect(
+      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+    ).rejects.toThrow(/stale checkpoint expectation/);
+  });
+
+  it('J2-poison-blind-journal is killed by the replay corpus', async () => {
+    const store = new PoisonBlindStore('comments');
+    const { primary, foreign } = bindReplayPair(store);
+    await expect(
+      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+    ).rejects.toThrow(/poison stalls the consumer/);
   });
 });
