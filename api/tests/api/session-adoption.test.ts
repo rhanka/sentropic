@@ -23,7 +23,8 @@ const sessionIds = [
   'sess-adopt-13', 'sess-adopt-14', 'sess-adopt-15', 'sess-adopt-16',
   'sess-adopt-17', 'sess-adopt-18', 'sess-adopt-19', 'sess-adopt-20',
   'sess-adopt-21', 'sess-adopt-22', 'sess-adopt-23', 'sess-adopt-24',
-  'sess-adopt-25', 'sess-adopt-26', 'sess-adopt-29',
+  'sess-adopt-25', 'sess-adopt-26', 'sess-adopt-27', 'sess-adopt-28',
+  'sess-adopt-29',
 ];
 
 // One-shot forced-interleave hook for the API race tests (m1, m2): the next
@@ -709,6 +710,42 @@ describe('session adoption workspace binding', () => {
     await expect(store.compareAndSet(stale!, {
       ...stale!, status: 'detached', version: 2, updatedAt: timestamp, detachedAt: timestamp,
     })).resolves.toBe(false);
+  });
+
+  it('should reject a stale compareAndSet for a session when another session shares the same state tuple (sessionId predicate)', async () => {
+    // Mutation record: removing `eq(sessionWorkspaceBindings.sessionId, …)`
+    // from the store WHERE lets this write through (returns true) by updating
+    // sess-adopt-28 instead of failing on sess-adopt-27.
+    const store = createDrizzleBindingStore(db);
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-27', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    await service.adopt({
+      sessionId: 'sess-adopt-28', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const staleA = await store.findBySession('sess-adopt-27');
+    const rowBBefore = await store.findBySession('sess-adopt-28');
+    expect(staleA?.version).toBe(1);
+    expect(rowBBefore?.version).toBe(1);
+    // Both sessions now share the exact same state tuple:
+    // status='attached', workspaceId, principalId, version=1.
+    // Advance sess-adopt-27 to version 2 so staleA (version 1) is stale.
+    await db.update(sessionWorkspaceBindings).set({ version: 2 })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-27'));
+
+    const timestamp = new Date().toISOString();
+    await expect(store.compareAndSet(staleA!, {
+      ...staleA!, status: 'detached', version: 2, updatedAt: timestamp, detachedAt: timestamp,
+    })).resolves.toBe(false);
+
+    // Verify sess-adopt-28 was NOT touched by the stale CAS attempt on sess-adopt-27.
+    const rowBAfter = await store.findBySession('sess-adopt-28');
+    expect(rowBAfter?.sessionId).toBe('sess-adopt-28');
+    expect(rowBAfter?.version).toBe(1);
+    expect(rowBAfter?.status).toBe('attached');
+    expect(rowBAfter?.workspaceId).toBe(workspaceId);
+    expect(rowBAfter?.principalId).toBe(user.id);
   });
 
   it('should hide the binding on get from a tenant member who is neither owner nor admin', async () => {
