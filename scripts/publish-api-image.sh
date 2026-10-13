@@ -10,28 +10,27 @@ API_VERSION="${API_VERSION:-}"
 API_IMAGE_RECEIPT="${API_IMAGE_RECEIPT:-.tmp/ci-prod-image/api-image-id}"
 API_IMAGE_REF="${API_IMAGE_REF:-}"
 MANIFEST_DIR="${MANIFEST_DIR:-.tmp/ci-prod-image}"
+LLM_MESH_NODE_IMAGE="${LLM_MESH_NODE_IMAGE:-node:24-bookworm-slim}"
 
 if [ -z "$API_VERSION" ]; then
   API_VERSION="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
 fi
 
-if [ -n "$REGISTRY" ]; then
-  TARGET_TAG="${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
-else
-  TARGET_TAG="${API_IMAGE_NAME}:${API_VERSION}"
+if [ -z "$REGISTRY" ]; then
+  echo "❌ Error: REGISTRY is not set. Publication requires an explicit registry." >&2
+  exit 1
 fi
 
+TARGET_TAG="${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
+
 # Moving tags policy:
-# Immutable release tags (content-addressed API_VERSION hashes) enforce strict collision
-# guards to guarantee reproducibility and prevent overwriting release artifacts.
-# In contrast, moving/alias tags (e.g. 'main', 'latest') are pointers designed to move forward
-# with each build or promotion. The dedicated target publish-api-main-image manages 'main'.
+# publish-api-image is dedicated strictly to immutable, content-addressed release tags.
+# Moving tags and aliases (such as 'main' or 'latest') must NOT be published through
+# this script; they must be promoted via publish-api-main-image.
 case "$API_VERSION" in
   main|latest)
-    echo "▶ Moving tag detected ($API_VERSION); updating $TARGET_TAG without collision guard..."
-    docker push "$TARGET_TAG"
-    echo "✅ Successfully updated moving tag $TARGET_TAG"
-    exit 0
+    echo "❌ Error: Cannot use publish-api-image for moving tag '$API_VERSION'. Moving tag aliases must be promoted via publish-api-main-image." >&2
+    exit 1
     ;;
 esac
 
@@ -56,31 +55,13 @@ rm -f "$manifest_file" "$manifest_err"
 
 echo "▶ Inspecting registry manifest for $TARGET_TAG..."
 if docker manifest inspect "$TARGET_TAG" > "$manifest_file" 2> "$manifest_err"; then
-  # Tag exists in registry! Extract remote digest
-  remote_digest=""
-  if command -v node >/dev/null 2>&1; then
-    remote_digest="$(node -e '
-      const fs = require("fs");
-      try {
-        const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-        const d = m.config?.digest || "";
-        if (d) process.stdout.write(d);
-      } catch (e) {
-        process.exit(1);
-      }
-    ' "$manifest_file" 2>/dev/null || true)"
-  fi
-  if [ -z "$remote_digest" ] && command -v jq >/dev/null 2>&1; then
-    remote_digest="$(jq -r '.config.digest // empty' "$manifest_file" 2>/dev/null || true)"
-  fi
-  if [ -z "$remote_digest" ] && [ -n "${LLM_MESH_NODE_IMAGE:-}" ]; then
-    remote_digest="$(docker run --rm -i "$LLM_MESH_NODE_IMAGE" node -e '
-      let s="";
-      for await (const c of process.stdin) s+=c;
-      const m = JSON.parse(s);
-      process.stdout.write(m.config?.digest || "");
-    ' < "$manifest_file" 2>/dev/null || true)"
-  fi
+  # Tag exists in registry! Extract remote digest via Docker container (Docker-First)
+  remote_digest="$(docker run --rm -i "$LLM_MESH_NODE_IMAGE" node -e '
+    let s="";
+    for await (const c of process.stdin) s+=c;
+    const m = JSON.parse(s);
+    process.stdout.write(m.config?.digest || "");
+  ' < "$manifest_file" 2>/dev/null || true)"
 
   if [ -z "$remote_digest" ]; then
     echo "❌ Error: Tag $TARGET_TAG exists in registry but could not extract config digest from manifest." >&2
@@ -95,16 +76,18 @@ if docker manifest inspect "$TARGET_TAG" > "$manifest_file" 2> "$manifest_err"; 
   echo "✅ Tag $TARGET_TAG already exists in registry with matching digest ($API_IMAGE_REF). Skipping push idempotently."
   exit 0
 else
-  # Inspect failed: verify if it is a missing manifest vs fatal error
-  combined_err="$(cat "$manifest_err" "$manifest_file" 2>/dev/null || true)"
-  if printf '%s\n' "$combined_err" | grep -Eiq 'manifest unknown|no such manifest|manifest not found|was not found|not found|does not exist'; then
+  # Inspect failed: verify if it is an exact missing manifest signal vs fatal error.
+  # Classify as absent ONLY on registry-specific manifest-unknown signal on stderr.
+  if [ -s "$manifest_err" ] && grep -Eq 'manifest unknown|no such manifest|manifest not found' "$manifest_err"; then
     echo "▶ Tag $TARGET_TAG is absent from registry. Pushing..."
     docker push "$TARGET_TAG"
     echo "✅ Successfully pushed $TARGET_TAG"
     exit 0
   else
     echo "❌ Error: Cannot establish production registry tag identity for $TARGET_TAG; refusing publication." >&2
-    printf '%s\n' "$combined_err" >&2
+    if [ -s "$manifest_err" ]; then
+      cat "$manifest_err" >&2
+    fi
     exit 1
   fi
 fi
