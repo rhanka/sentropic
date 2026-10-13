@@ -72,6 +72,7 @@
 - [x] `R3-RED2` — RED batch 2 (guard and rollback codes, opaque read cursors, envelope budget, retained-boundary disposal); observed failing pre-implementation, details in k1_r3_report.
 - [x] `R3-RED3` — RED batch 3 (persisted values, aggregate-version and predicate guards, unsupported-effect rejection); observed failing pre-implementation, details in k1_r3_report.
 - [x] `R3-RED4` — RED batch 4 (K1R3 validator tests, stale-update rollback, rebound replay pin); MIN2/MIN3 observed failing pre-fix, details in k1_r3_report.
+- [x] `R3-MUT1` — Mutations M6-M11 recorded and killed at their targeted assertions; M2 pattern widened to the R2 kill message.
 
 ## AI Flaky tests
 - [x] No AI flaky tests in scope.
