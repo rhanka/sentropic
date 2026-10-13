@@ -117,7 +117,7 @@ export const validateReadPage = (page: ReadPage, limits?: PageLimits): Validatio
     const validity = validatePageLimits(limits);
     if (!validity.ok) return validity;
     if (page.records.length > limits.maxRecords) errors.push('page exceeds maxRecords');
-    if (page.outcome === 'page') {
+    if (page.records.length > 0) {
       const encoded = Buffer.byteLength(JSON.stringify(page), 'utf8');
       if (encoded > limits.maxEncodedBytes) errors.push('page exceeds maxEncodedBytes');
       for (const record of page.records) {
