@@ -83,10 +83,12 @@ export interface PurgeJobView {
   readonly outcomeId: string | null;
 }
 
-interface PurgeJob extends PurgeJobView {
+interface PurgeJob {
   readonly intentId: string;
   readonly target: string;
   readonly authorizedBy: string;
+  state: 'pending' | 'held' | 'complete' | 'failed';
+  outcomeId: string | null;
 }
 
 interface StagedFragment {
@@ -583,5 +585,108 @@ export class TestStagedStore {
     entry.failedSeq = null;
     entry.cursor = this.staged.journalSeq;
     return { snapshotRoot: `root-${this.staged.journalSeq}`, journalSeq: this.staged.journalSeq };
+  }
+
+  configureLifecycle(policy: PurgePolicy): void {
+    this.requireOperation('maintain');
+    this.store.setPolicy(policy);
+  }
+
+  declareCoverage(parent: string, child: string): void {
+    this.requireOperation('write');
+    if (typeof parent !== 'string' || parent.length === 0 || typeof child !== 'string' || child.length === 0) {
+      throw new StorageInvalidCommandError('coverage requires a parent and a child');
+    }
+    if (parent === child) throw new StorageInvalidCommandError('coverage cannot cover itself');
+    let current: string | undefined = parent;
+    const seen = new Set<string>();
+    while (current !== undefined && !seen.has(current)) {
+      if (current === child) throw new StorageInvalidCommandError('coverage cannot cycle');
+      seen.add(current);
+      current = this.staged.coverage.get(current);
+    }
+    this.staged.coverage.set(child, parent);
+  }
+
+  holdTarget(target: string, reason: string): void {
+    this.requireOperation('maintain');
+    if (typeof target !== 'string' || target.length === 0 || typeof reason !== 'string' || reason.length === 0) {
+      throw new StorageInvalidCommandError('holds require a target and a reason');
+    }
+    this.staged.holds.set(target, reason);
+  }
+
+  releaseHold(target: string): void {
+    this.requireOperation('maintain');
+    if (!this.staged.holds.has(target)) throw new StorageInvalidCommandError('unknown hold');
+    this.staged.holds.delete(target);
+  }
+
+  completePurge(intentId: string): PurgeJobView {
+    this.requireOperation('maintain');
+    const job = this.staged.jobs.get(intentId);
+    if (!job) throw new StorageInvalidCommandError('unknown purge intent');
+    if (job.state === 'complete') return { state: job.state, outcomeId: job.outcomeId };
+    if (this.staged.holds.has(job.target)) {
+      job.state = 'held';
+      return { state: 'held', outcomeId: null };
+    }
+    if (!this.staged.chains.has(job.target) && !this.staged.blobs.has(job.target)) {
+      job.state = 'failed';
+      return { state: 'failed', outcomeId: null };
+    }
+    if (this.staged.chains.has(job.target) && !this.staged.disposed.has(job.target)) {
+      this.disposeChain(job.target);
+    }
+    const blob = this.staged.blobs.get(job.target);
+    if (blob) {
+      blob.bytes = null;
+      blob.owners.clear();
+    }
+    job.state = 'complete';
+    job.outcomeId = `purge-outcome-${intentId}`;
+    return { state: job.state, outcomeId: job.outcomeId };
+  }
+
+  purgeProgress(intentId: string): PurgeJobView {
+    this.requireOperation('read');
+    const job = this.staged.jobs.get(intentId);
+    if (!job) throw new StorageInvalidCommandError('unknown purge intent');
+    return { state: job.state, outcomeId: job.outcomeId };
+  }
+
+  purgeJobIds(): string[] {
+    this.requireOperation('read');
+    return [...this.staged.jobs.keys()];
+  }
+
+  shareBlob(blobId: string, owner: string, bytes: string): void {
+    this.requireOperation('write');
+    if (typeof blobId !== 'string' || blobId.length === 0 || typeof owner !== 'string' || owner.length === 0) {
+      throw new StorageInvalidCommandError('shared blobs require an id and an owner');
+    }
+    const existing = this.staged.blobs.get(blobId);
+    if (existing && existing.bytes !== null && existing.bytes !== bytes) {
+      throw new StorageIdempotencyConflictError('shared blob bytes conflict');
+    }
+    if (existing && existing.bytes !== null) {
+      existing.owners.add(owner);
+      return;
+    }
+    this.staged.blobs.set(blobId, { owners: new Set([owner]), bytes });
+  }
+
+  releaseBlob(blobId: string, owner: string): void {
+    this.requireOperation('write');
+    const existing = this.staged.blobs.get(blobId);
+    if (!existing) throw new StorageInvalidCommandError('unknown shared blob');
+    existing.owners.delete(owner);
+    if (existing.owners.size === 0) existing.bytes = null;
+  }
+
+  readBlob(blobId: string): string | null {
+    this.requireOperation('read');
+    if (this.isCovered(blobId)) throw new StorageDeniedError('barrier covered');
+    return this.staged.blobs.get(blobId)?.bytes ?? null;
   }
 }
