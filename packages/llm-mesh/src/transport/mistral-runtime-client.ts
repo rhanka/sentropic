@@ -105,11 +105,13 @@ const MISTRAL_SERVING_PATH = '/v1/chat/completions';
 // re-encoded); provider-originated reasoning history is not a wire input.
 type WireContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 
-// Canonical ToolChoice uses { type: 'tool' }; the OpenAI-compat wire takes
-// { type: 'function' } (spec §16.4). Strings pass through untouched.
+// Canonical ToolChoice uses { type: 'tool' }; the Chat Completions wire
+// takes the nested OpenAI shape { type: 'function', function: { name } }
+// (spec §16.4) — the flat { type: 'function', name } form is Responses-only.
+// Strings pass through untouched.
 const openAiToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
   choice && typeof choice === 'object' && choice.type === 'tool'
-    ? { type: 'function', name: choice.name }
+    ? { type: 'function', function: { name: choice.name } }
     : choice;
 
 const toWireMessage = (message: LlmMeshMessage): Record<string, unknown> => {
