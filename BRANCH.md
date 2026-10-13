@@ -90,6 +90,7 @@
 - [x] `K2B-FIX2-R2` — Single page-size rule (empty incomplete is null, last record measured with null); reference pages cross-checked through validateReadPage.
 - [x] `K2B-FIX2-R8` — M18 description matches the +6 envelope mutant; M17/M18/B3/T1 regexes pin one targeted assertion each.
 - [x] `K2B-FIX2-R3` — Resync never clears a poison stall (§13.1); stalled resync pinned (still stalled, checkpoint still refused, retry then checkpoint).
+- [x] `K2B-FIX2-R4` — Raw tombstone pinned discriminant (thread-2 coverage before tombstone stays readable, then thread-1 coverage denies).
 - [x] `K2B-FIX-MAJ2` — Resync no longer advances the checkpoint (§13.2 consume-then-acknowledge); J3 advancing-resync mutant killed.
 - [x] `K2B-FIX-MAJ3` — Abort asserts the typed state only; reference abort reason is the caller operation key, never an English sentence.
 - [x] `K2B-FIX-MIN` — Budgets derived from observed encoding (M18), empty-page envelope floor, retained-cursor and disposal evidence, staged index/seal/fence coverage, replay scope decoupling, divergent-intent atomicity, cursor-leak nulls.

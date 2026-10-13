@@ -183,6 +183,7 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
 
   await bound.appendChain('thread-2', { id: 'thread', bytes: '{"thread":2}', hash: 'hash-thread-2' }, { kind: 'absent', allocation: '0' });
   await bound.appendChain('comment-orphan', { id: 'orphan', bytes: '{}', hash: 'hash-orphan' }, { kind: 'absent', allocation: '0' });
+  await bound.declareCoverage('thread-2', 'comment-orphan');
   await bound.commitAtomic({
     ...emptyUnit(),
     appends: [
@@ -196,7 +197,7 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
   assert.equal(
     await bound.readHead('comment-orphan'),
     'hash-orphan',
-    'K2b-RED barriers: a raw tombstone without a barrier leaves reads unaffected',
+    'K2b-RED barriers: coverage without a barrier ancestor plus a raw tombstone leaves reads unaffected',
   );
   await bound.declareCoverage('thread-1', 'comment-orphan');
   await expectDenied(
