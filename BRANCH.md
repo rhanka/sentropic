@@ -61,7 +61,7 @@
 - [ ] `BR-K2B-DISC1` — One-time BRANCH.md rewrite (K1 content to K2b content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
 - [ ] `BR-K2B-EX1` — Deferred K2a-2 ticket merged into K2b per the k2b brief: touch `packages/cluster-mesh/tests/storage/reference-store.ts`, `read-corpus.ts`, `atomic-corpus.ts`, `reference.spec.ts`, `mutations.spec.ts` and `packages/cluster-mesh/src/storage/readers.ts` (R3 effective-cursor fix, M6/M11 mutants, Opus r3 MINEUR-1..5). Reason: the k2b brief owns the K2a-2 follow-up; impact: K1/K2a hunks only, no M1/L6a contact; rollback: revert the EX1 hunks file by file, K2b corpus stays green on the reverted reference only for non-R3 areas.
 - [x] `K2B-R3` — R3 fix: read pages measured with the effective returned cursor; 9 to 10 passage covered; skipped corpus test re-enabled and passing.
-- [ ] `K2B-MUT` — Sol M11 replaced by the record-counting mutant killed at the envelope assertion; M6 leaks staged effects on guard failure and dies on the rollback assertion; regexes tightened.
+- [x] `K2B-MUT` — Sol M11 replaced by the record-counting mutant killed at the envelope assertion; M6 leaks staged effects on guard failure and dies on the rollback assertion; regexes tightened.
 - [ ] `K2B-MIN2` — Atomic corpus profile-parameterized: barrier/purge/predicate rejections apply only when the profile is absent; positive owners recorded (K3 predicates, K2b/S3/P2c barriers and purge).
 - [ ] `K2B-MIN3` — `validateReadPage` byte limits apply to every record-carrying page; null-cursor and envelope-overflow validator tests added.
 - [ ] `K2B-MIN4` — Read corpus cursor-integrity gaps deferred to K3 token semantics; header adjusted.
@@ -95,7 +95,7 @@
   - [x] Create this BRANCH.md from plan/BRANCH_TEMPLATE.md.
 - [ ] **Lot 1 — Deferred R3 and mutation fixes (BR-K2B-EX1)**
   - [x] R3: effective-cursor measurement in `reference-store.ts` plus 9 to 10 coverage in `read-corpus.ts`; un-skip the cursor-budget test in `reference.spec.ts`.
-  - [ ] M6 dies on the guard-rollback assertion; M11 replaced by the record-counting mutant dying on the envelope assertion (`mutations.spec.ts`, `atomic-corpus.ts` message).
+  - [x] M6 dies on the guard-rollback assertion; M11 replaced by the record-counting mutant dying on the envelope assertion (`mutations.spec.ts`, `atomic-corpus.ts` message).
   - [ ] MIN2 profile parameterization (`atomic-corpus.ts`); MIN3 validator limits plus tests (`readers.ts`, `reference.spec.ts`); MIN4 header plus K3 deferral (`read-corpus.ts`).
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot 2 — Staged reference plus staged and replay corpora**

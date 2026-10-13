@@ -95,14 +95,22 @@ class NoStagingStore extends TestReferenceStore {
     const bound = super.bind(grant);
     const inner = bound.commitAtomic.bind(bound);
     bound.commitAtomic = async (unit: AtomicUnit, options?: CommitOptions) => {
-      for (const append of unit.appends) {
-        try {
-          await bound.appendChain(append.chainId, append.record, append.expectation);
-        } catch {
-          /* fall through to the staged commit */
+      try {
+        return await inner(unit, options);
+      } catch (error) {
+        if (error instanceof StorageCasConflictError) {
+          // Eager appends with late guard validation: the unit's appends stay
+          // live when the guard conflict surfaces, so the unit never rolls back.
+          for (const append of unit.appends) {
+            try {
+              await bound.appendChain(append.chainId, append.record, append.expectation);
+            } catch {
+              /* keep surfacing the guard conflict */
+            }
+          }
         }
+        throw error;
       }
-      return inner(unit, options);
     };
     return bound;
   }
@@ -167,12 +175,24 @@ class LatestHeadStore extends TestReferenceStore {
   }
 }
 
-class EnvelopeBlindStore extends TestReferenceStore {
+class RecordCountingStore extends TestReferenceStore {
   override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
     const bound = super.bind(grant);
     const inner = bound.readPage.bind(bound);
-    bound.readPage = (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) =>
-      inner(chainId, limit, cursor, maxEncodedBytes + 1024);
+    bound.readPage = async (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) => {
+      // Pre-R3 accounting: only the records count toward the budget while the
+      // envelope and the cursor ride free.
+      const admitted = await inner(chainId, limit, cursor, Number.MAX_SAFE_INTEGER);
+      if (admitted.outcome !== 'page') return admitted;
+      const recordsBytes = admitted.records.reduce(
+        (sum, entry) => sum + Buffer.byteLength(JSON.stringify(entry), 'utf8'),
+        0,
+      );
+      if (recordsBytes > maxEncodedBytes) {
+        return { outcome: 'incomplete', records: [], nextCursor: admitted.nextCursor } as const;
+      }
+      return admitted;
+    };
     return bound;
   }
 }
@@ -253,7 +273,7 @@ export const MUTATION_RECORDS: readonly MutationRecord[] = [
   { id: 'M8-code-as-idempotency', brokenSemantic: 'stale heads report idempotency-conflict instead of cas-conflict', corpus: 'chain', verdict: 'killed' },
   { id: 'M9-accept-unknown-token', brokenSemantic: 'bind accepts a never-issued grant token', corpus: 'authority', verdict: 'killed' },
   { id: 'M10-offset-cursor', brokenSemantic: 'read cursors follow the live head instead of the retained boundary', corpus: 'read', verdict: 'killed' },
-  { id: 'M11-envelope-blind-budget', brokenSemantic: 'read pages ignore envelope overhead in byte bounds', corpus: 'read', verdict: 'killed' },
+  { id: 'M11-record-counting-budget', brokenSemantic: 'read pages count records only toward byte bounds', corpus: 'read', verdict: 'killed' },
   { id: 'M12-empty-values', brokenSemantic: 'persisted records keep hashes but lose values', corpus: 'atomic', verdict: 'killed' },
   { id: 'M13-mutable-grant', brokenSemantic: 'bound handles follow caller-side grant mutation', corpus: 'authority', verdict: 'killed' },
   { id: 'M14-ignore-aggregate-version', brokenSemantic: 'atomic commits ignore aggregate-version guards', corpus: 'atomic', verdict: 'killed' },
@@ -306,7 +326,9 @@ describe('K2a discriminating mutations', () => {
     const { bound } = bindFresh(new NoStagingStore('comments'));
     await bound.appendChain('probe', { id: 'p', bytes: '{}', hash: 'hp-1' }, { kind: 'absent', allocation: '0' });
     await bound.appendChain('probe', { id: 'p', bytes: '{}', hash: 'hp-2' }, { kind: 'head', hash: 'hp-1' });
-    await expect(runAtomicCorpus(bound)).rejects.toThrow(/cas-conflict|guard/);
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(
+      /K2aR3-RED atomic: a failing guard rolls back the whole unit/,
+    );
   });
 
   it('M7-ignore-allocation is killed by the chain corpus', async () => {
@@ -337,9 +359,9 @@ describe('K2a discriminating mutations', () => {
     await expect(runReadCorpus(bound)).rejects.toThrow(/retained head|hash-e-5/);
   });
 
-  it('M11-envelope-blind-budget is killed by the read corpus', async () => {
-    const { bound } = bindFresh(new EnvelopeBlindStore('comments'));
-    await expect(runReadCorpus(bound)).rejects.toThrow(/incomplete/);
+  it('M11-record-counting-budget is killed by the read corpus', async () => {
+    const { bound } = bindFresh(new RecordCountingStore('comments'));
+    await expect(runReadCorpus(bound)).rejects.toThrow(/full encoded page/);
   });
 
   it('M12-empty-values is killed by the atomic corpus', async () => {
