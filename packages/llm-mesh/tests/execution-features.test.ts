@@ -37,22 +37,27 @@ describe('execution features (spec §16.3)', () => {
   });
 
   it('fails closed on undeclared support', () => {
-    expect(transportSupportsExecutionFeatures('codex', ['custom-tools', 'reasoning-context'])).toBe(false);
+    expect(transportSupportsExecutionFeatures('codex', ['native-reasoning-replay'])).toBe(false);
     expect(transportSupportsExecutionFeatures('codex', ['explicit-output-ceiling'])).toBe(false);
     expect(transportSupportsExecutionFeatures('muse', ['structured-output'])).toBe(false);
+    expect(transportSupportsExecutionFeatures('muse', ['native-reasoning-replay'])).toBe(false);
+    expect(transportSupportsExecutionFeatures('muse', ['custom-tools', 'verbosity'])).toBe(false);
     expect(transportSupportsExecutionFeatures('unknown-transport', ['verbosity'])).toBe(false);
   });
 
   it('declares the D16-C proven adapter controls per transport', () => {
     expect(transportSupportsExecutionFeatures('codex', [
       'named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema',
+      'reasoning-context', 'custom-tools', 'verbosity',
     ])).toBe(true);
-    expect(transportSupportsExecutionFeatures('muse', ['named-tool-choice', 'parallel-tool-control'])).toBe(true);
-    expect(transportSupportsExecutionFeatures('muse', ['reasoning-controls'])).toBe(false);
+    expect(transportSupportsExecutionFeatures('muse', [
+      'named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'explicit-output-ceiling',
+      'strict-schema',
+    ])).toBe(true);
     expect(transportSupportsExecutionFeatures('mistral-vibe', [
-      'named-tool-choice', 'parallel-tool-control', 'reasoning-controls',
+      'named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema',
     ])).toBe(true);
-    expect(transportSupportsExecutionFeatures('mistral-vibe', ['strict-schema'])).toBe(false);
+    expect(transportSupportsExecutionFeatures('mistral-vibe', ['custom-tools'])).toBe(false);
   });
 
   it('defers unpinned targets to the plan-time account check', () => {

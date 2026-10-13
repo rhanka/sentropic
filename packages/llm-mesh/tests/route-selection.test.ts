@@ -670,12 +670,12 @@ describe('execution-feature eligibility (spec §16.3)', () => {
   });
 
   it('fails closed when the account declares no execution support', () => {
-    // `verbosity` is declared by no transport (D16-C table): the pinned
-    // Codex account stays ineligible before acquisition.
+    // `native-reasoning-replay` is declared by no transport (D16-C table):
+    // the pinned Codex account stays ineligible before acquisition.
     expect(selectWith({
       requestedModel: 'gpt-6.1-sol',
       targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
-      requiredExecutionFeatures: ['verbosity'],
+      requiredExecutionFeatures: ['native-reasoning-replay'],
     }, [codexAccount])).toMatchObject({ kind: 'no-eligible-account' });
   });
 
