@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { isStorageError } from '../../src/storage/errors.js';
-import type { Awaitable } from './atomic-corpus.js';
+import { expectCode, type Awaitable } from './atomic-corpus.js';
 
 const codeOf = async (operation: () => unknown): Promise<string | null> => {
   try {
@@ -42,21 +42,21 @@ export const runChainCorpus = async (bound: ChainCorpusStore): Promise<void> => 
   const heads = (await bound.readChain('content')).map((entry) => entry.hash);
   assert.deepEqual(heads, ['hash-c-1', 'hash-c-2']);
 
-  await assert.rejects(
+  await expectCode(
     async () => bound.appendChain('fresh', record('f', 1), { kind: 'absent', allocation: '999' }),
-    /allocation/,
+    'invalid-command',
     'K2aC-RED chains: a new chain rejects a wrong creation allocation',
   );
 
-  await assert.rejects(
+  await expectCode(
     async () => bound.appendChain('content', record('c', 3), { kind: 'absent', allocation: '0' }),
-    /already exists/,
+    'idempotency-conflict',
     'K2a-RED chains: creation under an old absent expectation conflicts after data exists',
   );
 
-  await assert.rejects(
+  await expectCode(
     async () => bound.appendChain('content', record('c', 3), { kind: 'head', hash: 'hash-c-1' }),
-    /stale head/,
+    'cas-conflict',
     'K2a-RED chains: a stale expected head stays a CAS conflict',
   );
   assert.equal(
@@ -71,14 +71,14 @@ export const runChainCorpus = async (bound: ChainCorpusStore): Promise<void> => 
   );
 
   await bound.disposeChain('content');
-  await assert.rejects(
+  await expectCode(
     async () => bound.appendChain('content', record('c', 4), { kind: 'head', hash: 'hash-c-2' }),
-    /disposed/,
+    'invalid-command',
     'K2a-RED chains: disposed identities refuse new appends',
   );
-  await assert.rejects(
+  await expectCode(
     async () => bound.appendChain('content', record('c', 4), { kind: 'absent', allocation: '0' }),
-    /disposed|already exists/,
+    'invalid-command',
     'K2a-RED chains: disposed identities cannot be recreated under an old creation expectation',
   );
 };
