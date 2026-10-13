@@ -63,7 +63,7 @@
 - [x] `K2B-R3` — R3 fix: read pages measured with the effective returned cursor; 9 to 10 passage covered; skipped corpus test re-enabled and passing.
 - [x] `K2B-MUT` — Sol M11 replaced by the record-counting mutant killed at the envelope assertion; M6 leaks staged effects on guard failure and dies on the rollback assertion; regexes tightened.
 - [x] `K2B-MIN2` — Atomic corpus profile-parameterized: barrier/purge/predicate/relationship rejections apply only when the profile is absent; positive owners recorded (K3 predicates, K4 relationships, K2b/S3/P2c barriers and purge).
-- [ ] `K2B-MIN3` — `validateReadPage` byte limits apply to every record-carrying page; null-cursor and envelope-overflow validator tests added.
+- [x] `K2B-MIN3` — `validateReadPage` byte limits apply to every record-carrying page; null-cursor and envelope-overflow validator tests added.
 - [x] `K2B-MIN4` — Read corpus cursor-integrity gaps deferred to K3 token semantics; header adjusted.
 - [ ] `K2B-RED1` — RED staged corpus versus the unextended reference (hidden state, gaps, conflicts, atomic publication, recovery).
 - [ ] `K2B-RED2` — RED replay corpus (ordering, watermark, checkpoint CAS, poison, resync, external interleave).
@@ -98,7 +98,7 @@
   - [x] M6 dies on the guard-rollback assertion; M11 replaced by the record-counting mutant dying on the envelope assertion (`mutations.spec.ts`, `atomic-corpus.ts` message).
   - [x] MIN2 predicate/relationship profiles plus MIN4 header and K3 deferral (`atomic-corpus.ts`, `read-corpus.ts`).
   - [x] MIN2 barrier/purge positive paths (`atomic-corpus.ts`).
-  - [ ] MIN3 validator limits plus tests (`readers.ts`, `reference.spec.ts`).
+  - [x] MIN3 validator limits plus tests (`readers.ts`, `reference.spec.ts`).
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot 2 — Staged reference plus staged and replay corpora**
   - [ ] `reference-staged.ts`: staged units, journal, coverage/barrier groundwork.
