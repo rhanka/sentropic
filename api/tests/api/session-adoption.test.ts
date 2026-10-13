@@ -209,7 +209,7 @@ describe('session adoption workspace binding', () => {
       .rejects.toMatchObject({ code: 'workspace_rights_refused' });
   });
 
-  it('should hide cross-tenant bindings as binding_not_found on adopt', async () => {
+  it('should refuse cross-tenant adopt on a bound session without leaking the tenant', async () => {
     const service = new SessionWorkspaceService();
     await service.adopt({
       sessionId: 'sess-adopt-11', tenantId: TENANT_A, principalId: user.id, workspaceId,
@@ -220,7 +220,7 @@ describe('session adoption workspace binding', () => {
     await expect(service.adopt({
       sessionId: 'sess-adopt-11', tenantId: TENANT_B, principalId: user.id,
       create: { name: 'Probe code project', type: 'code' },
-    })).rejects.toMatchObject({ code: 'binding_not_found' });
+    })).rejects.toMatchObject({ code: 'session_already_attached' });
   });
 
   it('should refuse workspace creation via adoption for global guest role', async () => {
