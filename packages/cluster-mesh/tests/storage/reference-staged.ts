@@ -355,7 +355,7 @@ export class TestStagedStore {
   commitWithSegment(unit: AtomicUnit, options: CommitOptions, operationKey: string): CommitReceipt {
     this.pendingSegment = operationKey;
     try {
-      return this.commitAtomic(unit, options);
+      return this.commitAtomic(unit, { ...options, idempotencyKey: operationKey });
     } finally {
       this.pendingSegment = null;
     }
@@ -559,7 +559,7 @@ export class TestStagedStore {
     if (entry.cursor !== expected) throw new StorageCasConflictError('checkpoint expected mismatch');
     if (next < entry.cursor) throw new StorageInvalidCommandError('checkpoints are monotonic');
     if (next > this.staged.journalSeq) throw new StorageInvalidCommandError('checkpoint beyond the log');
-    if (entry.status === 'stalled' && entry.failedSeq !== null && next > entry.failedSeq) {
+    if (entry.status === 'stalled' && entry.failedSeq !== null && next >= entry.failedSeq) {
       throw new StorageInvalidCommandError('checkpoint cannot pass an undelivered poisoned event');
     }
     entry.cursor = next;

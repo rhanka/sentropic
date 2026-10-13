@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { runAtomicCorpus } from './atomic-corpus.js';
 import { grantFor } from './authority-corpus.js';
 import { runStagedCorpus } from './staged-corpus.js';
+import { runReplayCorpus } from './replay-corpus.js';
 import { TestStagedReferenceStore, type TestStagedStore } from './reference-staged.js';
 
 let tokenSeq = 0;
@@ -35,5 +36,22 @@ describe('K2b reference: atomic corpus with barrier and purge profiles', () => {
   it('K2b-RED profiled barrier and purge effects commit with carriers', async () => {
     const { bound } = bindStaged();
     await runAtomicCorpus(bound, { visibilityBarriers: true, purgeJobs: true });
+  });
+});
+
+describe('K2b reference: replay corpus', () => {
+  it('K2b-RED ordering, watermark, CAS, poison, resync and interleave hold', async () => {
+    const store = new TestStagedReferenceStore('comments');
+    const primary = store.bindStaged(stagedGrant());
+    const foreign = store.bindStaged(
+      grantFor({
+        token: `token-k2b-foreign-${(tokenSeq += 1)}`,
+        operations: ['read', 'write', 'maintain'],
+        scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' },
+      }),
+    );
+    await runReplayCorpus(primary, foreign, {
+      rebind: async () => store.bindStaged(stagedGrant()),
+    });
   });
 });
