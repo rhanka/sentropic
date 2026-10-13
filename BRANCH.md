@@ -80,11 +80,11 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
   - [x] Explicitly document and preserve moving tags behavior (`main`, `latest`).
   - [x] Update `publish-api-image` target in `Makefile` to call `scripts/publish-api-image.sh`.
 
-- [ ] **Lot 2 — Automated test suite**
-  - [ ] Create `scripts/test-api-tag-guard.sh` with isolated mock docker CLI.
-  - [ ] Implement test cases: `exists-different`, `exists-same`, `absent`, registry fatal error, and moving tags.
-  - [ ] Add `test-ci-api-tag-guard` target to `Makefile`.
-  - [ ] Run and pass test suite locally via `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+- [x] **Lot 2 — Automated test suite**
+  - [x] Create `scripts/test-api-tag-guard.sh` with isolated mock docker CLI.
+  - [x] Implement test cases: `exists-different`, `exists-same`, `absent`, registry fatal error, and moving tags.
+  - [x] Add `test-ci-api-tag-guard` target to `Makefile`.
+  - [x] Run and pass test suite locally via `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
 
 - [ ] **Lot 3 — CI workflow wiring**
   - [ ] Update `.github/workflows/ci.yml` `changes` filter `global` to include new scripts.

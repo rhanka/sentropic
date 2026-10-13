@@ -528,6 +528,10 @@ verify-api-image: ## Fail if the loaded canonical tag differs from the recorded 
 test-ci-api-runtime: verify-api-image ## Prove the production artifact has no npm CLI, global tree or cache
 	@docker run --rm $(API_IMAGE_REF) sh -ec '! command -v npm; ! command -v npx; test ! -e /usr/local/lib/node_modules/npm; test ! -e /root/.npm; node --version'
 
+.PHONY: test-ci-api-tag-guard
+test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
+	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
+
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
 	@echo $(API_TOOL_VERSION)
