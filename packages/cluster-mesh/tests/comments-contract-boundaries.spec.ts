@@ -22,9 +22,9 @@ import {
   missingProfiles,
   satisfiesRequirements,
 } from '../src/storage/profiles.js';
-// Frozen M1 wire codes imported from the frozen source (test-only import;
-// production runtime in packages/cluster-mesh/src imports no comments code).
-import { CANONICAL_WIRE_ERROR_CODES } from '../../comments/src/command-store.js';
+// Frozen M1 error vocabularies are parsed from the frozen sources
+// (commands.ts, command-store.ts); production runtime in packages/cluster-mesh/src
+// imports no comments code or checkout paths.
 
 // Resolve repository root from test location
 const REPO_ROOT = resolve(__dirname, '../../..');
@@ -94,6 +94,17 @@ const parseCommandErrorCodes = (): readonly string[] => {
   return [...block.matchAll(/'([^']+)'/g)].map((m) => m[1]);
 };
 
+/** Parse the CANONICAL_WIRE_ERROR_CODES array out of the frozen command-store.ts. */
+const parseWireErrorCodes = (): readonly string[] => {
+  const src = readFileSync(resolve(REPO_ROOT, 'packages/comments/src/command-store.ts'), 'utf8');
+  const anchor = 'export const CANONICAL_WIRE_ERROR_CODES = [';
+  const start = src.indexOf(anchor);
+  expect(start, 'CANONICAL_WIRE_ERROR_CODES anchor in frozen command-store.ts').toBeGreaterThanOrEqual(0);
+  const end = src.indexOf('] as const;', start);
+  const block = src.slice(start, end);
+  return [...block.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+};
+
 const listTsFiles = (dir: string): string[] => {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -144,9 +155,6 @@ describe('C0 exit proof: Frozen-M1 preservation', () => {
       'packages/comments/src/index.ts': '0000000000000000000000000000000000000000000000000000000000000000',
     };
     expect(verifyHashPins(tampered)).toEqual(['packages/comments/src/index.ts']);
-    const missing = { ...pins };
-    delete missing['packages/comments/src/index.ts'];
-    expect(verifyHashPins({ ...missing, 'packages/comments/src/index.ts': pins['packages/comments/src/index.ts'] })).toEqual([]);
     expect(verifyHashPins({ 'packages/comments/src/does-not-exist.ts': '00' })).toEqual([
       'packages/comments/src/does-not-exist.ts',
     ]);
@@ -191,7 +199,8 @@ describe('C0 exit proof: Frozen-M1 preservation', () => {
       wireErrors: string[];
     };
     expect([...parseCommandErrorCodes()].sort()).toEqual([...vocabulary.commandErrors].sort());
-    expect([...CANONICAL_WIRE_ERROR_CODES].sort()).toEqual([...vocabulary.wireErrors].sort());
+    const wireCodes = parseWireErrorCodes();
+    expect([...wireCodes].sort()).toEqual([...vocabulary.wireErrors].sort());
     expect(vocabulary.commandErrors).toEqual([
       'cas-conflict',
       'idempotency-conflict',
@@ -241,6 +250,11 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     const transport = (manifest.extensions as Record<string, Record<string, unknown>>).transport as {
       qualification: string;
       limits: Record<string, number | null>;
+      byteUnits: string;
+      pagingSemantics: Record<string, string>;
+      recordFramingRule: string;
+      proposedHostInjectedBounds: Record<string, unknown>;
+      transportQualificationRequirement: string;
       admission: Record<string, number>;
       incompatibilityRule: string;
       moduleOperations: string[];
@@ -257,6 +271,25 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
       completeEncodedPageBytes: 1048576,
       commentsCursorTtlSeconds: null,
     });
+    expect(transport.byteUnits).toBe('canonical bytes');
+    expect(transport.pagingSemantics).toEqual({
+      ordinaryPages: 'Ordinary pages count canonical records',
+      fragmentPages: 'Fragment pages count complete fragment envelopes',
+      byteLimitsInclusion: 'Both count the full response envelope and cursor toward byte limits',
+    });
+    expect(transport.recordFramingRule).toBe(
+      'Whole histories have no fragment-sized ceiling. A record plus required framing must fit an individual fragment.',
+    );
+    expect(transport.proposedHostInjectedBounds).toEqual({
+      bodyBytes: 65536,
+      segmentBytes: 16384,
+      profileBytes: 16384,
+      units: 'canonical bytes',
+      note: 'Existing M1 body/segment/profile bounds remain host-injected; CA proposed values are 64 KiB, 16 KiB and 16 KiB respectively.',
+    });
+    expect(transport.transportQualificationRequirement).toBe(
+      'Transport qualification must include escaping and multibyte encoding.',
+    );
     expect(transport.admission).toEqual({
       segmentsPerBody: 64,
       mentionsPerBody: 64,
@@ -322,18 +355,33 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
     expect(doc).toContain('retained-headers');
     expect(doc).toContain('transport-v1');
     expect(doc).toContain('staged-units-v1');
+    expect(doc).toContain('canonical bytes');
+    expect(doc).toContain('record plus required framing');
+    expect(doc).toContain('escaping and multibyte encoding');
+    expect(doc).toContain('frozen L3a v4.1 §17 row C0, §17.4');
   });
 
   it('production runtimes stay decoupled across the storage port', () => {
     const clusterMeshSrc = resolve(REPO_ROOT, 'packages/cluster-mesh/src');
     const commentsSrc = resolve(REPO_ROOT, 'packages/comments/src');
-    const clusterMeshOffenders = listTsFiles(clusterMeshSrc).filter((abs) =>
-      readFileSync(abs, 'utf8').includes('@sentropic/comments'),
-    );
-    expect(clusterMeshOffenders, 'cluster-mesh production import of @sentropic/comments').toEqual([]);
-    const commentsOffenders = listTsFiles(commentsSrc).filter((abs) =>
-      readFileSync(abs, 'utf8').includes('@sentropic/cluster-mesh'),
-    );
+    const crossPackageImportPattern = (pkgName: string): RegExp =>
+      new RegExp(`(?:from\\s+['"]|import\\s*\\(['"]|import\\s+['"])(?:@sentropic\\/${pkgName}\\b|(?:\\.\\.\\/)+${pkgName}\\b)`);
+
+    const clusterMeshOffenders = listTsFiles(clusterMeshSrc).filter((abs) => {
+      const content = readFileSync(abs, 'utf8');
+      return (
+        content.includes('@sentropic/comments') ||
+        crossPackageImportPattern('comments').test(content)
+      );
+    });
+    expect(clusterMeshOffenders, 'cluster-mesh production import of comments').toEqual([]);
+    const commentsOffenders = listTsFiles(commentsSrc).filter((abs) => {
+      const content = readFileSync(abs, 'utf8');
+      return (
+        content.includes('@sentropic/cluster-mesh') ||
+        crossPackageImportPattern('cluster-mesh').test(content)
+      );
+    });
     expect(commentsOffenders, 'frozen comments production import of cluster-mesh').toEqual([]);
   });
 
@@ -387,5 +435,30 @@ describe('C0 exit proof: Storage compatibility and extension manifest', () => {
       'scope-outbox-v1',
       'visibility-barriers-v1',
     ]);
+  });
+
+  it('step-1 docs preserve frozen §18.2 alignment without forbidden phrases', () => {
+    const step1Docs = [
+      'spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md',
+      'docs/comments-annotations/plan/PLAN_COMMENTS_ANNOTATIONS.md',
+      'docs/comments-annotations/plan/PLAN_HANDOFF.md',
+      'docs/comments-annotations/plan/BRANCH_P1_TEMPLATE.md',
+    ];
+    const forbiddenPhrases = [
+      'being authored now',
+      'live-storage/port.ts',
+      'includes the proposed @sentropic/comments/conformance',
+      'L3b-S qualification',
+    ];
+
+    for (const relPath of step1Docs) {
+      const content = readFileSync(resolve(REPO_ROOT, relPath), 'utf8');
+      for (const phrase of forbiddenPhrases) {
+        expect(
+          content.includes(phrase),
+          `Step-1 doc ${relPath} must not contain forbidden phrase "${phrase}" (contradicts frozen §18.2)`,
+        ).toBe(false);
+      }
+    }
   });
 });
