@@ -263,3 +263,9 @@
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
   - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).
+- [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
+  - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
+  - [ ] R4-MAJ-1: nested Chat `tool_choice` on muse/mistral clients.
+  - [ ] R4-MAJ-4: pre-dispatch refusal for Messages/Chat tool controls (no billed estimate).
+  - [ ] R4-MAJ-2: Muse history projection (`toWireMessage` equivalent).
+  - Owner/driver decision needed (not fixable in fold): R4-BLQ-1 (Meta reasoning slot + live replay), R4-MAJ-3 (live Codex namespaced-tool capture).

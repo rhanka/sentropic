@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 
 import {
@@ -262,5 +262,38 @@ describe('router checked-body admission (N06)', () => {
     const res = await app.request('/v1/messages', { method: 'POST' });
     expect(res.status).toBe(501);
     expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+
+  it.each(['/responses', '/v1/responses'] as const)('answers an authenticated OpenAI 501 on legacy-only %s without touching legacy dispatch', async (path) => {
+    const dispatch = { dispatch: vi.fn(async () => ({ status: 200, body: {} })),
+      dispatchStream: vi.fn(() => { throw Error('legacy stream must not run'); }) };
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig,
+        callerAuth: { async verify() { return { ok: true as const,
+          cost: { tenantId: 't', principalId: 'u', source: 'test', correlationId: 'c' } }; } },
+        dispatch },
+      resolveTarget: () => ({ providerId: 'openai', transportProviderId: 'openai', model: 'm' }),
+      metering: { settle: async () => {} },
+    });
+    const res = await app.request(path, { method: 'POST', headers: { authorization: 'Bearer test' },
+      body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'hello' }) });
+    expect(res.status).toBe(501);
+    expect(await res.json()).toEqual({ error: expect.objectContaining({ type: 'server_error', code: 'not_implemented' }) });
+    expect(dispatch.dispatch).not.toHaveBeenCalled();
+    expect(dispatch.dispatchStream).not.toHaveBeenCalled();
+  });
+
+  it.each(['/responses', '/v1/responses'] as const)('keeps caller auth ahead of the legacy-only %s 501', async (path) => {
+    const dispatch = { dispatch: vi.fn(), dispatchStream: vi.fn() };
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig, dispatch },
+      resolveTarget: () => ({ providerId: 'openai', transportProviderId: 'openai', model: 'm' }),
+      metering: { settle: async () => {} },
+    });
+    const res = await app.request(path, { method: 'POST',
+      body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'hello' }) });
+    expect(res.status).toBe(401);
+    expect(dispatch.dispatch).not.toHaveBeenCalled();
+    expect(dispatch.dispatchStream).not.toHaveBeenCalled();
   });
 });
