@@ -1,4 +1,4 @@
-// Shared atomic corpus for every backend (L3a v4 §5, §16.1).
+// Shared atomic corpus for every backend (L3a v4.1 frozen §5, §16.1).
 // Runs against the test-only reference here; real SQLite/Postgres later.
 // Backend-agnostic: structural port-shaped operations, all awaited (§5.2).
 
