@@ -31,9 +31,20 @@ export interface AtomicCorpusStore {
   commitAtomic(unit: AtomicUnit, options?: CommitOptions): Awaitable<CommitReceipt>;
 }
 
+// Announced backend profiles (L3a v4.1 frozen §3.2, §16.1): rejections below
+// apply only when the profile is absent. Positive predicate cases are owned
+// by K3, positive relationship cases by K4, barrier and purge positives by
+// K2b/S3/P2c. Defaults preserve the K2a reference limits.
+export interface AtomicCorpusProfiles {
+  readonly visibilityBarriers?: boolean;
+  readonly purgeJobs?: boolean;
+  readonly predicates?: boolean;
+  readonly relationships?: boolean;
+}
+
 const record = (id: string, n: number) => ({ id, bytes: `{"n":${n}}`, hash: `hash-${id}-${n}` });
 
-export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> => {
+export const runAtomicCorpus = async (bound: AtomicCorpusStore, profiles: AtomicCorpusProfiles = {}): Promise<void> => {
   const first = await bound.appendChain('chain-a', record('a', 1), { kind: 'absent', allocation: '0' });
   assert.equal(first.seq, 0);
   assert.equal(first.replayed, false);
@@ -285,27 +296,29 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
     'K2aR3-RED atomic: a failed version guard leaves no effects behind',
   );
 
-  await expectCode(
-    async () =>
-      bound.commitAtomic({
-        guards: [{ kind: 'predicate', predicateId: 'pred-1', dependency: 'dep-1' }],
-        records: [],
-        appends: [
-          {
-            chainId: 'chain-a',
-            record: record('a', 6),
-            expectation: { kind: 'head', hash: 'hash-a-5' },
-          },
-        ],
-        updates: [],
-        relationships: [],
-        barriers: [],
-        purgeIntents: [],
-        indexWrites: [],
-      }),
-    'invalid-command',
-    'K2aR3-RED atomic: a predicate guard is explicitly rejected by the K2a reference',
-  );
+  if (!profiles.predicates) {
+    await expectCode(
+      async () =>
+        bound.commitAtomic({
+          guards: [{ kind: 'predicate', predicateId: 'pred-1', dependency: 'dep-1' }],
+          records: [],
+          appends: [
+            {
+              chainId: 'chain-a',
+              record: record('a', 6),
+              expectation: { kind: 'head', hash: 'hash-a-5' },
+            },
+          ],
+          updates: [],
+          relationships: [],
+          barriers: [],
+          purgeIntents: [],
+          indexWrites: [],
+        }),
+      'invalid-command',
+      'K2aR3-RED atomic: a predicate guard is explicitly rejected by the K2a reference',
+    );
+  }
 
   await expectCode(
     async () =>
@@ -330,32 +343,53 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
 
   assert.equal(await bound.readHead('chain-a'), 'hash-a-5');
 
-  await expectCode(
-    async () =>
-      bound.commitAtomic({
-        guards: [],
-        records: [],
-        appends: [
-          {
-            chainId: 'rel-chain',
-            record: record('rel', 1),
-            expectation: { kind: 'absent', allocation: '0' },
-          },
-        ],
-        updates: [],
-        relationships: [{ kind: 'add', relation: 'rel-1', from: 'a', to: 'b' }],
-        barriers: [],
-        purgeIntents: [],
-        indexWrites: [],
-      }),
-    'invalid-command',
-    'K2aR3-RED atomic: relationships are explicitly rejected by the K2a reference',
-  );
-  assert.equal(
-    await bound.readHead('rel-chain'),
-    null,
-    'K2aR3-RED atomic: a rejected relationships unit leaves no carrier effects behind',
-  );
+  if (profiles.relationships) {
+    const related = await bound.commitAtomic({
+      guards: [],
+      records: [],
+      appends: [
+        {
+          chainId: 'rel-chain',
+          record: record('rel', 1),
+          expectation: { kind: 'absent', allocation: '0' },
+        },
+      ],
+      updates: [],
+      relationships: [{ kind: 'add', relation: 'rel-1', from: 'a', to: 'b' }],
+      barriers: [],
+      purgeIntents: [],
+      indexWrites: [],
+    });
+    assert.equal(related.effectiveAppends, 1);
+    assert.equal(await bound.readHead('rel-chain'), 'hash-rel-1');
+  } else {
+    await expectCode(
+      async () =>
+        bound.commitAtomic({
+          guards: [],
+          records: [],
+          appends: [
+            {
+              chainId: 'rel-chain',
+              record: record('rel', 1),
+              expectation: { kind: 'absent', allocation: '0' },
+            },
+          ],
+          updates: [],
+          relationships: [{ kind: 'add', relation: 'rel-1', from: 'a', to: 'b' }],
+          barriers: [],
+          purgeIntents: [],
+          indexWrites: [],
+        }),
+      'invalid-command',
+      'K2aR3-RED atomic: relationships are explicitly rejected by the K2a reference',
+    );
+    assert.equal(
+      await bound.readHead('rel-chain'),
+      null,
+      'K2aR3-RED atomic: a rejected relationships unit leaves no carrier effects behind',
+    );
+  }
 
   await expectCode(
     async () =>
