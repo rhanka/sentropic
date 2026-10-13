@@ -1,6 +1,11 @@
 import type { CapabilityRequirement } from './equivalence-council.js';
 import type { ExecutionFeature } from './execution-features.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
+import type {
+  NativeMessagesAdvertisement,
+  NativeUsagePricing,
+  PreparedNativeMessages,
+} from './native-messages.js';
 import type { RoutePolicy, RouteSelector } from './routing-policy.js';
 import type { TargetMapping } from './routing-targets.js';
 
@@ -26,6 +31,8 @@ export interface EligibleAccountDescriptor {
    * support. Populated by the account directory from runtime declarations.
    */
   readonly supportedExecutionFeatures?: readonly ExecutionFeature[];
+  /** Credential-free native advertisement; executable closures stay host-side. */
+  readonly nativeMessages?: NativeMessagesAdvertisement;
 }
 
 export interface RouteAvailabilityDiagnostic {
@@ -61,6 +68,8 @@ export interface RoutePlanInput {
   readonly policyProfile?: string;
   readonly policyOverride?: Partial<RoutePolicy>;
   readonly explicit?: RouteSelector;
+  /** Required native execution; composes conjunctively with execution features. */
+  readonly nativeMessages?: true;
   /** Pins the plan to a previously issued quote: no unquoted target, no larger attempt count. */
   readonly quote?: RouteQuote;
 }
@@ -80,7 +89,8 @@ export interface RouteUsageCeiling {
 }
 
 export type RouteQuoteInput = Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'intent'
-  | 'requiredCapabilities' | 'requiredExecutionFeatures' | 'policyProfile' | 'policyOverride' | 'explicit'>
+  | 'requiredCapabilities' | 'requiredExecutionFeatures' | 'policyProfile' | 'policyOverride' | 'explicit'
+  | 'nativeMessages'>
   & { readonly ceiling: RouteUsageCeiling; readonly now: Date };
 
 export interface QuotedRouteCandidate {
@@ -115,6 +125,7 @@ export interface RouteQuote {
 export type RouteQuoteErrorCode =
   | 'unknown-model'
   | 'capabilities-unmet'
+  | 'native-unavailable'
   | 'invalid-ceiling'
   | 'too-many-candidates';
 
@@ -173,7 +184,8 @@ export interface RouteFailureClassification {
   readonly committed?: boolean;
 }
 
-export interface RouteAttemptUsage {
+/** Physical attempt counts; optional native pricing evidence is trusted observer data. */
+export interface RouteAttemptUsage extends NativeUsagePricing {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly estimated: boolean;
@@ -181,6 +193,7 @@ export interface RouteAttemptUsage {
 
 export interface PreparedRouteAttempt {
   readonly attemptRef: string;
+  readonly nativeMessages?: PreparedNativeMessages;
   generate(request: GenerateRequest): Promise<GenerateResponse>;
   stream(request: StreamRequest): Promise<StreamResult>;
   recordOutcome(classification: RouteFailureClassification, usage?: RouteAttemptUsage): Promise<void>;

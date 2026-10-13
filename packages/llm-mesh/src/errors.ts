@@ -1,5 +1,24 @@
 import type { ProviderId } from './providers.js';
 
+/** Trusted transport measurement; never derive numbers from provider prose or caller headers. */
+export interface RequestSizeDetail {
+  readonly requestBytes: number;
+  readonly limitBytes?: number;
+  readonly sizeIsLowerBound?: boolean;
+  readonly source: 'gateway' | 'upstream';
+}
+
+export const readRequestSizeDetail = (value: unknown): RequestSizeDetail | undefined => {
+  const detail = value as Partial<RequestSizeDetail> | null;
+  if (!detail || typeof detail !== 'object' || !Number.isSafeInteger(detail.requestBytes)
+    || detail.requestBytes! < 0 || (detail.source !== 'gateway' && detail.source !== 'upstream')
+    || (detail.limitBytes !== undefined && (!Number.isSafeInteger(detail.limitBytes) || detail.limitBytes <= 0))
+    || (detail.sizeIsLowerBound !== undefined && typeof detail.sizeIsLowerBound !== 'boolean')) return undefined;
+  return Object.freeze({ requestBytes: detail.requestBytes!, source: detail.source,
+    ...(detail.limitBytes !== undefined ? { limitBytes: detail.limitBytes } : {}),
+    ...(detail.sizeIsLowerBound !== undefined ? { sizeIsLowerBound: detail.sizeIsLowerBound } : {}) });
+};
+
 export type ProviderErrorRetryReason =
   | 'rate_limit'
   | 'timeout'
