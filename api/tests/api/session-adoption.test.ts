@@ -23,7 +23,7 @@ const sessionIds = [
   'sess-adopt-13', 'sess-adopt-14', 'sess-adopt-15', 'sess-adopt-16',
   'sess-adopt-17', 'sess-adopt-18', 'sess-adopt-19', 'sess-adopt-20',
   'sess-adopt-21', 'sess-adopt-22', 'sess-adopt-23', 'sess-adopt-24',
-  'sess-adopt-25', 'sess-adopt-26',
+  'sess-adopt-25', 'sess-adopt-26', 'sess-adopt-29',
 ];
 
 // One-shot forced-interleave hook for the API race tests (m1, m2): the next
@@ -280,33 +280,61 @@ describe('session adoption workspace binding', () => {
   });
 
   it('should emit workspace creation notifications on adopt-create', async () => {
-    // m5: observes the NOTIFY emission directly (LISTEN on both channels).
+    // m5/m3: observes NOTIFY emission directly (LISTEN on both channels),
+    // asserts both payloads carry the created workspace id, and unlistens.
     const client = await pool.connect();
+    const seen: Array<{ channel: string; payload: string }> = [];
+    let resolveListener: (() => void) | null = null;
+    const notificationHandler = (msg: { channel: string; payload?: string }) => {
+      seen.push({ channel: msg.channel, payload: msg.payload ?? '' });
+      if (resolveListener) resolveListener();
+    };
     try {
+      client.on('notification', notificationHandler);
       await client.query('LISTEN workspace_events');
       await client.query('LISTEN workspace_membership_events');
-      const seen: Array<{ channel: string; payload: string }> = [];
-      const drained = new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, 3000);
-        client.on('notification', (msg) => {
-          seen.push({ channel: msg.channel, payload: msg.payload ?? '' });
-          if (seen.some((s) => s.channel === 'workspace_events')
-            && seen.some((s) => s.channel === 'workspace_membership_events')) {
-            clearTimeout(timer);
-            resolve();
-          }
-        });
-      });
+
       const service = new SessionWorkspaceService();
       const binding = await service.adopt({
         sessionId: 'sess-adopt-25', tenantId: TENANT_A, principalId: user.id,
         create: { name: 'Notified code project', type: 'code' },
       });
-      await drained;
-      expect(seen.map((s) => s.channel)).toContain('workspace_events');
-      expect(seen.map((s) => s.channel)).toContain('workspace_membership_events');
-      expect(seen.some((s) => s.payload.includes(binding.workspaceId))).toBe(true);
+
+      const hasBoth = () =>
+        seen.some((s) => s.channel === 'workspace_events' && s.payload.includes(binding.workspaceId))
+        && seen.some((s) => s.channel === 'workspace_membership_events' && s.payload.includes(binding.workspaceId));
+
+      if (!hasBoth()) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 3000);
+          resolveListener = () => {
+            if (hasBoth()) {
+              clearTimeout(timer);
+              resolve();
+            }
+          };
+        });
+      }
+
+      // Assert both channels delivered notifications specific to the created workspace.
+      const wsEvents = seen
+        .filter((s) => s.channel === 'workspace_events' && s.payload.includes(binding.workspaceId))
+        .map((s) => JSON.parse(s.payload));
+      expect(wsEvents.length).toBeGreaterThanOrEqual(1);
+      expect(wsEvents[0].workspace_id).toBe(binding.workspaceId);
+      expect(wsEvents[0].data?.action).toBe('created');
+
+      const memberEvents = seen
+        .filter((s) => s.channel === 'workspace_membership_events' && s.payload.includes(binding.workspaceId))
+        .map((s) => JSON.parse(s.payload));
+      expect(memberEvents.length).toBeGreaterThanOrEqual(1);
+      expect(memberEvents[0].workspace_id).toBe(binding.workspaceId);
+      expect(memberEvents[0].user_id).toBe(user.id);
+      expect(memberEvents[0].data?.action).toBe('added');
+      expect(memberEvents[0].data?.role).toBe('admin');
     } finally {
+      client.removeListener('notification', notificationHandler);
+      await client.query('UNLISTEN *').catch(() => {});
       client.release();
     }
   });
@@ -371,6 +399,29 @@ describe('session adoption workspace binding', () => {
     expect(second).toMatchObject({
       bindingId: first.bindingId, status: 'ended', version: first.version,
     });
+  });
+
+  it('should reject concurrent end when CAS loses the race and allow idempotent retry', async () => {
+    const service = new SessionWorkspaceService();
+    await service.adopt({
+      sessionId: 'sess-adopt-29', tenantId: TENANT_A, principalId: user.id, workspaceId,
+    });
+    const results = await Promise.allSettled([
+      service.end('sess-adopt-29', TENANT_A, user.id),
+      service.end('sess-adopt-29', TENANT_A, user.id),
+    ]);
+    const fulfilled = results.filter((r): r is PromiseFulfilledResult<AdoptedSessionWorkspace> => r.status === 'fulfilled');
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+    expect(fulfilled[0].value.status).toBe('ended');
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    for (const rej of rejected) {
+      expect(rej.reason).toMatchObject({
+        code: 'session_not_attached',
+        message: expect.stringContaining('retry the end'),
+      });
+    }
+    const replay = await service.end('sess-adopt-29', TENANT_A, user.id);
+    expect(replay.status).toBe('ended');
   });
 
   it('should conflict concurrent adopts of different workspaces', async () => {
