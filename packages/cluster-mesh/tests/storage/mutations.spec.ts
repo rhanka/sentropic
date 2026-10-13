@@ -201,20 +201,74 @@ class FrozenResumeCursorStore extends TestReferenceStore {
   override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
     const bound = super.bind(grant);
     const inner = bound.readPage.bind(bound);
-    bound.readPage = async (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) => {
-      // MAJ-1 mutant: freeze the resume cursor one position past the
-      // delivered prefix, skipping the first undelivered record.
-      const page = await inner(chainId, limit, cursor, maxEncodedBytes);
-      if (
-        page.outcome === 'incomplete' &&
-        page.records.length > 0 &&
-        page.nextCursor !== null &&
-        typeof page.nextCursor === 'object'
-      ) {
-        const stale = page.nextCursor as ChainPageCursor;
-        return { ...page, nextCursor: { ...stale, position: stale.position + 1 } };
+    const innerChain = bound.readChain.bind(bound);
+    const innerHead = bound.readHead.bind(bound);
+    const encodedBytes = (
+      outcome: string,
+      records: readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[],
+      nextCursor: unknown,
+    ): number => Buffer.byteLength(JSON.stringify({ outcome, records, nextCursor }), 'utf8');
+    // MAJ-1 faithful mutant: revert of fitIncomplete — the resume cursor is
+    // frozen before trimming (start + pre-trim length) instead of being
+    // recomputed as start + delivered. Under a budget that forces a trim
+    // (161-166 on s0..s2) it returns [s0] + {2}, skipping s1 on resume.
+    // Empty trims stay null so the mutant passes the floor assertions and
+    // dies on the exact full record set.
+    const buggyFit = (
+      records: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[],
+      start: number,
+      head: string | null,
+      maxEncodedBytes: number,
+    ) => {
+      const frozen: ChainPageCursor | null = head === null ? null : { position: start + records.length, head };
+      const trimmed = [...records];
+      while (trimmed.length > 0 && encodedBytes('incomplete', trimmed, frozen) > maxEncodedBytes) {
+        trimmed.pop();
       }
-      return page;
+      if (trimmed.length === 0) return { outcome: 'incomplete' as const, records: trimmed, nextCursor: null };
+      return { outcome: 'incomplete' as const, records: trimmed, nextCursor: frozen };
+    };
+    bound.readPage = async (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) => {
+      let start = 0;
+      let cursorHead: string | null = null;
+      if (cursor !== null && cursor !== undefined) {
+        const candidate = cursor as { readonly position?: unknown; readonly head?: unknown };
+        if (typeof candidate.position === 'number' && typeof candidate.head === 'string') {
+          start = candidate.position;
+          cursorHead = candidate.head;
+        } else {
+          return inner(chainId, limit, cursor, maxEncodedBytes);
+        }
+      }
+      let all: readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[];
+      try {
+        all = await innerChain(chainId);
+      } catch {
+        return inner(chainId, limit, cursor, maxEncodedBytes);
+      }
+      const head = cursorHead ?? (await innerHead(chainId));
+      if (head === null) return inner(chainId, limit, cursor, maxEncodedBytes);
+      const boundIdx = all.findIndex((entry) => entry.hash === head);
+      if (boundIdx === -1) return inner(chainId, limit, cursor, maxEncodedBytes);
+      const visible = all.slice(0, boundIdx + 1);
+      const deliverable = visible.filter((entry) => entry.seq >= start);
+      const lastSeq = deliverable.length > 0 ? deliverable[deliverable.length - 1].seq : -1;
+      const page: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[] = [];
+      for (const record of visible) {
+        if (record.seq < start) continue;
+        const isLast = record.seq === lastSeq;
+        const candidate: ChainPageCursor | null = isLast ? null : { position: record.seq, head };
+        const next: ChainPageCursor = { position: record.seq, head };
+        if (page.length >= limit) {
+          if (encodedBytes('page', page, next) > maxEncodedBytes) return buggyFit(page, start, head, maxEncodedBytes);
+          return { outcome: 'page' as const, records: page, nextCursor: next };
+        }
+        if (encodedBytes('page', [...page, record], candidate) > maxEncodedBytes) {
+          return buggyFit(page, start, head, maxEncodedBytes);
+        }
+        page.push(record);
+      }
+      return inner(chainId, limit, cursor, maxEncodedBytes);
     };
     return bound;
   }
