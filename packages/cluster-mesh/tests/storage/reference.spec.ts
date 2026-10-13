@@ -316,3 +316,50 @@ describe('K1 validators', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe('K2b page validator: byte limits bind every record-carrying page', () => {
+  const record = { id: 'a', seq: 0, hash: 'h', bytes: 'x' };
+
+  it('K2b-RED accepts an inaccessible page with a null cursor', () => {
+    expect(
+      validateReadPage(
+        { outcome: 'inaccessible', records: [], nextCursor: null },
+        { maxRecords: 10, maxEncodedBytes: 16 },
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('K2b-RED accepts an incomplete page with a null cursor', () => {
+    expect(
+      validateReadPage({ outcome: 'incomplete', records: [], nextCursor: null }, { maxRecords: 10, maxEncodedBytes: 16 })
+        .ok,
+    ).toBe(true);
+  });
+
+  it('K2b-RED rejects a page whose records fit but whose envelope does not', () => {
+    expect(
+      validateReadPage(
+        { outcome: 'page', records: [record], nextCursor: 'n'.repeat(100) },
+        { maxRecords: 10, maxEncodedBytes: 100 },
+      ).ok,
+    ).toBe(false);
+  });
+
+  it('K2b-RED accepts an incomplete page carrying records within budget', () => {
+    expect(
+      validateReadPage(
+        { outcome: 'incomplete', records: [record], nextCursor: null },
+        { maxRecords: 10, maxEncodedBytes: 1024 },
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('K2b-RED rejects an incomplete page carrying records over budget', () => {
+    expect(
+      validateReadPage(
+        { outcome: 'incomplete', records: [record], nextCursor: null },
+        { maxRecords: 10, maxEncodedBytes: 16 },
+      ).ok,
+    ).toBe(false);
+  });
+});
