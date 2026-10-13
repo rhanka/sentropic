@@ -41,6 +41,7 @@
   - [x] `.h2a/build/k1_k2a_report.md`
   - [x] `.h2a/build/k1_corev_report.md`
   - [x] `.h2a/build/k1_r3_report.md`
+  - [x] `.h2a/build/k1_split_report.md`
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - [x] `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -74,6 +75,8 @@
 - [x] `R3-RED4` — RED batch 4 (K1R3 validator tests, stale-update rollback, rebound replay pin); MIN2/MIN3 observed failing pre-fix, details in k1_r3_report.
 - [x] `R3-MUT1` — Mutations M6-M11 recorded and killed at their targeted assertions; M2 pattern widened to the R2 kill message.
 - [x] `R3-MUT2` — Mutations M12-M14 recorded and killed at their targeted assertions (values, post-bind grant, version guards).
+- [x] `SPLIT-1` — Engram co-review cap (3 rounds) reached; R1/R2 closed, R3 remains MAJOR (returned cursor can exceed the budget, Sol round 3: 116 bytes for 115). R3 frozen in this PR and fixed in follow-up lot K2a-2, same pattern as the L4b split.
+- [ ] `K2A2-1` — Follow-up lot K2a-2 owns the R3 fix plus Sol M11 plus Opus r3 MINEUR-1..5, including correcting the false R3-MUT1 claim for M6/M11; max 2 review rounds.
 
 ## AI Flaky tests
 - [x] No AI flaky tests in scope.
@@ -162,3 +165,12 @@
   - [x] Final gate step 1: push branch and open DRAFT PR to main using BRANCH.md text as PR body (never merge).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [x] Write .h2a/build/k1_k2a_report.md with K1 exit SHA and K2a exit SHA.
+- [ ] Lot S — Split close-out (this PR, R3 frozen)
+  - [x] Add discriminating R3 cursor-budget corpus test (RED proven: 116 bytes for 115), skipped as "R3 deferred to K2a-2".
+  - [x] Record the split and the K2a-2 follow-up in BRANCH.md.
+  - [ ] CI green on the final head.
+  - [ ] Write .h2a/build/k1_split_report.md with the final SHA.
+- [ ] Lot K2a-2 — Follow-up (deferred, max 2 review rounds)
+  - [ ] Fix R3: measure the response with its effective cursor and cover the 9 to 10 passage; re-enable the skipped corpus test.
+  - [ ] Replace Sol M11 with the record-counting mutant killed at the envelope assertion.
+  - [ ] Address Opus r3 MINEUR-1 through MINEUR-5, including correcting the false R3-MUT1 claim for M6/M11.
