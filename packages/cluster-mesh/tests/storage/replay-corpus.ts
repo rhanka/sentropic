@@ -136,14 +136,20 @@ export const runReplayCorpus = async (
 
   await commitOne(bound, 'journal-d', 4);
   await commitOne(bound, 'journal-e', 5);
+  assert.equal((await bound.journalInspect('c1')).cursor, 3);
   const boundary = await bound.journalResync('c1');
   assert.equal(boundary.journalSeq, 5);
+  assert.equal(
+    (await bound.journalInspect('c1')).cursor,
+    3,
+    'K2b-RED replay: resync captures the snapshot boundary without advancing the checkpoint',
+  );
   const outstanding = await bound.journalRead('c1', 3, 10);
   assert.deepEqual(
     outstanding.events.map((event) => event.seq),
     [4, 5],
   );
-  await bound.journalCheckpoint('c1', boundary.journalSeq, boundary.journalSeq);
+  await bound.journalCheckpoint('c1', 3, boundary.journalSeq);
   assert.equal((await bound.journalInspect('c1')).lag, 0);
 
   const sealing = await bound.beginStaged({

@@ -623,11 +623,14 @@ export class TestStagedStore {
       entry = { cursor: 0, status: 'running', failedEvent: null, failedReason: null, failedSeq: null };
       this.staged.consumers.set(consumer, entry);
     }
+    // §13.2: resync captures the snapshot/root and journal boundary but
+    // never advances the checkpoint; the consumer acknowledges only after
+    // consuming the snapshot. Advancing here would manufacture progress and
+    // lose events 4-5 on a crash between resync and consumption.
     entry.status = 'running';
     entry.failedEvent = null;
     entry.failedReason = null;
     entry.failedSeq = null;
-    entry.cursor = this.staged.journalSeq;
     return { snapshotRoot: `root-${this.staged.journalSeq}`, journalSeq: this.staged.journalSeq };
   }
 
