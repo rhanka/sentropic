@@ -165,7 +165,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] Route and adoption service use the shared provisioning
   - [x] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
   - [x] Sub-lot gate: test-cluster-mesh (426 pass), test-api-unit adoption (27 pass), scope-check PASS
-- [ ] **Lot 6 — Opus r5 NO-GO fixes (MAJ-1, MAJ-2, m1..m6)**
+- [x] **Lot 6 — Opus r5 NO-GO fixes (MAJ-1, MAJ-2, m1..m6)**
   - [x] RED API: one-predicate CAS tests (version/status/workspace/principal) in session-adoption.test.ts
   - [x] RED API: second-end idempotence test + get TOCTOU test + LISTEN notify test
   - [x] RED API: forced-interleave stale-admin detach test (replaces racy Promise.allSettled test)
@@ -176,6 +176,12 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN m4: CAS tuple doc corrected (Drizzle WHERE is the SQL projection, pinned per-predicate)
   - [x] GREEN m5: shared seeds/notify via workspace-provisioning, route uses shared notify
   - [x] Sub-lot gate: test-cluster-mesh (427 pass), test-api-unit adoption (33/33), scope-check PASS
+
+- [ ] **Lot 7 — Opus r6 minor fixes (m1..m4)**
+  - [x] RED: concurrent end tests (domain and API) and refined LISTEN notify assertions (m2, m3)
+  - [ ] RED: two-session CAS test pinning sessionId predicate (m1)
+  - [ ] GREEN: domain unreachable loops and fallback removed in detach/end, align CAS tuple doc (m1, m2)
+  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit adoption, scope-check PASS
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
