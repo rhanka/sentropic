@@ -43,7 +43,6 @@ export interface SessionWorkspaceGetInput {
 /** Narrow storage port; movable onto the generic cluster-mesh storage port (L3a) later. */
 export interface SessionWorkspaceBindingStore {
   findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null>;
-  save(binding: SessionWorkspaceBinding): Promise<void>;
   /**
    * Conditional write: persist `next` only when the stored row still matches
    * `current` (`null` = no row must exist; otherwise same `sessionId` and

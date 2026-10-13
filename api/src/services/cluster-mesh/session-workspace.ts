@@ -44,6 +44,8 @@ export class SessionWorkspaceError extends Error {
   }
 }
 type BindingRow = typeof sessionWorkspaceBindings.$inferSelect;
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type BindingDbClient = Pick<typeof db, 'select' | 'insert' | 'update'>;
 const requireId = (value: string | undefined, field: string): string => {
   if (!value?.trim()) throw new SessionWorkspaceError('invalid_request', `${field} is required`);
   return value;
@@ -61,42 +63,32 @@ const toRow = (b: SessionWorkspaceBinding) => ({
   endedAt: b.endedAt ? new Date(b.endedAt) : null,
 });
 
-const drizzleBindingStore: SessionWorkspaceBindingStore = {
+const toBinding = (row: BindingRow): SessionWorkspaceBinding => ({
+  bindingId: row.bindingId, sessionId: row.sessionId, workspaceId: row.workspaceId,
+  tenantId: row.tenantId, principalId: row.principalId,
+  status: row.status as SessionWorkspaceBinding['status'],
+  createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+  detachedAt: row.detachedAt ? row.detachedAt.toISOString() : undefined,
+  endedAt: row.endedAt ? row.endedAt.toISOString() : undefined,
+});
+
+const createDrizzleBindingStore = (client: BindingDbClient): SessionWorkspaceBindingStore => ({
   async findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null> {
-    const [row] = await db.select().from(sessionWorkspaceBindings)
+    const [row] = await client.select().from(sessionWorkspaceBindings)
       .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).limit(1);
-    if (!row) return null;
-    return {
-      bindingId: row.bindingId, sessionId: row.sessionId, workspaceId: row.workspaceId,
-      tenantId: row.tenantId, principalId: row.principalId ?? '',
-      status: row.status as SessionWorkspaceBinding['status'],
-      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
-      detachedAt: row.detachedAt ? row.detachedAt.toISOString() : undefined,
-      endedAt: row.endedAt ? row.endedAt.toISOString() : undefined,
-    };
-  },
-  async save(b: SessionWorkspaceBinding): Promise<void> {
-    await db.insert(sessionWorkspaceBindings).values(toRow(b)).onConflictDoUpdate({
-      target: sessionWorkspaceBindings.sessionId,
-      set: {
-        workspaceId: b.workspaceId, tenantId: b.tenantId, principalId: b.principalId,
-        status: b.status, updatedAt: new Date(b.updatedAt),
-        detachedAt: b.detachedAt ? new Date(b.detachedAt) : null,
-        endedAt: b.endedAt ? new Date(b.endedAt) : null,
-      },
-    });
+    return row ? toBinding(row) : null;
   },
   async compareAndSet(
     current: SessionWorkspaceBinding | null,
     next: SessionWorkspaceBinding,
   ): Promise<boolean> {
     if (current === null) {
-      const inserted = await db.insert(sessionWorkspaceBindings).values(toRow(next))
+      const inserted = await client.insert(sessionWorkspaceBindings).values(toRow(next))
         .onConflictDoNothing()
         .returning({ bindingId: sessionWorkspaceBindings.bindingId });
       return inserted.length > 0;
     }
-    const updated = await db.update(sessionWorkspaceBindings).set({
+    const updated = await client.update(sessionWorkspaceBindings).set({
       workspaceId: next.workspaceId, tenantId: next.tenantId, principalId: next.principalId,
       status: next.status, updatedAt: new Date(next.updatedAt),
       detachedAt: next.detachedAt ? new Date(next.detachedAt) : null,
@@ -107,7 +99,9 @@ const drizzleBindingStore: SessionWorkspaceBindingStore = {
     )).returning({ bindingId: sessionWorkspaceBindings.bindingId });
     return updated.length > 0;
   },
-};
+});
+
+const drizzleBindingStore = createDrizzleBindingStore(db);
 
 export class SessionWorkspaceService {
   private readonly mesh = createSessionWorkspaceBindingService(drizzleBindingStore);
