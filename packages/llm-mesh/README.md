@@ -365,8 +365,9 @@ import { createRemoteJudgeClient } from '@sentropic/llm-mesh/judge';
 
 const client = createRemoteJudgeClient({
   baseUrl: 'https://llm.sent-tech.ca',
-  resolveToken: async () => 'secret-bearer-token',
-  timeoutMs: 10_000, // Client applies +1 000 ms grace margin (11 000 ms total)
+  authToken: 'secret-bearer-token',
+  // Client timeout defaults to server deadline + 1 000 ms margin (11 000 ms default).
+  // Optional: timeoutMs can be provided to bound client wait below server deadline + margin.
 });
 
 const result = await client.judge({
@@ -376,23 +377,36 @@ const result = await client.judge({
   criterion: { kind: 'binary', instructions: 'Verify output correctness' },
   decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 },
   correlationId: 'corr-judge-100',
+  policy: { timeoutMs: 10_000 }, // Server deadline: 10 000 ms (client waits 11 000 ms with margin)
 });
 ```
 
 ### Host usage
 
 ```ts
-import { createJudgeService, createJevAdapter } from '@sentropic/llm-mesh/judge/host';
+import { createJudgeService, createJevAdapter, jevDescriptor } from '@sentropic/llm-mesh/judge/host';
 import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
 import { createProviderRegistry } from '@sentropic/llm-mesh';
 
-const adapter = createJevAdapter({ descriptor: jevDescriptor, transport: createJevTransport({ endpoint: 'https://api.jev.ai/v1/eval' }) });
-const service = createJudgeService({ registry: createProviderRegistry([adapter]), resolveEvaluator, resolvePrice, authorize, budget, receipts, resolveAuth, clock });
+const adapter = createJevAdapter({
+  descriptor: jevDescriptor,
+  transport: createJevTransport({ fetch: globalThis.fetch }),
+});
+const service = createJudgeService({
+  registry: createProviderRegistry([adapter]),
+  resolveEvaluator,
+  resolvePrice,
+  authorize,
+  budget,
+  receipts,
+  resolveAuth,
+  clock,
+});
 ```
 
 ### Deadline & Failure Semantics
 
-- **Deadline margin**: The client waits server deadline + 1 000 ms grace margin (11 000 ms default, 61 000 ms cap) so that the server's own timeout receipt reaches the client before client-side abort.
+- **Deadline margin**: The client waits server deadline + 1 000 ms grace margin (11 000 ms default, 61 000 ms cap) whenever client `options.timeoutMs` is omitted or ≥ server timeout + 1 000 ms, so that the server's own timeout receipt reaches the client before client-side abort. Providing `options.timeoutMs` bounds the client timeout via `Math.min(options.timeoutMs, serverTimeout + 1 000)`.
 - **Phase-aware errors**: `preflight`, `admission`, `dispatch`, `settlement`. Settlement and post-result timeouts have `retryable: false`.
 - **Advisory retry hints**: Bounded strictly to a 60-second ceiling.
 - **Normalization & security**: Unsafe JSON keys (`__proto__`, `constructor`, `prototype`) are rejected. MicroUsd prices use integer strings. Null candidate output/state is accepted; absent/undefined is refused.
