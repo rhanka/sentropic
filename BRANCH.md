@@ -140,7 +140,7 @@
     - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
     - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
 - [ ] **Lot 3 — Staged runtime with journal, barriers and lifecycle**
-  - [ ] Write `packages/cluster-mesh/src/storage/staged-runtime.ts`: staged units over the K3 backend, journal segments, coverage/barrier denial, purge jobs, G5 same-unit publication.
+  - [x] Write `packages/cluster-mesh/src/storage/staged-runtime.ts`: staged units over the K3 backend, journal segments, coverage/barrier denial, purge jobs, G5 same-unit publication.
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
     - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
@@ -151,9 +151,9 @@
       - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/visibility.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
       - [ ] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
 - [ ] **Lot 4 — Projection runtime and manifest**
-  - [ ] Write `packages/cluster-mesh/src/storage/projection-runtime.ts`: relationship index, registered queries with page limits, cause-tagged projection deltas.
-  - [ ] Write `packages/cluster-mesh/src/storage/manifest.ts`: canonical export manifest, retained registry, digest verification, terminal completeness.
-  - [ ] Evolve `packages/cluster-mesh/tests/storage/manifest.spec.ts` (new K4 manifest proof)
+  - [x] Write `packages/cluster-mesh/src/storage/projection-runtime.ts`: relationship index, registered queries with page limits, cause-tagged projection deltas.
+  - [x] Write `packages/cluster-mesh/src/storage/manifest.ts`: canonical export manifest, retained registry, digest verification, terminal completeness.
+  - [x] Evolve `packages/cluster-mesh/tests/storage/manifest.spec.ts` (new K4 manifest proof)
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
     - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
