@@ -263,6 +263,9 @@
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
   - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).
+- [x] **Lot N10a — Native feature classifier (fold)**
+  - [x] `packages/llm-gateway/src/native-features.ts` + `tests/native-features.test.ts` (selection matrix; flow/router wiring stays N10b).
+  - [x] `native-required`/`native-max-tokens-required` in `src/router/errors.ts` + `tests/contract-snapshot.test.ts` golden (deliberate same-PR edit).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-1: nested Chat `tool_choice` on muse/mistral clients.

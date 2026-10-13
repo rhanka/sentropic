@@ -46,6 +46,8 @@ export type GatewayFailureKind =
   | 'upstream-auth-failed'
   | 'upstream-rate-limited'
   | 'bad-request'
+  | 'native-required'
+  | 'native-max-tokens-required'
   | 'unknown-model'
   | 'no-route'
   | 'request-too-large'
@@ -228,6 +230,19 @@ export const mapGatewayError = (
       return anthropic
         ? anthropicError(400, 'invalid_request_error', 'request not permitted')
         : openAiError(400, 'invalid_request_error', 'request not permitted', 'unsupported');
+
+    case 'native-required': {
+      const message = anthropic
+        ? 'safeguards is not supported by this gateway route; retry without safeguards.'
+        : 'safeguards requires the Anthropic Messages endpoint.';
+      return anthropic ? anthropicError(400, 'invalid_request_error', message)
+        : openAiError(400, 'invalid_request_error', message, 'invalid_request');
+    }
+    case 'native-max-tokens-required': {
+      const message = 'safeguards requires a positive integer max_tokens.';
+      return anthropic ? anthropicError(400, 'invalid_request_error', message)
+        : openAiError(400, 'invalid_request_error', message, 'invalid_request');
+    }
 
     case 'bad-request': {
       // Spec §16.7: validated field code/path ride the OpenAI envelope;
