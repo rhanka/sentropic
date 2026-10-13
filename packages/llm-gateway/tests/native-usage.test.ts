@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { NativeCumulativeUsageAccumulator, NativeUsageObserver, nativeDefaultTtlEligible } from '../src/native-usage.js';
+import { NativeCumulativeUsageAccumulator, NativeUsageObserver, nativeDefaultTtlEligible,
+  NATIVE_CACHE_PRICING_POLICY, nativeCacheInputPriceUnits40, validateNativeInputPriceUnits40 } from '../src/native-usage.js';
 import { CACHE_START, NATIVE_MODELS, nativeUsageTurn, observeNativeEvent } from './fixtures/native-usage.js';
 
 describe('native usage accumulator', () => {
@@ -321,5 +322,67 @@ describe('native proof and output provenance', () => {
     expect(valid.accumulator.getState().messageDeltaInputDecreased).toBe(false);
     observeNativeEvent(valid, 'message_delta', { usage: { input_tokens: 0 } });
     expect(valid.accumulator.getState().messageDeltaInputDecreased).toBe(true);
+  });
+});
+
+describe('native pricing policy and arithmetic bounds', () => {
+  it.each(NATIVE_MODELS)('should enforce both exact units40 bounds for %s', model => {
+    const minimum = model === NATIVE_MODELS[2] ? 100 : 400;
+    expect(validateNativeInputPriceUnits40(100, minimum, model, NATIVE_CACHE_PRICING_POLICY)).toBe(true);
+    expect(validateNativeInputPriceUnits40(100, 8000, model, NATIVE_CACHE_PRICING_POLICY)).toBe(true);
+    for (const units of [0, minimum - 1, 8001]) {
+      expect(validateNativeInputPriceUnits40(100, units, model, NATIVE_CACHE_PRICING_POLICY)).toBe(false);
+    }
+    expect(validateNativeInputPriceUnits40(100, minimum, model, 'other-policy')).toBe(false);
+  });
+
+  it.each([undefined, 'unknown', 'claude-opus-5-alias', 'toString'])('should reject unpriced served model %s', model => {
+    expect(validateNativeInputPriceUnits40(100, 400, model, NATIVE_CACHE_PRICING_POLICY)).toBe(false);
+    const observer = new NativeUsageObserver(String(model));
+    observer.observeJson({ model, usage: { ...CACHE_START, output_tokens: 500 } });
+    expect(observer.snapshot('completed')).toMatchObject({ nativeInputUsageValidated: false, estimated: true,
+      nativeUsageUncertainty: 'served_model_unverified' });
+    expect(observer.snapshot('completed').nativeInputPriceUnits40).toBeUndefined();
+  });
+
+  it.each([-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('should reject unsafe count or units %s before bigint conversion', bad => {
+    expect(validateNativeInputPriceUnits40(bad, 400, NATIVE_MODELS[0], NATIVE_CACHE_PRICING_POLICY)).toBe(false);
+    expect(validateNativeInputPriceUnits40(100, bad, NATIVE_MODELS[0], NATIVE_CACHE_PRICING_POLICY)).toBe(false);
+    const state = new NativeCumulativeUsageAccumulator(CACHE_START).getState();
+    expect(nativeCacheInputPriceUnits40({ ...state, acceptedInputTokens: bad }, NATIVE_MODELS[0])).toBeUndefined();
+  });
+
+  it('should compute large bound products exactly and permanently reject units overflow', () => {
+    expect(validateNativeInputPriceUnits40(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER,
+      NATIVE_MODELS[0], NATIVE_CACHE_PRICING_POLICY)).toBe(false);
+    expect(validateNativeInputPriceUnits40(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER,
+      NATIVE_MODELS[2], NATIVE_CACHE_PRICING_POLICY)).toBe(true);
+    const start = { input_tokens: Number.MAX_SAFE_INTEGER, cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0, output_tokens: 1 };
+    const observer = nativeUsageTurn(NATIVE_MODELS[0], start, { output_tokens: 2 });
+    expect(observer.snapshot('completed')).toMatchObject({ nativeInputUsageValidated: false,
+      nativeUsageUncertainty: 'invalid_input', estimated: true });
+    expect(observer.snapshot('completed').nativeInputPriceUnits40).toBeUndefined();
+    expect(observer.snapshot('completed').totalTokens).toBeUndefined();
+    expect(observer.accumulator.getState().proofRevoked).toBe(true);
+    const unsafe = nativeUsageTurn(NATIVE_MODELS[0], { ...start, cache_read_input_tokens: 1 });
+    expect(unsafe.snapshot('completed').inputTokens).toBeUndefined();
+  });
+
+  it('should derive a split-only physical proof without inventing raw aggregate evidence', () => {
+    const { cache_creation_input_tokens: _aggregate, ...start } = CACHE_START;
+    const snapshot = nativeUsageTurn(NATIVE_MODELS[0], start).snapshot('completed');
+    expect(snapshot).toMatchObject({ inputTokens: 10300, nativeInputPriceUnits40: 60000,
+      nativeInputUsageValidated: true, estimated: false });
+    expect(snapshot.rawUsage?.cache_creation_input_tokens).toBeUndefined();
+    const json = new NativeUsageObserver(NATIVE_MODELS[0]);
+    json.observeJson({ model: NATIVE_MODELS[0], usage: { ...CACHE_START, output_tokens: 500 },
+      content: [{ type: 'fallback', fallback_credit_token: 'private' }] });
+    expect(json.snapshot('completed')).toMatchObject({ fallbackPresent: true, estimated: true });
+    expect(json.snapshot('completed').nativeInputPriceUnits40).toBeUndefined();
+  });
+
+  it('should inspect wide outbound arrays without exceeding the argument stack limit', () => {
+    expect(nativeDefaultTtlEligible({ messages: Array.from({ length: 200000 }, () => '') })).toBe(true);
   });
 });
