@@ -297,6 +297,7 @@
   - [x] **Lot N22-row34c — identity + iterations floors (`d9c1cb18b`)**: native identity/iterations settlement floors 100/100 GREEN (held behavior, no src change).
   - [x] **Lot N22-row34d — finalize parity + cleanup (`dc652fd54`)**: native finalize parity/cleanup cases 110/110 GREEN (held behavior, no src change).
   - [x] **Lot N22-row34e — SDK cache amounts (`f832ef3bc`)**: SDK-shaped cache stream amount matrices 194/194 GREEN (held behavior, no src change).
+  - [x] **Lot N22-row34f — finalize bound (`58ece90e7`)**: finalize-bound stream cases 200/200 GREEN (held behavior, no src change).
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).
