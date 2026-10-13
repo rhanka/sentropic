@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 // Mock the Anthropic SDK before importing the provider
 const mockAnthropicCreate = vi.fn();
@@ -38,6 +40,40 @@ describe('ClaudeProviderRuntime', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('relays native JSON through fake HTTP after confirmed upload completion', async () => {
+    let received = '';
+    let auth: string | undefined;
+    const server = createServer((request, response) => {
+      auth = request.headers['x-api-key'] as string | undefined;
+      request.on('data', chunk => { received += chunk.toString(); });
+      request.on('end', () => {
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ model: 'claude-sonnet-5', opaque: true }));
+      });
+    });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const holders = new Set<string>();
+    const body = { model: 'claude-sonnet-5', messages: [], future: { unchanged: 'é' } };
+    vi.stubEnv('ANTHROPIC_BASE_URL', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    try {
+      const result = await runtime.nativeMessages({ body, stream: false, requestId: 'native-test',
+        signal: new AbortController().signal,
+        headers: { anthropicVersion: '2023-06-01', forwarded: { 'x-api-key': 'caller-key' } },
+        bodyProbe: (holder, retained) => retained ? holders.add(holder) : holders.delete(holder),
+      });
+      expect(result).toMatchObject({ kind: 'json', status: 200, body: { opaque: true } });
+      expect(received).toBe(JSON.stringify(body));
+      expect(auth).toBe('test-anthropic-key');
+      expect(result.requestSize?.requestBytes).toBe(Buffer.byteLength(received));
+      expect(holders.size).toBe(0);
+      expect(mockAnthropicCreate).not.toHaveBeenCalled();
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+    }
   });
 
   describe('provider descriptor', () => {
@@ -242,8 +278,8 @@ describe('ClaudeProviderRuntime', () => {
   });
 
   describe('native fold boundary (N08)', () => {
-    it('exposes no native inference shape until the transport lots land', () => {
-      expect((runtime as unknown as Record<string, unknown>).nativeMessages).toBeUndefined();
+    it('exposes native inference once the transport lots land; count stays host-owned (N24)', () => {
+      expect(typeof (runtime as unknown as Record<string, unknown>).nativeMessages).toBe('function');
       expect((runtime as unknown as Record<string, unknown>).nativeCountTokens).toBeUndefined();
     });
   });
