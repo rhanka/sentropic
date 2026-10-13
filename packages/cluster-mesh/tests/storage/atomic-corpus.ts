@@ -391,59 +391,101 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore, profiles: Atomic
     );
   }
 
-  await expectCode(
-    async () =>
-      bound.commitAtomic({
-        guards: [],
-        records: [],
-        appends: [
-          {
-            chainId: 'barrier-chain',
-            record: record('bar', 1),
-            expectation: { kind: 'absent', allocation: '0' },
-          },
-        ],
-        updates: [],
-        relationships: [],
-        barriers: [{ boundary: 'b1', reason: 'r1' }],
-        purgeIntents: [],
-        indexWrites: [],
-      }),
-    'unsupported-profile',
-    'K2aR3-RED atomic: barriers are explicitly rejected by the K2a reference',
-  );
-  assert.equal(
-    await bound.readHead('barrier-chain'),
-    null,
-    'K2aR3-RED atomic: a rejected barriers unit leaves no carrier effects behind',
-  );
+  if (profiles.visibilityBarriers) {
+    const barriered = await bound.commitAtomic({
+      guards: [],
+      records: [],
+      appends: [
+        {
+          chainId: 'barrier-chain',
+          record: record('bar', 1),
+          expectation: { kind: 'absent', allocation: '0' },
+        },
+      ],
+      updates: [],
+      relationships: [],
+      barriers: [{ boundary: 'b1', reason: 'r1' }],
+      purgeIntents: [],
+      indexWrites: [],
+    });
+    assert.equal(barriered.effectiveAppends, 1);
+    assert.equal(await bound.readHead('barrier-chain'), 'hash-bar-1');
+  } else {
+    await expectCode(
+      async () =>
+        bound.commitAtomic({
+          guards: [],
+          records: [],
+          appends: [
+            {
+              chainId: 'barrier-chain',
+              record: record('bar', 1),
+              expectation: { kind: 'absent', allocation: '0' },
+            },
+          ],
+          updates: [],
+          relationships: [],
+          barriers: [{ boundary: 'b1', reason: 'r1' }],
+          purgeIntents: [],
+          indexWrites: [],
+        }),
+      'unsupported-profile',
+      'K2aR3-RED atomic: barriers are explicitly rejected by the K2a reference',
+    );
+    assert.equal(
+      await bound.readHead('barrier-chain'),
+      null,
+      'K2aR3-RED atomic: a rejected barriers unit leaves no carrier effects behind',
+    );
+  }
 
-  await expectCode(
-    async () =>
-      bound.commitAtomic({
-        guards: [],
-        records: [],
-        appends: [
-          {
-            chainId: 'purge-chain',
-            record: record('p', 1),
-            expectation: { kind: 'absent', allocation: '0' },
-          },
-        ],
-        updates: [],
-        relationships: [],
-        barriers: [],
-        purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'auth-1' }],
-        indexWrites: [],
-      }),
-    'unsupported-profile',
-    'K2aR3-RED atomic: purge intents are explicitly rejected by the K2a reference',
-  );
-  assert.equal(
-    await bound.readHead('purge-chain'),
-    null,
-    'K2aR3-RED atomic: a rejected purge unit leaves no carrier effects behind',
-  );
+  if (profiles.purgeJobs) {
+    const intended = await bound.commitAtomic({
+      guards: [],
+      records: [],
+      appends: [
+        {
+          chainId: 'purge-chain',
+          record: record('p', 1),
+          expectation: { kind: 'absent', allocation: '0' },
+        },
+      ],
+      updates: [],
+      relationships: [],
+      barriers: [],
+      purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'auth-1' }],
+      indexWrites: [],
+    });
+    assert.equal(intended.effectiveAppends, 1);
+    assert.equal(await bound.readHead('purge-chain'), 'hash-p-1');
+  } else {
+    await expectCode(
+      async () =>
+        bound.commitAtomic({
+          guards: [],
+          records: [],
+          appends: [
+            {
+              chainId: 'purge-chain',
+              record: record('p', 1),
+              expectation: { kind: 'absent', allocation: '0' },
+            },
+          ],
+          updates: [],
+          relationships: [],
+          barriers: [],
+          purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'auth-1' }],
+          indexWrites: [],
+        }),
+      'unsupported-profile',
+      'K2aR3-RED atomic: purge intents are explicitly rejected by the K2a reference',
+    );
+    assert.equal(
+      await bound.readHead('purge-chain'),
+      null,
+      'K2aR3-RED atomic: a rejected purge unit leaves no carrier effects behind',
+    );
+  }
 
   await expectCode(
     async () =>
