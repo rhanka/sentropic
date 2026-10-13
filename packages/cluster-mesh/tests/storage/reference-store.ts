@@ -70,7 +70,9 @@ const encodedPageBytes = (
 // An over-budget response sheds undelivered records down to an empty
 // incomplete page; the surviving cursor is always a recovery position for
 // the first undelivered record (start + delivered count), never a frozen
-// pre-trim position that would skip records.
+// pre-trim position that would skip records. An empty incomplete page
+// carries no retained cursor: the caller already holds its resume position,
+// and a retained cursor would exceed the byte floor (§8.4 minimal envelope).
 const fitIncomplete = (
   records: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[],
   start: number,
@@ -83,6 +85,7 @@ const fitIncomplete = (
   while (trimmed.length > 0 && encodedPageBytes('incomplete', trimmed, recoveryFor(trimmed.length)) > maxEncodedBytes) {
     trimmed.pop();
   }
+  if (trimmed.length === 0) return { outcome: 'incomplete', records: trimmed, nextCursor: null };
   return { outcome: 'incomplete', records: trimmed, nextCursor: recoveryFor(trimmed.length) };
 };
 
@@ -227,9 +230,18 @@ export class TestBoundStore {
       return { outcome: 'incomplete', records: [], nextCursor: retained };
     }
     const visible = boundHead === null ? [] : records.slice(0, boundIdx + 1);
+    const deliverable = visible.filter((entry) => entry.seq >= start);
+    const lastSeq = deliverable.length > 0 ? deliverable[deliverable.length - 1].seq : -1;
     const page: { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[] = [];
     for (const record of visible) {
       if (record.seq < start) continue;
+      const isLast = record.seq === lastSeq;
+      // The last deliverable record exhausts the traversal: its effective
+      // cursor is null, so admission measures it with null instead of the
+      // candidate {position} that would overestimate the envelope (§8.4:
+      // `incomplete` is reserved for a record that cannot fit).
+      const candidate: ChainPageCursor | null =
+        isLast || boundHead === null ? null : { position: record.seq, head: boundHead };
       const next: ChainPageCursor = { position: record.seq, head: boundHead as string };
       if (page.length >= limit) {
         if (encodedPageBytes('page', page, next) > maxEncodedBytes) {
@@ -237,7 +249,7 @@ export class TestBoundStore {
         }
         return { outcome: 'page', records: page, nextCursor: next };
       }
-      if (encodedPageBytes('page', [...page, record], next) > maxEncodedBytes) {
+      if (encodedPageBytes('page', [...page, record], candidate) > maxEncodedBytes) {
         return fitIncomplete(page, start, boundHead, maxEncodedBytes);
       }
       page.push(record);

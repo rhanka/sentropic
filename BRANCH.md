@@ -85,6 +85,7 @@
 - [x] `K2B-MUTB-L` — Lifecycle mutants L1-L3 killed at their targeted assertions.
 - [x] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions (`K2B_MUTATION_RECORDS`, 15 entries incl. J3/B3/T1).
 - [x] `K2B-FIX-MAJ1` — R3 resume cursor recomputed on first undelivered record; resume pagination asserts the exact full set; M17 frozen-cursor mutant killed.
+- [x] `K2B-FIX2-MAJ1` — Resume sweeps every budget with limits 10/2/1, accepts page/incomplete with progress guard; empty incomplete is null; last record measured with null.
 - [x] `K2B-FIX-MAJ2` — Resync no longer advances the checkpoint (§13.2 consume-then-acknowledge); J3 advancing-resync mutant killed.
 - [x] `K2B-FIX-MAJ3` — Abort asserts the typed state only; reference abort reason is the caller operation key, never an English sentence.
 - [x] `K2B-FIX-MIN` — Budgets derived from observed encoding (M18), empty-page envelope floor, retained-cursor and disposal evidence, staged index/seal/fence coverage, replay scope decoupling, divergent-intent atomicity, cursor-leak nulls.
