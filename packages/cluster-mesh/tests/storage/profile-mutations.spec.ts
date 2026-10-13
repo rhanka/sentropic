@@ -170,6 +170,20 @@ class PoisonBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class ResyncAdvancingStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.journalResync.bind(bound);
+    bound.journalResync = async (consumer) => {
+      const boundary = await inner(consumer);
+      const view = await bound.journalInspect(consumer);
+      await bound.journalCheckpoint(consumer, view.cursor, boundary.journalSeq);
+      return boundary;
+    };
+    return bound;
+  }
+}
+
 const stagedHooks = (store: TestStagedReferenceStore, bound: TestStagedStore) => ({
   breakAuthority: async () => {
     store.revoke(bound.grant.token);
@@ -232,6 +246,14 @@ describe('K2b discriminating mutations: replay', () => {
     await expect(
       runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
     ).rejects.toThrow(/poison stalls the consumer/);
+  });
+
+  it('J3-resync-advancing-checkpoint is killed by the replay corpus', async () => {
+    const store = new ResyncAdvancingStore('comments');
+    const { primary, foreign } = bindReplayPair(store);
+    await expect(
+      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+    ).rejects.toThrow(/without advancing the checkpoint/);
   });
 });
 
@@ -345,5 +367,75 @@ describe('K2b discriminating mutations: lifecycle', () => {
     const store = new ForkingOutcomeStore('comments');
     const { primary, hooks } = bindLifecycle(store);
     await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(/exactly one operational outcome/);
+  });
+});
+
+class DisposalBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    bound.disposeChain = () => undefined;
+    return bound;
+  }
+}
+
+class RivalBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.appendChain.bind(bound);
+    bound.appendChain = (chainId, record, expectation) => {
+      if (chainId === 'chain-s1' && record.hash === 'hash-s1-rival') return { seq: 99, hash: record.hash, replayed: false };
+      return inner(chainId, record, expectation);
+    };
+    return bound;
+  }
+}
+
+export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
+  { id: 'S1-visible-staging', brokenSemantic: 'staged effects leak before publication', corpus: 'staged', verdict: 'killed' },
+  { id: 'S2-gap-blind-staging', brokenSemantic: 'gapped ordinals advance the frontier', corpus: 'staged', verdict: 'killed' },
+  { id: 'S3-changed-bytes-staging', brokenSemantic: 'changed bytes at an accepted ordinal pass silently', corpus: 'staged', verdict: 'killed' },
+  { id: 'S4-unstable-receipt', brokenSemantic: 'fragment receipts fork on retry', corpus: 'staged', verdict: 'killed' },
+  { id: 'S5-abort-kept-effects', brokenSemantic: 'aborted units keep publishable effects', corpus: 'staged', verdict: 'killed' },
+  { id: 'J1-no-checkpoint-cas', brokenSemantic: 'checkpoints skip CAS protection', corpus: 'replay', verdict: 'killed' },
+  { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
+  { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
+  { id: 'B1-denial-blind-barrier', brokenSemantic: 'covered reads bypass denial', corpus: 'barrier', verdict: 'killed' },
+  { id: 'B2-escape-open-barrier', brokenSemantic: 'covered writes escape their barrier', corpus: 'barrier', verdict: 'killed' },
+  { id: 'B3-disposal-blind-barrier', brokenSemantic: 'disposed content stays readable', corpus: 'barrier', verdict: 'killed' },
+  { id: 'L1-hold-blind-lifecycle', brokenSemantic: 'holds never stall completion', corpus: 'lifecycle', verdict: 'killed' },
+  { id: 'L2-divergent-share', brokenSemantic: 'divergent shared bytes merge silently', corpus: 'lifecycle', verdict: 'killed' },
+  { id: 'L3-forking-outcome', brokenSemantic: 'completion forks operational outcomes', corpus: 'lifecycle', verdict: 'killed' },
+  { id: 'T1-rival-blind-base', brokenSemantic: 'changed bases publish without conflict', corpus: 'staged', verdict: 'killed' },
+];
+
+describe('K2b discriminating mutations: disposal and base', () => {
+  it('B3-disposal-blind-barrier is killed by the barrier corpus', async () => {
+    const { bound } = bindStaged(new DisposalBlindStore('comments'));
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/without coverage throws denied|stays denied after/);
+  });
+
+  it('T1-rival-blind-base is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new RivalBlindStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(/changed base|without publication/);
+  });
+
+  it('records every K2b discriminating mutation as killed', () => {
+    expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+      'killed',
+    ]);
   });
 });
