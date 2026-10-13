@@ -2,6 +2,7 @@ import type {
   PreparedRouteAttempt, RouteAttemptUsage, RouteFailureClassification, RoutePlan, RoutePlanInput,
   RoutePlanner, VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
+import { requestTooLargeDetail } from '@sentropic/llm-mesh';
 import type { GatewayConfig } from './config.js';
 import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonical-ingress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
@@ -251,6 +252,10 @@ export const classifyRouteError = (
   aborted = false,
 ): RouteFailureClassification => {
   if (aborted) return { reason: 'cancelled', retryable: false, healthScope: 'route' };
+  // N02: terminal 413 classifies before auth/rate/overload; local size
+  // failures never become provider-auth/rate evidence. Full pre-byte
+  // mapping and propagation land in N09.
+  if (requestTooLargeDetail(error)) return { reason: 'invalid-request', retryable: false, healthScope: 'route' };
   const record = asRecord(error);
   const status = typeof record?.statusCode === 'number' ? record.statusCode
     : typeof record?.status === 'number' ? record.status : undefined;

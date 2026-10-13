@@ -246,4 +246,4 @@
   - [x] `packages/llm-mesh/src/native-messages.ts`, `routing-contracts.ts`, `index.ts` (+ `errors.ts` size-detail prerequisite; cause traversal stays N02).
 - [ ] **Lot N02 — Trusted size evidence (fold)**
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
-  - [ ] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
+  - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
