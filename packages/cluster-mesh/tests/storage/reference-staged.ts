@@ -298,6 +298,17 @@ export class TestStagedStore {
     if (this.store.policy === 'required' && unit.barriers.length > 0 && unit.purgeIntents.length === 0) {
       throw new StorageInvalidCommandError('purge intent required with barriers');
     }
+    for (const append of unit.appends) {
+      if (this.isCovered(append.chainId)) {
+        throw new StorageInvalidCommandError('covered chain cannot escape its barrier');
+      }
+    }
+    for (const record of unit.records) {
+      if (this.isCovered(record.key)) throw new StorageInvalidCommandError('covered record cannot escape its barrier');
+    }
+    for (const update of unit.updates) {
+      if (this.isCovered(update.key)) throw new StorageInvalidCommandError('covered state cannot escape its barrier');
+    }
     if (options.idempotencyKey) {
       const stored = this.staged.commits.get(options.idempotencyKey);
       const unitHash = JSON.stringify(unit);
