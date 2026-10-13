@@ -137,6 +137,83 @@ describe('K1C expiry: parsed instants reject expired authority', () => {
   });
 });
 
+describe('K1R3 expiry: an unparseable now is refused', () => {
+  it('K1R3-RED refuses a grant lifetime check with an unparseable now', () => {
+    expect(validateGrantLifetime({ kind: 'lease', expiresAt: '2030-01-01T00:00:00.000Z' }, 'not-a-date').ok).toBe(false);
+  });
+
+  it('K1R3-RED refuses a leased snapshot check with an unparseable now', () => {
+    expect(
+      validateLeasedSnapshot(
+        {
+          token: 'lease-1',
+          queryVersion: 'v1',
+          paramsHash: 'ph-1',
+          order: 'seq-asc',
+          root: 'root-1',
+          incarnation: 'store-1',
+          expiresAt: '2030-01-01T00:00:00.000Z',
+        },
+        'not-a-date',
+      ).ok,
+    ).toBe(false);
+  });
+});
+
+describe('K1R3 triangle: L6a syntax compatibility', () => {
+  const local = {
+    declarationId: 'decl:local-1',
+    cloneId: 'clone:local-1',
+    worktreeId: 'wt:local-1',
+    declarationRevision: 1,
+  };
+
+  it('K1R3-RED rejects a blank serverIssuer like L6a', () => {
+    expect(
+      validateLiveIdentityTriangle({ ...local, serverWorkspaceId: 'srv-ws-1', serverIssuer: '  ', bindingRevision: 1 })
+        .ok,
+    ).toBe(false);
+  });
+
+  it('K1R3-RED rejects NUL identities like L6a', () => {
+    expect(validateLiveIdentityTriangle({ ...local, declarationId: 'decl:\0x' }).ok).toBe(false);
+    expect(validateLiveIdentityTriangle({ ...local, cloneId: 'clone:\0x' }).ok).toBe(false);
+    expect(validateLiveIdentityTriangle({ ...local, serverIssuer: 'srv\0x' }).ok).toBe(false);
+  });
+
+  it('K1R3-RED rejects whitespace-only identities like L6a', () => {
+    expect(validateLiveIdentityTriangle({ ...local, declarationId: '   ' }).ok).toBe(false);
+  });
+});
+
+describe('K2aR3 idempotency: scope-level replay across handles', () => {
+  it('K2aR3-RED replays an identical unit from a rebound handle', async () => {
+    const store = new TestReferenceStore('comments');
+    const first = store.bindNew(grantFor({ token: 'token-idem-a' }));
+    const unit = {
+      guards: [],
+      records: [],
+      appends: [
+        {
+          chainId: 'idem-chain',
+          record: { id: 'i1', bytes: '{"n":1}', hash: 'hash-i-1' },
+          expectation: { kind: 'absent', allocation: '0' } as const,
+        },
+      ],
+      updates: [],
+      relationships: [],
+      barriers: [],
+      purgeIntents: [],
+      indexWrites: [],
+    };
+    const receipt = await first.commitAtomic(unit, { idempotencyKey: 'idem-key-1' });
+    const rebound = store.bindNew(grantFor({ token: 'token-idem-b' }));
+    const replayed = await rebound.commitAtomic(unit, { idempotencyKey: 'idem-key-1' });
+    expect(replayed.commitId).toBe(receipt.commitId);
+    expect(await rebound.readHead('idem-chain')).toBe('hash-i-1');
+  });
+});
+
 describe('K1 validators', () => {
   it('K1-RED rejects an empty atomic unit', () => {
     const result = validateAtomicUnit({
