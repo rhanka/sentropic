@@ -113,19 +113,22 @@ export const validateReadPage = (page: ReadPage, limits?: PageLimits): Validatio
   if (page.outcome === 'page' && page.records.length === 0 && page.nextCursor !== null) {
     errors.push('a successful empty page must not promise a next page');
   }
-  if ((page.outcome === 'incomplete' || page.outcome === 'inaccessible') && page.nextCursor === null) {
-    errors.push('an unavailable page carries a recovery cursor when one exists');
-  }
   if (limits) {
     const validity = validatePageLimits(limits);
     if (!validity.ok) return validity;
     if (page.records.length > limits.maxRecords) errors.push('page exceeds maxRecords');
-    const used = page.records.reduce((total, record) => total + Buffer.byteLength(record.bytes, 'utf8'), 0);
-    if (used > limits.maxEncodedBytes) errors.push('page exceeds maxEncodedBytes');
-    for (const record of page.records) {
-      if (Buffer.byteLength(record.bytes, 'utf8') > limits.maxEncodedBytes) {
-        errors.push('an indivisible record that cannot fit yields incomplete');
-        break;
+    if (page.outcome === 'page') {
+      const encoded = Buffer.byteLength(JSON.stringify(page), 'utf8');
+      if (encoded > limits.maxEncodedBytes) errors.push('page exceeds maxEncodedBytes');
+      for (const record of page.records) {
+        const single = Buffer.byteLength(
+          JSON.stringify({ outcome: 'page', records: [record], nextCursor: null }),
+          'utf8',
+        );
+        if (single > limits.maxEncodedBytes) {
+          errors.push('an indivisible record that cannot fit yields incomplete');
+          break;
+        }
       }
     }
   }
@@ -164,6 +167,9 @@ export const validateLeasedSnapshot = (snapshot: LeasedSnapshot, nowIso?: string
   if (!isNonEmptyString(snapshot.root)) errors.push('lease requires a root');
   if (validateStoreIncarnation(snapshot.incarnation).ok === false) errors.push('lease requires an incarnation');
   if (!isIsoDateString(snapshot.expiresAt)) errors.push('lease requires an ISO expiry');
-  else if (nowIso !== undefined && Date.parse(snapshot.expiresAt) <= Date.parse(nowIso)) errors.push('lease is expired');
+  else if (nowIso !== undefined) {
+    if (!isIsoDateString(nowIso)) errors.push('now must be an ISO date string');
+    else if (Date.parse(snapshot.expiresAt) <= Date.parse(nowIso)) errors.push('lease is expired');
+  }
   return errors.length === 0 ? okResult() : errResult(...errors);
 };
