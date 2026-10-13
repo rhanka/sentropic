@@ -125,9 +125,12 @@ describe('K3 runtime: token-bound cursors', () => {
   it('K3-RED forged, tampered and cross-chain cursors are rejected', async () => {
     const bound = bindKernel();
     await bound.appendChain('tok-a', { id: 'a1', bytes: '{}', hash: 'hash-tok-a1' }, { kind: 'absent', allocation: '0' });
+    await bound.appendChain('tok-a', { id: 'a2', bytes: '{}', hash: 'hash-tok-a2' }, { kind: 'head', hash: 'hash-tok-a1' });
+    await bound.appendChain('tok-a', { id: 'a3', bytes: '{}', hash: 'hash-tok-a3' }, { kind: 'head', hash: 'hash-tok-a2' });
     await bound.appendChain('tok-b', { id: 'b1', bytes: '{}', hash: 'hash-tok-b1' }, { kind: 'absent', allocation: '0' });
-    const page = await bound.readPage('tok-a', 10, null, 4096);
+    const page = await bound.readPage('tok-a', 1, null, 4096);
     expect(page.outcome).toBe('page');
+    expect(page.nextCursor).not.toBe(null);
     await expectCode(async () => bound.readPage('tok-a', 10, 'forged-cursor', 4096), 'invalid-command', 'K3-RED tokens: a forged cursor is explicitly rejected');
     const owned = page.nextCursor as { readonly position: number; readonly head: string };
     await expectCode(async () => bound.readPage('tok-a', 10, { ...owned, position: owned.position + 999 }, 4096), 'invalid-command', 'K3-RED tokens: a tampered position is rejected');
