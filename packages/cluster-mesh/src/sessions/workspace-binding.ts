@@ -7,6 +7,7 @@ export interface SessionWorkspaceBinding {
   readonly tenantId: string;
   readonly principalId: string;
   readonly status: SessionWorkspaceBindingStatus;
+  readonly version: number;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly detachedAt?: string;
@@ -45,9 +46,9 @@ export interface SessionWorkspaceBindingStore {
   findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null>;
   /**
    * Conditional write: persist `next` only when the stored row still matches
-   * `current` (`null` = no row must exist; otherwise same `sessionId` and
-   * `status`). Returns `false` on conflict; the caller must re-read and map
-   * the winning state instead of overwriting it.
+   * `current` (`null` = no row must exist; otherwise matching `sessionId`,
+   * monotonic `version`, and full expected state). Returns `false` on conflict;
+   * the caller must re-read and map the winning state instead of overwriting it.
    */
   compareAndSet(
     current: SessionWorkspaceBinding | null,
@@ -116,7 +117,7 @@ export const createSessionWorkspaceBindingService = (
         }
         const reattached: SessionWorkspaceBinding = {
           ...existing, workspaceId: input.workspaceId, principalId: input.principalId,
-          status: 'attached', updatedAt: now().toISOString(), detachedAt: undefined,
+          status: 'attached', version: existing.version + 1, updatedAt: now().toISOString(), detachedAt: undefined,
         };
         if (await store.compareAndSet(existing, reattached)) return reattached;
         continue;
@@ -125,6 +126,7 @@ export const createSessionWorkspaceBindingService = (
       const binding: SessionWorkspaceBinding = {
         bindingId: newId(), sessionId: input.sessionId, workspaceId: input.workspaceId,
         tenantId: input.sessionTenantId, principalId: input.principalId, status: 'attached',
+        version: 1,
         createdAt: timestamp, updatedAt: timestamp,
       };
       if (await store.compareAndSet(null, binding)) return binding;
@@ -166,7 +168,7 @@ export const createSessionWorkspaceBindingService = (
       }
       const timestamp = now().toISOString();
       const detached: SessionWorkspaceBinding = {
-        ...existing, status: 'detached', updatedAt: timestamp, detachedAt: timestamp,
+        ...existing, status: 'detached', version: existing.version + 1, updatedAt: timestamp, detachedAt: timestamp,
       };
       if (await store.compareAndSet(existing, detached)) return detached;
     }
@@ -179,7 +181,7 @@ export const createSessionWorkspaceBindingService = (
       if (existing.status === 'ended') return existing;
       const timestamp = now().toISOString();
       const ended: SessionWorkspaceBinding = {
-        ...existing, status: 'ended', updatedAt: timestamp, endedAt: timestamp,
+        ...existing, status: 'ended', version: existing.version + 1, updatedAt: timestamp, endedAt: timestamp,
       };
       if (await store.compareAndSet(existing, ended)) return ended;
     }
