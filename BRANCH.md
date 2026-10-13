@@ -80,6 +80,7 @@
 - [x] `K2B-RED4` — Lifecycle corpus green first run on the verified reference; per-behavior kills in `K2B-MUTB`.
 - [x] `K2B-MUTB-S` — Staged mutants S1-S5 killed at their targeted assertions.
 - [x] `K2B-MUTB-J` — Replay mutants J1-J2 killed at their targeted assertions.
+- [x] `K2B-MUTB-B` — Barrier mutants B1-B2 killed at their targeted assertions.
 - [ ] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions.
 
 ## AI Flaky tests
