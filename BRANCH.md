@@ -77,7 +77,7 @@
 - [x] `K2B-REF6` — Committed effects cannot escape a barrier (appends, records, updates).
 - [x] `K2B-RED2` — Replay corpus green after two reference root causes (poison `>=`, segment key propagation); per-behavior kills in `K2B-MUTB`.
 - [x] `K2B-RED3` — Barrier corpus green after the commit-escape root cause; G1 denial before/after disposal, absence distinct, raw tombstone neutral, over-limit coverage, concurrent insertion.
-- [ ] `K2B-RED4` — RED lifecycle corpus (unconfigured denial, conditional intent atomicity, holds, shared objects, crash-safe completion).
+- [x] `K2B-RED4` — Lifecycle corpus green first run on the verified reference; per-behavior kills in `K2B-MUTB`.
 - [ ] `K2B-MUTB` — K2b discriminating mutations recorded and killed at their targeted assertions.
 
 ## AI Flaky tests
@@ -117,7 +117,7 @@
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot 3 — Barrier and lifecycle corpora with G1**
   - [x] `barrier-corpus.ts` with G1 denial before/after disposal plus gate.
-  - [ ] `lifecycle-corpus.ts` (purge policy, holds, shared objects, completion) plus gate.
+  - [x] `lifecycle-corpus.ts` (purge policy, holds, shared objects, completion) plus gate.
   - [ ] One discriminating mutation per barrier and lifecycle behavior.
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot N — Final validation**
