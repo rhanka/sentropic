@@ -1,36 +1,38 @@
-# Feature: Cluster-mesh storage-port lot K3 (L3a v4.1 frozen)
+# Feature: Cluster-mesh storage-port lot K4 (L3a v4.1 frozen)
 
 ## Objective
-- [ ] Deliver the K3 neutral runtime (validation, tokens, binding, ordinary transactions, exact-head immutable chain boundaries) on the K1/K2 corpora.
-- [ ] Designate the chain-boundary provider used by readChainPage (G3) for the engram adapter.
+- [ ] Deliver the K4 shared visibility-root and staged-unit machinery (neutral, on the K3 backend) against the K2b staged/barrier/lifecycle corpora.
+- [ ] Cover G5 where it touches staged units: a historical tombstone import writes its barrier in the same published unit.
 
 ## Scope / Guardrails
-- [ ] Scope limited to K3 runtime files and K3 specs plus the K3 report.
+- [ ] Scope limited to K4 runtime files and K4 specs plus the K4 report.
 - [ ] Make-only workflow, no direct Docker commands.
 - [ ] Root workspace ~/src/sentropic is reserved for user dev/UAT (ENV=dev) and must remain stable.
-- [ ] Branch development happens in worktree tmp/worktrees/cluster-mesh-storage-k3.
-- [ ] Automated test campaigns run on ENV=test-cm-k3, never on dev.
-- [ ] In every make command, ENV=test-cm-k3 passed as last argument with API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615.
+- [ ] Branch development happens in worktree tmp/worktrees/cluster-mesh-storage-k4.
+- [ ] Automated test campaigns run on ENV=test-cm-k4, never on dev.
+- [ ] In every make command, ENV=test-cm-k4 passed as last argument with API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620.
 - [ ] One Docker build at a time.
 - [ ] All new text in English.
 - [ ] Zero Python.
 - [ ] Kernel stays neutral: no pg, no drizzle, no engram imports; public types documented.
 - [ ] Frozen M1 and merged engram L6a 70ebdfee untouched.
 - [ ] No version bump.
-- [ ] K2a/K2b corpora run against the K3 runtime where applicable (ordinary only; staged/journal/barrier/lifecycle stay K4/S/P).
+- [ ] K2b staged/barrier/lifecycle corpora run against the K4 runtime; K3 ordinary corpora stay green.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**:
   - [ ] `BRANCH.md`
-  - [ ] `packages/cluster-mesh/src/storage/tokens.ts`
-  - [ ] `packages/cluster-mesh/src/storage/backend.ts`
-  - [ ] `packages/cluster-mesh/src/storage/record-runtime.ts`
-  - [ ] `packages/cluster-mesh/src/storage/scope-runtime.ts`
-  - [ ] `packages/cluster-mesh/src/storage/kernel.ts`
-  - [ ] `packages/cluster-mesh/src/storage/index.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/kernel.spec.ts`
-  - [ ] `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`
-  - [ ] `.h2a/build/k3_report.md`
+  - [ ] `packages/cluster-mesh/src/storage/visibility-root.ts`
+  - [ ] `packages/cluster-mesh/src/storage/staged-runtime.ts`
+  - [ ] `packages/cluster-mesh/src/storage/stage-validation.ts`
+  - [ ] `packages/cluster-mesh/src/storage/projection-runtime.ts`
+  - [ ] `packages/cluster-mesh/src/storage/manifest.ts`
+  - [ ] `packages/cluster-mesh/tests/storage/staged-units.spec.ts`
+  - [ ] `packages/cluster-mesh/tests/storage/visibility.spec.ts`
+  - [ ] `packages/cluster-mesh/tests/storage/manifest.spec.ts`
+  - [ ] `packages/cluster-mesh/package.json`
+  - [ ] `package-lock.json`
+  - [ ] `.h2a/build/k4_report.md`
 - [ ] **Forbidden Paths (must not change in this branch)**:
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -50,6 +52,12 @@
   - [ ] `packages/cluster-mesh/src/storage/staged-units.ts`
   - [ ] `packages/cluster-mesh/src/storage/readers.ts`
   - [ ] `packages/cluster-mesh/src/storage/errors.ts`
+  - [ ] `packages/cluster-mesh/src/storage/tokens.ts`
+  - [ ] `packages/cluster-mesh/src/storage/backend.ts`
+  - [ ] `packages/cluster-mesh/src/storage/record-runtime.ts`
+  - [ ] `packages/cluster-mesh/src/storage/scope-runtime.ts`
+  - [ ] `packages/cluster-mesh/src/storage/kernel.ts`
+  - [ ] `packages/cluster-mesh/src/storage/index.ts`
   - [ ] `packages/cluster-mesh/tests/storage/atomic-corpus.ts`
   - [ ] `packages/cluster-mesh/tests/storage/authority-corpus.ts`
   - [ ] `packages/cluster-mesh/tests/storage/chain-corpus.ts`
@@ -64,6 +72,8 @@
   - [ ] `packages/cluster-mesh/tests/storage/reference.spec.ts`
   - [ ] `packages/cluster-mesh/tests/storage/mutations.spec.ts`
   - [ ] `packages/cluster-mesh/tests/storage/profile-mutations.spec.ts`
+  - [ ] `packages/cluster-mesh/tests/storage/kernel.spec.ts`
+  - [ ] `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`
   - [ ] `.h2a/inputs/**`
   - [ ] `.h2a/reviews/**`
   - [ ] `.env`
@@ -75,9 +85,8 @@
   - [ ] Mirror the same exception in this file under Feedback Loop.
 
 ## Feedback Loop
-- [ ] `BR-K3-DISC1` — One-time BRANCH.md rewrite (K2b content to K3 content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
-- [ ] `BR-K3-G3` — G3 designation: readChainPage uses the retained exact-head boundary provider (server-side registry, byte-identical cursors); decision recorded in kernel.ts plus the K3 report.
-- [ ] `BR-K3-DISC2` — K3 runtime files land as one coherent file per commit when they exceed 150 lines (single review unit per §17.4 file; K1 `BR-K1R3-EX1` and K2b `BR-K2B-DISC2` precedent for reference-scale files); all other commits stay under 150 lines.
+- [ ] `BR-K4-DISC1` — One-time BRANCH.md rewrite (K3 content to K4 content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
+- [ ] `BR-K4-G5` — G5 where it touches staged units: a staged unit carrying a tombstoned record plus its barrier publishes both in one commit; the payload is never ordinarily readable between publication and barrier application; proof in staged-units.spec.ts plus the K4 report.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -90,64 +99,68 @@
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] Multi-branch (only if sub-workstreams require independent CI or long-running validation)
-- [ ] Rationale: single stacked branch on feat/cluster-mesh-storage-k2b; one final test cycle.
+- [ ] Rationale: single stacked branch on feat/cluster-mesh-storage-k3; one final test cycle.
 
 ## UAT Management (in orchestration context)
 - [ ] **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
 - [ ] Multi-branch: no UAT on sub-branches; UAT happens only after integration on the main branch.
 - [ ] UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
 - [ ] Execution flow (mandatory):
-  - [ ] Develop and run tests in `tmp/worktrees/cluster-mesh-storage-k3`.
+  - [ ] Develop and run tests in `tmp/worktrees/cluster-mesh-storage-k4`.
   - [ ] Push branch before UAT.
   - [ ] Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
-  - [ ] Switch back to `tmp/worktrees/cluster-mesh-storage-k3` after UAT.
+  - [ ] Switch back to `tmp/worktrees/cluster-mesh-storage-k4` after UAT.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
   - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `README.md`.
-  - [ ] Confirm worktree `tmp/worktrees/cluster-mesh-storage-k3` on branch `feat/cluster-mesh-storage-k3` stacked at `4da5b52ca`.
-  - [ ] Read frozen spec `L3a-spec-v4.1-frozen.md` §17 row K3 plus file table (K/T).
+  - [ ] Confirm worktree `tmp/worktrees/cluster-mesh-storage-k4` on branch `feat/cluster-mesh-storage-k4` stacked at `e6b64efc7`.
+  - [ ] Merge `origin/feat/cluster-mesh-storage-k2b` (K2b fixes `09b008890`) and `origin/feat/cluster-mesh-storage-k3` latest.
+  - [ ] Read frozen spec `L3a-spec-v4.1-frozen.md` §17 row K4 plus file table (K/T) and G5 (same-unit tombstone/barrier).
   - [ ] Rewrite `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` (this file).
-  - [ ] Confirm command style: `make ... API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` with `ENV` last.
-  - [ ] Confirm scope boundaries and `BR-K3-DISC1`.
-  - [ ] Baseline: `make test-cluster-mesh SCOPE=tests/storage/reference.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` green.
+  - [ ] Confirm command style: `make ... API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4` with `ENV` last.
+  - [ ] Confirm scope boundaries and `BR-K4-DISC1`.
+  - [ ] Baseline: `make test-cluster-mesh SCOPE=tests/storage/reference.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4` green.
   - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [ ] **Lot 1 — Test-first K3 specs (failing)**
-  - [x] Write `packages/cluster-mesh/tests/storage/kernel.spec.ts`: atomic + chain + read + cursor-budget corpora against the K3 runtime; predicate-positive acceptance; transact overlay/rollback/isolation/closed-context/nested-join; token tamper and cross-chain refusal; forged cursor refusal.
-  - [x] Write `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`: authority corpus against the K3 runtime; frozen-grant mutation check; revalidation on expiry and revocation; capability advertisement.
-  - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-  - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-  - [x] Lot gate: specs fail on missing runtime (RED), no other files touched.
-- [ ] **Lot 2 — Tokens, backend, record runtime**
-  - [x] Write `packages/cluster-mesh/src/storage/tokens.ts`: retained exact-head boundary registry (G3 provider), opaque id minting, documented public types.
-  - [x] Write `packages/cluster-mesh/src/storage/backend.ts`: neutral in-memory backend state per scope (chains, genesis, index, records, aggregates, commits, cursors).
-  - [x] Write `packages/cluster-mesh/src/storage/record-runtime.ts`: ordinary commit staging with CAS-first appends, allocation, disposal guards, idempotent genesis/index, aggregate versions, predicate-positive acceptance, barrier/purge/relationship refusal, full rollback, R3 effective-cursor paging.
-  - [x] Write `packages/cluster-mesh/src/storage/record-runtime.ts`: ordinary commit staging with CAS-first appends, allocation, disposal guards, idempotent genesis/index, aggregate versions, predicate-positive acceptance, barrier/purge/relationship refusal, full rollback, R3 effective-cursor paging.
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [ ] **Lot 3 — Scope binding, kernel, index**
-  - [x] Write `packages/cluster-mesh/src/storage/scope-runtime.ts`: grant bind with frozen copy, issued-token registry, revocation, per-operation revalidation, scope isolation, profiles advertisement.
-  - [x] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
-  - [x] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
-  - [ ] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
-  - [ ] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] **API tests**
-      - [ ] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` (new K3 ordinary runtime proof)
-      - [ ] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` (new K3 binding proof)
-      - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-      - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-      - [x] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [ ] **Lot 4 — Final validation, report, draft PR**
-  - [x] Typecheck and lint full package.
-  - [x] Retest storage: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
-  - [x] Retest package: `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
-  - [x] Verify neutrality: no pg, no drizzle, no engram imports in `packages/cluster-mesh/src/storage/`.
-  - [x] Verify frozen M1 and engram L6a untouched.
-  - [x] Write `.h2a/build/k3_report.md` with exit SHA, corpus evidence, G3 designation, neutrality proof.
-  - [x] Push only this branch, open a DRAFT PR noting "stacked on #669", never merge.
+    - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+    - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+- [ ] **Lot 1 — Test-first K4 specs (failing)**
+  - [ ] Write `packages/cluster-mesh/tests/storage/staged-units.spec.ts`: staged/replay/barrier/lifecycle corpora against the K4 runtime plus G5 same-unit tombstone/barrier proof.
+  - [ ] Write `packages/cluster-mesh/tests/storage/visibility.spec.ts`: root versions, base conflicts, rebase, denial without cursor leaks.
+  - [ ] Write `packages/cluster-mesh/tests/storage/manifest.spec.ts`: canonical manifest round-trip, unknown/tampered digest refusal, terminal completeness.
+  - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/staged-units.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+  - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/visibility.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+  - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/manifest.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+  - [ ] Lot gate: specs fail on missing runtime (RED), no other files touched.
+- [ ] **Lot 2 — Visibility root and stage validation**
+  - [ ] Write `packages/cluster-mesh/src/storage/visibility-root.ts`: scope visibility root/version, base capture and comparison, single publication point.
+  - [ ] Write `packages/cluster-mesh/src/storage/stage-validation.ts`: bounded seal validation steps with validating/sealed states and resume.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+    - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+- [ ] **Lot 3 — Staged runtime with journal, barriers and lifecycle**
+  - [ ] Write `packages/cluster-mesh/src/storage/staged-runtime.ts`: staged units over the K3 backend, journal segments, coverage/barrier denial, purge jobs, G5 same-unit publication.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+    - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+    - [ ] **API tests**
+      - [ ] Evolve `packages/cluster-mesh/tests/storage/staged-units.spec.ts` (new K4 staged-unit proof)
+      - [ ] Evolve `packages/cluster-mesh/tests/storage/visibility.spec.ts` (new K4 visibility proof)
+      - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/staged-units.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+      - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/visibility.spec.ts API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+      - [ ] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+- [ ] **Lot 4 — Projection runtime and manifest**
+  - [ ] Write `packages/cluster-mesh/src/storage/projection-runtime.ts`: relationship index, registered queries with page limits, cause-tagged projection deltas.
+  - [ ] Write `packages/cluster-mesh/src/storage/manifest.ts`: canonical export manifest, retained registry, digest verification, terminal completeness.
+  - [ ] Evolve `packages/cluster-mesh/tests/storage/manifest.spec.ts` (new K4 manifest proof)
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+    - [ ] `make lint-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`
+- [ ] **Lot 5 — Final validation, report, draft PR**
+  - [ ] Typecheck and lint full package.
+  - [ ] Retest storage: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`.
+  - [ ] Retest package: `make test-cluster-mesh API_PORT=9520 UI_PORT=5720 MAILDEV_UI_PORT=1620 ENV=test-cm-k4`.
+  - [ ] Verify neutrality: no pg, no drizzle, no engram imports in `packages/cluster-mesh/src/storage/`.
+  - [ ] Verify frozen M1 and engram L6a untouched.
+  - [ ] Write `.h2a/build/k4_report.md` with exit SHA, corpus evidence, G5 proof, neutrality proof.
+  - [ ] Push only this branch, open a DRAFT PR noting "stacked on #670", never merge.
