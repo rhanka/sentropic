@@ -3,6 +3,10 @@
 // unavailability. Backend-agnostic: cursors are opaque values minted by the
 // backend and never inspected or forged here; every refusal asserts a typed
 // code or page outcome, never a reference message (§5.2).
+// Cursor integrity binding (module/scope/incarnation/selection binding,
+// tampered-position and cross-chain reuse, clock-advance stability) is K3
+// token semantics and is not covered here: only malformed cursors are
+// rejected at this layer, retained heads bound the traversal.
 
 import assert from 'node:assert/strict';
 import { expectCode, type Awaitable } from './atomic-corpus.js';
