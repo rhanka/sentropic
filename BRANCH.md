@@ -266,6 +266,8 @@
 - [x] **Lot N10a — Native feature classifier (fold)**
   - [x] `packages/llm-gateway/src/native-features.ts` + `tests/native-features.test.ts` (selection matrix; flow/router wiring stays N10b).
   - [x] `native-required`/`native-max-tokens-required` in `src/router/errors.ts` + `tests/contract-snapshot.test.ts` golden (deliberate same-PR edit).
+- [x] **Lot N10b — Selection follow-through + opaque body (fold)**
+  - [x] `src/route-native.ts` `buildNativeMessagesBody` (shallow dispatch overrides, opaque nesting preserved) + `tests/native-body.test.ts` (RED missing-module → GREEN 28/28).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
