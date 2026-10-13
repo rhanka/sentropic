@@ -69,7 +69,8 @@
 - [x] `K2B-REF1` — Staged reference core: wrapper delegates, coverage resolution, disposal mirror, purge-policy commits, journal emission.
 - [x] `K2B-REF2a` — Staged reference intake: begin, fragment sequencing, inspect.
 - [x] `K2B-REF2b` — Staged reference publication: seal validation, base compare, idempotent commit, abort.
-- [ ] `K2B-RED1` — RED staged corpus versus the unextended reference (hidden state, gaps, conflicts, atomic publication, recovery).
+- [ ] `BR-K2B-DISC3` — Corpus files land as one review-unit commit each when they exceed 150 lines (staged-corpus here; K1 precedent for corpus-scale files); replay, barrier, lifecycle and mutation deltas stay under 150 lines.
+- [x] `K2B-RED1` — Staged corpus fails without staged support and passes on the staged reference (issuance root cause fixed, per-behavior kills in `K2B-MUTB`).
 - [x] `K2B-REF3` — Staged reference journal consumers: read, checkpoint CAS, poison, retry, resync.
 - [x] `K2B-REF4` — Staged reference lifecycle: coverage, holds, purge completion, shared blobs.
 - [ ] `K2B-RED2` — RED replay corpus (ordering, watermark, checkpoint CAS, poison, resync, external interleave).
@@ -107,8 +108,9 @@
   - [x] MIN3 validator limits plus tests (`readers.ts`, `reference.spec.ts`).
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot 2 — Staged reference plus staged and replay corpora**
-  - [ ] `reference-staged.ts`: staged units, journal, coverage/barrier groundwork.
-  - [ ] `staged-corpus.ts` plus gate; `replay-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
+  - [x] `reference-staged.ts`: staged units, journal, coverage/barrier groundwork.
+  - [x] `staged-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
+  - [ ] `replay-corpus.ts` plus gate (gates in `profile-mutations.spec.ts`).
   - [ ] One discriminating mutation per staged and replay behavior.
   - [ ] Lot gate: typecheck, scoped cluster-mesh tests, lint, scope-check.
 - [ ] **Lot 3 — Barrier and lifecycle corpora with G1**
