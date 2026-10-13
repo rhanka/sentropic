@@ -111,7 +111,7 @@
 - [ ] **Lot C0FIX3 — Opus r4 remediation (m1–m3)**
   - [x] Broaden boundary test residue rules to class motifs, exclude explicitly marked historical excerpts, and add reformulation test cases (m1).
   - [x] Correct section citations from §9.3 to §9.2 in storage-compatibility.md and storage-alignment.md (m2).
-  - [ ] Restore verbatim historical alternatives in owner-decisions.md with distinct current allocation (m3).
+  - [x] Restore verbatim historical alternatives in owner-decisions.md with distinct current allocation (m3).
   - [ ] Restore verbatim historical review verdicts in evidence index with distinct current dispositions and refreshed document digests (m3).
   - [ ] Correct c0_docs_astra_report.md and generate c0_fix3_report.md (m3).
 
