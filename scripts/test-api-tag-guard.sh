@@ -45,11 +45,12 @@ LOCAL_DIGEST="sha256:00000000000000000000000000000000000000000000000000000000000
 REMOTE_DIGEST="sha256:9999999999999999999999999999999999999999999999999999999999999999"
 TEST_RECEIPT="$scratch/api-image-id"
 printf '%s\n' "$LOCAL_DIGEST" > "$TEST_RECEIPT"
+DEFAULT_TAG="fa56b6"
 
 run_guard() {
   local scenario="$1"
   local reg="${2-registry.test.example/sentropic}"
-  local ver="${3-test-content-tag}"
+  local ver="${3-$DEFAULT_TAG}"
   : > "$scratch/calls"; : > "$scratch/output"
   PATH="$PWD/$scratch:$PATH" DOCKER_CALL_LOG="$PWD/$scratch/calls" GUARD_SCENARIO="$scenario" \
   MOCK_LOCAL_DIGEST="$LOCAL_DIGEST" MOCK_REMOTE_DIGEST="$REMOTE_DIGEST" \
@@ -62,28 +63,28 @@ run_guard() {
 test_exists_different() {
   ! run_guard exists-different || { echo "FAIL: exists-different should fail" >&2; return 1; }
   grep -q "Production tag collision" "$scratch/output" || { echo "FAIL: missing collision error" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on collision" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on collision" >&2; return 1; }
   echo "PASS: exists-different fails with clear collision message and never pushes"
 }
 
 test_exists_same() {
   run_guard exists-same || { cat "$scratch/output" >&2; echo "FAIL: exists-same should succeed" >&2; return 1; }
   grep -q "Skipping push idempotently" "$scratch/output" || { echo "FAIL: missing skip message" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on existing tag" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on existing tag" >&2; return 1; }
   echo "PASS: exists-same skips push idempotently and never pushes"
 }
 
 test_absent() {
   run_guard absent || { cat "$scratch/output" >&2; echo "FAIL: absent should succeed" >&2; return 1; }
   grep -q "is absent from registry. Pushing..." "$scratch/output" || { echo "FAIL: missing push message" >&2; return 1; }
-  grep -q "push registry.test.example/sentropic/sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: target not pushed" >&2; return 1; }
+  grep -q "push registry.test.example/sentropic/sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: target not pushed" >&2; return 1; }
   echo "PASS: absent tag publishes successfully"
 }
 
 test_stdout_manifest_unknown() {
   ! run_guard stdout-manifest-unknown || { echo "FAIL: stdout-manifest-unknown should fail" >&2; return 1; }
   grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on stdout-only manifest unknown" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on stdout-only manifest unknown" >&2; return 1; }
   echo "PASS: manifest unknown on stdout is not treated as absent (stderr-only isolation)"
 }
 
@@ -91,14 +92,14 @@ test_case_variant_manifest_unknown() {
   ! run_guard case-variant-manifest-unknown || { echo "FAIL: case-variant-manifest-unknown should fail" >&2; return 1; }
   grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
   grep -q "Manifest Unknown" "$scratch/output" || { echo "FAIL: missing stderr case variant in output" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on case variant" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on case variant" >&2; return 1; }
   echo "PASS: case variant (Manifest Unknown) is not treated as absent (case-sensitive matching)"
 }
 
 test_auth_error() {
   ! run_guard auth-error || { echo "FAIL: auth-error should fail" >&2; return 1; }
   grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on auth error" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on auth error" >&2; return 1; }
   echo "PASS: registry error fails closed and never pushes"
 }
 
@@ -106,7 +107,7 @@ test_credential_helper_not_found() {
   ! run_guard credential-helper-not-found || { echo "FAIL: credential-helper-not-found should fail" >&2; return 1; }
   grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
   grep -q "executable file not found" "$scratch/output" || { echo "FAIL: missing credential helper error output" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on credential helper error" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on credential helper error" >&2; return 1; }
   echo "PASS: credential-helper-not-found fails closed without treating not-found as absent"
 }
 
@@ -114,14 +115,14 @@ test_network_error() {
   ! run_guard network-error || { echo "FAIL: network-error should fail" >&2; return 1; }
   grep -q "Cannot establish production registry tag identity" "$scratch/output" || { echo "FAIL: missing identity refusal" >&2; return 1; }
   grep -q "Client.Timeout exceeded" "$scratch/output" || { echo "FAIL: missing timeout error output" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on network error" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on network error" >&2; return 1; }
   echo "PASS: network error fails closed and never pushes"
 }
 
 test_no_config_digest() {
   ! run_guard no-config-digest || { echo "FAIL: no-config-digest should fail" >&2; return 1; }
   grep -q "could not extract config digest from manifest" "$scratch/output" || { echo "FAIL: missing digest extraction error" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:test-content-tag" "$scratch/calls" || { echo "FAIL: pushed on missing config digest" >&2; return 1; }
+  ! grep -q "push .*sentropic-api:$DEFAULT_TAG" "$scratch/calls" || { echo "FAIL: pushed on missing config digest" >&2; return 1; }
   echo "PASS: existing manifest without config digest fails closed and never pushes"
 }
 
@@ -133,10 +134,13 @@ test_empty_registry() {
 }
 
 test_moving_tags() {
-  ! run_guard absent "registry.test.example/sentropic" "main" || { echo "FAIL: moving tags should fail in publish-api-image" >&2; return 1; }
-  grep -q "Cannot use publish-api-image for moving tag 'main'" "$scratch/output" || { echo "FAIL: missing moving tag refusal error" >&2; return 1; }
-  ! grep -q "push .*sentropic-api:main" "$scratch/calls" || { echo "FAIL: moving tag pushed through publish-api-image" >&2; return 1; }
-  echo "PASS: moving tags are rejected by publish-api-image and directed to publish-api-main-image"
+  local invalid_tags=("main" "latest" "staging" "v1" "fa56b" "fa56b67" "fa56bg" "FA56B6")
+  for tag in "${invalid_tags[@]}"; do
+    ! run_guard absent "registry.test.example/sentropic" "$tag" || { echo "FAIL: invalid tag '$tag' should fail in publish-api-image" >&2; return 1; }
+    grep -Eq "Cannot use publish-api-image for moving tag|Invalid API_VERSION" "$scratch/output" || { echo "FAIL: missing tag refusal error for '$tag'" >&2; return 1; }
+    ! grep -q "push .*sentropic-api:$tag" "$scratch/calls" || { echo "FAIL: invalid tag '$tag' pushed through publish-api-image" >&2; return 1; }
+  done
+  echo "PASS: moving tags and invalid tag formats are rejected by publish-api-image"
 }
 
 case "${1:-all}" in
