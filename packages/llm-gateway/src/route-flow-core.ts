@@ -63,11 +63,20 @@ export interface RouteFlowDeps {
 export interface PreparedRouteFlow {
   readonly cost: CostContext;
   readonly subject: VerifiedRoutingSubject;
-  readonly canonical: CanonicalIngressResult;
+  canonical: CanonicalIngressResult;
   readonly plan: RoutePlan;
   /** Present only when budget admission admitted the request. */
   readonly admission?: AdmittedRoute;
 }
+
+/** Retry projection is detached only when upload/commit or terminal SDK cleanup permits it. */
+export const retainRouteBody = (prepared: PreparedRouteFlow, request: GatewayFlowRequest): void => {
+  request.bodyLease?.trackDetach(() => {
+    const { providerId, modelId } = prepared.canonical.request;
+    prepared.canonical = { request: { messages: [],
+      ...(providerId ? { providerId } : {}), ...(modelId ? { modelId } : {}) }, requiredCapabilities: [] };
+  });
+};
 
 export const routingSubjectForCost = (cost: CostContext): VerifiedRoutingSubject => ({
   principalRef: cost.principalId,

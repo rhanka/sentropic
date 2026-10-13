@@ -2,7 +2,7 @@ import type { PreparedRouteAttempt, StreamEvent, RouteFailureClassification } fr
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, routeUsage,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, retainRouteBody, routeUsage,
   settleRouteRequest, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
@@ -45,7 +45,8 @@ const trackedExecution = (input: {
   let priming = true;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
   const isCancelled = () => terminal === 'cancelled';
-  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined);
+  const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined)
+    .finally(() => request.bodyLease?.release());
   const usage = (): SettleUsage => reported ?? ({
     inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
     outputTokens: Math.min(1_000_000, Math.ceil(outputCharacters / 4)), estimated: true,
@@ -155,6 +156,7 @@ export const runRouteStreamFlow = async (
   request: GatewayFlowRequest,
 ): Promise<GatewayStreamResult> => {
   const prepared = await prepareRouteFlow(deps, request);
+  retainRouteBody(prepared, request);
   const attempts: RouteAttemptSettlement[] = [];
   const signal = request.signal ?? request.authContext.signal;
   let settled = false;

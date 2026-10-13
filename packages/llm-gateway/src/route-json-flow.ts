@@ -3,7 +3,7 @@ import { estimateAnthropicInputTokens } from './canonical-stream.js';
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, routeUsage,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseUnmarkedDispatch, retainRouteBody, routeUsage,
   settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
@@ -36,6 +36,7 @@ export const runRouteJsonFlow = async (
   request: GatewayFlowRequest,
 ): Promise<RouteGatewayJsonResult> => {
   const prepared = await prepareRouteFlow(deps, request);
+  retainRouteBody(prepared, request);
   const attempts: RouteAttemptSettlement[] = [];
   const signal = request.signal ?? request.authContext.signal;
   const estimate = (output = ''): SettleUsage => ({
@@ -117,6 +118,8 @@ export const runRouteJsonFlow = async (
       throw terminal();
     }
     const usage = response.usage ? routeUsage(response.usage) : estimate(response.text);
+    // A successful JSON operation cannot retry; its host upload/SDK references are now gone.
+    request.bodyLease?.detach();
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
       outcome: 'success', usage });

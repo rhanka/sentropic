@@ -254,6 +254,8 @@
 - [x] **Lot N06 — Pre-parser composition (fold)**
   - [x] Router uses the checked owner, duplicate Responses reader removed (`src/router/index.ts` + `tests/router.test.ts`).
   - [x] Settlement uses the same policy/object (`api/.../gw.ts`, `M route-settlement.ts`) + product order/both aliases (bridge-once by disjoint registration, verified by construction).
+- [x] **Lot N07 — Flow retention (fold)**
+  - [x] `bodyLease` in `flow.ts`/`route-flow-core.ts`/`route-json-flow.ts`/`route-stream-flow.ts` + legacy passthrough (native stream parts stay N22).
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
   - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).
