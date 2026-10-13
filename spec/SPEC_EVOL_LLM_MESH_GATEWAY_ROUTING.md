@@ -1089,6 +1089,40 @@ thin data plane).
   `packages/llm-gateway/tests/target.test.ts` + `router.test.ts` (same
   order/efforts on the gateway side).
 
+### 14.4b Muse Wonder + Wonder Full (owner request 2026-10-13)
+
+- Catalog (`packages/llm-mesh/src/catalog.ts`): `muse-wonder-1.0` (label
+  `Muse Wonder`) and `muse-wonder-1.0-full` (label `Muse Wonder Full`),
+  both `advanced` reasoning with vision, same task hints as Spark.
+  `muse-wonder-1.0` is the exact model id from the local Muse CLI config
+  (`~/.config/muse/settings.json` `model`; model ids only — no secret was
+  read or copied). The Full id follows the base versioning; the owner
+  confirms it against the CLI catalog, and only that literal changes if it
+  differs.
+- Provider routing: both ids in `knownModelIds` /
+  `knownModelIdsByProvider.muse` (`providers.ts`), both mapped to the
+  `muse`/`muse` target (`routing-targets.ts`), both listed in
+  `GENERATED_MODEL_COUNCIL_SOURCE.excludedModelKeys`
+  (`generated-model-council.ts`) like Spark (no pinned benchmark evidence).
+  The gateway default stays the Spark contributor (`MUSE_CONTRIBUTOR_MODEL`
+  unchanged); no api change (account transport acquisition is
+  model-agnostic).
+- Responses-wire compatibility: execution features are transport-keyed, so
+  both Wonder ids inherit the proven `muse` set (`reasoning-controls`,
+  `explicit-output-ceiling`, `strict-schema`, §16.3/16.4 amendments apply
+  unchanged) and serve through the translated Muse adapter.
+- Effort mapping: no per-model effort table exists in mesh — the canonical
+  `reasoning.effort` passes through the Responses wire unchanged for every
+  muse model (CLI tiers none/minimal/low/medium/high/xhigh/max/ultra per
+  `muse model-profile --help`).
+- Count/accounting: model-agnostic — `responsesUsage` mapping and
+  route settlement/quote allowance apply identically (no per-model pricing
+  table in mesh or gateway).
+- Covered by `packages/llm-mesh/tests/muse.test.ts` (4-model surface),
+  `routing-targets.test.ts` (Wonder resolution), and the real-planner
+  replay (`packages/llm-gateway/tests/responses-real-planner.test.ts`:
+  a Responses body on each Wonder id serves 200 with usage preserved).
+
 ### 14.5 Runtime status and enrollment proofs
 
 - As of this writing the api runtime still lists no muse models

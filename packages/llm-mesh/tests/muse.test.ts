@@ -12,6 +12,8 @@ import { getProviderProfile, getModelProfile } from '../src/catalog.js';
 const MUSE_CATALOG_KEYS = [
   'muse-spark-1.3',
   'muse-spark-1.3-contributor',
+  'muse-wonder-1.0',
+  'muse-wonder-1.0-full',
 ] as const;
 
 describe('muse provider package surface', () => {
@@ -30,7 +32,7 @@ describe('muse provider package surface', () => {
     ]);
   });
 
-  it('lists the Muse Spark model ids (base + contributor tier option) for muse', () => {
+  it('lists the Muse model ids (Spark base + contributor, Wonder + Wonder Full) for muse', () => {
     expect(knownModelIdsByProvider.muse).toEqual(MUSE_CATALOG_KEYS);
   });
 
@@ -44,7 +46,7 @@ describe('muse provider package surface', () => {
     expect(adapters).toHaveLength(8);
   });
 
-  it('exposes the two Muse models through the registry built from default adapters', () => {
+  it('exposes the four Muse models through the registry built from default adapters', () => {
     const registry = createProviderRegistry(createDefaultProviderAdapters());
     const muse = registry.requireProvider('muse');
 
@@ -66,5 +68,15 @@ describe('muse provider package surface', () => {
     expect(base?.reasoningTier).toBe('advanced');
     expect(contributor?.modelId).toBe('muse-spark-1.3-contributor');
     expect(contributor?.reasoningTier).toBe('advanced');
+  });
+
+  it('profiles Muse Wonder and Muse Wonder Full as advanced Meta models', () => {
+    const wonder = getModelProfile('muse', 'muse-wonder-1.0');
+    const full = getModelProfile('muse', 'muse-wonder-1.0-full');
+
+    expect(wonder?.label).toBe('Muse Wonder');
+    expect(wonder?.reasoningTier).toBe('advanced');
+    expect(full?.label).toBe('Muse Wonder Full');
+    expect(full?.reasoningTier).toBe('advanced');
   });
 });

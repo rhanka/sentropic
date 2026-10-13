@@ -596,6 +596,27 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
   },
+  {
+    // Owner request 2026-10-13: `muse-wonder-1.0` is the exact model id from
+    // the local Muse CLI config (`~/.config/muse/settings.json` model).
+    providerId: 'muse',
+    modelId: 'muse-wonder-1.0',
+    label: 'Muse Wonder',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+  },
+  {
+    // Owner request 2026-10-13: Full tier id follows the base versioning
+    // (`muse-wonder-1.0` → `muse-wonder-1.0-full`); owner to confirm against
+    // the CLI catalog — only this literal changes if it differs.
+    providerId: 'muse',
+    modelId: 'muse-wonder-1.0-full',
+    label: 'Muse Wonder Full',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+  },
 ] as const satisfies readonly ModelProfile[];
 
 export const providerCapabilityMatrix = providerProfiles;

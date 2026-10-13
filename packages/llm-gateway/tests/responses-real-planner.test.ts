@@ -52,7 +52,8 @@ const rig = () => {
           enrollmentCompletedAt: '2026-08-01T00:00:00Z', readiness: 'ready' as const, revision: 'r1' },
         { accountRef: 'internal-muse', diagnosticAccountRef: 'acct_muse',
           targetProviderId: 'muse', transportProviderId: 'muse',
-          supportedModelIds: ['muse-spark-1.3-contributor', 'muse-spark-1.3'],
+          supportedModelIds: ['muse-spark-1.3-contributor', 'muse-spark-1.3',
+            'muse-wonder-1.0', 'muse-wonder-1.0-full'],
           enrollmentCompletedAt: '2026-08-01T00:00:00Z', readiness: 'ready' as const, revision: 'r1' },
       ];
     },
@@ -87,6 +88,18 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     const attempted = f.captured[0]!;
     expect(typeof attempted.model === 'string' ? attempted.model : attempted.modelId).toBe(model);
     expect(f.captured[0]!.tools?.map((tool) => tool.name)).toHaveLength(toolCount);
+    expect(body.usage).toMatchObject({ input_tokens: 10, output_tokens: 3, total_tokens: 13 });
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
+  });
+
+  it.each(['muse-wonder-1.0', 'muse-wonder-1.0-full'] as const)('serves a Responses body on %s at 200 (owner request 2026-10-13)', async (model) => {
+    const f = rig();
+    const res = await f.send('/responses',
+      { ...(await load('muse-1.4.6-initial-b.json')), model });
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, any>;
+    expect(body).toMatchObject({ object: 'response', model, status: 'completed' });
+    expect(body.output?.some((item: any) => item.type === 'function_call')).toBe(true);
     expect(body.usage).toMatchObject({ input_tokens: 10, output_tokens: 3, total_tokens: 13 });
     expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
