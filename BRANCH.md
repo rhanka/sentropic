@@ -93,7 +93,7 @@
   - [x] Replace local file reference in storage-compatibility.md with normative frozen spec reference (a-m8).
   - [x] Historical validation/push/report completed at `300dc5a40`; r3 supersedes the report's alignment claims (corrected by C0DOCS).
 
-- [ ] **Lot C0DOCS — Complete r3 documentation and guard remediation**
+- [x] **Lot C0DOCS — Complete r3 documentation and guard remediation**
   - [x] Restrict root/storage import guards while allowing the optional comments leaf (R3-m2).
   - [x] Align SPEC contract/ownership/transport boundaries and add a tracked frozen-source reference.
   - [x] Align SPEC and two-lane plan phase gates, C4 inventory, diagram and installed PG acceptance.
@@ -102,8 +102,10 @@
   - [x] Sweep every non-frozen comments document and SPEC against the frozen source; preserve historical evidence and M1 bytes (R3-MAJ-1, R3-m6).
   - [x] Correct confirmation citations, report claims and checklist state (R3-m3–m5).
   - [x] Prove the guard detects backticked originals and all ten residue classes; RED caught PLAN's remaining M1-authoring/representation paragraph before correction (R3-m1).
-  - [ ] Run scoped C0 tests, cluster-mesh typecheck/full tests and scope checks through Make; verify frozen bytes.
-  - [ ] Write `.h2a/build/c0_docs_astra_report.md`, push only this branch and record final PR checks; never merge.
+  - [x] Scoped C0 suite: 46 passed, with ten document residue classes, original backticked cases and allowed/forbidden import examples; frozen M1 comparison is empty.
+  - [x] Refresh all current document hashes; keep historical verdicts and source hashes explicitly historical.
+  - [x] Cluster-mesh typecheck passed; full suite: 487 passed / 35 existing opt-in or reference skips; Make scope check passed.
+  - [x] Write `.h2a/build/c0_docs_astra_report.md` and prepare branch-only publication; final push/CI evidence is recorded in that report; never merge.
 
 - [x] **Lot N — Final validation & PR**
   - [x] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
