@@ -187,6 +187,8 @@ jobs:
               - 'docker-compose.ci.yml'
               - 'tools/**'
               - 'scripts/test-api-tooling.sh'
+              - 'scripts/publish-api-image.sh'
+              - 'scripts/test-api-tag-guard.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
@@ -1006,6 +1008,9 @@ jobs:
       - name: Verify npm CLI and cache are absent from the production runtime
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-runtime ENV=test-ci-api
+      - name: Test publish-api-image tag-collision guard
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-ci-api-tag-guard ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api

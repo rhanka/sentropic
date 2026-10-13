@@ -40,7 +40,7 @@ checkout reuses it; this is not a dependencies-only cache. Base-image updates
 under a mutable tag do not invalidate the input hash. Updating base tags or an
 explicit cache-key version is required when refreshing those images.
 
-## Production identity
+## Production identity and tag-collision guard
 
 Build/save records Docker's immutable image config ID in
 `.tmp/ci-prod-image/api-image-id`, transported alongside `api-image.tar`. Load
@@ -49,13 +49,25 @@ container scan use that ID when present. E2E, VSCode and publication always load
 the current workflow's API artifact, rather than substituting a registry image.
 Production tag inputs include API migrations and compiled IdP/screen sources.
 
-Publication verifies the receipt and refuses an existing canonical tag with a
-different config digest. Inspection errors other than a missing manifest fail
-closed, and the workflow serializes API publication. The `main` alias is tagged from the verified local ID
-without re-pulling. This is local artifact/config identity, not a complete OCI
-manifest digest or a deployed Pod imageID proof. Registry digest receipts,
-registry-enforced immutable tags and deployment evidence remain follow-ups. Clear
-the generated receipt when intentionally returning a checkout to tag-based use.
+Publication (`make publish-api-image` / `scripts/publish-api-image.sh`) verifies the
+receipt and inspects the remote registry manifest (`docker manifest inspect`) before pushing:
+- **Absent**: If the target tag does not exist in the registry (identified strictly by an exact, case-sensitive missing-manifest signal on inspect stderr), publication proceeds normally.
+- **Exists with identical digest**: If the tag exists and its remote config digest matches the local artifact (`API_IMAGE_REF`), push is skipped idempotently without re-pushing or overwriting.
+- **Exists with different digest (collision)**: If the tag exists and points to a different config digest, publication immediately FAILS with a non-zero exit code and an explicit collision error. Immutable release tags must never be overwritten.
+- **Registry inspect error**: Any other inspection failure (such as credential helper, network, or authorization failures) fails closed and halts publication.
+
+This provides local artifact/config identity, not a complete OCI manifest digest or a deployed Pod imageID proof. Registry digest receipts, registry-enforced immutable tags and deployment evidence remain follow-ups. Clear the generated receipt when intentionally returning a checkout to tag-based use.
+
+Because remote registries may lack native immutable tag enforcement, an inspect-then-push sequence contains an inherent time-of-check to time-of-use (TOCTOU) window. In CI, this window is serialized by the GitHub Actions concurrency group `concurrency: api-image-publication` in `.github/workflows/ci.yml`.
+
+### Content-addressed tag format whitelist vs moving tags
+
+- **Immutable release tags**: Canonical content-addressed tags (`API_VERSION` hashes) represent immutable production releases. `scripts/publish-api-image.sh` strictly enforces a format whitelist requiring exactly 6 lowercase hexadecimal characters (`^[0-9a-f]{6}$`). The collision guard prevents overwriting existing tags with different digests and ensures idempotency when tags already exist with matching digests.
+- **Moving / alias tags**: Pointers such as `main`, `latest`, `staging`, or `v1` must NOT be published through `publish-api-image.sh` and are rejected by the 6-hex format whitelist. The `main` alias is promoted directly from the verified local ID via `make publish-api-main-image` without re-pulling.
+
+### Historical incident context
+
+Tag collision detection was initially introduced in commit `ec018720d` ("ci: carry the qualified API artifact through E2E and publication") to guard against artifact drift. The guard has been formalized into `scripts/publish-api-image.sh` and regressed mechanically via `make test-ci-api-tag-guard` (`scripts/test-api-tag-guard.sh`) to guarantee idempotent skipping on matching digests, strict rejection on mismatching digests, failsafe closure on inspection or network errors, and explicit moving tags semantics.
 
 ## Local checks and security
 
