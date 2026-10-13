@@ -240,4 +240,11 @@ describe('ClaudeProviderRuntime', () => {
       expect(collected[0]).toEqual(events[0]);
     });
   });
+
+  describe('native fold boundary (N08)', () => {
+    it('exposes no native inference shape until the transport lots land', () => {
+      expect((runtime as unknown as Record<string, unknown>).nativeMessages).toBeUndefined();
+      expect((runtime as unknown as Record<string, unknown>).nativeCountTokens).toBeUndefined();
+    });
+  });
 });

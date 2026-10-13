@@ -256,6 +256,8 @@
   - [x] Settlement uses the same policy/object (`api/.../gw.ts`, `M route-settlement.ts`) + product order/both aliases (bridge-once by disjoint registration, verified by construction).
 - [x] **Lot N07 — Flow retention (fold)**
   - [x] `bodyLease` in `flow.ts`/`route-flow-core.ts`/`route-json-flow.ts`/`route-stream-flow.ts` + legacy passthrough (native stream parts stay N22).
+- [x] **Lot N08 — Claude Code provider wire (fold)**
+  - [x] `api/.../gateway-native-config.ts` exact switch + boundary pin in `tests/unit/claude-provider.test.ts` (`G native-headers.ts` already byte-identical, R e2e fixtures void, provider transport stays N18/N19).
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
   - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).
