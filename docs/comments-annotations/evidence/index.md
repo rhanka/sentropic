@@ -4,22 +4,25 @@
 
 The [convergence receipt](convergence.md) resolves the complete predecessor/result hashes, actual CONF3/CONF4 verdicts, author treatment, reviewer identity/limits and the closed recording delta. At the final anchor it supersedes, for promotion-delta confirmation only, the pending mentions in the frozen SPEC, three plans and historical treatment/review extracts; those confirmations remain tied to their historical hashes; M2-DELTA below supersedes only storage/API ownership and pre-delivery restoration gates, and the current SPEC/plans have new hashes. The [promotion treatment](treatment-promotion.md) records every n-1–n-7 disposition. Original source digests are distinct from translated-extract digests.
 
-## Prepared document identities
+## Current document identities
 
-| Readable promoted document | SHA-256 of current prepared bytes |
+| Readable document | SHA-256 of current bytes |
 |---|---|
-| [SPEC](../../../spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md) | `df6bea51d7c270f7f88602924ff68de7d90f24a58307b6b52d7093abd2f08b74` |
-| [Two-lane plan](../plan/PLAN_COMMENTS_ANNOTATIONS.md) | `2959056e1afc9ddfaccf829733471c3ee27cc20ad3f6ea956465e525c1c14c13` |
-| [Model template](../plan/BRANCH_P1_TEMPLATE.md) | `1c0d84b968f8def33acf26420226a71611a302e6e172f25c8d7cf47eaa67d475` |
-| [Plan handoff](../plan/PLAN_HANDOFF.md) | `ac2d941c7014c86403e9913213646d21854585194301e7dfd6292c81ccb77dd1` |
-| [owner-decisions](owner-decisions.md) | `60d6f3fe98540e7bf46825b35bb2f7c869d92d345f94200ed53acbe9487b0f74` |
-| [author-metadata](author-metadata.md) | `8c7b0320d7c8ab595ceef1afa4995d29920e0ccbe804f5e7926c89a3fa1fd488` |
-| [interface-errata](interface-errata.md) | `057d47922da4ffec6a99ecb0655be4d4dd623f771370cbc641983ddec20ba006` |
-| [review-history](review-history.md) | `e56f8378b407a2de7ec1ce46628054af2a1ac4e4e299b9983eaa896d3ba1d546` |
-| [review-c6](review-c6.md) | `60f738abf3725dff708de7817e3b2dbc75d639887a897f28ce7d299835ef74d5` |
-| [review-confirmations](review-confirmations.md) | `7cdcb247403d844c07b66a3f8b7e9cc3f2e9853f2daa056b4f80b0a47c5ba90a` |
-| [treatment-promotion](treatment-promotion.md) | `400c8ade33a0eea0888e3832d5086563da0ba28f171327cde3e4e9a2240836ba` |
-| [convergence](convergence.md) | `add74328d4742477e9a616d0b9bf111c8daf2971163f8f748079852609de9d75` |
+| [SPEC](../../../spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md) | `ca90a83f6312ceefbe638c29ace991835d3dfc6f438b748a1ee7aab6a88eb8e3` |
+| [Two-lane plan](../plan/PLAN_COMMENTS_ANNOTATIONS.md) | `be9d8263eeded6131ff042c754fcae7bd4d7219eda0c25743d2dd6b0dfd3a386` |
+| [Model template](../plan/BRANCH_P1_TEMPLATE.md) | `ac5ce92b64379a9b6ca4b2890b24094e6d67f056097aead9cf103140400ac34c` |
+| [Plan handoff](../plan/PLAN_HANDOFF.md) | `c69ab3014f5c5b10d97ed205a1f7d16f0d69ddade66a64d3c94c1019787dcad8` |
+| [owner-decisions](owner-decisions.md) | `a0cfe0fa96e0640e4cf5f105c8f9ff3ddf326e22972f4f8369c22f1153c08262` |
+| [author-metadata](author-metadata.md) | `4c16c5f4ce86be137f227a8a9be2cadfa6863b5edccff884af7914e33c924450` |
+| [interface-errata](interface-errata.md) | `37a0faa1e8b4ff8b467f1e6f2916c61592d20da7f75fbf4be29ee09853ae4a1b` |
+| [review-history](review-history.md) | `9cf6559953745bb1f707799125dce0b59d6be268049c03ac91c259ef57ee9967` |
+| [review-c6](review-c6.md) | `178ab46402e2ad96a3a1741c632f78501e9b098091c457ddd796d6154c8c62b3` |
+| [review-confirmations](review-confirmations.md) | `8449f8f0ccf84a46329b9e0fbec92fe8aa74b9fb26d2354aad6bd331006b0618` |
+| [treatment-promotion](treatment-promotion.md) | `b20008bb8a5cce19dc0ce48bf082d03a951881bec83e6fb9ffc7bd8a9adfd06f` |
+| [convergence](convergence.md) | `85ca30dccc40d4ebbd694caad80fcdc90f0264a84944fdd3d42983caf1a171bd` |
+| [storage-alignment](storage-alignment.md) | `2ff7f1ad0fcf43f120b7a20dd511b248ba6b14fe1c263831d81fd554cf41e41c` |
+| [storage-module-v1](../contract/storage-module-v1.json) | `02114383aaac4dfe701da2b637776dfc1bd91669ed6d47eab3d6194e13e21a46` |
+| [storage-compatibility](../contract/storage-compatibility.md) | `833498551011f0e7935f833a0b73f56a2dfbb424ad6ae04ebd05fef28c8159a9` |
 
 The [documentary BRANCH.md](../../../BRANCH.md) link refers to its state at the LAST promotion-series anchor commit, whose actual SHA will be recorded in the subsequent model BRANCH.md. The model branch replaces that checklist at Lot 0 and the merge workflow later deletes it; the durable summary below preserves its exceptions and series. Its checkboxes evolve, so this index does not pin their changing digest. This index's own digest is supplied in the files-only handoff, not embedded recursively.
 

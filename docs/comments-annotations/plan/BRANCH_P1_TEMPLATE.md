@@ -9,9 +9,9 @@
 ## Scope / Guardrails
 
 - [x] M1 is owner-closed at 2dabe25ce with four reserves. Preserve exact contract-v1.json/freeze-receipt.md and pinned package bytes. The receipt does not attest manifest confirmation or host acknowledgement. [Frozen storage alignment](../evidence/storage-alignment.md) governs this template.
-- [ ] Source: [TREAT2 and M2-DELTA owner decisions](../evidence/owner-decisions.md); reviewed SPEC 2e3083fc38ee5d9b3ca225823a794760245b6bc725321a4c802f77938c06463d; current prepared SPEC SHA-256: df6bea51d7c270f7f88602924ff68de7d90f24a58307b6b52d7093abd2f08b74. Confirmed source SPEC: c6d7a548d25746243b3904a20adea2d1b96360b3042445ba020a8204479ed967. CONF2 MAJ-1 and m-A–m-I are treated; its earlier verdict does not accept these new bytes.
+- [ ] Source: [frozen alignment](../evidence/storage-alignment.md), [owner decisions](../evidence/owner-decisions.md) and [current hashes](../evidence/index.md). Historical reviews attest their recorded bytes only.
 - [ ] Baseline HEAD: dc95f7e4f88048e9671002827537cde4cb8149b7, spec/comments-annotations-port. Superseded template SHA: bcd6c990e11f5d6c427fe753c9f3be9a909fc28820d47d648ab700d352b7909f.
-- [ ] Proposed branch/worktree: feat/comments-annotations-model, tmp/worktrees/comments-annotations-model; allocate registry number, exact ENV and all three ports at implementation entry.
+- [ ] Preserve the existing feat/comments-annotations-model baseline; each subsequent C/K/P lot gets a bounded branch/worktree from qualified inputs with exact ENV and all three ports.
 - [ ] Owner default authority is « j'autorise par défaut tout sauf question empêchant d'avancer ». AUTH-M needs no repeat vote: it becomes effective after SPEC §1's treated-version confirmation, reviewed plan alignment and durable evidence promotion.
 - [ ] Review passed means explicit GO or GO with reservations, no unresolved BLOQUANT or MAJEUR due before M1. Record predecessor/treated hashes, each reasoned disposition and Opus 5.5 max delta confirmation; conductor/i-cond do not arbitrate.
 - [x] Historical documentary base: the M1 receipt identifies anchor 90e7a9fd89c58178aa889d83dee7b1c3099f08ca. Preserve that ancestry; do not repeat documentary promotion or M1 authoring.
@@ -89,7 +89,7 @@
   - [ ] Declare BRxx-EXn with exact paths, evidence, reason, impact and rollback; resolve mechanically valid scope before editing.
   - [ ] If a neutral fixture needs Make/compose, move the exact authorized path from Forbidden to Conditional before C2; never leave contradictory buckets.
   - [ ] Actual branches select literal §17.4 files for their lot. Kernel/backend work belongs to K/P branches under cluster-mesh ownership, with engram/comments co-review; consume independent ModuleStorageBinding and qualified PG artifacts. Shared backend, journal and migration work is not implicit comments-lot permission. M5-S/U stay separate.
-  - [ ] Durable SPEC/plan promotion precedes M1 on spec/comments-annotations-port, after that documentary branch's BRANCH.md is scoped for the SPEC and docs/comments-annotations/{evidence,plan}/**. This template starts from the resulting exact LAST series commit; its implementation paths do not authorize editing the accepted SPEC. The documentary files and BRANCH.md are prepared in this task; no Git recording or model implementation occurs.
+  - [ ] Documentary promotion and M1 closure are historical. Preserve recorded anchor 90e7a9fd89c58178aa889d83dee7b1c3099f08ca and its ancestry; active BRANCH.md selects only its actual lot's files.
   - [ ] Any new source module/test discovered at Lot 0 is named in actual BRANCH.md with its bounded purpose before BUILD.
 
 ## Feedback Loop
@@ -130,14 +130,14 @@
 ## Plan / Todo (lot-based)
 
 - [ ] **Lot 0 — Authority, baseline and exact candidate scope**
-  - [ ] Confirm P0 receipt, all treated document hashes, durable authority links and no open pre-M1 MAJEUR before BUILD; no repeat AUTH-M/STAGING-M ask.
-  - [ ] Read MASTER/workflow/testing/domain rules, accepted SPEC and aligned plan; create the model worktree/BRANCH from the exact LAST documentary promotion-series commit only in the later authorized implementation task; record that commit and main ancestor, then run harness C1.
+  - [ ] Check the frozen manifest/receipt and current C0/§17 evidence; preserve review limits and carried reserves without reopening P0/M1.
+  - [ ] Read rules, frozen source and current aligned documents; create only the separately authorized lot worktree from its qualified inputs, record baseline/ancestry and run harness C1.
   - [ ] CONF3 n-2: record the LAST promotion-series commit SHA and verified main ancestor; forbid rebasing or dropping that anchor or its documentary ancestry through P4-S. Any implementation-only rebase must retain it as an ancestor; later integration changes require their own reviewed scope.
   - [ ] CONF3 n-5.3: from that base commit alone, resolve the SPEC, all three plans, readable authority/review/treatment extracts, exact hashes and convergence receipt without an ignored local file.
   - [ ] Recheck file: dependency, workflow triggers/filters, exact old export consumers, package/registry versions and runner recipes. Open the non-mergeable main-targeted draft PR and bind milestone CI to head/tested SHAs. Confirm the delivery branch's sole artifact-job ownership; freeze staging boundaries without changing app composition.
   - [ ] CONF3 n-1: before the first source-changing draft-PR CI evidence, inspect the published registry version and set a working version on the reviewed breaking-minor line strictly above it, with the required manifest/lock changes. Require enforce-package-bump on the draft PR; no skip or waiver. Recheck after each permitted rebase. This working version is not publication or M4's reserved candidate identity.
   - [ ] Allocate ENV/API/UI/Maildev ports and local build slot; name exact new source/test paths and resolve neutral runner/identity/surface exceptions.
-  - [ ] Gate: scope and checks support independent P1/P2/P4-M/P5 evidence, with green existing API CI and separate S/U responsibilities.
+  - [ ] Gate: scope and checks support the selected M2/M3/M4 lot, frozen-M1 preservation, green application regression CI and separate S/U responsibilities.
 
 - [x] **Lot 1 — Owner-closed M1 baseline**
   - [x] Preserve contract-v1.json, freeze-receipt.md and every pinned source/export/corpus byte at 2dabe25ce.
