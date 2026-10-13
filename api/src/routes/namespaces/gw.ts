@@ -33,6 +33,9 @@ export const GW_PATHS = [
   // Spec §16.2: Responses ingress aliases. `/v1/responses` rides the `/v1/*`
   // middleware below; `/responses` needs its own registrations (once each).
   '/responses', '/v1/responses',
+  // The mounted gateway router registers a global body-limit middleware
+  // (Hono reports it as `/*`): fence it so the completeness gate holds.
+  '/*',
 ] as const;
 /** Default reserved output ceiling for a request without max tokens (the Claude code default). */
 export const GW_DEFAULT_OUTPUT_TOKENS = 4_096;

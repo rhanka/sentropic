@@ -89,8 +89,10 @@ describe('llm-mesh model projections', () => {
     expect(modelsByProvider('muse')).toEqual([
       'muse-spark-1.3',
       'muse-spark-1.3-contributor',
+      'muse-wonder-1.0',
+      'muse-wonder-1.0-full',
     ]);
-    expect(data.models).toHaveLength(32);
+    expect(data.models).toHaveLength(34);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
