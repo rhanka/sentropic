@@ -4,11 +4,12 @@ import {
   CheckedGatewayBody, createGatewayRouter, defaultGatewayBodyBytePool, ensureCheckedGatewayBody, GatewayBodyBytePool,
   GATEWAY_INFLIGHT_BODY_BYTES, GATEWAY_MAX_REQUEST_BODY_BYTES, gatewayRequestBodyLimit,
   isGatewayBodyPath, REQUEST_BODY_CAPACITY_MESSAGE, resolveGatewayBodyLimit,
-  resolveGatewayBodyRoute, retainGatewayStreamBody, type RequestBodyLimitOptions,
+  resolveGatewayBodyRoute, retainGatewayStreamBody, type CreateGatewayRouterOptions, type RequestBodyLimitOptions,
 } from '../src/index.js';
 import { GatewayError, mapGatewayError } from '../src/index.js';
 import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
-import { NativeMessagesUpstreamError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, RouteQuoteError, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
+import { fixtureQuote } from './fixtures/budget.js';
 
 // Fold lots N03-N07 grow this file: N03 covers the shared byte pool only.
 // Reader, retention, middleware order and flow lifetimes follow per lot.
@@ -501,6 +502,97 @@ describe('request reference lifetimes (row 44b1a)', () => {
     expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 2, releases: 2 });
     const following = await ensureCheckedGatewayBody(bodyRequest([utf8('{}')]).raw, options);
     expect(following.lease.bytes).toBe(2); following.release();
+  });
+});
+
+const generationRefusals = [
+  { name: 'caller_auth', status: 401, type: 'authentication_error', message: 'authentication failed' },
+  { name: 'partition', status: 401, type: 'authentication_error', message: 'authentication failed' },
+  { name: 'safeguards_off', status: 400, type: 'invalid_request_error', message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+  { name: 'native_required', status: 400, type: 'invalid_request_error', message: 'safeguards requires the Anthropic Messages endpoint.' },
+  { name: 'native_max_tokens_required', status: 400, type: 'invalid_request_error', message: 'safeguards requires a positive integer max_tokens.' },
+  { name: 'unknown_model', status: 404, type: 'not_found_error', message: 'Unknown model: "claude-sonnet-5"' },
+  { name: 'native_unavailable', status: 400, type: 'invalid_request_error', message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+  { name: 'quote_failure', status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
+  { name: 'no_route', status: 503, type: 'api_error', message: 'No route available for model: "claude-sonnet-5"' },
+  { name: 'budget_admission', status: 429, type: 'rate_limit_error', message: 'rate limit exceeded' },
+  { name: 'prepared_attempt', status: 400, type: 'invalid_request_error', message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+  { name: 'dispatch_mark', status: 503, type: 'overloaded_error', message: 'budget service temporarily unavailable' },
+];
+describe('N2 pre-dispatch refusal matrix (row 44b2)', () => {
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+  const bodyRequest = (chunks: readonly Uint8Array[], path = '/v1/messages',
+    headers: Record<string, string> = {}, signal?: AbortSignal) => {
+    let index = 0;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { if (index < chunks.length) controller.enqueue(chunks[index++]!); else controller.close(); }, cancel,
+    });
+    const raw = new Request(`https://gateway.test${path}`, { method: 'POST', body, headers, signal,
+      duplex: 'half' } as RequestInit & { duplex: 'half' });
+    return { raw, cancel };
+  };
+  const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBodyLimitOptions,
+    owners: CheckedGatewayBody[] = [], overrides: Partial<CreateGatewayRouterOptions> = {}) => {
+    const app = new Hono();
+    const inspect: MiddlewareHandler = async (c, next) => {
+      owners.push(await ensureCheckedGatewayBody(c.req.raw, options)); await next();
+    };
+    app.use('*', gatewayRequestBodyLimit(options));
+    app.use('*', inspect);
+    app.route('/', createGatewayRouter({ config: h.deps.config, routePlanner: h.deps.routePlanner,
+      routeMetering: h.deps.metering, budget: h.deps.budget, nativeMessagesEnabled: true,
+      requestBody: options, requestId: () => 'req-native', ...overrides }));
+    return app;
+  };
+
+  it.each(generationRefusals.map(row => [row.name, row] as const))('pre_dispatch_%s_restores_capacity_once', async (_name, row) => {
+    for (const order of ['product', 'standalone']) for (const stream of [false, true]) for (const rejecting of [false, true]) {
+      const h = nativeHarness(); const pool = new GatewayBodyBytePool(4096); const owners: CheckedGatewayBody[] = [];
+      const generate = vi.fn(h.attempt.generate); const dispatchStream = vi.fn(h.attempt.stream);
+      h.attempt.generate = generate; h.attempt.stream = dispatchStream;
+      const overrides: Partial<CreateGatewayRouterOptions> = {};
+      const controller = new AbortController(); const body: Record<string, unknown> = { ...h.request.body, stream };
+      switch (row.name) {
+        case 'caller_auth': case 'partition':
+          overrides.config = { ...h.deps.config, callerAuth: { async verify() { return { ok: false, reason: row.name }; } } }; break;
+        case 'safeguards_off': overrides.nativeMessagesEnabled = false; break;
+        case 'native_max_tokens_required': overrides.budget = undefined; delete body.max_tokens; break;
+        case 'unknown_model': case 'native_unavailable':
+          h.deps.routePlanner.quote = () => { throw new RouteQuoteError('refused', row.name === 'unknown_model' ? 'unknown-model' : 'native-unavailable'); }; break;
+        case 'quote_failure': h.deps.routePlanner.quote = () => { throw Error('quote failed'); }; break;
+        case 'no_route': h.deps.routePlanner.quote = () => fixtureQuote({ requestedModel: h.model, candidates: [] }); break;
+        case 'budget_admission': h.recorder.port.admit = async input => {
+          h.recorder.events.push('admit'); h.recorder.admitted.push(input);
+          return { kind: 'over-budget', resetAtMs: h.deps.budget.now!() + 1000 };
+        }; break;
+        case 'prepared_attempt': h.attempt.nativeMessages.apiVersions = []; break;
+        case 'dispatch_mark': h.recorder.port.markDispatched = async () => { throw Error('mark failed'); }; break;
+      }
+      const originalSettle = h.recorder.metering.settleRoute;
+      h.recorder.metering.settleRoute = async value => { await originalSettle(value); if (rejecting) throw Error('sink failed'); };
+      const originalRelease = h.recorder.port.release;
+      h.recorder.port.release = async hold => { await originalRelease(hold); if (rejecting) throw Error('release failed'); };
+      if (rejecting) h.attempt.releaseCancelled.mockImplementation(async () => { controller.abort(); throw Error('cleanup failed'); });
+      const path = row.name === 'native_required' ? '/v1/chat/completions' : '/v1/messages';
+      const limited = { product: () => limitedRouter(h, { pool, limitBytes: 4096 }, owners, overrides),
+        standalone: () => limitedRouter(h, { pool, limitBytes: 4096 }, owners, overrides) };
+      const app = order === 'product' ? limited.product() : limited.standalone();
+      const response = await app.request(bodyRequest([utf8(JSON.stringify(body))], path, {}, controller.signal).raw);
+      expect(response.status).toBe(row.status);
+      // W precedence: a failing release/cancel cleanup masks the admission error with the generic 503.
+      const message = row.name === 'dispatch_mark' && rejecting
+        ? 'service temporarily unavailable' : row.message;
+      expect(await response.json()).toEqual(path.includes('chat')
+        ? { error: { type: row.type, code: 'invalid_request', message } }
+        : { type: 'error', error: { type: row.type, message } });
+      expect(h.execute).not.toHaveBeenCalled(); expect(h.finalize).not.toHaveBeenCalled();
+      expect(generate).not.toHaveBeenCalled(); expect(dispatchStream).not.toHaveBeenCalled();
+      expect(owners.at(-1)!.body).toBeUndefined(); expect(owners.at(-1)!.retainedHolders).toBe(0);
+      expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0 });
+      const settled = ['prepared_attempt', 'dispatch_mark'].includes(row.name);
+      expect(h.recorder.settlements).toHaveLength(settled ? 1 : 0);
+    }
   });
 });
 
