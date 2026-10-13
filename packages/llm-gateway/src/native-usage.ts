@@ -3,6 +3,7 @@ import type {
   NativeUsageSnapshot, NativeUsageTermination,
 } from '@sentropic/llm-mesh';
 import type { NativeSseFrame } from './native-sse.js';
+import type { SettleUsage } from './flow.js';
 
 export function isSafeNonNegativeInteger(n: unknown): n is number {
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
@@ -52,10 +53,12 @@ export const nativeCacheInputPriceUnits40 = (
   state: NativeCumulativeUsageState, servedModelId: unknown,
 ): number | undefined => {
   const weight = nativeReadWeight(servedModelId);
-  const oneHour = state.inferredCacheCreation1h ?? state.reportedCacheCreation1h ?? 0;
+  const unknownSplit = state.uncertaintyReason === 'cache_write_split_unknown';
+  const oneHour = unknownSplit ? state.acceptedCacheCreationInputTokens
+    : state.inferredCacheCreation1h ?? state.reportedCacheCreation1h ?? 0;
   const fiveMinute = state.acceptedCacheCreationInputTokens - oneHour;
   const counts = [state.acceptedInputTokens, state.acceptedCacheReadInputTokens, oneHour, fiveMinute];
-  if (!state.inputUsageValidated || weight === undefined || !counts.every(isSafeNonNegativeInteger)) return undefined;
+  if ((!state.inputUsageValidated && !unknownSplit) || weight === undefined || !counts.every(isSafeNonNegativeInteger)) return undefined;
   const units = 40n * BigInt(state.acceptedInputTokens) + BigInt(weight) * BigInt(state.acceptedCacheReadInputTokens)
     + 50n * BigInt(fiveMinute) + 80n * BigInt(oneHour);
   if (units > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
@@ -402,9 +405,18 @@ export class NativeUsageObserver {
       nativeSelectedModelId: this.selectedModelId, nativeServedModelId: this.servedModelId,
       fallbackPresent: this.fallbackPresent, iterationsPresent: this.iterationsPresent,
       nativeInputUsageValidated: inputValidated, nativeInputUsageSource: state.inputUsageSource,
-      ...(inputValidated ? { nativeInputPriceUnits40: priceUnits, nativePricingPolicy: NATIVE_CACHE_PRICING_POLICY } : {}),
+      ...(priceUnits !== undefined ? { nativeInputPriceUnits40: priceUnits, nativePricingPolicy: NATIVE_CACHE_PRICING_POLICY } : {}),
       nativeUsageUncertainty: this.modelReason ?? pricingReason ?? state.uncertaintyReason ?? (estimated ? 'incomplete_output' : undefined),
       nativeCacheWriteSplitReason: state.cacheWriteSplitReason,
     });
   }
 }
+
+/** Financial projection of the same trusted pre-floor observer snapshot. */
+export const nativeSnapshotUsage = (snapshot: NativeUsageSnapshot): SettleUsage => ({
+  inputTokens: snapshot.inputTokens ?? 0, outputTokens: snapshot.outputTokens ?? 0, estimated: snapshot.estimated,
+  nativeInputPriceUnits40: snapshot.nativeInputPriceUnits40, nativePricingPolicy: snapshot.nativePricingPolicy,
+  nativeServedModelId: snapshot.nativeServedModelId, nativeInputUsageValidated: snapshot.nativeInputUsageValidated,
+  nativeInputUsageSource: snapshot.nativeInputUsageSource, nativeUsageUncertainty: snapshot.nativeUsageUncertainty,
+  nativeCacheWriteSplitReason: snapshot.nativeCacheWriteSplitReason,
+});

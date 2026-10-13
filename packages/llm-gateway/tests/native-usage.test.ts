@@ -244,7 +244,7 @@ describe('native cache pricing and TTL evidence', () => {
     const snapshot = nativeUsageTurn(NATIVE_MODELS[0], start).snapshot('completed');
     expect(snapshot).toMatchObject({ inputTokens: 10300, estimated: true,
       nativeInputUsageValidated: false, nativeUsageUncertainty: 'cache_write_split_unknown' });
-    expect(snapshot.nativeInputPriceUnits40).toBeUndefined();
+    expect(snapshot.nativeInputPriceUnits40).toBe(60000);
   });
 });
 
