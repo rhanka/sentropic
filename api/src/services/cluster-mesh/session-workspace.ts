@@ -50,6 +50,13 @@ const toRecord = (b: SessionWorkspaceBinding | BindingRow): AdoptedSessionWorksp
   tenantId: b.tenantId, principalId: b.principalId ?? undefined,
   status: b.status as AdoptedSessionWorkspaceStatus,
 });
+const toRow = (b: SessionWorkspaceBinding) => ({
+  bindingId: b.bindingId, sessionId: b.sessionId, workspaceId: b.workspaceId,
+  tenantId: b.tenantId, principalId: b.principalId, status: b.status,
+  createdAt: new Date(b.createdAt), updatedAt: new Date(b.updatedAt),
+  detachedAt: b.detachedAt ? new Date(b.detachedAt) : null,
+  endedAt: b.endedAt ? new Date(b.endedAt) : null,
+});
 
 const drizzleBindingStore: SessionWorkspaceBindingStore = {
   async findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null> {
@@ -66,13 +73,7 @@ const drizzleBindingStore: SessionWorkspaceBindingStore = {
     };
   },
   async save(b: SessionWorkspaceBinding): Promise<void> {
-    await db.insert(sessionWorkspaceBindings).values({
-      bindingId: b.bindingId, sessionId: b.sessionId, workspaceId: b.workspaceId,
-      tenantId: b.tenantId, principalId: b.principalId, status: b.status,
-      createdAt: new Date(b.createdAt), updatedAt: new Date(b.updatedAt),
-      detachedAt: b.detachedAt ? new Date(b.detachedAt) : null,
-      endedAt: b.endedAt ? new Date(b.endedAt) : null,
-    }).onConflictDoUpdate({
+    await db.insert(sessionWorkspaceBindings).values(toRow(b)).onConflictDoUpdate({
       target: sessionWorkspaceBindings.sessionId,
       set: {
         workspaceId: b.workspaceId, tenantId: b.tenantId, principalId: b.principalId,
@@ -81,6 +82,27 @@ const drizzleBindingStore: SessionWorkspaceBindingStore = {
         endedAt: b.endedAt ? new Date(b.endedAt) : null,
       },
     });
+  },
+  async compareAndSet(
+    current: SessionWorkspaceBinding | null,
+    next: SessionWorkspaceBinding,
+  ): Promise<boolean> {
+    if (current === null) {
+      const inserted = await db.insert(sessionWorkspaceBindings).values(toRow(next))
+        .onConflictDoNothing()
+        .returning({ bindingId: sessionWorkspaceBindings.bindingId });
+      return inserted.length > 0;
+    }
+    const updated = await db.update(sessionWorkspaceBindings).set({
+      workspaceId: next.workspaceId, tenantId: next.tenantId, principalId: next.principalId,
+      status: next.status, updatedAt: new Date(next.updatedAt),
+      detachedAt: next.detachedAt ? new Date(next.detachedAt) : null,
+      endedAt: next.endedAt ? new Date(next.endedAt) : null,
+    }).where(and(
+      eq(sessionWorkspaceBindings.sessionId, next.sessionId),
+      eq(sessionWorkspaceBindings.status, current.status),
+    )).returning({ bindingId: sessionWorkspaceBindings.bindingId });
+    return updated.length > 0;
   },
 };
 
@@ -148,7 +170,7 @@ export class SessionWorkspaceService {
     const existing = await drizzleBindingStore.findBySession(sessionId);
     if (existing) {
       if (existing.tenantId !== tenantId) {
-        throw new SessionWorkspaceError('cross_tenant_refused', 'session tenant does not match binding tenant');
+        throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
       }
       if (existing.status === 'ended') {
         throw new SessionWorkspaceError('session_ended', 'session is ended and keeps its workspace history');
@@ -172,17 +194,19 @@ export class SessionWorkspaceService {
     }
   }
 
-  async detach(sessionId: string, tenantId: string, principalId?: string): Promise<AdoptedSessionWorkspace> {
+  async detach(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
+    requireId(principalId, 'principalId');
+    // Membership first: a non-member learns nothing about binding existence.
+    await this.checkTenantMember(tenantId, principalId);
     const existing = await drizzleBindingStore.findBySession(sessionId);
     if (!existing || existing.tenantId !== tenantId) {
       throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
     }
-    if (principalId) await this.checkTenantMember(tenantId, principalId);
-    const isAdmin = principalId ? await this.checkIsAdmin(tenantId, principalId, existing.workspaceId) : false;
+    const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
     try {
-      const binding = await this.mesh.detach(sessionId, tenantId, principalId, isAdmin);
+      const binding = await this.mesh.detach({ sessionId, tenantId, principalId, isAdmin });
       return toRecord(binding);
     } catch (err) {
       if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
@@ -190,17 +214,19 @@ export class SessionWorkspaceService {
     }
   }
 
-  async end(sessionId: string, tenantId: string, principalId?: string): Promise<AdoptedSessionWorkspace> {
+  async end(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
+    requireId(principalId, 'principalId');
+    // Membership first: a non-member learns nothing about binding existence.
+    await this.checkTenantMember(tenantId, principalId);
     const existing = await drizzleBindingStore.findBySession(sessionId);
     if (!existing || existing.tenantId !== tenantId) {
       throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
     }
-    if (principalId) await this.checkTenantMember(tenantId, principalId);
-    const isAdmin = principalId ? await this.checkIsAdmin(tenantId, principalId, existing.workspaceId) : false;
+    const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
     try {
-      const binding = await this.mesh.end(sessionId, tenantId, principalId, isAdmin);
+      const binding = await this.mesh.end({ sessionId, tenantId, principalId, isAdmin });
       return toRecord(binding);
     } catch (err) {
       if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
@@ -208,10 +234,12 @@ export class SessionWorkspaceService {
     }
   }
 
-  async get(sessionId: string, tenantId: string): Promise<AdoptedSessionWorkspace | null> {
+  async get(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace | null> {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
-    const binding = await this.mesh.get(sessionId, tenantId);
+    requireId(principalId, 'principalId');
+    await this.checkTenantMember(tenantId, principalId);
+    const binding = await this.mesh.get({ sessionId, tenantId, principalId });
     return binding ? toRecord(binding) : null;
   }
 }
