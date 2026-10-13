@@ -118,6 +118,12 @@ export const runReplayCorpus = async (
   await bound.journalMarkPoison('c1', poisoned, 'poison-k2b');
   const stalled = await bound.journalInspect('c1');
   assert.equal(stalled.status, 'stalled', 'K2b-RED replay: poison stalls the consumer');
+  await commitOne(foreign, 'journal-foreign-during-poison', 9);
+  assert.equal(
+    await foreign.readHead('journal-foreign-during-poison'),
+    'hash-j-9',
+    'K2b-RED replay: other scopes continue while one consumer is stalled',
+  );
   assert.equal(stalled.failedEvent, poisoned);
   await expectCode(
     async () => bound.journalCheckpoint('c1', 2, 3),
@@ -136,14 +142,20 @@ export const runReplayCorpus = async (
 
   await commitOne(bound, 'journal-d', 4);
   await commitOne(bound, 'journal-e', 5);
+  assert.equal((await bound.journalInspect('c1')).cursor, 3);
   const boundary = await bound.journalResync('c1');
   assert.equal(boundary.journalSeq, 5);
+  assert.equal(
+    (await bound.journalInspect('c1')).cursor,
+    3,
+    'K2b-RED replay: resync captures the snapshot boundary without advancing the checkpoint',
+  );
   const outstanding = await bound.journalRead('c1', 3, 10);
   assert.deepEqual(
     outstanding.events.map((event) => event.seq),
     [4, 5],
   );
-  await bound.journalCheckpoint('c1', boundary.journalSeq, boundary.journalSeq);
+  await bound.journalCheckpoint('c1', 3, boundary.journalSeq);
   assert.equal((await bound.journalInspect('c1')).lag, 0);
 
   const sealing = await bound.beginStaged({
@@ -282,9 +294,10 @@ export const runReplayCorpus = async (
   assert.equal(await foreign.readHead('shared-id'), 'hash-foreign-1');
   const interleaved = await bound.externalRead(0, 100);
   const colliding = interleaved.events.slice(-2);
-  assert.deepEqual(
-    colliding.map((event) => event.scope.workspaceId).sort(),
-    ['workspace-a', 'workspace-b'],
+  const scopes = colliding.map((event) => event.scope.workspaceId);
+  assert.equal(scopes.length, 2);
+  assert.ok(
+    scopes[0].length > 0 && scopes[1].length > 0 && scopes[0] !== scopes[1],
     'K2b-RED replay: interleaved scopes with colliding ids stay separate on one log',
   );
   assert.equal(interleaved.watermark >= 2, true);

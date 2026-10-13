@@ -362,4 +362,13 @@ describe('K2b page validator: byte limits bind every record-carrying page', () =
       ).ok,
     ).toBe(false);
   });
+
+  it('K2b-RED rejects an empty page with a bloated cursor over budget', () => {
+    expect(
+      validateReadPage(
+        { outcome: 'inaccessible', records: [], nextCursor: 'n'.repeat(100) },
+        { maxRecords: 10, maxEncodedBytes: 16 },
+      ).ok,
+    ).toBe(false);
+  });
 });
