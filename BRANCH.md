@@ -131,6 +131,7 @@
 - [ ] **Lot 3 — Scope binding, kernel, index**
   - [x] Write `packages/cluster-mesh/src/storage/scope-runtime.ts`: grant bind with frozen copy, issued-token registry, revocation, per-operation revalidation, scope isolation, profiles advertisement.
   - [x] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
+  - [x] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
   - [ ] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
   - [ ] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
   - [ ] Lot gate:
