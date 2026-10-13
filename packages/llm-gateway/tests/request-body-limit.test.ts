@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  defaultGatewayBodyBytePool, GatewayBodyBytePool, GATEWAY_INFLIGHT_BODY_BYTES,
-  REQUEST_BODY_CAPACITY_MESSAGE,
+  CheckedGatewayBody, defaultGatewayBodyBytePool, GatewayBodyBytePool, GATEWAY_INFLIGHT_BODY_BYTES,
+  REQUEST_BODY_CAPACITY_MESSAGE, retainGatewayStreamBody,
 } from '../src/index.js';
 import { GatewayError, mapGatewayError } from '../src/index.js';
 
@@ -72,5 +72,79 @@ describe('shared byte pool (N03)', () => {
     expect(REQUEST_BODY_CAPACITY_MESSAGE).toContain('retry later');
     first.release(); second.release();
     expect(defaultGatewayBodyBytePool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0 });
+  });
+});
+
+describe('checked body owner (N04)', () => {
+  const ownerFor = () => {
+    const pool = new GatewayBodyBytePool(64);
+    const lease = pool.acquire(); lease.extend(9);
+    return { pool, owner: new CheckedGatewayBody({ model: 'm' }, 9, lease) };
+  };
+
+  it('counts holders and detaches before shrinking the lease', () => {
+    const { pool, owner } = ownerFor();
+    expect(owner.retainedHolders).toBe(1);
+    const cleared: string[] = [];
+    owner.trackDetach(() => { cleared.push('first'); });
+    owner.trackDetach(() => { cleared.push('second'); });
+    expect(owner.retainedHolders).toBe(3);
+    owner.detach();
+    expect(cleared).toEqual(['first', 'second']);
+    expect(owner.body).toBeUndefined();
+    expect(owner.retainedHolders).toBe(0);
+    expect(owner.lease.bytes).toBe(0);
+    expect(pool.stats.reservedBytes).toBe(0);
+    owner.trackDetach(() => { cleared.push('late'); });
+    expect(cleared).toEqual(['first', 'second', 'late']);
+  });
+
+  it('releases once across detach/release races', () => {
+    const { pool, owner } = ownerFor();
+    owner.detach(); owner.release(); owner.release();
+    expect(owner.body).toBeUndefined();
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+
+  it('transfers stream ownership and cleans a started then abandoned iterator', async () => {
+    const { pool, owner } = ownerFor();
+    const returned: string[] = [];
+    async function* source(): AsyncGenerator<string, void, unknown> {
+      try { yield 'frame'; } finally { returned.push('upstream'); }
+    }
+    const wrapped = retainGatewayStreamBody(source(), owner);
+    expect(owner.transferred).toBe(true);
+    await expect(wrapped.next()).resolves.toEqual({ done: false, value: 'frame' });
+    await wrapped.return(undefined);
+    expect(returned).toEqual(['upstream']);
+    expect(owner.body).toBeUndefined();
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
+  });
+
+  it('releases the owner even when the downstream never starts the iterator', async () => {
+    const { pool, owner } = ownerFor();
+    async function* source(): AsyncGenerator<string, void, unknown> {
+      yield 'never read';
+    }
+    const wrapped = retainGatewayStreamBody(source(), owner);
+    await wrapped.return(undefined);
+    expect(owner.body).toBeUndefined();
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
+  });
+
+  it('aborts a pending stream and preserves the original read failure', async () => {
+    const { pool, owner } = ownerFor();
+    const controller = new AbortController();
+    const failure = Error('reader failed');
+    async function* source(): AsyncGenerator<string, void, unknown> {
+      yield 'frame';
+      throw failure;
+    }
+    const wrapped = retainGatewayStreamBody(source(), owner, controller.signal);
+    await expect(wrapped.next()).resolves.toEqual({ done: false, value: 'frame' });
+    controller.abort();
+    await expect(wrapped.next()).rejects.toBe(failure);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
+    expect(owner.body).toBeUndefined();
   });
 });
