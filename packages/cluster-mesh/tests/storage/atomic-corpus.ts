@@ -3,9 +3,21 @@
 // Backend-agnostic: structural port-shaped operations, all awaited (§5.2).
 
 import assert from 'node:assert/strict';
+import { isStorageError } from '../../src/storage/errors.js';
 import type { AtomicUnit, CommitOptions, CommitReceipt } from '../../src/storage/atomic.js';
 
 export type Awaitable<T> = T | Promise<T>;
+
+export const expectCode = async (operation: () => unknown, code: string, message: string): Promise<void> => {
+  try {
+    await operation();
+  } catch (error) {
+    const actual = isStorageError(error) ? error.code : error instanceof Error ? error.message : String(error);
+    assert.equal(actual, code, message);
+    return;
+  }
+  assert.fail(`${message}: expected rejection with ${code}, but the operation succeeded`);
+};
 
 export interface AtomicCorpusStore {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
@@ -29,9 +41,9 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
   const second = await bound.appendChain('chain-a', record('a', 2), { kind: 'head', hash: 'hash-a-1' });
   assert.equal(second.seq, 1);
 
-  await assert.rejects(
+  await expectCode(
     async () => bound.appendChain('chain-a', record('a', 2), { kind: 'head', hash: 'hash-a-1' }),
-    /stale head/,
+    'cas-conflict',
     'K2a-RED atomic: repeated bytes under a stale head still conflict (CAS first)',
   );
 
@@ -39,9 +51,9 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
   assert.equal(replayed.replayed, false);
   const replay = await bound.genesis('submission', 'sub-1', 'digest-1', { v: 1 });
   assert.equal(replay.replayed, true);
-  await assert.rejects(
+  await expectCode(
     async () => bound.genesis('submission', 'sub-1', 'digest-2', { v: 2 }),
-    /conflict/,
+    'idempotency-conflict',
     'K2a-RED atomic: same genesis id with a different hash conflicts',
   );
 
@@ -53,9 +65,9 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
     await bound.indexPut('cmd-1', { digest: 'd1', resultIds: ['r2'], resultHash: null }),
     'replace',
   );
-  await assert.rejects(
+  await expectCode(
     async () => bound.indexPut('cmd-1', { digest: 'd2', resultIds: ['r3'], resultHash: null }),
-    /conflict/,
+    'idempotency-conflict',
     'K2a-RED atomic: different digest under the same command key conflicts',
   );
 
@@ -87,13 +99,18 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
 
   const sameReceipt = await bound.commitAtomic(
     {
-      guards: [],
+      guards: [{ kind: 'head', chainId: 'chain-a', hash: 'hash-a-2' }],
       records: [],
       appends: [
         {
           chainId: 'chain-a',
-          record: record('a', 99),
-          expectation: { kind: 'head', hash: 'hash-a-3' },
+          record: record('a', 3),
+          expectation: { kind: 'head', hash: 'hash-a-2' },
+        },
+        {
+          chainId: 'chain-b',
+          record: record('b', 1),
+          expectation: { kind: 'absent', allocation: '0' },
         },
       ],
       updates: [],
@@ -105,6 +122,32 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
     { idempotencyKey: 'unit-1' },
   );
   assert.equal(sameReceipt.commitId, receipt.commitId);
+  assert.equal(await bound.readHead('chain-a'), 'hash-a-3');
+
+  await expectCode(
+    async () =>
+      bound.commitAtomic(
+        {
+          guards: [],
+          records: [],
+          appends: [
+            {
+              chainId: 'chain-a',
+              record: record('a', 99),
+              expectation: { kind: 'head', hash: 'hash-a-3' },
+            },
+          ],
+          updates: [],
+          relationships: [],
+          barriers: [],
+          purgeIntents: [],
+          indexWrites: [],
+        },
+        { idempotencyKey: 'unit-1' },
+      ),
+    'idempotency-conflict',
+    'K2aR3-RED atomic: the same idempotency key with a divergent unit conflicts',
+  );
   assert.equal(await bound.readHead('chain-a'), 'hash-a-3');
 
   const before = (await bound.readChain('chain-a')).length;

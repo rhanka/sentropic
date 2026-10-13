@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import type { ScopeGrant } from '../../src/storage/authority.js';
-import type { Awaitable } from './atomic-corpus.js';
+import { expectCode, type Awaitable } from './atomic-corpus.js';
 
 export interface AuthorityBound {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<unknown>;
@@ -46,34 +46,55 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
   const bound = await store.bindNew(grant);
   await bound.appendChain('auth-chain', { id: 'x', bytes: '{}', hash: 'h1' }, { kind: 'absent', allocation: '0' });
 
-  await assert.rejects(
+  await expectCode(
     async () => store.bind(grantFor({ token: '' })),
-    /denied|token/,
+    'denied',
     'K2a-RED authority: a forged grant with an empty token is denied',
   );
 
-  await assert.rejects(
+  await expectCode(
     async () => store.bind(grantFor({ token: 'token-forged-unknown' })),
-    /unknown|denied/,
+    'denied',
     'K2aC-RED authority: a non-empty token never issued is denied',
   );
 
-  await assert.rejects(
+  await expectCode(
     async () => store.bind({ ...grant, operations: ['read', 'write', 'publish'] as const }),
-    /tampered|denied/,
+    'denied',
     'K2aC-RED authority: falsified operations on an issued grant are denied',
   );
 
-  await assert.rejects(
+  await expectCode(
     async () => store.bind({ ...grant, scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
-    /tampered|denied/,
+    'denied',
     'K2aC-RED authority: a falsified scope on an issued grant is denied',
   );
 
-  await assert.rejects(
+  await expectCode(
     async () => store.bind(grantFor({ moduleId: 'engram-live' })),
-    /wrong module/,
+    'denied',
     'K2a-RED authority: a grant for another module is denied',
+  );
+
+  const mutableOperations: Array<'read' | 'write' | 'publish' | 'maintain'> = ['read'];
+  const mutableGrant = grantFor({ token: 'token-mutable-1', operations: mutableOperations });
+  const mutableBound = await store.bindNew(mutableGrant);
+  mutableOperations.push('write');
+  await expectCode(
+    async () =>
+      mutableBound.appendChain('mut-chain', { id: 'm', bytes: '{}', hash: 'hm-1' }, { kind: 'absent', allocation: '0' }),
+    'denied',
+    'K2aR3-RED authority: operations forged after binding stay denied',
+  );
+
+  const mutableScope: { tenantId: string; workspaceId: string } = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
+  const scopeGrant = grantFor({ token: 'token-scope-mut-1', scope: mutableScope });
+  const scopeBound = await store.bindNew(scopeGrant);
+  mutableScope.workspaceId = 'workspace-b';
+  assert.equal(
+    await scopeBound.readHead('auth-chain'),
+    'h1',
+    'K2aR3-RED authority: a scope forged after binding keeps the bound scope',
   );
 
   const otherScope = await store.bindNew(
@@ -86,9 +107,9 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
   );
 
   const reader = await store.bindNew(readGrant);
-  await assert.rejects(
+  await expectCode(
     async () => reader.appendChain('auth-chain-2', { id: 'y', bytes: '{}', hash: 'h2' }, { kind: 'absent', allocation: '0' }),
-    /lacks write/,
+    'denied',
     'K2a-RED authority: a read-only grant cannot write (no escalation)',
   );
 
@@ -98,9 +119,9 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
   });
   const leasedBound = await store.bindNew(leased);
   fixture.setNow('2031-06-01T00:00:00.000Z');
-  await assert.rejects(
+  await expectCode(
     async () => leasedBound.readHead('auth-chain'),
-    /expired|denied/,
+    'denied',
     'K2a-RED authority: an expired lease is denied even for reads',
   );
   fixture.setNow('2026-01-01T00:00:00.000Z');
@@ -108,9 +129,9 @@ export const runAuthorityCorpus = async (fixture: AuthorityFixture): Promise<voi
   const doomed = grantFor({ token: 'token-revoked-1' });
   const doomedBound = await store.bindNew(doomed);
   await store.revoke('token-revoked-1');
-  await assert.rejects(
+  await expectCode(
     async () => doomedBound.readHead('auth-chain'),
-    /revoked/,
+    'denied',
     'K2a-RED authority: revocation before commit denies queued work',
   );
 

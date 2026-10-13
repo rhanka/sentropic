@@ -68,6 +68,7 @@
 - [x] `BR-K1C-EX1` — K1+K2a share one branch with 22 files vs twelve-file §17.4 budget; combined review requested in one pass; rollback by splitting K1C follow-ups per lot if required.
 - [x] `BR-K1C-EX1-RAT` — BR-K1C-EX1 ratified: combined review delivered in one pass (engram Sol rounds 1-2, Opus review of PR #666); no split required.
 - [x] `BR-K1R3-EX1` — Historical discipline deviations already pushed (5 commits over 150 lines: 36c70c715, 325eb11fc, 56acb484a, 6e3bd68fe, fd8134101; 9 K1 commits without BRANCH.md from 09770777a to 6e3bd68fe); history immutable after push; all R3 commits stay under 150 lines with BRANCH.md in-commit; rollback not applicable.
+- [x] `R3-RED1` — RED batch 1 (atomic conversions plus identical replay, authority and chain typed codes); observed failing pre-implementation, details in k1_r3_report.
 
 ## AI Flaky tests
 - [x] No AI flaky tests in scope.
