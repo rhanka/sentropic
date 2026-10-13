@@ -172,7 +172,11 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
     'cas-conflict',
     'K2a-RED atomic: a failing guard rolls back the whole unit',
   );
-  assert.equal((await bound.readChain('chain-a')).length, before);
+  assert.equal(
+    (await bound.readChain('chain-a')).length,
+    before,
+    'K2aR3-RED atomic: a failing guard rolls back the whole unit',
+  );
 
   await bound.indexPut('atomic-idx-1', { digest: 'd1', resultIds: ['r1'], resultHash: null });
   const headBeforeLate = await bound.readHead('chain-a');
