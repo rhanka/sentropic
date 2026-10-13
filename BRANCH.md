@@ -308,6 +308,7 @@
   - [x] **Lot N16b — cache TTL growth allocation (`98620c71f`)**: equal/growing aggregate TTL allocation in deltas; 15/15 GREEN (growth tests land with `9e5038f3f`).
   - [x] **Lot N16c — cache usage + TTL pricing tests (`9e5038f3f`)**: `tests/fixtures/native-usage.ts` turn-driver + growth/pricing cases 26/26 GREEN.
   - [x] **Lot N16d — proof + output provenance tests (`8a3b980af`)**: served-model/proof/finality snapshot cases 45/45 GREEN.
+  - [x] **Lot N16e — pricing policy + overflow bounds (`ef627491b`)**: RED 1/60 pre-fix (stack-limit on wide arrays) → loop push; 60/60 GREEN, byte-identical.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
