@@ -78,7 +78,7 @@
 
 ## Feedback Loop
 - [ ] `BR-K3-DISC1` — One-time BRANCH.md rewrite (K2b content to K3 content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
-- [ ] `BR-K3-G3` — G3 designation: readChainPage uses the retained exact-head boundary provider (server-side registry, byte-identical cursors); decision recorded in kernel.ts plus the K3 report.
+- [x] `BR-K3-G3` — G3 designation: readChainPage uses the HMAC exact-head boundary provider (self-contained opaque cursors, no registry; supersedes the retained registry after the opus review); decision recorded in kernel.ts plus the K3 fix report.
 - [ ] `BR-K3-DISC2` — K3 runtime files land as one coherent file per commit when they exceed 150 lines (single review unit per §17.4 file; K1 `BR-K1R3-EX1` and K2b `BR-K2B-DISC2` precedent for reference-scale files); all other commits stay under 150 lines.
 - [ ] `BR-K3-EX1` — Merge-only intake of `origin/feat/cluster-mesh-storage-k2b` (#669 r2, opus §1). Reason: K3 is stacked on K2b and must carry the R3 resume fix, the `readers.ts` envelope floor, the disposal evidence and the corpus deltas; `readers.ts` is otherwise forbidden on K3. Impact: K2b-owned files only (`readers.ts`, `reference-store.ts`, `read-corpus.ts`, `atomic-corpus.ts`, staged/replay/barrier/lifecycle corpora, `mutations.spec.ts`, `profile-mutations.spec.ts`, `reference.spec.ts`, `reference-staged.ts`); no K3 runtime hand-edits outside allowed paths; `BRANCH.md` conflict resolved by keeping the K3 version. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
 - [ ] `BR-K3-DISC3` — Opus fix files land as one coherent file per commit when they exceed 150 lines (single review unit per finding; `BR-K3-DISC2` precedent); all other fix commits stay under 150 lines with `BRANCH.md` in-commit.
@@ -108,31 +108,31 @@
   - [x] Stay in `tmp/worktrees/cluster-mesh-storage-k3` after the gates.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `README.md`.
-  - [ ] Confirm worktree `tmp/worktrees/cluster-mesh-storage-k3` on branch `feat/cluster-mesh-storage-k3` stacked at `4da5b52ca`.
-  - [ ] Read frozen spec `L3a-spec-v4.1-frozen.md` §17 row K3 plus file table (K/T).
-  - [ ] Rewrite `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` (this file).
-  - [ ] Confirm command style: `make ... API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` with `ENV` last.
-  - [ ] Confirm scope boundaries and `BR-K3-DISC1`.
-  - [ ] Baseline: `make test-cluster-mesh SCOPE=tests/storage/reference.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` green.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [ ] **Lot 1 — Test-first K3 specs (failing)**
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `README.md`.
+  - [x] Confirm worktree `tmp/worktrees/cluster-mesh-storage-k3` on branch `feat/cluster-mesh-storage-k3` stacked at `4da5b52ca`.
+  - [x] Read frozen spec `L3a-spec-v4.1-frozen.md` §17 row K3 plus file table (K/T).
+  - [x] Rewrite `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` (this file).
+  - [x] Confirm command style: `make ... API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` with `ENV` last.
+  - [x] Confirm scope boundaries and `BR-K3-DISC1`.
+  - [x] Baseline: `make test-cluster-mesh SCOPE=tests/storage/reference.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` green.
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+- [x] **Lot 1 — Test-first K3 specs (failing)**
   - [x] Write `packages/cluster-mesh/tests/storage/kernel.spec.ts`: atomic + chain + read + cursor-budget corpora against the K3 runtime; predicate-positive acceptance; transact overlay/rollback/isolation/closed-context/nested-join; token tamper and cross-chain refusal; forged cursor refusal.
   - [x] Write `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`: authority corpus against the K3 runtime; frozen-grant mutation check; revalidation on expiry and revocation; capability advertisement.
   - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
   - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
   - [x] Lot gate: specs fail on missing runtime (RED), no other files touched.
-- [ ] **Lot 2 — Tokens, backend, record runtime**
+- [x] **Lot 2 — Tokens, backend, record runtime**
   - [x] Write `packages/cluster-mesh/src/storage/tokens.ts`: retained exact-head boundary registry (G3 provider), opaque id minting, documented public types.
   - [x] Write `packages/cluster-mesh/src/storage/backend.ts`: neutral in-memory backend state per scope (chains, genesis, index, records, aggregates, commits, cursors).
   - [x] Write `packages/cluster-mesh/src/storage/record-runtime.ts`: ordinary commit staging with CAS-first appends, allocation, disposal guards, idempotent genesis/index, aggregate versions, predicate-positive acceptance, barrier/purge/relationship refusal, full rollback, R3 effective-cursor paging.
   - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [ ] **Lot 3 — Scope binding, kernel, index**
+- [x] **Lot 3 — Scope binding, kernel, index**
   - [x] Write `packages/cluster-mesh/src/storage/scope-runtime.ts`: grant bind with frozen copy, issued-token registry, revocation, per-operation revalidation, scope isolation, profiles advertisement, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal).
   - [x] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, G3 provider wiring, documented public types.
   - [x] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
@@ -140,12 +140,12 @@
     - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [x] **API tests**
-      - [ ] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` (new K3 ordinary runtime proof)
-      - [ ] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` (new K3 binding proof)
+      - [x] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` (new K3 ordinary runtime proof)
+      - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` (new K3 binding proof)
       - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
       - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
       - [x] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-- [ ] **Lot 4 — Final validation, report, draft PR**
+- [x] **Lot 4 — Final validation, report, draft PR**
   - [x] Typecheck and lint full package.
   - [x] Retest storage: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
   - [x] Retest package: `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
@@ -154,25 +154,25 @@
   - [x] Write `.h2a/build/k3_report.md` with exit SHA, corpus evidence, G3 designation, neutrality proof.
   - [x] Push only this branch, open a DRAFT PR noting "stacked on #669", never merge.
 - [ ] **Lot 5 — Opus fix (6 MAJEUR, 9 MINEUR, PR #670)**
-  - [ ] Merge `origin/feat/cluster-mesh-storage-k2b` under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
-  - [ ] MAJEUR-1: recompute `start + delivered` on every trim in `record-runtime.ts`; full-sweep resume plus faithful mutant against K3.
-  - [ ] MAJEUR-2: bounded HMAC cursor token in `tokens.ts` (no per-record state, restart-stable via secret, opaque string cursors).
-  - [ ] MAJEUR-3: sequential commit validation, async-context transaction isolation, nested rollback-only, frozen units in `scope-runtime.ts` plus `record-runtime.ts`.
-  - [ ] MAJEUR-4: evaluate registered predicates, refuse unknown ones explicitly in `record-runtime.ts`.
-  - [ ] MAJEUR-5: deny disposed getters, null continuation on `inaccessible`, disposal tail corpus against K3.
-  - [ ] MAJEUR-6: authority port plus root/adapter handle split with server-side rights in `kernel.ts`.
-  - [ ] MINEUR-2: measure admission with the effective cursor; validator-clean floor in `record-runtime.ts`.
-  - [ ] MINEUR-3: reserve the commit id upfront; refuse empty transactions; no fabricated receipts.
-  - [ ] MINEUR-4: copy canonical state on every read in `scope-runtime.ts` plus `record-runtime.ts`.
-  - [ ] MINEUR-5: reuse the K1 `ProfileClaim` type with a real digest in `scope-runtime.ts`.
-  - [ ] MINEUR-6: refuse `CommitOptions.fence` explicitly in `record-runtime.ts`.
-  - [ ] MINEUR-7: discriminating K3 tests plus mutants in `kernel.spec.ts` plus `scope-runtime.spec.ts`.
-  - [ ] MINEUR-8: commits under 150 lines (`BR-K3-DISC3`), no duplicated lines, checked boxes.
+  - [x] Merge `origin/feat/cluster-mesh-storage-k2b` under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
+  - [x] MAJEUR-1: recompute `start + delivered` on every trim in `record-runtime.ts`; full-sweep resume plus faithful mutant against K3.
+  - [x] MAJEUR-2: bounded HMAC cursor token in `tokens.ts` (no per-record state, restart-stable via secret, opaque string cursors).
+  - [x] MAJEUR-3: sequential commit validation, async-context transaction isolation, nested rollback-only, frozen units in `scope-runtime.ts` plus `record-runtime.ts`.
+  - [x] MAJEUR-4: evaluate registered predicates, refuse unknown ones explicitly in `record-runtime.ts`.
+  - [x] MAJEUR-5: deny disposed getters, null continuation on `inaccessible`, disposal tail corpus against K3.
+  - [x] MAJEUR-6: authority port plus root/adapter handle split with server-side rights in `kernel.ts`.
+  - [x] MINEUR-2: measure admission with the effective cursor; validator-clean floor in `record-runtime.ts`.
+  - [x] MINEUR-3: reserve the commit id upfront; refuse empty transactions; no fabricated receipts.
+  - [x] MINEUR-4: copy canonical state on every read in `scope-runtime.ts` plus `record-runtime.ts`.
+  - [x] MINEUR-5: reuse the K1 `ProfileClaim` type with a real digest in `scope-runtime.ts`.
+  - [x] MINEUR-6: refuse `CommitOptions.fence` explicitly in `record-runtime.ts`.
+  - [x] MINEUR-7: discriminating K3 tests plus mutants in `kernel.spec.ts` plus `scope-runtime.spec.ts`.
+  - [x] MINEUR-8: commits under 150 lines (`BR-K3-DISC3`), no duplicated lines, checked boxes.
   - [ ] MINEUR-9: accurate `.h2a/build/k3_fix_report.md` with exit SHA.
   - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] CI green on PR #670 with no reserves; re-merge K2b if it advances.
