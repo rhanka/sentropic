@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  concatBytes,
   NativeSseFramer,
   NativeSseFrameOverflowError,
   parseNativeSseStream,
@@ -83,6 +84,59 @@ describe('native SSE byte framer', () => {
     const incremental = new NativeSseFramer(50);
     incremental.push(enc('data: ' + 'a'.repeat(30)));
     expect(() => incremental.push(enc('a'.repeat(30)))).toThrow(NativeSseFrameOverflowError);
+
+    const fExact = new NativeSseFramer(20);
+    const exactFrames = fExact.push(enc('data: 123456789012\n\n'));
+    expect(exactFrames).toHaveLength(1);
+    expect(exactFrames[0]!.rawBytes.length).toBe(20);
+
+    const fOver = new NativeSseFramer(20);
+    expect(() => fOver.push(enc('data: 1234567890123\n\n'))).toThrow(NativeSseFrameOverflowError);
+
+    const f1M = new NativeSseFramer();
+    expect(() => f1M.push(enc('data: ' + 'x'.repeat(1024 * 1024) + '\n\n'))).toThrow(NativeSseFrameOverflowError);
+
+    const fCross = new NativeSseFramer(20);
+    fCross.push(enc('data: 1234567890'));
+    expect(() => fCross.push(enc('123\n\n'))).toThrow(NativeSseFrameOverflowError);
+
+    const fCrossExact = new NativeSseFramer(20);
+    fCrossExact.push(enc('data: 1234567890'));
+    const crossFrames = fCrossExact.push(enc('12\n\n'));
+    expect(crossFrames).toHaveLength(1);
+    expect(crossFrames[0]!.rawBytes.length).toBe(20);
+
+    const fMulti = new NativeSseFramer(20);
+    const multi = enc('data: 123456789012\n\ndata: abcdefghijkl\n\n');
+    const mFrames = fMulti.push(multi);
+    expect(mFrames).toHaveLength(2);
+    expect(mFrames[0]!.rawBytes.length).toBe(20);
+    expect(mFrames[1]!.rawBytes.length).toBe(20);
+  });
+
+  it('preserves opaque byte fidelity across leading, repeated and trailing blank lines and chunks', () => {
+    const framer = new NativeSseFramer();
+    const c1 = enc('data: 1\n\n\n');
+    const c2 = enc('data: 2\n\n');
+    const f1 = framer.push(c1);
+    const f2 = framer.push(c2);
+    expect(f1).toHaveLength(2);
+    expect(f2).toHaveLength(1);
+    const all = [...f1, ...f2];
+    const cat = concatBytes(all.map(f => f.rawBytes));
+    expect(dec(cat)).toBe('data: 1\n\n\ndata: 2\n\n');
+
+    const f2Framer = new NativeSseFramer();
+    const complex = '\n\n\r\n: ping\n\n\n\nevent: ok\r\ndata: {"ok":true}\r\n\r\n\r\r';
+    const chunks = [
+      enc('\n\n\r\n: ping\n\n'),
+      enc('\n\nevent: ok\r\ndata: {"ok":'),
+      enc('true}\r\n\r\n\r'),
+      enc('\r'),
+    ];
+    const gathered = [...chunks.flatMap(c => f2Framer.push(c)), ...f2Framer.finish()];
+    const gatheredBytes = concatBytes(gathered.map(f => f.rawBytes));
+    expect(dec(gatheredBytes)).toBe(complex);
   });
 
   it('streams frames via parseNativeSseStream async generator', async () => {
