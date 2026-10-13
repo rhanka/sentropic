@@ -117,7 +117,17 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
   });
   await bound.declareCoverage('thread-1', 'rec-covered');
 
-  const retained = await bound.readPage('comment-0', 10, null, 4096);
+  await bound.appendChain('retained-chain', { id: 'rc1', bytes: '{"retained":1}', hash: 'hash-retained-1' }, { kind: 'absent', allocation: '0' });
+  await bound.appendChain('retained-chain', { id: 'rc2', bytes: '{"retained":2}', hash: 'hash-retained-2' }, { kind: 'head', hash: 'hash-retained-1' });
+  const retained = await bound.readPage('retained-chain', 1, null, 4096);
+  assert.equal(retained.outcome, 'page');
+  assert.equal(retained.records.length, 1);
+  assert.notEqual(
+    retained.nextCursor,
+    null,
+    'K2b-RED barriers: a two-record chain read with limit 1 mints a real retained cursor',
+  );
+  await bound.declareCoverage('thread-1', 'retained-chain');
 
   await bound.commitAtomic({
     ...emptyUnit(),
@@ -151,11 +161,17 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
     async () => bound.readRecord('rec-covered'),
     'K2b-RED barriers G1: a covered record throws denied',
   );
-  const retainedPage = await bound.readPage('comment-0', 10, retained.nextCursor, 4096);
+  const retainedPage = await bound.readPage('retained-chain', 1, retained.nextCursor, 4096);
   assert.equal(
     retainedPage.outcome,
     'inaccessible',
     'K2b-RED barriers: a retained root cannot bypass the current barrier',
+  );
+  assert.equal(retainedPage.records.length, 0);
+  assert.equal(
+    retainedPage.nextCursor,
+    null,
+    'K2b-RED barriers: an inaccessible page leaks no retained cursor',
   );
   const lifecycle = await bound.readChain('lifecycle-1');
   assert.equal(lifecycle.length, 1);
@@ -181,6 +197,11 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
     await bound.readHead('comment-orphan'),
     'hash-orphan',
     'K2b-RED barriers: a raw tombstone without a barrier leaves reads unaffected',
+  );
+  await bound.declareCoverage('thread-1', 'comment-orphan');
+  await expectDenied(
+    async () => bound.readHead('comment-orphan'),
+    'K2b-RED barriers: coverage links the orphan chain to its barrier scope',
   );
 
   await bound.declareCoverage('thread-1', 'comment-12');
@@ -214,4 +235,20 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
   const disposed = await bound.readPage('comment-3', 10, null, 4096);
   assert.equal(disposed.outcome, 'inaccessible');
   assert.equal(disposed.records.length, 0);
+  assert.equal(disposed.nextCursor, null);
+
+  await bound.appendChain('disposed-plain', { id: 'dp1', bytes: '{"plain":1}', hash: 'hash-disposed-plain-1' }, { kind: 'absent', allocation: '0' });
+  await bound.disposeChain('disposed-plain');
+  await expectDenied(
+    async () => bound.readHead('disposed-plain'),
+    'K2b-RED barriers G1: disposed content without coverage throws denied',
+  );
+  await expectDenied(
+    async () => bound.readChain('disposed-plain'),
+    'K2b-RED barriers G1: a disposed chain without coverage throws denied',
+  );
+  const disposedPlain = await bound.readPage('disposed-plain', 10, null, 4096);
+  assert.equal(disposedPlain.outcome, 'inaccessible');
+  assert.equal(disposedPlain.records.length, 0);
+  assert.equal(disposedPlain.nextCursor, null);
 };
