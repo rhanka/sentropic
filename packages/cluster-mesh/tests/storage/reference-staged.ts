@@ -62,6 +62,20 @@ export interface StagedConsumer {
   status: 'running' | 'stalled';
   failedEvent: string | null;
   failedReason: string | null;
+  failedSeq: number | null;
+}
+
+export interface JournalReadResult {
+  readonly events: readonly StagedJournalEvent[];
+  readonly watermark: number;
+}
+
+export interface ConsumerView {
+  readonly cursor: number;
+  readonly status: 'running' | 'stalled';
+  readonly failedEvent: string | null;
+  readonly failedReason: string | null;
+  readonly lag: number;
 }
 
 export interface PurgeJobView {
@@ -481,5 +495,93 @@ export class TestStagedStore {
     op.state = 'aborted';
     op.abortReason = 'aborted by caller';
     op.fragments.length = 0;
+  }
+
+  journalRead(consumer: string, after: number, limit: number): JournalReadResult {
+    this.requireOperation('read');
+    if (typeof consumer !== 'string' || consumer.length === 0) {
+      throw new StorageInvalidCommandError('journal reader requires a consumer');
+    }
+    if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
+      throw new StorageInvalidCommandError('journal reader requires a valid window');
+    }
+    return {
+      events: this.staged.journal.filter((event) => event.seq > after).slice(0, limit),
+      watermark: this.staged.journalSeq,
+    };
+  }
+
+  journalCheckpoint(consumer: string, expected: number, next: number): void {
+    this.requireOperation('write');
+    if (!Number.isSafeInteger(expected) || expected < 0 || !Number.isSafeInteger(next) || next < 0) {
+      throw new StorageInvalidCommandError('checkpoints require non-negative cursors');
+    }
+    let entry = this.staged.consumers.get(consumer);
+    if (!entry) {
+      entry = { cursor: 0, status: 'running', failedEvent: null, failedReason: null, failedSeq: null };
+      this.staged.consumers.set(consumer, entry);
+    }
+    if (entry.cursor !== expected) throw new StorageCasConflictError('checkpoint expected mismatch');
+    if (next < entry.cursor) throw new StorageInvalidCommandError('checkpoints are monotonic');
+    if (next > this.staged.journalSeq) throw new StorageInvalidCommandError('checkpoint beyond the log');
+    if (entry.status === 'stalled' && entry.failedSeq !== null && next > entry.failedSeq) {
+      throw new StorageInvalidCommandError('checkpoint cannot pass an undelivered poisoned event');
+    }
+    entry.cursor = next;
+  }
+
+  journalInspect(consumer: string): ConsumerView {
+    this.requireOperation('read');
+    const entry = this.staged.consumers.get(consumer);
+    const cursor = entry?.cursor ?? 0;
+    return {
+      cursor,
+      status: entry?.status ?? 'running',
+      failedEvent: entry?.failedEvent ?? null,
+      failedReason: entry?.failedReason ?? null,
+      lag: this.staged.journalSeq - cursor,
+    };
+  }
+
+  journalMarkPoison(consumer: string, eventId: string, reason: string): void {
+    this.requireOperation('write');
+    const event = this.staged.journal.find((entry) => entry.eventId === eventId);
+    if (!event) throw new StorageInvalidCommandError('unknown journal event');
+    let entry = this.staged.consumers.get(consumer);
+    if (!entry) {
+      entry = { cursor: 0, status: 'running', failedEvent: null, failedReason: null, failedSeq: null };
+      this.staged.consumers.set(consumer, entry);
+    }
+    entry.status = 'stalled';
+    entry.failedEvent = eventId;
+    entry.failedReason = reason;
+    entry.failedSeq = event.seq;
+  }
+
+  journalRetry(consumer: string, expectedFailure: string): void {
+    this.requireOperation('write');
+    const entry = this.staged.consumers.get(consumer);
+    if (!entry || entry.status !== 'stalled' || entry.failedEvent !== expectedFailure) {
+      throw new StorageInvalidCommandError('nothing to retry');
+    }
+    entry.status = 'running';
+    entry.failedEvent = null;
+    entry.failedReason = null;
+    entry.failedSeq = null;
+  }
+
+  journalResync(consumer: string): { readonly snapshotRoot: string; readonly journalSeq: number } {
+    this.requireOperation('write');
+    let entry = this.staged.consumers.get(consumer);
+    if (!entry) {
+      entry = { cursor: 0, status: 'running', failedEvent: null, failedReason: null, failedSeq: null };
+      this.staged.consumers.set(consumer, entry);
+    }
+    entry.status = 'running';
+    entry.failedEvent = null;
+    entry.failedReason = null;
+    entry.failedSeq = null;
+    entry.cursor = this.staged.journalSeq;
+    return { snapshotRoot: `root-${this.staged.journalSeq}`, journalSeq: this.staged.journalSeq };
   }
 }
