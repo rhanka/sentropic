@@ -49,6 +49,7 @@ export type GatewayFailureKind =
   | 'unknown-model'
   | 'no-route'
   | 'request-too-large'
+  | 'request-body-capacity'
   | 'cross-user-disabled';
 
 export class GatewayError extends Error {
@@ -256,6 +257,18 @@ export const mapGatewayError = (
       return anthropic
         ? anthropicError(413, 'request_too_large', message, headers)
         : openAiError(413, 'invalid_request_error', message, 'request_too_large', headers);
+    }
+
+    case 'request-body-capacity': {
+      // N03: capacity exhaustion is retryable with a 1s hint; no waiting
+      // queue, quote, hold, dispatch or financial event follows. The N05
+      // reader raises this kind; the pool below never waits. The literal
+      // duplicates REQUEST_BODY_CAPACITY_MESSAGE to avoid an import cycle.
+      const message = 'Gateway request body capacity is temporarily exhausted; retry later.';
+      const headers = { 'Retry-After': '1', 'x-should-retry': 'true' };
+      return anthropic
+        ? anthropicError(503, 'api_error', message, headers)
+        : openAiError(503, 'api_error', message, 'request_body_capacity', headers);
     }
 
     case 'no-route': {

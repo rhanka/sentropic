@@ -20,3 +20,4 @@ export * from './route-json-flow.js';
 export * from './route-stream-flow.js';
 export * from './native-count-tokens.js';
 export * from './native-count-rate.js';
+export * from './request-body-pool.js';
