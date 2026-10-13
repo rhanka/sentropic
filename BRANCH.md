@@ -111,6 +111,7 @@
 - [x] Lot 1.23 review resolution - MAJEUR-1 (2026-10-12): exercised real judge composition, registration generation mismatch refusal (code-derived reason 'generation_mismatch'), effectRef derived from real JudgeReceipt.callId (no verdict fields), and deduplicated idempotent receipt stage (judge-receipts.spec.ts).
 - [x] Owner decision (2026-10-12): PR #633 remainder is folded into PR #662; the judge predecessor gate "after PR #633 merged" becomes "after PR #662 (with folded native relay) merged", lots 1.26a/b and TUPLE then follow; Lot 2 is not authorized to start yet.
 - [x] Lot 1D / N-1 review resolution - MAJEUR-1 & spec fixes (2026-10-12): rewrote README examples in llm-mesh and cluster-mesh to match real exported APIs (authToken, no endpoint, no judgeHost option, proper compose/llm-mesh import, real deadline margin behavior); fixed spec inaccuracies in SPEC_EVOL_LLM_MESH.md regarding Math.min deadline margin and durable receipt verdict/settled status when persist completes after deadline.
+- [x] Lot 1.23 review resolution - MINEUR-1 (2026-10-12): fixed line 79 empty assertion by asserting result.ok === true and decision.pass === false independently; removed tautological string comparisons and redundant test helper effectRef return in judge-receipts.spec.ts.
 
 
 ## AI Flaky tests
