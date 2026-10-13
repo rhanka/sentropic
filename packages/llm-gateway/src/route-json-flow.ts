@@ -1,4 +1,4 @@
-import type { GenerateResponse, PreparedRouteAttempt, RouteAttemptUsage } from '@sentropic/llm-mesh';
+import type { GenerateResponse, NativeMessagesRequest, PreparedRouteAttempt, RouteAttemptUsage } from '@sentropic/llm-mesh';
 import { estimateAnthropicInputTokens } from './canonical-stream.js';
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
@@ -81,13 +81,13 @@ export const runRouteJsonFlow = async (
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       if (native) {
-        let nativeRequest = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
+        let nativeRequest: NativeMessagesRequest | undefined = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
         nativeObserver = new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body));
         lifecycle = nativeLifecycle(nativeObserver, nativeRequest.finalize,
           { requestId: nativeRequest.requestId, attemptRef: attempt.attemptRef });
         nativeInvoked = true;
         const result = await dispatchNativeMessages(deps.dispatch, { capability: native.capability, request: nativeRequest });
-        nativeRequest = undefined!;
+        nativeRequest = undefined;
         nativeReader = nativeResponseReader(result);
         assertNativeMessagesResult(result, 'json');
         if (result.kind !== 'json') throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
