@@ -303,6 +303,7 @@
   - [x] **Lot N22-row35b — malformed reader closing (`1828f6a9f`)**: RED 2 pre-src → returned readers closed once before exposing json/stream contract refusals 2/2 GREEN, mechanical apply.
   - [x] **Lot N23a — response header policy (`c5348ddc`, row 36)**: native forward via shared `buildNativeResponseHeaders` (already present) + served-identity matrix 5/5 GREEN (held behavior; test extracted byte-exact).
   - [x] **Lot N23b — router header/byte isolation (`e0404f86`, row 37)**: router header + byte isolation pins 20/20 GREEN (held behavior, test-only).
+  - [x] **Lot N23c — loopback HTTP fixture (`2ea32b11`, row 38)**: `fixtures/anthropic-native-http.ts` + fixture self-test 1/1 GREEN (new files extracted byte-exact).
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).
