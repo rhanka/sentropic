@@ -4,9 +4,12 @@
  * prepared-dispatch guards, lifecycle and streaming around this projection.
  */
 import { GatewayError } from './router/errors.js';
-import { isPreparedNativeMessages, type PreparedRouteAttempt } from '@sentropic/llm-mesh';
+import { isPreparedNativeMessages, NativeMessagesUpstreamError, type NativeMessagesRequest,
+  type NativeMessagesResult, type PreparedRouteAttempt } from '@sentropic/llm-mesh';
 import type { NativeFeatureSelection } from './native-features.js';
 import type { ResolvedTarget } from './flow.js';
+import type { GatewayFlowRequest } from './flow.js';
+import type { PreparedRouteFlow } from './route-flow-core.js';
 
 export class NativeAttemptRefusal extends Error {
   constructor() { super('Prepared native Messages capability unavailable'); }
@@ -48,4 +51,32 @@ export const buildNativeMessagesBody = (
   const max_tokens = supplied
     ? Math.min(original.max_tokens as number, dispatch.maxOutputTokens) : dispatch.maxOutputTokens;
   return { ...original, model: dispatch.model, stream: dispatch.stream, max_tokens };
+};
+
+export const buildNativeMessagesRequest = (
+  prepared: PreparedRouteFlow, request: GatewayFlowRequest,
+  native: NonNullable<ReturnType<typeof prepareNativeMessages>>, signal: AbortSignal,
+): NativeMessagesRequest => {
+  const features = prepared.nativeFeatures;
+  if (features.kind === 'none') throw new NativeAttemptRefusal();
+  return {
+    body: buildNativeMessagesBody(request.body, { model: native.capability.modelId,
+      stream: request.stream, maxOutputTokens: prepared.canonical.request.maxOutputTokens ?? features.maxOutputTokens }),
+    stream: request.stream, signal, requestId: request.authContext.requestId,
+    // W selection carries no forwarded map (N13d); the host forwards no caller betas.
+    headers: { anthropicVersion: native.anthropicVersion, forwarded: {} },
+    ...(native.capability.finalize ? { finalize: native.capability.finalize } : {}),
+  };
+};
+
+/** The host bounds JSON parsing; the gateway accepts only the matching closed envelope. */
+export const assertNativeMessagesResult: (result: NativeMessagesResult, kind: 'json' | 'stream') => void = (result, kind) => {
+  if (!result || result.kind !== kind || result.status !== 200 || !result.headers
+    || typeof result.headers !== 'object' || Array.isArray(result.headers)
+    || !Object.values(result.headers).every(value => typeof value === 'string')
+    || !result.body || typeof result.body !== 'object'
+    || (kind === 'json' ? Array.isArray(result.body)
+      : typeof (result.body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] !== 'function')) {
+    throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
+  }
 };

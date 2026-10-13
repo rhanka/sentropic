@@ -402,6 +402,26 @@ export const toProviderShapedError = (
   ) {
     return mapGatewayError(wire, 'bad-request');
   }
+  // N21: raw upstream failures (native dispatch skips kind mapping) keep
+  // their provider shape without leaking detail.
+  const upstreamStatus = error && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
+    ? (error as { status: number }).status : undefined;
+  const upstreamCode = error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+    ? (error as { code: string }).code : undefined;
+  if (upstreamCode === 'native_protocol_error') return anthropicError(503, 'api_error', 'upstream protocol failure');
+  if (upstreamStatus === 404) return mapGatewayError(wire, 'unknown-model', undefined, requestedModel);
+  if (upstreamStatus === 429) {
+    const retryAfterMs = error && typeof error === 'object'
+      && typeof (error as { retryAfterMs?: unknown }).retryAfterMs === 'number'
+      ? (error as { retryAfterMs: number }).retryAfterMs : undefined;
+    return mapGatewayError(wire, 'upstream-rate-limited',
+      retryAfterMs === undefined ? undefined : retryAfterMs / 1000);
+  }
+  if (upstreamStatus === 413) {
+    const type = 'request_too_large';
+    return wire === 'anthropic-messages' ? anthropicError(upstreamStatus, type, 'upstream request failed')
+      : openAiError(upstreamStatus, type, 'upstream request failed');
+  }
   // Unknown internal failure — never leak the message; map to a generic
   // provider availability error (NOT the internal detail).
   return wire === 'anthropic-messages'
