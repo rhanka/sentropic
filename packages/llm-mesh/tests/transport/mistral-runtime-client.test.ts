@@ -396,9 +396,28 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     expect(deltas.map((e) => (e as { data: { delta: string } }).data.delta).join('')).toBe('hi');
     const doneEvents = events.filter((e) => e.type === 'done');
     expect(doneEvents).toHaveLength(1);
+    // No finish reason and no `[DONE]`: the trailing usage chunk is
+    // accounting, and the truncated close is `unknown`, never `stop`
+    // (spec §16.4, R4-MIN-3).
     expect(doneEvents[0]).toMatchObject({
-      data: { finishReason: 'stop', usage: { totalTokens: 5 } },
+      data: { finishReason: 'unknown', usage: { totalTokens: 5 } },
     });
+  });
+
+  it('ends done/unknown when the stream closes without finish_reason or terminator (R4-MIN-3)', async () => {
+    const sse = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'));
+        controller.close();
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const client = new MistralRuntimeClient({ fetch: async () => sse });
+    const events = [];
+    for await (const event of await client.stream({ ...request }, auth)) {
+      events.push(event);
+    }
+    expect(events[events.length - 1]).toMatchObject({ type: 'done', data: { finishReason: 'unknown' } });
   });
 
   it('maps JSON finish reasons length and content_filter instead of stop', async () => {

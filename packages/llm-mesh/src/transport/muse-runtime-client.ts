@@ -8,11 +8,16 @@ import type { FinishReason, StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
 
 /** Canonical terminal reason: provider finish_reason wins over inference (spec §16.4). */
-const terminalFinish = (args: { sawToolCalls: boolean; rawFinish?: string; sawText: boolean }): FinishReason => {
+const terminalFinish = (args: {
+  sawToolCalls: boolean; rawFinish?: string; sawText: boolean; sawCleanEnd?: boolean;
+}): FinishReason => {
   if (args.sawToolCalls || args.rawFinish === 'tool_calls') return 'tool_calls';
   if (args.rawFinish === 'length') return 'length';
   if (args.rawFinish === 'content_filter') return 'content_filter';
-  return args.sawText ? 'stop' : 'unknown';
+  // Spec §16.4 (R4-MIN-3): a stream that ends without finish_reason is a
+  // proven completion only behind the SSE clean terminator (`[DONE]`). A
+  // truncated close after text is `unknown`, never a `stop` success.
+  return args.sawText && args.sawCleanEnd ? 'stop' : 'unknown';
 };
 
 /** Latest string `choices[0].finish_reason` on a Chat JSON/SSE payload, if any. */
@@ -219,6 +224,7 @@ const extractUsage = (payload: unknown): TokenUsage | undefined => {
 
 const parseSseJson = async function* (
   body: ReadableStream<Uint8Array>,
+  state?: { sawCleanEnd?: boolean },
 ): AsyncGenerator<unknown> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -237,7 +243,9 @@ const parseSseJson = async function* (
           .filter((line) => line.startsWith('data:'))
           .map((line) => line.slice(5).trim())
           .join('\n');
-        if (payload && payload !== '[DONE]') {
+        if (payload === '[DONE]') {
+          if (state) state.sawCleanEnd = true;
+        } else if (payload) {
           try {
             yield JSON.parse(payload);
           } catch {
@@ -343,8 +351,9 @@ export class MuseRuntimeClient implements MuseAdapterClient {
       let sawToolCalls = false;
       let rawFinish: string | undefined;
       let stashedUsage: TokenUsage | undefined;
+      const sseState: { sawCleanEnd?: boolean } = {};
       const toolCallIds = new Map<number, string>();
-      for await (const raw of parseSseJson(response.body!)) {
+      for await (const raw of parseSseJson(response.body!, sseState)) {
         const text = extractText(raw);
         const usage = extractUsage(raw);
         const finish = rawFinishOf(raw);
@@ -385,9 +394,10 @@ export class MuseRuntimeClient implements MuseAdapterClient {
           };
         }
         if (usage) {
-          // A usage-only chunk before any content/finish/terminal is
-          // accounting, not a terminal stop (spec §16.4): stash and continue.
-          if (!sawText && !sawToolCalls && !rawFinish) {
+          // Only a usage chunk carrying a finish reason terminates (the
+          // live Meta shape). A finish-less usage chunk is accounting:
+          // stash the latest and continue (spec §16.4, R4-MIN-3).
+          if (!rawFinish) {
             stashedUsage = usage;
             continue;
           }
@@ -405,7 +415,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
       yield {
         type: 'done',
         data: {
-          finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText }),
+          finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText, sawCleanEnd: sseState.sawCleanEnd }),
           ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
           ...(stashedUsage ? { usage: stashedUsage } : {}),
         },
