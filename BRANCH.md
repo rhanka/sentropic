@@ -126,7 +126,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: enforce workspace RBAC and canonical creation in session-workspace service
   - [x] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
-- [ ] **Lot 3 — Opus r2 NO-GO fixes (r3)**
+- [x] **Lot 3 — Opus r2 NO-GO fixes (r3)**
   - [x] RED: domain principal/CAS/uniform coverage in session-workspace.spec.ts
   - [x] RED: API principal/order/uniform/journal coverage in session-adoption.test.ts
   - [x] RED: API editor role and canonical seeds coverage in session-adoption.test.ts
@@ -138,7 +138,13 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: tx-scoped drizzle store, unconditional save removed (API)
   - [x] GREEN: englobing transaction for creation and binding (API)
   - [x] GREEN: clean 0011 migration, re-date journal, BRANCH minors
-  - [ ] GREEN: clean 0011 migration, re-date journal, BRANCH minors
+  - [x] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
+
+- [ ] **Lot 4 — MAJ-1 ABA compare-and-set fix (r3 GO avec réserves)**
+  - [x] RED: domain ABA race and monotonic version tests in session-workspace.spec.ts
+  - [ ] GREEN: domain monotonic version and full-row CAS in workspace-binding.ts
+  - [ ] RED: API ABA race and version CAS tests in session-adoption.test.ts
+  - [ ] GREEN: API version column, tx-scoped detach/end CAS in session-workspace.ts and control-schema.ts
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
 - [ ] **Lot N — Final validation**
