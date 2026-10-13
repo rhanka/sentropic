@@ -37,7 +37,7 @@ import type {
   ProviderResponseHeaders,
 } from './ports/dispatch.js';
 import type { PoolSelection, PoolSelectionRequest } from './ports/pool.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import type { CheckedGatewayBody } from './request-body-retention.js';
 import { ProviderRateLimitError } from './internal/provider-rate-limit-error.js';
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
@@ -319,9 +319,18 @@ export const runJsonFlow = async (
     let response: GatewayDispatchResponse;
     try {
       response = await deps.config.dispatch.dispatch(dispatchRequest);
-    } catch {
-      await settle(deps, request, prepared, 'failed', undefined);
-      throw new GatewayError('pooled-account-unavailable', 'dispatch failed', undefined, prepared.target);
+    } catch (error) {
+      const tooLarge = gatewayRequestTooLargeError(error, prepared.target);
+      try { await settle(deps, request, prepared, 'failed', undefined); }
+      catch (callbackError) { if (!tooLarge) throw callbackError; }
+      throw tooLarge ?? new GatewayError('pooled-account-unavailable', 'dispatch failed', undefined, prepared.target);
+    }
+
+    const tooLarge = gatewayRequestTooLargeError(response, prepared.target);
+    if (tooLarge) {
+      try { await settle(deps, request, prepared, 'failed', extractUsage(request.wire, response.body)); }
+      catch { /* Preserve the terminal numeric refusal. */ }
+      throw tooLarge;
     }
 
     const ok = response.status >= 200 && response.status < 300;
@@ -425,6 +434,13 @@ export const runStreamFlow = async (
       firstResult = await iterator.next();
       break; // Success — first byte received (or empty stream)
     } catch (error) {
+      // Terminal 413 precedes 429 retry: a rejecting size never rotates accounts.
+      const tooLarge = gatewayRequestTooLargeError(error, prepared.target);
+      if (tooLarge) {
+        try { await settle(deps, request, prepared, 'failed', undefined); }
+        catch { /* Preserve the terminal numeric refusal. */ }
+        throw tooLarge;
+      }
       // Pre-first-byte failure: check if it's a 429 for retry.
       if (error instanceof ProviderRateLimitError && attempt < maxRetries) {
         // Clean up the failed stream iterator to release transport resources.

@@ -7,7 +7,7 @@ import type { GatewayConfig } from './config.js';
 import { normalizeGatewayIngress, type CanonicalIngressResult } from './canonical-ingress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import type { CostContext } from './ports/cost-context.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { isRoutePlanError, isRouteQuoteError } from './internal/mesh-routing-error.js';
 import { authenticateCaller } from './internal/caller-auth.js';
 import type { RouteAttemptDispatchPort } from './ports/dispatch.js';
@@ -318,7 +318,12 @@ export const terminalGatewayError = (
   classification: RouteFailureClassification,
   target: ResolvedTarget,
   fallbackMessage: string,
+  originalError?: unknown,
 ): GatewayError => {
+  // N09: typed 413 evidence survives wrapping and keeps its terminal class
+  // instead of collapsing into bad-request or pooled-account-unavailable.
+  const tooLarge = gatewayRequestTooLargeError(originalError, target);
+  if (classification.reason !== 'cancelled' && tooLarge) return tooLarge;
   if (classification.reason === 'invalid-request') {
     return new GatewayError(
       'bad-request', 'upstream refused the request as invalid', undefined, target,

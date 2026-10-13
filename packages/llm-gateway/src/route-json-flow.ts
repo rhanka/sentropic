@@ -85,7 +85,7 @@ export const runRouteJsonFlow = async (
         outcome: classification.reason, usage,
       });
       const terminal = () => terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned routes failed',
+        classification, servedTargetFor(diagnostic), 'all planned routes failed', error,
       );
       try {
         if (attempt) {

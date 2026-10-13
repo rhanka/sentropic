@@ -244,7 +244,7 @@ export const runRouteStreamFlow = async (
         outcome: classification.reason, usage,
       });
       const terminal = () => terminalGatewayError(
-        classification, servedTargetFor(diagnostic), 'all planned streams failed',
+        classification, servedTargetFor(diagnostic), 'all planned streams failed', error,
       );
       try {
         if (attempt) {
