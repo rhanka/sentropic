@@ -271,4 +271,60 @@ describe('bounded checked read (N05)', () => {
     expect(raw.body!.locked).toBe(false); expect(pool.stats.reservedBytes).toBe(3);
     held.release(); expect(pool.stats.reservedBytes).toBe(0);
   });
+
+  it.each([false, true])('abort preserves its reason and restores partial bytes even if reader cancellation rejects (%s)', async rejecting => {
+    const pool = new GatewayBodyBytePool(32);
+    let markStored!: () => void;
+    const stored = new Promise<void>((resolve) => { markStored = resolve; });
+    const abort = new AbortController(); const reason = new DOMException('Ingress timeout', 'TimeoutError');
+    const cancel = vi.fn(async () => { if (rejecting) throw Error('reader cancel failed'); });
+    const raw = new Request('https://gateway.test/v1/messages', { method: 'POST', signal: abort.signal,
+      body: new ReadableStream({ start(controller) { controller.enqueue(utf8('{')); }, cancel }), duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    const pending = ensureCheckedGatewayBody(raw, { pool, limitBytes: 32,
+      storage: size => { markStored(); return new Uint8Array(size); } });
+    await stored; expect(pool.stats.reservedBytes).toBe(1);
+    const refused = expect(pending).rejects.toBe(reason);
+    abort.abort(reason); await refused;
+    expect(cancel).toHaveBeenCalledTimes(1); expect(raw.body!.locked).toBe(false);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+
+  it('read failure releases received chunks without fabricating a numeric 413', async () => {
+    const pool = new GatewayBodyBytePool(32);
+    let markStored!: () => void;
+    const stored = new Promise<void>((resolve) => { markStored = resolve; });
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const raw = new Request('https://gateway.test/v1/messages', { method: 'POST', duplex: 'half',
+      body: new ReadableStream<Uint8Array>({ start(input) { controller = input; input.enqueue(utf8('{"')); } }),
+    } as RequestInit & { duplex: 'half' });
+    const pending = ensureCheckedGatewayBody(raw, { pool, limitBytes: 32,
+      storage: size => { markStored(); return new Uint8Array(size); } });
+    await stored; expect(pool.stats.reservedBytes).toBe(2);
+    const failure = Error('transport read failed'); const refused = expect(pending).rejects.toBe(failure);
+    controller.error(failure); await refused;
+    expect(raw.body!.locked).toBe(false); expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, releases: 1 });
+  });
+
+  it('product session denial before the cap acquires and releases nothing', async () => {
+    const pool = new GatewayBodyBytePool(4096); const storage = vi.fn(); const app = new Hono();
+    app.use('*', async c => c.json({ error: 'session denied' }, 401));
+    app.use('*', gatewayRequestBodyLimit({ pool, limitBytes: 4096, storage }));
+    const response = await app.request(bodyRequest([utf8('{}')]).raw);
+    expect(response.status).toBe(401); expect(storage).not.toHaveBeenCalled();
+    expect(pool.stats).toEqual({ reservedBytes: 0, liveLeases: 0, acquisitions: 0, releases: 0 });
+  });
+
+  it.each(['/responses', '/v1/responses'])('reads %s under the smaller Responses cap', async path => {
+    const pool = new GatewayBodyBytePool(96);
+    const bytes = utf8(JSON.stringify({ model: 'm', input: 'x'.repeat(48) }));
+    const over = utf8(`${JSON.stringify({ model: 'm', input: 'x'.repeat(48) })} `);
+    const ok = await ensureCheckedGatewayBody(bodyRequest([bytes], path).raw,
+      { pool, limitBytes: 96, responsesLimitBytes: bytes.length });
+    expect(ok.bytes).toBe(bytes.length); ok.release();
+    await expect(ensureCheckedGatewayBody(bodyRequest([over], path).raw,
+      { pool, limitBytes: 96, responsesLimitBytes: bytes.length }))
+      .rejects.toMatchObject({ kind: 'request-too-large' });
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0 });
+  });
 });
