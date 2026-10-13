@@ -7,7 +7,8 @@ import {
   resolveGatewayBodyRoute, retainGatewayStreamBody, type RequestBodyLimitOptions,
 } from '../src/index.js';
 import { GatewayError, mapGatewayError } from '../src/index.js';
-import { nativeHarness } from './fixtures/native-flow.js';
+import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
+import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
 
 // Fold lots N03-N07 grow this file: N03 covers the shared byte pool only.
 // Reader, retention, middleware order and flow lifetimes follow per lot.
@@ -402,5 +403,103 @@ describe('shared ingress capacity (row 44a)', () => {
     expect(storage.mock.calls).toEqual([[1]]); expect(cancel).toHaveBeenCalledTimes(1);
     expect(pool.stats).toMatchObject({ reservedBytes: 14, liveLeases: 1, releases: 1 });
     held.release(); expect(pool.stats.reservedBytes).toBe(0);
+  });
+});
+
+describe('request reference lifetimes (row 44b1a)', () => {
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+  const deferred = <T = void>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>(done => { resolve = done; });
+    return { promise, resolve };
+  };
+  const bodyRequest = (chunks: readonly Uint8Array[], path = '/v1/messages') => {
+    let index = 0;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { if (index < chunks.length) controller.enqueue(chunks[index++]!); else controller.close(); }, cancel,
+    });
+    const raw = new Request(`https://gateway.test${path}`, { method: 'POST', body,
+      duplex: 'half' } as RequestInit & { duplex: 'half' });
+    return { raw, cancel };
+  };
+  const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBodyLimitOptions,
+    order: 'product' | 'standalone' = 'product', owners: CheckedGatewayBody[] = []) => {
+    const app = new Hono();
+    const inspect: MiddlewareHandler = async (c, next) => {
+      owners.push(await ensureCheckedGatewayBody(c.req.raw, options)); await next();
+    };
+    if (order === 'standalone') app.use('*', (c, next) => gatewayRequestBodyLimit(options)(c, async () => { await inspect(c, next); }));
+    app.use('*', gatewayRequestBodyLimit(options));
+    if (order === 'product') app.use('*', inspect);
+    app.route('/', createGatewayRouter({ config: h.deps.config, routePlanner: h.deps.routePlanner,
+      routeMetering: h.deps.metering, budget: h.deps.budget, nativeMessagesEnabled: true,
+      requestBody: options, requestId: () => 'req-native' }));
+    return app;
+  };
+
+  it.each(['product', 'standalone'] as const)('native_commit_releases_N_after_host_detach (%s)', async order => {
+    const uploadEntered = deferred(); const uploadDone = deferred(); const responseDone = deferred();
+    let hostBody: unknown; let hostBytes: Uint8Array | undefined; let reads = 0;
+    const close = vi.fn(async () => { responseDone.resolve(); return { done: true as const, value: undefined }; });
+    const h = nativeHarness({ execute: async request => {
+      hostBody = request.body; hostBytes = utf8(JSON.stringify(request.body)); uploadEntered.resolve();
+      await uploadDone.promise; hostBody = undefined; hostBytes = undefined;
+      return { kind: 'stream', status: 200, headers: {}, body: { [Symbol.asyncIterator]: () => ({
+        next: async () => ++reads === 1 ? { done: false, value: nativeStart(h.model) }
+          : (await responseDone.promise, { done: true, value: undefined }), return: close,
+      }) } };
+    } });
+    const incoming = utf8(JSON.stringify({ ...h.request.body, stream: true }));
+    const pool = new GatewayBodyBytePool(incoming.length); const owners: CheckedGatewayBody[] = [];
+    const options = { pool, limitBytes: incoming.length };
+    const pending = limitedRouter(h, options, order, owners).request(bodyRequest([incoming]).raw);
+    await uploadEntered.promise;
+    expect(hostBody).toBeDefined(); expect(hostBytes).toBeDefined();
+    expect(pool.stats.reservedBytes).toBe(incoming.length); expect(owners[0]!.retainedHolders).toBeGreaterThan(0);
+    const following = nativeHarness({ body: { messages: [] } });
+    const nextBody = utf8(JSON.stringify(following.request.body));
+    const nextApp = limitedRouter(following, options);
+    expect((await nextApp.request(bodyRequest([nextBody]).raw)).status).toBe(503);
+    uploadDone.resolve(); const response = await pending;
+    expect(response.status).toBe(200); h.execute.mockClear();
+    expect(hostBody).toBeUndefined(); expect(hostBytes).toBeUndefined();
+    expect(owners[0]!.body).toBeUndefined(); expect(owners[0]!.retainedHolders).toBe(0);
+    expect(owners[0]!.lease.bytes).toBe(0); expect(pool.stats.reservedBytes).toBe(0);
+    expect((await nextApp.request(bodyRequest([nextBody]).raw)).status).toBe(200);
+    expect(close).not.toHaveBeenCalled();
+    await response.body!.cancel();
+    expect(close).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements).toHaveLength(1);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 3, releases: 3 });
+  });
+  it.each(['product', 'standalone'] as const)('canonical_commit_retains_N_until_terminal_cleanup (%s)', async order => {
+    const done = deferred(); let sdkHolder: unknown; let reads = 0;
+    const close = vi.fn(async () => { sdkHolder = undefined; done.resolve(); return { done: true as const, value: undefined }; });
+    const h = nativeHarness();
+    const { nativeMessages: _native, ...base } = h.attempt;
+    const attempt: PreparedRouteAttempt = { ...base, stream: async request => {
+      sdkHolder = request;
+      return { [Symbol.asyncIterator]: () => ({
+        next: async (): Promise<IteratorResult<StreamEvent>> => ++reads === 1
+          ? { done: false, value: { type: 'content_delta', data: { delta: 'answer' } } }
+          : (await done.promise, { done: true, value: undefined }), return: close,
+      }) };
+    } };
+    h.deps.routePlanner.prepareAttempt = async () => attempt;
+    const incoming = utf8(JSON.stringify({ ...h.request.body, safeguards: undefined, stream: true }));
+    const pool = new GatewayBodyBytePool(incoming.length); const owners: CheckedGatewayBody[] = [];
+    const options = { pool, limitBytes: incoming.length };
+    const response = await limitedRouter(h, options, order, owners).request(bodyRequest([incoming]).raw);
+    expect(response.status).toBe(200); expect(sdkHolder).toBeDefined();
+    expect(owners[0]!.lease.bytes).toBe(incoming.length); expect(pool.stats.reservedBytes).toBe(incoming.length);
+    await expect(ensureCheckedGatewayBody(bodyRequest([utf8('{}')]).raw, options)).rejects.toMatchObject({ kind: 'request-body-capacity' });
+    await response.body!.cancel();
+    expect(close).toHaveBeenCalledTimes(1); expect(sdkHolder).toBeUndefined();
+    expect(owners[0]!.body).toBeUndefined(); expect(owners[0]!.retainedHolders).toBe(0);
+    expect(h.recorder.settlements).toHaveLength(1); expect(h.finalize).not.toHaveBeenCalled();
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 2, releases: 2 });
+    const following = await ensureCheckedGatewayBody(bodyRequest([utf8('{}')]).raw, options);
+    expect(following.lease.bytes).toBe(2); following.release();
   });
 });

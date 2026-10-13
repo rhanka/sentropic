@@ -50,6 +50,7 @@ import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller
 import type { GatewayBudgetOptions } from '../ports/budget.js';
 import { assertBudgetRouteDeps } from '../admission.js';
 import { buildNativeResponseHeaders } from '../native-headers.js';
+import { retainGatewayStreamBody } from '../request-body-retention.js';
 import {
   NativeCountTokensRefusal, NativeCountUpstreamError, runNativeCountTokens,
   type NativeCountTokensPort,
@@ -291,7 +292,13 @@ export const createGatewayRouter = (
     } catch (error) {
       return sendError(c, toProviderShapedError(wire, error, undefined), id);
     }
-    const body = owner.body;
+    let body: unknown;
+    const bodyLease = owner;
+    try {
+      body = bodyLease.body;
+    } catch {
+      return sendError(c, mapGatewayError(wire, 'bad-request'), id);
+    }
 
     const model = readModel(body);
     if (!model) {
@@ -322,10 +329,12 @@ export const createGatewayRouter = (
       return sendError(c, notImplemented(wire), id);
     }
     const flowRequest = {
-      wire, headers, body, model, stream, authContext,
+      wire, headers, body, bodyLease, model, stream, authContext,
       signal: c.req.raw.signal,
       ...(wire === 'openai-responses' ? { responsesLimits } : {}),
     };
+    body = undefined;
+    bodyLease.trackDetach(() => { flowRequest.body = undefined; });
 
     if (!stream) {
       try {
@@ -369,6 +378,8 @@ export const createGatewayRouter = (
 
     const streamNative = 'relay' in streamResult && streamResult.relay === 'native';
     forwardProviderHeaders(c, streamResult.headers, streamNative);
+    streamResult = { ...streamResult,
+      stream: retainGatewayStreamBody(streamResult.stream, bodyLease, cancellation.signal) };
     c.header('Content-Type', SSE_CONTENT_TYPE);
     c.header('Cache-Control', 'no-cache');
     c.header(REQUEST_ID_HEADER, id);
