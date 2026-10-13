@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import { createGatewayRouter, runRouteJsonFlow, runRouteStreamFlow } from '@sentropic/llm-gateway';
 import type { RouteRequestSettlement } from '@sentropic/llm-gateway';
 import type { NativeUsageSnapshot } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { nativeHarness, nativeFrame, nativeStart } from '../../../packages/llm-gateway/tests/fixtures/native-flow';
 import { db } from '../../src/db/client';
 import { createBudgetAdmission, createRouteSettlement, insertModelPricing, recordLlmUsage } from '../../src/services/llm-metering';
@@ -14,7 +15,7 @@ export const mixed = { input_tokens: 100, cache_read_input_tokens: 10_000, cache
   cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 }, output_tokens: 20 };
 type Options = { model?: string; served?: string; usage?: Record<string, unknown>; body?: Record<string, unknown>;
   chunks?: Uint8Array[]; allowanceInput?: number; allowanceOutput?: number; inputRate?: number; outputRate?: number;
-  requestBody?: Record<string, unknown> };
+  requestBody?: Record<string, unknown>; preFetchFailure?: boolean };
 /** Real Postgres admission/settlement; pricing changes roll back, observation cleanup is fixture-keyed only. */
 export const withNativeLedger = async (options: Options, check: (h: Awaited<ReturnType<typeof build>>) => Promise<void>) => {
   const user = `native-ledger-${randomUUID()}`;
@@ -54,6 +55,8 @@ const build = async (options: Options, tx: Parameters<Parameters<typeof db.trans
   const port = createAnthropicNativePort({ modelIds: [model], record,
     dependencies: { resolveProviderCredential: vi.fn(async () => ({ providerId: 'anthropic', source: 'environment', credential: 'fake' })) },
     runtime: { nativeCountTokens: vi.fn(), nativeMessages: vi.fn(async payload => {
+      if (options.preFetchFailure) throw new NativeMessagesUpstreamError({ status: 503, code: 'account_unavailable',
+        usage: { inputTokens: 0, outputTokens: 0, estimated: false } });
       payload.onResponseStarted();
       return payload.stream ? { kind: 'stream' as const, status: 200, headers: {}, body: { [Symbol.asyncIterator]: () => ({
         next: async () => index < chunks.length ? { done: false as const, value: chunks[index++]! }
@@ -75,14 +78,17 @@ const build = async (options: Options, tx: Parameters<Parameters<typeof db.trans
   const deps = { ...h.deps, config, metering, budget: { port: admission, now: () => clock.getTime() } };
   h.request.authContext.requestId = requestId;
   const run = async (stream = false, terminal?: 'cancel' | 'commit-failure') => {
-    if (!stream) await runRouteJsonFlow(deps, h.request);
+    if (!stream) {
+      try { await runRouteJsonFlow(deps, h.request); } catch (error) { if (!options.preFetchFailure) throw error; }
+    }
     else {
-      const flow = await runRouteStreamFlow(deps, { ...h.request, stream: true });
+      if (terminal === 'commit-failure') h.attempt.markCommitted.mockRejectedValue(new Error('fixture commit failure'));
+      let flow;
+      try { flow = await runRouteStreamFlow(deps, { ...h.request, stream: true }); }
+      catch (error) { if (terminal !== 'commit-failure') throw error; await Promise.all(writes); return; }
       const iterator = flow.stream[Symbol.asyncIterator]();
-      if (terminal) { await iterator.next();
-        if (terminal === 'commit-failure') { try { await flow.onCommit?.(); } catch { /* terminal policy */ } }
-        await iterator.return?.();
-      } else { while (!(await iterator.next()).done) { /* Drain provider bytes. */ } }
+      if (terminal === 'cancel') await iterator.return?.();
+      else { while (!(await iterator.next()).done) { /* Drain provider bytes. */ } }
     }
     await Promise.all(writes);
   };
