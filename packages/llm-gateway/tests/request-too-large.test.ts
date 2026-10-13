@@ -5,6 +5,7 @@ import type { GatewayWire } from '../src/ports/dispatch.js';
 import { defaultGatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
 import { classifyRouteError } from '../src/route-flow-core.js';
 import { budgetRouter, jsonAttempt, quotingPlanner, recordingBudget, send, textResponse } from './fixtures/budget.js';
+import { nativeHarness, nativeChunks, nativeFrame, sendNative } from './fixtures/native-flow.js';
 
 // N02 wire contract slice: numeric 413 envelopes on every wire. Flow-level
 // pre-byte mapping and terminal propagation land in N09 (same file extended).
@@ -109,6 +110,35 @@ describe.each([
       if (mode === 'stream-event') expect(closed).toHaveBeenCalledTimes(1);
     }
   });
+});
+
+it.each(['json', 'stream-open', 'stream-frame'] as const)('keeps native %s 413 terminal with no canonical fallback', async mode => {
+  for (const rejection of rejectionModes) {
+    const h = nativeHarness({ execute: async () => {
+      if (mode !== 'stream-frame') throw new NativeMessagesUpstreamError({ status: 413, requestSize: size });
+      return { kind: 'stream', status: 200, headers: {}, requestSize: size,
+        body: nativeChunks([nativeFrame('error', { error: { type: 'request_too_large', message: 'PRIVATE auth rate' } })]) };
+    } });
+    const plan = h.deps.routePlanner.plan;
+    h.deps.routePlanner.plan = async (...args) => {
+      const value = await plan(...args);
+      return { ...value, candidateRefs: ['candidate-0', 'candidate-1'],
+        diagnostics: [value.diagnostics[0]!, { ...value.diagnostics[0]!, candidateRef: 'candidate-1' }] };
+    };
+    const prepare = vi.fn(async () => h.attempt); h.deps.routePlanner.prepareAttempt = prepare;
+    if (rejection === 'outcome' || rejection === 'both') h.attempt.recordOutcome.mockRejectedValue(Error('outcome unavailable'));
+    const settle = h.recorder.metering.settleRoute;
+    const sink = vi.fn(async (value: Parameters<typeof settle>[0]) => {
+      await settle(value); if (rejection === 'settlement' || rejection === 'both') throw Error('sink unavailable');
+    });
+    h.recorder.metering.settleRoute = sink;
+    await verifyRefusal(await sendNative(h, mode !== 'json'));
+    expect(prepare).toHaveBeenCalledTimes(1); expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(h.attempt.generate).not.toHaveBeenCalled(); expect(h.attempt.markCommitted).not.toHaveBeenCalled();
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(sink).toHaveBeenCalledTimes(1);
+    expect(h.recorder.settlements[0]!.attempts).toHaveLength(1);
+    expect(h.recorder.settlements[0]!.usage).toMatchObject({ inputTokens: 10000, outputTokens: 32000, estimated: true });
+  }
 });
 
 describe('terminal mid-read transport 413', () => {
