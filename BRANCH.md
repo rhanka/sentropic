@@ -241,6 +241,6 @@
 - [ ] **Lot N00 — Scope and baseline (native fold)**
   - [ ] EX8–EX11 declared above; classifier exclusion superseded; count/metering scope narrowed to EX8/EX9.
   - [x] Spec §17 committed in capped slices; no R plan/history or version literals imported.
-- [ ] **Lot N01 — Native contracts (fold)**
-  - [ ] `packages/llm-mesh/tests/native-messages.test.ts` ported (W alias reconciliation documented in-file).
-  - [ ] `packages/llm-mesh/src/native-messages.ts`, `routing-contracts.ts`, `index.ts` (+ `errors.ts` size-detail prerequisite; cause traversal stays N02).
+- [x] **Lot N01 — Native contracts (fold)**
+  - [x] `packages/llm-mesh/tests/native-messages.test.ts` ported (W alias reconciliation documented in-file).
+  - [x] `packages/llm-mesh/src/native-messages.ts`, `routing-contracts.ts`, `index.ts` (+ `errors.ts` size-detail prerequisite; cause traversal stays N02).

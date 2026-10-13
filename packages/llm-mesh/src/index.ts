@@ -8,6 +8,7 @@ export * from './equivalence-council.js';
 export * from './execution-features.js';
 export * from './generation.js';
 export * from './messages.js';
+export * from './native-messages.js';
 export * from './mesh.js';
 export * from './providers.js';
 export * from './registry.js';
