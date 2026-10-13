@@ -1,3 +1,4 @@
+import { RequestTooLargeError } from '@sentropic/llm-mesh';
 import type { RoutePlanInput, RoutePlanner, VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import { classifyRouteError, prepareRouteFlow, retainRouteBody, terminalGatewayError } from '../src/route-flow-core.js';
@@ -33,6 +34,40 @@ describe('route body retention (N07)', () => {
     const prepared = preparedFor() as unknown as Parameters<typeof retainRouteBody>[0];
     retainRouteBody(prepared, {} as Parameters<typeof retainRouteBody>[1]);
     expect(prepared.canonical.request.messages).toHaveLength(1);
+  });
+});
+
+describe('terminal 413 preservation (N09)', () => {
+  const target = { providerId: 'anthropic', transportProviderId: 'anthropic', model: 'claude-sonnet-5' };
+  const size = { requestBytes: 111, limitBytes: 100, source: 'upstream' as const };
+
+  it('keeps typed size evidence instead of collapsing into bad-request or pooled 503', () => {
+    const error = new RequestTooLargeError(size);
+    for (const classification of [{ reason: 'invalid-request' }, { reason: 'provider-5xx' }] as const) {
+      const terminal = terminalGatewayError(
+        { ...classification, retryable: false, healthScope: 'route' as const }, target, 'all planned routes failed', error,
+      );
+      expect(terminal.kind).toBe('request-too-large');
+      expect(terminal.requestSize).toEqual(size);
+    }
+  });
+
+  it('keeps existing classes when no size evidence is present', () => {
+    expect(terminalGatewayError(
+      { reason: 'invalid-request', retryable: false, healthScope: 'route' }, target, 'fallback',
+    ).kind).toBe('bad-request');
+    expect(terminalGatewayError(
+      { reason: 'provider-5xx', retryable: false, healthScope: 'route' }, target, 'fallback',
+      { status: 500 },
+    ).kind).toBe('pooled-account-unavailable');
+  });
+
+  it('never masks cancellation with a size refusal', () => {
+    const terminal = terminalGatewayError(
+      { reason: 'cancelled', retryable: false, healthScope: 'route' }, target, 'fallback',
+      new RequestTooLargeError(size),
+    );
+    expect(terminal.kind).not.toBe('request-too-large');
   });
 });
 
