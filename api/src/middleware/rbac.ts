@@ -28,7 +28,7 @@ const ROLE_LEVELS: Record<Role, number> = {
 /**
  * Check if user has required role or higher
  */
-function hasRole(userRole: string, requiredRole: Role): boolean {
+export function hasRole(userRole: string, requiredRole: Role): boolean {
   const userLevel = ROLE_LEVELS[userRole as Role] || 0;
   const requiredLevel = ROLE_LEVELS[requiredRole];
   return userLevel >= requiredLevel;
