@@ -47,6 +47,7 @@
 - [x] `BR00-EX4` (`BR-C0-EX4`) — Commit `2faca3916` modified 391 lines in `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts` exceeding the 150-line limit (C0 Opus r2 a-m1). Rationale: atomic update of the boundary test suite to test all derived hash pins and frozen error vocabulary in a single coherent test file without intermediate broken test states. Impact: 1 test file only. Rollback: revert commit 2faca3916. All subsequent commits remain strictly under 150 lines.
 - [x] `BR00-EX5` (`BR-C0-EX5`) — Re-merge `spec/comments-annotations-port` at `c3518c2de` (C0 Opus r2 MAJ-1, a-m7); partially addresses §18.2; r3 identifies remaining contradictory passages in step-1 docs (plan and spec files). Conflict resolution limited to `BRANCH.md` (kept C0 side); frozen M1 files verified untouched.
 - [x] `BR00-EX6` (`BR-C0-EX6`) — Owner-requested full C0 documentation sweep on this branch: plans, evidence extracts and `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md` may change to align frozen L3a v4.1 §§9.6/11.3/17/18.2. Impact: documentation and the existing C0 guard only; frozen M1 remains byte-identical. Rollback: revert this remediation series. No merge or other-branch push.
+- [x] `BR00-EX7` (`BR-C0-EX7`) — Remediation of C0 Opus r4 minors (m1–m3): class motifs in boundary tests, §9.2 citations in compatibility and alignment docs, verbatim historical review excerpts and distinct current dispositions in evidence index and owner decisions. Impact: test and documentation only; frozen M1 remains untouched. Rollback: revert this commit series.
 - [x] `DEBT-TEST-FIRST` — Git commit history shows manifest/doc committed before boundary tests (`4318dca02` before `c6f57bb8a` in initial C0; `e9a1e2951` before `2faca3916` in r1 remediation) (C0 Opus r2 a-m6). Acknowledged technical debt: all subsequent fixes are test-verified before commit.
 
 ## AI Flaky tests
@@ -107,9 +108,16 @@
   - [x] Cluster-mesh typecheck passed; full suite: 487 passed / 35 existing opt-in or reference skips; Make scope check passed.
   - [x] Write `.h2a/build/c0_docs_astra_report.md` and prepare branch-only publication; final push/CI evidence is recorded in that report; never merge.
 
-- [x] **Lot N — Final validation & PR**
-  - [x] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
-  - [x] Push `feat/comments-cm-c0` to origin: `git push origin feat/comments-cm-c0`.
-  - [x] Open draft PR with stacked note ("depends on #663 and #666") (#667).
-  - [x] Generate `.h2a/build/c0_report.md` (untracked).
-  - [x] Stop after C0.
+- [ ] **Lot C0FIX3 — Opus r4 remediation (m1–m3)**
+  - [x] Broaden boundary test residue rules to class motifs, exclude explicitly marked historical excerpts, and add reformulation test cases (m1).
+  - [ ] Correct section citations from §9.3 to §9.2 in storage-compatibility.md and storage-alignment.md (m2).
+  - [ ] Restore verbatim historical alternatives in owner-decisions.md with distinct current allocation (m3).
+  - [ ] Restore verbatim historical review verdicts in evidence index with distinct current dispositions and refreshed document digests (m3).
+  - [ ] Correct c0_docs_astra_report.md and generate c0_fix3_report.md (m3).
+
+- [ ] **Lot N — Final validation & PR**
+  - [ ] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
+  - [ ] Push `feat/comments-cm-c0` to origin: `git push origin feat/comments-cm-c0`.
+  - [ ] Open draft PR with stacked note ("depends on #663 and #666") (#667).
+  - [ ] Generate `.h2a/build/c0_report.md` (untracked).
+  - [ ] Stop after C0.
