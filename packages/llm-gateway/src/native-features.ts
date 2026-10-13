@@ -2,6 +2,7 @@ import type { CanonicalIngressResult } from './canonical-ingress.js';
 import type { GatewayWire } from './ports/dispatch.js';
 import type { GatewayBudgetOptions } from './ports/budget.js';
 import { GatewayError } from './router/errors.js';
+import { buildNativeRequestHeaders } from './native-headers.js';
 
 export type NativeFeatureSelection =
   | { readonly kind: 'none' }
@@ -9,6 +10,7 @@ export type NativeFeatureSelection =
       readonly kind: 'optional' | 'required';
       readonly anthropicVersion?: string;
       readonly anthropicBeta?: string;
+      readonly forwarded: Readonly<Record<string, string>>;
       readonly maxOutputTokens: number;
     };
 
@@ -46,6 +48,7 @@ export const classifyNativeFeatures = (
   const version = parsed.get('anthropic-version');
   return {
     kind: required ? 'required' : 'optional', maxOutputTokens: ceiling!,
+    forwarded: buildNativeRequestHeaders(headers),
     ...(version !== undefined ? { anthropicVersion: version } : {}),
     ...(beta !== undefined ? { anthropicBeta: beta } : {}),
   };
