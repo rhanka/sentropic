@@ -285,6 +285,7 @@
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).
   - [x] **Lot N12e — sticky binding + filter-order coverage (`fba3db8d2`)**: explicit-pin affinity proof, filter-before-truncation, suppressed-pool precedence (2 suppression tests use quarantine: W lone-route degrade holds; R's lone-5xx would still serve) 51/51 GREEN.
+  - [x] **Lot N13a — prepared native forwarding (`de1441c7b`)**: `route-attempt.ts` fresh-descriptor/model guard + planner `isNativeTarget` wiring + forwarding test 52/52 GREEN.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
