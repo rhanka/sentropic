@@ -89,11 +89,14 @@ export const nativeStreamExecution = (input: {
   };
   input.signal?.addEventListener('abort', onAbort, { once: true });
   if (input.signal?.aborted) onAbort();
-  const prime = async (source: AsyncIterable<Uint8Array>) => {
-    raw = source[Symbol.asyncIterator]();
+  const attach = (reader: AsyncIterator<Uint8Array>) => {
+    raw = reader;
     frames = parseNativeSseStream({ [Symbol.asyncIterator]: () => ({
       next: () => raw!.next(), return: async () => { await closeRaw(); return { done: true as const, value: undefined }; },
     }) });
+  };
+  const prime = async () => {
+    if (!frames) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
     if (input.signal?.aborted) onAbort();
     const next = await read();
     input.signal?.throwIfAborted();
@@ -129,5 +132,5 @@ export const nativeStreamExecution = (input: {
     stream.return = async value => { await cancel(); return originalReturn(value); };
     return stream;
   };
-  return { prime, expose, finish, close, cancel, lifecycle, get terminal() { return terminal; } };
+  return { attach, prime, expose, finish, close, cancel, lifecycle, get terminal() { return terminal; } };
 };
