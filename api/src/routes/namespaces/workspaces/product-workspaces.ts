@@ -26,8 +26,10 @@ import {
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../../services/workspace-access';
-import { notifyWorkspaceEvent, notifyWorkspaceMembershipEvent, provisionWorkspace } from '../../../services/workspace-provisioning';
-import { todoOrchestrationService } from '../../../services/todo-orchestration';
+import {
+  notifyWorkspaceCreated, notifyWorkspaceEvent, notifyWorkspaceMembershipEvent,
+  provisionWorkspace, seedWorkspaceTypeResources,
+} from '../../../services/workspace-provisioning';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
@@ -73,28 +75,14 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
     }),
   );
 
-  // Seed default workflows and agents for this workspace type (§7.6, §8.1)
-  try {
-    await todoOrchestrationService.seedWorkflowsForType(
-      { userId: user.userId, role: user.role, workspaceId: id },
-      type,
-    );
-  } catch (seedErr) {
-    console.error('Failed to seed workflows for workspace type', type, seedErr);
-    // Non-fatal: workspace is created, seeding can be retried
-  }
+  // Seed default workflows/agents (§7.6, §8.1) and view templates (§12.6)
+  // via the shared provisioning path (same steps as session adoption).
+  await seedWorkspaceTypeResources({
+    userId: user.userId, role: user.role, workspaceId: id,
+    type: type as import('../../../services/workspace-access').WorkspaceType,
+  });
 
-  // Seed default view templates for this workspace type (§12.6)
-  try {
-    const { viewTemplateService } = await import('../../../services/view-template-service');
-    await viewTemplateService.seedForWorkspace(id, type);
-  } catch (seedErr) {
-    console.error('Failed to seed view templates for workspace type', type, seedErr);
-    // Non-fatal: workspace is created, seeding can be retried
-  }
-
-  await notifyWorkspaceEvent(id, { action: 'created' });
-  await notifyWorkspaceMembershipEvent(id, user.userId, { action: 'added', role: 'admin' });
+  await notifyWorkspaceCreated(id, user.userId);
 
   return c.json({ id }, 201);
 });

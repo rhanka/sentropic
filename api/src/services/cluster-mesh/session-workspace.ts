@@ -9,10 +9,8 @@ import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
 import { tenantMemberships, users, workspaces } from '../../db/schema';
 import { hasRole } from '../../middleware/rbac';
-import { todoOrchestrationService } from '../todo-orchestration';
-import { viewTemplateService } from '../view-template-service';
 import { hasWorkspaceRole, type WorkspaceType } from '../workspace-access';
-import { notifyWorkspaceCreated, provisionWorkspace } from '../workspace-provisioning';
+import { notifyWorkspaceCreated, provisionWorkspace, seedWorkspaceTypeResources } from '../workspace-provisioning';
 
 export type AdoptedSessionWorkspaceStatus = 'attached' | 'detached' | 'ended';
 
@@ -152,18 +150,9 @@ export class SessionWorkspaceService {
   private async seedCreatedWorkspace(
     principalId: string, globalRole: string, workspaceId: string, type: WorkspaceType,
   ): Promise<void> {
-    try {
-      await todoOrchestrationService.seedWorkflowsForType(
-        { userId: principalId, role: globalRole, workspaceId }, type,
-      );
-    } catch (seedErr) {
-      console.error('Failed to seed workflows for workspace type', type, seedErr);
-    }
-    try {
-      await viewTemplateService.seedForWorkspace(workspaceId, type);
-    } catch (seedErr) {
-      console.error('Failed to seed view templates for workspace type', type, seedErr);
-    }
+    await seedWorkspaceTypeResources(
+      { userId: principalId, role: globalRole, workspaceId, type },
+    );
     try {
       await notifyWorkspaceCreated(workspaceId, principalId);
     } catch (notifyErr) {

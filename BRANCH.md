@@ -174,7 +174,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN m3: required expectedVersion in domain detach/end inputs
   - [x] GREEN m2: re-authorized get when the row moved between reads
   - [x] GREEN m4: CAS tuple doc corrected (Drizzle WHERE is the SQL projection, pinned per-predicate)
-  - [ ] GREEN m5: shared seeds/notify via workspace-provisioning, route uses shared notify
+  - [x] GREEN m5: shared seeds/notify via workspace-provisioning, route uses shared notify
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit adoption, scope-check
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
