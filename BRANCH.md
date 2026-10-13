@@ -151,7 +151,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 
 - [ ] **Lot 5 — Opus r4 NO-GO fixes (MAJ-A, MAJ-B, b-m1..b-m8)**
   - [x] RED domain: stale workspace-admin detach, cross-tenant oracle, scoped get
-  - [ ] RED domain: production CAS predicate tests
+  - [x] RED domain: production CAS predicate tests
   - [ ] GREEN domain: expectedVersion binding, shared CAS predicate, tenant-neutral oracle, scoped get
   - [ ] RED API: stale workspace-admin guard, production CAS store, scoped get
   - [ ] GREEN API: version-bound detach/end, tx-scoped roles, scoped get, store export
