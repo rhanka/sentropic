@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  detectNativeBillingError, NATIVE_BILLING_MASKED_MESSAGE, parseNativeErrorDetail,
-  sanitizeNativeErrorMessage,
+  detectNativeBillingError, NATIVE_BILLING_MASKED_MESSAGE, neutralizeFeatureIdentifiers,
+  parseNativeErrorDetail, sanitizeNativeErrorMessage,
 } from '../src/native-errors.js';
 
 describe('native error billing classifier and bounding', () => {
@@ -88,5 +88,39 @@ describe('native error billing classifier and bounding', () => {
       error: { type: 'invalid_request_error', message },
     }), 400);
     expect(detail).toEqual({ type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE });
+  });
+
+  it('K7: bounds scan work to at most one check per maximal run on 64 KiB adversarial input', () => {
+    const noSuffix = 'a-' + 'a-'.repeat(32767);
+    expect(noSuffix.length).toBe(65536);
+    const statsNoSuffix = { runs: 0, checks: 0 };
+    expect(neutralizeFeatureIdentifiers(noSuffix, statsNoSuffix)).toBe(noSuffix);
+    expect(statsNoSuffix.runs).toBe(1);
+    expect(statsNoSuffix.checks).toBe(1);
+    expect(detectNativeBillingError(noSuffix)).toBe(false);
+
+    const validRun = `${'a'.repeat(65525)}-2026-06-01`;
+    expect(validRun.length).toBe(65536);
+    const statsValid = { runs: 0, checks: 0 };
+    expect(neutralizeFeatureIdentifiers(validRun, statsValid)).toBe('neutralized-identifier');
+    expect(statsValid.runs).toBe(1);
+    expect(statsValid.checks).toBe(1);
+    expect(detectNativeBillingError(validRun)).toBe(false);
+
+    expect(detectNativeBillingError(`${validRun} credit balance is low`)).toBe(true);
+
+    const multi = 'anthropic-header-1 fallback-credit-2026-06-01 plain-word-no-date';
+    const statsMulti = { runs: 0, checks: 0 };
+    expect(neutralizeFeatureIdentifiers(multi, statsMulti))
+      .toBe('neutralized-identifier neutralized-identifier plain-word-no-date');
+    expect(statsMulti.runs).toBe(3);
+    expect(statsMulti.checks).toBe(3);
+  });
+
+  it('respects underscore boundaries: underscores are word characters that prevent sub-identifier split', () => {
+    const text = 'prefix_fallback-credit-2026-06-01_suffix fallback_credit_token _anthropic-header';
+    const stats = { runs: 0, checks: 0 };
+    expect(neutralizeFeatureIdentifiers(text, stats)).toBe(text);
+    expect(detectNativeBillingError(text)).toBe(false);
   });
 });
