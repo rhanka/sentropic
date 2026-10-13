@@ -3,8 +3,9 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import {
   CheckedGatewayBody, createGatewayRouter, defaultGatewayBodyBytePool, ensureCheckedGatewayBody, GatewayBodyBytePool,
   GATEWAY_INFLIGHT_BODY_BYTES, GATEWAY_MAX_REQUEST_BODY_BYTES, gatewayRequestBodyLimit,
-  isGatewayBodyPath, REQUEST_BODY_CAPACITY_MESSAGE, resolveGatewayBodyLimit,
-  resolveGatewayBodyRoute, retainGatewayStreamBody, type CreateGatewayRouterOptions, type RequestBodyLimitOptions,
+  isGatewayBodyPath, NativeCountTokensRateLimiter, NativeCountUpstreamError, REQUEST_BODY_CAPACITY_MESSAGE,
+  resolveGatewayBodyLimit, resolveGatewayBodyRoute, retainGatewayStreamBody,
+  type CreateGatewayRouterOptions, type NativeCountTokensResult, type RequestBodyLimitOptions,
 } from '../src/index.js';
 import { GatewayError, mapGatewayError } from '../src/index.js';
 import { nativeHarness, nativeFrame, nativeStart } from './fixtures/native-flow.js';
@@ -702,6 +703,76 @@ describe('default byte pool overlap on one replica (row 44c)', () => {
       expect(defaultGatewayBodyBytePool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0,
         acquisitions: baseline.acquisitions + 68, releases: baseline.releases + 68 });
     });
+
+  it.each(['no_port', 'denied', 'rate', 'concurrency', 'failing'] as const)(
+    'pre_dispatch_count_%s_restores_capacity_once (row 49a)', async kind => {
+    for (const order of ['product', 'standalone'] as const) {
+      const h = nativeHarness();
+      const pool = new GatewayBodyBytePool(4096);
+      const owners: CheckedGatewayBody[] = [];
+      const entered = deferred();
+      const finish = deferred();
+      const rate = new NativeCountTokensRateLimiter({ capacity: kind === 'rate' ? 1 : 10,
+        maxInFlight: 1, now: () => 0 });
+      const execute = vi.fn(async (): Promise<NativeCountTokensResult> => {
+        entered.resolve();
+        if (kind === 'concurrency') await finish.promise;
+        if (kind === 'failing') {
+          throw new NativeCountUpstreamError({ status: 503, headers: {}, body: { type: 'error',
+            error: { type: 'api_error', message: 'count transport down' } } });
+        }
+        return { kind: 'json', status: 200, headers: {}, body: { input_tokens: 3 } };
+      });
+      const capability = { providerId: 'anthropic', modelId: h.model, apiVersions: ['2023-06-01'], execute };
+      const prepare = vi.fn(async () => kind === 'denied' ? undefined : capability);
+      const port = { modelIds: [h.model], prepare };
+      const app = limitedRouter(h, { pool, limitBytes: 4096 }, order, owners,
+        kind === 'no_port' ? {} : { nativeCountTokens: port, nativeCountRate: rate });
+      const bytes = utf8(JSON.stringify({ model: h.model, opaque: { retained: ['body'] } }));
+      let live: ReturnType<typeof app.request> | undefined;
+      if (kind === 'concurrency') {
+        live = app.request(bodyRequest([bytes], PATHS[2]).raw);
+        await entered.promise;
+      }
+      if (kind === 'rate') {
+        // Prime the single token with a successful count (no direct pool access).
+        expect((await app.request(bodyRequest([bytes], PATHS[2]).raw)).status).toBe(200);
+      }
+      const baseline = pool.stats;
+      const upstreamBefore = execute.mock.calls.length;
+      const response = await app.request(bodyRequest([bytes], PATHS[2]).raw);
+      const status = kind === 'no_port' || kind === 'denied' ? 400 : kind === 'failing' ? 503 : 429;
+      expect(response.status).toBe(status);
+      const message = kind === 'no_port'
+        ? 'Token counting is not supported by this gateway route.'
+        : kind === 'denied' ? 'Token counting is not supported by this gateway route for this request.'
+          : kind === 'failing' ? 'count transport down' : 'Token counting request limit exceeded.';
+      expect(await response.json()).toEqual(status === 429
+        ? { type: 'error', error: { type: 'rate_limit_error', message } }
+        : status === 503
+          ? { type: 'error', error: { type: 'api_error', message } }
+          : { type: 'error', error: { type: 'invalid_request_error', message } });
+      if (status === 429) expect(response.headers.get('retry-after')).toBe('1');
+      expect(response.headers.has('x-sentropic-relay')).toBe(false);
+      expect(execute).toHaveBeenCalledTimes(upstreamBefore + (kind === 'failing' ? 1 : 0));
+      expect(h.execute).not.toHaveBeenCalled();
+      expect(owners.at(-1)!.body).toBeUndefined();
+      expect(owners.at(-1)!.retainedHolders).toBe(0);
+      expect(pool.stats.reservedBytes).toBe(baseline.reservedBytes);
+      expect(pool.stats.liveLeases).toBe(baseline.liveLeases);
+      // The shared pool stays reusable across harnesses after a count refusal.
+      const following = nativeHarness();
+      const next = await limitedRouter(following, { pool, limitBytes: 4096 })
+        .request(bodyRequest([utf8(JSON.stringify(following.request.body))]).raw);
+      expect(next.status).toBe(200);
+      expect(following.execute).toHaveBeenCalledTimes(1);
+      finish.resolve();
+      if (live) expect((await live).status).toBe(200);
+      expect(pool.stats.reservedBytes).toBe(0);
+      expect(pool.stats.liveLeases).toBe(0);
+      expect(pool.stats.acquisitions).toBe(pool.stats.releases);
+    }
+  });
 });
 
 describe('body terminal ownership (row 44b1b)', () => {
