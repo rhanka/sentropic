@@ -29,6 +29,8 @@ export const GENERATED_MODEL_COUNCIL_SOURCE = {
     "mistral:zai-glm-5-3",
     "muse:muse-spark-1.3",
     "muse:muse-spark-1.3-contributor",
+    "muse:muse-wonder-1.0",
+    "muse:muse-wonder-1.0-full",
     "openai:gpt-4.1-nano",
     "openai:gpt-5.4-nano",
     "openai:gpt-5.5",
