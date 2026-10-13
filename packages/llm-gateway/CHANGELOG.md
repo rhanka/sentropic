@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- OpenAI Responses ingress (`POST /responses` + `POST /v1/responses`,
+  stateless JSON/SSE): strict codec, lossless canonical mapping, native Codex
+  execution (custom tools, `reasoning.context`, `text.verbosity`,
+  `prompt_cache_key`, ordered reasoning items) and translated Muse/Mistral
+  execution (named choice, parallel control, `max_tokens`, strict schemas,
+  qualified tool-name return). Real-planner fixture replay pins every
+  committed Muse/Codex body at 200 with usage preserved.
+- `mistral-vibe-cli-latest` alias resolving to the pinned
+  `mistral:mistral-medium-3.5`/`mistral-vibe` target (no duplicate profile).
 - Unknown-model 404 (BR-REL-Q3): plan-path, quote-path and terminal upstream
   `unsupported-model` failures map to Anthropic 404 `not_found_error` / OpenAI 404
   `invalid_request_error` (`model_not_found`) with the requested-model-only message

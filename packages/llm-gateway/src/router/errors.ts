@@ -70,8 +70,10 @@ export class GatewayError extends Error {
      */
     readonly code?: string,
     /**
-     * Client-safe field path (gateway-built, never caller text). Rendered
-     * only for `bad-request` on OpenAI-shaped wires.
+     * Client-safe field path: gateway-built literals, plus unknown caller
+     * keys echoed charset-gated (a restricted echo to the caller itself,
+     * never a reflection vector). Rendered only for `bad-request` on
+     * OpenAI-shaped wires.
      */
     readonly param?: string,
     /** Trusted measured size for `request-too-large`; never caller text. */
@@ -112,7 +114,12 @@ const FIELD_ERROR_CODES: ReadonlySet<string> = new Set(
   ['bad_request', 'unsupported_parameter', 'invalid_request'],
 );
 
-/** Field paths are gateway-built from literal segments — never caller text. */
+/**
+ * Field paths are gateway-built literals, except unknown caller keys (e.g.
+ * an unsupported top-level field) which echo back charset-gated: anything
+ * outside this pattern is dropped, so the echo reaches only the caller
+ * itself and carries no markup or quoting (R4-MIN-9).
+ */
 const FIELD_PATH_PATTERN = /^[A-Za-z0-9_.[\]-]+$/;
 
 export interface FieldError {

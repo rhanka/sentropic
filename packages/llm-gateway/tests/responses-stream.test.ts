@@ -156,7 +156,23 @@ describe('responses SSE lifecycle (spec §16.5)', () => {
     ]);
     expect(frames.map((frame) => frame.event)).toContain('response.reasoning_summary_text.delta');
     expect(JSON.stringify(frames)).not.toContain('secret');
+    const events = frames.map((frame) => frame.event);
+    expect(events.indexOf('response.reasoning_summary_text.done')).toBeGreaterThan(
+      events.indexOf('response.reasoning_summary_text.delta'));
+    expect(events.indexOf('response.reasoning_summary_part.done')).toBeGreaterThan(
+      events.indexOf('response.reasoning_summary_text.done'));
+    const textDone = frames.find((frame) => frame.event === 'response.reasoning_summary_text.done')!.data;
+    expect(textDone).toMatchObject({ text: 'hmm' });
     const itemDone = frames.find((frame) => frame.event === 'response.output_item.done')!.data;
     expect(itemDone).toMatchObject({ item: { type: 'reasoning' } });
+  });
+
+  it('announces response.created with the full initial snapshot (R4-MIN-5)', async () => {
+    const frames = await collect([text('hi'), done('stop')]);
+    const created = frames.find((frame) => frame.event === 'response.created')!.data;
+    expect(created).toMatchObject({
+      response: { id: 'resp_1', object: 'response', model: 'gpt-6.1-sol',
+        status: 'in_progress', created_at: 1_700_000_000, output: [] },
+    });
   });
 });
