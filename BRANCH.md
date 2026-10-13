@@ -316,6 +316,7 @@
   - [x] **Lot N24pre9 — body byte pool (`625aa815`, row 43a)**: no-op — `request-body-pool.ts` byte-identical + `request-body-capacity` kind/snapshot already held (R BRANCH-only 43p1–p3 skipped: R-side bookkeeping).
   - [x] **Lot N24pre10 — body detachment ownership (`d948f37e`, row 43b)**: no-op — `CheckedGatewayBody` extraction already held (class head identical; mine extended with retain helpers).
   - [x] **Lot N24pre11 — retry/SDK body retention (`6bb35fd3`, row 43c1)**: `retainRouteBody`/detach/release all held; only the post-dispatch `nativeRequest` clearing was missing — ported 47/47 GREEN.
+  - [x] **Lot N24pre12 — stream lease transfer (`ef9d4109`, row 43c2)**: `retainGatewayStreamBody` + index export byte-identical already; typed `nativeRequest` clearing in json + stream ported 47/47 + 244/244 GREEN.
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).
