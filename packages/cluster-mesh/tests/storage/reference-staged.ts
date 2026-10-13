@@ -174,7 +174,7 @@ export class TestStagedReferenceStore extends TestReferenceStore {
   }
 
   bindStaged(grant: ScopeGrant<unknown>): TestStagedStore {
-    const inner = super.bind(grant);
+    const inner = super.bind(super.issueGrant(grant));
     return new TestStagedStore(inner, this.stagedScope(inner.scope), this);
   }
 }
