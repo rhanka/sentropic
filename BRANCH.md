@@ -15,7 +15,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 - All new text in English.
 - No D2 content consent or mirror, no UI.
 - Cluster-mesh version coordination tuple: #662 is 0.14.0, #666 is 0.15.0, #664 moves to next free at rebase; this branch proposes 0.16.0.
-- Migration recalage rule: `0011_session_workspace_bindings` has `when: 1791855645000` strictly after 0009 cowork (`1791632933743`) and 0010 live-git (`1791845400000`) and not in the future. If rebased, re-verify contiguous `idx` and `when > last.when`.
+- Migration recalage rule: `0011_session_workspace_bindings` has `when: 1791855645000` strictly after 0009 cowork (`1791632933743`) and 0010 live-git (`1791845400000`) and not in the future. If rebased, re-verify contiguous `idx` and `when > last.when`. `0011` never landed on `origin/main` (verified 2026-10-13: main journal ends at `0008_llm_admission`); in-place edits stay local-only until merge. Local/preview bases that applied the pre-r5 `0011` must re-apply it to gain the `version` column and the `version >= 1` CHECK.
+- History note (r4 b-m4): `0e27e9600` (184 lines) is immutable history; the guard is process (every r5 commit < 150 lines, scope-checked), never a rewrite.
 - History semantics: "Keep project and history after detach/end" guarantees that the Sentropic workspace data (files, commits, history) is preserved across session detachment and termination.
 - Session registry dependency: session ID validity against the session registry is gated on PR #664 (L6a contract).
 
@@ -162,7 +163,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN API (b): scoped get with owner/admin rights
   - [x] Shared workspace provisioning module with notifications and role levels (BR01-EX5)
   - [x] Route and adoption service use the shared provisioning
-  - [ ] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
+  - [x] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
