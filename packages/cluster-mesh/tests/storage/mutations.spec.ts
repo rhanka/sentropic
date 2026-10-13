@@ -7,7 +7,7 @@ import { StorageCasConflictError, StorageDeniedError, StorageIdempotencyConflict
 import { grantFor, runAuthorityCorpus } from './authority-corpus.js';
 import { runAtomicCorpus } from './atomic-corpus.js';
 import { runChainCorpus } from './chain-corpus.js';
-import { runReadCorpus } from './read-corpus.js';
+import { runReadCorpus, runReadCursorBudgetCorpus } from './read-corpus.js';
 import type { ScopeGrant } from '../../src/storage/authority.js';
 import { TestBoundStore, TestReferenceStore, type ChainPageCursor, type ChainRecordInput } from './reference-store.js';
 
@@ -197,6 +197,42 @@ class RecordCountingStore extends TestReferenceStore {
   }
 }
 
+class FrozenResumeCursorStore extends TestReferenceStore {
+  override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
+    const bound = super.bind(grant);
+    const inner = bound.readPage.bind(bound);
+    bound.readPage = async (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) => {
+      // MAJ-1 mutant: freeze the resume cursor one position past the
+      // delivered prefix, skipping the first undelivered record.
+      const page = await inner(chainId, limit, cursor, maxEncodedBytes);
+      if (
+        page.outcome === 'incomplete' &&
+        page.records.length > 0 &&
+        page.nextCursor !== null &&
+        typeof page.nextCursor === 'object'
+      ) {
+        const stale = page.nextCursor as ChainPageCursor;
+        return { ...page, nextCursor: { ...stale, position: stale.position + 1 } };
+      }
+      return page;
+    };
+    return bound;
+  }
+}
+
+class CandidateCursorBudgetStore extends TestReferenceStore {
+  override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
+    const bound = super.bind(grant);
+    const inner = bound.readPage.bind(bound);
+    bound.readPage = async (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) => {
+      // MIN-1 mutant: measure admission as a 'page' (6 bytes smaller than
+      // 'incomplete'), restoring the pre-R3 candidate-cursor accounting.
+      return inner(chainId, limit, cursor, maxEncodedBytes + 6);
+    };
+    return bound;
+  }
+}
+
 class EmptyValuesStore extends TestReferenceStore {
   override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
     const bound = super.bind(grant);
@@ -279,6 +315,8 @@ export const MUTATION_RECORDS: readonly MutationRecord[] = [
   { id: 'M14-ignore-aggregate-version', brokenSemantic: 'atomic commits ignore aggregate-version guards', corpus: 'atomic', verdict: 'killed' },
   { id: 'M15-drop-unsupported-effects', brokenSemantic: 'atomic commits silently drop unsupported effects', corpus: 'atomic', verdict: 'killed' },
   { id: 'M16-accept-stale-update', brokenSemantic: 'atomic commits accept stale aggregate versions', corpus: 'atomic', verdict: 'killed' },
+  { id: 'M17-frozen-resume-cursor', brokenSemantic: 'over-budget pages freeze the resume cursor past the first undelivered record', corpus: 'read', verdict: 'killed' },
+  { id: 'M18-candidate-cursor-budget', brokenSemantic: 'read pages measure admission with the candidate page cursor', corpus: 'read', verdict: 'killed' },
 ];
 
 describe('K2a discriminating mutations', () => {
@@ -394,8 +432,20 @@ describe('K2a discriminating mutations', () => {
     await expect(runAtomicCorpus(bound)).rejects.toThrow(/cas-conflict|stale/);
   });
 
+  it('M17-frozen-resume-cursor is killed by the read resume corpus', async () => {
+    const { bound } = bindFresh(new FrozenResumeCursorStore('comments'));
+    await expect(runReadCursorBudgetCorpus(bound)).rejects.toThrow(/exact full record set/);
+  });
+
+  it('M18-candidate-cursor-budget is killed by the read budget corpus', async () => {
+    const { bound } = bindFresh(new CandidateCursorBudgetStore('comments'));
+    await expect(runReadCursorBudgetCorpus(bound)).rejects.toThrow(/one byte under|refuses the page/);
+  });
+
   it('records every discriminating mutation as killed', () => {
     expect(MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
+      'killed',
       'killed',
       'killed',
       'killed',
