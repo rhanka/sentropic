@@ -282,6 +282,7 @@
   - [x] **Lot N11b — native billing classifier + bounded 400 policy (`d64bf9492`)**: `src/native-errors.ts` (billing patterns, identifier neutralization, 64 KiB body ceiling, 4096-byte public bound) + index export.
   - [x] **Lot N11c — billing families + native error bounds test (`5c6d706da`)**: `tests/native-errors.test.ts` (15-family phrases, C0/C1 indicators, late-billing detection, 4096-byte bound, 64 KiB ceiling) 25/25 GREEN.
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
+  - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
