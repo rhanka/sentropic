@@ -7,12 +7,12 @@ import {
 } from '@sentropic/cluster-mesh';
 import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
-import { tenantMemberships, users, workspaceMemberships, workspaces } from '../../db/schema';
-import { getDefaultGateConfig } from '../gate-service';
+import { tenantMemberships, users, workspaces } from '../../db/schema';
+import { hasRole } from '../../middleware/rbac';
 import { todoOrchestrationService } from '../todo-orchestration';
 import { viewTemplateService } from '../view-template-service';
 import { hasWorkspaceRole, type WorkspaceType } from '../workspace-access';
-import { createId } from '../../utils/id';
+import { notifyWorkspaceCreated, provisionWorkspace } from '../workspace-provisioning';
 
 export type AdoptedSessionWorkspaceStatus = 'attached' | 'detached' | 'ended';
 
@@ -45,7 +45,6 @@ export class SessionWorkspaceError extends Error {
   }
 }
 type BindingRow = typeof sessionWorkspaceBindings.$inferSelect;
-type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type BindingDbClient = Pick<typeof db, 'select' | 'insert' | 'update'>;
 const requireId = (value: string | undefined, field: string): string => {
   if (!value?.trim()) throw new SessionWorkspaceError('invalid_request', `${field} is required`);
@@ -140,32 +139,10 @@ export class SessionWorkspaceService {
     const [row] = await db.select({ role: users.role }).from(users)
       .where(eq(users.id, principalId)).limit(1);
     const role = row?.role ?? 'guest';
-    const levels: Record<string, number> = { admin_app: 4, admin_org: 3, editor: 2, guest: 1 };
-    if ((levels[role] ?? 0) < (levels.editor ?? 2)) {
+    if (!hasRole(role, 'editor')) {
       throw new SessionWorkspaceError('workspace_rights_refused', 'global editor role required to create a workspace');
     }
     return role;
-  }
-
-  /**
-   * Canonical workspace rows, mirroring the product workspaces route (creator
-   * becomes admin member). Runs inside the adopt transaction so a failed
-   * attach rolls the workspace back instead of orphaning it.
-   */
-  private async createWorkspaceInTx(
-    tx: DbTx, tenantId: string, principalId: string, name: string, type: WorkspaceType,
-  ): Promise<string> {
-    const id = createId();
-    const now = new Date();
-    const gateConfig = getDefaultGateConfig(type);
-    await tx.insert(workspaces).values({
-      id, ownerUserId: principalId, name, type,
-      gateConfig: gateConfig ?? undefined, tenantId, createdAt: now, updatedAt: now,
-    });
-    await tx.insert(workspaceMemberships).values({
-      workspaceId: id, userId: principalId, role: 'admin', createdAt: now,
-    });
-    return id;
   }
 
   /**
@@ -186,6 +163,11 @@ export class SessionWorkspaceService {
       await viewTemplateService.seedForWorkspace(workspaceId, type);
     } catch (seedErr) {
       console.error('Failed to seed view templates for workspace type', type, seedErr);
+    }
+    try {
+      await notifyWorkspaceCreated(workspaceId, principalId);
+    } catch (notifyErr) {
+      console.error('Failed to notify workspace creation', workspaceId, notifyErr);
     }
   }
 
@@ -228,7 +210,7 @@ export class SessionWorkspaceService {
         }
         const type = rawType as WorkspaceType;
         const globalRole = await this.requireGlobalEditor(principalId);
-        workspaceId = await this.createWorkspaceInTx(tx, tenantId, principalId, name, type);
+        workspaceId = await provisionWorkspace(tx, { ownerUserId: principalId, name, type, tenantId });
         seed = { workspaceId, type, globalRole };
       }
       let binding;
