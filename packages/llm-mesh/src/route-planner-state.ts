@@ -35,7 +35,7 @@ export class RoutePlanError extends Error {
   constructor(
     message: string,
     readonly code: 'no-route' | 'unknown-model' | 'capabilities-unmet' | 'invalid-plan' | 'expired-plan' | 'stale-candidate' | 'conflict'
-      | 'quote-mismatch',
+      | 'quote-mismatch' | 'native-unavailable',
     readonly diagnostic?: RouteAvailabilityDiagnostic,
     /**
      * Every transport-matching availability entry (Lot 7): by caller
