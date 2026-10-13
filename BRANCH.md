@@ -135,19 +135,19 @@
   - [x] Fix 8 discriminating mutations preserving valid cases.
   - [x] Fix 9 branch file-budget exception recorded above.
 - [ ] Lot R3 — Round-3 fixes for engram Sol-2 REJECT and Opus NO-GO
-  - [ ] R1 persisted record and aggregate values asserted in full.
-  - [ ] R2 bound grant and scope deep-copied and frozen at bind.
-  - [ ] R3 budget measured on full encoded page including envelope.
-  - [ ] R4 disposal resume from a retained non-null boundary.
-  - [ ] MAJEUR-1 opaque cursors plus typed code and outcome assertions.
-  - [ ] MAJEUR-2 disposed chain reads return inaccessible.
-  - [ ] MAJEUR-3 aggregate-version and predicate guards plus unsupported-effect rejection.
+  - [x] R1 persisted record and aggregate values asserted in full.
+  - [x] R2 bound grant and scope deep-copied and frozen at bind.
+  - [x] R3 budget measured on full encoded page including envelope.
+  - [x] R4 disposal resume from a retained non-null boundary.
+  - [x] MAJEUR-1 opaque cursors plus typed code and outcome assertions.
+  - [x] MAJEUR-2 disposed chain reads return inaccessible.
+  - [x] MAJEUR-3 aggregate-version and predicate guards plus unsupported-effect rejection.
   - [ ] MAJEUR-4 mutations M6-M15 recorded, M5 propagation claim corrected.
   - [ ] MINEUR-1 page validator allows absent continuation and full encoding.
   - [ ] MINEUR-2 unparseable nowIso refused for grants and snapshots.
   - [ ] MINEUR-3 triangle rejects blank and NUL identities per L6a.
-  - [ ] MINEUR-4 scope-level idempotency with divergent-content conflict.
-  - [ ] MINEUR-5 bound-scope snapshot comparison in the reference.
+  - [x] MINEUR-4 scope-level idempotency with divergent-content conflict.
+  - [x] MINEUR-5 bound-scope snapshot comparison in the reference.
   - [ ] MINEUR-6 discipline deviations recorded under BR-K1R3-EX1.
   - [ ] MINEUR-7 BRANCH gates, v4.1 headers and allowed paths fixed.
 - [ ] Lot N — Final validation
