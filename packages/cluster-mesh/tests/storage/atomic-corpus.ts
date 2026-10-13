@@ -309,6 +309,27 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore): Promise<void> =
         guards: [],
         records: [],
         appends: [],
+        updates: [{ key: 'agg-1', version: 1, value: { format: 'utf8', data: 'v2' } }],
+        relationships: [],
+        barriers: [],
+        purgeIntents: [],
+        indexWrites: [],
+      }),
+    'cas-conflict',
+    'K2aR3-RED atomic: a stale aggregate update rolls back the whole unit',
+  );
+  assert.deepEqual(
+    await bound.readAggregate('agg-1'),
+    { version: 1, value: { format: 'utf8', data: 'v1' } },
+    'K2aR3-RED atomic: a failed stale update leaves no effects behind',
+  );
+
+  await expectCode(
+    async () =>
+      bound.commitAtomic({
+        guards: [],
+        records: [],
+        appends: [],
         updates: [],
         relationships: [{ kind: 'add', relation: 'rel-1', from: 'a', to: 'b' }],
         barriers: [],
