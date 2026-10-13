@@ -304,7 +304,17 @@ export class SessionWorkspaceService {
     if (!existing || existing.tenantId !== tenantId) return null;
     const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
     const binding = await this.mesh.get({ sessionId, tenantId, principalId, isAdmin });
-    return binding ? toRecord(binding) : null;
+    if (!binding) return null;
+    // The row may have moved between the two reads (detach + re-attach).
+    // Rights decided on the first read must never disclose the second row:
+    // when the row moved, re-resolve rights on the row actually returned.
+    if (binding.version !== existing.version || binding.status !== existing.status
+      || binding.workspaceId !== existing.workspaceId || binding.principalId !== existing.principalId) {
+      if (binding.tenantId !== tenantId) return null;
+      if (binding.principalId !== principalId
+        && !(await this.checkIsAdmin(tenantId, principalId, binding.workspaceId))) return null;
+    }
+    return toRecord(binding);
   }
 }
 
