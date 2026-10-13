@@ -388,4 +388,29 @@ describe('session workspace binding', () => {
     });
     expect(staleCasResult).toBe(false);
   });
+
+  it('should compare the full CAS tuple through the production predicate', async () => {
+    const module = await import('../src/sessions/workspace-binding.js') as unknown as {
+      isExpectedBindingState?: (
+        existing: SessionWorkspaceBinding | null,
+        current: SessionWorkspaceBinding | null,
+      ) => boolean;
+    };
+    if (typeof module.isExpectedBindingState !== 'function') {
+      throw new Error('isExpectedBindingState is not exported (RED)');
+    }
+    const { isExpectedBindingState } = module;
+    const store = memoryStore();
+    const service = createSessionWorkspaceBindingService(store);
+    const initial = await service.attach(attachInput());
+    await service.detach({
+      sessionId: 'session-1', tenantId: 'tenant-a', principalId: 'user-1', isAdmin: false,
+    });
+    const reattached = await service.attach(attachInput());
+    expect(isExpectedBindingState(initial, initial)).toBe(true);
+    // Pure ABA: same visible attributes, version moved on.
+    expect(isExpectedBindingState(reattached, initial)).toBe(false);
+    expect(isExpectedBindingState({ ...initial, status: 'detached' }, initial)).toBe(false);
+    expect(isExpectedBindingState(null, initial)).toBe(false);
+  });
 });
