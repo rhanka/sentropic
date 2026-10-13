@@ -32,6 +32,12 @@ export interface SessionWorkspaceDetachInput {
    * required so the ownership check cannot be bypassed by omission.
    */
   readonly isAdmin: boolean;
+  /**
+   * Version read by the caller before invoking detach/end. While set, the
+   * operation only proceeds while the stored row still carries that version,
+   * so rights evaluated on the read state can never apply to a newer binding.
+   */
+  readonly expectedVersion?: number;
 }
 export type SessionWorkspaceEndInput = SessionWorkspaceDetachInput;
 
@@ -39,7 +45,30 @@ export interface SessionWorkspaceGetInput {
   readonly sessionId: string;
   readonly tenantId: string;
   readonly principalId: string;
+  /**
+   * Whether the principal administers the tenant or workspace. Only the
+   * owner or an admin may read the binding (it carries the principalId);
+   * other members observe null, exactly like a tenant mismatch.
+   */
+  readonly isAdmin: boolean;
 }
+
+/**
+ * Production CAS tuple comparison shared by every store: the stored row
+ * still matches the expected state only when the session, the monotonic
+ * version and the full expected state (status, workspace, principal) agree.
+ */
+export const isExpectedBindingState = (
+  existing: SessionWorkspaceBinding | null,
+  current: SessionWorkspaceBinding | null,
+): boolean => {
+  if (!existing || !current) return false;
+  return existing.sessionId === current.sessionId
+    && existing.version === current.version
+    && existing.status === current.status
+    && existing.workspaceId === current.workspaceId
+    && existing.principalId === current.principalId;
+};
 
 /** Narrow storage port; movable onto the generic cluster-mesh storage port (L3a) later. */
 export interface SessionWorkspaceBindingStore {
@@ -100,10 +129,14 @@ export const createSessionWorkspaceBindingService = (
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const existing = await store.findBySession(input.sessionId);
       if (existing) {
-        // Uniform refusal: a caller probing another tenant's session learns
-        // nothing about the binding (same error as a missing binding).
+        // Uniform refusal without tenant disclosure: from any other tenant
+        // this session is simply already bound elsewhere (same error as a
+        // same-tenant conflict, with no hint about where it is bound).
         if (existing.tenantId !== input.sessionTenantId) {
-          throw new SessionWorkspaceBindingError('binding_not_found', 'no binding for session');
+          throw new SessionWorkspaceBindingError(
+            'session_already_attached',
+            'session is already attached; detach or end it first',
+          );
         }
         if (existing.status === 'ended') {
           throw new SessionWorkspaceBindingError('session_ended', 'session is ended and keeps its workspace history');
@@ -160,6 +193,9 @@ export const createSessionWorkspaceBindingService = (
   const detach = async (input: SessionWorkspaceDetachInput): Promise<SessionWorkspaceBinding> => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const existing = await authorize(input);
+      if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
+        throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the detach');
+      }
       if (existing.status === 'ended') {
         throw new SessionWorkspaceBindingError('session_ended', 'session is ended and keeps its workspace history');
       }
@@ -178,6 +214,9 @@ export const createSessionWorkspaceBindingService = (
   const end = async (input: SessionWorkspaceEndInput): Promise<SessionWorkspaceBinding> => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const existing = await authorize(input);
+      if (input.expectedVersion !== undefined && existing.version !== input.expectedVersion) {
+        throw new SessionWorkspaceBindingError('session_not_attached', 'concurrent modification; retry the end');
+      }
       if (existing.status === 'ended') return existing;
       const timestamp = now().toISOString();
       const ended: SessionWorkspaceBinding = {
@@ -194,8 +233,12 @@ export const createSessionWorkspaceBindingService = (
     requireId(input?.sessionId, 'sessionId');
     requireId(input?.tenantId, 'tenantId');
     requireId(input?.principalId, 'principalId');
+    if (typeof input?.isAdmin !== 'boolean') {
+      throw new SessionWorkspaceBindingError('invalid_request', 'isAdmin is required');
+    }
     const existing = await store.findBySession(input.sessionId);
     if (!existing || existing.tenantId !== input.tenantId) return null;
+    if (existing.principalId !== input.principalId && !input.isAdmin) return null;
     return existing;
   };
 
