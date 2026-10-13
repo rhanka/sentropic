@@ -20,6 +20,7 @@ export * from './route-json-flow.js';
 export * from './route-stream-flow.js';
 export * from './native-count-tokens.js';
 export * from './native-count-rate.js';
+export * from './native-errors.js';
 export * from './request-body-pool.js';
 export { retainGatewayStreamBody } from './request-body-retention.js';
 export * from './request-body-limit.js';
