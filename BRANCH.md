@@ -86,10 +86,10 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
   - [x] Add `test-ci-api-tag-guard` target to `Makefile`.
   - [x] Run and pass test suite locally via `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
 
-- [ ] **Lot 3 — CI workflow wiring**
-  - [ ] Update `.github/workflows/ci.yml` `changes` filter `global` to include new scripts.
-  - [ ] Add `make test-ci-api-tag-guard ENV=test-ci-api` step in `build-api-image` job.
-  - [ ] Verify `make check-ci-version-filters API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+- [x] **Lot 3 — CI workflow wiring**
+  - [x] Update `.github/workflows/ci.yml` `changes` filter `global` to include new scripts.
+  - [x] Add `make test-ci-api-tag-guard ENV=test-ci-api` step in `build-api-image` job.
+  - [x] Verify `make check-ci-version-filters API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update `docs/ci-images.md` to document immutable release tag collision guard and moving tags policy.
