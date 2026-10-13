@@ -251,9 +251,9 @@
   - [x] `packages/llm-gateway/src/request-body-retention.ts` + owner slice in `tests/request-body-limit.test.ts` (router/flow lifetimes stay N06/N07).
 - [x] **Lot N05 — Reader and path resolver (fold)**
   - [x] `packages/llm-gateway/src/request-body-limit.ts` + reader slices in `tests/request-body-limit.test.ts` (router/settlement composition stays N06).
-- [ ] **Lot N06 — Pre-parser composition (fold)**
+- [x] **Lot N06 — Pre-parser composition (fold)**
   - [x] Router uses the checked owner, duplicate Responses reader removed (`src/router/index.ts` + `tests/router.test.ts`).
-  - [ ] Settlement uses the same policy/object (`api/.../gw.ts`, `M route-settlement.ts`) + product order/both aliases.
+  - [x] Settlement uses the same policy/object (`api/.../gw.ts`, `M route-settlement.ts`) + product order/both aliases (bridge-once by disjoint registration, verified by construction).
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
   - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).
