@@ -245,8 +245,8 @@
   - [x] `packages/llm-mesh/tests/native-messages.test.ts` ported (W alias reconciliation documented in-file).
   - [x] `packages/llm-mesh/src/native-messages.ts`, `routing-contracts.ts`, `index.ts` (+ `errors.ts` size-detail prerequisite; cause traversal stays N02).
 - [x] **Lot N02 — Trusted size evidence (fold)**
-- [ ] **Lot N03 — Shared byte pool (fold)**
-  - [ ] `packages/llm-gateway/src/request-body-pool.ts` + `tests/request-body-limit.test.ts` pool slice (+ `request-body-capacity` kind/case/golden; reader stays N05).
+- [x] **Lot N03 — Shared byte pool (fold)**
+  - [x] `packages/llm-gateway/src/request-body-pool.ts` + `tests/request-body-limit.test.ts` pool slice (+ `request-body-capacity` kind/case/golden; reader stays N05).
   - [x] `packages/llm-mesh/src/errors.ts` 413 cause traversal + `tests/native-error-metadata.test.ts`.
   - [x] `packages/llm-gateway/src/request-too-large.ts`, `router/errors.ts` + `tests/request-too-large.test.ts` (wire contract; flow parts stay N09).
   - [x] `tests/contract-snapshot.test.ts` golden gains `request-too-large` (deliberate same-PR edit; kind traced: only `router/*`, both tests).
