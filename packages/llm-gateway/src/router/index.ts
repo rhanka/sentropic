@@ -40,6 +40,8 @@ import {
   type ProviderShapedError,
 } from './errors.js';
 import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
+import { openAiError } from './errors.js';
+import { resolveResponsesLimits, type ResponsesLimits } from '../responses-egress.js';
 import { authenticateCaller, validateAuthContext } from '../internal/caller-auth.js';
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 import type { GatewayBudgetOptions } from '../ports/budget.js';
@@ -94,6 +96,12 @@ export interface CreateGatewayRouterOptions {
   readonly nativeCountTokens?: NativeCountTokensPort;
   /** Per-principal count engineering limits; omitted routers share the process-wide limiter. */
   readonly nativeCountRate?: NativeCountTokensRateLimiter;
+  /**
+   * Responses engineering bounds (spec §16.7). Validated at construction;
+   * each field takes the stricter of the spec default and the host value.
+   * Only the Responses wire enforces them; other wires stay frozen.
+   */
+  readonly responsesLimits?: Partial<ResponsesLimits>;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -164,6 +172,47 @@ const readHeaders = (raw: Headers): Record<string, string> => {
   return headers;
 };
 
+/** Over-cap Responses body: short-circuits to the spec §16.7 413, never dispatch. */
+class ResponsesBodyTooLarge extends Error {
+  constructor() {
+    super('responses request body exceeds maxBodyBytes');
+    this.name = 'ResponsesBodyTooLarge';
+  }
+}
+
+/**
+ * Parse a Responses JSON body under the byte cap (spec §16.7). A declared
+ * Content-Length above the cap refuses without reading; a missing or false
+ * length still meets the incremental bound while streaming. Throws
+ * ResponsesBodyTooLarge on overflow, SyntaxError on malformed JSON.
+ */
+const readBoundedJson = async (req: Request, maxBytes: number): Promise<unknown> => {
+  const declared = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) throw new ResponsesBodyTooLarge();
+  if (!req.body) return req.json();
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      bytes += next.value.byteLength;
+      if (bytes > maxBytes) throw new ResponsesBodyTooLarge();
+      chunks.push(next.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const merged = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(merged));
+};
+
 /** Send a provider-shaped error with any mapped headers (spec §3b). */
 const sendError = (
   c: import('hono').Context,
@@ -198,6 +247,8 @@ export const createGatewayRouter = (
   }
   assertBudgetRouteDeps(options.routePlanner, Boolean(options.routeMetering), options.budget);
   const requestId = options.requestId ?? defaultRequestId;
+  // Spec §16.7: invalid host bounds fail fast here, before any route serves.
+  const responsesLimits = resolveResponsesLimits(options.responsesLimits);
   const app = new Hono();
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
     try {
@@ -248,11 +299,24 @@ export const createGatewayRouter = (
     }
 
     // Parse the provider-native body (bad JSON -> provider-shaped 400, §3b).
+    // The Responses wire reads under its byte cap (over-cap -> 413 §16.7);
+    // every other wire keeps its frozen unbounded read.
     let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return sendError(c, mapGatewayError(wire, 'bad-request'), id);
+    if (wire === 'openai-responses') {
+      try {
+        body = await readBoundedJson(c.req.raw, responsesLimits.maxBodyBytes);
+      } catch (error) {
+        if (error instanceof ResponsesBodyTooLarge) {
+          return sendError(c, openAiError(413, 'invalid_request_error', 'request too large', 'request_too_large'), id);
+        }
+        return sendError(c, mapGatewayError(wire, 'bad-request'), id);
+      }
+    } else {
+      try {
+        body = await c.req.json();
+      } catch {
+        return sendError(c, mapGatewayError(wire, 'bad-request'), id);
+      }
     }
 
     const model = readModel(body);

@@ -70,3 +70,45 @@ describe('Responses routes (D16-A admission parity)', () => {
     expect(body.error.message).toBe('authentication failed');
   });
 });
+
+describe('Responses body cap (D16-F 413)', () => {
+  const cappedApp = () => createGatewayRouter({
+    config: stubGatewayConfig,
+    routePlanner: {} as unknown as RoutePlanner,
+    routeMetering: { settleRoute: vi.fn() },
+    responsesLimits: { maxBodyBytes: 64 },
+  });
+
+  it.each(['/responses', '/v1/responses'])('refuses an over-cap JSON body with 413: %s', async (path) => {
+    const res = await cappedApp().request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'x'.repeat(128) }),
+    });
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as { error: { type: string; code?: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('request_too_large');
+    expect(res.headers.get('X-Sentropic-Request-Id')).toBeTruthy();
+  });
+
+  it.each(['/responses', '/v1/responses'])('caps a headerless stream body the same way: %s', async (path) => {
+    const chunk = JSON.stringify({ model: 'gpt-6.1-sol', input: 'y'.repeat(128) });
+    const res = await cappedApp().request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: new ReadableStream({ start: (c) => { c.enqueue(new TextEncoder().encode(chunk)); c.close(); } }),
+      duplex: 'half',
+    } as RequestInit);
+    expect(res.status).toBe(413);
+  });
+
+  it.each(['/responses', '/v1/responses'])('passes an under-cap body to admission: %s', async (path) => {
+    const res = await cappedApp().request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'hi' }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
