@@ -79,6 +79,25 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     }]);
   });
 
+  it('forwards the validated strict flag on function tools', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: 'hi' } }],
+    }), { status: 200 }));
+    const client = new MistralRuntimeClient({ fetch: fetchFn });
+
+    await client.generate({
+      ...request,
+      tools: [{ type: 'function', name: 'get_time', inputSchema: { type: 'object' }, strict: true }],
+    }, auth);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    const body = JSON.parse(String(init.body));
+    expect(body.tools).toEqual([{
+      type: 'function',
+      function: { name: 'get_time', parameters: { type: 'object' }, strict: true },
+    }]);
+  });
+
   it('sends no gateway session header (Mistral has no muse x-meta session slot)', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       choices: [{ message: { content: 'hi' } }],
