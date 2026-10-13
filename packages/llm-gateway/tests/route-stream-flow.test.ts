@@ -1,6 +1,7 @@
 import { RoutePlanError, type PreparedRouteAttempt, type RoutePlanner, type StreamEvent } from '@sentropic/llm-mesh';
 import { describe, expect, it, vi } from 'vitest';
-import { createGatewayRouter, toProviderShapedError } from '../src/index.js';
+import { CheckedGatewayBody, createGatewayRouter, GatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
+import { runStreamFlow } from '../src/flow.js';
 import { runRouteStreamFlow } from '../src/route-stream-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
@@ -704,4 +705,65 @@ describe('route stream lifecycle through the router', () => {
       expect(settlements).toHaveLength(1);
       expect(settlements[0]?.outcome).toBe('failed');
     });
+
+  it('releases the checked lease when the routed stream closes without depending on stream start', async () => {
+    const hooks: string[] = [];
+    const source = streamAttempt(answerStream(), hooks);
+    const dispatch = { generate: vi.fn(), stream: vi.fn(async (input: import('../src/ports/dispatch.js').RouteAttemptDispatchRequest) => input.attempt.stream(input.request)) };
+    const pool = new GatewayBodyBytePool(64);
+    const lease = pool.acquire(); lease.extend(5);
+    const owner = new CheckedGatewayBody({ model: 'gpt-5.6-terra' }, 5, lease);
+    const result = await runRouteStreamFlow(
+      { config, routePlanner: plannerFor([source]), dispatch, metering: { settleRoute() {} } },
+      { ...request, bodyLease: owner },
+    );
+    await collect(result.stream);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+});
+
+describe('legacy passthrough retention (N07)', () => {
+  const legacyRequest = (owner: CheckedGatewayBody) => ({
+    wire: 'openai-chat-completions' as const, headers: {}, body: { model: 'm' }, model: 'm', stream: true,
+    authContext: { method: 'POST', url: 'https://gateway.test/v1/chat/completions', requestId: 'req-legacy' },
+    bodyLease: owner,
+  });
+  const legacyDeps = (frames: AsyncIterable<{ raw: string }>, hooks: string[]) => ({
+    config: { ...stubGatewayConfig,
+      callerAuth: { async verify() { return { ok: true as const,
+        cost: { tenantId: 't', principalId: 'u', source: 'test', correlationId: 'c' } }; } },
+      pool: { async select() { return { acquisition: { async recordOutcome() { hooks.push('outcome'); } } }; } },
+      authResolver: { async resolve() { return { descriptor: { sourceType: 'test' }, material: {} }; } },
+      dispatch: { dispatchStream: () => ({ frames, headers: {} }) },
+    },
+    resolveTarget: () => ({ providerId: 'openai', transportProviderId: 'openai', model: 'm' }),
+    metering: { settle: async () => { hooks.push('settled'); } },
+  });
+
+  it.each([false, true])('closes an unconsumed stream and releases its bytes (early return=%s)', async (early) => {
+    const closed: string[] = [];
+    const hooks: string[] = [];
+    async function* frames(): AsyncGenerator<{ raw: string }> {
+      try { yield { raw: 'data: one' }; yield { raw: 'data: two' }; }
+      finally { closed.push('iterator'); }
+    }
+    const pool = new GatewayBodyBytePool(64);
+    const lease = pool.acquire(); lease.extend(4);
+    const owner = new CheckedGatewayBody({ model: 'm' }, 4, lease);
+    const result = await runStreamFlow(
+      legacyDeps(frames(), hooks) as unknown as Parameters<typeof runStreamFlow>[0],
+      legacyRequest(owner),
+    );
+    if (early) {
+      const first = await result.stream.next();
+      expect(first.done).toBe(false);
+      await result.stream.return?.(undefined);
+    } else {
+      for await (const _frame of result.stream) { /* Drain without starting work. */ }
+    }
+    expect(closed).toEqual(['iterator']);
+    expect(owner.body).toBeUndefined();
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+    expect(hooks).toContain('settled');
+  });
 });
