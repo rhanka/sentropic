@@ -66,7 +66,7 @@ describe('session adoption workspace binding', () => {
       principalId: user.id, workspaceId,
     });
     expect(binding).toMatchObject({ sessionId: 'sess-adopt-1', workspaceId, status: 'attached' });
-    await expect(service.get('sess-adopt-1', TENANT_A)).resolves.toMatchObject({ workspaceId });
+    await expect(service.get('sess-adopt-1', TENANT_A, user.id)).resolves.toMatchObject({ workspaceId });
   });
 
   it('should create and attach a new code workspace', async () => {
@@ -175,8 +175,9 @@ describe('session adoption workspace binding', () => {
     await service.adopt({
       sessionId: 'sess-adopt-8', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
-    await expect(service.detach('sess-adopt-8', TENANT_A)).rejects.toMatchObject({ code: 'invalid_request' });
-    await expect(service.end('sess-adopt-8', TENANT_A)).rejects.toMatchObject({ code: 'invalid_request' });
+    const omitted = undefined as unknown as string;
+    await expect(service.detach('sess-adopt-8', TENANT_A, omitted)).rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(service.end('sess-adopt-8', TENANT_A, omitted)).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
   it('should refuse get when principal is omitted', async () => {
@@ -184,12 +185,8 @@ describe('session adoption workspace binding', () => {
     await service.adopt({
       sessionId: 'sess-adopt-9', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
-    const getMissingPrincipal = (
-      service.get as unknown as (
-        sessionId: string, tenantId: string, principalId?: string,
-      ) => Promise<unknown>
-    ).bind(service);
-    await expect(getMissingPrincipal('sess-adopt-9', TENANT_A)).rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(service.get('sess-adopt-9', TENANT_A, undefined as unknown as string))
+      .rejects.toMatchObject({ code: 'invalid_request' });
   });
 
   it('should check tenant membership before revealing binding existence', async () => {
@@ -200,12 +197,7 @@ describe('session adoption workspace binding', () => {
     const outsider = await createAuthenticatedUser('editor');
     await expect(service.detach('sess-adopt-unknown', TENANT_A, outsider.id))
       .rejects.toMatchObject({ code: 'workspace_rights_refused' });
-    const getAsOutsider = (
-      service.get as unknown as (
-        sessionId: string, tenantId: string, principalId: string,
-      ) => Promise<unknown>
-    ).bind(service);
-    await expect(getAsOutsider('sess-adopt-10', TENANT_A, outsider.id))
+    await expect(service.get('sess-adopt-10', TENANT_A, outsider.id))
       .rejects.toMatchObject({ code: 'workspace_rights_refused' });
   });
 
@@ -354,13 +346,8 @@ describe('session adoption workspace binding', () => {
     await db.insert(tenantMemberships).values({
       tenantId: TENANT_B, userId: user.id, status: 'approved', role: 'member',
     });
-    const getAsMember = (
-      service.get as unknown as (
-        sessionId: string, tenantId: string, principalId: string,
-      ) => Promise<unknown>
-    ).bind(service);
-    await expect(getAsMember('sess-adopt-9', TENANT_A, user.id)).resolves.toMatchObject({ workspaceId });
-    await expect(getAsMember('sess-adopt-9', TENANT_B, user.id)).resolves.toBeNull();
+    await expect(service.get('sess-adopt-9', TENANT_A, user.id)).resolves.toMatchObject({ workspaceId });
+    await expect(service.get('sess-adopt-9', TENANT_B, user.id)).resolves.toBeNull();
   });
 
   it('should recover the binding after restart', async () => {
@@ -369,7 +356,7 @@ describe('session adoption workspace binding', () => {
       sessionId: 'sess-adopt-1', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
     const after = new SessionWorkspaceService();
-    await expect(after.get('sess-adopt-1', TENANT_A)).resolves.toMatchObject({
+    await expect(after.get('sess-adopt-1', TENANT_A, user.id)).resolves.toMatchObject({
       sessionId: 'sess-adopt-1', status: 'attached',
     });
   });
