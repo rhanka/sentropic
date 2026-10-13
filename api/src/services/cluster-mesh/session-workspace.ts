@@ -139,67 +139,45 @@ export class SessionWorkspaceService {
   }
 
   /**
-   * Canonical workspace creation, mirroring the product workspaces route:
-   * creator becomes admin member, then workflows/agents and view templates are
-   * seeded for the type (seed failures are non-fatal, exactly like the route).
+   * Canonical workspace rows, mirroring the product workspaces route (creator
+   * becomes admin member). Runs inside the adopt transaction so a failed
+   * attach rolls the workspace back instead of orphaning it.
    */
-  private async createWorkspace(
-    tenantId: string, principalId: string, globalRole: string,
-    create: { readonly name: string; readonly type?: string },
+  private async createWorkspaceInTx(
+    tx: DbTx, tenantId: string, principalId: string, name: string, type: WorkspaceType,
   ): Promise<string> {
-    const name = create.name.trim();
-    const type = (create.type ?? 'ai-priorities') as WorkspaceType;
     const id = createId();
     const now = new Date();
     const gateConfig = getDefaultGateConfig(type);
-    await db.transaction(async (tx) => {
-      await tx.insert(workspaces).values({
-        id, ownerUserId: principalId, name, type,
-        gateConfig: gateConfig ?? undefined, tenantId, createdAt: now, updatedAt: now,
-      });
-      await tx.insert(workspaceMemberships).values({
-        workspaceId: id, userId: principalId, role: 'admin', createdAt: now,
-      });
+    await tx.insert(workspaces).values({
+      id, ownerUserId: principalId, name, type,
+      gateConfig: gateConfig ?? undefined, tenantId, createdAt: now, updatedAt: now,
     });
+    await tx.insert(workspaceMemberships).values({
+      workspaceId: id, userId: principalId, role: 'admin', createdAt: now,
+    });
+    return id;
+  }
+
+  /**
+   * Post-commit seeds for an adopted workspace: workflows/agents and view
+   * templates for the type. Failures are non-fatal, exactly like the route.
+   */
+  private async seedCreatedWorkspace(
+    principalId: string, globalRole: string, workspaceId: string, type: WorkspaceType,
+  ): Promise<void> {
     try {
       await todoOrchestrationService.seedWorkflowsForType(
-        { userId: principalId, role: globalRole, workspaceId: id }, type,
+        { userId: principalId, role: globalRole, workspaceId }, type,
       );
     } catch (seedErr) {
       console.error('Failed to seed workflows for workspace type', type, seedErr);
     }
     try {
-      await viewTemplateService.seedForWorkspace(id, type);
+      await viewTemplateService.seedForWorkspace(workspaceId, type);
     } catch (seedErr) {
       console.error('Failed to seed view templates for workspace type', type, seedErr);
     }
-    return id;
-  }
-
-  private async resolveWorkspaceId(tenantId: string, principalId: string, wId?: string, create?: { name: string; type?: string }): Promise<string> {
-    if (wId) {
-      const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, wId)).limit(1);
-      if (!ws || ws.tenantId !== tenantId) {
-        throw new SessionWorkspaceError('workspace_not_found', 'workspace does not exist');
-      }
-      const canEdit = await hasWorkspaceRole(principalId, ws.id, 'editor');
-      if (!canEdit) {
-        throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient workspace rights');
-      }
-      return ws.id;
-    }
-    if (!create?.name?.trim()) throw new SessionWorkspaceError('invalid_request', 'either workspaceId or create is required');
-    const name = create.name.trim();
-    if (name.length > 128) throw new SessionWorkspaceError('invalid_request', 'workspace name too long');
-    const rawType = create.type ?? 'ai-priorities';
-    const allowedTypes: WorkspaceType[] = ['code', 'ai-priorities', 'opportunity'];
-    if (!allowedTypes.includes(rawType as WorkspaceType)) {
-      throw new SessionWorkspaceError('invalid_request', `invalid workspace type: ${rawType}`);
-    }
-    const globalRole = await this.requireGlobalEditor(principalId);
-    return await this.createWorkspace(
-      tenantId, principalId, globalRole, { name, type: create.type },
-    );
   }
 
   async adopt(input: AdoptSessionWorkspaceInput): Promise<AdoptedSessionWorkspace> {
@@ -208,31 +186,60 @@ export class SessionWorkspaceService {
     const principalId = requireId(input.principalId, 'principalId');
     await this.checkTenantMember(tenantId, principalId);
 
-    const existing = await drizzleBindingStore.findBySession(sessionId);
-    if (existing) {
-      if (existing.tenantId !== tenantId) {
-        throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
+    // One transaction covers workspace creation and the conditional binding
+    // write: concurrent adopts conflict instead of overwriting each other, an
+    // ended session cannot be resurrected, and a failed attach leaves no
+    // orphan workspace behind.
+    const { binding, seed: pendingSeed } = await db.transaction(async (tx) => {
+      const store = createDrizzleBindingStore(tx);
+      const mesh = createSessionWorkspaceBindingService(store);
+      let seed: {
+        readonly workspaceId: string; readonly type: WorkspaceType; readonly globalRole: string;
+      } | null = null;
+      let workspaceId: string;
+      if (input.workspaceId) {
+        const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, input.workspaceId)).limit(1);
+        if (!ws || ws.tenantId !== tenantId) {
+          throw new SessionWorkspaceError('workspace_not_found', 'workspace does not exist');
+        }
+        if (!(await hasWorkspaceRole(principalId, ws.id, 'editor'))) {
+          throw new SessionWorkspaceError('workspace_rights_refused', 'insufficient workspace rights');
+        }
+        workspaceId = ws.id;
+      } else {
+        if (!input.create?.name?.trim()) {
+          throw new SessionWorkspaceError('invalid_request', 'either workspaceId or create is required');
+        }
+        const name = input.create.name.trim();
+        if (name.length > 128) throw new SessionWorkspaceError('invalid_request', 'workspace name too long');
+        const rawType = input.create.type ?? 'ai-priorities';
+        const allowedTypes: WorkspaceType[] = ['code', 'ai-priorities', 'opportunity'];
+        if (!allowedTypes.includes(rawType as WorkspaceType)) {
+          throw new SessionWorkspaceError('invalid_request', `invalid workspace type: ${rawType}`);
+        }
+        const type = rawType as WorkspaceType;
+        const globalRole = await this.requireGlobalEditor(principalId);
+        workspaceId = await this.createWorkspaceInTx(tx, tenantId, principalId, name, type);
+        seed = { workspaceId, type, globalRole };
       }
-      if (existing.status === 'ended') {
-        throw new SessionWorkspaceError('session_ended', 'session is ended and keeps its workspace history');
+      let binding;
+      try {
+        binding = await mesh.attach({
+          sessionId, workspaceId, sessionTenantId: tenantId,
+          workspaceTenantId: tenantId, principalId,
+        });
+      } catch (err) {
+        if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
+        throw err;
       }
-      if (existing.status === 'attached') {
-        if (input.workspaceId && existing.workspaceId === input.workspaceId) return toRecord(existing);
-        throw new SessionWorkspaceError('session_already_attached', 'session is already attached; detach or end it first');
-      }
+      return { binding, seed };
+    });
+    if (pendingSeed) {
+      await this.seedCreatedWorkspace(
+        principalId, pendingSeed.globalRole, pendingSeed.workspaceId, pendingSeed.type,
+      );
     }
-
-    const workspaceId = await this.resolveWorkspaceId(tenantId, principalId, input.workspaceId, input.create);
-    try {
-      const binding = await this.mesh.attach({
-        sessionId, workspaceId, sessionTenantId: tenantId,
-        workspaceTenantId: tenantId, principalId,
-      });
-      return toRecord(binding);
-    } catch (err) {
-      if (err instanceof SessionWorkspaceBindingError) throw new SessionWorkspaceError(err.code, err.message);
-      throw err;
-    }
+    return toRecord(binding);
   }
 
   async detach(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace> {
