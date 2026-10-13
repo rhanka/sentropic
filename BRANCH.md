@@ -131,7 +131,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 - [ ] **Lot 3 — Opus r2 NO-GO fixes (r3)**
   - [x] RED: domain principal/CAS/uniform coverage in session-workspace.spec.ts
   - [x] RED: API principal/order/uniform/journal coverage in session-adoption.test.ts
-  - [ ] RED: API editor/seeds/concurrency/admin/ended/get coverage in session-adoption.test.ts
+  - [x] RED: API editor role and canonical seeds coverage in session-adoption.test.ts
+  - [ ] RED: API concurrency/admin/ended/get coverage in session-adoption.test.ts
   - [ ] GREEN: conditional binding writes in cluster-mesh domain (compare-and-set)
   - [ ] GREEN: required principal object inputs on detach/end/get (API + domain)
   - [ ] GREEN: rights order, global editor, canonical seeds, englobing transaction
