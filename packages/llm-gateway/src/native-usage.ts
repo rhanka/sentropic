@@ -8,6 +8,42 @@ export function isSafeNonNegativeInteger(n: unknown): n is number {
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
 }
 
+export const NATIVE_CACHE_PRICING_POLICY = 'anthropic-cache-2026-10-02' as const;
+// Official model pricing / prompt-caching tables, verified 2026-10-02:
+// https://platform.claude.com/docs/en/about-claude/pricing#prompt-caching
+const readUnits40: Readonly<Record<string, number>> = Object.freeze({
+  'claude-sonnet-5': 4, 'claude-opus-5': 4, 'claude-fable-5-1': 1,
+});
+const nativeReadWeight = (servedModelId: unknown): number | undefined =>
+  typeof servedModelId === 'string' && Object.hasOwn(readUnits40, servedModelId)
+    ? readUnits40[servedModelId] : undefined;
+
+export const validateNativeInputPriceUnits40 = (
+  physicalInput: unknown, units40: unknown, servedModelId: unknown, policy: unknown,
+): boolean => {
+  const readWeight = nativeReadWeight(servedModelId);
+  if (policy !== NATIVE_CACHE_PRICING_POLICY || readWeight === undefined
+    || !isSafeNonNegativeInteger(physicalInput) || !isSafeNonNegativeInteger(units40)) return false;
+  const units = BigInt(units40), physical = BigInt(physicalInput);
+  return BigInt(readWeight) * physical <= units && units <= 80n * physical;
+};
+
+export const nativeCacheInputPriceUnits40 = (
+  state: NativeCumulativeUsageState, servedModelId: unknown,
+): number | undefined => {
+  const weight = nativeReadWeight(servedModelId);
+  const oneHour = state.inferredCacheCreation1h ?? state.reportedCacheCreation1h ?? 0;
+  const fiveMinute = state.acceptedCacheCreationInputTokens - oneHour;
+  const counts = [state.acceptedInputTokens, state.acceptedCacheReadInputTokens, oneHour, fiveMinute];
+  if (!state.inputUsageValidated || weight === undefined || !counts.every(isSafeNonNegativeInteger)) return undefined;
+  const units = 40n * BigInt(state.acceptedInputTokens) + BigInt(weight) * BigInt(state.acceptedCacheReadInputTokens)
+    + 50n * BigInt(fiveMinute) + 80n * BigInt(oneHour);
+  if (units > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+  const numeric = Number(units);
+  return validateNativeInputPriceUnits40(state.physicalInput, numeric, servedModelId, NATIVE_CACHE_PRICING_POLICY)
+    ? numeric : undefined;
+};
+
 export interface RawNativeUsageUpdate {
   readonly input_tokens?: number | null; readonly cache_read_input_tokens?: number | null;
   readonly cache_creation_input_tokens?: number | null;
@@ -305,7 +341,11 @@ export class NativeUsageObserver {
     const input = state.inputUsageValidated || state.physicalLowerBound > 0 ? state.physicalInput : undefined;
     const output = raw.output_tokens;
     const finalOutputObserved = termination === 'completed' && this.stopped && this.finalCandidate;
-    const inputValidated = state.inputUsageValidated && !this.modelReason && this.servedModelId === this.selectedModelId;
+    const priceUnits = !this.modelReason && this.servedModelId === this.selectedModelId
+      ? nativeCacheInputPriceUnits40(state, this.servedModelId) : undefined;
+    const pricingReason = nativeReadWeight(this.servedModelId) === undefined ? 'served_model_unverified'
+      : state.inputUsageValidated && priceUnits === undefined && !this.modelReason ? 'invalid_input' : undefined;
+    const inputValidated = state.inputUsageValidated && priceUnits !== undefined;
     const estimated = state.estimated || !inputValidated || !finalOutputObserved
       || !input || !output;
     const total = input !== undefined && output !== undefined ? BigInt(input) + BigInt(output) : undefined;
@@ -317,7 +357,8 @@ export class NativeUsageObserver {
       nativeSelectedModelId: this.selectedModelId, nativeServedModelId: this.servedModelId,
       fallbackPresent: this.fallbackPresent, iterationsPresent: this.iterationsPresent,
       nativeInputUsageValidated: inputValidated, nativeInputUsageSource: state.inputUsageSource,
-      nativeUsageUncertainty: this.modelReason ?? state.uncertaintyReason ?? (estimated ? 'incomplete_output' : undefined),
+      ...(inputValidated ? { nativeInputPriceUnits40: priceUnits, nativePricingPolicy: NATIVE_CACHE_PRICING_POLICY } : {}),
+      nativeUsageUncertainty: this.modelReason ?? pricingReason ?? state.uncertaintyReason ?? (estimated ? 'incomplete_output' : undefined),
       nativeCacheWriteSplitReason: state.cacheWriteSplitReason,
     });
   }
