@@ -360,6 +360,13 @@ export const toProviderShapedError = (
     : openAiError(503, 'rate_limit_error', 'service temporarily unavailable', 'overloaded');
 };
 
+/** Terminal numeric refusal from any wrapped size evidence; the served target preserves the actual-model header. */
+export const gatewayRequestTooLargeError = (error: unknown, target?: ResolvedTarget): GatewayError | undefined => {
+  const detail = requestTooLargeDetail(error);
+  return detail ? new GatewayError('request-too-large', 'Request body is too large', undefined,
+    target, undefined, undefined, detail.requestSize) : undefined;
+};
+
 /** Map a gateway condition to a provider-shaped error for the given wire (spec §3b). */
 export const notImplemented = (wire: GatewayWire): ProviderShapedError =>
   wire === 'anthropic-messages'

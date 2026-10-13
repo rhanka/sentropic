@@ -11,7 +11,7 @@
  * separate RouteAttemptDispatchPort below, without provider credentials.
  */
 
-import type { SecretAuthMaterial } from '@sentropic/llm-mesh';
+import type { RequestSizeDetail, SecretAuthMaterial } from '@sentropic/llm-mesh';
 import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult } from '@sentropic/llm-mesh';
 
 export interface RouteAttemptDispatchRequest {
@@ -60,6 +60,8 @@ export interface GatewayDispatchResponse {
   readonly body: unknown;
   /** Provider response headers (lowercased). The router forwards the allowlist (#4). */
   readonly headers?: ProviderResponseHeaders;
+  /** Trusted measured size evidence; terminal 413 survives callback wrapping. */
+  readonly requestSize?: RequestSizeDetail;
 }
 
 /** Provider-native SSE event, framed by wire (Anthropic event/data; OpenAI data + [DONE]). */
