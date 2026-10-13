@@ -114,7 +114,7 @@
     - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
 - [ ] **Lot 1 — Test-first K3 specs (failing)**
-  - [ ] Write `packages/cluster-mesh/tests/storage/kernel.spec.ts`: atomic + chain + read + cursor-budget corpora against the K3 runtime; predicate-positive acceptance; transact overlay/rollback/isolation/closed-context/nested-join; token tamper and cross-chain refusal; forged cursor refusal.
+  - [x] Write `packages/cluster-mesh/tests/storage/kernel.spec.ts`: atomic + chain + read + cursor-budget corpora against the K3 runtime; predicate-positive acceptance; transact overlay/rollback/isolation/closed-context/nested-join; token tamper and cross-chain refusal; forged cursor refusal.
   - [ ] Write `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`: authority corpus against the K3 runtime; frozen-grant mutation check; revalidation on expiry and revocation; capability advertisement.
   - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
   - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
