@@ -4,6 +4,12 @@ export const NATIVE_BILLING_MASK_RULE = 'native-billing-mask-v2-2026-10-03';
 export const NATIVE_BILLING_MASKED_MESSAGE = 'The upstream service could not accept this request.';
 export const NATIVE_MAX_ERROR_BODY_BYTES = 65_536; // 64 KiB
 export const NATIVE_MAX_PUBLIC_MESSAGE_BYTES = 4096;
+export const CLASSIFIER_BETA = 'auto-mode-classifier-2026-07-16';
+export const DANGEROUS_TOOL_BETA = 'dangerous-tool-use-2026-09-03';
+export const SAFEGUARDS_NOT_SUPPORTED_MESSAGE =
+  'safeguards is not supported by this gateway route; retry without safeguards.';
+const CLASSIFIER_REWRITE_PATTERN =
+  /\b(?:unsupported|not supported|unrecognized|unknown beta|invalid beta)\b|unexpected value/i;
 const NEUTRALIZED_PLACEHOLDER = 'neutralized-identifier';
 
 const BILLING_PATTERNS: readonly RegExp[] = [
@@ -91,6 +97,16 @@ export const parseNativeErrorDetail = (
   if (status === 400 && errorObj.type === 'invalid_request_error') {
     if (detectNativeBillingError(errorObj.message)) {
       return { type: 'invalid_request_error', message: NATIVE_BILLING_MASKED_MESSAGE };
+    }
+    const lowerMsg = errorObj.message.toLowerCase();
+    const hasNestedOrDangerous = lowerMsg.includes(DANGEROUS_TOOL_BETA) || lowerMsg.includes('safeguards');
+    const sentClassifier = Boolean(
+      options?.requestSafeguards &&
+      options?.sentBetas?.some((b) => b.split(',').map((x) => x.trim()).includes(CLASSIFIER_BETA)),
+    );
+    const hasClassifierReject = lowerMsg.includes(CLASSIFIER_BETA) && CLASSIFIER_REWRITE_PATTERN.test(errorObj.message);
+    if (sentClassifier && !hasNestedOrDangerous && hasClassifierReject) {
+      return { type: 'invalid_request_error', message: SAFEGUARDS_NOT_SUPPORTED_MESSAGE };
     }
     return { type: 'invalid_request_error', message: sanitizeNativeErrorMessage(errorObj.message) };
   }

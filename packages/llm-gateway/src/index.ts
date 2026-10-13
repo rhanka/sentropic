@@ -22,7 +22,12 @@ export * from './native-sse.js';
 export * from './native-usage.js';
 export * from './native-count-tokens.js';
 export * from './native-count-rate.js';
-export * from './native-errors.js';
+export {
+  NATIVE_BILLING_MASK_RULE, NATIVE_BILLING_MASKED_MESSAGE, NATIVE_MAX_ERROR_BODY_BYTES,
+  NATIVE_MAX_PUBLIC_MESSAGE_BYTES, CLASSIFIER_BETA, DANGEROUS_TOOL_BETA,
+  SAFEGUARDS_NOT_SUPPORTED_MESSAGE, neutralizeFeatureIdentifiers, detectNativeBillingError,
+  sanitizeNativeErrorMessage, parseNativeErrorDetail, type IdentifierScanStats,
+} from './native-errors.js';
 export * from './request-body-pool.js';
 export { retainGatewayStreamBody } from './request-body-retention.js';
 export * from './request-body-limit.js';
