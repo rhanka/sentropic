@@ -270,7 +270,11 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     fence: FENCE,
   });
   await bound.abortStaged({ unit: aborted });
-  assert.deepEqual(await bound.inspectStaged('op-staged-abort'), { state: 'aborted', reason: 'aborted by caller' });
+  assert.deepEqual(
+    await bound.inspectStaged('op-staged-abort'),
+    { state: 'aborted', reason: 'aborted by caller' },
+    'K2b-RED staged: abandoned units report abortion',
+  );
   assert.equal(await bound.readHead('chain-abandoned'), null);
   await expectCode(
     async () => bound.sealStaged({ unit: aborted, root: sealRoot('op-staged-abort', 'digest-abort-0', '1') }),
