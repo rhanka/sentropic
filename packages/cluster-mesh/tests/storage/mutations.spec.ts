@@ -214,6 +214,34 @@ class IgnoreAggregateVersionStore extends TestReferenceStore {
   }
 }
 
+class DropUnsupportedEffectsStore extends TestReferenceStore {
+  override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
+    const bound = super.bind(grant);
+    const inner = bound.commitAtomic.bind(bound);
+    bound.commitAtomic = (unit: AtomicUnit, options?: CommitOptions) =>
+      inner({ ...unit, relationships: [], barriers: [], purgeIntents: [] }, options);
+    return bound;
+  }
+}
+
+class AcceptStaleUpdateStore extends TestReferenceStore {
+  override bind(grant: Parameters<TestReferenceStore['bind']>[0]): TestBoundStore {
+    const bound = super.bind(grant);
+    const inner = bound.commitAtomic.bind(bound);
+    bound.commitAtomic = async (unit: AtomicUnit, options?: CommitOptions) => {
+      const updates = [];
+      for (const update of unit.updates) {
+        const stored = await bound.readAggregate(update.key);
+        updates.push(
+          stored && update.version <= stored.version ? { ...update, version: stored.version + 1 } : update,
+        );
+      }
+      return inner({ ...unit, updates }, options);
+    };
+    return bound;
+  }
+}
+
 export const MUTATION_RECORDS: readonly MutationRecord[] = [
   { id: 'M1-no-cas', brokenSemantic: 'CAS-first appends accept stale heads', corpus: 'atomic', verdict: 'killed' },
   { id: 'M2-no-scope', brokenSemantic: 'operations pass without any authority check', corpus: 'authority', verdict: 'killed' },
@@ -229,6 +257,8 @@ export const MUTATION_RECORDS: readonly MutationRecord[] = [
   { id: 'M12-empty-values', brokenSemantic: 'persisted records keep hashes but lose values', corpus: 'atomic', verdict: 'killed' },
   { id: 'M13-mutable-grant', brokenSemantic: 'bound handles follow caller-side grant mutation', corpus: 'authority', verdict: 'killed' },
   { id: 'M14-ignore-aggregate-version', brokenSemantic: 'atomic commits ignore aggregate-version guards', corpus: 'atomic', verdict: 'killed' },
+  { id: 'M15-drop-unsupported-effects', brokenSemantic: 'atomic commits silently drop unsupported effects', corpus: 'atomic', verdict: 'killed' },
+  { id: 'M16-accept-stale-update', brokenSemantic: 'atomic commits accept stale aggregate versions', corpus: 'atomic', verdict: 'killed' },
 ];
 
 describe('K2a discriminating mutations', () => {
@@ -332,8 +362,20 @@ describe('K2a discriminating mutations', () => {
     await expect(runAtomicCorpus(bound)).rejects.toThrow(/cas-conflict|aggregate-version/);
   });
 
+  it('M15-drop-unsupported-effects is killed by the atomic corpus', async () => {
+    const { bound } = bindFresh(new DropUnsupportedEffectsStore('comments'));
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/invalid-command|relationship|carrier/);
+  });
+
+  it('M16-accept-stale-update is killed by the atomic corpus', async () => {
+    const { bound } = bindFresh(new AcceptStaleUpdateStore('comments'));
+    await expect(runAtomicCorpus(bound)).rejects.toThrow(/cas-conflict|stale/);
+  });
+
   it('records every discriminating mutation as killed', () => {
     expect(MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
+      'killed',
       'killed',
       'killed',
       'killed',
