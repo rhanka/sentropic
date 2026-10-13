@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../src/db/client';
 import { sessionWorkspaceBindings } from '../../src/db/control-schema';
 import {
-  tenantMemberships, tenants, viewTemplates, workflowDefinitions,
-  workspaceMemberships, workspaces,
+  agentDefinitions, tenantMemberships, tenants, viewTemplates, workflowDefinitions,
+  workflowDefinitionTasks, workspaceMemberships, workspaces, workspaceTypeWorkflows,
 } from '../../src/db/schema';
 import { SessionWorkspaceService } from '../../src/services/cluster-mesh/session-workspace';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
@@ -51,6 +51,18 @@ describe('session adoption workspace binding', () => {
     const wsIds = tenantWorkspaces.map((w) => w.id);
     if (user.workspaceId) wsIds.push(user.workspaceId);
     if (wsIds.length > 0) {
+      const wfRows = await db.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
+        .where(inArray(workflowDefinitions.workspaceId, wsIds));
+      const wfIds = wfRows.map((w) => w.id);
+      if (wfIds.length > 0) {
+        await db.delete(workflowDefinitionTasks)
+          .where(inArray(workflowDefinitionTasks.workflowDefinitionId, wfIds));
+        await db.delete(workspaceTypeWorkflows)
+          .where(inArray(workspaceTypeWorkflows.workflowDefinitionId, wfIds));
+      }
+      await db.delete(workflowDefinitions).where(inArray(workflowDefinitions.workspaceId, wsIds));
+      await db.delete(agentDefinitions).where(inArray(agentDefinitions.workspaceId, wsIds));
+      await db.delete(viewTemplates).where(inArray(viewTemplates.workspaceId, wsIds));
       await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.workspaceId, wsIds));
       await db.delete(workspaces).where(inArray(workspaces.id, wsIds));
     }
@@ -78,9 +90,6 @@ describe('session adoption workspace binding', () => {
     expect(binding.status).toBe('attached');
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, binding.workspaceId));
     expect(ws?.tenantId).toBe(TENANT_A);
-    await db.delete(sessionWorkspaceBindings)
-      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-2'));
-    await db.delete(workspaces).where(eq(workspaces.id, binding.workspaceId));
   });
 
   it('should stay idempotent when adopting twice', async () => {
@@ -166,8 +175,6 @@ describe('session adoption workspace binding', () => {
       sessionId: 'sess-adopt-7', tenantId: TENANT_A, principalId: user.id,
       create: { name: 'Neutral WS', type: 'neutral' },
     })).rejects.toMatchObject({ code: 'invalid_request' });
-    await db.delete(sessionWorkspaceBindings).where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-2'));
-    await db.delete(workspaces).where(eq(workspaces.id, binding.workspaceId));
   });
 
   it('should refuse detach and end when principal is omitted', async () => {
@@ -239,8 +246,6 @@ describe('session adoption workspace binding', () => {
     const views = await db.select({ id: viewTemplates.id }).from(viewTemplates)
       .where(eq(viewTemplates.workspaceId, binding.workspaceId));
     expect(views.length).toBeGreaterThan(0);
-    await db.delete(sessionWorkspaceBindings).where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-13'));
-    await db.delete(workspaces).where(eq(workspaces.id, binding.workspaceId));
   });
 
   it('should enforce editor threshold on attach for workspace members', async () => {
