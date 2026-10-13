@@ -528,6 +528,10 @@ verify-api-image: ## Fail if the loaded canonical tag differs from the recorded 
 test-ci-api-runtime: verify-api-image ## Prove the production artifact has no npm CLI, global tree or cache
 	@docker run --rm $(API_IMAGE_REF) sh -ec '! command -v npm; ! command -v npx; test ! -e /usr/local/lib/node_modules/npm; test ! -e /root/.npm; node --version'
 
+.PHONY: test-ci-api-tag-guard
+test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision guard (absent, exists-same, exists-different)
+	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
+
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
 	@echo $(API_TOOL_VERSION)
@@ -583,12 +587,7 @@ pull-api-image: docker-login
 publish-api-image: docker-login
 	@echo "▶ Pushing api image to registry"
 	@$(MAKE) verify-api-image ENV=$(ENV)
-	@if docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/ci-prod-image/existing-manifest.json 2> .tmp/ci-prod-image/manifest-error; then \
-		docker run --rm -i $(LLM_MESH_NODE_IMAGE) node -e 'let s=""; for await (const c of process.stdin) s+=c; const m=JSON.parse(s); if (m.config?.digest !== process.argv[1]) { console.error("Production tag collision: recorded artifact differs from registry"); process.exit(1); }' "$(API_IMAGE_REF)" < .tmp/ci-prod-image/existing-manifest.json; \
-	elif ! grep -Eq 'manifest unknown|no such manifest|manifest not found' .tmp/ci-prod-image/manifest-error; then \
-		echo 'Cannot establish production registry tag identity; refusing publication'; exit 1; \
-	fi
-	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+	@bash scripts/publish-api-image.sh
 
 .PHONY: publish-api-main-image
 publish-api-main-image: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
