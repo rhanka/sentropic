@@ -18,7 +18,7 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `Makefile`
-  - `.github/workflows/**`
+  - `.github/workflows/ci.yml`
   - `scripts/publish-api-image.sh`
   - `scripts/test-api-tag-guard.sh`
   - `docs/ci-images.md`
@@ -31,7 +31,7 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
-  - `.github/workflows/**`
+  - `.github/workflows/ci.yml`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -106,9 +106,9 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
 - [ ] **Lot 4 — Review remediation (Opus PR #668 findings)**
   - [x] Address MAJ-1, m1, m2, m3 in `scripts/publish-api-image.sh` (exact manifest-unknown signal on stderr, fail closed on empty REGISTRY, reject moving tags, Docker-First containerized digest extraction).
   - [x] Address m5, m6, and MAJ-1 test requirements in `scripts/test-api-tag-guard.sh` (use `.tmp/`, add tests for credential helper not found, network error, no config digest, empty registry, moving tag refusal).
-  - [ ] Address m4 in `docs/ci-images.md` (restore TOCTOU window, serialization, and architectural limits from `main`).
-  - [ ] Address m7 in `BRANCH.md` (restrict `.github/workflows/**` to `.github/workflows/ci.yml`).
-  - [ ] Validate locally with `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
-  - [ ] Verify `make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+  - [x] Address m4 in `docs/ci-images.md` (restore TOCTOU window, serialization, and architectural limits from `main`).
+  - [x] Address m7 in `BRANCH.md` (restrict `.github/workflows/**` to `.github/workflows/ci.yml`).
+  - [x] Validate locally with `make test-ci-api-tag-guard API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
+  - [x] Verify `make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`.
   - [ ] Generate fix report in `.h2a/build/ci_tag_guard_fix_report.md`.
 
