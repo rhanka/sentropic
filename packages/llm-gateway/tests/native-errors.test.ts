@@ -48,7 +48,12 @@ describe('native error billing classifier and bounding', () => {
   });
 
   it('returns fixed invalid request fallback when sanitized message is empty', () => {
-    expect(sanitizeNativeErrorMessage('\u0000\u0001\u001F\u007F\u009F   ')).toBe('invalid request');
+    expect(sanitizeNativeErrorMessage('\u0000\u0001\u001F\u007F\u009F')).toBe('invalid request');
+  });
+
+  it('preserves non-control whitespace without trimming', () => {
+    expect(sanitizeNativeErrorMessage('  max_tokens: invalid value  ')).toBe('  max_tokens: invalid value  ');
+    expect(sanitizeNativeErrorMessage('\u0000   \u0001')).toBe('   ');
   });
 
   it('rejects an upstream error body exceeding the 64 KiB ceiling', () => {
@@ -94,33 +99,42 @@ describe('native error billing classifier and bounding', () => {
   it('K7: bounds scan work to at most one check per maximal run on 64 KiB adversarial input', () => {
     const noSuffix = 'a-' + 'a-'.repeat(32767);
     expect(noSuffix.length).toBe(65536);
-    const statsNoSuffix = { runs: 0, checks: 0 };
+    const statsNoSuffix = { runs: 0, checks: 0, work: 0 };
     expect(neutralizeFeatureIdentifiers(noSuffix, statsNoSuffix)).toBe(noSuffix);
     expect(statsNoSuffix.runs).toBe(1);
     expect(statsNoSuffix.checks).toBe(1);
+    expect(statsNoSuffix.work).toBeLessThanOrEqual(noSuffix.length * 2);
     expect(detectNativeBillingError(noSuffix)).toBe(false);
 
     const validRun = `${'a'.repeat(65525)}-2026-06-01`;
     expect(validRun.length).toBe(65536);
-    const statsValid = { runs: 0, checks: 0 };
+    const statsValid = { runs: 0, checks: 0, work: 0 };
     expect(neutralizeFeatureIdentifiers(validRun, statsValid)).toBe('neutralized-identifier');
     expect(statsValid.runs).toBe(1);
     expect(statsValid.checks).toBe(1);
+    expect(statsValid.work).toBeLessThanOrEqual(validRun.length * 2);
+    expect(statsValid.work).toBeGreaterThanOrEqual(validRun.length - 12);
     expect(detectNativeBillingError(validRun)).toBe(false);
 
     expect(detectNativeBillingError(`${validRun} credit balance is low`)).toBe(true);
 
     const multi = 'anthropic-header-1 fallback-credit-2026-06-01 plain-word-no-date';
-    const statsMulti = { runs: 0, checks: 0 };
+    const statsMulti = { runs: 0, checks: 0, work: 0 };
     expect(neutralizeFeatureIdentifiers(multi, statsMulti))
       .toBe('neutralized-identifier neutralized-identifier plain-word-no-date');
     expect(statsMulti.runs).toBe(3);
     expect(statsMulti.checks).toBe(3);
+    expect(statsMulti.work).toBeLessThanOrEqual(multi.length * 2);
+  });
+
+  it('recognizes shortest valid 12-character feature identifier a-2026-06-01', () => {
+    expect(neutralizeFeatureIdentifiers('a-2026-06-01')).toBe('neutralized-identifier');
+    expect(detectNativeBillingError('a-2026-06-01')).toBe(false);
   });
 
   it('respects underscore boundaries: underscores are word characters that prevent sub-identifier split', () => {
     const text = 'prefix_fallback-credit-2026-06-01_suffix fallback_credit_token _anthropic-header';
-    const stats = { runs: 0, checks: 0 };
+    const stats = { runs: 0, checks: 0, work: 0 };
     expect(neutralizeFeatureIdentifiers(text, stats)).toBe(text);
     expect(detectNativeBillingError(text)).toBe(false);
   });
