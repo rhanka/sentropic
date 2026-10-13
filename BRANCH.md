@@ -167,7 +167,8 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] Sub-lot gate: test-cluster-mesh (426 pass), test-api-unit adoption (27 pass), scope-check PASS
 - [ ] **Lot 6 — Opus r5 NO-GO fixes (MAJ-1, MAJ-2, m1..m6)**
   - [x] RED API: one-predicate CAS tests (version/status/workspace/principal) in session-adoption.test.ts
-  - [ ] RED API: forced-interleave stale-admin/get tests + LISTEN notify test + second-end test
+  - [x] RED API: second-end idempotence test + get TOCTOU test + LISTEN notify test
+  - [ ] RED API: forced-interleave stale-admin detach test (replaces racy Promise.allSettled test)
   - [x] RED domain: expectedVersion omission test in session-workspace.spec.ts
   - [ ] GREEN MAJ-2: idempotent second end via the API
   - [ ] GREEN m3: required expectedVersion in domain detach/end inputs
