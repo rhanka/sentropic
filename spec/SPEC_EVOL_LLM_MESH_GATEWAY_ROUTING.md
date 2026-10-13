@@ -1891,3 +1891,140 @@ contract version, exact model, supported API version and admitted ceiling
 before marking dispatch.
 
 Native body construction shallow-copies the object and changes only selected
+model, boolean stream and the validated/admitted `max_tokens` minimum.
+Unknown fields, safeguards, nested values and tool IDs survive. Chat and both
+Responses aliases remain their own wires; Anthropic headers cannot activate
+this relay on them. Safeguards on those wires is an explicit wire-shaped
+refusal. Preserve the strict Responses normalization and its native Codex
+carrier; that carrier is not `PreparedNativeMessages`.
+
+### 17.4 D17-D — Shared actual-byte admission and parser order
+
+Use one checked-body predicate and wire/limit resolver for POST to exactly:
+
+| Path, relative to a trusted mount prefix | Wire | Default actual-byte ceiling |
+|---|---|---:|
+| `/v1/messages` | Anthropic Messages | 32,000,000 |
+| `/v1/chat/completions` | OpenAI Chat | 32,000,000 |
+| `/responses` | OpenAI Responses | 16,777,216 |
+| `/v1/responses` | OpenAI Responses | 16,777,216 |
+| `/v1/messages/count_tokens` | Anthropic count | 32,000,000 |
+
+Normalize only the host-configured mount prefix, including product
+`/api/v1/gw` and configured `/gw`; reject arbitrary suffix matches, lookalike
+paths, non-POST methods and `/responses/count_tokens`. The smaller validated
+host/Responses limit wins. Keep §16's other input/tool/output/event limits and
+their host overrides. All paths share one process-default 32,000,000-byte
+reservation pool even with native OFF; do not allocate separate pools per
+router, alias or count endpoint.
+
+Before any gateway parser reads, resolve the common pool and effective path
+limits and supply the same immutable policy to middleware and router. A
+cached parse under a looser policy must not bypass a stricter Responses or
+host bound. Replace the standalone Responses bounded reader and the gateway
+settlement parser's `Request.clone().json()` with the checked owner's single
+parsed object. No clone, second JSON read or consolidated raw byte buffer.
+
+Read actual bytes: check N+chunk against the effective ceiling, extend the
+shared lease atomically, then copy into exactly granted backing storage.
+Content-Length supplies neither authority nor proof, including false high or
+low values. Decode/parse once at EOF. Overflow precedes capacity refusal;
+capacity exhaustion cancels the reader, drops partial storage and returns
+retryable 503 with `Retry-After: 1` and `x-should-retry: true`. No waiting queue,
+quote, hold, dispatch or financial/observation event follows these refusals.
+The reservation/amplification model is not measured RSS qualification.
+
+Product ordering is author fence → product session authentication → checked
+body admission → settlement-mode extraction → one-shot verified caller bridge
+→ gateway caller/partition authentication → classification/normalization →
+quote/admission → plan/dispatch. Preserve the separate `/responses` middleware
+registrations and the single `/v1/*` registration covering `/v1/responses`.
+Count skips settlement-mode extraction and all financial effects. Standalone
+settlement middleware obtains the same checked owner before inspecting a
+gateway body; the router reuses it. Preserve package parse/model-before-auth
+behavior and scaffold refusal without consuming a body.
+
+### 17.5 D17-E — Transport, stream and terminal ownership
+
+Trusted host code chooses credentials, account, URL and auth headers. Reuse
+the existing native request/response filters: open `anthropic-*`, permitted
+`x-app`/`x-stainless-*`, with credential/session/hop-by-hop/Connection-nominated
+and internal exclusions. Host authentication wins last; no caller endpoint
+override or redirect. Native execution makes one raw HTTP attempt with a
+55-second response-readiness bound and continuing caller cancellation.
+
+Complete or cancel upload and detach request, serialized-byte and view holders
+before exposing JSON/count or a commit-ready stream. Fetch response headers
+alone do not prove upload completion. Response/abort/finalize closures retain
+only response state and bounded metadata. Canonical SDK/Responses operations
+retain checked-body bytes through retries, JSON collection and terminal SDK
+or iterator cleanup; native Codex Responses does not inherit Anthropic's early
+detach proof. Clear every registered holder before shrinking/releasing.
+
+Transfer stream ownership before middleware exits. Once-only cleanup covers
+never-consumed streams, cancellation before first read, malformed returned
+envelopes, commit failure, EOF without stop, reader errors and callback
+failures. Close/abort the upstream reader and finish the attempt once;
+cleanup and the one aggregate financial settlement never wait for observation.
+
+Native JSON preserves the provider object semantically. Native SSE relays
+upstream bytes, comments, unknown events and line endings with backpressure
+and a 1 MiB pending-frame bound. Observe usage separately. Prime a complete
+non-error frame before commitment; after commitment or failed commit callback,
+there is no replay/fallback. Missing `message_stop` is failure, not fabricated
+completion. Responses keeps §16's accumulator, JSON envelope and SSE encoder,
+including its pre-commit buffering and post-commit `response.failed` contract.
+
+Success-only `X-Sentropic-Relay: native` identifies native relay. Native JSON
+`X-Sentropic-Served` requires a safe response-served model with no invalidating
+fallback/substantive iterations; selected identity is not proof. A safe
+mismatch may be reported but cannot qualify discount pricing. Native SSE and
+count omit served identity. Emit gateway diagnostics last, after filtering.
+
+Carry forward the pending owner keepalive requirement as new implementation:
+after commitment, add `: keepalive\n\n` only between complete frames after
+15 seconds of upstream silence. Upstream frames remain byte-identical; added
+comments are the sole intended fidelity change. No pre-commit keepalive,
+mid-frame insertion, competing reads, extra usage or surviving timer after
+terminal cleanup. This was not implemented in #633 and is required before
+production activation, with frame-boundary/backpressure tests.
+
+### 17.6 D17-F — Bounded errors and terminal numeric 413
+
+Native validation relay requires a trusted typed parser-result channel,
+bounded to 64 KiB input and 4,096 public UTF-8 bytes after control filtering.
+Mask billing-state detail before truncation or feature detection; preserve
+non-control whitespace and linear identifier handling. Only an own safeguards
+request rejecting the exact classifier beta actually sent qualifies for the
+narrow rewrite. Arbitrary provider strings/400s do not gain this authority.
+Canonical errors and #662's subsystem/no-route diagnostics keep their policy.
+
+Carry validated numeric request-size evidence through mesh errors, provider
+wrappers, runtime adapters and every JSON/stream/callback path. Exact size and
+observed lower bound are distinct. Report the effective known gateway limit
+(including Responses/host limits); when an upstream rejecting limit is unknown,
+say it is unavailable rather than inventing it. Never use Content-Length or
+caller fields as measured evidence.
+
+Before commitment, terminal 413 is Anthropic-shaped on Messages/count and
+OpenAI-shaped on Chat/both Responses aliases. Preserve the original typed 413
+if commit/settlement/cleanup also fails; no retry, account rotation or later
+successful result. After commitment HTTP remains 200: emit a sanitized native
+or Chat error frame, or exactly one Responses `response.failed` carrying
+`request_too_large` and safe size detail. Abort/close and settle once with
+already observed usage; never append a success terminal. Local body/codec
+failures remain neutral account outcomes, not provider auth/rate evidence.
+
+### 17.7 D17-G — Physical usage, proof and exact financial settlement
+
+The gateway owns one cumulative native usage fold and freezes one immutable
+pre-financial-floor terminal snapshot for both settlement and observation.
+Physical input P=U+R+aggregate W; TTL subcounts are not added again. Missing or
+null evidence is unknown, not invented zero. Output is cumulative, not the sum
+of frames. Start output is provisional; successful JSON or final output with
+clean `message_stop` establishes finality.
+
+Valid start-anchored deltas inherit absent/null fields. Equal aggregate writes
+retain accepted TTL allocation; growth alone receives five-minute weight when
+outbound cache controls establish that eligibility, otherwise a conservative
+2x bound. Inferred growth is marked separately from provider-reported TTL.
