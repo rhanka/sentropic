@@ -117,32 +117,32 @@
 - [ ] **Lot 1 — Test-first K3 specs (failing)**
   - [x] Write `packages/cluster-mesh/tests/storage/kernel.spec.ts`: atomic + chain + read + cursor-budget corpora against the K3 runtime; predicate-positive acceptance; transact overlay/rollback/isolation/closed-context/nested-join; token tamper and cross-chain refusal; forged cursor refusal.
   - [x] Write `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`: authority corpus against the K3 runtime; frozen-grant mutation check; revalidation on expiry and revocation; capability advertisement.
-  - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-  - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-  - [ ] Lot gate: specs fail on missing runtime (RED), no other files touched.
+  - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+  - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+  - [x] Lot gate: specs fail on missing runtime (RED), no other files touched.
 - [ ] **Lot 2 — Tokens, backend, record runtime**
   - [x] Write `packages/cluster-mesh/src/storage/tokens.ts`: retained exact-head boundary registry (G3 provider), opaque id minting, documented public types.
   - [x] Write `packages/cluster-mesh/src/storage/backend.ts`: neutral in-memory backend state per scope (chains, genesis, index, records, aggregates, commits, cursors).
   - [x] Write `packages/cluster-mesh/src/storage/record-runtime.ts`: ordinary commit staging with CAS-first appends, allocation, disposal guards, idempotent genesis/index, aggregate versions, predicate-positive acceptance, barrier/purge/relationship refusal, full rollback, R3 effective-cursor paging.
-  - [ ] Write `packages/cluster-mesh/src/storage/record-runtime.ts`: ordinary commit staging with CAS-first appends, allocation, disposal guards, idempotent genesis/index, aggregate versions, predicate-positive acceptance, barrier/purge/relationship refusal, full rollback, R3 effective-cursor paging.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+  - [x] Write `packages/cluster-mesh/src/storage/record-runtime.ts`: ordinary commit staging with CAS-first appends, allocation, disposal guards, idempotent genesis/index, aggregate versions, predicate-positive acceptance, barrier/purge/relationship refusal, full rollback, R3 effective-cursor paging.
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
 - [ ] **Lot 3 — Scope binding, kernel, index**
   - [x] Write `packages/cluster-mesh/src/storage/scope-runtime.ts`: grant bind with frozen copy, issued-token registry, revocation, per-operation revalidation, scope isolation, profiles advertisement.
   - [x] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
   - [x] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
   - [ ] Write `packages/cluster-mesh/src/storage/kernel.ts`: kernel factory with incarnation and clock, ordinary transact machinery (overlay, immediate plus commit-time CAS, rollback-only nesting, closed-context refusal), G3 provider wiring, documented public types.
   - [ ] Write `packages/cluster-mesh/src/storage/index.ts`: public re-exports for the engram adapter.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] **API tests**
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] **API tests**
       - [ ] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` (new K3 ordinary runtime proof)
       - [ ] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` (new K3 binding proof)
-      - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-      - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-      - [ ] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+      - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/kernel.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+      - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/storage/scope-runtime.spec.ts API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+      - [x] Sub-lot gate: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
 - [ ] **Lot 4 — Final validation, report, draft PR**
   - [ ] Typecheck and lint full package.
   - [ ] Retest storage: `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`.
