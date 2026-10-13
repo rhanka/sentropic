@@ -118,4 +118,23 @@ describe('judge compose llm-mesh namespace module', () => {
       tree.cleanup();
     }
   });
+
+  it('typechecks and verifies the public README composition example', async () => {
+    const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
+      enabled: true,
+      judge: true,
+      createRouter: ({ llmMesh, judgeHost, context, receipts }) => {
+        const router = new Hono();
+        expect(typeof llmMesh.createLlmMesh).toBe('function');
+        expect(typeof judgeHost?.createJudgeService).toBe('function');
+        expect(typeof context.verify).toBe('function');
+        expect(typeof receipts.append).toBe('function');
+        return router;
+      },
+    });
+    expect(module.namespace).toBe('/llm-mesh');
+    expect(module.enabled).toBe(true);
+    const router = module.createRouter({ context: dummyContext, receipts: dummyReceipts });
+    expect(router).toBeDefined();
+  });
 });
