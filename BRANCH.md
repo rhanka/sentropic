@@ -94,6 +94,7 @@
 - [x] `K2B-FIX2-R5` — Stale fence rejected (§7.5/§13.4) and buffers immutable after acceptance; S6/S7 mutants killed.
 - [x] `K2B-FIX2-R6` — Sibling consumer still delivers and checkpoints while one consumer is stalled (per-consumer block, not whole-log).
 - [x] `K2B-FIX2-R7` — Held disposal discriminant (no barrier), purge intent needs maintain (§10.1), disposal+outcome survive restart; L4 killed.
+- [x] `K2B-FIX2-R1` — Byte-truncated pages accept page or incomplete (§8.4 arbitration); resume asserts progress (no empty identical-cursor loop).
 - [x] `K2B-FIX-MAJ2` — Resync no longer advances the checkpoint (§13.2 consume-then-acknowledge); J3 advancing-resync mutant killed.
 - [x] `K2B-FIX-MAJ3` — Abort asserts the typed state only; reference abort reason is the caller operation key, never an English sentence.
 - [x] `K2B-FIX-MIN` — Budgets derived from observed encoding (M18), empty-page envelope floor, retained-cursor and disposal evidence, staged index/seal/fence coverage, replay scope decoupling, divergent-intent atomicity, cursor-leak nulls.
