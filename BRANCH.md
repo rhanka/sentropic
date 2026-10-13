@@ -57,7 +57,7 @@
 - [x] Mono-branch: no UI surface in C0, no UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & merge resolution**
+- [x] **Lot 0 — Baseline & merge resolution**
   - [x] Create worktree `tmp/worktrees/comments-cm-c0` on branch `feat/comments-cm-c0` from `origin/feat/comments-annotations-model`.
   - [x] Merge `origin/spec/comments-annotations-port`.
   - [x] Merge `origin/feat/cluster-mesh-storage-k1`.
@@ -73,9 +73,9 @@
   - [x] Run typecheck and test targets: `make test-cluster-mesh SCOPE=tests/comments-contract-boundaries.spec.ts API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
   - [x] Verify existing comments and cluster-mesh test suites pass.
 
-- [ ] **Lot N — Final validation & PR**
+- [x] **Lot N — Final validation & PR**
   - [x] Run `make scope-check API_PORT=9500 UI_PORT=5700 MAILDEV_UI_PORT=1600 ENV=test-comments-c0`.
-  - [ ] Push `feat/comments-cm-c0` to origin: `git push origin feat/comments-cm-c0`.
-  - [ ] Open draft PR with stacked note ("depends on #663 and #666").
-  - [ ] Generate `.h2a/build/c0_report.md` (untracked).
-  - [ ] Stop after C0.
+  - [x] Push `feat/comments-cm-c0` to origin: `git push origin feat/comments-cm-c0`.
+  - [x] Open draft PR with stacked note ("depends on #663 and #666") (#667).
+  - [x] Generate `.h2a/build/c0_report.md` (untracked).
+  - [x] Stop after C0.
