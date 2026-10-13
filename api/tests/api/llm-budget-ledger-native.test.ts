@@ -18,6 +18,52 @@ it('joins opaque HTTP response, physical observation and exactly one priced fina
       .toEqual([{ reserved_micro_usd: '0', spent_micro_usd: '1490' }]);
   });
 });
+it.each([['claude-fable-5-1', 'claude-opus-5'], ['claude-opus-5', 'claude-fable-5-1']]
+  .flatMap(([model, served]) => [false, true].map(stream => [model!, served!, stream] as const)))
+('retains selected pinned price and one joined mismatch audit (%s → %s, stream=%s)', async (model, served, stream) => {
+  await withNativeLedger({ model, served, allowanceInput: 10350, allowanceOutput: 20,
+    chunks: [nativeStart(served, mixed), nativeFrame('message_stop')] }, async h => {
+    await h.run(stream);
+    const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe(10390); expect(row.pricing_version).toBe(h.pricingId);
+    expect(row.attempts[0]).toMatchObject({ modelId: model, nativeServedModelId: served,
+      nativeUsageUncertainty: 'served_model_mismatch', estimated: true });
+    expect(row.attempts[0].nativeInputPriceUnits40).toBeUndefined();
+    expect(obs.model_id).toBe(served); expect(obs.usage_raw.estimated).toBe(true);
+    await h.settlement.settleRoute(h.settled[0]!);
+    const audit = await h.rows(sql`SELECT b.request_id, b.reason, l.attempts FROM control.blocked_attempts b
+      JOIN control.cost_ledger l ON l.idempotency_key = b.request_id AND l.hold_id IS NOT NULL
+      WHERE b.request_id = ${h.requestId}`);
+    expect(audit).toHaveLength(1); expect(audit[0]).toMatchObject({ request_id: h.requestId, reason: 'overrun' });
+    expect(audit[0]!.attempts).toEqual(row.attempts); expect(await h.ledger()).toHaveLength(2);
+  });
+});
+it('uses unequal selected pinned rates instead of the independently priced served model', async () => {
+  await withNativeLedger({ model: 'claude-fable-5-1', served: 'claude-opus-5', allowanceInput: 10350,
+    allowanceOutput: 20, inputRate: 3000000, outputRate: 7000000,
+    otherPrice: { model: 'claude-opus-5', input: 99000000, output: 99000000 } }, async h => {
+    await h.run(); expect(Number((await h.financial()).cost_micro_usd)).toBe(31190);
+    expect((await h.financial()).pricing_version).toBe(h.pricingId); expect(await h.audit()).toHaveLength(1);
+  });
+});
+it.each(['fallback', 'iterations', 'late-model'].flatMap(kind => [false, true].map(stream => [kind, stream] as const)))
+('latches %s evidence without discount or raw payload persistence (stream=%s)', async (kind, stream) => {
+  const model = MODELS[0]!;
+  const usage = { ...mixed, ...(kind === 'iterations' ? { iterations: [{ private: 'fixture-secret' }] } : {}) };
+  const extra = kind === 'fallback' ? [nativeFrame('content_block_start', { content_block: { type: 'fallback', token: 'fixture-secret' } })]
+    : kind === 'late-model' ? [nativeStart('claude-opus-5', mixed)] : [];
+  await withNativeLedger({ usage, served: kind === 'late-model' ? 'claude-opus-5' : model,
+    body: kind === 'fallback' ? { content: [{ type: 'fallback', token: 'fixture-secret' }] } : {},
+    chunks: [nativeStart(model, usage), ...extra, nativeFrame('message_stop')], allowanceInput: 10350, allowanceOutput: 20 }, async h => {
+    await h.run(stream);
+    const row = await h.financial(), obs = await h.observation();
+    expect(Number(row.cost_micro_usd)).toBe(10390); expect(row.attempts[0].estimated).toBe(true);
+    expect(row.attempts[0].nativeInputPriceUnits40).toBeUndefined(); expect(await h.audit()).toHaveLength(1);
+    expect(obs.usage_raw).toMatchObject({ uncertainty_reason: 'served_model_mismatch',
+      fallback_present: kind === 'fallback', iterations_present: kind === 'iterations', input_usage_validated: false });
+    expect(JSON.stringify(await h.ledger())).not.toContain('fixture-secret');
+  });
+});
 it.each(MODELS.flatMap((model, index) => ['cancel', 'eof'].map(terminal => [model, index, terminal] as const)))
 ('preserves validated mixed-cache input and floors only interrupted output: %s %s %s', async (model, index, terminal) => {
   await withNativeLedger({ model, chunks: [nativeStart(model, { ...mixed, output_tokens: 1 })],
