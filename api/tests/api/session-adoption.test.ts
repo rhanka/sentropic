@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../src/db/client';
 import { sessionWorkspaceBindings } from '../../src/db/control-schema';
-import { tenantMemberships, tenants, workspaceMemberships, workspaces } from '../../src/db/schema';
+import {
+  tenantMemberships, tenants, viewTemplates, workflowDefinitions,
+  workspaceMemberships, workspaces,
+} from '../../src/db/schema';
 import { SessionWorkspaceService } from '../../src/services/cluster-mesh/session-workspace';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 
@@ -214,6 +217,54 @@ describe('session adoption workspace binding', () => {
       sessionId: 'sess-adopt-11', tenantId: TENANT_B, principalId: user.id,
       create: { name: 'Probe code project', type: 'code' },
     })).rejects.toMatchObject({ code: 'binding_not_found' });
+  });
+
+  it('should refuse workspace creation via adoption for global guest role', async () => {
+    const service = new SessionWorkspaceService();
+    const guest = await createAuthenticatedUser('guest');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: guest.id, status: 'approved', role: 'member',
+    });
+    await expect(service.adopt({
+      sessionId: 'sess-adopt-12', tenantId: TENANT_A, principalId: guest.id,
+      create: { name: 'Guest code project', type: 'code' },
+    })).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+  });
+
+  it('should seed workflows and views like canonical creation on adopt-create', async () => {
+    const service = new SessionWorkspaceService();
+    const binding = await service.adopt({
+      sessionId: 'sess-adopt-13', tenantId: TENANT_A, principalId: user.id,
+      create: { name: 'Seeded code project', type: 'code' },
+    });
+    const flows = await db.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
+      .where(eq(workflowDefinitions.workspaceId, binding.workspaceId));
+    expect(flows.length).toBeGreaterThan(0);
+    const views = await db.select({ id: viewTemplates.id }).from(viewTemplates)
+      .where(eq(viewTemplates.workspaceId, binding.workspaceId));
+    expect(views.length).toBeGreaterThan(0);
+    await db.delete(sessionWorkspaceBindings).where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-13'));
+    await db.delete(workspaces).where(eq(workspaces.id, binding.workspaceId));
+  });
+
+  it('should enforce editor threshold on attach for workspace members', async () => {
+    const service = new SessionWorkspaceService();
+    const member = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: member.id, status: 'approved', role: 'member',
+    });
+    await db.insert(workspaceMemberships).values({ workspaceId, userId: member.id, role: 'viewer' });
+    const attempt = {
+      sessionId: 'sess-adopt-14', tenantId: TENANT_A, principalId: member.id, workspaceId,
+    };
+    await expect(service.adopt(attempt)).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    const scope = and(
+      eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, member.id),
+    );
+    await db.update(workspaceMemberships).set({ role: 'commenter' }).where(scope);
+    await expect(service.adopt(attempt)).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    await db.update(workspaceMemberships).set({ role: 'editor' }).where(scope);
+    await expect(service.adopt(attempt)).resolves.toMatchObject({ status: 'attached' });
   });
 
   it('should recover the binding after restart', async () => {
