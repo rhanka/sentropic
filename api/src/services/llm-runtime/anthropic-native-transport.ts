@@ -1,5 +1,6 @@
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
-import { NATIVE_MAX_ERROR_BODY_BYTES, parseNativeErrorDetail } from '@sentropic/llm-gateway';
+import { NATIVE_MAX_ERROR_BODY_BYTES, parseNativeErrorDetail, NativeSseFramer } from '@sentropic/llm-gateway';
+import type { NativeReadiness } from './anthropic-native-readiness';
 
 /** Test instrumentation observes actual holders, never request contents. */
 export type NativeBodyProbe = (holder: 'body' | 'serialization' | 'upload', retained: boolean) => void;
@@ -68,22 +69,36 @@ export const nativeTransportHeaders = (forwarded: Readonly<Record<string, string
 };
 
 /** This closure owns response state only, including when return precedes next. */
-export const nativeResponseBytes = (response: Response): AsyncIterable<Uint8Array> => {
+export const nativeResponseBytes = (response: Response, readiness: NativeReadiness): AsyncIterable<Uint8Array> => {
   const reader = response.body?.getReader();
+  let framer: NativeSseFramer | undefined = new NativeSseFramer();
   let closed = false;
+  let aborted = false;
   const close = async () => {
     if (closed) return;
     closed = true;
+    readiness.signal.removeEventListener('abort', abort);
+    readiness.close();
+    framer = undefined;
     try { await reader?.cancel(); } finally { reader?.releaseLock(); }
   };
+  const abort = () => { aborted = true; void close().catch(() => undefined); };
+  readiness.signal.addEventListener('abort', abort, { once: true });
+  if (readiness.signal.aborted) abort();
   return { [Symbol.asyncIterator]: () => ({
     async next() {
+      if (aborted) throw readiness.failure(readiness.signal.reason);
       if (closed || !reader) return { done: true as const, value: undefined };
       try {
-        const chunk = await reader.read();
-        if (chunk.done) { closed = true; reader.releaseLock(); return { done: true as const, value: undefined }; }
+        const chunk = await readiness.race(reader.read());
+        if (chunk.done) { await close(); return { done: true as const, value: undefined }; }
+        if (framer) for (const frame of framer.frames(chunk.value)) {
+          let type: unknown = frame.event;
+          if (frame.data) { try { if (JSON.parse(frame.data)?.type === 'error') type = 'error'; } catch { /* Opaque frame. */ } }
+          if (type !== 'error') { readiness.ready(); framer = undefined; break; }
+        }
         return { done: false as const, value: chunk.value };
-      } catch (error) { await close(); throw error; }
+      } catch (error) { await close(); throw readiness.failure(error); }
     },
     async return() { await close(); return { done: true as const, value: undefined }; },
   }) };
