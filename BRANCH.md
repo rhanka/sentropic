@@ -7,7 +7,7 @@
 - [x] Execute `.h2a/inputs/build_brief.md`; specification `.h2a/specs/judge_spec_v2_2.md` and its Opus review are the design inputs.
 - [x] Work only in `/home/antoinefa/src/sentropic/tmp/llm-judge`, branch `feat/llm-judge`; root dev/UAT remains untouched.
 - [x] Baseline rebased onto origin/main `12be48eeb566439b9f455b106c7928065511aa7f` on 2026-10-04; mesh/gateway/cluster remain 0.22.3/0.19.1/0.13.0.
-- [x] Build brief supersedes the spec's early-code prohibition: code/tests may proceed before PR #633 lands; TUPLE, migration generation and release qualification remain gated.
+- [x] Build brief supersedes the spec's early-code prohibition: code/tests may proceed before PR #662 (with folded native relay) lands; TUPLE, migration generation and release qualification remain gated.
 - [x] Make-only, Docker-first, no native package manager/Python; one Docker build at a time, Make uses -j1 after the OOM report; every Make invocation ends with ENV.
 - [x] Never ENV=dev; never make clean-all; all new code, comments, commits and Markdown text are in English.
 - [x] Tracked judge design/docs consolidation is a prerequisite before any PR or integration; the ignored draft is a local execution input only.
@@ -49,7 +49,7 @@
 - [x] **Exception process**: use the numeric BR96-EXn grammar with rationale, impact and rollback before a conditional/forbidden edit; no concrete exception ID is active.
 
 ## Feedback Loop
-- [x] Q1 working assumption: develop code/tests now per launch brief; after PR #633 lands, rebase/recheck and wait for conductor GO before the reserved 0.24.0/0.21.0/0.15.0 tuple. No alternate tuple.
+- [x] Q1 working assumption: develop code/tests now per launch brief; after PR #662 (with folded native relay) lands, rebase/recheck and wait for conductor GO before the reserved tuple. No alternate tuple.
 - [x] Q2/Q5/Q6 working assumptions remain revisable: product /llm-mesh host later; common ProviderId with explicit judgeOnly marker; environment-only JEV key, no BYOK.
 - [x] Review S1: before future 2.08a, add app.ts registry authPaths union and root-mount-fence-completeness/namespace-inventory regressions; future host scope must explicitly include these paths.
 - [x] Review S2 working assumption for future API tests: non-secret REGISTRY=local configuration with no provider keys; conductor confirms review-slot provisioning before any review/API stack launch.
@@ -58,7 +58,7 @@
 - [x] Review s4/s5: future host uses DPoP for bound tokens, rejects workspace selectors, sanitizes duplicate-binding configuration failures; migration regeneration must have zero artifact delta.
 - [x] Track source artifact only: concurrent worktree is not designated .track writer; conductor imports BRANCH.md under track-operation single-writer rules.
 - [x] Lot 0 Opus review: no BLOCKER; M1 maps the brief's BRJ-EXn spelling to numeric BR96-EXn; exception numbers 1–3 remain reserved for future Compose/migration/TUPLE and numbers 4+ for Lot 1. Do not list concrete inactive IDs, since the harness unlock is global.
-- [x] M2: 1.26a/b defer until PR #633 merged, rebase completed and 2.12 committed; no pre-train literal fixture changes.
+- [x] M2: 1.26a/b defer until PR #662 (with folded native relay) merged, rebase completed and 2.12 committed; no pre-train literal fixture changes.
 - [x] M3 conductor decision, 2026-10-04: SPLIT into 1A contracts (1.01–1.03), 1B chat gates (1.04a–g), 1C JEV/service (1.05–1.18), 1D client/cluster/docs (2.09, 1.20a–1.23, 1.25a…). Stop/report/Opus review after each; no next checkpoint before blocking findings are resolved.
 - [x] m1: user default-provider route is llm-mesh.ts, not config-product-settings.ts; 1.04e asserts its existing closed-enum refusal through judge-chat-settings.test.ts; conditional source scope is limited above.
 - [x] m2: 1.04f includes R API provider-mesh-contract-proof.test.ts/provider-credentials.test.ts and mesh local.test.ts; any necessary test edit requires scope extension first. Gateway typecheck/lint/full tests join the checkpoint gates.
@@ -109,6 +109,8 @@
 - [x] Lot 1.21 review resolution - MINEUR-D & MINEUR-E (2026-10-12): removed unneeded public loader aliases loadJudgeClient, loadJudgeHost, loadJevTransport; updated tests/modules/judge-loading.spec.ts to verify ClusterMeshModuleUnavailableError with code cluster_mesh_module_unavailable and reasons disabled and export_unavailable (via fakeMesh in-range without judge subpaths).
 - [x] Lot 1.23 review resolution - MINEUR-1, 2, 3 (2026-10-12): marked pending-reconciliation on returned receipt when clock exceeds deadline during persist (execution.ts); pinned 1 000 ms grace margin (unsettled at 10 000/60 000 ms, TIMEOUT at 11 000/61 000 ms) and verified no abort listener leaks on caller signal (client.ts, judge-client.test.ts, judge-dispatch.test.ts); affirmed client deadline semantics (server deadline + 1 000 ms margin).
 - [x] Lot 1.23 review resolution - MAJEUR-1 (2026-10-12): exercised real judge composition, registration generation mismatch refusal (code-derived reason 'generation_mismatch'), effectRef derived from real JudgeReceipt.callId (no verdict fields), and deduplicated idempotent receipt stage (judge-receipts.spec.ts).
+- [x] Owner decision (2026-10-12): PR #633 remainder is folded into PR #662; the judge predecessor gate "after PR #633 merged" becomes "after PR #662 (with folded native relay) merged", lots 1.26a/b and TUPLE then follow; Lot 2 is not authorized to start yet.
+- [x] Lot 1D / N-1 review resolution - MAJEUR-1 & spec fixes (2026-10-12): rewrote README examples in llm-mesh and cluster-mesh to match real exported APIs (authToken, no endpoint, no judgeHost option, proper compose/llm-mesh import, real deadline margin behavior); fixed spec inaccuracies in SPEC_EVOL_LLM_MESH.md regarding Math.min deadline margin and durable receipt verdict/settled status when persist completes after deadline.
 
 
 ## AI Flaky tests
@@ -243,7 +245,7 @@
   - [x] Consolidate judge contract, normalization, custody, privacy and failure semantics into tracked SPEC_EVOL_LLM_MESH.md/DEPLOYABLE_PROCESS.md and package READMEs before any PR/integration; verify public-surface tests.
   - [ ] Judge durable-host Lot 2 requires separate execution scope/schema exception/product tests; preserve S1–S2/s1–s5 as handoff requirements and keep live qualification separately gated.
 - [ ] **Lot N — Final validation (deferred to conductor release train)**
-  - [ ] After PR #633 merged + rebase + 2.12 committed: 1.26a independent post-train literals in tests/fixtures/train.ts, integration suites/package-tree helper; registry/topology regressions.
+  - [ ] After PR #662 (with folded native relay) merged + rebase + 2.12 committed: 1.26a independent post-train literals in tests/fixtures/train.ts, integration suites/package-tree helper; registry/topology regressions.
   - [ ] Under the same gate: 1.26b registry/topology/topology-ranges literals and intentional skew cases; run all three and both integration suites.
   - [ ] After conductor GO: atomic TUPLE/package bumps and 1.24a… packaging fixtures, complete exact-artifact/packed gates; default-suite skips are not qualification evidence.
   - [ ] Under separately authorized release scope: PR title/body from BRANCH.md, UAT/CI green, commit BRANCH.md removal, push/merge and separately authorized publication. No such action is authorized now.

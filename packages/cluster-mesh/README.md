@@ -367,18 +367,24 @@ repository CI publication path.
 
 ## LLM Mesh Composition with Judge Support
 
-`createLlmMeshNamespaceModule` supports optional judge hosting via `{ judge: true, judgeHost }`. When `judge` is omitted or false, judge subpaths are not acquired.
+`createLlmMeshNamespaceModule` supports optional judge hosting via `{ judge: true }`. When `judge` is omitted or false, judge subpaths are not acquired.
 
 ```ts
-import { createLlmMeshNamespaceModule, createClusterMeshModules } from '@sentropic/cluster-mesh';
+import { Hono } from 'hono';
+import { createClusterMeshModules } from '@sentropic/cluster-mesh';
+import { createLlmMeshNamespaceModule } from '@sentropic/cluster-mesh/compose/llm-mesh';
 
 const module = await createLlmMeshNamespaceModule(createClusterMeshModules(), {
   enabled: true,
   judge: true,
-  judgeHost: { jevDescriptor, createJudgeService, createJevAdapter },
+  createRouter: ({ llmMesh, judgeHost, context, receipts }) => {
+    const router = new Hono();
+    // Route handlers use loaded llmMesh and host judge capability (judgeHost) when judge: true
+    return router;
+  },
 });
 ```
 
 ### Correlation & Receipt Neutrality
 
-The registration gate validates generation policy (`generationId`). Refusals produce stage `verified` with `decision: 'refused'` and code-derived `reason: 'generation_mismatch'` without emitting an `acted` stage. Neutral invocation receipts correlate via `effectRef` (`receipt:${callId}:metadata`), strictly preserving verdict privacy without exposing `pass`, `score`, or `noul` values.
+In test environments (such as lot 1.23 integration tests), the registration gate validates generation policy (`generationId`). Refusals produce stage `verified` with `decision: 'refused'` and code-derived `reason: 'generation_mismatch'` without emitting an `acted` stage. Invocation receipts correlate via `effectRef` convention (`receipt:${callId}:metadata`), strictly preserving verdict privacy without exposing `pass`, `score`, or `noul` values (production routing and effectRef derivation remain assigned to future host lot 2.08).
