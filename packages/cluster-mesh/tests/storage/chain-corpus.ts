@@ -1,4 +1,4 @@
-// Shared chain corpus (L3a v4 §5.3): independent typed chains, allocation
+// Shared chain corpus (L3a v4.1 frozen §5.3): independent typed chains, allocation
 // rules, CAS ordering and disposal-retained recreation guards.
 // Backend-agnostic: structural port-shaped operations, all awaited (§5.2).
 

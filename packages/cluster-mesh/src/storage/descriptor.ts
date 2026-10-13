@@ -1,5 +1,5 @@
 // K1 registered descriptor, projection SPI and effective-change
-// derivation (L3a v4 §6). Descriptors are trusted installed code.
+// derivation (L3a v4.1 frozen §6). Descriptors are trusted installed code.
 
 import {
   errResult,

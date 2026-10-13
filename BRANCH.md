@@ -152,8 +152,8 @@
   - [x] MINEUR-3 triangle rejects blank and NUL identities per L6a.
   - [x] MINEUR-4 scope-level idempotency with divergent-content conflict.
   - [x] MINEUR-5 bound-scope snapshot comparison in the reference.
-  - [ ] MINEUR-6 discipline deviations recorded under BR-K1R3-EX1.
-  - [ ] MINEUR-7 BRANCH gates, v4.1 headers and allowed paths fixed.
+  - [x] MINEUR-6 discipline deviations recorded under BR-K1R3-EX1.
+  - [x] MINEUR-7 BRANCH gates, v4.1 headers and allowed paths fixed.
 - [ ] Lot N — Final validation
   - [ ] Typecheck and Lint
   - [ ] Retest cluster-mesh

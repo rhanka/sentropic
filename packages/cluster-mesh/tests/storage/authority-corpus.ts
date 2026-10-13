@@ -1,4 +1,4 @@
-// Shared authority corpus (L3a v4 §4, §16.1): forged, wrong-module and
+// Shared authority corpus (L3a v4.1 frozen §4, §16.1): forged, wrong-module and
 // cross-scope handles plus operation escalation, expiry and revocation.
 // Backend-agnostic: injected structural fixtures, all operations awaited (§5.2).
 
