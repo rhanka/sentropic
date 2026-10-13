@@ -179,7 +179,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
 
 - [ ] **Lot 7 — Opus r6 minor fixes (m1..m4)**
   - [x] RED: concurrent end tests (domain and API) and refined LISTEN notify assertions (m2, m3)
-  - [ ] RED: two-session CAS test pinning sessionId predicate (m1)
+  - [x] RED: two-session CAS test pinning sessionId predicate (m1)
   - [ ] GREEN: domain unreachable loops and fallback removed in detach/end, align CAS tuple doc (m1, m2)
   - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit adoption, scope-check PASS
 - [ ] **Lot N — Final validation**
