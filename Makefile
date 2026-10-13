@@ -583,12 +583,7 @@ pull-api-image: docker-login
 publish-api-image: docker-login
 	@echo "▶ Pushing api image to registry"
 	@$(MAKE) verify-api-image ENV=$(ENV)
-	@if docker manifest inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/ci-prod-image/existing-manifest.json 2> .tmp/ci-prod-image/manifest-error; then \
-		docker run --rm -i $(LLM_MESH_NODE_IMAGE) node -e 'let s=""; for await (const c of process.stdin) s+=c; const m=JSON.parse(s); if (m.config?.digest !== process.argv[1]) { console.error("Production tag collision: recorded artifact differs from registry"); process.exit(1); }' "$(API_IMAGE_REF)" < .tmp/ci-prod-image/existing-manifest.json; \
-	elif ! grep -Eq 'manifest unknown|no such manifest|manifest not found' .tmp/ci-prod-image/manifest-error; then \
-		echo 'Cannot establish production registry tag identity; refusing publication'; exit 1; \
-	fi
-	@docker push $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+	@bash scripts/publish-api-image.sh
 
 .PHONY: publish-api-main-image
 publish-api-main-image: docker-login verify-api-image ## Promote the verified artifact to main without a registry re-pull
