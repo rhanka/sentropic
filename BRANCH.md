@@ -65,6 +65,8 @@
 - [x] `K2B-MIN2` — Atomic corpus profile-parameterized: barrier/purge/predicate/relationship rejections apply only when the profile is absent; positive owners recorded (K3 predicates, K4 relationships, K2b/S3/P2c barriers and purge).
 - [x] `K2B-MIN3` — `validateReadPage` byte limits apply to every record-carrying page; null-cursor and envelope-overflow validator tests added.
 - [x] `K2B-MIN4` — Read corpus cursor-integrity gaps deferred to K3 token semantics; header adjusted.
+- [ ] `BR-K2B-DISC2` — New `reference-staged.ts` core lands in one commit over 150 lines (single coherent test-support file, K1 `BR-K1R3-EX1` precedent for reference-scale files); all following commits stay under 150 lines.
+- [x] `K2B-REF1` — Staged reference core: wrapper delegates, coverage resolution, disposal mirror, purge-policy commits, journal emission.
 - [ ] `K2B-RED1` — RED staged corpus versus the unextended reference (hidden state, gaps, conflicts, atomic publication, recovery).
 - [ ] `K2B-RED2` — RED replay corpus (ordering, watermark, checkpoint CAS, poison, resync, external interleave).
 - [ ] `K2B-RED3` — RED barrier corpus (G1 denial before/after disposal, absence distinct, raw tombstone neutral, over-limit coverage, concurrent insertion).
