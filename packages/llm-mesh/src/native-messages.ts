@@ -102,3 +102,106 @@ export type NativeMessagesResult = (
   /** Host-measured outgoing bytes, retained for numeric pre/late SSE 413 errors. */
   readonly requestSize?: RequestSizeDetail;
 };
+
+/** Empty until real qualification; trusted hosts may supply a code-only override. */
+export const NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS: readonly string[] = Object.freeze([]);
+
+const isExactAnthropicCatalogModel = (modelId: string): boolean =>
+  modelProfiles.some((profile) => profile.providerId === 'anthropic' && profile.modelId === modelId);
+
+export const validateNativeModelAllowlist = (
+  modelIds: readonly string[],
+): readonly string[] => {
+  for (const modelId of modelIds) {
+    // W port of R's exclusive-alias rejection: R keyed its single-target
+    // `EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS`; W folds every launch alias
+    // into `LAUNCH_ALIAS_ROUTE_MAPPINGS`, so any alias key without its own
+    // exact Anthropic catalog entry is rejected. Bare ids that are exact
+    // catalog models (e.g. `claude-sonnet-5`) remain accepted.
+    if (!isExactAnthropicCatalogModel(modelId)
+      || Object.hasOwn(LAUNCH_ALIAS_ROUTE_MAPPINGS, modelId) && !isExactAnthropicCatalogModel(modelId)) {
+      throw new Error('Native Messages allowlist requires exact non-exclusive Anthropic model IDs');
+    }
+  }
+  return Object.freeze([...modelIds]);
+};
+
+/** Pure provider/model identity check; account advertisement is a separate gate. */
+export const isNativeMessagesTarget = (
+  target: { readonly providerId: string; readonly modelId: string },
+  modelIds: readonly string[] = NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS,
+): boolean => target.providerId === 'anthropic' && modelIds.includes(target.modelId);
+
+const isNonemptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+export const isPreparedNativeMessages = (value: unknown): value is PreparedNativeMessages => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const capability = value as Record<string, unknown>;
+  return capability.contractVersion === 1
+    && capability.protocol === 'anthropic-messages'
+    && isNonemptyString(capability.modelId)
+    && Array.isArray(capability.apiVersions) && capability.apiVersions.length > 0
+    && [...capability.apiVersions].every(isNonemptyString)
+    && Array.isArray(capability.requiredBetas)
+    && [...capability.requiredBetas].every((beta) => typeof beta === 'string')
+    && typeof capability.execute === 'function'
+    && (capability.finalize === undefined || typeof capability.finalize === 'function');
+};
+
+/** Lot 2 required betas are empty: preserve the caller's parser-retained value exactly. */
+export const composeAnthropicBeta = (
+  callerValue: string | undefined,
+  requiredBetas: readonly string[] = [],
+): string | undefined => {
+  if (requiredBetas.length === 0) return callerValue;
+  const required = requiredBetas.join(',');
+  return callerValue === undefined ? required : `${callerValue},${required}`;
+};
+
+export type NativeMessagesProviderErrorType =
+  | 'invalid_request_error' | 'authentication_error' | 'permission_error'
+  | 'not_found_error' | 'request_too_large' | 'rate_limit_error'
+  | 'api_error' | 'overloaded_error';
+
+export type NativeMessagesTransportCode =
+  | 'timeout' | 'account_unavailable' | 'native_protocol_error';
+
+export interface NativeValidationPublicDetail {
+  readonly type: string;
+  readonly message: string;
+}
+
+export interface NativeMessagesUpstreamErrorOptions {
+  readonly requestSize?: RequestSizeDetail;
+  readonly status: number;
+  readonly type?: NativeMessagesProviderErrorType;
+  readonly code?: NativeMessagesTransportCode;
+  readonly retryAfterMs?: number;
+  /** Operational evidence; dispatched pre-fetch zeros do not exempt billing. */
+  readonly usage?: RouteAttemptUsage;
+  readonly validation?: NativeValidationPublicDetail;
+}
+
+/** Never place upstream validation prose, payloads or credentials in this error. */
+export class NativeMessagesUpstreamError extends Error {
+  readonly requestSize?: RequestSizeDetail;
+  readonly status: number;
+  readonly type?: NativeMessagesProviderErrorType;
+  readonly code?: NativeMessagesTransportCode;
+  readonly retryAfterMs?: number;
+  readonly usage?: RouteAttemptUsage;
+  readonly validation?: NativeValidationPublicDetail;
+
+  constructor(options: NativeMessagesUpstreamErrorOptions) {
+    super('Native Anthropic Messages request failed');
+    this.name = 'NativeMessagesUpstreamError';
+    this.status = options.status;
+    this.type = options.type;
+    this.code = options.code;
+    this.retryAfterMs = options.retryAfterMs;
+    this.usage = options.usage;
+    this.validation = options.validation;
+    this.requestSize = readRequestSizeDetail(options.requestSize);
+  }
+}
