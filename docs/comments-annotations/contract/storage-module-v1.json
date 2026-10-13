@@ -104,6 +104,21 @@
         "completeEncodedPageBytes": 1048576,
         "commentsCursorTtlSeconds": null
       },
+      "byteUnits": "canonical bytes",
+      "pagingSemantics": {
+        "ordinaryPages": "Ordinary pages count canonical records",
+        "fragmentPages": "Fragment pages count complete fragment envelopes",
+        "byteLimitsInclusion": "Both count the full response envelope and cursor toward byte limits"
+      },
+      "recordFramingRule": "Whole histories have no fragment-sized ceiling. A record plus required framing must fit an individual fragment.",
+      "proposedHostInjectedBounds": {
+        "bodyBytes": 65536,
+        "segmentBytes": 16384,
+        "profileBytes": 16384,
+        "units": "canonical bytes",
+        "note": "Existing M1 body/segment/profile bounds remain host-injected; CA proposed values are 64 KiB, 16 KiB and 16 KiB respectively."
+      },
+      "transportQualificationRequirement": "Transport qualification must include escaping and multibyte encoding.",
       "admission": {
         "segmentsPerBody": 64,
         "mentionsPerBody": 64,
