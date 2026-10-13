@@ -390,6 +390,78 @@ export class TestStagedStore {
     return { unitId: op.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
   }
 
+  sealStaged(input: { readonly unit: StagedHandle; readonly root: StagedCommitRoot }): {
+    readonly unitId: string;
+    readonly commitRoot: StagedCommitRoot;
+  } {
+    this.requireOperation('write');
+    const op = this.staged.units.get(input.unit.operationKey);
+    if (!op || op.unitId !== input.unit.unitId) throw new StorageInvalidCommandError('unknown staged unit');
+    if (op.state !== 'staging') throw new StorageInvalidCommandError('only staging units seal');
+    const root = validateCommitRoot(input.root);
+    if (!root.ok) throw new StorageInvalidCommandError(root.errors.join('; '));
+    if (input.root.fragmentCount !== String(op.fragments.length)) {
+      throw new StorageInvalidCommandError('wrong counts cannot seal');
+    }
+    const last = op.fragments[op.fragments.length - 1];
+    if (!last || input.root.finalFragmentHash !== last.fragmentDigest) {
+      throw new StorageInvalidCommandError('truncated chains cannot seal');
+    }
+    if (nextStagedState('staging', 'begin-seal') !== 'sealing' || nextStagedState('sealing', 'seal') !== 'sealed') {
+      throw new StorageInvalidCommandError('seal transition closed');
+    }
+    const touched = new Set<string>();
+    for (const fragment of op.fragments) {
+      for (const guard of fragment.effects.guards) {
+        if (guard.kind === 'head' || guard.kind === 'absent') touched.add(guard.chainId);
+      }
+      for (const append of fragment.effects.appends) touched.add(append.chainId);
+    }
+    const base = new Map<string, { readonly head: string | null; readonly disposed: boolean }>();
+    for (const chainId of touched) {
+      base.set(chainId, { head: this.inner.readHead(chainId), disposed: this.staged.disposed.has(chainId) });
+    }
+    op.state = 'sealed';
+    op.seal = { unitId: op.unitId, commitRoot: input.root };
+    op.base = base;
+    return op.seal;
+  }
+
+  commitStaged(input: {
+    readonly seal: { readonly unitId: string; readonly commitRoot: StagedCommitRoot };
+    readonly fence: WriterFence;
+  }): CommitReceipt {
+    this.requireOperation('write');
+    const fence = validateWriterFence(input.fence);
+    if (!fence.ok) throw new StorageInvalidCommandError(fence.errors.join('; '));
+    const op = [...this.staged.units.values()].find((entry) => entry.unitId === input.seal.unitId);
+    if (!op) throw new StorageInvalidCommandError('unknown staged seal');
+    if (op.state === 'committed' && op.receipt) return op.receipt;
+    if (op.state !== 'sealed' || !op.seal || !op.base) throw new StorageInvalidCommandError('unstaged commit');
+    if (JSON.stringify(op.seal) !== JSON.stringify(input.seal)) {
+      throw new StorageInvalidCommandError('seal substitution rejected');
+    }
+    for (const [chainId, captured] of op.base) {
+      if (this.inner.readHead(chainId) !== captured.head || this.staged.disposed.has(chainId) !== captured.disposed) {
+        throw new StorageCasConflictError('changed base without publication');
+      }
+    }
+    const merged: AtomicUnit = {
+      guards: op.fragments.flatMap((fragment) => fragment.effects.guards),
+      records: op.fragments.flatMap((fragment) => fragment.effects.records),
+      appends: op.fragments.flatMap((fragment) => fragment.effects.appends),
+      updates: op.fragments.flatMap((fragment) => fragment.effects.updates),
+      relationships: op.fragments.flatMap((fragment) => fragment.effects.relationships),
+      barriers: op.fragments.flatMap((fragment) => fragment.effects.barriers),
+      purgeIntents: op.fragments.flatMap((fragment) => fragment.effects.purgeIntents),
+      indexWrites: op.fragments.flatMap((fragment) => fragment.effects.indexWrites),
+    };
+    const receipt = this.commitWithSegment(merged, {}, op.operationKey);
+    op.state = 'committed';
+    op.receipt = receipt;
+    return receipt;
+  }
+
   inspectStaged(operationKey: string): StagedUnitStatus {
     this.requireOperation('read');
     const op = this.staged.units.get(operationKey);
@@ -398,5 +470,16 @@ export class TestStagedStore {
     if (op.state === 'sealed' && op.seal) return { state: 'sealed', seal: op.seal };
     if (op.state === 'committed' && op.receipt) return { state: 'committed', commitId: op.receipt.commitId };
     return { state: 'aborted', reason: op.abortReason ?? 'aborted' };
+  }
+
+  abortStaged(input: { readonly unit: StagedHandle }): void {
+    this.requireOperation('write');
+    const op = this.staged.units.get(input.unit.operationKey);
+    if (!op || op.unitId !== input.unit.unitId) throw new StorageInvalidCommandError('unknown staged unit');
+    if (op.state === 'committed') throw new StorageInvalidCommandError('committed units cannot abort');
+    if (op.state === 'aborted') return;
+    op.state = 'aborted';
+    op.abortReason = 'aborted by caller';
+    op.fragments.length = 0;
   }
 }
