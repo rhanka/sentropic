@@ -2,7 +2,7 @@
 // Test-first RED: imports the K3 kernel before it exists.
 
 import { describe, expect, it } from 'vitest';
-import { createKernel } from '../../src/storage/kernel.js';
+import { createKernel, createStaticAuthorityPort } from '../../src/storage/kernel.js';
 import { grantFor, runAuthorityCorpus } from './authority-corpus.js';
 import { expectCode } from './atomic-corpus.js';
 
@@ -52,6 +52,43 @@ describe('K3 binding: revalidation and capabilities', () => {
     const doomed = kernel.bindNew(grantFor({ token: 'token-revoked-k3' }));
     kernel.revoke('token-revoked-k3');
     await expectCode(async () => doomed.readHead('any'), 'denied', 'K3-RED binding: revocation denies queued work');
+  });
+
+  it('K3-FIX divergent re-issuance of a token is refused', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const base = grantFor({ token: 'token-reissue-1' });
+    kernel.bindNew(base);
+    await expectCode(
+      async () =>
+        kernel.bindNew({ ...base, operations: ['read', 'write', 'publish'] } as typeof base),
+      'denied',
+      'K3-FIX binding: a second bindNew with widened operations is refused',
+    );
+    const rebound = kernel.bind(base);
+    expect(await rebound.readHead('nothing')).toBe(null);
+  });
+
+  it('K3-FIX the adapter handle exposes no issuance', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const grant = grantFor({ token: 'token-adapter-1' });
+    kernel.bindNew(grant);
+    const adapter = kernel.adapter();
+    expect('bindNew' in (adapter as unknown as Record<string, unknown>)).toBe(false);
+    expect('revoke' in (adapter as unknown as Record<string, unknown>)).toBe(false);
+    const bound = adapter.bind(grant);
+    expect(await bound.readHead('nothing')).toBe(null);
+  });
+
+  it('K3-FIX grants with an unexpected issuer are refused at the root', async () => {
+    const kernel = createKernel({
+      moduleId: 'comments',
+      authority: createStaticAuthorityPort({ issuer: 'expected-issuer' }),
+    });
+    await expectCode(
+      async () => kernel.bindNew(grantFor({ token: 'token-rogue-1', issuer: 'rogue' })),
+      'denied',
+      'K3-FIX binding: a grant with an unexpected issuer is refused',
+    );
   });
 
   it('K3-RED advertised profiles expose ordinary capabilities only', async () => {
