@@ -42,6 +42,23 @@ describe('responses pre-dispatch refusal (spec §16.6)', () => {
     expect(f.settleRoute).not.toHaveBeenCalled();
   });
 
+  it('echoes a charset-safe unknown key in param and drops a hostile one (R4-MIN-9)', async () => {
+    const f = rig();
+    const clean = await f.send('/responses',
+      { model: 'gpt-6.1-sol', input: 'hi', future_flag: true });
+    expect(clean.status).toBe(400);
+    expect(await clean.json()).toEqual({ error: expect.objectContaining({
+      code: 'unsupported_parameter', param: 'future_flag' }) });
+    const hostile = await f.send('/responses',
+      { model: 'gpt-6.1-sol', input: 'hi', 'weird key");': true });
+    expect(hostile.status).toBe(400);
+    const hostileBody = await hostile.json() as { error: Record<string, unknown> };
+    expect(hostileBody.error.code).toBe('unsupported_parameter');
+    expect(hostileBody.error).not.toHaveProperty('param');
+    expect(f.plan).not.toHaveBeenCalled();
+    expect(f.settleRoute).not.toHaveBeenCalled();
+  });
+
   it.each(['/responses/count_tokens', '/v1/responses/count_tokens'] as const)('serves no count endpoint at %s', async (path) => {
     const f = rig();
     const res = await f.send(path, { model: 'gpt-6.1-sol', input: 'hi' });

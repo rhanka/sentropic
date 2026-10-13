@@ -119,14 +119,16 @@ is contextually typed and compiles without the annotation.
 | --- | --- | --- |
 | `POST /v1/messages` | Anthropic Messages, JSON or SSE |
 | `POST /v1/chat/completions` | OpenAI Chat Completions, JSON or SSE |
+| `POST /responses`, `POST /v1/responses` | OpenAI Responses (stateless), JSON or SSE |
 | `GET /v1/models` | caller/pool-filtered discovery |
 | `GET /healthz` | liveness |
 | `GET /readyz` | DB, secret-store, and pool readiness |
 
-The gateway does not replace either compatible endpoint with `/v1/responses`.
-Codex Responses and Cloud Code wire conversion are runtime responsibilities in
-mesh. Reasoning, images, tools/results, usage, finish status, allowed provider
-headers, and provider-shaped errors are preserved through the canonical form.
+The Responses routes complement the two compatible endpoints; they do not
+replace them. Codex Responses and Cloud Code wire conversion are runtime
+responsibilities in mesh. Reasoning, images, tools/results, usage, finish
+status, allowed provider headers, and provider-shaped errors are preserved
+through the canonical form.
 
 ## Routing integration
 

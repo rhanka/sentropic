@@ -199,6 +199,12 @@ export const normalizeResponsesIngress = (
   }
 
   if (root.input === undefined) fail('input', 'bad_request', 'input must be set');
+  // R4-MIN-9: enforce the item bound before mapping — oversized input fails
+  // without building the full canonical message array (the body cap still
+  // bounds absolute size).
+  if (Array.isArray(root.input) && root.input.length > limits.maxInputItems) {
+    fail('input', 'bad_request', `at most ${limits.maxInputItems} input items are served`);
+  }
   const messages: LlmMeshMessage[] = [];
   if (typeof root.instructions === 'string') {
     messages.push({ role: 'system', content: root.instructions, metadata: { ingress: 'instructions' } });
@@ -212,9 +218,6 @@ export const normalizeResponsesIngress = (
     mapped.messages.push({ role: 'user', content: root.input, metadata: { ingress: root.input } });
   } else if (Array.isArray(root.input)) {
     (root.input as unknown[]).forEach((item, index) => mapInputItem(item, index, collected, mapped));
-    if (root.input.length > limits.maxInputItems) {
-      fail('input', 'bad_request', `at most ${limits.maxInputItems} input items are served`);
-    }
   } else {
     fail('input', 'bad_request', 'input must be a string or an item array');
   }
