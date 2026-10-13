@@ -72,13 +72,13 @@ Guard the publish-api-image CI job against release tag collisions and overwrites
   - [x] Verify baseline version filters (`make check-ci-version-filters API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`).
   - [x] Verify baseline scope check (`make scope-check API_PORT=9510 UI_PORT=5710 MAILDEV_UI_PORT=1610 ENV=test-ci-tag-guard`).
 
-- [ ] **Lot 1 — Publish guard implementation**
-  - [ ] Create `scripts/publish-api-image.sh` enforcing registry manifest inspect before push.
-  - [ ] Handle `exists-different` with exit 1 and tag collision error.
-  - [ ] Handle `exists-same` with idempotent push skip and exit 0.
-  - [ ] Handle `absent` with push and exit 0.
-  - [ ] Explicitly document and preserve moving tags behavior (`main`, `latest`).
-  - [ ] Update `publish-api-image` target in `Makefile` to call `scripts/publish-api-image.sh`.
+- [x] **Lot 1 — Publish guard implementation**
+  - [x] Create `scripts/publish-api-image.sh` enforcing registry manifest inspect before push.
+  - [x] Handle `exists-different` with exit 1 and tag collision error.
+  - [x] Handle `exists-same` with idempotent push skip and exit 0.
+  - [x] Handle `absent` with push and exit 0.
+  - [x] Explicitly document and preserve moving tags behavior (`main`, `latest`).
+  - [x] Update `publish-api-image` target in `Makefile` to call `scripts/publish-api-image.sh`.
 
 - [ ] **Lot 2 — Automated test suite**
   - [ ] Create `scripts/test-api-tag-guard.sh` with isolated mock docker CLI.
