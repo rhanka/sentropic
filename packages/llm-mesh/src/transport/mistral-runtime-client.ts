@@ -3,6 +3,7 @@ import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } f
 import type { MistralAdapterClient } from '../adapters.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { ProviderRuntimeContext } from '../registry.js';
+import { requalifyResponseToolName, responsesCarrierOf } from '../responses-wire.js';
 import type { FinishReason, StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
 
@@ -259,6 +260,7 @@ export class MistralRuntimeClient implements MistralAdapterClient {
         name: tool.name,
         ...(tool.description ? { description: tool.description } : {}),
         parameters: tool.inputSchema,
+        ...(tool.strict !== undefined ? { strict: tool.strict } : {}),
       },
     }));
     const body: Record<string, unknown> = {
@@ -304,6 +306,7 @@ export class MistralRuntimeClient implements MistralAdapterClient {
   }
 
   async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
+    const carrier = responsesCarrierOf(request.providerOptions);
     const response = await this.post(request, context, 'text/event-stream', true);
     if (!response.body) {
       const done: StreamEvent = { type: 'done', data: { finishReason: 'unknown' } };
@@ -335,7 +338,7 @@ export class MistralRuntimeClient implements MistralAdapterClient {
               data: {
                 toolCallId,
                 providerCallId: toolDelta.id ?? toolCallId,
-                name: toolDelta.name ?? '',
+                name: requalifyResponseToolName(toolDelta.name ?? '', carrier),
                 argumentsText: '',
               },
             };
@@ -351,7 +354,7 @@ export class MistralRuntimeClient implements MistralAdapterClient {
               toolCallId,
               providerCallId: toolDelta.id ?? toolCallId,
               delta: toolDelta.fragment,
-              ...(toolDelta.name ? { name: toolDelta.name } : {}),
+              ...(toolDelta.name ? { name: requalifyResponseToolName(toolDelta.name, carrier) } : {}),
             },
           };
         }
@@ -400,7 +403,10 @@ export class MistralRuntimeClient implements MistralAdapterClient {
     const choiceMessage = firstChoice && typeof firstChoice === 'object'
       ? (firstChoice as Record<string, unknown>).message
       : undefined;
-    const toolCalls = extractToolCalls(choiceMessage);
+    const carrier = responsesCarrierOf(request.providerOptions);
+    const toolCalls = extractToolCalls(choiceMessage).map((call) => ({
+      ...call, name: requalifyResponseToolName(call.name, carrier),
+    }));
     const rawFinish = firstChoice && typeof firstChoice === 'object'
       ? textOf((firstChoice as Record<string, unknown>).finish_reason)
       : null;

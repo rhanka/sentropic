@@ -75,6 +75,23 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
     }]);
   });
 
+  it('forwards the validated strict flag on function tools (fixture B serves strict:true)', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ output_text: 'hi' }), { status: 200 }));
+    const client = new MuseRuntimeClient({ fetch: fetchFn });
+
+    await client.generate({
+      ...request,
+      tools: [{ type: 'function', name: 'get_time', inputSchema: { type: 'object' }, strict: true }],
+    }, auth);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    const body = JSON.parse(String(init.body));
+    expect(body.tools).toEqual([{
+      type: 'function',
+      function: { name: 'get_time', parameters: { type: 'object' }, strict: true },
+    }]);
+  });
+
   it('forwards the gateway session id when the account carries one', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ output_text: 'hi' }), { status: 200 }));
     const client = new MuseRuntimeClient({ fetch: fetchFn });
@@ -83,6 +100,25 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
 
     const [, init] = fetchFn.mock.calls[0]!;
     expect(init.headers).toMatchObject({ 'x-meta-ai-gateway-session-id': 'stable-session-1' });
+  });
+
+  it('requalifies returned bare tool names through the Responses carrier refs', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-2',
+      choices: [{ message: { content: '',
+        tool_calls: [{ id: 'call_1', type: 'function',
+          function: { name: 'work_list', arguments: '{}' } }] }, finish_reason: 'tool_calls' }],
+    }), { status: 200 }));
+    const client = new MuseRuntimeClient({ fetch: fetchFn });
+
+    const response = await client.generate({ ...request,
+      providerOptions: { responses: { customTools: [],
+        functionToolRefs: [{ qualifiedName: 'muse.work_list', bareName: 'work_list', namespace: 'muse' }],
+        reasoningArtifacts: [], itemIds: [] } } }, auth);
+
+    expect(response.toolCalls).toEqual([{ toolCallId: 'call_1', providerCallId: 'call_1',
+      name: 'muse.work_list', argumentsText: '{}' }]);
+    expect(response.finishReason).toBe('tool_calls');
   });
 
   it('never accepts an absent executable muse token', async () => {
