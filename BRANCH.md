@@ -317,6 +317,12 @@
   - [x] **Lot N24pre10 — body detachment ownership (`d948f37e`, row 43b)**: no-op — `CheckedGatewayBody` extraction already held (class head identical; mine extended with retain helpers).
   - [x] **Lot N24pre11 — retry/SDK body retention (`6bb35fd3`, row 43c1)**: `retainRouteBody`/detach/release all held; only the post-dispatch `nativeRequest` clearing was missing — ported 47/47 GREEN.
   - [x] **Lot N24pre12 — stream lease transfer (`ef9d4109`, row 43c2)**: `retainGatewayStreamBody` + index export byte-identical already; typed `nativeRequest` clearing in json + stream ported 47/47 + 244/244 GREEN.
+  - [x] **Lot N24pre13 — passthrough stream cleanup (`d3500203`, row 43c3)**: no-op — finish-once/close-release/early-return cleanup already held in legacy `runStreamFlow`.
+  - [x] **Lot N24pre14 — checked bodies at router (`f5c6f2f3`, row 44-1)**: no-op — body-limit middleware + `bodyLease` wiring already held (superset with requestBodyOptions + count path).
+  - [x] **Lot N24pre15 — bodyless refusal (`fbfed703`, row 44-1b)**: no-op — empty checked body for readerless requests already held.
+  - [x] **Lot N24pre16 — ingress cap boundaries (`422e1d73`, row 44-2)**: no-op — over-cap/exact-cap/invalid-JSON/order-sharing cases already held in the evolved `request-body-limit.test.ts` 46/46 GREEN.
+  - [x] **Lot N24pre17 — boundary fixture fix (`cb0d1911`, row 44-2b)**: no-op — one-char literal fix specific to R's test text (unported; mine covers exact boundaries via headroom).
+  - [x] **Lot N24pre18 — shared capacity refusals (`351cadc1`, row 44a)**: 503 capacity refusal across router instances pre-auth/parse/settle + partial restore without parsing 50/50 GREEN (held behavior; self-contained block with own helpers).
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).

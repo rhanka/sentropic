@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import {
-  CheckedGatewayBody, defaultGatewayBodyBytePool, ensureCheckedGatewayBody, GatewayBodyBytePool,
+  CheckedGatewayBody, createGatewayRouter, defaultGatewayBodyBytePool, ensureCheckedGatewayBody, GatewayBodyBytePool,
   GATEWAY_INFLIGHT_BODY_BYTES, GATEWAY_MAX_REQUEST_BODY_BYTES, gatewayRequestBodyLimit,
   isGatewayBodyPath, REQUEST_BODY_CAPACITY_MESSAGE, resolveGatewayBodyLimit,
-  resolveGatewayBodyRoute, retainGatewayStreamBody,
+  resolveGatewayBodyRoute, retainGatewayStreamBody, type RequestBodyLimitOptions,
 } from '../src/index.js';
 import { GatewayError, mapGatewayError } from '../src/index.js';
+import { nativeHarness } from './fixtures/native-flow.js';
 
 // Fold lots N03-N07 grow this file: N03 covers the shared byte pool only.
 // Reader, retention, middleware order and flow lifetimes follow per lot.
@@ -326,5 +327,80 @@ describe('bounded checked read (N05)', () => {
       { pool, limitBytes: 96, responsesLimitBytes: bytes.length }))
       .rejects.toMatchObject({ kind: 'request-too-large' });
     expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0 });
+  });
+});
+
+describe('shared ingress capacity (row 44a)', () => {
+  const PATHS = ['/v1/messages', '/v1/chat/completions', '/v1/messages/count_tokens'];
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+  const bodyRequest = (chunks: readonly Uint8Array[], path = PATHS[0]!) => {
+    let index = 0;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { if (index < chunks.length) controller.enqueue(chunks[index++]!); else controller.close(); }, cancel,
+    });
+    const raw = new Request(`https://gateway.test${path}`, { method: 'POST', body,
+      duplex: 'half' } as RequestInit & { duplex: 'half' });
+    return { raw, cancel };
+  };
+  const limitedRouter = (h: ReturnType<typeof nativeHarness>, options: RequestBodyLimitOptions,
+    owners: CheckedGatewayBody[] = []) => {
+    const app = new Hono();
+    const inspect: MiddlewareHandler = async (c, next) => {
+      owners.push(await ensureCheckedGatewayBody(c.req.raw, options)); await next();
+    };
+    app.use('*', gatewayRequestBodyLimit(options));
+    app.use('*', inspect);
+    app.route('/', createGatewayRouter({ config: h.deps.config, routePlanner: h.deps.routePlanner,
+      routeMetering: h.deps.metering, budget: h.deps.budget, nativeMessagesEnabled: true,
+      requestBody: options, requestId: () => 'req-native' }));
+    return app;
+  };
+
+  it.each(PATHS)('refuses only unavailable byte extensions on %s across router instances', async path => {
+    const h = nativeHarness(); const bytes = utf8(JSON.stringify(h.request.body));
+    const pool = new GatewayBodyBytePool(bytes.length * 2); const options = { pool, limitBytes: bytes.length };
+    const left = await ensureCheckedGatewayBody(bodyRequest([bytes], PATHS[0]).raw, options);
+    const right = await ensureCheckedGatewayBody(bodyRequest([bytes], PATHS[2]).raw, options);
+    expect(pool.stats.reservedBytes).toBe(pool.capacityBytes);
+    const auth = vi.fn(h.deps.config.callerAuth.verify);
+    const build = () => createGatewayRouter({ config: { ...h.deps.config, callerAuth: { verify: auth } },
+      routePlanner: h.deps.routePlanner, routeMetering: h.deps.metering, budget: h.deps.budget, requestBody: options });
+    const apps = [build(), build()];
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      for (const app of apps) {
+        const { raw, cancel } = bodyRequest([utf8('!')], path);
+        const before = parse.mock.calls.length;
+        const response = await app.request(raw);
+        expect(parse.mock.calls.length).toBe(before);
+        expect(response.status).toBe(503); expect(cancel).toHaveBeenCalledTimes(1);
+        expect(response.headers.get('retry-after')).toBe('1');
+        expect(response.headers.get('x-should-retry')).toBe('true');
+        expect(response.headers.has('x-sentropic-relay')).toBe(false);
+        expect(response.headers.has('x-sentropic-served')).toBe(false);
+        const message = 'Gateway request body capacity is temporarily exhausted; retry later.';
+        expect(await response.json()).toEqual(path.includes('chat')
+          ? { error: { type: 'api_error', code: 'request_body_capacity', message } }
+          : { type: 'error', error: { type: 'api_error', message } });
+        expect(pool.stats.reservedBytes).toBe(pool.capacityBytes);
+      }
+    } finally { parse.mockRestore(); left.release(); right.release(); }
+    expect(auth).not.toHaveBeenCalled(); expect(h.calls.quote).toEqual([]);
+    expect(h.execute).not.toHaveBeenCalled(); expect(h.finalize).not.toHaveBeenCalled();
+    expect(h.recorder.events).toEqual([]); expect(h.recorder.settlements).toEqual([]);
+    const following = await limitedRouter(h, options).request(bodyRequest([bytes]).raw);
+    expect(following.status).toBe(200); expect(h.execute).toHaveBeenCalledTimes(1);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 5, releases: 5 });
+  });
+  it('restores partially reserved ingress after an unavailable extension without parsing', async () => {
+    const pool = new GatewayBodyBytePool(16); const held = pool.acquire(); held.extend(14);
+    const storage = vi.fn((size: number) => new Uint8Array(size));
+    const { raw, cancel } = bodyRequest([utf8('{'), utf8('"a')]);
+    await expect(ensureCheckedGatewayBody(raw, { pool, limitBytes: 16, storage }))
+      .rejects.toMatchObject({ kind: 'request-body-capacity' });
+    expect(storage.mock.calls).toEqual([[1]]); expect(cancel).toHaveBeenCalledTimes(1);
+    expect(pool.stats).toMatchObject({ reservedBytes: 14, liveLeases: 1, releases: 1 });
+    held.release(); expect(pool.stats.reservedBytes).toBe(0);
   });
 });
