@@ -2,7 +2,7 @@ import { InMemoryRoutePlanner, RoutePlanError, type PreparedRouteAttempt, type R
 import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
-import { toProviderShapedError } from '../src/index.js';
+import { CheckedGatewayBody, GatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import {
@@ -592,5 +592,27 @@ describe('route JSON flow with a real planner (Lot 7)', () => {
     expect(body).toContain('expired at 2026-10-11T01:25:00.000Z');
     expect(body).toContain('reauthenticate the codex account');
     expect(settleRoute).toHaveBeenCalledOnce();
+  });
+
+  it('detaches the checked owner on JSON success and scrubs the retry projection', async () => {
+    const hooks: string[] = [];
+    const { planner } = quotingPlanner([jsonAttempt(textResponse(), hooks)]);
+    const recorder = recordingBudget();
+    const pool = new GatewayBodyBytePool(256);
+    const lease = pool.acquire(); lease.extend(10);
+    const owner = new CheckedGatewayBody({ model: 'gpt-5.6-terra' }, 10, lease);
+    const result = await runRouteJsonFlow(
+      { config: budgetConfig, routePlanner: planner, metering: recorder.metering, budget: recorder.options },
+      { ...request, body: { ...request.body, max_tokens: 64 }, bodyLease: owner },
+    );
+    expect(result.body).toMatchObject({ choices: [{ message: { content: 'answer' } }] });
+    // Success detaches (drops references, returns bytes); the terminal
+    // release stays with the middleware/transfer owner (N05/N22).
+    expect(owner.body).toBeUndefined();
+    expect(owner.retainedHolders).toBe(0);
+    expect(owner.lease.bytes).toBe(0);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, acquisitions: 1 });
+    owner.release();
+    expect(pool.stats).toMatchObject({ liveLeases: 0, releases: 1 });
   });
 });
