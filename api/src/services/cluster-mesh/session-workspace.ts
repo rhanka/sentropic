@@ -280,6 +280,10 @@ export class SessionWorkspaceService {
         const binding = await mesh.end({
           sessionId, tenantId, principalId, isAdmin, expectedVersion: existing.version,
         });
+        // Idempotent replay: the domain returns the already-ended row
+        // unchanged (same version), which never satisfies the write
+        // post-control below — return it before that check.
+        if (existing.status === 'ended') return toRecord(binding);
         if (binding.version !== existing.version + 1 || binding.workspaceId !== existing.workspaceId) {
           throw new SessionWorkspaceError('session_not_attached', 'concurrent modification; retry the end');
         }
