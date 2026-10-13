@@ -27,6 +27,7 @@ export interface LifecycleCorpusStore {
 
 export interface LifecycleCorpusHooks {
   rebind(): Awaitable<LifecycleCorpusStore>;
+  bindWithoutMaintain(): Awaitable<LifecycleCorpusStore>;
 }
 
 const emptyUnit = (): AtomicUnit => ({
@@ -104,11 +105,22 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   );
 
   await bound.configureLifecycle('optional');
+  const weak = await hooks.bindWithoutMaintain();
+  await expectCode(
+    async () =>
+      weak.commitAtomic({
+        ...emptyUnit(),
+        appends: [lifecycleAppend('life-noauth', 'tomb-noauth', 'hash-tomb-noauth')],
+        purgeIntents: [{ target: 'held-target', intentId: 'intent-noauth-1', authorizedBy: 'owner-1' }],
+      }),
+    'denied',
+    'K2b-RED lifecycle: a purge intent without purge authority is denied',
+  );
+
   await bound.appendChain('held-target', { id: 'h1', bytes: '{}', hash: 'hash-held-1' }, { kind: 'absent', allocation: '0' });
   await bound.commitAtomic({
     ...emptyUnit(),
     appends: [lifecycleAppend('life-held', 'tomb-4', 'hash-tomb-4')],
-    barriers: [{ boundary: 'held-target', reason: 'tombstone-4' }],
     purgeIntents: [{ target: 'held-target', intentId: 'intent-held-1', authorizedBy: 'owner-1' }],
   });
   await bound.holdTarget('held-target', 'legal-hold-1');
@@ -130,6 +142,19 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
     again.outcomeId,
     done.outcomeId,
     'K2b-RED lifecycle: completion carries exactly one operational outcome',
+  );
+  const heldRebound = await hooks.rebind();
+  const heldRecovered = await heldRebound.purgeProgress('intent-held-1');
+  assert.equal(heldRecovered.state, 'complete');
+  assert.equal(
+    heldRecovered.outcomeId,
+    done.outcomeId,
+    'K2b-RED lifecycle: disposal and outcome survive restart with the same outcome',
+  );
+  await expectCode(
+    async () => heldRebound.readHead('held-target'),
+    'denied',
+    'K2b-RED lifecycle: disposal evidence survives restart',
   );
 
   await bound.commitAtomic({

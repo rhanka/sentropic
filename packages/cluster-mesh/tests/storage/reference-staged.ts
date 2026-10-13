@@ -307,6 +307,12 @@ export class TestStagedStore {
     if (unit.purgeIntents.length > 0 && this.store.policy === 'unconfigured') {
       throw new StorageDeniedError('purge not configured');
     }
+    // §10.1: a purge intent requires purge authority. In the port this is
+    // the maintain capability; without it the whole transaction is denied
+    // before any effect is published.
+    if (unit.purgeIntents.length > 0) {
+      this.requireOperation('maintain');
+    }
     if (this.store.policy === 'required' && unit.barriers.length > 0 && unit.purgeIntents.length === 0) {
       throw new StorageInvalidCommandError('purge intent required with barriers');
     }
