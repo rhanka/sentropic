@@ -372,7 +372,7 @@ const client = createRemoteJudgeClient({
 
 const result = await client.judge({
   schemaVersion: 1,
-  evaluator: { providerId: 'typesafe', modelId: 'jev-1.13.0', revision: 'syn-v1' },
+  evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' },
   inputs: { output: 'Candidate completion', state: null },
   criterion: { kind: 'binary', instructions: 'Verify output correctness' },
   decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 },
