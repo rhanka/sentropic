@@ -348,6 +348,7 @@
   - [x] **Lot N28a — native gateway namespace fixtures (`a3c52aacd`)**: byte-exact port, GREEN-held 1/1 in-container (fixture works against the evolved tree).
   - [x] **Lot N28b — native namespace contracts (`2cd472248`)**: RED 2 → opus-5-5 is unknown-404 (N12c fold, not exclusive-400); tiny-pool 413 replaced by malformed-JSON 400 (W §17.4 shared owner + actual-governs); 11/11 GREEN in-container.
   - [x] **Lot N28c — authenticated nonbillable counts (`d28d7b3ea`)**: RED 2 → safeguards dropped from the 200-body (fail-closed), opus-5-5 unknown-404; `nativeCountRate` module option ported (alias guard N/A); 8/8 GREEN in-container.
+  - [x] **Lot N28d — count limits by trusted principal (`b5f9753b3`)**: byte-exact port, GREEN-held 11/11 in-container.
   - [x] **Lot N12a+b — native quote seams + tests (`841afe171` + `da3570133`)**: `route-quote.ts` native filter/`nativeMessagesModelIds`/quoteRef binding + `budget-quote.test.ts` (filter, refusal, hash binding, quote-plan agreement) 29/29 GREEN.
   - [x] **Lot N12c — native eligibility in planner P0/P1 + sticky (`a3d4a9386`)**: `route-planner.ts` pre-check/candidate filter/sticky gate/`quote()` forwarding (exclusive-alias disjunct dropped: W has no exclusive codex pin).
   - [x] **Lot N12d — planner native filtering + sticky + baselines (`4f4b4dbfc`)**: P0 refusal, empty-vs-filtered-empty, ineligible-sticky repair, selection baseline (route-planner 48/48, route-selection 25/25 GREEN).
