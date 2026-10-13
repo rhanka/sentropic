@@ -154,7 +154,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: API version column, tx-scoped detach/end CAS in session-workspace.ts and control-schema.ts
   - [x] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
 
-- [ ] **Lot 5 — Opus r4 NO-GO fixes (MAJ-A, MAJ-B, b-m1..b-m8)**
+- [x] **Lot 5 — Opus r4 NO-GO fixes (MAJ-A, MAJ-B, b-m1..b-m8)**
   - [x] RED domain: stale workspace-admin detach, cross-tenant oracle, scoped get
   - [x] RED domain: production CAS predicate tests
   - [x] GREEN domain: expectedVersion binding, shared CAS predicate, tenant-neutral oracle, scoped get
@@ -164,7 +164,7 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] Shared workspace provisioning module with notifications and role levels (BR01-EX5)
   - [x] Route and adoption service use the shared provisioning
   - [x] Journal test recalage, version CHECK, history/sharing notes (b-m4, b-m5, b-m7, b-m8)
-  - [ ] Sub-lot gate: test-cluster-mesh, test-api-unit, scope-check
+  - [x] Sub-lot gate: test-cluster-mesh (426 pass), test-api-unit adoption (27 pass), scope-check PASS
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
