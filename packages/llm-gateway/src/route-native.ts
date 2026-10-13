@@ -63,8 +63,7 @@ export const buildNativeMessagesRequest = (
     body: buildNativeMessagesBody(request.body, { model: native.capability.modelId,
       stream: request.stream, maxOutputTokens: prepared.canonical.request.maxOutputTokens ?? features.maxOutputTokens }),
     stream: request.stream, signal, requestId: request.authContext.requestId,
-    // W selection carries no forwarded map (N13d); the host forwards no caller betas.
-    headers: { anthropicVersion: native.anthropicVersion, forwarded: {} },
+    headers: { anthropicVersion: native.anthropicVersion, forwarded: features.forwarded },
     ...(native.capability.finalize ? { finalize: native.capability.finalize } : {}),
   };
 };

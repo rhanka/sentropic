@@ -21,7 +21,8 @@ describe('native feature classification', () => {
   it.each(['', '   ', 'unknown-beta, beta-two , future-2026-01-01'])(
     'selects a present beta without rewriting its value: %j', (beta) => {
       expect(select(base, { 'ANTHROPIC-BETA': beta, 'Anthropic-Version': 'future-version' }))
-        .toEqual({ kind: 'optional', anthropicBeta: beta, anthropicVersion: 'future-version', maxOutputTokens: 64 });
+        .toEqual({ kind: 'optional', anthropicBeta: beta, anthropicVersion: 'future-version', maxOutputTokens: 64,
+          forwarded: { 'anthropic-beta': beta, 'anthropic-version': 'future-version' } });
     });
 
   it.each([null, {}, [], false, 'provider-defined'])('requires native for own safeguards: %j', (safeguards) => {
