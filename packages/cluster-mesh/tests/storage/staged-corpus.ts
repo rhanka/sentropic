@@ -209,6 +209,66 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     'K2b-RED staged: a malformed fence cannot open a unit',
   );
 
+  const staleWriter = await bound.beginStaged({
+    operationKey: 'op-staged-stale',
+    inputDigest: 'input-stale',
+    contractDigest: 'contract-k2b',
+    sourceBoundary: 'boundary-k2b',
+    fence: FENCE,
+  });
+  await bound.stageFragment({
+    unit: staleWriter,
+    ordinal: '0',
+    predecessorHash: null,
+    fragmentDigest: 'digest-stale-0',
+    effects: appendUnit('chain-stale', 'st1', 'hash-st1', null),
+    fence: FENCE,
+  });
+  const staleSeal = await bound.sealStaged({
+    unit: staleWriter,
+    root: sealRoot('op-staged-stale', 'digest-stale-0', '1'),
+  });
+  await expectCode(
+    async () => bound.commitStaged({ seal: staleSeal, fence: { fenceId: 'fence-k2b', epoch: '0' } }),
+    'invalid-command',
+    'K2b-RED staged: a stale writer cannot publish',
+  );
+  assert.equal(await bound.readHead('chain-stale'), null);
+  const freshReceipt = await bound.commitStaged({ seal: staleSeal, fence: FENCE });
+  assert.equal(await bound.readHead('chain-stale'), 'hash-st1');
+  assert.ok(freshReceipt.commitId.length > 0);
+
+  const immutableUnit = await bound.beginStaged({
+    operationKey: 'op-staged-immutable',
+    inputDigest: 'input-immutable',
+    contractDigest: 'contract-k2b',
+    sourceBoundary: 'boundary-k2b',
+    fence: FENCE,
+  });
+  const mutableEffects = appendUnit('chain-immutable', 'im1', 'hash-im1', null);
+  await bound.stageFragment({
+    unit: immutableUnit,
+    ordinal: '0',
+    predecessorHash: null,
+    fragmentDigest: 'digest-immutable-0',
+    effects: mutableEffects,
+    fence: FENCE,
+  });
+  mutableEffects.appends.push(
+    ...appendUnit('chain-mutated', 'mu1', 'hash-mu1', null).appends,
+  );
+  const immutableSeal = await bound.sealStaged({
+    unit: immutableUnit,
+    root: sealRoot('op-staged-immutable', 'digest-immutable-0', '1'),
+  });
+  await bound.commitStaged({ seal: immutableSeal, fence: FENCE });
+  assert.equal(await bound.readHead('chain-immutable'), 'hash-im1');
+  assert.equal(
+    await bound.readHead('chain-mutated'),
+    null,
+    'K2b-RED staged: buffers are immutable after acceptance',
+  );
+
   await expectCode(
     async () => bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-1', '5') }),
     'invalid-command',
