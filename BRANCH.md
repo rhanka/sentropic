@@ -300,6 +300,7 @@
   - [x] **Lot N14c — retain cumulative output independently of input (`55a09eed8`)**: RED 1/5 pre-fix (R1 repro, proven on this tree) → output accepted before input checks; 6/6 GREEN, src+test byte-identical.
   - [x] **Lot N14d — preserve input proof on invalid output (`49494f4fd`)**: RED 2/9 pre-fix (M4-R start/input-delta) → invalid output no longer discards valid input; 9/9 GREEN, byte-identical.
   - [x] **Lot N14e — retain safe reported usage without invented zeros (`936addeae`)**: RED 5 pre-fix (M6-R null/NaN/Infinity/unsafe-int) → raw keeps only safe fields, explicit zero survives; 15/15 GREEN, byte-identical.
+  - [x] **Lot N14b — usage observer + output finality (`2ed07c354`)**: `NativeUsageObserver` (JSON/SSE fold, final-candidate latch, termination snapshot); accumulator tests stay 15/15 GREEN (observer coverage lands with N16/N17).
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
