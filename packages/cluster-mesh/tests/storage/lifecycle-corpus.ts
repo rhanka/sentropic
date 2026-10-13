@@ -79,6 +79,17 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
     purgeIntents: [{ target: 'life-thread-2', intentId: 'intent-required-1', authorizedBy: 'owner-1' }],
   });
   assert.equal((await bound.purgeProgress('intent-required-1')).state, 'pending');
+  await expectCode(
+    async () =>
+      bound.commitAtomic({
+        ...emptyUnit(),
+        appends: [lifecycleAppend('life-divergent', 'tomb-div', 'hash-tomb-div')],
+        purgeIntents: [{ target: 'other-target', intentId: 'intent-required-1', authorizedBy: 'owner-1' }],
+      }),
+    'idempotency-conflict',
+    'K2b-RED lifecycle: a reused purge intent with a divergent target conflicts atomically',
+  );
+  assert.equal(await bound.readHead('life-divergent'), null);
 
   await bound.configureLifecycle('unconfigured');
   await expectCode(
@@ -109,6 +120,11 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   const done = await bound.completePurge('intent-held-1');
   assert.equal(done.state, 'complete');
   assert.ok(done.outcomeId);
+  await expectCode(
+    async () => bound.readHead('held-target'),
+    'denied',
+    'K2b-RED lifecycle: completion leaves physical-disposal evidence on reads',
+  );
   const again = await bound.completePurge('intent-held-1');
   assert.equal(
     again.outcomeId,
@@ -169,4 +185,9 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   );
   const repeated = await rebound.completePurge('intent-crash-1');
   assert.equal(repeated.outcomeId, crashed.outcomeId);
+  await expectCode(
+    async () => rebound.readHead('crash-target'),
+    'denied',
+    'K2b-RED lifecycle: completion survives restart with disposal evidence intact',
+  );
 };

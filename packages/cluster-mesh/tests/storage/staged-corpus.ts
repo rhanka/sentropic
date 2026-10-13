@@ -30,6 +30,7 @@ export interface StagedCorpusStore {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
   readHead(chainId: string): Awaitable<string | null>;
   readChain(chainId: string): Awaitable<readonly StagedCorpusRecord[]>;
+  indexGet(key: string): Awaitable<{ readonly digest: string; readonly resultIds: readonly string[]; readonly resultHash: string | null } | null>;
   commitAtomic(unit: AtomicUnit, options?: CommitOptions): Awaitable<{ readonly commitId: string }>;
   disposeChain(chainId: string): Awaitable<void>;
   beginStaged(input: { readonly operationKey: string; readonly inputDigest: string; readonly contractDigest: string; readonly sourceBoundary: string; readonly fence: WriterFence }): Awaitable<StagedCorpusHandle>;
@@ -173,7 +174,10 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     ordinal: '1',
     predecessorHash: 'digest-0',
     fragmentDigest: 'digest-1',
-    effects: appendUnit('chain-s2', 's2', 'hash-s2', null),
+    effects: {
+      ...appendUnit('chain-s2', 's2', 'hash-s2', null),
+      indexWrites: [{ key: 'staged-idx-1', digest: 'd1', resultIds: ['r1'], resultHash: null }],
+    },
     fence: FENCE,
   });
 
@@ -183,6 +187,27 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     'K2b-RED staged: staged effects stay invisible to head lookup',
   );
   assert.deepEqual(await bound.readChain('chain-s2'), []);
+  assert.equal(
+    await bound.indexGet('staged-idx-1'),
+    null,
+    'K2b-RED staged: staged index writes stay invisible to command-result lookup',
+  );
+  assert.ok(
+    !('commitId' in first),
+    'K2b-RED staged: a staging receipt is never a canonical commit receipt',
+  );
+  await expectCode(
+    async () =>
+      bound.beginStaged({
+        operationKey: 'op-staged-bad-fence',
+        inputDigest: 'input-bad',
+        contractDigest: 'contract-k2b',
+        sourceBoundary: 'boundary-k2b',
+        fence: { fenceId: '', epoch: '1' },
+      }),
+    'invalid-command',
+    'K2b-RED staged: a malformed fence cannot open a unit',
+  );
 
   await expectCode(
     async () => bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-1', '5') }),
@@ -215,6 +240,11 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
   assert.deepEqual(await bound.inspectStaged('op-staged-1'), { state: 'committed', commitId: receipt.commitId });
   assert.equal(await bound.readHead('chain-s1'), 'hash-s1');
   assert.equal(await bound.readHead('chain-s2'), 'hash-s2');
+  assert.deepEqual(
+    await bound.indexGet('staged-idx-1'),
+    { digest: 'd1', resultIds: ['r1'], resultHash: null },
+    'K2b-RED staged: staged index writes publish atomically with their unit',
+  );
 
   const recovered = await bound.commitStaged({ seal, fence: FENCE });
   assert.equal(
@@ -246,6 +276,15 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     unit: guarded,
     root: sealRoot('op-staged-base', 'digest-base-0', '1'),
   });
+  await expectCode(
+    async () =>
+      bound.commitStaged({
+        seal: { unitId: guardedSeal.unitId, commitRoot: { ...guardedSeal.commitRoot, dependencyRoot: 'tampered-root' } },
+        fence: FENCE,
+      }),
+    'invalid-command',
+    'K2b-RED staged: a substituted seal cannot publish',
+  );
   await bound.appendChain('chain-s1', { id: 's1-rival', bytes: '{}', hash: 'hash-s1-rival' }, { kind: 'head', hash: 'hash-s1' });
   await expectCode(
     async () => bound.commitStaged({ seal: guardedSeal, fence: FENCE }),
