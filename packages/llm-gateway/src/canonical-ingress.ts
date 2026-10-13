@@ -11,9 +11,11 @@ export interface CanonicalIngressResult {
   readonly request: GenerateRequest;
   readonly requiredCapabilities: readonly CapabilityRequirement[];
   /**
-   * Finer-than-capability execution requirements (spec §16.3), set only by
-   * the Responses codec from validated input. The canonical entry points
-   * forward them into plan/quote input.
+   * Finer-than-capability execution requirements (spec §16.3), set by the
+   * Responses codec from validated input and, for the Messages/Chat wires,
+   * derived from the normalized tool controls (named choice, explicit
+   * parallel control). The canonical entry points forward them into
+   * plan/quote input.
    */
   readonly requiredExecutionFeatures?: readonly ExecutionFeature[];
 }
@@ -299,6 +301,19 @@ export const normalizeGatewayIngress = (
   }
   const tools = normalizeTools(raw.tools);
   const toolControl = normalizeToolChoice(raw.tool_choice);
+  // Spec §16.3/§16.6 (R4-MAJ-4): the Messages/Chat wires derive the same
+  // tool-control execution features the application dispatch adapter refuses
+  // (named choice, explicit parallel control), so a feature-enforcing plane
+  // refuses at plan time — pre-dispatch, hold released, zero usage — instead
+  // of failing post-dispatch-marker with a billed estimate. Planes without
+  // feature enforcement ignore them (no behavior change there).
+  const requiredFeatures: ExecutionFeature[] = [];
+  if (toolControl.choice && typeof toolControl.choice === 'object') {
+    requiredFeatures.push('named-tool-choice');
+  }
+  if (toolControl.parallelToolCalls !== undefined) {
+    requiredFeatures.push('parallel-tool-control');
+  }
   const reasoning = normalizeReasoning(raw);
   const serialized = JSON.stringify(body);
   const required = new Set<CapabilityRequirement>();
@@ -327,5 +342,8 @@ export const normalizeGatewayIngress = (
     ...(typeof raw.top_p === 'number' ? { topP: raw.top_p } : {}),
     providerOptions: { ingressWire: wire, ingressBody: body },
   };
-  return { request, requiredCapabilities: [...required] };
+  return {
+    request, requiredCapabilities: [...required],
+    ...(requiredFeatures.length > 0 ? { requiredExecutionFeatures: requiredFeatures } : {}),
+  };
 };

@@ -1,4 +1,4 @@
-import { RequestTooLargeError } from '@sentropic/llm-mesh';
+import { RequestTooLargeError, RoutePlanError } from '@sentropic/llm-mesh';
 import type { RoutePlanInput, RoutePlanner, VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import { classifyRouteError, prepareRouteFlow, retainRouteBody, terminalGatewayError } from '../src/route-flow-core.js';
@@ -118,6 +118,61 @@ describe('route flow core', () => {
       },
     });
     expect(JSON.stringify(captured)).not.toContain('attacker');
+  });
+
+  it('refuses feature-requiring Chat controls pre-dispatch with zero-usage settlement (R4-MAJ-4)', async () => {
+    // Mirrors the application plane: no served execution feature — a request
+    // carrying refused tool controls must fail at plan time, never reach
+    // dispatch, and settle zero usage (no billed estimate).
+    let plannedInput: RoutePlanInput | undefined;
+    let dispatches = 0;
+    const settlements: unknown[] = [];
+    const routePlanner = {
+      async plan(_subject: VerifiedRoutingSubject, input: RoutePlanInput) {
+        plannedInput = input;
+        const unsupported = (input.requiredExecutionFeatures ?? []).filter(() => true);
+        if (unsupported.length > 0) {
+          throw new RoutePlanError(
+            `application runtime does not support execution features: ${unsupported.join(', ')}`,
+            'capabilities-unmet',
+          );
+        }
+        dispatches += 1;
+        throw new Error('must not reach dispatch planning');
+      },
+    } as unknown as RoutePlanner;
+
+    const failure = await prepareRouteFlow({
+      config: {
+        ...stubGatewayConfig,
+        callerAuth: { async verify() {
+          return {
+            ok: true as const,
+            cost: {
+              tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'user-1',
+              ownerScopeRef: 'cli:stable-owner', source: 'test', correlationId: 'session-1',
+            },
+          };
+        } },
+      },
+      routePlanner,
+      metering: { settleRoute: (settlement: unknown) => { settlements.push(settlement); } },
+    }, {
+      wire: 'openai-chat-completions', headers: {}, authContext: { method: 'POST', url: 'https://gateway.test/v1/chat/completions', requestId: 'req-maj4' }, model: 'gpt-5.6-terra', stream: false,
+      body: {
+        model: 'gpt-5.6-terra',
+        messages: [{ role: 'user', content: 'hi' }],
+        tool_choice: { type: 'tool', name: 'lookup' },
+      },
+    }).then(() => null, (error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(RoutePlanError);
+    expect(plannedInput?.requiredExecutionFeatures).toEqual(['named-tool-choice']);
+    expect(dispatches).toBe(0);
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      outcome: 'failed', usage: { inputTokens: 0, outputTokens: 0 },
+    });
   });
 
   it('falls back to tenant and principal ownership for existing callers', async () => {
