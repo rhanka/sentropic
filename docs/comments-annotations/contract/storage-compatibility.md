@@ -1,7 +1,7 @@
 # Comments Generic Storage Port Compatibility & Extension Manifest (C0)
 
 Date: 2026-10-12  
-Specification: L3a v4.1 frozen §17 row C0, §17.4  
+Specification: L3a v4.1 frozen §17.2 row C0, §17.4  
 Deliverables:
 - Manifest: [`storage-module-v1.json`](storage-module-v1.json)
 - Specification note: [`storage-compatibility.md`](storage-compatibility.md)
@@ -47,8 +47,8 @@ The division of responsibilities between `@sentropic/comments` and `@sentropic/c
 |---|---|---|
 | **Identity & Scope** | Canonical entities, anchors, quantizer, revision hashing | Multi-tenant isolation, workspace bindings, `StorageScope` |
 | **Persistence Core** | 24-method command store interface | Generic storage SPI, SQLite & Postgres kernel drivers |
-| **Transactions** | Logical transaction boundary declaration | ACID atomicity, commit-time CAS, generation fencing |
-| **Visibility & Barriers** | Lifecycle events (`tombstone`, `purge-intent`, `purge-outcome`) | Immediate read barriers (`visibility-barriers-v1`), outbox |
+| **Transactions** | Logical transaction boundary declaration | ACID atomicity, commit-time CAS, authority fencing and root publication |
+| **Visibility & Barriers** | Lifecycle events (`tombstone`, `purge-intent`, `purge-outcome`) | Immediate read barriers (`visibility-barriers-v1`), default package journal; optional qualified app outbox binding |
 | **Large Units** | Unit manifest & payload DTOs | Staged units protocol (`staged-units-v1`), atomic root publication |
 | **Queries** | Domain query signatures | Registered projection assets, index queries (`by-resource`, etc.) |
 | **API Exposure** | Neutral HTTP port declarations | Module runtime composition, canonical Hono routes (`M2-W`) |
@@ -68,7 +68,7 @@ As defined in `packages/cluster-mesh/src/storage/profiles.ts`, comments declares
 - **Staged Units**: Large units (threads exceeding 512 KiB or 1 MiB) are split into hash-chained sub-units. Staged sub-units remain invisible to all readers until an atomic linearization root publication point.
 - **Explicit Continuation**: Paged export and resync use an explicit continuation envelope. Transport continuation fields must **not** be smuggled into or overload frozen M1 DTO fields (`snapshotBoundary`, `exportId`, `idempotencyKey`).
 - **Transport Limits** (adopted CA values, frozen L3a v4.1 §11.3): fragment manifest or unit/group root 64 KiB canonical bytes; fragment payload 512 KiB canonical bytes; prepare/commit items per request 50; request batch manifest 256 KiB canonical bytes; complete encoded request 1 MiB; default page count 50; maximum page count 100; complete encoded page 1 MiB; time-based comments cursor TTL none.
-- **Byte Units & Record Framing** (§11.3): Byte limits are in canonical bytes. Whole histories have no fragment-sized ceiling. A record plus required framing must fit an individual fragment.
+- **Byte Units & Record Framing** (§11.3): Fragment/root/payload/manifest limits count canonical bytes; request/page limits count the complete encoded envelopes. Whole histories have no fragment-sized ceiling. A record plus required framing must fit an individual fragment.
 - **Paging Semantics** (§11.3): Ordinary pages count canonical records; fragment pages count complete fragment envelopes. Both count the full response envelope and cursor toward byte limits.
 - **Proposed Host-Injected Bounds** (§11.3): Existing M1 body/segment/profile bounds remain host-injected; CA proposed values are 64 KiB, 16 KiB, and 16 KiB respectively.
 - **Transport Qualification Requirement** (§11.3): Transport qualification must include escaping and multibyte encoding.
@@ -94,11 +94,12 @@ The frozen `CapacityDescriptor` in `@sentropic/comments` is not mutated. Supplem
 
 ---
 
-## 5. Confirmation Deltas (G1–G5 Alignment)
+## 5. Frozen specification cross-references
 
-This specification incorporates the confirmation deltas resolved in frozen L3a v4.1 §17 row C0, §17.4 (confirmation items G1–G5):
-- **G1**: Getters on barrier-covered or eliminated content throw `CanonicalCommandError('denied')`; `readChainPage` yields `inaccessible`.
-- **G2**: Canonical HTTP router routes through operational services; no direct `appendLifecycleEvent` exposure.
-- **G3**: C0 exit evidence explicitly requires compatibility manifest and unchanged M1 source hashes.
-- **G4**: Visibility root discipline (`staged-units-v1`) is active from C1a on the comments/Postgres root.
-- **G5**: Imported tombstone state commits an immediate barrier within the same published unit.
+The [tracked source extract](../evidence/storage-alignment.md) pins the governing document's digest. These requirements trace directly to frozen L3a v4.1 §17.2 row C0 and the sections below; they are not G-numbered items in §17.4.
+
+- **§9.3 / §16.2**: Barrier-covered or disposed full getters throw `CanonicalCommandError('denied')`; `readChainPage` yields `inaccessible`, before and after disposal.
+- **§9.4 / §16.2 M2-W**: Canonical HTTP routes use operational services; router tests reject raw lifecycle bypass and forged tombstone/`purge-outcome` effects.
+- **§17.2 C0**: Exit proof requires the compatibility manifest and unchanged M1 source hashes.
+- **§17.2 C1a**: K4/P2u visibility roots are active from C1a on the comments/Postgres root.
+- **§16.2 C4**: `comments-import.spec.ts` proves imported tombstone and immediate barrier publication in the same unit.
