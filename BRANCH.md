@@ -327,6 +327,7 @@
   - [x] **Lot N21a — native JSON relay (`2fa2eedca`)**: `buildNativeMessagesRequest`/`assertNativeMessagesResult` + flow dispatch/usage/terminal relay + upstream mapping (`forwarded:{}`: W selection carries no forwarded map).
   - [x] **Lot N21b — lifecycle in JSON flow (`13405b90f`)**: `nativeLifecycle` finalize-once, invoked-guard, termination mapping; 40/40 with N21c tests.
   - [x] **Lot N21c — JSON fidelity + lifecycle tests (`6edfd9b7a`)**: `tests/fixtures/native-flow.ts` harness + relay/fallback/malformed/refusal cases 40/40 GREEN.
+  - [x] **Row 32.1 remainder — bounded SSE errors (`59702820a` minus framer hunk)**: `src/native-stream-errors.ts` frame-error/late-bytes + 500/529 mapping; 41/41 errors GREEN.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
