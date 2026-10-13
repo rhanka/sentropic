@@ -19,9 +19,8 @@ describe('native contract types and refusal lifecycle', () => {
     execute: vi.fn(),
   };
 
-  // W selection carries no forwarded map (R row-21 shape); version/max tokens only.
-  const optionalSelection: NativeFeatureSelection = { kind: 'optional', maxOutputTokens: 64 };
-  const requiredSelection: NativeFeatureSelection = { kind: 'required', maxOutputTokens: 64 };
+  const optionalSelection: NativeFeatureSelection = { kind: 'optional', forwarded: {}, maxOutputTokens: 64 };
+  const requiredSelection: NativeFeatureSelection = { kind: 'required', forwarded: {}, maxOutputTokens: 64 };
 
   it('verifies prepareNativeMessages selection and refusal contracts', () => {
     const attempt = { nativeMessages: capability } as unknown as PreparedRouteAttempt;
