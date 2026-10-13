@@ -72,6 +72,13 @@ describe('K2b reference: lifecycle corpus', () => {
     const primary = store.bindStaged(stagedGrant());
     await runLifecycleCorpus(primary, {
       rebind: async () => store.bindStaged(stagedGrant()),
+      bindWithoutMaintain: async () =>
+        store.bindStaged(
+          grantFor({
+            token: `token-k2b-weak-${(tokenSeq += 1)}`,
+            operations: ['read', 'write'],
+          }),
+        ),
     });
   });
 });
@@ -356,6 +363,26 @@ class HoldBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class PurgeAuthorityBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const innerCommit = bound.commitAtomic.bind(bound);
+    bound.commitAtomic = (unit, options) => {
+      const originalRequire = bound.requireOperation.bind(bound);
+      bound.requireOperation = (op) => {
+        if (op === 'maintain') return;
+        return originalRequire(op);
+      };
+      try {
+        return innerCommit(unit, options);
+      } finally {
+        bound.requireOperation = originalRequire;
+      }
+    };
+    return bound;
+  }
+}
+
 class DivergentShareStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -392,7 +419,19 @@ class ForkingOutcomeStore extends TestStagedReferenceStore {
 describe('K2b discriminating mutations: lifecycle', () => {
   const bindLifecycle = (store: TestStagedReferenceStore) => {
     const primary = store.bindStaged(stagedGrant());
-    return { primary, hooks: { rebind: async () => store.bindStaged(stagedGrant()) } };
+    return {
+      primary,
+      hooks: {
+        rebind: async () => store.bindStaged(stagedGrant()),
+        bindWithoutMaintain: async () =>
+          store.bindStaged(
+            grantFor({
+              token: `token-k2b-weak-${(tokenSeq += 1)}`,
+              operations: ['read', 'write'],
+            }),
+          ),
+      },
+    };
   };
 
   it('L1-hold-blind-lifecycle is killed by the lifecycle corpus', async () => {
@@ -411,6 +450,12 @@ describe('K2b discriminating mutations: lifecycle', () => {
     const store = new ForkingOutcomeStore('comments');
     const { primary, hooks } = bindLifecycle(store);
     await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(/exactly one operational outcome/);
+  });
+
+  it('L4-purge-authority-blind is killed by the lifecycle corpus', async () => {
+    const store = new PurgeAuthorityBlindStore('comments');
+    const { primary, hooks } = bindLifecycle(store);
+    await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(/without purge authority is denied/);
   });
 });
 
@@ -451,6 +496,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'L1-hold-blind-lifecycle', brokenSemantic: 'holds never stall completion', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'L2-divergent-share', brokenSemantic: 'divergent shared bytes merge silently', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'L3-forking-outcome', brokenSemantic: 'completion forks operational outcomes', corpus: 'lifecycle', verdict: 'killed' },
+  { id: 'L4-purge-authority-blind', brokenSemantic: 'purge intents pass without purge authority', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'T1-rival-blind-base', brokenSemantic: 'changed bases publish without conflict', corpus: 'staged', verdict: 'killed' },
 ];
 
@@ -469,6 +515,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',
