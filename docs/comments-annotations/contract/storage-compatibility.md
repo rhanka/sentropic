@@ -98,7 +98,7 @@ The frozen `CapacityDescriptor` in `@sentropic/comments` is not mutated. Supplem
 
 The [tracked source extract](../evidence/storage-alignment.md) pins the governing document's digest. These requirements trace directly to frozen L3a v4.1 §17.2 row C0 and the sections below; they are not G-numbered items in §17.4.
 
-- **§9.3 / §16.2**: Barrier-covered or disposed full getters throw `CanonicalCommandError('denied')`; `readChainPage` yields `inaccessible`, before and after disposal.
+- **§9.2 / §16.2**: Barrier-covered or disposed full getters throw `CanonicalCommandError('denied')`; `readChainPage` yields `inaccessible`, before and after disposal.
 - **§9.4 / §16.2 M2-W**: Canonical HTTP routes use operational services; router tests reject raw lifecycle bypass and forged tombstone/`purge-outcome` effects.
 - **§17.2 C0**: Exit proof requires the compatibility manifest and unchanged M1 source hashes.
 - **§17.2 C1a**: K4/P2u visibility roots are active from C1a on the comments/Postgres root.
