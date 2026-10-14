@@ -3,22 +3,23 @@
 ## Objective
 - [x] Deliver the K3 neutral runtime (validation, tokens, binding, ordinary transactions, exact-head immutable chain boundaries) on the K1/K2 corpora.
 - [x] Designate the chain-boundary provider used by readChainPage (G3) for the engram adapter.
-- [ ] Fix the opus review findings (6 MAJEUR, 9 MINEUR) on draft PR #670 with CI green and no reserves.
+- [x] Fix the opus r2 findings (7 MAJEUR, 14 MINEUR) plus Sol co-review (7 MAJEUR) on draft PR #670 (fix2 pass, Lot 6).
+- [ ] Fix the opus r3 findings (1 BLOQUANT, 2 MAJEUR, 9 MINEUR) on draft PR #670 with CI green and no reserves (fix3 pass, Lot 7).
 
 ## Scope / Guardrails
-- [ ] Scope limited to K3 runtime files and K3 specs plus the K3 report.
-- [ ] Make-only workflow, no direct Docker commands.
-- [ ] Root workspace ~/src/sentropic is reserved for user dev/UAT (ENV=dev) and must remain stable.
-- [ ] Branch development happens in worktree tmp/worktrees/cluster-mesh-storage-k3.
-- [ ] Automated test campaigns run on ENV=test-cm-k3, never on dev.
-- [ ] In every make command, ENV=test-cm-k3 passed as last argument with API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615.
-- [ ] One Docker build at a time.
-- [ ] All new text in English.
-- [ ] Zero Python.
-- [ ] Kernel stays neutral: no pg, no drizzle, no engram imports; public types documented.
-- [ ] Frozen M1 and merged engram L6a 70ebdfee untouched.
-- [ ] No version bump.
-- [ ] K2a/K2b corpora run against the K3 runtime where applicable (ordinary only; staged/journal/barrier/lifecycle stay K4/S/P).
+- [x] Scope limited to K3 runtime files and K3 specs plus the K3 report (merge-only intakes via BR-K3-EX1/EX2).
+- [x] Make-only workflow, no direct Docker commands.
+- [x] Root workspace ~/src/sentropic is reserved for user dev/UAT (ENV=dev) and must remain stable.
+- [x] Branch development happens in worktree tmp/worktrees/cluster-mesh-storage-k3.
+- [x] Automated test campaigns run on ENV=test-cm-k3, never on dev.
+- [x] In every make command, ENV=test-cm-k3 passed as last argument with API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615.
+- [x] One Docker build at a time.
+- [x] All new text in English.
+- [x] Zero Python.
+- [x] Kernel stays neutral: no pg, no drizzle, no engram imports; public types documented.
+- [x] Frozen M1 and merged engram L6a 70ebdfee untouched.
+- [x] No version bump.
+- [x] K2a/K2b corpora run against the K3 runtime where applicable (ordinary only; staged/journal/barrier/lifecycle stay K4/S/P).
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**:
@@ -34,6 +35,7 @@
   - [ ] `.h2a/build/k3_report.md`
   - [ ] `.h2a/build/k3_fix_report.md` (BR-K3-EX1 opus fix report)
   - [ ] `.h2a/build/k3_fix2_report.md` (BR-K3 Lot 6 opus-r2 plus Sol fix2 report)
+  - [ ] `.h2a/build/k3_fix3_report.md` (BR-K3 Lot 7 opus-r3 fix3 report)
 - [ ] **Forbidden Paths (must not change in this branch)**:
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -78,11 +80,14 @@
   - [ ] Mirror the same exception in this file under Feedback Loop.
 
 ## Feedback Loop
-- [ ] `BR-K3-DISC1` — One-time BRANCH.md rewrite (K2b content to K3 content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
+- [x] `BR-K3-DISC1` — One-time BRANCH.md rewrite (K2b content to K3 content) exceeds 150 changed lines through deletions alone; single logical change, all following commits stay under 150 lines with BRANCH.md in-commit.
 - [x] `BR-K3-G3` — G3 designation: readChainPage uses the HMAC exact-head boundary provider (self-contained opaque cursors, no registry; supersedes the retained registry after the opus review); decision recorded in kernel.ts plus the K3 fix report.
-- [ ] `BR-K3-DISC2` — K3 runtime files land as one coherent file per commit when they exceed 150 lines (single review unit per §17.4 file; K1 `BR-K1R3-EX1` and K2b `BR-K2B-DISC2` precedent for reference-scale files); all other commits stay under 150 lines.
-- [ ] `BR-K3-EX1` — Merge-only intake of `origin/feat/cluster-mesh-storage-k2b` (#669 r2, opus §1). Reason: K3 is stacked on K2b and must carry the R3 resume fix, the `readers.ts` envelope floor, the disposal evidence and the corpus deltas; `readers.ts` is otherwise forbidden on K3. Impact: K2b-owned files only (`readers.ts`, `reference-store.ts`, `read-corpus.ts`, `atomic-corpus.ts`, staged/replay/barrier/lifecycle corpora, `mutations.spec.ts`, `profile-mutations.spec.ts`, `reference.spec.ts`, `reference-staged.ts`); no K3 runtime hand-edits outside allowed paths; `BRANCH.md` conflict resolved by keeping the K3 version. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
+- [x] `BR-K3-DISC2` — K3 runtime files land as one coherent file per commit when they exceed 150 lines (single review unit per §17.4 file; K1 `BR-K1R3-EX1` and K2b `BR-K2B-DISC2` precedent for reference-scale files); all other commits stay under 150 lines.
+- [x] `BR-K3-EX1` — Merge-only intake of `origin/feat/cluster-mesh-storage-k2b` (#669 r2, opus §1). Reason: K3 is stacked on K2b and must carry the R3 resume fix, the `readers.ts` envelope floor, the disposal evidence and the corpus deltas; `readers.ts` is otherwise forbidden on K3. Impact: K2b-owned files only (`readers.ts`, `reference-store.ts`, `read-corpus.ts`, `atomic-corpus.ts`, staged/replay/barrier/lifecycle corpora, `mutations.spec.ts`, `profile-mutations.spec.ts`, `reference.spec.ts`, `reference-staged.ts`); no K3 runtime hand-edits outside allowed paths; `BRANCH.md` conflict resolved by keeping the K3 version. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
 - [ ] `BR-K3-DISC3` — Opus fix files land as one coherent file per commit when they exceed 150 lines (single review unit per finding; `BR-K3-DISC2` precedent); all other fix commits stay under 150 lines with `BRANCH.md` in-commit.
+- [ ] `BR-K3-EX2` — Merge-only intake of `origin/main` into K3 (opus r3 M1; PR #670 `CONFLICTING`). Reason: the PR targets `main` and needs PR CI plus mergeability. Impact: `Makefile` plus `.github/workflows/ci.yml` taken verbatim from `main` with no hand-edits (forbidden paths); `BRANCH.md` conflict resolved by keeping the K3 version; all other main files merged normally. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
+- [ ] `BR-K3-CI-R3` — CI run `38490269426` (`workflow_dispatch`, HEAD `1d2bfea8e`): `validate-cluster-mesh` failure is branch-related (B1 unhandled rejection, `StorageInvalidCommandError: transaction closed` from `kernel.spec.ts:655`), fixed in Lot 7, never flaky-accepted.
+- [ ] `BR-K3-CI-AI` — CI run `38490269426`: `test-api-unit-integration (ai, chat-sync,executive-summary-auto,comment-assistant)` failure is provider/model nondeterminism on the AI flaky list (`rules/testing.md`); K3 touches no API file; recorded pending owner sign-off before merge.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -154,7 +159,7 @@
   - [x] Verify frozen M1 and engram L6a untouched.
   - [x] Write `.h2a/build/k3_report.md` with exit SHA, corpus evidence, G3 designation, neutrality proof.
   - [x] Push only this branch, open a DRAFT PR noting "stacked on #669", never merge.
-- [ ] **Lot 6 — Fix2 pass (opus r2 7 MAJEUR + 14 MINEUR, Sol co-review 7 MAJEUR, PR #670)**
+- [x] **Lot 6 — Fix2 pass (opus r2 7 MAJEUR + 14 MINEUR, Sol co-review 7 MAJEUR, PR #670)**
   - [x] Merge `origin/feat/cluster-mesh-storage-k2b` r3 (`361b3c9f8`) under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
   - [x] R-MAJ-1 follow-up: K2b r3 floor (empty incomplete carries no retained cursor) in `record-runtime.ts`; r3 corpora green against K3.
   - [x] R-MAJ-2/m1/m14: cursor v2 binds (head, seq, allocation) with plaintext incarnation plus key id; unknown boundary returns explicit `incomplete`; default secret documented and tested.
@@ -178,6 +183,13 @@
   - [x] K3M1 mutant re-simulated as frozen input cursor; K3 sweep enlarged to 9 records (v2 token economics).
   - [x] Paginated-tx decision: no `tx.readChainPage`; the tx boundary is unsealed until commit so paging would bind a movable boundary; pending appends stay readable via `tx.readChain`, committed pages via `readPage`.
   - [x] m11/m12/m13: accurate `.h2a/build/k3_fix2_report.md` with exit SHA; this lot's core commit is one atomic green unit (token format times runtime times proofs cannot split green).
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (red: B1 unhandled rejection in `kernel.spec.ts`)
+    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (red: same B1 error, exit 1)
+    - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] CI green on PR #670 (HEAD `1d2bfea8e` is `CONFLICTING`; `workflow_dispatch` run `38490269426` has branch-related `validate-cluster-mesh` failure B1 plus listed AI flaky failure).
 - [ ] **Lot 5 — Opus fix (6 MAJEUR, 9 MINEUR, PR #670)**
   - [x] Merge `origin/feat/cluster-mesh-storage-k2b` under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
   - [x] MAJEUR-1: recompute `start + delivered` on every trim in `record-runtime.ts`; full-sweep resume plus faithful mutant against K3.
@@ -193,7 +205,7 @@
   - [x] MINEUR-6: refuse `CommitOptions.fence` explicitly in `record-runtime.ts`.
   - [x] MINEUR-7: discriminating K3 tests plus mutants in `kernel.spec.ts` plus `scope-runtime.spec.ts`.
   - [x] MINEUR-8: commits under 150 lines (`BR-K3-DISC3`), no duplicated lines, checked boxes.
-  - [ ] MINEUR-9: accurate `.h2a/build/k3_fix_report.md` with exit SHA.
+  - [x] MINEUR-9: accurate `.h2a/build/k3_fix_report.md` with exit SHA.
   - [ ] Lot gate:
     - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
@@ -201,3 +213,23 @@
     - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] CI green on PR #670 with no reserves; re-merge K2b if it advances.
+- [ ] **Lot 7 — Fix3 pass (opus r3 1 BLOQUANT + 2 MAJEUR + 9 MINEUR, PR #670)**
+  - [x] B1: handler attached inside the deferred callback in `kernel.spec.ts`; `make test-cluster-mesh` exits 0; report corrected.
+  - [ ] M1: merge `origin/main` under `BR-K3-EX2` (`Makefile` plus `ci.yml` verbatim from `main`, K3 `BRANCH.md` kept); PR mergeable plus PR CI green.
+  - [ ] M2: `tx.readChain` paginated (`RecordPage`) plus `tx.readRecords` with mandatory `limits` and byte budget, per FROZEN §5.2; local paginated-tx decision removed.
+  - [ ] m1: MAC verified before the plaintext incarnation/key check (unknown `keyId` only skips the MAC); incarnation plus `keyId` alteration tests.
+  - [ ] m2: no constant default incarnation (random per kernel unless configured); restart tests pin explicit incarnations.
+  - [ ] m3: every joined grant revalidated at commit; revocation-of-B test.
+  - [ ] m4: joined calls share the final outer receipt; outer-failure receipt test.
+  - [ ] m5: versioned K3M4 race test plus MAC module/scope binding tests.
+  - [ ] m6: every fix3 commit atomic (under 150 lines) with `BRANCH.md` in-commit.
+  - [ ] m7: coherent `BRANCH.md` (true boxes checked, CI failures recorded, gates per lot).
+  - [ ] m8: accurate `.h2a/build/k3_fix3_report.md` with exit SHA (no `all gates green` without exit 0).
+  - [ ] m9: proscribed word removed from code, specs and reports; factual terms only.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] CI green on PR #670 with no reserves; owner sign-off on the listed AI flaky failure.
