@@ -83,7 +83,7 @@ export const createKernel = (options: KernelOptions): KernelRoot => {
   const revoked = new Set<string>();
   const issued = new Map<string, string>();
   const nextCommitId = createOpaqueIssuer('commit');
-  const deps: ScopedRuntimeDeps = { moduleId, backend, provider, incarnation, clock, revoked, issued, nextCommitId, predicates: options.predicates };
+  const deps: ScopedRuntimeDeps = { moduleId, backend, provider, incarnation, clock, revoked, issued, nextCommitId, authority, predicates: options.predicates };
 
   const admit = (grant: ScopeGrant<unknown>): void => {
     const validity = validateScopeGrant(grant, { nowIso: clock() });
