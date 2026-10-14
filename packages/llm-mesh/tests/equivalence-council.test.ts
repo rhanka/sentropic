@@ -45,6 +45,7 @@ describe('model equivalence council', () => {
 
     expect(excluded).toContain('anthropic:claude-fable-5-1');
     expect(excluded).toContain('gemini:gemini-3.8-flash');
+    expect(excluded).toContain('gemini:gemini-4-argon');
     expect(excluded).toContain('openai:gpt-6-astra');
   });
 
