@@ -1,12 +1,13 @@
 # Changelog
 
-## 0.15.0
+## 0.16.0
 
-- Post-rebase version bump strictly greater than npm (0.13.3) and main
-  (0.14.0) for the same native Anthropic relay release train:
-  cluster-mesh 0.15.0, llm-mesh 0.26.0 and llm-gateway 0.20.0. No runtime
-  change from 0.14.0: keeps the `>=0.22.0 <0.27.0` /
-  `>=0.19.0 <0.21.0` peer ceilings and qualifies the same train.
+- Post-#664 version bump strictly greater than npm (0.15.0) and main
+  (0.15.0) for the same native Anthropic relay release train:
+  cluster-mesh 0.16.0, llm-mesh 0.26.0 and llm-gateway 0.20.0. No runtime
+  change from main's 0.15.0 (the live-storage registration export is
+  inherited): keeps the `>=0.22.0 <0.27.0` / `>=0.19.0 <0.21.0` peer
+  ceilings and qualifies the same train.
 - Retain the previously qualified llm-mesh 0.22.x / llm-gateway 0.19.x tuple.
   Prereleases remain outside the window.
 
