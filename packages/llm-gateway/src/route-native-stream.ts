@@ -6,6 +6,7 @@ import { NativeUsageObserver } from './native-usage.js';
 import { nativeLifecycle } from './native-lifecycle.js';
 import { parseNativeSseStream, NativeSseFrameOverflowError, type NativeSseFrame } from './native-sse.js';
 import { nativeFrameError, nativeLateErrorBytes } from './native-stream-errors.js';
+import { NATIVE_SSE_KEEPALIVE_BYTES, NATIVE_SSE_KEEPALIVE_MS } from './native-sse.js';
 
 export const nativeStreamTermination = (error: unknown, aborted = false): NativeUsageTermination =>
   aborted ? 'cancelled' : error instanceof NativeSseFrameOverflowError ? 'frame_overflow'
@@ -38,11 +39,16 @@ export const nativeStreamExecution = (input: {
     input.signal?.removeEventListener('abort', onAbort);
     input.controller.abort();
     void frames?.return(undefined).catch(() => undefined);
+    // The frames return is deliberately not awaited: an async generator's
+    // return() queues behind an in-flight next(), so awaiting teardown in
+    // series would hang the consumer exactly when it is going away.
     return closeRaw();
   };
   const read = async () => {
+    const frameResult = frames!.next().then(value => ({ kind: 'frame' as const, value }));
+    frameResult.catch(() => {});
     const next = await Promise.race([
-      frames!.next().then(value => ({ kind: 'frame' as const, value })),
+      frameResult,
       aborted.then(() => ({ kind: 'aborted' as const })),
     ]);
     if (next.kind === 'aborted') throw new DOMException('Native stream cancelled', 'AbortError');
@@ -106,13 +112,53 @@ export const nativeStreamExecution = (input: {
     first = next.value;
     observe(first);
   };
-  const expose = () => {
+  const expose = (options?: { readonly keepaliveMs?: number }) => {
+    const keepaliveMs = options?.keepaliveMs ?? NATIVE_SSE_KEEPALIVE_MS;
+    // One outstanding upstream read shared by every silence race: re-racing
+    // the same pending next() can neither lose a frame nor start a second
+    // read. The timer is armed only between complete frames, after commitment.
+    let pending: Promise<IteratorResult<NativeSseFrame>> | undefined;
+    const readShared = () => pending ??= frames!.next().finally(() => { pending = undefined; });
+    const readAlive = async (): Promise<IteratorResult<NativeSseFrame> | { keepalive: true }> => {
+      if (!(keepaliveMs > 0)) {
+        const next = await read();
+        return next;
+      }
+      for (;;) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<'timeout'>(resolve => {
+          timer = setTimeout(() => resolve('timeout'), keepaliveMs);
+          (timer as unknown as { unref?: () => void }).unref?.();
+        });
+        try {
+          // The guard catch keeps an abandoned (post-timeout/abort) read from
+          // surfacing as an unhandled rejection when upstream later fails.
+          const frameResult = readShared().then(value => ({ kind: 'frame' as const, value }));
+          frameResult.catch(() => {});
+          const next = await Promise.race([
+            frameResult,
+            aborted.then(() => ({ kind: 'aborted' as const })),
+            timeout.then(() => ({ kind: 'timeout' as const })),
+          ]);
+          if (next.kind === 'timeout') return { keepalive: true };
+          if (next.kind === 'aborted') throw new DOMException('Native stream cancelled', 'AbortError');
+          return next.value;
+        } finally { if (timer !== undefined) clearTimeout(timer); }
+      }
+    };
     const stream = (async function* () {
       try {
         input.signal?.throwIfAborted();
         if (terminal) return;
         yield { bytes: first!.rawBytes };
-        for (let next = await read(); !next.done; next = await read()) {
+        for (;;) {
+          const next = await readAlive();
+          if ('keepalive' in next) {
+            if (terminal) return;
+            yield { bytes: NATIVE_SSE_KEEPALIVE_BYTES };
+            continue;
+          }
+          if (next.done) break;
           input.signal?.throwIfAborted();
           if (terminal) return;
           observe(next.value);
