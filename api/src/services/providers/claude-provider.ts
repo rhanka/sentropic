@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream';
 import { env } from '../../config/env';
+import { qualificationSdkOptions } from '../llm-runtime/gw-native-qualification-transport';
 import { executeClaudeNative, type ClaudeNativeRequest, type ClaudeNativeCountRequest } from '../llm-runtime/anthropic-native-http';
 import type {
   CredentialValidationResult,
@@ -131,7 +132,9 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
     apiKeyOverride?: string,
     claudeCodeTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null },
   ): Anthropic {
+    const qualification = qualificationSdkOptions();
     if (claudeCodeTransport?.accessToken) {
+      if (qualification.fetch) throw new Error('Qualification requires server token mode');
       return new Anthropic({
         apiKey: 'claude_code_dummy_key',
         fetch: buildClaudeCodeFetch(claudeCodeTransport),
@@ -143,7 +146,7 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
       throw new Error(validation.message || 'Anthropic API key is not configured');
     }
 
-    return new Anthropic({ apiKey: apiKeyOverride || env.ANTHROPIC_API_KEY });
+    return new Anthropic({ apiKey: apiKeyOverride || env.ANTHROPIC_API_KEY, ...qualification });
   }
 
   private async *toAsyncIterable(
