@@ -2,9 +2,10 @@
 // the staged, replay, barrier and lifecycle corpora executed against the
 // test-only staged reference, plus one recorded mutant per corpus behavior.
 
+import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { isStorageError } from '../../src/storage/errors.js';
-import { runAtomicCorpus } from './atomic-corpus.js';
+import { expectCode, runAtomicCorpus } from './atomic-corpus.js';
 import { grantFor } from './authority-corpus.js';
 import { runStagedCorpus } from './staged-corpus.js';
 import { runReplayCorpus } from './replay-corpus.js';
@@ -479,6 +480,22 @@ class RivalBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class PlainErrorStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.readHead.bind(bound);
+    bound.readHead = (chainId: string) => {
+      try {
+        return inner(chainId);
+      } catch (error) {
+        if (isStorageError(error)) throw new Error('denied');
+        throw error;
+      }
+    };
+    return bound;
+  }
+}
+
 export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'S1-visible-staging', brokenSemantic: 'staged effects leak before publication', corpus: 'staged', verdict: 'killed' },
   { id: 'S2-gap-blind-staging', brokenSemantic: 'gapped ordinals advance the frontier', corpus: 'staged', verdict: 'killed' },
@@ -498,6 +515,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'L3-forking-outcome', brokenSemantic: 'completion forks operational outcomes', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'L4-purge-authority-blind', brokenSemantic: 'purge intents pass without purge authority', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'T1-rival-blind-base', brokenSemantic: 'changed bases publish without conflict', corpus: 'staged', verdict: 'killed' },
+  { id: 'E1-plain-error', brokenSemantic: 'untyped Error passes as a typed denial', corpus: 'barrier', verdict: 'killed' },
 ];
 
 describe('K2b discriminating mutations: disposal and base', () => {
@@ -513,8 +531,22 @@ describe('K2b discriminating mutations: disposal and base', () => {
     );
   });
 
+  it('E1-plain-error is killed by the barrier corpus', async () => {
+    const { bound } = bindStaged(new PlainErrorStore('comments'));
+    await expect(runBarrierCorpus(bound)).rejects.toThrow(/throws denied before purge/);
+  });
+
+  it('E1-plain-error helper rejects an untyped denial', async () => {
+    await assert.rejects(
+      expectCode(async () => {
+        throw new Error('denied');
+      }, 'denied', 'K2b-INT-C19: an untyped denial never satisfies the typed helper'),
+    );
+  });
+
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',
