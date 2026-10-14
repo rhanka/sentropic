@@ -444,6 +444,44 @@ export const runStagedCorpus = async (
   );
   assert.equal(await bound.readHead('chain-base'), null);
 
+  const indexed = await bound.beginStaged({
+    operationKey: 'op-staged-index-race',
+    inputDigest: 'input-index-race',
+    contractDigest: 'contract-k2b',
+    sourceBoundary: 'boundary-k2b',
+    fence: FENCE,
+  });
+  await bound.stageFragment({
+    unit: indexed,
+    ordinal: '0',
+    predecessorHash: null,
+    fragmentDigest: 'digest-index-race-0',
+    effects: {
+      ...emptyUnit(),
+      indexWrites: [{ key: 'idx-race', digest: 'd-race', resultIds: ['r1'], resultHash: null }],
+    },
+    fence: FENCE,
+  });
+  const indexedSeal = await bound.sealStaged({
+    unit: indexed,
+    root: sealRoot('op-staged-index-race', 'digest-index-race-0', '1'),
+  });
+  await bound.commitAtomic({
+    guards: [],
+    records: [],
+    appends: [],
+    updates: [],
+    relationships: [],
+    barriers: [],
+    purgeIntents: [],
+    indexWrites: [{ key: 'idx-race', digest: 'd-race', resultIds: ['r2'], resultHash: null }],
+  });
+  await expectCode(
+    async () => bound.commitStaged({ seal: indexedSeal, fence: FENCE }),
+    'cas-conflict',
+    'K2b-RED staged: an unguarded index replacement conflicts without publication',
+  );
+
   const aborted = await bound.beginStaged({
     operationKey: 'op-staged-abort',
     inputDigest: 'input-abort',
