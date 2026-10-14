@@ -64,6 +64,7 @@ describe('llm-mesh model projections', () => {
       'gemini-3.5-flash',
       'gemini-3.7-flash',
       'gemini-3.8-flash',
+      'gemini-4-argon',
     ]);
     expect(modelsByProvider('anthropic')).toEqual([
       'claude-fable-5',
@@ -92,7 +93,7 @@ describe('llm-mesh model projections', () => {
       'muse-wonder-1.0',
       'muse-wonder-full-1.0',
     ]);
-    expect(data.models).toHaveLength(34);
+    expect(data.models).toHaveLength(35);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
