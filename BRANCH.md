@@ -49,6 +49,9 @@
 - [x] Migration sequencing (M6): migration `0010_live_git_declarations.sql` has `idx: 9`, `when: 1791845400000`. It sequences after `feat/cowork-remote-mcp` (which also holds an unmerged `idx: 9` in its branch). Any eventual renumbering will follow the final merge order onto main.
 - [x] Round-1 commit discipline anomalies (m6): commit `2569bbd09` failed standalone compilation due to missing `INITIAL_DECLARATION_REVISION` import, resolved immediately in subsequent commit `0d7778af4`. Commits `0d7778af4`, `3821a06e3`, and `f828d112e` were committed without an updated `BRANCH.md` in-commit. Recorded here permanently per Sentropic review policy (no history rewriting on published review branches).
 - [x] Cluster-mesh package versioning and migration sequencing (m8, M6): `@sentropic/cluster-mesh` remains at `0.14.0` in this branch to avoid a version collision with open PR #662 (which also targets `0.14.0`). When PR #662 merges and `feat/live-git-l6a-s` is rebased onto `origin/main`, `@sentropic/cluster-mesh` will be bumped to `0.15.0` (including root `package-lock.json` and `refresh-lazy-package-lock` for the `selected` fixture). Migration ordering for `0010_live_git_declarations.sql` (M6, `idx: 9`, `when: 1791845400000`) will also be rechecked and sequenced against `origin/main` at that time.
+- [x] Round-3 remediation n1 (r4): `PostgresLiveDeclarationStore` constructor now requires `bindingAuthorizer: LiveProductBindingAuthorizationPort` (no `?`), so a product composition that forgets the injection fails at type level; `save()` additionally refuses when the authorizer is absent at runtime (`product binding authorizer is required`), covering JS callers that bypass types. Test `refuses to persist without a product binding authorizer (n1)` in `api/tests/api/live-registration.test.ts` covers bound and unbound saves on an authorizer-less store.
+- [x] Round-3 remediation n2 (r4): intermediate commits `438379f35` and `eb4ec93b6` made shared-type edits that likely do not pass standalone `typecheck-api` (optional `serverWorkspaceId`/`serverIssuer`/`bindingRevision` widened in `registration.ts:497-503` before the `code-git-ports.ts` narrowing landed in `efc354574`; vitest/esbuild does not check types and CI only gates the head). Recorded here permanently per Sentropic review policy (no history rewriting on published review branches). Going forward, run `make typecheck-api` on every commit that touches a type shared with the API.
+- [ ] Migration renumbering after PR #665 (r4, blocked): PR #665 (`feat/session-workspace-binding`, migration `0011`, journal `idx: 9`) is still OPEN and not on `origin/main` (journal ends at `idx: 8` `0008_llm_admission`; `npm view @sentropic/cluster-mesh` is `0.13.3`, branch holds `0.14.0`). Per packet stop condition, renumbering of `0010_live_git_declarations.sql` to the next free journal idx with `when` strictly after #665 plus the Post-Rebase version bump wait for #665 on main (rebase on `origin/main`, never merge).
 
 ## AI Flaky tests
 - [x] Acceptance rule: none expected; no AI/provider-dependent test in scope. If a flaky failure appears, record command + failing file + signature here and treat as blocking when related to this branch.
@@ -111,6 +114,16 @@
   - [x] Add comprehensive RED and GUARD test cases in live-registration.test.ts (B1, M4, m5, M7) and verify green.
   - [x] Full validation: lint, typecheck, scoped/full tests, push branch, wait for PR #664 CI fully green (m7).
   - [x] Write fix report .h2a/build/l6a_s_fix_report.md (m8).
+
+- [ ] **Lot 8 — Round-3 review remediation (Opus r3 n1, n2; renumbering blocked on #665)**
+  - [x] Make `PostgresLiveDeclarationStore` binding authorizer mandatory at type level plus runtime refusal in `save()` (n1).
+  - [x] Add `refuses to persist without a product binding authorizer (n1)` test in `api/tests/api/live-registration.test.ts`.
+  - [x] Record non-typechecking intermediates `438379f35`/`eb4ec93b6` in Feedback Loop with no rewrite (n2).
+  - [x] Lot gate: `make typecheck-api API_PORT=9540 UI_PORT=5740 MAILDEV_UI_PORT=1640 ENV=test-l6a-s-r4` (PASS).
+  - [x] Lot gate: `make test-api-endpoints SCOPE=tests/api/live-registration.test.ts API_PORT=9540 UI_PORT=5740 MAILDEV_UI_PORT=1640 ENV=test-l6a-s-r4` (10 passed).
+  - [x] Lot gate: `make scope-check API_PORT=9540 UI_PORT=5740 MAILDEV_UI_PORT=1640 ENV=test-l6a-s-r4` (PASS C2).
+  - [ ] Renumbering + version bump deferred until PR #665 is on `origin/main` (rebase, never merge).
+  - [ ] Report `.h2a/build/l6a_s_r4_report.md`.
 
 - [x] **Lot 7 — Round-2 review remediation (Opus review N1, m1-m8)**
   - [x] Make withdrawal retryable on status withdrawn and support optional binding authorization input (m3).

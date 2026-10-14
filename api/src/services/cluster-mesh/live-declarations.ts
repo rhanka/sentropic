@@ -74,7 +74,7 @@ export const contractLiveDeclarationIdentity = canonicalLiveDeclarationIdentity;
 export class PostgresLiveDeclarationStore implements LiveDeclarationStorePort {
   constructor(
     private readonly identity: LiveDeclarationIdentityAdapter = contractLiveDeclarationIdentity,
-    private readonly bindingAuthorizer?: LiveProductBindingAuthorizationPort,
+    private readonly bindingAuthorizer: LiveProductBindingAuthorizationPort,
   ) {}
 
   async save(declaration: LiveWorkspaceDeclaration): Promise<void> {
@@ -83,15 +83,16 @@ export class PostgresLiveDeclarationStore implements LiveDeclarationStorePort {
       throw new Error(`invalid live workspace declaration: ${checked.errors.join('; ')}`);
     }
 
-    if (this.bindingAuthorizer) {
-      await this.bindingAuthorizer.authorizeProductBinding({
-        tenant: declaration.tenant,
-        principal: declaration.principal,
-        serverWorkspaceId: declaration.serverWorkspaceId,
-        serverIssuer: declaration.serverIssuer,
-        bindingRevision: declaration.bindingRevision,
-      });
+    if (!this.bindingAuthorizer) {
+      throw new Error('product binding authorizer is required: PostgresLiveDeclarationStore must be constructed with a LiveProductBindingAuthorizationPort');
     }
+    await this.bindingAuthorizer.authorizeProductBinding({
+      tenant: declaration.tenant,
+      principal: declaration.principal,
+      serverWorkspaceId: declaration.serverWorkspaceId,
+      serverIssuer: declaration.serverIssuer,
+      bindingRevision: declaration.bindingRevision,
+    });
 
     const row = {
       declarationKey: this.identity.declarationKey(declaration),
