@@ -8,8 +8,26 @@ import { qualificationEnvironment, checkQualificationReadiness, type Qualificati
 import { inputUsageReceipt, cleanNativeMeasured, serverToolQualifies } from '../ai/gw-native-qualification-receipts';
 import { observeQualificationResponse } from '../../src/services/llm-runtime/gw-native-qualification-observer';
 import { readQualificationReply } from '../ai/gw-native-qualification-http';
+import { qualificationLedgerEvidence } from '../ai/gw-native-qualification-ledger';
 
 describe('native qualification safety', () => {
+  it('should join one measured financial row and one physical native observation without persisting arbitrary metadata', () => {
+    const planned = { model: 'claude-sonnet-5', name: 'sse', native: true, count: false, stream: true };
+    const financial = { idempotency_key: 'request', hold_id: 'hold', cost_micro_usd: '7', input_tokens: 7, output_tokens: 4,
+      attempts: [{ inputTokens: 7, outputTokens: 4, estimated: false }] };
+    const observation = { idempotency_key: 'call', response_id: 'request', hold_id: null, cost_micro_usd: null,
+      credential_source: 'environment', input_tokens: 7, output_tokens: 4, total_tokens: 11, usage_raw: { input_tokens: 2,
+        cache_read_input_tokens: 3, cache_creation_input_tokens: 2, output_tokens: 4, input_usage_validated: true,
+        input_usage_source: 'message_delta', native_pricing_policy: 'anthropic-cache-2026-10-02', estimated: false,
+        final_output_observed: true, termination: 'completed', fallback_present: false, iterations_present: false,
+        native_selected_model_id: planned.model, native_served_model_id: planned.model, secret: 'private data' } };
+    const receipt = qualificationLedgerEvidence(planned, 'request', [financial, observation], [{ status: 'settled' }], 1);
+    expect(receipt).toMatchObject({ financialRows: 1, observationRows: 1, inputTokens: 7, chargedOutputTokens: 4 });
+    expect(JSON.stringify(receipt)).not.toContain('private'); expect(JSON.stringify(receipt)).not.toContain('"hold"');
+    expect(() => qualificationLedgerEvidence(planned, 'request', [financial, observation, financial], [{ status: 'settled' }], 1)).toThrow('prerequisite');
+    expect(() => qualificationLedgerEvidence({ ...planned, count: true }, 'request', [financial], [], 0)).toThrow('prerequisite');
+    expect(qualificationLedgerEvidence({ ...planned, count: true }, 'request', [], [], 0)).toMatchObject({ financialRows: 0, observationRows: 0, outboxEvents: 0 });
+  });
   it('should extract only numeric WebSearch growth and reject EOF without message_stop', async () => {
     const frame = (type: string, rest = {}) => `event: ${type}\ndata: ${JSON.stringify({ type, ...rest })}\n\n`;
     const body = frame('message_start', { message: { model: 'claude-sonnet-5', usage: { input_tokens: 2679 } } })

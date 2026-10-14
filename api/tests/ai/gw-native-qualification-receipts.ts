@@ -43,12 +43,12 @@ export const inputUsageReceipt = (start: Usage, deltas: readonly Usage[]) => {
     message_delta_input_decreased: decreased, numeric_input_growth: growth,
     input_start: safeInputCategories(start), input_deltas: deltas.map(safeInputCategories) };
 };
-export const cleanNativeMeasured = (model: string, observation: Usage, financial: Usage): boolean => {
+export const cleanNativeMeasured = (model: string, observation: Usage, financial: Usage, stream = true): boolean => {
   const raw = observation.usage_raw as Usage | undefined;
   const attempts = financial.attempts as Usage[] | undefined;
   const attempt = attempts?.[0];
   return !!raw && !!attempt && attempts?.length === 1 && raw.input_usage_validated === true
-    && ['message_start', 'message_delta'].includes(String(raw.input_usage_source))
+    && (stream ? ['message_start', 'message_delta'] : ['json']).includes(String(raw.input_usage_source))
     && raw.uncertainty_reason == null && raw.estimated === false && attempt.estimated === false
     && raw.final_output_observed === true && raw.termination === 'completed'
     && raw.fallback_present === false && raw.iterations_present === false
