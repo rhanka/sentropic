@@ -29,6 +29,7 @@ export const readQualificationFixture = (read: (path: string | URL) => string = 
     || !isDeepStrictEqual(source.webSearchBody, fixture.webSearchBody) || source.recognizedSuccessfulClassification !== true
     || !isDeepStrictEqual(source.webSearchBetas, fixture.webSearchBetas) || !isDeepStrictEqual(source.betas, fixture.betas)) throw new Error('Qualification construction evidence mismatch');
   const safeguards = fixture.body.safeguards as Record<string, unknown>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results = fixture.successfulSafeguardResults as Record<string, any>[];
   if (!Array.isArray(safeguards) || safeguards.length !== 1 || safeguards[0]?.type !== 'dangerous_tool_use'
     || !Object.hasOwn(safeguards[0], 'classifier_context') || safeguards[0].classifier_context == null
