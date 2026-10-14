@@ -19,6 +19,10 @@
   (owner request 2026-10-13, Full id corrected 2026-10-14); same
   transport-keyed Responses execution set as Spark (minus
   `reasoning-controls`, R5-MAJ-1), gateway default unchanged.
+- Gemini 4 Argon (`gemini-4-argon`) catalog entry, `gemini`/`cloud-code`
+  routing target and council listing (owner request 2026-10-14); same
+  `gemini-3.8-flash` pattern (`gemini-4-argon-low|medium|high` resolve per
+  effort through the generic Cloud Code wire suffix, no transport change).
 - **Rupture:** `admitRoute` requires `subject` (budget admission). This
   required field justifies the minor bump.
 - Codex device-flow network tolerance: poll + token-exchange retry (3

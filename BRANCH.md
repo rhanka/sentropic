@@ -238,7 +238,7 @@
   - [x] Final gate step 1: PR [#662](https://github.com/rhanka/sentropic/pull/662) created with `BRANCH.md` body; pushed.
   - [ ] Final gate step 2: branch CI green (run `38140227206` queued) + resolve blockers.
   - [ ] Final gate step 3: once UAT + CI `OK`, commit removal of `BRANCH.md`, push, merge.
-  - [ ] Publish via CI OIDC (`publish-llm-mesh`, `publish-llm-gateway`, `publish-cluster-mesh`); verify npm versions 0.26.0 / 0.20.0 / 0.14.0.
+  - [ ] Publish via CI OIDC (`publish-llm-mesh`, `publish-llm-gateway`, `publish-cluster-mesh`); verify npm versions 0.26.0 / 0.20.0 / 0.15.0 (R6: cluster-mesh 0.15.0 on branch; R6-MAJ-2 moves it above main+npm after #664 merges).
   - [ ] Mark loop `gw-muse-vibe-wires` done; reply to `agent:conductor:38f44695f2ad`.
 - `BR662-EX8`: native runtime/provider/composition — `api/src/services/llm-runtime/anthropic-native{,-http,-transport,-upload,-readiness,-lease,-observation}.ts`, `gateway-native-config.ts`, `gateway-package-version.ts`, `standalone-ports.ts`, `api/src/services/providers/claude-provider.ts`; extends EX5/EX7 (`gateway-count-tokens.ts`, `gateway-route-plane.ts`, `gateway-wire-adapter.ts`) and GWV-EX4 (`api/src/routes/namespaces/gw.ts`). Reason: host auth, raw execution, canonical SDK guard, composition. Impact: host runtime/namespace behavior; no caller-selected transport. Rollback: revert the fold slices as a coherent set; OFF removes activation, not ordinary count/body changes.
 - `BR662-EX9`: metering/body-parser contracts — `api/src/services/llm-metering/budget-admission.ts`, `route-settlement.ts`, `cost-ledger-sink.ts`. Reason: checked-body settlement inspection, exact native prices, role-separated observation/audit. Impact: financial contract under existing DB fences; no migration. Rollback: coordinated with usage/host slices, never mixed price contracts.
@@ -470,6 +470,13 @@
   - [x] R5-MIN-5: gateway spec §3 lists `/responses`, `/v1/responses`, `/muse-code/models`; mesh spec PR #662 addendum (BR662-EX13).
   - [x] R5-MIN-6: `BR662-EX8` duplicate folded into `GWV-EX1`; stale `-1.0-full` ids superseded by owner-corrected `muse-wonder-full-1.0`; round-4 parent checked.
   - [ ] R5-MIN-7: Wonder contributor variants stay owner-deferred (gateway default is Spark contributor; no scope change).
-  - [ ] R5-MAJ-3: deferred — #665 not on main (cluster-mesh main+npm still 0.13.3); on the next post-#665 rebase, bump cluster-mesh above both + locks/fixtures/CHANGELOG/README.
+  - [x] R5-MAJ-3: superseded — #665 merged on `origin/main` `f26cb0124` (cluster-mesh 0.14.0 on main and npm; branch took 0.15.0 in `c36d81148`); the remaining version gate is R6-MAJ-2 (#664 collision, still open).
   - [ ] R5-BLQ-3: owner-owned (real UAT + native qualification disposition) — not this lane.
   - [x] CI-red follow-up on run `38581987571` (3 fails, all diagnosed): Argon-packet fallout — `llm-runtime-stream.test.ts` matrix + `models.test.ts` pins lacked `gemini-4-argon` (catalog gained it in `3b509281d`); MAJ-2 follow-up — fence completeness demands exact paths, so the bridge uses `/muse-code/models` instead of `/muse-code/*` (same behavior, fence-clean). Verified locally: unit stream file 151 passed, 3 endpoints files 82 passed.
+- [ ] **Opus round-6 review fixes (`.h2a/reviews/pr662_opus_r6.md`, verdict NO-GO: 0 BLOQUANT, 2 MAJEUR, 3 MINEUR)**
+  - [x] R6-MAJ-1 (mesh half): capabilities-unmet refusal carries the §16.7 cause — mesh `unmetExecutionFeatures` (selection → plan/quote errors), covered by selection + quote tests (RED proven pre-fix, GREEN post-fix). Gateway mapper naming lands next.
+  - [ ] R6-MAJ-2: BLOCKED — PR #664 still OPEN (not on `origin/main` `f26cb0124`; main and npm cluster-mesh 0.14.0, branch 0.15.0). Per packet: no rebase, no bump; stop and report after the rest lands. Post-#664: rebase (never merge), cluster-mesh to the free minor above main+npm, CHANGELOG + README matrix, `lock-root` + `refresh-lazy-package-lock`, BRANCH.md in-commit.
+  - [x] R6-MIN-1: Argon line in mesh CHANGELOG Unreleased + mesh spec PR #662 addendum (3.8-flash pattern, no transport change).
+  - [ ] R6-MIN-2: PR body refresh from this BRANCH.md after push + green CI (final refresh rides the R6-MAJ-2 commit).
+  - [x] R6-MIN-3: BRANCH.md in every R6 commit (this update); R5-MAJ-3 reworded (#665 merged, superseded by R6-MAJ-2); Lot N publish versions 0.26.0/0.20.0/0.15.0.
+  - [x] Gateway CHANGELOG capabilities-unmet line amended (named refusal documented, R6-MAJ-1).

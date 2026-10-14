@@ -1,3 +1,4 @@
+import type { ExecutionFeature } from './execution-features.js';
 import type { RankedRouteCandidate } from './route-selection.js';
 import type {
   AffinityDescription,
@@ -46,6 +47,12 @@ export class RoutePlanError extends Error {
      * every failure cause.
      */
     readonly diagnostics?: readonly RouteAvailabilityDiagnostic[],
+    /**
+     * Requested execution features no resolved target supports (spec §16.7
+     * cause for `capabilities-unmet`; absent for older constructions and
+     * non-execution refusals). The gateway names the first mapped one.
+     */
+    readonly unmetExecutionFeatures?: readonly ExecutionFeature[],
   ) {
     super(message);
     this.name = 'RoutePlanError';

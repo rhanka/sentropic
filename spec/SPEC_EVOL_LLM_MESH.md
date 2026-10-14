@@ -830,3 +830,7 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
 - `mistral-vibe-cli-latest` alias resolving to the pinned `mistral:mistral-medium-3.5` /
   `mistral-vibe` target (no duplicate profile); the Vibe-proven `reasoning_effort` slot is
   forwarded on the Mistral Chat egress.
+- Gemini 4 Argon (`gemini-4-argon`): catalog entry, `gemini`/`cloud-code` routing target,
+  council listing (owner request 2026-10-14); same `gemini-3.8-flash` pattern
+  (`gemini-4-argon-low|medium|high` resolve per effort through the generic Cloud Code
+  wire suffix, no transport change).

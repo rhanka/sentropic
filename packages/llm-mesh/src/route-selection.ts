@@ -1,6 +1,6 @@
 import { modelProfiles, type ModelProfile } from './catalog.js';
 import { modelSupportsCapability, type ModelEquivalenceCouncil } from './equivalence-council.js';
-import { transportSupportsExecutionFeatures } from './execution-features.js';
+import { transportSupportsExecutionFeatures, type ExecutionFeature } from './execution-features.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
 import {
@@ -15,7 +15,15 @@ export interface RankedRouteCandidate {
 export type RouteCandidateSelection =
   | { readonly kind: 'candidates'; readonly candidates: readonly RankedRouteCandidate[] }
   | { readonly kind: 'unknown-model'; readonly requestedModel: string }
-  | { readonly kind: 'capabilities-unmet'; readonly requestedModel: string }
+  | {
+    readonly kind: 'capabilities-unmet'; readonly requestedModel: string;
+    /**
+     * Requested execution features no resolved target supports (spec §16.7:
+     * the gateway names the first mapped one as the refusal field path).
+     * Empty when the refusal comes from the capability filter instead.
+     */
+    readonly unmetExecutionFeatures: readonly ExecutionFeature[];
+  }
   | { readonly kind: 'no-eligible-account'; readonly requestedModel: string };
 
 export interface ResolvedRouteTarget {
@@ -112,7 +120,31 @@ export type RouteTargetResolution =
     readonly faithfulClaude: boolean;
   }
   | { readonly kind: 'unknown-model'; readonly requestedModel: string }
-  | { readonly kind: 'capabilities-unmet'; readonly requestedModel: string };
+  | {
+    readonly kind: 'capabilities-unmet'; readonly requestedModel: string;
+    /**
+     * Requested execution features no resolved target supports (spec §16.7:
+     * the gateway names the first mapped one as the refusal field path).
+     * Empty when the refusal comes from the capability filter instead.
+     */
+    readonly unmetExecutionFeatures: readonly ExecutionFeature[];
+  };
+
+/**
+ * Requested execution features no candidate target supports. A target with an
+ * unpinned transport is kept for the plan-time account check, so it never
+ * marks a feature unmet here. In request order; empty when execution
+ * features are not (one of) the refusal cause(s).
+ */
+const unmetExecutionFeatures = (
+  request: RoutePlanInput,
+  targets: readonly ResolvedRouteTarget[],
+): readonly ExecutionFeature[] => {
+  const required = request.requiredExecutionFeatures;
+  if (!required || required.length === 0 || targets.length === 0) return [];
+  return required.filter((feature) => !targets.some((target) =>
+    transportSupportsExecutionFeatures(target.transportProviderId, [feature])));
+};
 
 /**
  * Account-independent target resolution shared by planning and quoting:
@@ -181,11 +213,17 @@ export const resolveRouteTargets = (
   const faithfulClaude = request.requestedModel.startsWith('claude-')
     && resolution.useFaithfulAnthropicTarget;
   if (faithfulClaude && targets[0] && !supportsTarget(targets[0])) {
-    return { kind: 'capabilities-unmet', requestedModel: request.requestedModel };
+    return {
+      kind: 'capabilities-unmet', requestedModel: request.requestedModel,
+      unmetExecutionFeatures: unmetExecutionFeatures(request, [targets[0]]),
+    };
   }
   const capableTargets = targets.filter(supportsTarget);
   if (!faithfulClaude && targets.length > 0 && capableTargets.length === 0) {
-    return { kind: 'capabilities-unmet', requestedModel: request.requestedModel };
+    return {
+      kind: 'capabilities-unmet', requestedModel: request.requestedModel,
+      unmetExecutionFeatures: unmetExecutionFeatures(request, targets),
+    };
   }
   return { kind: 'targets', targets, capableTargets, faithfulClaude };
 };
