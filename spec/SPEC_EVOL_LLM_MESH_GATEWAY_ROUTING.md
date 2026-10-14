@@ -1213,13 +1213,17 @@ thin data plane).
   unchanged); no api change (account transport acquisition is
   model-agnostic).
 - Responses-wire compatibility: execution features are transport-keyed, so
-  both Wonder ids inherit the proven `muse` set (`reasoning-controls`,
-  `explicit-output-ceiling`, `strict-schema`, §16.3/16.4 amendments apply
-  unchanged) and serve through the translated Muse adapter.
-- Effort mapping: no per-model effort table exists in mesh — the canonical
-  `reasoning.effort` passes through the Responses wire unchanged for every
-  muse model (CLI tiers none/minimal/low/medium/high/xhigh/max/ultra per
-  `muse model-profile --help`).
+  both Wonder ids inherit the proven `muse` set (`named-tool-choice`,
+  `parallel-tool-control`, `explicit-output-ceiling`, `strict-schema`) and
+  serve through the translated Muse adapter. R5-MAJ-1: `reasoning-controls`
+  is NOT declared (no proven Meta Chat reasoning slot) — a request carrying
+  reasoning effort/summary is refused before dispatch with a named
+  capability 400, never served with the effort silently dropped.
+- Effort mapping: no per-model effort table exists in mesh. The canonical
+  `reasoning.effort` is validated at the Responses ingress (CLI tiers
+  none/minimal/low/medium/high/xhigh/max/ultra per `muse model-profile
+  --help`) but is NOT forwarded on the Muse Chat egress: the Meta
+  `/v1/chat/completions` shim has no proven reasoning slot (R5-MAJ-1).
 - Count/accounting: model-agnostic — `responsesUsage` mapping and
   route settlement/quote allowance apply identically (no per-model pricing
   table in mesh or gateway).
@@ -1640,7 +1644,7 @@ same opaque mesh attempt and gateway Responses encoder.
 | Provider / account transport | Egress already present | Responses execution in this extension |
 |---|---|---|
 | OpenAI / `codex` | `https://chatgpt.com/backend-api/codex/responses` | Native Responses via `CodexRuntimeClient`; validate/project the native carrier, preserve call ids, terminal items and available reasoning artifacts. Upstream remains streaming with `store:false`; collect for downstream JSON requests. |
-| Muse / `muse` | Meta `/v1/chat/completions` | Translate Responses to canonical to Chat and back. The CLI's `/responses` path does not establish a native Meta serving endpoint; do not repoint `MUSE_SERVING_PATH` on that inference. |
+| Muse / `muse` | Meta `/v1/chat/completions` | Translate Responses to canonical to Chat and back. The CLI's `/responses` path does not establish a native Meta serving endpoint; do not repoint `MUSE_SERVING_PATH` on that inference. No reasoning slot is proven on this Chat egress (R5-MAJ-1): `muse` declares no `reasoning-controls`; reasoning requests fail closed. |
 | Mistral / `mistral-vibe` | Mistral `/v1/chat/completions` | Translate text, images and qualified function/tool-result controls. Preserve the plan-billed account transport. |
 | Gemini / `cloud-code` | Cloud Code generation transport | Translate supported canonical content/tools/summaries; retain required provider continuation signatures or refuse the affected round trip. No Gemini ingress is added. |
 | Anthropic / `claude-code` | Qualified CLI runtime seam | Translation is conditional on that runtime's proven capabilities. Its current strict request projector rejects several canonical fields; do not label it universally compatible or substitute an unapproved HTTP transport. |
