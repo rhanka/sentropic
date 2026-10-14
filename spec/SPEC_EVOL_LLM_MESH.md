@@ -814,3 +814,19 @@ Use BR-14c to build a small SDK core and cut the current app runtime over to it,
 - Deferred systems: SSO, managed virtual keys, budgets, dashboards, persistent traces, billing, and gateway deployment.
 
 This keeps `@sentropic/llm-mesh` useful as an npm library while leaving enough contract surface for later FinOps and observability without forcing those systems into the MVP.
+
+## PR #662 Addendum (R5-MIN-5): Responses Execution Features, Wonder, Vibe Alias
+
+Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§16.4; this addendum records the mesh-owned surface:
+
+- Execution features (`packages/llm-mesh/src/execution-features.ts`): transport-keyed support table
+  (`reasoning-context`, `custom-tools`, `verbosity` on Codex; named/parallel tool control,
+  `explicit-output-ceiling`, `strict-schema` on Muse — no `reasoning-controls`, R5-MAJ-1;
+  named/parallel tool control, `reasoning-controls`, `strict-schema` on Mistral Vibe) with
+  fail-closed planning/quoting eligibility (`transportSupportsExecutionFeatures`).
+- Muse Wonder (`muse-wonder-1.0`) + Wonder Full (`muse-wonder-full-1.0`): catalog entries,
+  `muse`/`muse` routing targets, council listing (owner request 2026-10-13, Full id
+  corrected 2026-10-14); same transport-keyed Responses execution set as Spark.
+- `mistral-vibe-cli-latest` alias resolving to the pinned `mistral:mistral-medium-3.5` /
+  `mistral-vibe` target (no duplicate profile); the Vibe-proven `reasoning_effort` slot is
+  forwarded on the Mistral Chat egress.

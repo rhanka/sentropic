@@ -50,7 +50,9 @@ failure/estimated usage; **no retry after bytes have streamed**.
 ## 3. Wire contract (FROZEN v1 surface — expand only with contract tests)
 `POST /v1/messages` (Anthropic Messages compat), `POST /v1/messages/count_tokens` (native JSON token estimate),
 `POST /v1/chat/completions` (OpenAI Chat Completions compat),
-`GET /v1/models` (filtered by caller/pool policy), `GET /healthz`, `GET /readyz`. Auth = SENTROPIC auth (NOT
+`POST /responses` + `POST /v1/responses` (OpenAI Responses ingress, stateless JSON/SSE),
+`GET /v1/models` (filtered by caller/pool policy), `GET /muse-code/models` (Muse catalog, same filtered list),
+`GET /healthz`, `GET /readyz`. Auth = SENTROPIC auth (NOT
 provider auth): `Authorization: Bearer <OIDC/session>` OR `DPoP <token>` + DPoP proof for S2S OR `x-api-key:
 <sentropic-key>` (the Anthropic-SDK drop-in scheme — the SDK sends its key as `x-api-key`, never
 `Authorization: Bearer`, so a client with `ANTHROPIC_BASE_URL=<gateway>` + the standard `ANTHROPIC_API_KEY` reaches
