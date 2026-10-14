@@ -103,7 +103,7 @@ topology introduced in 0.1: one Sentropic server, its attached local workstation
 local signed projections, and the existing device-code lifecycle. It does not
 implement server-to-server federation.
 
-## Lazy integration surface (0.12+, tuple of 0.13)
+## Lazy integration surface (0.12+, tuple of 0.14)
 
 Cluster Mesh is the single integration surface for llm-mesh and llm-gateway. Those
 providers stay independent packages and never depend on cluster-mesh. They are
@@ -151,7 +151,7 @@ the llm-mesh range; gateway entries check the llm-gateway and llm-mesh ranges. R
 are checked on the copies cluster-mesh actually resolves (llm-mesh and llm-gateway from
 its own physical location, the gateway's llm-mesh from the gateway's location), release
 versions only: a prerelease version never satisfies, and `+build` metadata is ignored
-as npm does (`0.22.0+build.1` satisfies `>=0.22.0 <0.23.0`). An absent
+as npm does (`0.26.0+build.1` satisfies `>=0.22.0 <0.27.0`). An absent
 provider is left to the leaf import itself.
 Copies are keyed by module URL without `?query`/`#hash`: a copy loaded from another
 path (nested install, `npm link`, a `--preserve-symlinks` link path) is a duplicate,
@@ -182,6 +182,13 @@ oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7; session mode with auth-hono 0.15.0
 (llm-gateway 0.20.0's declared peer range `^0.15.0`); the latest versions inside
 every declared range are re-qualified on each release run. The previous tuple
 (llm-mesh 0.21.x, llm-gateway 0.18.x) is refused, see "Upgrading to 0.13" below.
+
+The current release target is **cluster-mesh 0.14.0, llm-mesh 0.26.0 and
+llm-gateway 0.20.0**, all still unpublished. Final sibling archive qualification
+and the selected-lock integrity refresh remain release gates; the selected fixture
+retains the baseline until that final refresh. The widened ranges retain the prior
+qualified minors.
+
 Release-train runs qualify the unpublished llm-mesh and llm-gateway candidates from
 same-PR sibling archives validated by the CI `loadSiblings` rules (sha256, packed
 identity and manifest guard, receipts packed from the current commit, no unlisted
@@ -189,6 +196,11 @@ archive) (`make -f packages/cluster-mesh/packaging.mk test-lazy-package
 SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json`); a
 receipt for cluster-mesh itself replaces the local pack as the qualified candidate. The
 committed `selected` lockfile carries their registry URL and the sha512 of those bytes.
+
+**Upgrading to 0.14.** Gateway 0.20.0 requires llm-mesh `^0.26.0`: upgrade both
+providers in the same artifact and keep their physical llm-mesh instance shared.
+Cluster-mesh 0.14.0 also accepts the prior 0.22.x / 0.19.x tuple. Prereleases
+are refused.
 
 **Upgrading to 0.13.** Bump cluster-mesh 0.13, llm-mesh 0.22 and llm-gateway 0.19 in
 the same commit; npm may not error on a partial bump. Measured with npm 11.19: a
