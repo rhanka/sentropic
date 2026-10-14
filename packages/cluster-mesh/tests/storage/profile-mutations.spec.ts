@@ -341,6 +341,19 @@ class CrossBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class SnapshotBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.snapshotRead.bind(bound);
+    bound.snapshotRead = async (snapshotRoot: string, after: number, limit: number) => {
+      const result = await inner(snapshotRoot, after, limit);
+      const full = await bound.journalRead('c-snap', 0, 100);
+      return { events: full.events.slice(0, result.events.length + 1), watermark: result.watermark };
+    };
+    return bound;
+  }
+}
+
 class IdRewriteStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -539,6 +552,14 @@ describe('K2b discriminating mutations: replay', () => {
     await expect(
       runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
     ).rejects.toThrow(/external mirrors preserve kernel identities/);
+  });
+
+  it('J5-snapshot-blind is killed by the replay corpus', async () => {
+    const store = new SnapshotBlindStore('comments');
+    const { primary, foreign } = bindReplayPair(store);
+    await expect(
+      runReplayCorpus(primary, foreign, { rebind: async () => store.bindStaged(stagedGrant()) }),
+    ).rejects.toThrow(/excludes records committed after its boundary/);
   });
 });
 
@@ -774,6 +795,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
   { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
   { id: 'J4-id-rewrite', brokenSemantic: 'external mirrors rewrite kernel identities', corpus: 'replay', verdict: 'killed' },
+  { id: 'J5-snapshot-blind', brokenSemantic: 'snapshots leak post-boundary records', corpus: 'replay', verdict: 'killed' },
   { id: 'B1-denial-blind-barrier', brokenSemantic: 'covered reads bypass denial', corpus: 'barrier', verdict: 'killed' },
   { id: 'B2-escape-open-barrier', brokenSemantic: 'covered writes escape their barrier', corpus: 'barrier', verdict: 'killed' },
   { id: 'B4-reparent-open-barrier', brokenSemantic: 'covered children escape via reparenting', corpus: 'barrier', verdict: 'killed' },
@@ -814,6 +836,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',

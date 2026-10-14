@@ -740,7 +740,27 @@ export class TestStagedStore {
     // pass an undelivered poisoned event after resync. Advancing or clearing
     // here would manufacture progress and lose events on a crash between
     // resync and snapshot consumption.
-    return { snapshotRoot: `root-${this.staged.journalSeq}`, journalSeq: this.staged.journalSeq };
+    const { tenantId, workspaceId } = this.scope;
+    return { snapshotRoot: `root:${tenantId}:${workspaceId}:${this.staged.journalSeq}`, journalSeq: this.staged.journalSeq };
+  }
+
+  snapshotRead(snapshotRoot: string, after: number, limit: number): JournalReadResult {
+    this.requireOperation('read');
+    if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
+      throw new StorageInvalidCommandError('snapshot reader requires a valid window');
+    }
+    const match = /^root:([^:]+):([^:]+):(\d+)$/.exec(snapshotRoot);
+    if (!match) throw new StorageInvalidCommandError('unknown snapshot root');
+    const [, tenantId, workspaceId, seqRaw] = match;
+    if (tenantId !== this.scope.tenantId || workspaceId !== this.scope.workspaceId) {
+      throw new StorageInvalidCommandError('foreign snapshot root');
+    }
+    const boundary = Number(seqRaw);
+    if (!Number.isSafeInteger(boundary) || boundary < 0 || boundary > this.staged.journalSeq) {
+      throw new StorageInvalidCommandError('stale snapshot root');
+    }
+    const events = this.staged.journal.filter((event) => event.seq > after && event.seq <= boundary).slice(0, limit);
+    return { events, watermark: boundary };
   }
 
   configureLifecycle(policy: PurgePolicy): void {

@@ -36,6 +36,7 @@ export interface ReplayCorpusStore {
   journalMarkPoison(consumer: string, eventId: string, reason: string): Awaitable<void>;
   journalRetry(consumer: string, expectedFailure: string): Awaitable<void>;
   journalResync(consumer: string): Awaitable<{ readonly snapshotRoot: string; readonly journalSeq: number }>;
+  snapshotRead(snapshotRoot: string, after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
   externalRead(after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
 }
 
@@ -423,4 +424,34 @@ export const runReplayCorpus = async (
   assert.ok(failJournal.segment);
   assert.ok(failExternal.segment);
   assert.deepEqual(failExternal.segment, failJournal.segment);
+
+  const snapBoundary = await bound.journalResync('c-snap');
+  const snapCursorBefore = (await bound.journalInspect('c-snap')).cursor;
+  await commitOne(bound, 'journal-snap-later', 8);
+  const snapPage = await bound.snapshotRead(snapBoundary.snapshotRoot, 0, 100);
+  assert.equal(snapPage.watermark, snapBoundary.journalSeq);
+  assert.equal(
+    snapPage.events.some((event) => event.commitId === failReceipt.commitId),
+    true,
+  );
+  assert.equal(
+    snapPage.events.some((event) => event.seq > snapBoundary.journalSeq),
+    false,
+    'K2b-RED replay: a snapshot excludes records committed after its boundary',
+  );
+  assert.equal((await bound.journalInspect('c-snap')).cursor, snapCursorBefore);
+  await bound.journalCheckpoint('c-snap', snapCursorBefore, snapBoundary.journalSeq);
+  assert.equal((await bound.journalInspect('c-snap')).lag, 1);
+  for (const badRoot of ['', 'root-foreign', snapBoundary.snapshotRoot.replace(/^root:/, 'root:x:')]) {
+    await expectCode(
+      async () => bound.snapshotRead(badRoot, 0, 10),
+      'invalid-command',
+      'K2b-RED replay: a foreign or malformed snapshot root fails',
+    );
+  }
+  await expectCode(
+    async () => bound.snapshotRead(snapBoundary.snapshotRoot.replace(/:\d+$/, `:${snapBoundary.journalSeq + 1000}`), 0, 10),
+    'invalid-command',
+    'K2b-RED replay: a future snapshot root fails',
+  );
 };
