@@ -1417,7 +1417,7 @@ describe('opaque route planner', () => {
     // Adapted from R: R suppressed with a lone provider-5xx, but W pins the
     // single-account degrade (uncommitted failures still serve the lone route),
     // so suppression here uses rate-limit quarantine, which holds even lone.
-    let now = Date.parse('2026-08-08T00:00:00Z');
+    const now = Date.parse('2026-08-08T00:00:00Z');
     const planner = new InMemoryRoutePlanner({
       directory: new FakeRouteDirectory([{
         accountRef: 'internal-canonical', diagnosticAccountRef: 'acct_canonical',
@@ -1443,7 +1443,7 @@ describe('opaque route planner', () => {
 
   it('preserves no-route when eligible native capacity is suppressed by health', async () => {
     // Same W adaptation as above: quarantine, not a lone 5xx, suppresses.
-    let now = Date.parse('2026-08-08T00:00:00Z');
+    const now = Date.parse('2026-08-08T00:00:00Z');
     const planner = new InMemoryRoutePlanner({
       directory: new FakeRouteDirectory([{
         accountRef: 'internal-native', diagnosticAccountRef: 'acct_native',
