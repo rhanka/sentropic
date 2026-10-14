@@ -30,6 +30,7 @@ export interface StagedCorpusStore {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
   readHead(chainId: string): Awaitable<string | null>;
   readChain(chainId: string): Awaitable<readonly StagedCorpusRecord[]>;
+  readRecord(key: string): Awaitable<{ readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; readonly contentHash: string } | null>;
   indexGet(key: string): Awaitable<{ readonly digest: string; readonly resultIds: readonly string[]; readonly resultHash: string | null } | null>;
   commitAtomic(unit: AtomicUnit, options?: CommitOptions): Awaitable<{ readonly commitId: string }>;
   disposeChain(chainId: string): Awaitable<void>;
@@ -196,6 +197,7 @@ export const runStagedCorpus = async (
     fragmentDigest: 'digest-1',
     effects: {
       ...appendUnit('chain-s2', 's2', 'hash-s2', null),
+      records: [{ key: 'rec-hidden-1', bytes: { format: 'utf8', data: 'hidden' }, contentHash: 'h-hidden-1' }],
       indexWrites: [{ key: 'staged-idx-1', digest: 'd1', resultIds: ['r1'], resultHash: null }],
     },
     fence: FENCE,
@@ -207,6 +209,11 @@ export const runStagedCorpus = async (
     'K2b-RED staged: staged effects stay invisible to head lookup',
   );
   assert.deepEqual(await bound.readChain('chain-s2'), []);
+  assert.equal(
+    await bound.readRecord('rec-hidden-1'),
+    null,
+    'K2b-RED staged: staged records stay invisible to direct lookup',
+  );
   assert.equal(
     await bound.indexGet('staged-idx-1'),
     null,
@@ -367,6 +374,11 @@ export const runStagedCorpus = async (
   assert.deepEqual(await bound.inspectStaged('op-staged-1'), { state: 'committed', commitId: receipt.commitId });
   assert.equal(await bound.readHead('chain-s1'), 'hash-s1');
   assert.equal(await bound.readHead('chain-s2'), 'hash-s2');
+  assert.deepEqual(
+    await bound.readRecord('rec-hidden-1'),
+    { bytes: { format: 'utf8', data: 'hidden' }, contentHash: 'h-hidden-1' },
+    'K2b-RED staged: staged records publish atomically with their unit',
+  );
   assert.deepEqual(
     await bound.indexGet('staged-idx-1'),
     { digest: 'd1', resultIds: ['r1'], resultHash: null },

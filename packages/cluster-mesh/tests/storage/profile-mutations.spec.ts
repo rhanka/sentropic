@@ -273,6 +273,34 @@ class SealBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class RecordLeakStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const innerStage = bound.stageFragment.bind(bound);
+    bound.stageFragment = async (input) => {
+      const receipt = await innerStage(input);
+      if (input.effects.records.length > 0) {
+        try {
+          await bound.commitAtomic({
+            guards: [],
+            records: [...input.effects.records],
+            appends: [],
+            updates: [],
+            relationships: [],
+            barriers: [],
+            purgeIntents: [],
+            indexWrites: [],
+          });
+        } catch {
+          /* leak attempt */
+        }
+      }
+      return receipt;
+    };
+    return bound;
+  }
+}
+
 class OverlayBlindStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -442,6 +470,13 @@ describe('K2b discriminating mutations: staged', () => {
     const { store, bound } = bindStaged(new OverlayBlindStore('comments'));
     await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
       /successive fragments publish the full ordered history/,
+    );
+  });
+
+  it('S13-record-leak is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new RecordLeakStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /staged records stay invisible to direct lookup/,
     );
   });
 });
@@ -685,6 +720,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'S10b-seal-blind', brokenSemantic: 'divergent seals pass validation', corpus: 'staged', verdict: 'killed' },
   { id: 'S11-cross-blind', brokenSemantic: 'foreign handles stage across scopes', corpus: 'staged', verdict: 'killed' },
   { id: 'S12-overlay-blind', brokenSemantic: 'successive fragments drop intermediate history', corpus: 'staged', verdict: 'killed' },
+  { id: 'S13-record-leak', brokenSemantic: 'staged records leak before publication', corpus: 'staged', verdict: 'killed' },
   { id: 'J1-no-checkpoint-cas', brokenSemantic: 'checkpoints skip CAS protection', corpus: 'replay', verdict: 'killed' },
   { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
   { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
@@ -727,6 +763,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',
