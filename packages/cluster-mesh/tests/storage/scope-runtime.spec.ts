@@ -44,6 +44,36 @@ describe('K3 binding: frozen grant copies', () => {
   });
 });
 
+describe('K3 binding: sealed handle invariants', () => {
+  it('K3-FIX handle invariants cannot be replaced at runtime', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const reader = kernel.bindNew(grantFor({ token: 'token-brand-read', operations: ['read'] }));
+    // Escalation: the grant property is sealed; replacing it throws and the
+    // original read-only grant still denies writes.
+    expect(() => {
+      (reader as unknown as Record<string, unknown>)['grant'] = grantFor({ token: 'token-brand-evil' });
+    }).toThrow();
+    expect(() => {
+      (reader as unknown as Record<string, unknown>)['requireOperation'] = () => undefined;
+    }).toThrow();
+    await expectCode(
+      async () => reader.appendChain('brand-esc', { id: 'e', bytes: '{}', hash: 'h-brand-esc' }, { kind: 'absent', allocation: '0' }),
+      'denied',
+      'K3-FIX branding: a replaced grant cannot escalate a read-only handle',
+    );
+    // Tenant switch: the scope invariant is sealed; spoofing it is ignored.
+    const victim = kernel.bindNew(
+      grantFor({ token: 'token-brand-victim', scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
+    );
+    await victim.appendChain('brand-secret', { id: 's', bytes: '{}', hash: 'h-brand-secret' }, { kind: 'absent', allocation: '0' });
+    const alien = kernel.bindNew(grantFor({ token: 'token-brand-alien' }));
+    expect(() => {
+      (alien as unknown as Record<string, unknown>)['boundScope'] = { tenantId: 'tenant-b', workspaceId: 'workspace-a' };
+    }).toThrow();
+    expect(await alien.readHead('brand-secret')).toBe(null);
+  });
+});
+
 describe('K3 binding: revalidation and capabilities', () => {
   it('K3-RED expired and revoked grants deny every operation', async () => {
     let now = '2026-01-01T00:00:00.000Z';
