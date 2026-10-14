@@ -28,6 +28,7 @@ export interface ReplayCorpusStore {
   stageFragment(input: { readonly unit: StagedCorpusHandle; readonly ordinal: string; readonly predecessorHash: string | null; readonly fragmentDigest: string; readonly effects: AtomicUnit; readonly fence: WriterFence }): Awaitable<{ readonly unitId: string; readonly ordinal: string; readonly fragmentDigest: string }>;
   sealStaged(input: { readonly unit: StagedCorpusHandle; readonly root: StagedCommitRoot }): Awaitable<StagedCorpusSeal>;
   commitStaged(input: { readonly seal: StagedCorpusSeal; readonly fence: WriterFence }): Awaitable<{ readonly commitId: string }>;
+  armExternalFailure(): Awaitable<void>;
   abortStaged(input: { readonly unit: StagedCorpusHandle }): Awaitable<void>;
   journalRead(consumer: string, after: number, limit: number): Awaitable<{ readonly events: readonly ReplayCorpusEvent[]; readonly watermark: number }>;
   journalCheckpoint(consumer: string, expected: number, next: number): Awaitable<void>;
@@ -339,4 +340,87 @@ export const runReplayCorpus = async (
     'K2b-RED replay: interleaved scopes with colliding ids stay separate on one log',
   );
   assert.equal(interleaved.watermark >= 2, true);
+
+  const kernelEvents = await bound.journalRead('c1', 0, 100);
+  const mirrorEvents = await bound.externalRead(0, 100);
+  const kernelFirst = kernelEvents.events.slice(0, 3).map((event) => `${event.eventId}:${event.commitId}`);
+  const mirrorFirst = mirrorEvents.events.slice(0, 3).map((event) => `${event.eventId}:${event.commitId}`);
+  assert.deepEqual(
+    mirrorFirst,
+    kernelFirst,
+    'K2b-RED replay: external mirrors preserve kernel identities and order',
+  );
+  const kernelCommits = kernelEvents.events.map((event) => event.commitId);
+  const mirrorCommits = mirrorEvents.events
+    .filter((event) => event.scope.workspaceId === kernelEvents.events[0].scope.workspaceId)
+    .map((event) => event.commitId);
+  assert.deepEqual(mirrorCommits.slice(0, 3), kernelCommits.slice(0, 3));
+
+  const failing = await bound.beginStaged({
+    operationKey: 'op-replay-fail',
+    inputDigest: 'input-fail',
+    contractDigest: 'contract-k2b',
+    sourceBoundary: 'boundary-k2b',
+    fence: FENCE,
+  });
+  await bound.stageFragment({
+    unit: failing,
+    ordinal: '0',
+    predecessorHash: null,
+    fragmentDigest: 'digest-fail-0',
+    effects: {
+      guards: [],
+      records: [],
+      appends: [
+        {
+          chainId: 'journal-fail',
+          record: { id: 'f1', bytes: '{}', hash: 'hash-fail-1' },
+          expectation: { kind: 'absent', allocation: '0' },
+        },
+      ],
+      updates: [],
+      relationships: [],
+      barriers: [],
+      purgeIntents: [],
+      indexWrites: [],
+    },
+    fence: FENCE,
+  });
+  const failingSeal = await bound.sealStaged({
+    unit: failing,
+    root: {
+      operationId: 'op-replay-fail',
+      contractDigest: 'contract-k2b',
+      sourceBoundary: 'boundary-k2b',
+      finalFragmentHash: 'digest-fail-0',
+      fragmentCount: '1',
+      dependencyRoot: 'dep-root-k2b',
+      effectRoot: 'eff-root-k2b',
+    },
+  });
+  await bound.armExternalFailure();
+  await expectCode(
+    async () => bound.commitStaged({ seal: failingSeal, fence: FENCE }),
+    'invalid-command',
+    'K2b-RED replay: an external failure leaves no canonical effects',
+  );
+  assert.equal(await bound.readHead('journal-fail'), null);
+  const afterFail = await bound.journalRead('c1', 0, 100);
+  assert.equal(afterFail.events.some((event) => event.operationKey === 'op-replay-fail'), false);
+  const afterFailExternal = await bound.externalRead(0, 100);
+  assert.equal(afterFailExternal.events.some((event) => event.operationKey === 'op-replay-fail'), false);
+  const failReceipt = await bound.commitStaged({ seal: failingSeal, fence: FENCE });
+  const failJournal = (await bound.journalRead('c1', 0, 100)).events.find(
+    (event) => event.operationKey === 'op-replay-fail',
+  );
+  const failExternal = (await bound.externalRead(0, 100)).events.find(
+    (event) => event.operationKey === 'op-replay-fail',
+  );
+  assert.ok(failJournal);
+  assert.ok(failExternal);
+  assert.equal(failJournal.commitId, failReceipt.commitId);
+  assert.equal(failExternal.commitId, failReceipt.commitId);
+  assert.ok(failJournal.segment);
+  assert.ok(failExternal.segment);
+  assert.deepEqual(failExternal.segment, failJournal.segment);
 };
