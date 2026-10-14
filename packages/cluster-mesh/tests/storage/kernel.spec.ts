@@ -850,24 +850,69 @@ describe('K3 runtime: single-apply dependents and commit races', () => {
     expect(await first.readHead('join-chain')).toBe('hash-join-1');
   });
 
-  it('K3-FIX joined receipts are frozen snapshots', async () => {
+  it('K3-FIX joined calls share the final outer receipt', async () => {
     const bound = bindKernel();
-    let provisional: CommitReceipt | null = null;
+    let shared: CommitReceipt | null = null;
     const outer = await bound.transact({}, async () => {
       const inner = await bound.transact({}, async (tx) => {
         await tx.apply(appendUnit('snap-chain', 'p1', 'hash-snap-1', null));
         return 'inner';
       });
-      provisional = inner.receipt;
-      // Provisional at return time: the outer commit has not run yet.
+      shared = inner.receipt;
+      // Before the outer commit: the reserved commit id with zero effects.
       expect(inner.receipt.effectiveAppends).toBe(0);
-      (inner.receipt as unknown as { effectiveAppends: number }).effectiveAppends = 99;
       return 'outer';
     });
-    // Mutating the copy cannot touch the commit, and the commit cannot
-    // rewrite the previously returned copy.
-    expect(outer.receipt.effectiveAppends).toBe(1);
-    expect(provisional?.effectiveAppends).toBe(99);
+    // After the outer commit the same object reads the final counts.
+    expect(shared).toBe(outer.receipt);
+    expect(shared?.commitId).toBe(outer.receipt.commitId);
+    expect(shared?.effectiveAppends).toBe(1);
+  });
+
+  it('K3-FIX a failed outer leaves the joined receipt uncommitted', async () => {
+    const bound = bindKernel();
+    let shared: CommitReceipt | null = null;
+    await expectCode(
+      async () =>
+        bound.transact({}, async () => {
+          const inner = await bound.transact({}, async (tx) => {
+            await tx.apply(appendUnit('snap-fail-chain', 'q1', 'hash-snap-fail-1', null));
+            return 'inner';
+          });
+          shared = inner.receipt;
+          throw new Error('outer-boom');
+        }),
+      'outer-boom',
+      'K3-FIX receipts: the outer failure propagates and nothing commits',
+    );
+    // The reserved commit id never committed: zero effects, no chain.
+    expect(shared?.effectiveAppends).toBe(0);
+    expect(await bound.readHead('snap-fail-chain')).toBe(null);
+  });
+
+  it('K3-FIX a revoked joined grant refuses the outer commit', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const scope = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
+    const first = kernel.bindNew(grantFor({ token: 'token-revoke-join-a', scope }));
+    const second = kernel.bindNew(grantFor({ token: 'token-revoke-join-b', scope }));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const outer = first.transact({}, async () => {
+      await second.transact({}, async (tx) => {
+        await tx.apply(appendUnit('revoke-join-chain', 'r1', 'hash-revoke-join-1', null));
+        release();
+        return 'inner';
+      });
+      return 'outer';
+    });
+    // B is revoked after its apply but before the outer commit runs: the
+    // commit-time revalidation of every contributor refuses the commit.
+    await gate;
+    kernel.revoke('token-revoke-join-b');
+    await expectCode(() => outer, 'denied', 'K3-FIX transactions: a revoked joined grant refuses the commit');
+    expect(await first.readHead('revoke-join-chain')).toBe(null);
   });
 });
 
