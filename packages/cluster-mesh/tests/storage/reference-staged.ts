@@ -740,6 +740,9 @@ export class TestStagedStore {
       seen.add(current);
       current = this.staged.coverage.get(current);
     }
+    if (this.isCovered(child) && !this.isCovered(parent)) {
+      throw new StorageInvalidCommandError('covered child cannot escape its barrier');
+    }
     this.staged.coverage.set(child, parent);
   }
 
