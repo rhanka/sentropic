@@ -108,6 +108,9 @@ interface StagedOp {
   receipt?: CommitReceipt;
   abortReason?: string;
   beginFence?: WriterFence;
+  beginInputDigest?: string;
+  beginContractDigest?: string;
+  beginSourceBoundary?: string;
 }
 
 const compareEpoch = (current: string, begin: string): number => {
@@ -404,7 +407,16 @@ export class TestStagedStore {
     const valid = validateBeginInput(input);
     if (!valid.ok) throw new StorageInvalidCommandError(valid.errors.join('; '));
     const existing = this.staged.units.get(input.operationKey);
-    if (existing) return { unitId: existing.unitId, operationKey: input.operationKey };
+    if (existing) {
+      if (
+        existing.beginInputDigest !== input.inputDigest ||
+        existing.beginContractDigest !== input.contractDigest ||
+        existing.beginSourceBoundary !== input.sourceBoundary
+      ) {
+        throw new StorageIdempotencyConflictError('divergent begin conflicts');
+      }
+      return { unitId: existing.unitId, operationKey: input.operationKey };
+    }
     this.staged.unitSeq += 1;
     const op: StagedOp = {
       unitId: `unit-${this.staged.unitSeq}`,
@@ -412,6 +424,9 @@ export class TestStagedStore {
       fragments: [],
       state: 'staging',
       beginFence: { ...input.fence },
+      beginInputDigest: input.inputDigest,
+      beginContractDigest: input.contractDigest,
+      beginSourceBoundary: input.sourceBoundary,
     };
     this.staged.units.set(input.operationKey, op);
     return { unitId: op.unitId, operationKey: op.operationKey };
@@ -479,12 +494,24 @@ export class TestStagedStore {
     if (op.state !== 'staging') throw new StorageInvalidCommandError('only staging units seal');
     const root = validateCommitRoot(input.root);
     if (!root.ok) throw new StorageInvalidCommandError(root.errors.join('; '));
+    if (input.root.operationId !== op.operationKey) {
+      throw new StorageInvalidCommandError('seal operation mismatch');
+    }
+    if (input.root.contractDigest !== op.beginContractDigest) {
+      throw new StorageInvalidCommandError('seal contract mismatch');
+    }
+    if (input.root.sourceBoundary !== op.beginSourceBoundary) {
+      throw new StorageInvalidCommandError('seal boundary mismatch');
+    }
     if (input.root.fragmentCount !== String(op.fragments.length)) {
       throw new StorageInvalidCommandError('wrong counts cannot seal');
     }
     const last = op.fragments[op.fragments.length - 1];
     if (!last || input.root.finalFragmentHash !== last.fragmentDigest) {
       throw new StorageInvalidCommandError('truncated chains cannot seal');
+    }
+    if (input.root.dependencyRoot !== 'dep-root-k2b' || input.root.effectRoot !== 'eff-root-k2b') {
+      throw new StorageInvalidCommandError('seal roots mismatch');
     }
     if (nextStagedState('staging', 'begin-seal') !== 'sealing' || nextStagedState('sealing', 'seal') !== 'sealed') {
       throw new StorageInvalidCommandError('seal transition closed');
@@ -501,9 +528,9 @@ export class TestStagedStore {
       base.set(chainId, { head: this.inner.readHead(chainId), disposed: this.staged.disposed.has(chainId) });
     }
     op.state = 'sealed';
-    op.seal = { unitId: op.unitId, commitRoot: input.root };
+    op.seal = { unitId: op.unitId, commitRoot: { ...input.root } };
     op.base = base;
-    return op.seal;
+    return { unitId: op.seal.unitId, commitRoot: { ...op.seal.commitRoot } };
   }
 
   commitStaged(input: {
