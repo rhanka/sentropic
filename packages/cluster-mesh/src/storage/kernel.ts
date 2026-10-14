@@ -10,6 +10,7 @@
 // record, never from the caller-supplied object: a divergent re-issuance
 // under a known token is refused instead of overwriting it.
 
+import { randomBytes } from 'node:crypto';
 import { StorageDeniedError, StorageInvalidCommandError } from './errors.js';
 import { validateScopeGrant, type ScopeGrant } from './authority.js';
 import { MemoryBackend } from './backend.js';
@@ -42,7 +43,9 @@ export const createStaticAuthorityPort = (expectations: {
 export interface KernelOptions {
   /** Owning module id (for example 'comments'). */
   readonly moduleId: string;
-  /** Stable store incarnation bound into every cursor. Defaults to 'store-1'. */
+  /** Stable store incarnation bound into every cursor. Defaults to a random
+   * per-kernel value: cursor portability across restarts needs an explicit
+   * incarnation plus a shared cursorSecret. */
   readonly incarnation?: string;
   /** Clock for grant lifetimes and receipts. Defaults to live time. */
   readonly now?: () => string;
@@ -76,7 +79,10 @@ export const createKernel = (options: KernelOptions): KernelRoot => {
   }
   const moduleId = options.moduleId;
   const clock = options.now ?? (() => new Date().toISOString());
-  const incarnation = options.incarnation ?? 'store-1';
+  // No constant default: a restarted kernel with a lost backend must report
+  // its cursors as an unknown boundary (§8.2), never resume silently under a
+  // recycled incarnation (m2).
+  const incarnation = options.incarnation ?? `store-${randomBytes(8).toString('hex')}`;
   const backend = new MemoryBackend();
   const provider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
   const authority = options.authority ?? createStaticAuthorityPort();
