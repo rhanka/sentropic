@@ -23,7 +23,10 @@ import type { GatewayWire } from '../ports/dispatch.js';
 import type { ResolvedTarget } from '../flow.js';
 import { requestTooLargeDetail, type RequestSizeDetail } from '@sentropic/llm-mesh';
 import * as mesh from '@sentropic/llm-mesh';
-import type { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
+import {
+  EXECUTION_FEATURES,
+  type ExecutionFeature, type NativeMessagesUpstreamError,
+} from '@sentropic/llm-mesh';
 import { NativeSseUpstreamError } from '../native-stream-errors.js';
 import {
   isProcessedNativeValidationDetail,
@@ -142,6 +145,41 @@ export interface FieldError {
   readonly code?: string;
   readonly param?: string;
 }
+
+/**
+ * Spec §16.7 field path per execution feature: gateway-built literals only,
+ * each grounded in a Responses ingress `fail()` path (`responses-ingress.ts`,
+ * `responses-ingress-tools.ts`) or the shared canonical tool field. The
+ * Anthropic wire never renders `param` (frozen shape); OpenAI wires render
+ * the mapped path. `native-reasoning-replay` derives from continuation
+ * artifacts rather than a caller field, so it stays unmapped and keeps the
+ * frozen bare 400.
+ */
+const EXECUTION_FEATURE_FIELD_PATH: Readonly<Record<ExecutionFeature, string | undefined>> = {
+  'named-tool-choice': 'tool_choice',
+  'parallel-tool-control': 'parallel_tool_calls',
+  'strict-schema': 'text.format.strict',
+  'structured-output': 'text.format',
+  'reasoning-controls': 'reasoning',
+  'reasoning-context': 'reasoning.context',
+  'verbosity': 'text.verbosity',
+  'explicit-output-ceiling': 'max_output_tokens',
+  'custom-tools': 'tools',
+  'native-reasoning-replay': undefined,
+};
+
+/**
+ * First mesh-reported unmet execution feature, validated against the known
+ * taxonomy (a duplicated mesh install or forged name/code match carries no
+ * trusted list and falls back to the frozen bare 400).
+ */
+const unmetExecutionFeature = (error: unknown): ExecutionFeature | undefined => {
+  const list = (error as { unmetExecutionFeatures?: unknown })?.unmetExecutionFeatures;
+  if (!Array.isArray(list)) return undefined;
+  const known: readonly string[] = EXECUTION_FEATURES;
+  return list.find((entry): entry is ExecutionFeature =>
+    typeof entry === 'string' && known.includes(entry));
+};
 
 const sanitizedFieldError = (field?: FieldError): { code: string; param?: string } => {
   const code = field?.code && FIELD_ERROR_CODES.has(field.code) ? field.code : 'invalid_request';
@@ -427,6 +465,18 @@ export const toProviderShapedError = (
     isRoutePlanError(error, 'capabilities-unmet') || isRouteQuoteError(error, 'capabilities-unmet')
     || isRouteQuoteError(error, 'invalid-ceiling')
   ) {
+    // Spec §16.7: an execution-feature refusal names the cause on OpenAI
+    // wires (`unsupported_parameter` + safe field path). Capability-filter
+    // refusals and unknown causes keep the frozen bare 400.
+    const unmet = unmetExecutionFeature(error);
+    if (unmet && (isRoutePlanError(error, 'capabilities-unmet')
+      || isRouteQuoteError(error, 'capabilities-unmet'))) {
+      const param = EXECUTION_FEATURE_FIELD_PATH[unmet];
+      if (param) {
+        return mapGatewayError(wire, 'bad-request', undefined, requestedModel, undefined,
+          { code: 'unsupported_parameter', param });
+      }
+    }
     return mapGatewayError(wire, 'bad-request');
   }
   // N21: raw upstream failures (native dispatch skips kind mapping) keep
