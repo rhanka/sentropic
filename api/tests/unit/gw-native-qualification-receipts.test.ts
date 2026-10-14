@@ -5,9 +5,32 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions } from '../../src/services/llm-runtime/gw-native-qualification-transport';
 import { qualificationEnvironment, checkQualificationReadiness, type QualificationDb } from '../ai/gw-native-qualification-readiness';
-import { inputUsageReceipt, cleanNativeMeasured } from '../ai/gw-native-qualification-receipts';
+import { inputUsageReceipt, cleanNativeMeasured, serverToolQualifies } from '../ai/gw-native-qualification-receipts';
 
 describe('native qualification safety', () => {
+  const websearch = () => ({ selectedModel: 'claude-sonnet-5', servedModel: 'claude-sonnet-5', native: true,
+    requestId: 'server-request', toolName: 'web_search', serverTool: true, resultObserved: true, webSearchRequests: 1,
+    input: inputUsageReceipt({ input_tokens: 2679, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+      [{ input_tokens: 10682, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }]) });
+  it('server_tool_receipt_rejects_canonical_or_non_QB_turn', () => {
+    expect(serverToolQualifies(websearch())).toBe(true);
+    expect(serverToolQualifies({ ...websearch(), native: false })).toBe(false);
+    expect(serverToolQualifies({ ...websearch(), selectedModel: 'other', servedModel: 'other' })).toBe(false);
+    expect(serverToolQualifies({ ...websearch(), servedModel: 'claude-opus-5' })).toBe(false);
+  });
+  it('server_tool_receipt_rejects_client_only_search', () => {
+    expect(serverToolQualifies({ ...websearch(), serverTool: false })).toBe(false);
+    expect(serverToolQualifies({ ...websearch(), resultObserved: false })).toBe(false);
+    expect(serverToolQualifies({ ...websearch(), webSearchRequests: 0 })).toBe(false);
+  });
+  it('server_tool_growth_requires_repeated_numeric_categories', () => {
+    for (const input of [inputUsageReceipt({ input_tokens: 2679 }, [{}]),
+      inputUsageReceipt({ input_tokens: 2679 }, [{ input_tokens: null }]),
+      inputUsageReceipt({ input_tokens: 2679 }, [{ input_tokens: 2679 }]),
+      inputUsageReceipt({ input_tokens: 2679 }, [{ input_tokens: 10682 }, { input_tokens: 10681 }])]) {
+      expect(serverToolQualifies({ ...websearch(), input })).toBe(false);
+    }
+  });
   it('growth_and_decrease_have_distinct_receipts', () => {
     const start = { input_tokens: 2, cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } };
     expect(inputUsageReceipt(start, [{ cache_creation_input_tokens: 200 }])).toMatchObject({

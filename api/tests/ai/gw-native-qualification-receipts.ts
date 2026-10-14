@@ -1,3 +1,4 @@
+import { QUALIFICATION_MODELS } from '../../src/services/llm-runtime/gw-native-qualification-plan';
 type Usage = Record<string, unknown>;
 const categories = ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens',
   'ephemeral_5m_input_tokens', 'ephemeral_1h_input_tokens'] as const;
@@ -56,3 +57,14 @@ export const cleanNativeMeasured = (model: string, observation: Usage, financial
     && observation.output_tokens === financial.output_tokens && observation.output_tokens === attempt.outputTokens
     && observation.input_tokens === financial.input_tokens && observation.input_tokens === attempt.inputTokens;
 };
+export type ServerToolEvidence = {
+  selectedModel: string; servedModel: string; native: boolean; requestId: string;
+  toolName: string; serverTool: boolean; resultObserved: boolean; webSearchRequests: number;
+  input: ReturnType<typeof inputUsageReceipt>;
+};
+export const serverToolQualifies = (turn: ServerToolEvidence): boolean =>
+  QUALIFICATION_MODELS.some(model => model === turn.selectedModel) && turn.servedModel === turn.selectedModel
+  && turn.native && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(turn.requestId)
+  && turn.toolName === 'web_search' && turn.serverTool && turn.resultObserved
+  && count(turn.webSearchRequests) && turn.webSearchRequests > 0
+  && turn.input.message_delta_repeats_input && turn.input.numeric_input_growth && !turn.input.message_delta_input_decreased;
