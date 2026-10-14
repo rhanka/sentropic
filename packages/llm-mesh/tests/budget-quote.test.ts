@@ -689,6 +689,17 @@ describe('execution-feature-bound quotes (spec §16.3)', () => {
     })), 'capabilities-unmet');
   });
 
+  it('carries the unmet execution features on the quote refusal (R6-MAJ-1, spec §16.7)', () => {
+    let caught: unknown;
+    try {
+      quoteRoute(codexOverride({ requiredExecutionFeatures: ['explicit-output-ceiling'] }));
+    } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(RouteQuoteError);
+    expect(caught).toMatchObject({
+      code: 'capabilities-unmet', unmetExecutionFeatures: ['explicit-output-ceiling'],
+    });
+  });
+
   it('binds the requirements into the deterministic quote identity', () => {
     const plain = quoteRoute(openOverride());
     const featured = quoteRoute(openOverride({ requiredExecutionFeatures: ['named-tool-choice'] }));

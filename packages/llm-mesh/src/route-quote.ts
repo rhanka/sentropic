@@ -2,6 +2,7 @@ import { modelProfiles, providerProfiles } from './catalog.js';
 import {
   DEFAULT_MODEL_EQUIVALENCE_COUNCIL, type ModelEquivalenceCouncil,
 } from './equivalence-council.js';
+import type { ExecutionFeature } from './execution-features.js';
 import {
   isNativeMessagesTarget, NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS,
   validateNativeModelAllowlist,
@@ -24,7 +25,16 @@ export const MAX_ROUTE_QUOTE_CANDIDATES = 16;
 const OUTPUT_CEILING_UNENFORCED_TRANSPORTS: readonly string[] = ['codex'];
 
 export class RouteQuoteError extends Error {
-  constructor(message: string, readonly code: RouteQuoteErrorCode) {
+  constructor(
+    message: string,
+    readonly code: RouteQuoteErrorCode,
+    /**
+     * Requested execution features no resolved target supports (spec §16.7
+     * cause for `capabilities-unmet`; absent for older constructions and
+     * non-execution refusals). The gateway names the first mapped one.
+     */
+    readonly unmetExecutionFeatures?: readonly ExecutionFeature[],
+  ) {
     super(message);
     this.name = 'RouteQuoteError';
   }
@@ -173,7 +183,8 @@ const resolveQuoteTargets = (
     throw new RouteQuoteError('Unknown requested model', 'unknown-model');
   }
   if (resolution.kind === 'capabilities-unmet') {
-    throw new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet');
+    throw new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet',
+      resolution.unmetExecutionFeatures);
   }
   // Account-independent part of an explicit selector; the account selector only narrows plan().
   const explicit = input.explicit;
