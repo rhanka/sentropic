@@ -51,9 +51,11 @@ describe('execution features (spec §16.3)', () => {
       'reasoning-context', 'custom-tools', 'verbosity',
     ])).toBe(true);
     expect(transportSupportsExecutionFeatures('muse', [
-      'named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'explicit-output-ceiling',
+      'named-tool-choice', 'parallel-tool-control', 'explicit-output-ceiling',
       'strict-schema',
     ])).toBe(true);
+    // R5-MAJ-1: no proven Meta Chat reasoning slot — reasoning fails closed.
+    expect(transportSupportsExecutionFeatures('muse', ['reasoning-controls'])).toBe(false);
     expect(transportSupportsExecutionFeatures('mistral-vibe', [
       'named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema',
     ])).toBe(true);
