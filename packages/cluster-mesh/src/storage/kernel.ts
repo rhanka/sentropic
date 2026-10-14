@@ -84,12 +84,15 @@ export const createKernel = (options: KernelOptions): KernelRoot => {
   // recycled incarnation (m2).
   const incarnation = options.incarnation ?? `store-${randomBytes(8).toString('hex')}`;
   const backend = new MemoryBackend();
+  // Unique owning-kernel identity (Sol-2): two kernels never share a
+  // transaction overlay even with equal module and scope.
+  const kernelId = `kernel-${randomBytes(8).toString('hex')}`;
   const provider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
   const authority = options.authority ?? createStaticAuthorityPort();
   const revoked = new Set<string>();
   const issued = new Map<string, string>();
   const nextCommitId = createOpaqueIssuer('commit');
-  const deps: ScopedRuntimeDeps = { moduleId, backend, provider, incarnation, clock, revoked, issued, nextCommitId, authority, predicates: options.predicates };
+  const deps: ScopedRuntimeDeps = { moduleId, kernelId, backend, provider, incarnation, clock, revoked, issued, nextCommitId, authority, predicates: options.predicates };
 
   const admit = (grant: ScopeGrant<unknown>): void => {
     const validity = validateScopeGrant(grant, { nowIso: clock() });
