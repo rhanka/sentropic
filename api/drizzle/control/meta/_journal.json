@@ -64,6 +64,13 @@
       "when": 1790406334759,
       "tag": "0008_llm_admission",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791855645000,
+      "tag": "0011_session_workspace_bindings",
+      "breakpoints": true
     }
   ]
 }
