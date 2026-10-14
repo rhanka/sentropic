@@ -1,5 +1,11 @@
 export const NATIVE_MAX_SSE_FRAME_BYTES = 1024 * 1024; // 1 MiB
 
+/** Idle comment relayed between complete frames after upstream silence (spec §17 carry-forward). */
+export const NATIVE_SSE_KEEPALIVE = ': keepalive\n\n';
+export const NATIVE_SSE_KEEPALIVE_BYTES = new TextEncoder().encode(NATIVE_SSE_KEEPALIVE);
+/** Default upstream silence before a keepalive comment (15 s, owner option a). */
+export const NATIVE_SSE_KEEPALIVE_MS = 15_000;
+
 export class NativeSseFrameOverflowError extends Error {
   constructor(message = 'SSE frame exceeded 1 MiB limit') {
     super(message);
