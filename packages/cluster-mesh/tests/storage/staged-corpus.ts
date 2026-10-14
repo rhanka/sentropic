@@ -45,6 +45,8 @@ export interface StagedCorpusHooks {
   breakAuthority(): Awaitable<void>;
 }
 
+export type StagedCorpusForeign = StagedCorpusStore;
+
 const FENCE: WriterFence = { fenceId: 'fence-k2b', epoch: '1' };
 
 const emptyUnit = (): AtomicUnit => ({
@@ -79,7 +81,11 @@ const sealRoot = (operationId: string, finalFragmentHash: string, fragmentCount:
   effectRoot: 'eff-root-k2b',
 });
 
-export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCorpusHooks): Promise<void> => {
+export const runStagedCorpus = async (
+  bound: StagedCorpusStore,
+  hooks: StagedCorpusHooks,
+  foreign?: StagedCorpusForeign,
+): Promise<void> => {
   const unit = await bound.beginStaged({
     operationKey: 'op-staged-1',
     inputDigest: 'input-1',
@@ -504,6 +510,72 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
   await bound.commitStaged({ seal: groupedSeal, fence: FENCE });
   for (let n = 0; n < 12; n += 1) {
     assert.equal(await bound.readHead(`chain-lg-${n}`), `hash-lg-${n}`);
+  }
+
+  if (foreign) {
+    const local = await bound.beginStaged({
+      operationKey: 'op-collide',
+      inputDigest: 'input-collide',
+      contractDigest: 'contract-k2b',
+      sourceBoundary: 'boundary-k2b',
+      fence: FENCE,
+    });
+    const remote = await foreign.beginStaged({
+      operationKey: 'op-collide',
+      inputDigest: 'input-collide',
+      contractDigest: 'contract-k2b',
+      sourceBoundary: 'boundary-k2b',
+      fence: FENCE,
+    });
+    await expectCode(
+      async () =>
+        foreign.stageFragment({
+          unit: local,
+          ordinal: '0',
+          predecessorHash: null,
+          fragmentDigest: 'digest-collide-0',
+          effects: appendUnit('chain-collide', 'c1', 'hash-c1', null),
+          fence: FENCE,
+        }),
+      'invalid-command',
+      'K2b-RED staged: a foreign handle cannot stage',
+    );
+    await expectCode(
+      async () =>
+        bound.stageFragment({
+          unit: remote,
+          ordinal: '0',
+          predecessorHash: null,
+          fragmentDigest: 'digest-collide-0',
+          effects: appendUnit('chain-collide', 'c1', 'hash-c1', null),
+          fence: FENCE,
+        }),
+      'invalid-command',
+      'K2b-RED staged: a foreign handle cannot stage',
+    );
+    await foreign.stageFragment({
+      unit: remote,
+      ordinal: '0',
+      predecessorHash: null,
+      fragmentDigest: 'digest-collide-0',
+      effects: appendUnit('chain-collide', 'c1', 'hash-c1', null),
+      fence: FENCE,
+    });
+    const remoteSeal = await foreign.sealStaged({
+      unit: remote,
+      root: sealRoot('op-collide', 'digest-collide-0', '1'),
+    });
+    await expectCode(
+      async () => bound.commitStaged({ seal: remoteSeal, fence: FENCE }),
+      'invalid-command',
+      'K2b-RED staged: a foreign seal cannot publish',
+    );
+    await expectCode(
+      async () => foreign.abortStaged({ unit: local }),
+      'invalid-command',
+      'K2b-RED staged: a foreign handle cannot abort',
+    );
+    await foreign.abortStaged({ unit: remote });
   }
 
   const doomed = await bound.beginStaged({
