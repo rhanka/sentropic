@@ -26,13 +26,25 @@ const bindStaged = (
 
 describe('K2b reference: staged corpus', () => {
   it('K2b-RED hidden state, sequencing, publication, conflicts and recovery hold', async () => {
-    const { store, bound } = bindStaged();
-    const grant = bound.grant;
-    await runStagedCorpus(bound, {
-      breakAuthority: async () => {
-        store.revoke(grant.token);
+    const store = new TestStagedReferenceStore('comments');
+    const primary = store.bindStaged(stagedGrant());
+    const foreign = store.bindStaged(
+      grantFor({
+        token: `token-k2b-staged-foreign-${(tokenSeq += 1)}`,
+        operations: ['read', 'write', 'maintain'],
+        scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' },
+      }),
+    );
+    const grant = primary.grant;
+    await runStagedCorpus(
+      primary,
+      {
+        breakAuthority: async () => {
+          store.revoke(grant.token);
+        },
       },
-    });
+      foreign,
+    );
   });
 });
 
@@ -261,6 +273,24 @@ class SealBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class CrossBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.stageFragment.bind(bound);
+    bound.stageFragment = async (input) => {
+      try {
+        return await inner(input);
+      } catch (error) {
+        if (isStorageError(error) && input.unit.operationKey === 'op-collide') {
+          return { unitId: input.unit.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
+        }
+        throw error;
+      }
+    };
+    return bound;
+  }
+}
+
 class NoCheckpointCasStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -368,6 +398,21 @@ describe('K2b discriminating mutations: staged', () => {
     const { store, bound } = bindStaged(new SealBlindStore('comments'));
     await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
       /a divergent seal operation cannot seal/,
+    );
+  });
+
+  it('S11-cross-blind is killed by the staged corpus', async () => {
+    const store = new CrossBlindStore('comments');
+    const primary = store.bindStaged(stagedGrant());
+    const foreign = store.bindStaged(
+      grantFor({
+        token: `token-k2b-cross-${(tokenSeq += 1)}`,
+        operations: ['read', 'write', 'maintain'],
+        scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' },
+      }),
+    );
+    await expect(runStagedCorpus(primary, stagedHooks(store, primary), foreign)).rejects.toThrow(
+      /a foreign handle cannot stage/,
     );
   });
 });
@@ -609,6 +654,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'S9-receipt-mutable', brokenSemantic: 'returned receipts mutate stored commitments', corpus: 'staged', verdict: 'killed' },
   { id: 'S10-begin-blind', brokenSemantic: 'divergent begins recover silently', corpus: 'staged', verdict: 'killed' },
   { id: 'S10b-seal-blind', brokenSemantic: 'divergent seals pass validation', corpus: 'staged', verdict: 'killed' },
+  { id: 'S11-cross-blind', brokenSemantic: 'foreign handles stage across scopes', corpus: 'staged', verdict: 'killed' },
   { id: 'J1-no-checkpoint-cas', brokenSemantic: 'checkpoints skip CAS protection', corpus: 'replay', verdict: 'killed' },
   { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
   { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
@@ -651,6 +697,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',

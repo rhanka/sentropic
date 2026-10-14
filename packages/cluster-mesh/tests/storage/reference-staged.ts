@@ -542,7 +542,12 @@ export class TestStagedStore {
     if (!fence.ok) throw new StorageInvalidCommandError(fence.errors.join('; '));
     const op = [...this.staged.units.values()].find((entry) => entry.unitId === input.seal.unitId);
     if (!op) throw new StorageInvalidCommandError('unknown staged seal');
-    if (op.state === 'committed' && op.receipt) return { ...op.receipt, scope: { ...op.receipt.scope } };
+    if (op.state === 'committed' && op.receipt) {
+      if (!op.seal || JSON.stringify(op.seal) !== JSON.stringify(input.seal)) {
+        throw new StorageInvalidCommandError('unknown staged seal');
+      }
+      return { ...op.receipt, scope: { ...op.receipt.scope } };
+    }
     // §7.5 step 2 + §13.4: a successful CAS does not authorize a stale
     // writer. The commit fence must match the begin fence and must not
     // regress to an earlier epoch.
