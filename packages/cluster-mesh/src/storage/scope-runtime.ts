@@ -175,6 +175,11 @@ export class ScopedRuntime {
     this.grant = copy;
     this.boundScope = { tenantId: copy.scope.tenantId, workspaceId: copy.scope.workspaceId };
     this.#deps = deps;
+    // Sealed handle (Sol-1): grant, scope, module and checks cannot be
+    // replaced at runtime, so escalation or tenant-switch by property
+    // assignment throws instead of redirecting authority. All internal
+    // paths read these sealed invariants through requireOperation.
+    Object.freeze(this);
   }
 
   get scope(): StorageScope {
