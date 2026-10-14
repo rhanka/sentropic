@@ -3,8 +3,8 @@ import { createQualificationCap, qualificationSelected, QUALIFICATION_SCOPE } fr
 import { qualificationCases } from '../../src/services/llm-runtime/gw-native-qualification-plan';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions } from '../../src/services/llm-runtime/gw-native-qualification-transport';
-import { qualificationEnvironment, checkQualificationReadiness, type QualificationDb } from '../ai/gw-native-qualification-readiness';
+import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions, readQualificationFixture } from '../../src/services/llm-runtime/gw-native-qualification-transport';
+import { qualificationEnvironment, checkQualificationReadiness, probeQualificationListener, type QualificationDb } from '../ai/gw-native-qualification-readiness';
 import { inputUsageReceipt, cleanNativeMeasured, serverToolQualifies } from '../ai/gw-native-qualification-receipts';
 import { observeQualificationResponse } from '../../src/services/llm-runtime/gw-native-qualification-observer';
 import { readQualificationReply } from '../ai/gw-native-qualification-http';
@@ -12,6 +12,37 @@ import { qualificationLedgerEvidence } from '../ai/gw-native-qualification-ledge
 import { createFirstFailureGuard } from '../ai/gw-native-qualification-run';
 
 describe('native qualification safety', () => {
+  it('should accept the actual enabled switch and reject true before any live readiness work', () => {
+    try {
+      for (const [name, value] of Object.entries({ LLM_GATEWAY_UAT_MODE: 'qualify-three', LLM_GATEWAY_UAT_SCOPE: 'test-llm-native-uat',
+        NODE_ENV: 'development', LLM_GATEWAY_NATIVE_MESSAGES: 'enabled', DISABLE_AUTH: '0', CHAT_TRACE_ENABLED: 'false',
+        ANTHROPIC_API_KEY: 'fake-server', LLM_GATEWAY_UAT_SESSION_TOKEN: 'fake-caller',
+        ANTHROPIC_BASE_URL: 'https://api.anthropic.com', DATABASE_URL: 'postgres://app:app@postgres:5432/app' })) vi.stubEnv(name, value);
+      expect(typeof qualificationEnvironment().token === 'string').toBe(true);
+      vi.stubEnv('LLM_GATEWAY_NATIVE_MESSAGES', 'true'); expect(() => qualificationEnvironment()).toThrow('prerequisite');
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it('should require matching local construction evidence and reject unsupported classification before transport', () => {
+    const fixture = { body: { messages: [], safeguards: [{ type: 'dangerous_tool_use', classifier_context: 'fake-only-context' }] },
+      betas: ['dangerous-tool-use-2026-09-03'], successfulSafeguardResults: [{ type: 'dangerous_tool_use', status: { type: 'fixture_success' } }],
+      webSearchBody: { messages: [], tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }] },
+      webSearchBetas: ['fixture-beta'], payloadSource: 'captured-fixture.json' };
+    const source = { ...fixture, recognizedSuccessfulClassification: true };
+    const read = (candidate = fixture, captured: object = source) => (path: string | URL) =>
+      JSON.stringify(String(path).endsWith('captured-fixture.json') ? captured : candidate);
+    expect(readQualificationFixture(read())).toEqual(fixture);
+    expect(() => readQualificationFixture(read(fixture, { ...source, body: {} }))).toThrow('evidence mismatch');
+    const unsupported = { ...fixture, successfulSafeguardResults: [{ type: 'dangerous_tool_use', status: { type: 'unsupported' } }] };
+    expect(() => readQualificationFixture(read(unsupported, { ...unsupported, recognizedSuccessfulClassification: true }))).toThrow('safeguards construction');
+  });
+  it('should attempt all three post-run HTTP probes even when health fails', async () => {
+    const probe = vi.fn(async () => Response.json({}, { status: 503 }));
+    try {
+      vi.stubGlobal('fetch', probe);
+      await expect(probeQualificationListener('private-token')).rejects.toThrow('prerequisite');
+      expect(probe).toHaveBeenCalledTimes(3);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it('should abort after the first failed case without retrying or sending a later case', async () => {
     const close = vi.fn(); const send = vi.fn(async () => { throw new Error('private error'); });
     const guard = createFirstFailureGuard(close);
@@ -32,6 +63,11 @@ describe('native qualification safety', () => {
     const receipt = qualificationLedgerEvidence(planned, 'request', [financial, observation], [{ status: 'settled' }], 1);
     expect(receipt).toMatchObject({ financialRows: 1, observationRows: 1, inputTokens: 7, chargedOutputTokens: 4 });
     expect(JSON.stringify(receipt)).not.toContain('private'); expect(JSON.stringify(receipt)).not.toContain('"hold"');
+    const saved = vi.fn();
+    expect(() => qualificationLedgerEvidence({ ...planned, name: 'websearch' }, 'request', [financial,
+      { ...observation, usage_raw: { ...observation.usage_raw, input_usage_validated: false, uncertainty_reason: 'invalid_input' } }],
+    [{ status: 'settled' }], 1, saved)).toThrow('prerequisite');
+    expect(saved.mock.calls[0]?.[0]).toMatchObject({ input_usage_validated: false, uncertainty_reason: 'invalid_input' });
     expect(() => qualificationLedgerEvidence(planned, 'request', [financial, observation, financial], [{ status: 'settled' }], 1)).toThrow('prerequisite');
     expect(() => qualificationLedgerEvidence({ ...planned, count: true }, 'request', [financial], [], 0)).toThrow('prerequisite');
     expect(qualificationLedgerEvidence({ ...planned, count: true }, 'request', [], [], 0)).toMatchObject({ financialRows: 0, observationRows: 0, outboxEvents: 0 });
