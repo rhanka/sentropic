@@ -109,7 +109,7 @@
 - [x] `K2B-INT-C09` — Barrier-escaping reparent rejected atomically (N6/C09/S2:8); coverage and denial preserved; B4 mutant killed.
 - [x] `K2B-INT-C11` — External journal preserves identities plus atomic segment (N7/C11/S2:9); failure leaves no effects/events; J4 mutant killed.
 - [x] `K2B-INT-C13` — Real boundary-bound snapshot consumed (N7/C13/S2:10); foreign/empty/stale roots fail; J5 mutant killed.
-- [ ] `K2B-INT-C14` — Purge outcome counted plus interruption window (N9/C14/S2:11); one outcome/notification across resume; L5 mutant killed.
+- [x] `K2B-INT-C14` — Purge outcome counted plus interruption window (N9/C14/S2:11); one outcome/notification across resume; L5 mutant killed.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
