@@ -13,7 +13,7 @@ const MUSE_CATALOG_KEYS = [
   'muse-spark-1.3',
   'muse-spark-1.3-contributor',
   'muse-wonder-1.0',
-  'muse-wonder-1.0-full',
+  'muse-wonder-full-1.0',
 ] as const;
 
 describe('muse provider package surface', () => {
@@ -72,7 +72,7 @@ describe('muse provider package surface', () => {
 
   it('profiles Muse Wonder and Muse Wonder Full as advanced Meta models', () => {
     const wonder = getModelProfile('muse', 'muse-wonder-1.0');
-    const full = getModelProfile('muse', 'muse-wonder-1.0-full');
+    const full = getModelProfile('muse', 'muse-wonder-full-1.0');
 
     expect(wonder?.label).toBe('Muse Wonder');
     expect(wonder?.reasoningTier).toBe('advanced');

@@ -525,9 +525,9 @@ describe('canonical model targets', () => {
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-wonder-1.0',
     });
-    expect(resolve('muse-wonder-1.0-full')).toEqual({
+    expect(resolve('muse-wonder-full-1.0')).toEqual({
       providerId: 'muse', transportProviderId: 'muse',
-      model: 'muse-wonder-1.0-full',
+      model: 'muse-wonder-full-1.0',
     });
     expect(resolve('mistral-medium-3.5')).toMatchObject({ transportProviderId: 'mistral-vibe' });
     expect(resolve('gemini-3.8-flash')).toEqual({

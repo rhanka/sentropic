@@ -53,7 +53,7 @@ const rig = () => {
         { accountRef: 'internal-muse', diagnosticAccountRef: 'acct_muse',
           targetProviderId: 'muse', transportProviderId: 'muse',
           supportedModelIds: ['muse-spark-1.3-contributor', 'muse-spark-1.3',
-            'muse-wonder-1.0', 'muse-wonder-1.0-full'],
+            'muse-wonder-1.0', 'muse-wonder-full-1.0'],
           enrollmentCompletedAt: '2026-08-01T00:00:00Z', readiness: 'ready' as const, revision: 'r1' },
       ];
     },
@@ -92,7 +92,7 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
-  it.each(['muse-wonder-1.0', 'muse-wonder-1.0-full'] as const)('serves a Responses body on %s at 200 (owner request 2026-10-13)', async (model) => {
+  it.each(['muse-wonder-1.0', 'muse-wonder-full-1.0'] as const)('serves a Responses body on %s at 200 (owner request 2026-10-13)', async (model) => {
     const f = rig();
     const res = await f.send('/responses',
       { ...(await load('muse-1.4.6-initial-b.json')), model });

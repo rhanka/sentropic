@@ -607,11 +607,10 @@ export const modelProfiles = [
     capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
   },
   {
-    // Owner request 2026-10-13: Full tier id follows the base versioning
-    // (`muse-wonder-1.0` → `muse-wonder-1.0-full`); owner to confirm against
-    // the CLI catalog — only this literal changes if it differs.
+    // Owner request 2026-10-13, id corrected 2026-10-14 against the local
+    // Muse provider catalog: Full tier id is `muse-wonder-full-1.0`.
     providerId: 'muse',
-    modelId: 'muse-wonder-1.0-full',
+    modelId: 'muse-wonder-full-1.0',
     label: 'Muse Wonder Full',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],

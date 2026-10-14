@@ -49,8 +49,8 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'muse-wonder-1.0': {
     providerId: 'muse', transportProviderId: 'muse', model: 'muse-wonder-1.0',
   },
-  'muse-wonder-1.0-full': {
-    providerId: 'muse', transportProviderId: 'muse', model: 'muse-wonder-1.0-full',
+  'muse-wonder-full-1.0': {
+    providerId: 'muse', transportProviderId: 'muse', model: 'muse-wonder-full-1.0',
   },
   'claude-sonnet-5': {
     providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-5',
