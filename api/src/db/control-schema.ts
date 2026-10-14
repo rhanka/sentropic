@@ -936,5 +936,66 @@ export const sessionWorkspaceBindings = controlSchema.table(
   }),
 );
 
+/**
+ * control.live_git_declarations — durable explicit live workspace
+ * declarations (engram plan L6a, S seat).
+ *
+ * Canonical engram contract 70ebdfee: declarations carry the opaque identity
+ * triangle (declarationId, cloneId, worktreeId) with explicit uncertainty
+ * states. No contract identity field is an individual key column: `declaration_key`
+ * is the unambiguous canonical JSON key derived by canonicalLiveDeclarationIdentity
+ * (using canonicalIdKey('declaration', [tenant, declarationId, cloneId, worktreeId]))
+ * in services/cluster-mesh/live-declarations.ts, and the full declaration and
+ * withdrawal documents live in `payload`/`withdrawal` jsonb.
+ *
+ * Guardrails:
+ * - NO cross-namespace FK (control-namespace rule).
+ * - Withdrawal marks the row and never deletes it: committed history is
+ *   preserved (purge/withdrawal mechanics, LIVE §10).
+ * - Only the explicit 'live' capability is accepted; declaration and binding
+ *   coherence is enforced by the cluster-mesh registration validators before
+ *   this table is written, not frozen in DDL.
+ */
+export const liveGitDeclarations = controlSchema.table(
+  'live_git_declarations',
+  {
+    declarationKey: text('declaration_key').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    payload: jsonb('payload').notNull(),
+    liveCapability: text('live_capability').notNull(),
+    status: text('status').notNull().default('declared'),
+    withdrawal: jsonb('withdrawal'),
+    withdrawalReason: text('withdrawal_reason'),
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    tenantStatusIdx: index('live_git_declarations_tenant_status_idx').on(
+      table.tenantId,
+      table.status,
+    ),
+    liveCapabilityCheck: check(
+      'live_git_declarations_live_capability_check',
+      sql`${table.liveCapability} IN ('live')`,
+    ),
+    statusCheck: check(
+      'live_git_declarations_status_check',
+      sql`${table.status} IN ('declared', 'withdrawn')`,
+    ),
+    withdrawalReasonCheck: check(
+      'live_git_declarations_withdrawal_reason_check',
+      sql`${table.withdrawalReason} IS NULL OR ${table.withdrawalReason} IN ('workspace-remove', 'owner-request', 'policy-withdrawn')`,
+    ),
+    withdrawalCoherenceCheck: check(
+      'live_git_declarations_withdrawal_coherence_check',
+      sql`(${table.status} = 'withdrawn') = (${table.withdrawnAt} IS NOT NULL) AND (${table.status} = 'withdrawn') = (${table.withdrawal} IS NOT NULL)`,
+    ),
+  }),
+);
+
 export type SessionWorkspaceBindingRow = typeof sessionWorkspaceBindings.$inferSelect;
 export type SessionWorkspaceBindingInsert = typeof sessionWorkspaceBindings.$inferInsert;
+
+export type LiveGitDeclarationRow = typeof liveGitDeclarations.$inferSelect;
+export type LiveGitDeclarationInsert = typeof liveGitDeclarations.$inferInsert;
