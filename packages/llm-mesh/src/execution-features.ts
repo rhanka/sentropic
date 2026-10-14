@@ -57,10 +57,13 @@ export const EXECUTION_FEATURES: readonly ExecutionFeature[] = [
  * no `max_output_tokens` slot, spec §16.4). The translated Chat clients
  * project named choice and parallel control with tests; Mistral
  * additionally forwards the Vibe-proven `reasoning_effort` slot. Meta has
- * no reasoning slot (asymmetry, spec §16.4): `reasoning-controls` on `muse`
- * is accepted-validated but not forwarded (bounded §16.3/§16.4 amendment —
- * Muse always sends reasoning, so fail-closed would refuse 100% of Muse
- * traffic); `max_tokens` is projected, so `explicit-output-ceiling` holds.
+ * no proven reasoning slot on the Chat egress (spec §16.4, R5-MAJ-1):
+ * unauthenticated probes are auth-first (401 for every variant), Meta 400s
+ * unknown params (`max_output_tokens` precedent), and the binary
+ * `reasoningEffort` belongs to the native TBH `/responses` transport, not
+ * this OpenAI-compat shim — so `muse` declares no `reasoning-controls` and
+ * reasoning requests fail closed until a slot is proven by an authenticated
+ * probe. `max_tokens` is projected, so `explicit-output-ceiling` holds.
  * Both translated clients forward the validated `strict` flag on function
  * tools (standard OpenAI function shape); a provider that rejects it fails
  * visibly as a provider 400, never as a silent drop.
@@ -70,7 +73,7 @@ const TRANSPORT_EXECUTION_FEATURES: Readonly<
 > = {
   codex: ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema',
     'reasoning-context', 'custom-tools', 'verbosity'],
-  muse: ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'explicit-output-ceiling',
+  muse: ['named-tool-choice', 'parallel-tool-control', 'explicit-output-ceiling',
     'strict-schema'],
   'mistral-vibe': ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema'],
 };

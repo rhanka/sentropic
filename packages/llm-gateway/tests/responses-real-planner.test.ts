@@ -1,8 +1,10 @@
 /**
- * Fixture replay through the REAL mesh planner (R4-BLQ-1): every committed
- * Muse/Codex body passes plan eligibility with codex/muse accounts and
- * serves 200. Provider I/O is faked at the attempt seam; planning,
- * capability and execution-feature filtering are real. No mocked plan.
+ * Fixture replay through the REAL mesh planner (R4-BLQ-1, amended R5-MAJ-1):
+ * committed Codex bodies pass plan eligibility and serve 200; committed Muse
+ * bodies fail closed with 400 (no proven Meta Chat reasoning slot — every
+ * Muse fixture carries reasoning effort/summary, which `muse` no longer
+ * declares). Provider I/O is faked at the attempt seam; planning, capability
+ * and execution-feature filtering are real. No mocked plan.
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -73,8 +75,6 @@ const rig = () => {
 
 describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
   it.each([
-    ['muse-1.4.6-initial-a.json', '/responses', 'muse-spark-1.3-contributor', 26],
-    ['muse-1.4.6-initial-b.json', '/responses', 'muse-spark-1.3-contributor', 1],
     ['codex-0.162.1-initial.json', '/v1/responses', 'gpt-6.1-sol', 10],
     ['codex-0.162.1-tools.json', '/v1/responses', 'gpt-6.1-sol', 10],
   ] as const)('serves %s at 200 without losing model, tools or usage', async (file, path, model, toolCount) => {
@@ -92,20 +92,31 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
-  it.each(['muse-wonder-1.0', 'muse-wonder-full-1.0'] as const)('serves a Responses body on %s at 200 (owner request 2026-10-13)', async (model) => {
+  // R5-MAJ-1: every committed Muse fixture carries reasoning effort/summary,
+  // which `muse` no longer declares (no proven Meta Chat slot) — the plan is
+  // refused before dispatch with a named capability 400, never a silent drop.
+  it.each([
+    ['muse-1.4.6-initial-a.json', '/responses'],
+    ['muse-1.4.6-initial-b.json', '/responses'],
+    ['muse-1.4.6-tool-result.json', '/responses'],
+  ] as const)('refuses %s at 400 before dispatch (unforwarded reasoning-controls)', async (file, path) => {
+    const f = rig();
+    const res = await f.send(path, await load(file));
+    expect(res.status).toBe(400);
+    expect(f.captured).toHaveLength(0);
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
+  });
+
+  it.each(['muse-wonder-1.0', 'muse-wonder-full-1.0'] as const)('refuses a Responses body on %s at 400 (owner request 2026-10-13, R5-MAJ-1)', async (model) => {
     const f = rig();
     const res = await f.send('/responses',
       { ...(await load('muse-1.4.6-initial-b.json')), model });
-    expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
-    expect(body).toMatchObject({ object: 'response', model, status: 'completed' });
-    expect(body.output?.some((item: any) => item.type === 'function_call')).toBe(true);
-    expect(body.usage).toMatchObject({ input_tokens: 10, output_tokens: 3, total_tokens: 13 });
-    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
+    expect(res.status).toBe(400);
+    expect(f.captured).toHaveLength(0);
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
   });
 
   it.each([
-    ['muse-1.4.6-tool-result.json', '/responses'],
     ['codex-0.162.1-tool-result.json', '/v1/responses'],
   ] as const)('serves %s at 200 with call_id correlation intact', async (file, path) => {
     const f = rig();
