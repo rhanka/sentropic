@@ -7,7 +7,7 @@ export { createKernel, createStaticAuthorityPort, type KernelHandle, type Kernel
 // The adapter surface exposes binding results by type only (R-MAJ-5): the
 // ScopedRuntime constructor and ScopedRuntimeDeps stay internal to the
 // package, so adapter code cannot mint handles or reach issuance state.
-export { ORDINARY_PROFILES, type KernelTransaction, type ScopedRuntime, type TxRecordRead } from './scope-runtime.js';
+export { ORDINARY_PROFILES, type ChainReadRequest, type KernelTransaction, type RecordPage, type RecordRead, type ScopedRuntime } from './scope-runtime.js';
 export { HmacExactHeadBoundaryProvider, createOpaqueIssuer, isUnknownCursorBoundary, type ChainBoundaryProvider, type ChainBoundaryRecord, type ChainCursor, type CursorVerification, type UnknownCursorBoundary } from './tokens.js';
 export { MemoryBackend, backendScopeKey, createBackendScopeState, incrementBackendAllocation } from './backend.js';
 export type { BackendAggregate, BackendAtomicRecord, BackendChainRecord, BackendChainState, BackendGenesisState, BackendIdempotencyEntry, BackendIndexEntry, BackendScopeState } from './backend.js';

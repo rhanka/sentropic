@@ -216,7 +216,7 @@
 - [ ] **Lot 7 — Fix3 pass (opus r3 1 BLOQUANT + 2 MAJEUR + 9 MINEUR, PR #670)**
   - [x] B1: handler attached inside the deferred callback in `kernel.spec.ts`; `make test-cluster-mesh` exits 0; report corrected.
   - [ ] M1: merge `origin/main` under `BR-K3-EX2` (`Makefile` plus `ci.yml` verbatim from `main`, K3 `BRANCH.md` kept); PR mergeable plus PR CI green.
-  - [ ] M2: `tx.readChain` paginated (`RecordPage`) plus `tx.readRecords` with mandatory `limits` and byte budget, per FROZEN §5.2; local paginated-tx decision removed.
+  - [x] M2: `tx.readChain` paginated (`RecordPage`) plus `tx.readRecords` with mandatory `limits` and byte budget, per FROZEN §5.2; local paginated-tx decision removed.
   - [x] m1: MAC verified before the plaintext incarnation/key check (unknown `keyId` only skips the MAC); incarnation plus `keyId` alteration tests.
   - [x] m2: no constant default incarnation (random per kernel unless configured); restart tests pin explicit incarnations.
   - [ ] m3: every joined grant revalidated at commit; revocation-of-B test.
