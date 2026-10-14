@@ -669,6 +669,23 @@ describe('execution-feature eligibility (spec §16.3)', () => {
     }, [codexAccount])).toMatchObject({ kind: 'capabilities-unmet', requestedModel: 'gpt-6.1-sol' });
   });
 
+  it('carries the unmet execution features on the refusal (R6-MAJ-1, spec §16.7)', () => {
+    const selection = selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      requiredExecutionFeatures: ['explicit-output-ceiling'],
+    }, [codexAccount]);
+    if (selection.kind !== 'capabilities-unmet') throw new Error(`Expected capabilities-unmet, got ${selection.kind}`);
+    expect(selection.unmetExecutionFeatures).toEqual(['explicit-output-ceiling']);
+    // A capability-filter refusal carries no execution cause.
+    const capabilityRefusal = selectWith({
+      requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:audio'],
+    }, []);
+    if (capabilityRefusal.kind !== 'capabilities-unmet') {
+      throw new Error(`Expected capabilities-unmet, got ${capabilityRefusal.kind}`);
+    }
+    expect(capabilityRefusal.unmetExecutionFeatures).toEqual([]);
+  });
+
   it('fails closed when the account declares no execution support', () => {
     // `native-reasoning-replay` is declared by no transport (D16-C table):
     // the pinned Codex account stays ineligible before acquisition.

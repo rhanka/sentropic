@@ -152,7 +152,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       throw new RoutePlanError('Unknown requested model', 'unknown-model');
     }
     if (selection.kind === 'capabilities-unmet') {
-      throw new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet');
+      throw new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+        undefined, undefined, selection.unmetExecutionFeatures);
     }
     if (input.nativeMessages === true) {
       // Adapted from R: R also rejected exclusive launch aliases here, but W
