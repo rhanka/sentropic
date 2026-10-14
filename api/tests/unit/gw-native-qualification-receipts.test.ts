@@ -3,15 +3,30 @@ import { createQualificationCap, qualificationSelected, QUALIFICATION_SCOPE } fr
 import { qualificationCases } from '../../src/services/llm-runtime/gw-native-qualification-plan';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions, readQualificationFixture } from '../../src/services/llm-runtime/gw-native-qualification-transport';
+import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions, readQualificationFixture, qualificationFetch } from '../../src/services/llm-runtime/gw-native-qualification-transport';
 import { qualificationEnvironment, checkQualificationReadiness, probeQualificationListener, type QualificationDb } from '../ai/gw-native-qualification-readiness';
 import { inputUsageReceipt, cleanNativeMeasured, serverToolQualifies } from '../ai/gw-native-qualification-receipts';
-import { observeQualificationResponse } from '../../src/services/llm-runtime/gw-native-qualification-observer';
+import { observeQualificationResponse, safeQualificationModel } from '../../src/services/llm-runtime/gw-native-qualification-observer';
 import { readQualificationReply } from '../ai/gw-native-qualification-http';
 import { qualificationLedgerEvidence } from '../ai/gw-native-qualification-ledger';
 import { createFirstFailureGuard } from '../ai/gw-native-qualification-run';
 
 describe('native qualification safety', () => {
+  it('should preserve the configured fake UAT phase without permitting an origin switch or redirects', async () => {
+    const send = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ input_tokens: 1 }));
+    try {
+      vi.stubEnv('LLM_GATEWAY_UAT_MODE', 'qualify-three'); vi.stubEnv('LLM_GATEWAY_UAT_SCOPE', 'test-llm-native-uat');
+      vi.stubEnv('NODE_ENV', 'development'); vi.stubEnv('ANTHROPIC_BASE_URL', 'http://fake-provider:8787'); vi.stubGlobal('fetch', send);
+      await qualificationFetch('http://fake-provider:8787/v1/messages', { method: 'POST' });
+      expect(send).toHaveBeenCalledTimes(1); expect(send.mock.calls[0]?.[1]?.redirect).toBe('error');
+      await expect(qualificationFetch('https://api.anthropic.com/v1/messages')).rejects.toThrow('origin refused');
+      expect(send).toHaveBeenCalledTimes(1);
+    } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+  });
+  it('should retain safe served aliases for mismatch evidence and mask malformed model values', () => {
+    expect(safeQualificationModel('claude-sonnet-5-served-alias')).toBe('claude-sonnet-5-served-alias');
+    expect(safeQualificationModel('private body\n')).toBe('other'); expect(safeQualificationModel({ secret: 'private' })).toBe('other');
+  });
   it('should accept the actual enabled switch and reject true before any live readiness work', () => {
     try {
       for (const [name, value] of Object.entries({ LLM_GATEWAY_UAT_MODE: 'qualify-three', LLM_GATEWAY_UAT_SCOPE: 'test-llm-native-uat',

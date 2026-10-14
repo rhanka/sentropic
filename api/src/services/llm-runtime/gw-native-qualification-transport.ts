@@ -62,7 +62,15 @@ export const closeQualificationRun = (directory = qualificationRoot): void => {
 let capped: ReturnType<typeof createQualificationCap> | undefined;
 export const qualificationFetch: typeof fetch = async (input, init) => {
   if (!qualificationUatMode()) return globalThis.fetch(input, init);
-  const origin = new URL(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').origin;
+  const configured = new URL(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
+  const origin = configured.origin;
+  const target = new URL(input instanceof Request ? input.url : String(input));
+  if (target.origin !== origin || target.username || target.password) throw new Error('Qualification provider origin refused');
+  // Section 6.5 uses a configured HTTP fake during bootstrap/edge checks, before real qualification.
+  // It must never redirect into the real provider; the live runner itself requires the official HTTPS origin.
+  if (configured.protocol === 'http:' && configured.hostname !== 'api.anthropic.com') {
+    return globalThis.fetch(input, { ...init, redirect: 'error' });
+  }
   if (origin !== 'https://api.anthropic.com') throw new Error('Qualification provider origin refused');
   let ordinal = 0;
   capped ??= createQualificationCap(origin, async (url, options) => {
