@@ -237,11 +237,11 @@ describe('K3 discriminating mutants', () => {
         return false;
       }
     };
-    const honestKernel = createKernel({ moduleId: 'comments', predicates: { checked: (dependency) => dependency === 'ok' } });
-    const honest = honestKernel.bindNew(writeGrant('token-m2-honest-1'));
+    const referenceKernel = createKernel({ moduleId: 'comments', predicates: { checked: (dependency) => dependency === 'ok' } });
+    const reference = referenceKernel.bindNew(writeGrant('token-m2-reference-1'));
     const mutantKernel = createKernel({ moduleId: 'comments', predicates: { checked: () => true } });
     const mutant = mutantKernel.bindNew(writeGrant('token-m2-mutant-1'));
-    expect(await refusesUnevaluated((unit) => honest.commitAtomic(unit))).toBe(true);
+    expect(await refusesUnevaluated((unit) => reference.commitAtomic(unit))).toBe(true);
     expect(await refusesUnevaluated((unit) => mutant.commitAtomic(unit))).toBe(false);
   });
 
@@ -270,13 +270,13 @@ describe('K3 discriminating mutants', () => {
         return false;
       }
     };
-    const honest = createKernel({ moduleId: 'comments' }).bindNew(writeGrant('token-m3-honest-1'));
-    await setup(honest);
+    const reference = createKernel({ moduleId: 'comments' }).bindNew(writeGrant('token-m3-reference-1'));
+    await setup(reference);
     const mutant = createKernel({ moduleId: 'comments', boundaryProvider: acceptAll }).bindNew(
       writeGrant('token-m3-mutant-1'),
     );
     await setup(mutant);
-    expect(await refusesForged(honest)).toBe(true);
+    expect(await refusesForged(reference)).toBe(true);
     expect(await refusesForged(mutant)).toBe(false);
   });
 });
@@ -641,6 +641,29 @@ describe('K3 runtime: token-bound cursors', () => {
     await expectCode(async () => bound.readPage('tok-a', 10, tamper(2, 'hash-tok-a1'), 4096), 'invalid-command', 'K3-FIX tokens: a rebound head breaks the seal');
     await expectCode(async () => bound.readPage('tok-a', 10, tamper(3, 0), 4096), 'invalid-command', 'K3-FIX tokens: a rebound sequence breaks the seal');
     await expectCode(async () => bound.readPage('tok-a', 10, tamper(4, '99'), 4096), 'invalid-command', 'K3-FIX tokens: a rebound allocation breaks the seal');
+  });
+
+  it('K3-FIX incarnation and keyId alterations classify without leaking', async () => {
+    const bound = bindKernel();
+    await bound.appendChain('tok-c', { id: 'c1', bytes: '{}', hash: 'hash-tok-c1' }, { kind: 'absent', allocation: '0' });
+    await bound.appendChain('tok-c', { id: 'c2', bytes: '{}', hash: 'hash-tok-c2' }, { kind: 'head', hash: 'hash-tok-c1' });
+    const page = await bound.readPage('tok-c', 1, null, 4096);
+    const owned = page.nextCursor as unknown as string;
+    const parts = JSON.parse(Buffer.from(owned, 'base64url').toString('utf8')) as unknown[];
+    const tamper = (index: number, value: unknown): string => {
+      const forged = [...parts];
+      forged[index] = value;
+      return Buffer.from(JSON.stringify(forged), 'utf8').toString('base64url');
+    };
+    // Altered incarnation under the same key: the seal is checked first and
+    // breaks, so the cursor is refused, never treated as unknown.
+    await expectCode(async () => bound.readPage('tok-c', 10, tamper(5, 'store-evil'), 4096), 'invalid-command', 'K3-FIX tokens: an altered incarnation breaks the seal');
+    // Altered key id: the seal cannot be checked, so the cursor is an
+    // unknown boundary (explicit incomplete), never a refusal.
+    const unknownKey = await bound.readPage('tok-c', 10, tamper(6, 'AAAAAAAAAAAA'), 4096);
+    expect(unknownKey.outcome).toBe('incomplete');
+    expect(unknownKey.records).toEqual([]);
+    expect(unknownKey.nextCursor).toBe(null);
   });
 });
 
