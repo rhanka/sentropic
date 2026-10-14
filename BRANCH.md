@@ -100,7 +100,7 @@
 - [x] `K2B-FIX-MIN` — Budgets derived from observed encoding (M18), empty-page envelope floor, retained-cursor and disposal evidence, staged index/seal/fence coverage, replay scope decoupling, divergent-intent atomicity, cursor-leak nulls.
 - [x] `K2B-INT-C19` — Typed errors without message fallback (N11/N12/C19/S2:12); plain Error denied fails helper; E1 mutant killed.
 - [x] `K2B-INT-C10R` — R3 residual empty page carrying cursor (N10/C10/S2:1); oversized cursor suppressed on every empty path; M17/M18 faithful.
-- [ ] `K2B-INT-C01` — Fragment integrity recomputed commitments plus owned buffers (N1/N2/C01/S2:3); same-digest divergent retry conflicts; S8/S9 mutants killed.
+- [x] `K2B-INT-C01` — Fragment integrity recomputed commitments plus owned buffers (N1/N2/C01/S2:3); same-digest divergent retry conflicts; S8/S9 mutants killed.
 - [ ] `K2B-INT-C02` — Begin/seal bindings compared plus seals isolated (N2/N3/C02/S2:4); divergent begin conflicts; S10 mutant killed.
 - [ ] `K2B-INT-C03` — Capabilities across colliding scopes plus current fences (N2/C03/S2:5); cross-scope handle/seal denied; S11 mutant killed.
 - [ ] `K2B-INT-C05D` — Successive same-chain fragments on overlay (N3/N5/C05/S2:2); h0/h1/h2 across fragments publish; S12 mutant killed.
