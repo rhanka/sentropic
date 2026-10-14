@@ -131,6 +131,11 @@ describe('canonical model targets', () => {
       transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash',
     });
+    expect(resolve('gemini-4-argon')).toEqual({
+      providerId: 'gemini',
+      transportProviderId: 'cloud-code',
+      model: 'gemini-4-argon',
+    });
     expect(resolve('claude-fable-5-1')).toEqual({
       providerId: 'anthropic', transportProviderId: 'claude-code',
       model: 'claude-fable-5-1',
