@@ -91,6 +91,10 @@ interface TxOverlay {
   savedError: unknown;
   closed: boolean;
   readonly receipt: CommitReceipt;
+  // Every handle that joined this overlay, by grant token (§4.3 m3): each
+  // one is revalidated immediately before the mutation commits.
+  readonly contributors: Map<string, ScopeGrant<unknown>>;
+  readonly scope: StorageScope;
 }
 
 /** §5.2 record read: one entry per found key, in key order. Absent keys
@@ -308,13 +312,15 @@ export class ScopedRuntime {
       // means detached work outliving its context: refuse it instead of
       // opening an independent transaction (R-MAJ-3).
       if (joined.closed) throw new StorageInvalidCommandError('transaction closed');
+      joined.contributors.set(this.grant.token, this.grant);
       try {
         const value = await operation(this.makeTx(joined));
-        // Frozen snapshot (m2): the outer commit has not run yet, so the
-        // shared receipt is still provisional. The caller gets a copy, never
-        // the live object: a later outer failure cannot retroactively change
-        // what was returned, and mutating the copy cannot touch the commit.
-        return { value, receipt: { ...joined.receipt, scope: { ...joined.receipt.scope } } };
+        // Shared final receipt (m4): the joined call returns the outer
+        // commit's receipt object itself. It reads the reserved commit id
+        // with zero effects before the outer commits, and the final counts
+        // after. A reserved commit id that never commits means the outer
+        // failed (§5.5: the callback result returns only after commit).
+        return { value, receipt: joined.receipt };
       } catch (error) {
         joined.rollbackOnly = true;
         joined.savedError = error;
@@ -325,7 +331,7 @@ export class ScopedRuntime {
     // call shares the single receipt of the one commit that follows.
     const commitId = this.#deps.nextCommitId();
     const receipt: CommitReceipt = { commitId, moduleId: this.moduleId, scope: { ...this.boundScope }, committedAt: this.#deps.clock(), effectiveRecords: 0, effectiveAppends: 0, journalCursor: `cursor-${commitId}` };
-    const overlay: TxOverlay = { units: [], heads: new Map(), created: new Set(), aggregateVersions: new Map(), aggregateWrites: new Map(), recordWrites: new Map(), chainAppends: new Map(), indexAppends: new Map(), rollbackOnly: false, savedError: null, closed: false, receipt };
+    const overlay: TxOverlay = { units: [], heads: new Map(), created: new Set(), aggregateVersions: new Map(), aggregateWrites: new Map(), recordWrites: new Map(), chainAppends: new Map(), indexAppends: new Map(), rollbackOnly: false, savedError: null, closed: false, receipt, contributors: new Map([[this.grant.token, this.grant]]), scope: { ...this.boundScope } };
     const nested = new Map(ambient);
     nested.set(joinKey, overlay);
     try {
@@ -333,6 +339,19 @@ export class ScopedRuntime {
       if (overlay.rollbackOnly) throw overlay.savedError ?? new StorageInvalidCommandError('transaction rolled back');
       this.requireOperation('write');
       if (overlay.units.length === 0) throw new StorageInvalidCommandError('empty transaction commits nothing');
+      // Commit-time revalidation of every contributor (§4.3 m3): a handle
+      // revoked or expired between its apply and the outer commit cannot
+      // smuggle its units in.
+      for (const grant of overlay.contributors.values()) {
+        const validity = validateScopeGrant(grant, { nowIso: this.#deps.clock() });
+        if (!validity.ok) throw new StorageDeniedError(validity.errors.join('; '));
+        if (this.#deps.revoked.has(grant.token)) throw new StorageDeniedError('grant revoked');
+        this.#deps.authority.attest(grant);
+        if (!canOperate(grant, 'write')) throw new StorageDeniedError('grant lacks write');
+        if (grant.scope.tenantId !== overlay.scope.tenantId || grant.scope.workspaceId !== overlay.scope.workspaceId) {
+          throw new StorageDeniedError('cross-scope handle');
+        }
+      }
       const committed = commitUnitsToScope(this.#deps.backend.scopeState(this.boundScope), overlay.units, options, {
         moduleId: this.moduleId,
         scope: this.boundScope,
