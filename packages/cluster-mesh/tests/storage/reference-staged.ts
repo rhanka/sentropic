@@ -162,6 +162,7 @@ export class TestStagedReferenceStore extends TestReferenceStore {
   private externalSeq = 0;
   private purgePolicy: PurgePolicy = 'optional';
   private readonly stagedClock: TestClock;
+  private failExternalNext = false;
 
   constructor(moduleId: string, clock: TestClock = () => new Date().toISOString(), purgePolicy: PurgePolicy = 'optional') {
     super(moduleId, clock);
@@ -195,9 +196,24 @@ export class TestStagedReferenceStore extends TestReferenceStore {
     return new TestStagedStore(inner, this.stagedScope(inner.scope), this);
   }
 
+  armExternalFailure(): void {
+    this.failExternalNext = true;
+  }
+
+  consumeExternalFailure(): void {
+    if (this.failExternalNext) {
+      this.failExternalNext = false;
+      throw new StorageInvalidCommandError('external append failed');
+    }
+  }
+
   appendExternal(entry: Omit<StagedJournalEvent, 'seq' | 'eventId'>): StagedJournalEvent {
+    if (this.failExternalNext) {
+      this.failExternalNext = false;
+      throw new StorageInvalidCommandError('external append failed');
+    }
     this.externalSeq += 1;
-    const stored: StagedJournalEvent = { ...entry, seq: this.externalSeq, eventId: `xevt-${this.externalSeq}` };
+    const stored: StagedJournalEvent = { ...entry, seq: this.externalSeq, eventId: `evt-${this.externalSeq}` };
     this.externalLog.push(stored);
     return stored;
   }
@@ -304,6 +320,7 @@ export class TestStagedStore {
 
   commitAtomic(unit: AtomicUnit, options: CommitOptions = {}): CommitReceipt {
     this.requireOperation('write');
+    this.store.consumeExternalFailure();
     if (options.limits) {
       const limited = validateAtomicUnit(unit, options.limits);
       if (!limited.ok) throw new StorageInvalidCommandError(limited.errors.join('; '));
@@ -704,6 +721,10 @@ export class TestStagedStore {
     entry.failedEvent = null;
     entry.failedReason = null;
     entry.failedSeq = null;
+  }
+
+  armExternalFailure(): void {
+    this.store.armExternalFailure();
   }
 
   journalResync(consumer: string): { readonly snapshotRoot: string; readonly journalSeq: number } {
