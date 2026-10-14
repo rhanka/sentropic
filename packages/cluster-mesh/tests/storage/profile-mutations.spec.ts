@@ -681,10 +681,16 @@ class DisposalBlindStore extends TestStagedReferenceStore {
 class RivalBlindStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
-    const inner = bound.appendChain.bind(bound);
-    bound.appendChain = (chainId, record, expectation) => {
-      if (chainId === 'chain-s1' && record.hash === 'hash-s1-rival') return { seq: 99, hash: record.hash, replayed: false };
-      return inner(chainId, record, expectation);
+    const inner = bound.commitStaged.bind(bound);
+    bound.commitStaged = async (input) => {
+      const staged = (
+        bound as unknown as {
+          staged: { units: Map<string, { indexBase?: Map<string, unknown> }> };
+        }
+      ).staged;
+      const op = [...staged.units.values()].find((entry) => entry.unitId === input.seal.unitId);
+      if (op) op.indexBase = new Map();
+      return inner(input);
     };
     return bound;
   }
@@ -744,7 +750,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
   it('T1-rival-blind-base is killed by the staged corpus', async () => {
     const { store, bound } = bindStaged(new RivalBlindStore('comments'));
     await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
-      /a changed base produces a conflict without publication/,
+      /an unguarded index replacement conflicts without publication/,
     );
   });
 
