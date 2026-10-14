@@ -391,7 +391,9 @@ describe('K3 runtime: transaction reads', () => {
         updates: [{ key: 'agg-rd', version: 1, value: { format: 'utf8', data: 'v1' } }],
       });
       expect(await tx.readHead('rd-chain')).toBe('hash-rd-1');
-      expect((await tx.readChain('rd-chain')).map((entry) => entry.id)).toEqual(['r1']);
+      const chainPage = await tx.readChain({ chainId: 'rd-chain', limit: 10, maxEncodedBytes: 4096 });
+      expect(chainPage.outcome).toBe('page');
+      expect(chainPage.records.map((entry) => entry.id)).toEqual(['r1']);
       expect(await tx.readRecord('rec-rd')).toEqual({ bytes: { format: 'utf8', data: 'hi' }, contentHash: 'h-rd' });
       expect(await tx.readAggregate('agg-rd')).toEqual({ version: 1, value: { format: 'utf8', data: 'v1' } });
       await tx.apply({
@@ -439,24 +441,64 @@ describe('K3 runtime: transaction reads', () => {
     expect(missing.value).toBe(null);
   });
 
-  it('K3-FIX readRecords reads pending writes within bounds', async () => {
+  it('K3-FIX readRecords requires limits and applies both budgets', async () => {
     const bound = bindKernel();
     await bound.commitAtomic({
       ...emptyUnit(),
-      records: [{ key: 'rec-base', bytes: { format: 'utf8', data: 'base' }, contentHash: 'h-base' }],
+      records: [
+        { key: 'rec-base', bytes: { format: 'utf8', data: 'base' }, contentHash: 'h-base' },
+        { key: 'rec-big', bytes: { format: 'utf8', data: 'x'.repeat(100) }, contentHash: 'h-big' },
+      ],
     });
     const seen = await bound.transact({}, async (tx) => {
       await tx.apply({
         ...emptyUnit(),
         records: [{ key: 'rec-tx', bytes: { format: 'utf8', data: 'tx' }, contentHash: 'h-tx' }],
       });
+      // Compact: one entry per found key in key order; absent keys are absent.
       const rows = await tx.readRecords(['rec-base', 'rec-tx', 'rec-absent'], { maxRecords: 3, maxEncodedBytes: 4096 });
       await expectCode(() => tx.readRecords(['a', 'b'], { maxRecords: 1, maxEncodedBytes: 4096 }), 'invalid-command', 'K3-FIX reads: record reads beyond maxRecords are refused');
+      await expectCode(
+        () => tx.readRecords(['rec-base', 'rec-big'], { maxRecords: 10, maxEncodedBytes: 10 }),
+        'invalid-command',
+        'K3-FIX reads: record reads over the byte budget are refused',
+      );
+      await expectCode(
+        () => tx.readRecords(['rec-base'], undefined as unknown as { maxRecords: number; maxEncodedBytes: number }),
+        'invalid-command',
+        'K3-FIX reads: record reads without limits are refused',
+      );
       return rows;
     });
-    expect(seen.value[0]).toEqual({ key: 'rec-base', bytes: { format: 'utf8', data: 'base' }, contentHash: 'h-base' });
-    expect(seen.value[1]).toEqual({ key: 'rec-tx', bytes: { format: 'utf8', data: 'tx' }, contentHash: 'h-tx' });
-    expect(seen.value[2]).toBe(null);
+    expect(seen.value).toEqual([
+      { key: 'rec-base', bytes: { format: 'utf8', data: 'base' }, contentHash: 'h-base' },
+      { key: 'rec-tx', bytes: { format: 'utf8', data: 'tx' }, contentHash: 'h-tx' },
+    ]);
+  });
+
+  it('K3-FIX tx.readChain pages pending appends within limits', async () => {
+    const bound = bindKernel();
+    await bound.appendChain('tx-page', { id: 'p0', bytes: '{}', hash: 'hash-tx-p0' }, { kind: 'absent', allocation: '0' });
+    const seen = await bound.transact({}, async (tx) => {
+      await tx.apply(appendUnit('tx-page', 'p1', 'hash-tx-p1', 'hash-tx-p0'));
+      await tx.apply(appendUnit('tx-page', 'p2', 'hash-tx-p2', 'hash-tx-p1'));
+      const collected: string[] = [];
+      let cursor: unknown = null;
+      for (let guard = 0; guard < 8; guard += 1) {
+        const page = await tx.readChain({ chainId: 'tx-page', limit: 1, cursor, maxEncodedBytes: 4096 });
+        for (const entry of page.records) collected.push(entry.id);
+        cursor = page.nextCursor;
+        if (cursor === null) break;
+      }
+      await expectCode(
+        () => tx.readChain({ chainId: 'tx-page', limit: 0, maxEncodedBytes: 4096 }),
+        'invalid-command',
+        'K3-FIX reads: a paged chain read without a positive limit is refused',
+      );
+      return collected;
+    });
+    expect(seen.value).toEqual(['p0', 'p1', 'p2']);
+    expect(seen.receipt.effectiveAppends).toBe(2);
   });
 
   it('K3-FIX fenced commits are explicitly refused', async () => {
