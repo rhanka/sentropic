@@ -24,7 +24,11 @@
   (BR-REL-Q7): Anthropic `api_error` / OpenAI `server_error` (`no_route`),
   `No route available for model: "<model>"`, `x-should-retry: false`, no `Retry-After`.
 - `capabilities-unmet` plan/quote failures map to 400 `invalid_request_error`;
-  `quote-mismatch` and unclassified errors stay on the sanitized 503.
+  an execution-feature refusal names its cause on OpenAI wires (R6-MAJ-1,
+  spec §16.7: `unsupported_parameter` with a safe field path such as
+  `reasoning`); capability-filter refusals and the Anthropic wire keep the
+  frozen bare 400. `quote-mismatch` and unclassified errors stay on the
+  sanitized 503.
 - Terminal upstream refusals survive post-dispatch callback failures on both
   paths: a rejecting metering sink or `recordOutcome` hook no longer
   replaces the terminal `unknown-model` 404 (or any other terminal refusal)

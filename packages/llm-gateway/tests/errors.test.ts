@@ -257,6 +257,60 @@ describe('provider-shaped error mapper (unit)', () => {
     }
   });
 
+  // R6-MAJ-1 (spec §16.7): an execution-feature refusal carries the cause —
+  // status AND error type AND code AND param on OpenAI wires; the Anthropic
+  // wire keeps its frozen shape (no code/param slot).
+  it.each([
+    ['openai-responses', 'reasoning', 'unsupported_parameter'],
+    ['openai-chat-completions', 'reasoning', 'unsupported_parameter'],
+  ] as const)('names the unmet execution feature on %s (param %s, code %s)', (wire, param, code) => {
+    for (const error of [
+      new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+        undefined, undefined, ['reasoning-controls']),
+      new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet',
+        ['reasoning-controls']),
+    ]) {
+      const mapped = toProviderShapedError(wire, error, 'known-model');
+      expect(mapped.status).toBe(400);
+      expect(mapped.headers).toBeUndefined();
+      const body = mapped.body as { error: { message: string; type: string; code: string; param: string } };
+      expect(body.error.type).toBe('invalid_request_error');
+      expect(body.error.code).toBe(code);
+      expect(body.error.param).toBe(param);
+    }
+  });
+
+  it('keeps the bare 400 for capability-filter refusals, unmapped features and the Anthropic wire', () => {
+    const executionRefusal = new RoutePlanError('Required capabilities are unavailable',
+      'capabilities-unmet', undefined, undefined, ['reasoning-controls']);
+    const anthropic = toProviderShapedError('anthropic-messages', executionRefusal, 'known-model');
+    expect(anthropic.status).toBe(400);
+    const anthropicBody = anthropic.body as {
+      type: string; error: { type: string; message: string };
+    };
+    expect(anthropicBody.type).toBe('error');
+    expect(anthropicBody.error.type).toBe('invalid_request_error');
+    expect(JSON.stringify(anthropic.body)).not.toContain('unsupported_parameter');
+    expect(JSON.stringify(anthropic.body)).not.toContain('reasoning');
+    // A feature with no caller field (derived from continuation artifacts)
+    // and an unknown feature name both fall back to the frozen bare 400.
+    for (const error of [
+      new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+        undefined, undefined, ['native-reasoning-replay']),
+      Object.assign(new Error('forged'), {
+        name: 'RoutePlanError', code: 'capabilities-unmet',
+        unmetExecutionFeatures: ['not-a-feature'],
+      }),
+    ]) {
+      const mapped = toProviderShapedError('openai-responses', error, 'known-model');
+      expect(mapped.status).toBe(400);
+      const body = mapped.body as { error: { type: string; code: string } };
+      expect(body.error.type).toBe('invalid_request_error');
+      expect(body.error.code).toBe('invalid_request');
+      expect(JSON.stringify(mapped.body)).not.toContain('param');
+    }
+  });
+
   it('keeps the enrollment-action branch ahead of structural recognition', () => {
     const error = {
       name: 'RoutePlanError', code: 'no-route',
