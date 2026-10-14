@@ -33,6 +33,7 @@
   - [ ] `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts`
   - [ ] `.h2a/build/k3_report.md`
   - [ ] `.h2a/build/k3_fix_report.md` (BR-K3-EX1 opus fix report)
+  - [ ] `.h2a/build/k3_fix2_report.md` (BR-K3 Lot 6 opus-r2 plus Sol fix2 report)
 - [ ] **Forbidden Paths (must not change in this branch)**:
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -176,7 +177,7 @@
   - [x] m9: disposal zeroes chain payload bytes, retains status.
   - [x] K3M1 mutant re-simulated as frozen input cursor; K3 sweep enlarged to 9 records (v2 token economics).
   - [x] Paginated-tx decision: no `tx.readChainPage`; the tx boundary is unsealed until commit so paging would bind a movable boundary; pending appends stay readable via `tx.readChain`, committed pages via `readPage`.
-  - [ ] m11/m12/m13: accurate `.h2a/build/k3_fix2_report.md` with exit SHA; this lot's core commit is one atomic green unit (token format times runtime times proofs cannot split green).
+  - [x] m11/m12/m13: accurate `.h2a/build/k3_fix2_report.md` with exit SHA; this lot's core commit is one atomic green unit (token format times runtime times proofs cannot split green).
 - [ ] **Lot 5 — Opus fix (6 MAJEUR, 9 MINEUR, PR #670)**
   - [x] Merge `origin/feat/cluster-mesh-storage-k2b` under `BR-K3-EX1`; keep the K3 `BRANCH.md`.
   - [x] MAJEUR-1: recompute `start + delivered` on every trim in `record-runtime.ts`; full-sweep resume plus faithful mutant against K3.
