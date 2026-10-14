@@ -410,6 +410,7 @@
   - [x] **Rows 32.3+32a — dispatch/commit + shared snapshot (`d44798c44`+`74719eab9`)**: `GatewayNativeObjects` thread-through, reader ownership, shared terminal snapshot; stream suite stays 41/41 GREEN.
   - [x] **Lot N30a — keepalive constants + test fixture**: `NATIVE_SSE_KEEPALIVE`/`_BYTES`/`_MS=15_000` in `native-sse.ts` + `tests/fixtures/native-keepalive.ts` (gated upstream, execution setup); typecheck clean.
   - [x] **Lot N30b — keepalive emission machinery**: `expose({keepaliveMs})` shared-pending `readAlive` (one comment per silence bound, re-armed; pre-commit silent; no usage for comments) + emission tests 4/4 GREEN; stream-flow 244/244 + relay 7/7 held.
+  - [x] **Lot N30c — keepalive abort shutdown**: abort settles promptly with no post-terminal emission and zero pending timers (pre-fire count, mutation-proven); shutdown test GREEN.
 - [ ] **Opus round-4 review fixes (`.h2a/reviews/pr662_opus_r4.md`, verdict NO-GO)**
   - [x] R4-MAJ-5: legacy-only 501 guard in `packages/llm-gateway/src/router/index.ts` + 2 regression tests in `tests/router.test.ts` (auth-ahead 401 preserved).
   - [x] R4-MAJ-5 follow-up: the guard broke the N09 legacy 413 Responses leg (501 wins per §16.2); `tests/request-too-large-legacy.test.ts` evolved (Responses pins 501 + zero dispatch/settlement, Messages/Chat keep 413).
