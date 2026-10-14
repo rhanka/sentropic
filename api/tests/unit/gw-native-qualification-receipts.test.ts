@@ -4,8 +4,22 @@ import { qualificationCases } from '../../src/services/llm-runtime/gw-native-qua
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions } from '../../src/services/llm-runtime/gw-native-qualification-transport';
+import { qualificationEnvironment, checkQualificationReadiness, type QualificationDb } from '../ai/gw-native-qualification-readiness';
 
 describe('native qualification safety', () => {
+  it('should refuse two sessions of one principal before HTTP or provider traffic', async () => {
+    const query = vi.fn(async () => ({ rows: [{ id: 'a', user_id: 'one' }, { id: 'b', user_id: 'one' }] }));
+    const now = Date.now();
+    await expect(checkQualificationReadiness({ query } as unknown as QualificationDb, 'private', {
+      sessionIds: ['a', 'b'], generationId: 'g', featureSha: 'a'.repeat(40), uatSha: 'b'.repeat(40), edgeSha: 'c'.repeat(40),
+      listenerStartedAtMs: now - 1000, reaperHeartbeatAtMs: now, reaperSuccessfulPasses: 1, reaperFailedPasses: 0,
+      secondModelsProbeAtMs: now, sourceEquivalent: true, imageVerified: true, edgeLimitsVerified: true, authorizedHeadroomMicroUsd: 1,
+    })).rejects.toThrow('prerequisite');
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+  it('should refuse live readiness in normal test environments before provider or DB work', () => {
+    expect(() => qualificationEnvironment()).toThrow('prerequisite');
+  });
   it('should enable the listener transport only under the isolated UAT guards with zero SDK retries', () => {
     try {
       vi.stubEnv('LLM_GATEWAY_UAT_MODE', ''); expect(qualificationSdkOptions()).toEqual({});
