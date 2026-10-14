@@ -9,7 +9,7 @@ const usage = (value: Record<string, any> = {}) => {
   const project = (object: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(key => Object.hasOwn(object, key))
     .map(key => [key, object[key] === null ? null : typeof object[key] === 'number' ? object[key] : 'invalid']));
   return { ...project(value, ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens']),
-    ...(value.cache_creation == null ? {} : { cache_creation: typeof value.cache_creation === 'object'
+    ...(value.cache_creation == null ? {} : { cache_creation: typeof value.cache_creation === 'object' && !Array.isArray(value.cache_creation)
       ? project(value.cache_creation, ['ephemeral_5m_input_tokens', 'ephemeral_1h_input_tokens']) : 'invalid' }) };
 };
 /** Consume HTTP bytes only; keep bounded named usage categories and equality booleans. */

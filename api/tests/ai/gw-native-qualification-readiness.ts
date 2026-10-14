@@ -88,5 +88,6 @@ export const checkQualificationReadiness = async (db: QualificationDb, token: st
     AND model_id = ANY($1::text[]) AND effective_from <= now() AND (effective_to IS NULL OR effective_to > now())`, [QUALIFICATION_MODELS])).rows;
   requireQualification(QUALIFICATION_MODELS.every(model => pricing.filter(row => row.model_id === model).length === 1));
   await probeQualificationListener(token);
-  return { cutoverMatches: true, partitionMatches: true, distinctPrincipals: true, pricingModels: pricing.length };
+  return { cutoverMatches: true, partitionMatches: true, distinctPrincipals: true, pricingModels: pricing.length,
+    identity: { generation: cutover[0].selected_generation_id, revision: partition.revision, hash: partition.hash } };
 };
