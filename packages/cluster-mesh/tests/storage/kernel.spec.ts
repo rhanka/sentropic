@@ -880,6 +880,37 @@ describe('K3 runtime: single-apply dependents and commit races', () => {
     expect(await first.readHead('join-chain')).toBe('hash-join-1');
   });
 
+  it('K3-FIX two independent kernels never share a transaction', async () => {
+    // Same module and scope, distinct backends: the nested transact must
+    // commit independently to its own kernel, never join the outer overlay
+    // and write to the wrong backend under one receipt (Sol-2).
+    const scope = { tenantId: 'tenant-a', workspaceId: 'workspace-a' };
+    const kernelA = createKernel({ moduleId: 'comments' });
+    const kernelB = createKernel({ moduleId: 'comments' });
+    const first = kernelA.bindNew(grantFor({ token: 'token-xkernel-a', scope }));
+    const second = kernelB.bindNew(grantFor({ token: 'token-xkernel-b', scope }));
+    let innerReceipt: CommitReceipt | null = null;
+    const outer = await first.transact({}, async (tx) => {
+      await tx.apply(appendUnit('belongs-to-A', 'a1', 'hash-xkernel-a1', null));
+      const inner = await second.transact({}, async (txB) => {
+        await txB.apply(appendUnit('belongs-to-B', 'b1', 'hash-xkernel-b1', null));
+        return 'inner';
+      });
+      innerReceipt = inner.receipt;
+      expect(inner.value).toBe('inner');
+      return 'outer';
+    });
+    // Independent commits with distinct receipt objects (commit ids are
+    // per-kernel sequences, so identity — not the id string — separates
+    // the two commits).
+    expect(innerReceipt?.effectiveAppends).toBe(1);
+    expect(outer.receipt.effectiveAppends).toBe(1);
+    expect(innerReceipt).not.toBe(outer.receipt);
+    expect(await first.readHead('belongs-to-A')).toBe('hash-xkernel-a1');
+    expect(await second.readHead('belongs-to-B')).toBe('hash-xkernel-b1');
+    expect(await first.readHead('belongs-to-B')).toBe(null);
+  });
+
   it('K3-FIX joined calls share the final outer receipt', async () => {
     const bound = bindKernel();
     let shared: CommitReceipt | null = null;
