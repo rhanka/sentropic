@@ -460,6 +460,16 @@ describe('K3 runtime: transaction reads', () => {
       });
       // Compact: one entry per found key in key order; absent keys are absent.
       const rows = await tx.readRecords(['rec-base', 'rec-tx', 'rec-absent'], { maxRecords: 3, maxEncodedBytes: 4096 });
+      // Exact byte budgets over committed plus overlay rows: the full
+      // encoded result at exactly its size passes, one byte less refuses.
+      const exact = Buffer.byteLength(JSON.stringify(rows), 'utf8');
+      const exactRows = await tx.readRecords(['rec-base', 'rec-tx', 'rec-absent'], { maxRecords: 3, maxEncodedBytes: exact });
+      expect(exactRows).toEqual(rows);
+      await expectCode(
+        () => tx.readRecords(['rec-base', 'rec-tx', 'rec-absent'], { maxRecords: 3, maxEncodedBytes: exact - 1 }),
+        'invalid-command',
+        'K3-FIX reads: record reads one byte over budget are refused',
+      );
       await expectCode(() => tx.readRecords(['a', 'b'], { maxRecords: 1, maxEncodedBytes: 4096 }), 'invalid-command', 'K3-FIX reads: record reads beyond maxRecords are refused');
       await expectCode(
         () => tx.readRecords(['rec-base', 'rec-big'], { maxRecords: 10, maxEncodedBytes: 10 }),

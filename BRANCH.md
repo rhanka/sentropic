@@ -237,6 +237,6 @@
 - [ ] **Lot 8 — Sol round-2 pass (4 MAJEUR, REJETÉ tour 2/3, PR #670)**
   - [x] Sol-1: sealed handle invariants (grant, scope, module, checks unreplaceable); escalation plus tenant-switch tests.
   - [x] Sol-2: transaction bound to its kernel/backend identity; cross-kernel join refused, same-kernel join kept.
-  - [ ] Sol-3: `readRecords` byte budget enforced on the full encoded result; exact plus exact-minus-one tests on committed and overlay rows.
+  - [x] Sol-3: `readRecords` byte budget enforced on the full encoded result; exact plus exact-minus-one tests on committed and overlay rows.
   - [ ] Sol-4: seal mutants K3M5/K3M6/K3M7 (minus module/tenant/workspace) killed by cross-boundary reuse tests demanding `invalid-command`.
   - [ ] Lot gate: typecheck, lint, storage plus package tests, scope-check, PR CI green on the final head; report updated with Sol-2 section.
