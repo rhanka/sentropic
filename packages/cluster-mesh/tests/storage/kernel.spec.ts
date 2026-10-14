@@ -650,12 +650,15 @@ describe('K3 runtime: detached and unauthorized transaction work', () => {
     let late: Promise<unknown> | null = null;
     await bound.transact({}, async (tx) => {
       await tx.apply(appendUnit('detached-tx', 'd1', 'hash-detached-1', null));
-      // Deferred past the commit: inherits the closed overlay via ALS.
+      // Deferred past the commit: inherits the closed overlay via ALS. The
+      // rejection is handled immediately so the deferred verdict never
+      // surfaces as an unhandled rejection; it is asserted below.
       setTimeout(() => {
         late = bound.transact({}, async (inner) => {
           await inner.apply(appendUnit('detached-tx', 'd2', 'hash-detached-2', 'hash-detached-1'));
           return 'late';
         });
+        late.catch(() => undefined);
       }, 0);
       return 'ok';
     });
