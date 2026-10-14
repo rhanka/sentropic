@@ -295,13 +295,17 @@ export class TestBoundStore {
     ) {
       throw new StorageInvalidCommandError('empty unit');
     }
+    const stagedChains = new Map<string, TestChainState>();
+    for (const [id, chain] of scopeState.chains) {
+      stagedChains.set(id, { allocation: chain.allocation, head: chain.head, records: [...chain.records], disposed: chain.disposed });
+    }
     for (const guard of unit.guards) {
       if (guard.kind === 'head') {
-        const head = scopeState.chains.get(guard.chainId)?.head ?? null;
+        const head = stagedChains.get(guard.chainId)?.head ?? null;
         if (head !== guard.hash) throw new StorageCasConflictError('guard head mismatch');
       }
       if (guard.kind === 'absent') {
-        if (scopeState.chains.has(guard.chainId)) throw new StorageIdempotencyConflictError('guard absent violated');
+        if (stagedChains.has(guard.chainId)) throw new StorageIdempotencyConflictError('guard absent violated');
       }
       if (guard.kind === 'aggregate-version') {
         const stored = scopeState.aggregates.get(guard.key);
@@ -311,20 +315,6 @@ export class TestBoundStore {
         throw new StorageInvalidCommandError('predicate guards unsupported in the K2a reference');
       }
     }
-    for (const append of unit.appends) {
-      const chain = scopeState.chains.get(append.chainId);
-      if (append.expectation.kind === 'absent') {
-        if (append.expectation.allocation !== '0') throw new StorageInvalidCommandError('unexpected allocation at commit');
-        if (chain) throw new StorageIdempotencyConflictError('stale creation expectation');
-      }
-      if (append.expectation.kind === 'head' && chain?.head !== append.expectation.hash) {
-        throw new StorageCasConflictError('stale head at commit');
-      }
-    }
-    const stagedChains = new Map<string, TestChainState>();
-    for (const [id, chain] of scopeState.chains) {
-      stagedChains.set(id, { allocation: chain.allocation, head: chain.head, records: [...chain.records], disposed: chain.disposed });
-    }
     const stagedIndex = new Map(scopeState.index);
     const stagedRecords = new Map(scopeState.records);
     const stagedAggregates = new Map(scopeState.aggregates);
@@ -332,6 +322,13 @@ export class TestBoundStore {
     for (const append of unit.appends) {
       const chain = stagedChains.get(append.chainId);
       if (chain?.disposed) throw new StorageInvalidCommandError('chain disposed at commit');
+      if (append.expectation.kind === 'absent') {
+        if (append.expectation.allocation !== '0') throw new StorageInvalidCommandError('unexpected allocation at commit');
+        if (chain) throw new StorageIdempotencyConflictError('stale creation expectation');
+      }
+      if (append.expectation.kind === 'head' && chain?.head !== append.expectation.hash) {
+        throw new StorageCasConflictError('stale head at commit');
+      }
       if (!chain) {
         stagedChains.set(append.chainId, {
           allocation: incrementAllocation('0'),

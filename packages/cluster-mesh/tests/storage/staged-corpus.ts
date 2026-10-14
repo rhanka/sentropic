@@ -512,6 +512,49 @@ export const runStagedCorpus = async (
     assert.equal(await bound.readHead(`chain-lg-${n}`), `hash-lg-${n}`);
   }
 
+  const dependent = await bound.beginStaged({
+    operationKey: 'op-staged-dependent',
+    inputDigest: 'input-dependent',
+    contractDigest: 'contract-k2b',
+    sourceBoundary: 'boundary-k2b',
+    fence: FENCE,
+  });
+  await bound.stageFragment({
+    unit: dependent,
+    ordinal: '0',
+    predecessorHash: null,
+    fragmentDigest: 'digest-dep-0',
+    effects: appendUnit('chain-dep', 'd0', 'hash-dep-0', null),
+    fence: FENCE,
+  });
+  await bound.stageFragment({
+    unit: dependent,
+    ordinal: '1',
+    predecessorHash: 'digest-dep-0',
+    fragmentDigest: 'digest-dep-1',
+    effects: appendUnit('chain-dep', 'd1', 'hash-dep-1', 'hash-dep-0'),
+    fence: FENCE,
+  });
+  await bound.stageFragment({
+    unit: dependent,
+    ordinal: '2',
+    predecessorHash: 'digest-dep-1',
+    fragmentDigest: 'digest-dep-2',
+    effects: appendUnit('chain-dep', 'd2', 'hash-dep-2', 'hash-dep-1'),
+    fence: FENCE,
+  });
+  const depSeal = await bound.sealStaged({
+    unit: dependent,
+    root: sealRoot('op-staged-dependent', 'digest-dep-2', '3'),
+  });
+  await bound.commitStaged({ seal: depSeal, fence: FENCE });
+  assert.equal(await bound.readHead('chain-dep'), 'hash-dep-2');
+  assert.deepEqual(
+    (await bound.readChain('chain-dep')).map((entry) => entry.hash),
+    ['hash-dep-0', 'hash-dep-1', 'hash-dep-2'],
+    'K2b-RED staged: successive fragments publish the full ordered history',
+  );
+
   if (foreign) {
     const local = await bound.beginStaged({
       operationKey: 'op-collide',
