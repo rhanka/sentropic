@@ -65,6 +65,7 @@ const VERIFIED_CLOUD_CODE_MODEL_IDS = [
   'claude-opus-4-6-thinking',
   'gemini-3.7-flash',
   'gemini-3.8-flash',
+  'gemini-4-argon',
   'gemini-3.1-pro',
 ] as const;
 

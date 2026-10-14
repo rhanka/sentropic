@@ -91,6 +91,9 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gemini-3.8-flash': {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
   },
+  'gemini-4-argon': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-4-argon',
+  },
   'gpt-5.6-terra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
   },

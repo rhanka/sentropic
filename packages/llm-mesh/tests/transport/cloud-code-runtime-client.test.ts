@@ -365,6 +365,22 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('uses an announced argon effort-suffixed wire id', async () => {
+    const fetchFn = createFetch(['gemini-4-argon-low', 'gemini-4-argon-medium', 'gemini-4-argon-high']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-argon',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'low' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-argon-low',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } },
+    });
+  });
+
   it('uses an announced base wire id with the requested thinking level', async () => {
     const fetchFn = createFetch(['claude-sonnet-4-6']);
     const client = new CloudCodeRuntimeClient(fetchFn);
