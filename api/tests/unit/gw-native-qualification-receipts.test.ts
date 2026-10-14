@@ -1,8 +1,33 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createQualificationCap, qualificationSelected, QUALIFICATION_SCOPE } from '../../src/services/llm-runtime/gw-native-qualification-cap';
 import { qualificationCases } from '../../src/services/llm-runtime/gw-native-qualification-plan';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions } from '../../src/services/llm-runtime/gw-native-qualification-transport';
 
 describe('native qualification safety', () => {
+  it('should enable the listener transport only under the isolated UAT guards with zero SDK retries', () => {
+    try {
+      vi.stubEnv('LLM_GATEWAY_UAT_MODE', ''); expect(qualificationSdkOptions()).toEqual({});
+      vi.stubEnv('LLM_GATEWAY_UAT_MODE', 'qualify-three'); vi.stubEnv('LLM_GATEWAY_UAT_SCOPE', 'wrong');
+      expect(() => qualificationSdkOptions()).toThrow('guard refused');
+      vi.stubEnv('LLM_GATEWAY_UAT_SCOPE', 'test-llm-native-uat'); vi.stubEnv('NODE_ENV', 'production');
+      expect(() => qualificationSdkOptions()).toThrow('guard refused');
+      vi.stubEnv('NODE_ENV', 'development'); expect(qualificationSdkOptions().maxRetries).toBe(0);
+      expect(typeof qualificationSdkOptions().fetch).toBe('function');
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it('should keep thirteen durable reservations across transport reconstruction', () => {
+    const directory = mkdtempSync(`${tmpdir()}/qualification-cap-`);
+    try {
+      expect(() => reserveQualificationSend(directory)).toThrow('not armed');
+      writeFileSync(`${directory}/armed.json`, '{}');
+      for (let n = 1; n <= 13; n++) expect(reserveQualificationSend(directory)).toBe(n);
+      expect(() => reserveQualificationSend(directory)).toThrow('call cap');
+      closeQualificationRun(directory);
+      expect(() => reserveQualificationSend(directory)).toThrow('not armed');
+    } finally { rmSync(directory, { recursive: true }); }
+  });
   it('should plan exactly nine generation, three count and one WebSearch turn', () => {
     const cases = qualificationCases({ body: { messages: [], safeguards: [] }, betas: [],
       successfulSafeguardResults: [], webSearchBody: {}, webSearchBetas: [], payloadSource: 'fixture' });
