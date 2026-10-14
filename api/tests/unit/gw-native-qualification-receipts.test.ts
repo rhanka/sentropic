@@ -9,8 +9,16 @@ import { inputUsageReceipt, cleanNativeMeasured, serverToolQualifies } from '../
 import { observeQualificationResponse } from '../../src/services/llm-runtime/gw-native-qualification-observer';
 import { readQualificationReply } from '../ai/gw-native-qualification-http';
 import { qualificationLedgerEvidence } from '../ai/gw-native-qualification-ledger';
+import { createFirstFailureGuard } from '../ai/gw-native-qualification-run';
 
 describe('native qualification safety', () => {
+  it('should abort after the first failed case without retrying or sending a later case', async () => {
+    const close = vi.fn(); const send = vi.fn(async () => { throw new Error('private error'); });
+    const guard = createFirstFailureGuard(close);
+    await expect(guard.run(send)).rejects.toThrow('first failed case');
+    await expect(guard.run(send)).rejects.toThrow('prerequisite');
+    expect(send).toHaveBeenCalledTimes(1); expect(close).toHaveBeenCalledTimes(1); expect(guard.failed()).toBe(true);
+  });
   it('should join one measured financial row and one physical native observation without persisting arbitrary metadata', () => {
     const planned = { model: 'claude-sonnet-5', name: 'sse', native: true, count: false, stream: true };
     const financial = { idempotency_key: 'request', hold_id: 'hold', cost_micro_usd: '7', input_tokens: 7, output_tokens: 4,
