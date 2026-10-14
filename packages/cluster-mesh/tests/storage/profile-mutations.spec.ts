@@ -273,6 +273,14 @@ class SealBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class InterruptBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    bound.armPurgeFailure = () => undefined;
+    return bound;
+  }
+}
+
 class RecordLeakStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -732,6 +740,14 @@ describe('K2b discriminating mutations: lifecycle', () => {
     const { primary, hooks } = bindLifecycle(store);
     await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(/without purge authority is denied/);
   });
+
+  it('L5-interrupt-blind is killed by the lifecycle corpus', async () => {
+    const store = new InterruptBlindStore('comments');
+    const { primary, hooks } = bindLifecycle(store);
+    await expect(runLifecycleCorpus(primary, hooks)).rejects.toThrow(
+      /an interruption before the outcome leaves no completion/,
+    );
+  });
 });
 
 class DisposalBlindStore extends TestStagedReferenceStore {
@@ -804,6 +820,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'L2-divergent-share', brokenSemantic: 'divergent shared bytes merge silently', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'L3-forking-outcome', brokenSemantic: 'completion forks operational outcomes', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'L4-purge-authority-blind', brokenSemantic: 'purge intents pass without purge authority', corpus: 'lifecycle', verdict: 'killed' },
+  { id: 'L5-interrupt-blind', brokenSemantic: 'purge interruptions complete silently', corpus: 'lifecycle', verdict: 'killed' },
   { id: 'T1-rival-blind-base', brokenSemantic: 'changed bases publish without conflict', corpus: 'staged', verdict: 'killed' },
   { id: 'E1-plain-error', brokenSemantic: 'untyped Error passes as a typed denial', corpus: 'barrier', verdict: 'killed' },
 ];
@@ -836,6 +853,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',
