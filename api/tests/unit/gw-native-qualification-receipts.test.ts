@@ -6,8 +6,32 @@ import { tmpdir } from 'node:os';
 import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions } from '../../src/services/llm-runtime/gw-native-qualification-transport';
 import { qualificationEnvironment, checkQualificationReadiness, type QualificationDb } from '../ai/gw-native-qualification-readiness';
 import { inputUsageReceipt, cleanNativeMeasured, serverToolQualifies } from '../ai/gw-native-qualification-receipts';
+import { observeQualificationResponse } from '../../src/services/llm-runtime/gw-native-qualification-observer';
 
 describe('native qualification safety', () => {
+  it('should observe JSON fidelity without persisting response contents or credentials', async () => {
+    const evidence = vi.fn();
+    const result = [{ type: 'fixture', status: 'fixture' }];
+    const body = { model: 'claude-sonnet-5', safeguard_results: result, content: [{ text: 'private response' }] };
+    const response = observeQualificationResponse(Response.json(body), false, result, evidence);
+    expect(await response.json()).toEqual(body);
+    expect(evidence.mock.calls[0]?.[0]).toMatchObject({ safeguardResultsPresent: true, safeguardResultsEqual: true });
+    expect(JSON.stringify(evidence.mock.calls)).not.toContain('private response');
+    expect(JSON.stringify(evidence.mock.calls)).not.toContain('fixture');
+  });
+  it('should preserve SSE bytes and deliver the first frame before stream completion', async () => {
+    const evidence = vi.fn(); const encoder = new TextEncoder();
+    const start = 'event: message_start\ndata: {"type":"message_start","message":{"model":"claude-sonnet-5"}}\n\n';
+    const end = 'event: message_delta\ndata: {"type":"message_delta","delta":{"safeguard_results":[]}}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n';
+    let upstream!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start(controller) { upstream = controller; controller.enqueue(encoder.encode(start)); } });
+    const response = observeQualificationResponse(new Response(body), true, [], evidence);
+    const reader = response.body!.getReader(); const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toBe(start); expect(evidence).not.toHaveBeenCalled();
+    upstream.enqueue(encoder.encode(end)); upstream.close();
+    const last = await reader.read(); expect(new TextDecoder().decode(last.value)).toBe(end); await reader.read();
+    expect(evidence.mock.calls[0]?.[0]).toMatchObject({ messageStop: true, safeguardResultsPresent: true, safeguardResultsEqual: true });
+  });
   const websearch = () => ({ selectedModel: 'claude-sonnet-5', servedModel: 'claude-sonnet-5', native: true,
     requestId: 'server-request', toolName: 'web_search', serverTool: true, resultObserved: true, webSearchRequests: 1,
     input: inputUsageReceipt({ input_tokens: 2679, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
