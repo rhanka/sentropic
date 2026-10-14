@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { qualificationCases } from '../../src/services/llm-runtime/gw-native-qualification-plan';
 import { closeQualificationRun, qualificationRoot, readQualificationFixture } from '../../src/services/llm-runtime/gw-native-qualification-transport';
-import { checkQualificationReadiness, qualificationEnvironment, qualificationListener, openQualificationDb, requireQualification } from './gw-native-qualification-readiness';
+import { checkQualificationReadiness, checkQualificationReaper, probeQualificationListener, qualificationEnvironment,
+  qualificationListener, openQualificationDb, requireQualification } from './gw-native-qualification-readiness';
 import { readQualificationReply } from './gw-native-qualification-http';
 import { readQualificationLedger } from './gw-native-qualification-ledger';
 import { serverToolQualifies } from './gw-native-qualification-receipts';
@@ -17,6 +18,11 @@ export const createFirstFailureGuard = (close: () => void) => {
   } };
 };
 const persist = (name: string, evidence: unknown) => writeFileSync(`${qualificationRoot}/${name}.json`, JSON.stringify(evidence), { flag: 'wx', mode: 0o600 });
+export const postQualificationReadinessFailure = async () => {
+  const { token } = qualificationEnvironment();
+  await probeQualificationListener(token);
+  // No run was armed: only the operator's existing listener is probed, without administrative mutation.
+};
 export const createQualificationRun = async () => {
   const { token, database } = qualificationEnvironment(); const fixture = readQualificationFixture();
   const db = await openQualificationDb(database);
@@ -31,6 +37,7 @@ export const createQualificationRun = async () => {
   const guard = createFirstFailureGuard(() => closeQualificationRun());
   return { failed: guard.failed,
     async runCase(index: number) { return guard.run(async () => {
+      checkQualificationReaper(before.identity.generation);
       requireQualification(index === completed); const planned = cases[index]!;
       const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'anthropic-version': '2023-06-01',
         ...(planned.betas.length ? { 'anthropic-beta': planned.betas.join(',') } : {}) };
@@ -66,8 +73,8 @@ export const createQualificationRun = async () => {
       } finally { await response.body?.cancel().catch(() => undefined); }
     }); },
     async finish() {
-      closeQualificationRun();
       try {
+        closeQualificationRun();
         const after = await checkQualificationReadiness(db, token);
         const unchanged = isDeepStrictEqual(before.identity, after.identity);
         persist('post-run', { probesPassed: true, cutoverPartitionUnchanged: unchanged, completedCases: completed });
