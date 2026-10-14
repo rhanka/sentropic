@@ -278,6 +278,19 @@ describe('live registration product-binding persistence (L6a)', () => {
     await expect(store.save(unboundSuspended as never)).rejects.toThrow(/not an approved member of tenant/);
   });
 
+  it('refuses to persist without a product binding authorizer (n1)', async () => {
+    const unguarded = new PostgresLiveDeclarationStore(
+      canonicalLiveDeclarationIdentity,
+      undefined as never,
+    );
+    await expect(unguarded.save(makeDeclaration({
+      serverWorkspaceId: TEST_CODE_WORKSPACE,
+      serverIssuer: resolveOAuthIssuer(),
+      bindingRevision: INITIAL_BINDING_REVISION,
+    }) as never)).rejects.toThrow(/product binding authorizer is required/);
+    await expect(unguarded.save(makeDeclaration() as never)).rejects.toThrow(/product binding authorizer is required/);
+  });
+
   it('enforces complete product-binding triplet and initial revision 1', async () => {
     const issuer = resolveOAuthIssuer();
     const partial = makeDeclaration({ serverWorkspaceId: TEST_CODE_WORKSPACE });
