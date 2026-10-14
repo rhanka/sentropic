@@ -5,8 +5,37 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { reserveQualificationSend, closeQualificationRun, qualificationSdkOptions } from '../../src/services/llm-runtime/gw-native-qualification-transport';
 import { qualificationEnvironment, checkQualificationReadiness, type QualificationDb } from '../ai/gw-native-qualification-readiness';
+import { inputUsageReceipt, cleanNativeMeasured } from '../ai/gw-native-qualification-receipts';
 
 describe('native qualification safety', () => {
+  it('growth_and_decrease_have_distinct_receipts', () => {
+    const start = { input_tokens: 2, cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } };
+    expect(inputUsageReceipt(start, [{ cache_creation_input_tokens: 200 }])).toMatchObject({
+      message_delta_repeats_input: true, message_delta_input_equals_start: true, message_delta_input_decreased: false });
+    expect(inputUsageReceipt(start, [{ input_tokens: 3 }])).toMatchObject({ numeric_input_growth: true, message_delta_input_decreased: false });
+    expect(inputUsageReceipt(start, [{ input_tokens: 0 }])).toMatchObject({ message_delta_input_decreased: true });
+  });
+  it('decrease_compares_with_latest_accepted_counts', () => {
+    expect(inputUsageReceipt({ input_tokens: 2 }, [{ input_tokens: 9 }, { input_tokens: 8 }, { input_tokens: 10 }]))
+      .toMatchObject({ message_delta_input_decreased: true, message_delta_input_equals_start: false });
+    expect(inputUsageReceipt({ input_tokens: 2 }, [{ input_tokens: 9.5 }, { input_tokens: 3 }]).message_delta_input_decreased).toBe(false);
+  });
+  it('null_input_is_not_a_decrease', () => {
+    expect(inputUsageReceipt({ input_tokens: 2 }, [{ input_tokens: null }, {}])).toMatchObject({
+      message_delta_repeats_input: false, message_delta_input_equals_start: false, message_delta_input_decreased: false });
+    expect(inputUsageReceipt({ input_tokens: 2 }, [{ input_tokens: 'private' }]).message_delta_input_equals_start).toBe(false);
+  });
+  it('clean_sse_rejects_revoked_proof_or_output_floor and inferred_split_can_remain_measured', () => {
+    const observation = { input_tokens: 2, output_tokens: 4, usage_raw: { input_usage_validated: true,
+      input_usage_source: 'message_delta', estimated: false, final_output_observed: true, termination: 'completed',
+      fallback_present: false, iterations_present: false, native_selected_model_id: 'm', native_served_model_id: 'm',
+      output_tokens: 4, cache_write_split_reason: 'cache_write_split_inferred' } };
+    const financial = { input_tokens: 2, output_tokens: 4, attempts: [{ inputTokens: 2, outputTokens: 4, estimated: false }] };
+    expect(cleanNativeMeasured('m', observation, financial)).toBe(true);
+    expect(cleanNativeMeasured('m', { ...observation, usage_raw: { ...observation.usage_raw, input_usage_validated: false } }, financial)).toBe(false);
+    expect(cleanNativeMeasured('m', observation, { ...financial, output_tokens: 16 })).toBe(false);
+    expect(cleanNativeMeasured('m', { ...observation, usage_raw: { ...observation.usage_raw, uncertainty_reason: 'invalid_input' } }, financial)).toBe(false);
+  });
   it('should refuse two sessions of one principal before HTTP or provider traffic', async () => {
     const query = vi.fn(async () => ({ rows: [{ id: 'a', user_id: 'one' }, { id: 'b', user_id: 'one' }] }));
     const now = Date.now();
