@@ -163,6 +163,7 @@ export class TestStagedReferenceStore extends TestReferenceStore {
   private purgePolicy: PurgePolicy = 'optional';
   private readonly stagedClock: TestClock;
   private failExternalNext = false;
+  private failPurgeNext = false;
 
   constructor(moduleId: string, clock: TestClock = () => new Date().toISOString(), purgePolicy: PurgePolicy = 'optional') {
     super(moduleId, clock);
@@ -204,6 +205,17 @@ export class TestStagedReferenceStore extends TestReferenceStore {
     if (this.failExternalNext) {
       this.failExternalNext = false;
       throw new StorageInvalidCommandError('external append failed');
+    }
+  }
+
+  armPurgeFailure(): void {
+    this.failPurgeNext = true;
+  }
+
+  consumePurgeFailure(): void {
+    if (this.failPurgeNext) {
+      this.failPurgeNext = false;
+      throw new StorageInvalidCommandError('purge completion interrupted');
     }
   }
 
@@ -289,12 +301,14 @@ export class TestStagedStore {
   readRecord(key: string): ReturnType<TestBoundStore['readRecord']> {
     this.requireOperation('read');
     if (this.isCovered(key)) throw new StorageDeniedError('barrier covered');
+    if (this.staged.disposed.has(key)) throw new StorageDeniedError('record disposed');
     return this.inner.readRecord(key);
   }
 
   readAggregate(key: string): ReturnType<TestBoundStore['readAggregate']> {
     this.requireOperation('read');
     if (this.isCovered(key)) throw new StorageDeniedError('barrier covered');
+    if (this.staged.disposed.has(key)) throw new StorageDeniedError('aggregate disposed');
     return this.inner.readAggregate(key);
   }
 
@@ -810,21 +824,31 @@ export class TestStagedStore {
       job.state = 'held';
       return { state: 'held', outcomeId: null };
     }
-    if (!this.staged.chains.has(job.target) && !this.staged.blobs.has(job.target)) {
+    const hasRecord = this.inner.readRecord(job.target) !== null;
+    const hasAggregate = this.inner.readAggregate(job.target) !== null;
+    if (!this.staged.chains.has(job.target) && !this.staged.blobs.has(job.target) && !hasRecord && !hasAggregate) {
       job.state = 'failed';
       return { state: 'failed', outcomeId: null };
     }
     if (this.staged.chains.has(job.target) && !this.staged.disposed.has(job.target)) {
       this.disposeChain(job.target);
     }
+    if ((hasRecord || hasAggregate) && !this.staged.disposed.has(job.target)) {
+      this.staged.disposed.add(job.target);
+    }
     const blob = this.staged.blobs.get(job.target);
     if (blob) {
       blob.bytes = null;
       blob.owners.clear();
     }
+    this.store.consumePurgeFailure();
     job.state = 'complete';
     job.outcomeId = `purge-outcome-${intentId}`;
     return { state: job.state, outcomeId: job.outcomeId };
+  }
+
+  armPurgeFailure(): void {
+    this.store.armPurgeFailure();
   }
 
   purgeProgress(intentId: string): PurgeJobView {
