@@ -4,7 +4,7 @@
 - [x] Deliver the K3 neutral runtime (validation, tokens, binding, ordinary transactions, exact-head immutable chain boundaries) on the K1/K2 corpora.
 - [x] Designate the chain-boundary provider used by readChainPage (G3) for the engram adapter.
 - [x] Fix the opus r2 findings (7 MAJEUR, 14 MINEUR) plus Sol co-review (7 MAJEUR) on draft PR #670 (fix2 pass, Lot 6).
-- [ ] Fix the opus r3 findings (1 BLOQUANT, 2 MAJEUR, 9 MINEUR) on draft PR #670 with CI green and no reserves (fix3 pass, Lot 7).
+- [x] Fix the opus r3 findings (1 BLOQUANT, 2 MAJEUR, 9 MINEUR) on draft PR #670 with CI green and no reserves (fix3 pass, Lot 7).
 
 ## Scope / Guardrails
 - [x] Scope limited to K3 runtime files and K3 specs plus the K3 report (merge-only intakes via BR-K3-EX1/EX2).
@@ -86,8 +86,9 @@
 - [x] `BR-K3-EX1` — Merge-only intake of `origin/feat/cluster-mesh-storage-k2b` (#669 r2, opus §1). Reason: K3 is stacked on K2b and must carry the R3 resume fix, the `readers.ts` envelope floor, the disposal evidence and the corpus deltas; `readers.ts` is otherwise forbidden on K3. Impact: K2b-owned files only (`readers.ts`, `reference-store.ts`, `read-corpus.ts`, `atomic-corpus.ts`, staged/replay/barrier/lifecycle corpora, `mutations.spec.ts`, `profile-mutations.spec.ts`, `reference.spec.ts`, `reference-staged.ts`); no K3 runtime hand-edits outside allowed paths; `BRANCH.md` conflict resolved by keeping the K3 version. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
 - [ ] `BR-K3-DISC3` — Opus fix files land as one coherent file per commit when they exceed 150 lines (single review unit per finding; `BR-K3-DISC2` precedent); all other fix commits stay under 150 lines with `BRANCH.md` in-commit.
 - [x] `BR-K3-EX2` — Merge-only intake of `origin/main` into K3 (opus r3 M1; PR #670 `CONFLICTING`). Reason: the PR targets `main` and needs PR CI plus mergeability. Impact: `Makefile` plus `.github/workflows/ci.yml` taken verbatim from `main` with no hand-edits (forbidden paths); `BRANCH.md` conflict resolved by keeping the K3 version; all other main files merged normally. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
-- [ ] `BR-K3-CI-R3` — CI run `38490269426` (`workflow_dispatch`, HEAD `1d2bfea8e`): `validate-cluster-mesh` failure is branch-related (B1 unhandled rejection, `StorageInvalidCommandError: transaction closed` from `kernel.spec.ts:655`), fixed in Lot 7, never flaky-accepted.
-- [ ] `BR-K3-CI-AI` — CI run `38490269426`: `test-api-unit-integration (ai, chat-sync,executive-summary-auto,comment-assistant)` failure is provider/model nondeterminism on the AI flaky list (`rules/testing.md`); K3 touches no API file; recorded pending owner sign-off before merge.
+- [x] `BR-K3-CI-R3` — CI run `38490269426` (`workflow_dispatch`, HEAD `1d2bfea8e`): `validate-cluster-mesh` failure is branch-related (B1 unhandled rejection, `StorageInvalidCommandError: transaction closed` from `kernel.spec.ts:655`), fixed in Lot 7 and verified green in PR run `38494759359`, never flaky-accepted.
+- [ ] `BR-K3-CI-AI` — CI run `38490269426`: `test-api-unit-integration (ai, chat-sync,executive-summary-auto,comment-assistant)` failure is provider/model nondeterminism on the AI flaky list (`rules/testing.md`); K3 touches no API file; recorded pending owner sign-off before merge. Fix3 note: the same suite passed on `e59b2af8f` in PR run `38494759359`.
+- [ ] `BR-K3-CI-E2E3` — CI run `38494473542` (`workflow_dispatch`, HEAD `e59b2af8f`): `test-e2e (group-c, 03)` failure is provider/model timing nondeterminism on the AI flaky list (`e2e/tests/03-chat.spec.ts:281`, `Timeout 60000ms exceeded while waiting on the predicate` in `waitForComposerCanSend`, after two retries); the same job passed on the same SHA in PR run `38494759359`; K3 touches no UI/API/e2e file; recorded pending owner sign-off before merge.
 
 ## AI Flaky tests
 - [ ] Acceptance rule:
@@ -213,18 +214,18 @@
     - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] CI green on PR #670 with no reserves; re-merge K2b if it advances.
-- [ ] **Lot 7 — Fix3 pass (opus r3 1 BLOQUANT + 2 MAJEUR + 9 MINEUR, PR #670)**
+- [x] **Lot 7 — Fix3 pass (opus r3 1 BLOQUANT + 2 MAJEUR + 9 MINEUR, PR #670)**
   - [x] B1: handler attached inside the deferred callback in `kernel.spec.ts`; `make test-cluster-mesh` exits 0; report corrected.
-  - [ ] M1: merge `origin/main` under `BR-K3-EX2` (`Makefile` plus `ci.yml` verbatim from `main`, K3 `BRANCH.md` kept); PR mergeable plus PR CI green.
+  - [x] M1: merge `origin/main` under `BR-K3-EX2` (`Makefile` plus `ci.yml` verbatim from `main`, K3 `BRANCH.md` kept); PR mergeable plus PR CI green.
   - [x] M2: `tx.readChain` paginated (`RecordPage`) plus `tx.readRecords` with mandatory `limits` and byte budget, per FROZEN §5.2; local paginated-tx decision removed.
   - [x] m1: MAC verified before the plaintext incarnation/key check (unknown `keyId` only skips the MAC); incarnation plus `keyId` alteration tests.
   - [x] m2: no constant default incarnation (random per kernel unless configured); restart tests pin explicit incarnations.
   - [x] m3: every joined grant revalidated at commit; revocation-of-B test.
   - [x] m4: joined calls share the final outer receipt; outer-failure receipt test.
   - [x] m5: versioned K3M4 race test plus MAC module/scope binding tests.
-  - [ ] m6: every fix3 commit atomic (under 150 lines) with `BRANCH.md` in-commit.
-  - [ ] m7: coherent `BRANCH.md` (true boxes checked, CI failures recorded, gates per lot).
-  - [ ] m8: accurate `.h2a/build/k3_fix3_report.md` with exit SHA (no `all gates green` without exit 0).
+  - [x] m6: every fix3 commit atomic (under 150 lines) with `BRANCH.md` in-commit.
+  - [x] m7: coherent `BRANCH.md` (true boxes checked, CI failures recorded, gates per lot).
+  - [x] m8: accurate `.h2a/build/k3_fix3_report.md` with exit SHA (no `all gates green` without exit 0).
   - [x] m9: proscribed word removed from code, specs and reports; factual terms only.
   - [ ] Lot gate:
     - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
@@ -232,4 +233,4 @@
     - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (135/135)
     - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (533 passed, 0 failed, exit 0)
     - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (PASS C2)
-    - [ ] CI green on PR #670 with no reserves; owner sign-off on the listed AI flaky failure.
+    - [x] CI green on PR #670 with no reserves (`pull_request` run `38494759359` on `e59b2af8f`: success; dispatch-run e2e flake recorded as `BR-K3-CI-E2E3`, owner sign-off before merge still pending).
