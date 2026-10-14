@@ -14,8 +14,8 @@ export const qualificationUatMode = (): boolean => {
   }
   return true;
 };
-export const readQualificationFixture = (): QualificationFixture => {
-  const fixture = JSON.parse(readFileSync(qualificationFixturePath, 'utf8')) as QualificationFixture;
+export const readQualificationFixture = (read: (path: string | URL) => string = path => readFileSync(path, 'utf8')): QualificationFixture => {
+  const fixture = JSON.parse(read(qualificationFixturePath)) as QualificationFixture;
   const names = ['dangerous-tool-use-2026-09-03', 'auto-mode-classifier-2026-07-16'];
   if (!fixture.body?.safeguards || !Array.isArray(fixture.body.messages) || !fixture.betas?.length
     || fixture.betas.some(name => !names.includes(name)) || !Array.isArray(fixture.successfulSafeguardResults)
@@ -24,10 +24,19 @@ export const readQualificationFixture = (): QualificationFixture => {
     throw new Error('Qualification construction evidence missing');
   }
   // The operator supplies local construction evidence; the harness never invents classifier_context.
-  const source = JSON.parse(readFileSync(new URL(`../../../../.h2a/inputs/${fixture.payloadSource}`, import.meta.url), 'utf8'));
+  const source = JSON.parse(read(new URL(`../../../../.h2a/inputs/${fixture.payloadSource}`, import.meta.url)));
   if (!isDeepStrictEqual(source.body, fixture.body) || !isDeepStrictEqual(source.successfulSafeguardResults, fixture.successfulSafeguardResults)
     || !isDeepStrictEqual(source.webSearchBody, fixture.webSearchBody) || source.recognizedSuccessfulClassification !== true
-    || !isDeepStrictEqual(source.webSearchBetas, fixture.webSearchBetas)) throw new Error('Qualification construction evidence mismatch');
+    || !isDeepStrictEqual(source.webSearchBetas, fixture.webSearchBetas) || !isDeepStrictEqual(source.betas, fixture.betas)) throw new Error('Qualification construction evidence mismatch');
+  const safeguards = fixture.body.safeguards as Record<string, unknown>[];
+  const results = fixture.successfulSafeguardResults as Record<string, any>[];
+  if (!Array.isArray(safeguards) || safeguards.length !== 1 || safeguards[0]?.type !== 'dangerous_tool_use'
+    || !Object.hasOwn(safeguards[0], 'classifier_context') || safeguards[0].classifier_context == null
+    || !['string', 'object'].includes(typeof safeguards[0].classifier_context) || Array.isArray(safeguards[0].classifier_context)
+    || results.filter(result => result.type === 'dangerous_tool_use').length !== 1
+    || results.some(result => result.status == null || ['unsupported', 'unavailable'].includes(result.status?.type))) {
+    throw new Error('Qualification safeguards construction evidence missing');
+  }
   const tools = fixture.webSearchBody.tools as Record<string, unknown>[];
   if (!Array.isArray(tools) || tools.length !== 1 || tools[0]?.name !== 'web_search'
     || !/^web_search_\d{8}$/.test(String(tools[0]?.type)) || tools[0]?.max_uses !== 1
@@ -70,6 +79,7 @@ export const qualificationFetch: typeof fetch = async (input, init) => {
       || request.method !== 'POST' || count !== planned.count || body.model !== planned.model
       || (!count && (body.max_tokens !== 16 || body.stream !== planned.stream))
       || !credential || headers.get('x-api-key') !== credential || headers.has('authorization')
+      || headers.get('anthropic-version') !== '2023-06-01'
       || !isDeepStrictEqual(beta, planned.betas)
       || (planned.native && !isDeepStrictEqual(body, planned.body))) throw new Error('Qualification outbound equality refused');
     const serialized = JSON.stringify(body);
@@ -77,7 +87,8 @@ export const qualificationFetch: typeof fetch = async (input, init) => {
       requestBytes: Buffer.byteLength(serialized), headerNames: [...headers.keys()], betaTokens: beta,
       requestFields: qualificationFieldTypes(body), bodyEqual: planned.native && isDeepStrictEqual(body, planned.body),
       serverCredentialEqual: true, callerCredentialAbsent: headers.get('x-api-key') !== process.env.LLM_GATEWAY_UAT_SESSION_TOKEN };
-    const response = await globalThis.fetch(request.url, { ...options, body: serialized, redirect: 'error' });
+    const response = await globalThis.fetch(request.url, { ...options, method: request.method, headers: request.headers,
+      body: serialized, signal: request.signal, redirect: 'error' });
     if (response.status !== 200) { closeQualificationRun(); return response; }
     const receiptOrdinal = ordinal;
     return observeQualificationResponse(response, planned.stream, fixture.successfulSafeguardResults, evidence => {

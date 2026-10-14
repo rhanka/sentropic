@@ -38,7 +38,7 @@ export const qualificationLedgerEvidence = (planned: Case, requestId: string, ro
     final_output_observed: raw.final_output_observed === true, splitInferred: raw.cache_write_split_reason === 'cache_write_split_inferred',
     rawInput: safeInputCategories(raw) };
   persist?.(evidence);
-  if (planned.name !== 'websearch') requireQualification(raw.native_pricing_policy === 'anthropic-cache-2026-10-02'
+  if (planned.name !== 'websearch' || (!raw.fallback_present && !raw.iterations_present)) requireQualification(raw.native_pricing_policy === 'anthropic-cache-2026-10-02'
     && cleanNativeMeasured(planned.model, observation, charged, planned.stream));
   return evidence;
 };

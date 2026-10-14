@@ -4,11 +4,12 @@ import { Client } from 'pg';
 import { routePartitionHash, type RoutePartitionConfig } from '../../src/services/llm-metering/budget-admission';
 import { QUALIFICATION_MODELS } from '../../src/services/llm-runtime/gw-native-qualification-plan';
 import { qualificationUatMode } from '../../src/services/llm-runtime/gw-native-qualification-transport';
+import { gatewayNativeMessagesEnabled } from '../../src/services/llm-runtime/gateway-native-config';
 
 export const requireQualification = (ok: unknown): void => { if (!ok) throw new Error('Qualification prerequisite or case failed'); };
 export const qualificationListener = 'http://ui:5173/api/v1/gw';
 export const qualificationEnvironment = () => {
-  requireQualification(qualificationUatMode() && process.env.LLM_GATEWAY_NATIVE_MESSAGES === 'true'
+  requireQualification(qualificationUatMode() && gatewayNativeMessagesEnabled(process.env.LLM_GATEWAY_NATIVE_MESSAGES)
     && process.env.DISABLE_AUTH === '0' && process.env.CHAT_TRACE_ENABLED === 'false'
     && process.env.ANTHROPIC_API_KEY?.trim() && process.env.LLM_GATEWAY_UAT_SESSION_TOKEN?.trim());
   const provider = new URL(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
@@ -28,8 +29,15 @@ export type ReadinessEvidence = {
   authorizedHeadroomMicroUsd: number;
 };
 const evidence = (): ReadinessEvidence => JSON.parse(readFileSync(new URL('../../../.h2a/inputs/gw-native-uat-readiness.json', import.meta.url), 'utf8'));
+export const checkQualificationReaper = (generation: string) => {
+  const proof = evidence(); const now = Date.now();
+  requireQualification(proof.generationId === generation && proof.reaperSuccessfulPasses > 0 && proof.reaperFailedPasses === 0
+    && proof.reaperHeartbeatAtMs >= proof.listenerStartedAtMs && proof.reaperHeartbeatAtMs <= now && now - proof.reaperHeartbeatAtMs <= 90_000);
+};
 export const probeQualificationListener = async (token: string) => {
+  const checks: boolean[] = [];
   for (const path of ['/healthz', '/readyz', '/v1/models']) {
+    try {
     const response = await fetch(`${qualificationListener}${path}`, { headers: { authorization: `Bearer ${token}` },
       redirect: 'error', signal: AbortSignal.timeout(2_000) });
     requireQualification(response.status === 200);
@@ -37,7 +45,10 @@ export const probeQualificationListener = async (token: string) => {
     if (path === '/healthz') requireQualification(body.status === 'ok');
     if (path === '/readyz') requireQualification(body.status === 'ready');
     if (path === '/v1/models') requireQualification(QUALIFICATION_MODELS.every(model => body.data?.some((row: { id: string }) => row.id === model)));
+      checks.push(true);
+    } catch { checks.push(false); }
   }
+  requireQualification(checks.every(Boolean));
 };
 /** SELECT-only, including both N6 principals. No product app, fixture helper or cleanup hook. */
 export const checkQualificationReadiness = async (db: QualificationDb, token: string, proof = evidence()) => {
