@@ -524,15 +524,23 @@ describe('K3 runtime: token-bound cursors', () => {
     await expectCode(async () => bound.readPage('tok-b', 10, owned, 4096), 'invalid-command', 'K3-RED tokens: a cross-chain cursor is rejected');
   });
 
+  it('K3-FIX default incarnations are random per kernel', async () => {
+    const first = createKernel({ moduleId: 'comments' });
+    const second = createKernel({ moduleId: 'comments' });
+    expect(first.incarnation).not.toBe('store-1');
+    expect(second.incarnation).not.toBe('store-1');
+    expect(first.incarnation).not.toBe(second.incarnation);
+  });
+
   it('K3-FIX cursors survive a restart with the same secret', async () => {
     const secret = 'k3-test-secret-restart';
-    const first = createKernel({ moduleId: 'comments', cursorSecret: secret });
+    const first = createKernel({ moduleId: 'comments', incarnation: 'store-restart-1', cursorSecret: secret });
     const before = first.bindNew(writeGrant('token-restart-a'));
     await before.appendChain('restart-chain', { id: 'r1', bytes: '{}', hash: 'hash-restart-1' }, { kind: 'absent', allocation: '0' });
     await before.appendChain('restart-chain', { id: 'r2', bytes: '{}', hash: 'hash-restart-2' }, { kind: 'head', hash: 'hash-restart-1' });
     const page = await before.readPage('restart-chain', 1, null, 4096);
     expect(page.outcome).toBe('page');
-    const second = createKernel({ moduleId: 'comments', cursorSecret: secret });
+    const second = createKernel({ moduleId: 'comments', incarnation: 'store-restart-1', cursorSecret: secret });
     const after = second.bindNew(writeGrant('token-restart-b'));
     await after.appendChain('restart-chain', { id: 'r1', bytes: '{}', hash: 'hash-restart-1' }, { kind: 'absent', allocation: '0' });
     await after.appendChain('restart-chain', { id: 'r2', bytes: '{}', hash: 'hash-restart-2' }, { kind: 'head', hash: 'hash-restart-1' });
@@ -958,7 +966,7 @@ describe('K3 runtime: storage-boundary isolation', () => {
 
   it('K3-FIX an absent boundary keeps its recovery cursor only within budget', async () => {
     const secret = 'k3-test-secret-absent';
-    const first = createKernel({ moduleId: 'comments', cursorSecret: secret });
+    const first = createKernel({ moduleId: 'comments', incarnation: 'store-absent-1', cursorSecret: secret });
     const before = first.bindNew(writeGrant('token-absent-a'));
     await before.appendChain('absent-chain', { id: 'r1', bytes: '{}', hash: 'hash-absent-1' }, { kind: 'absent', allocation: '0' });
     await before.appendChain('absent-chain', { id: 'r2', bytes: '{}', hash: 'hash-absent-2' }, { kind: 'head', hash: 'hash-absent-1' });
@@ -968,7 +976,7 @@ describe('K3 runtime: storage-boundary isolation', () => {
     // Restart with the same secret but without the chain: the sealed
     // boundary is absent (resync pending). The retained cursor is the
     // recovery position when it fits the budget, else the floor applies.
-    const second = createKernel({ moduleId: 'comments', cursorSecret: secret });
+    const second = createKernel({ moduleId: 'comments', incarnation: 'store-absent-1', cursorSecret: secret });
     const after = second.bindNew(writeGrant('token-absent-b'));
     const retained = await after.readPage('absent-chain', 10, page.nextCursor, 4096);
     expect(retained.outcome).toBe('incomplete');
