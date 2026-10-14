@@ -1,11 +1,11 @@
 import { isDeepStrictEqual } from 'node:util';
 import { NativeSseFramer } from '@sentropic/llm-gateway';
-import { QUALIFICATION_MODELS } from './gw-native-qualification-plan';
 
 export const qualificationFieldTypes = (body: Record<string, unknown>) => Object.entries(body)
   .filter(([name]) => /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(name))
   .map(([name, value]) => ({ name, type: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value }));
-export const safeQualificationModel = (model: unknown): string => QUALIFICATION_MODELS.find(value => value === model) ?? 'other';
+export const safeQualificationModel = (model: unknown): string => typeof model === 'string'
+  && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model) ? model : 'other';
 export type QualificationResponseEvidence = {
   servedModel: string; responseBytes: number; safeguardResultsPresent: boolean; safeguardResultsEqual: boolean;
   messageStop: boolean; responseFields: ReturnType<typeof qualificationFieldTypes>;
