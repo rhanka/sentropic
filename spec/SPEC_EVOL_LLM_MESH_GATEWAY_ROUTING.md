@@ -1198,13 +1198,12 @@ thin data plane).
 ### 14.4b Muse Wonder + Wonder Full (owner request 2026-10-13)
 
 - Catalog (`packages/llm-mesh/src/catalog.ts`): `muse-wonder-1.0` (label
-  `Muse Wonder`) and `muse-wonder-1.0-full` (label `Muse Wonder Full`),
+  `Muse Wonder`) and `muse-wonder-full-1.0` (label `Muse Wonder Full`),
   both `advanced` reasoning with vision, same task hints as Spark.
   `muse-wonder-1.0` is the exact model id from the local Muse CLI config
   (`~/.config/muse/settings.json` `model`; model ids only — no secret was
-  read or copied). The Full id follows the base versioning; the owner
-  confirms it against the CLI catalog, and only that literal changes if it
-  differs.
+  read or copied). The Full id is verified against the local Muse
+  provider catalog as `muse-wonder-full-1.0` (owner correction 2026-10-14).
 - Provider routing: both ids in `knownModelIds` /
   `knownModelIdsByProvider.muse` (`providers.ts`), both mapped to the
   `muse`/`muse` target (`routing-targets.ts`), both listed in

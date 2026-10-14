@@ -66,13 +66,14 @@ export const knownModelIds = [
   'laneformer-2b-it',
   // Meta Muse (Muse Code): `muse-spark-1.3` base + `-contributor` discounted
   // tier option (content may train product), plus `muse-wonder-1.0` /
-  // `muse-wonder-1.0-full` (owner request 2026-10-13). invoked via the `muse`
-  // account transport (CLI login) or MUSE_API_KEY; wire/transport lives in
-  // api/gateway.
+  // `muse-wonder-full-1.0` (owner request 2026-10-13, id corrected
+  // 2026-10-14 against the local Muse provider catalog). invoked via the
+  // `muse` account transport (CLI login) or MUSE_API_KEY; wire/transport
+  // lives in api/gateway.
   'muse-spark-1.3',
   'muse-spark-1.3-contributor',
   'muse-wonder-1.0',
-  'muse-wonder-1.0-full',
+  'muse-wonder-full-1.0',
 ] as const;
 
 export type KnownModelId = (typeof knownModelIds)[number];
@@ -100,7 +101,7 @@ export const knownModelIdsByProvider = {
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],
   local: ['laneformer-2b-it'],
-  muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor', 'muse-wonder-1.0', 'muse-wonder-1.0-full'],
+  muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor', 'muse-wonder-1.0', 'muse-wonder-full-1.0'],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 
 export interface ModelReference {
