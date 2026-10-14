@@ -217,7 +217,7 @@
   - [x] B1: handler attached inside the deferred callback in `kernel.spec.ts`; `make test-cluster-mesh` exits 0; report corrected.
   - [ ] M1: merge `origin/main` under `BR-K3-EX2` (`Makefile` plus `ci.yml` verbatim from `main`, K3 `BRANCH.md` kept); PR mergeable plus PR CI green.
   - [ ] M2: `tx.readChain` paginated (`RecordPage`) plus `tx.readRecords` with mandatory `limits` and byte budget, per FROZEN §5.2; local paginated-tx decision removed.
-  - [ ] m1: MAC verified before the plaintext incarnation/key check (unknown `keyId` only skips the MAC); incarnation plus `keyId` alteration tests.
+  - [x] m1: MAC verified before the plaintext incarnation/key check (unknown `keyId` only skips the MAC); incarnation plus `keyId` alteration tests.
   - [ ] m2: no constant default incarnation (random per kernel unless configured); restart tests pin explicit incarnations.
   - [ ] m3: every joined grant revalidated at commit; revocation-of-B test.
   - [ ] m4: joined calls share the final outer receipt; outer-failure receipt test.
@@ -225,7 +225,7 @@
   - [ ] m6: every fix3 commit atomic (under 150 lines) with `BRANCH.md` in-commit.
   - [ ] m7: coherent `BRANCH.md` (true boxes checked, CI failures recorded, gates per lot).
   - [ ] m8: accurate `.h2a/build/k3_fix3_report.md` with exit SHA (no `all gates green` without exit 0).
-  - [ ] m9: proscribed word removed from code, specs and reports; factual terms only.
+  - [x] m9: proscribed word removed from code, specs and reports; factual terms only.
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
