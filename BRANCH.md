@@ -472,3 +472,4 @@
   - [ ] R5-MIN-7: Wonder contributor variants stay owner-deferred (gateway default is Spark contributor; no scope change).
   - [ ] R5-MAJ-3: deferred — #665 not on main (cluster-mesh main+npm still 0.13.3); on the next post-#665 rebase, bump cluster-mesh above both + locks/fixtures/CHANGELOG/README.
   - [ ] R5-BLQ-3: owner-owned (real UAT + native qualification disposition) — not this lane.
+  - [x] CI-red follow-up on run `38581987571` (3 fails, all diagnosed): Argon-packet fallout — `llm-runtime-stream.test.ts` matrix + `models.test.ts` pins lacked `gemini-4-argon` (catalog gained it in `3b509281d`); MAJ-2 follow-up — fence completeness demands exact paths, so the bridge uses `/muse-code/models` instead of `/muse-code/*` (same behavior, fence-clean). Verified locally: unit stream file 151 passed, 3 endpoints files 82 passed.
