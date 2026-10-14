@@ -12,7 +12,7 @@ export const expectCode = async (operation: () => unknown, code: string, message
   try {
     await operation();
   } catch (error) {
-    const actual = isStorageError(error) ? error.code : error instanceof Error ? error.message : String(error);
+    const actual = isStorageError(error) ? error.code : undefined;
     assert.equal(actual, code, message);
     return;
   }
