@@ -95,6 +95,8 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
   // R5-MAJ-1: every committed Muse fixture carries reasoning effort/summary,
   // which `muse` no longer declares (no proven Meta Chat slot) — the plan is
   // refused before dispatch with a named capability 400, never a silent drop.
+  // R6-MAJ-1 (spec §16.7): the refusal names the cause — status AND error
+  // type AND code AND param are asserted, not just the status.
   it.each([
     ['muse-1.4.6-initial-a.json', '/responses'],
     ['muse-1.4.6-initial-b.json', '/responses'],
@@ -103,6 +105,10 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     const f = rig();
     const res = await f.send(path, await load(file));
     expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string; type: string; code: string; param: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('unsupported_parameter');
+    expect(body.error.param).toBe('reasoning');
     expect(f.captured).toHaveLength(0);
     expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
   });
@@ -112,6 +118,10 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     const res = await f.send('/responses',
       { ...(await load('muse-1.4.6-initial-b.json')), model });
     expect(res.status).toBe(400);
+    const body = await res.json() as { error: { message: string; type: string; code: string; param: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('unsupported_parameter');
+    expect(body.error.param).toBe('reasoning');
     expect(f.captured).toHaveLength(0);
     expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
   });
@@ -133,6 +143,11 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     const f = rig();
     const res = await f.send('/v1/responses', { ...(await load('codex-0.162.1-initial.json')), max_output_tokens: 128000 });
     expect(res.status).toBe(400);
+    // R6-MAJ-1: the ceiling refusal names its field too (spec §16.7).
+    const body = await res.json() as { error: { type: string; code: string; param: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('unsupported_parameter');
+    expect(body.error.param).toBe('max_output_tokens');
     expect(f.captured).toHaveLength(0);
   });
 });
