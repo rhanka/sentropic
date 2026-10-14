@@ -7,8 +7,20 @@ import { reserveQualificationSend, closeQualificationRun, qualificationSdkOption
 import { qualificationEnvironment, checkQualificationReadiness, type QualificationDb } from '../ai/gw-native-qualification-readiness';
 import { inputUsageReceipt, cleanNativeMeasured, serverToolQualifies } from '../ai/gw-native-qualification-receipts';
 import { observeQualificationResponse } from '../../src/services/llm-runtime/gw-native-qualification-observer';
+import { readQualificationReply } from '../ai/gw-native-qualification-http';
 
 describe('native qualification safety', () => {
+  it('should extract only numeric WebSearch growth and reject EOF without message_stop', async () => {
+    const frame = (type: string, rest = {}) => `event: ${type}\ndata: ${JSON.stringify({ type, ...rest })}\n\n`;
+    const body = frame('message_start', { message: { model: 'claude-sonnet-5', usage: { input_tokens: 2679 } } })
+      + frame('content_block_start', { content_block: { type: 'server_tool_use', name: 'web_search', input: 'private query' } })
+      + frame('content_block_start', { content_block: { type: 'web_search_tool_result', content: [{ type: 'web_search_result', title: 'private results' }] } })
+      + frame('message_delta', { usage: { input_tokens: 10682, output_tokens: 16, server_tool_use: { web_search_requests: 1 } } });
+    await expect(readQualificationReply(new Response(body), true, [])).rejects.toThrow('prerequisite');
+    const receipt = await readQualificationReply(new Response(body + frame('message_stop')), true, []);
+    expect(receipt).toMatchObject({ serverTool: true, resultObserved: true, webSearchRequests: 1, input: { numeric_input_growth: true } });
+    expect(JSON.stringify(receipt)).not.toContain('private');
+  });
   it('should observe JSON fidelity without persisting response contents or credentials', async () => {
     const evidence = vi.fn();
     const result = [{ type: 'fixture', status: 'fixture' }];
