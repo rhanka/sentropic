@@ -62,6 +62,10 @@
   - `packages/llm-gateway/CHANGELOG.md` (BR662-EX11)
   - `packages/llm-mesh/CHANGELOG.md` (BR662-EX11)
   - `packages/cluster-mesh/CHANGELOG.md` (BR662-EX11)
+  - `spec/SPEC_EVOL_LLM_GATEWAY.md` (BR662-EX12, N32 doc port mandated by the fold design)
+  - `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md` (BR662-EX12, N32 doc port)
+  - `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md` (BR662-EX12, N32 doc port)
+  - `packages/cluster-mesh/README.md` (BR662-EX12, N32 release-tuple note)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` (harness grammar; this branch historically used `GWV-EXn`, round 3 declares `BR662-EXn` IDs) in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -240,6 +244,7 @@
 - `BR662-EX9`: metering/body-parser contracts — `api/src/services/llm-metering/budget-admission.ts`, `route-settlement.ts`, `cost-ledger-sink.ts`. Reason: checked-body settlement inspection, exact native prices, role-separated observation/audit. Impact: financial contract under existing DB fences; no migration. Rollback: coordinated with usage/host slices, never mixed price contracts.
 - `BR662-EX10`: qualification/API tests — `api/src/services/llm-runtime/gw-native-qualification-{cap,observer,plan,transport}.ts`, `api/tests/ai/gw-native-qualification-{http,ledger,readiness,receipts,run}.ts` + entry, `api/tests/unit/gateway-route-plane-native.test.ts`, `gateway-package-version.test.ts`, gateway/mesh native unit tests. Reason: inert-by-default tooling, isolated fixtures, no provider traffic. Rollback: revert tooling/imports together; preserve sanitized records from a later owner run.
 - `BR662-EX11`: release docs — `packages/llm-gateway/README.md`, `CHANGELOG.md`, `packages/llm-mesh/CHANGELOG.md`, `packages/cluster-mesh/CHANGELOG.md` (spec already allowed). Reason: native release/gating/compatibility docs. Impact: docs only. Rollback: revert added sections. Extends EX6/GWV-EX3 rationale to the combined candidate train (mesh 0.26.0 / gateway 0.20.0 / cluster-mesh 0.14.0); no new versions.
+- `BR662-EX12`: N32 spec ports — `spec/SPEC_EVOL_LLM_GATEWAY.md`, `spec/SPEC_EVOL_LLM_DEPLOYABLE_PROCESS.md`, `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md`, `packages/cluster-mesh/README.md`. Reason: fold design N32 mandates the doc consolidation; routing spec already allowed. Impact: docs only. Rollback: revert added sections.
 - `acknowledge` (N00 baseline 2026-10-12): branch `fix/llm-gateway-muse-vibe-wires` HEAD `c06589b75` verified; R source `feat/llm-gateway-native-relay` `9055406f0` read-only, never pushed; coverage SHA-256 `81ecae2e…288bb`; native stays OFF by default; versions frozen 0.26.0/0.20.0/0.14.0; no R manifests/locks/versions transplanted. Test gates: `typecheck-llm-mesh`, `typecheck-llm-gateway`, `typecheck-api`, `typecheck-cluster-mesh`, `lint-llm-mesh`, `lint-llm-gateway`, `lint-api`, `lint-cluster-mesh`, `test-llm-mesh`, `test-llm-gateway`, `test-api-unit`, `test-api-endpoints`, `test-cluster-mesh`, `check-llm-model-equivalences`; env `ENV=test-gw-wires` last with ports 9470/5670/1570 (9470/1570 confirmed owned by this project's `test-gw-wires` stack); one Docker build at a time; no Opus `pr662_opus_r4.md` present, no BLOQUANT/MAJEUR to fix.
 - [ ] **Lot N00 — Scope and baseline (native fold)**
   - [ ] EX8–EX11 declared above; classifier exclusion superseded; count/metering scope narrowed to EX8/EX9.
@@ -420,6 +425,7 @@
   - [x] **Lot N31j — inert sequential wiring + post-run gates (`f4b04de28`)**: byte-identical ai 13-case sequential runner (RED 4 pre-wiring), fixture `read` injection + safeguards/beta gates + version pin + method/signal passthrough, ledger websearch persist-first, readiness enabled-switch + reaper + all-probes; receipts unit 23/23 GREEN, ai 14 skipped, api typecheck clean.
   - [x] **Lot N31k — fake UAT + safe served evidence (`2ffb27605`)**: configured-HTTP fake passthrough (no redirect/origin switch), `safeQualificationModel` shape check (served aliases retained, malformed masked) + 2 unit tests (RED 2 pre-src); receipts unit 25/25 GREEN in-container. N31 complete — no live run in this lot.
   - [x] **Lot N32a — routing spec native section (`fd2eeda17`)**: §5.6 adapted to W (count port stays available with native OFF; pricing/ledger built + inert-tested; keepalive paragraph added); no production enablement claimed.
+  - [x] **Lot N32b — gateway spec native contracts (`9155fc365`)**: wire/precise-contract native wording + native relay block adapted to W (always-on count port; transport/pricing/persistence built, live qualification pending); claims verified against source (403 mapping, org disclosure).
   - [x] **Lot N30a — keepalive constants + test fixture**: `NATIVE_SSE_KEEPALIVE`/`_BYTES`/`_MS=15_000` in `native-sse.ts` + `tests/fixtures/native-keepalive.ts` (gated upstream, execution setup); typecheck clean.
   - [x] **Lot N30b — keepalive emission machinery**: `expose({keepaliveMs})` shared-pending `readAlive` (one comment per silence bound, re-armed; pre-commit silent; no usage for comments) + emission tests 4/4 GREEN; stream-flow 244/244 + relay 7/7 held.
   - [x] **Lot N30c — keepalive abort shutdown**: abort settles promptly with no post-terminal emission and zero pending timers (pre-fire count, mutation-proven); shutdown test GREEN.
