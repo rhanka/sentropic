@@ -243,6 +243,44 @@ describe('cluster mesh gateway namespace', () => {
     }
   });
 
+  it('serves the Muse catalog on the product mount with the same caller admission (R5-MAJ-2)', async () => {
+    // `/api/v1/gw/muse-code/models` runs fence, auth, settlement mode and
+    // the one-shot caller bridge exactly like `/v1/*` and `/responses`.
+    expect(GW_PATHS).toContain('/muse-code/models');
+    const cost = { tenantId: TENANT, workspaceId: `${TENANT}-ws`, principalId: 'user-1',
+      ownerScopeRef: `workspace:${TENANT}-ws:principal:user-1`, source: 'test', correlationId: 'request-1' };
+    const resolveCaller = vi.fn(() => cost);
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate: vi.fn(), stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller,
+      })],
+    }));
+    await activate(R1);
+    const response = await app.request('/api/v1/gw/muse-code/models');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ object: 'list' });
+    expect(resolveCaller).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the Muse catalog without a resolved caller on the product mount (R5-MAJ-2)', async () => {
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate: vi.fn(), stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller: () => undefined,
+      })],
+    }));
+    await activate(R1);
+    const response = await app.request('/api/v1/gw/muse-code/models');
+    expect(response.status).toBe(401);
+  });
+
   it('excludes execution features the application runtime does not support (spec §16.4)', async () => {
     // The injected application runtime honors no §16 execution feature
     // across providers (named choice and parallel control are refused by
