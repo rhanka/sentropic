@@ -12,6 +12,8 @@ export type LifecyclePurgePolicy = 'unconfigured' | 'optional' | 'required';
 export interface LifecycleCorpusStore {
   appendChain(chainId: string, record: { readonly id: string; readonly bytes: string; readonly hash: string }, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Awaitable<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }>;
   readHead(chainId: string): Awaitable<string | null>;
+  readRecord(key: string): Awaitable<unknown>;
+  readAggregate(key: string): Awaitable<unknown>;
   commitAtomic(unit: AtomicUnit): Awaitable<{ readonly commitId: string }>;
   configureLifecycle(policy: LifecyclePurgePolicy): Awaitable<void>;
   declareCoverage(parent: string, child: string): Awaitable<void>;
@@ -20,6 +22,7 @@ export interface LifecycleCorpusStore {
   holdTarget(target: string, reason: string): Awaitable<void>;
   releaseHold(target: string): Awaitable<void>;
   completePurge(intentId: string): Awaitable<{ readonly state: 'pending' | 'held' | 'complete' | 'failed'; readonly outcomeId: string | null }>;
+  armPurgeFailure(): Awaitable<void>;
   shareBlob(blobId: string, owner: string, bytes: string): Awaitable<void>;
   releaseBlob(blobId: string, owner: string): Awaitable<void>;
   readBlob(blobId: string): Awaitable<string | null>;
@@ -215,4 +218,43 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
     'denied',
     'K2b-RED lifecycle: completion survives restart with disposal evidence intact',
   );
+
+  await bound.commitAtomic({
+    ...emptyUnit(),
+    records: [{ key: 'rec-purge-1', bytes: { format: 'utf8', data: 'gone' }, contentHash: 'h-rec-1' }],
+    updates: [{ key: 'agg-purge-1', value: 1, baseVersion: null }],
+  });
+  await bound.commitAtomic({
+    ...emptyUnit(),
+    appends: [lifecycleAppend('life-rec', 'tomb-rec', 'hash-tomb-rec')],
+    purgeIntents: [
+      { target: 'rec-purge-1', intentId: 'intent-rec-1', authorizedBy: 'owner-1' },
+      { target: 'agg-purge-1', intentId: 'intent-agg-1', authorizedBy: 'owner-1' },
+    ],
+  });
+  const recJobsBefore = (await bound.purgeJobIds()).length;
+  assert.equal((await bound.completePurge('intent-rec-1')).state, 'complete');
+  assert.equal((await bound.completePurge('intent-agg-1')).state, 'complete');
+  await expectCode(async () => bound.readRecord('rec-purge-1'), 'denied', 'K2b-RED lifecycle: purged records deny reads');
+  await expectCode(async () => bound.readAggregate('agg-purge-1'), 'denied', 'K2b-RED lifecycle: purged aggregates deny reads');
+  assert.equal((await bound.purgeJobIds()).length, recJobsBefore);
+
+  await bound.appendChain('interrupt-target', { id: 'i1', bytes: '{}', hash: 'hash-int-1' }, { kind: 'absent', allocation: '0' });
+  await bound.commitAtomic({
+    ...emptyUnit(),
+    appends: [lifecycleAppend('life-int', 'tomb-int', 'hash-tomb-int')],
+    purgeIntents: [{ target: 'interrupt-target', intentId: 'intent-int-1', authorizedBy: 'owner-1' }],
+  });
+  await bound.armPurgeFailure();
+  await expectCode(
+    async () => bound.completePurge('intent-int-1'),
+    'invalid-command',
+    'K2b-RED lifecycle: an interruption before the outcome leaves no completion',
+  );
+  assert.equal((await bound.purgeProgress('intent-int-1')).outcomeId, null);
+  const resumed = await bound.completePurge('intent-int-1');
+  assert.equal(resumed.state, 'complete');
+  const resumedAgain = await bound.completePurge('intent-int-1');
+  assert.equal(resumedAgain.outcomeId, resumed.outcomeId);
+  await expectCode(async () => bound.readHead('interrupt-target'), 'denied', 'K2b-RED lifecycle: resumed completion disposes exactly once');
 };
