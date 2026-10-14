@@ -5,10 +5,9 @@
 // transact() runs in a request-local asynchronous context: independent calls
 // stay isolated while a nested call on the same handle joins the outer
 // overlay and can only mark it rollback-only. The commit id is reserved
-// upfront so joined calls share one honest receipt; an empty transaction
-// commits nothing and is refused.Physically disposed chains deny full
-// getters and leak no continuation. Reads return copies, never canonical
-// state.
+// upfront so joined calls share one receipt; an empty transaction commits
+// nothing and is refused. Physically disposed chains deny full getters and
+// leak no continuation. Reads return copies, never canonical state.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';

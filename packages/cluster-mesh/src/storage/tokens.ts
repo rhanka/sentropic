@@ -5,8 +5,10 @@
 // sequence, allocation, incarnation and key id travel in plaintext: the
 // reader needs them to resolve the immutable boundary and to tell an
 // unknown boundary (changed incarnation, retired or default key) apart from
-// a broken seal. Every plaintext field is integrity-protected by the MAC,
-// so any alteration fails closed. Head hashes stay readable in the token;
+// a broken seal. Every plaintext field is integrity-protected by the MAC:
+// the seal is verified first, so an altered field breaks the seal
+// (invalid-command) while a valid seal under a foreign incarnation or key
+// reports unknown-boundary (incomplete). Head hashes stay readable in the token;
 // comments retains hashes required by its contract without an anonymity
 // claim (§5.1). Minting and verification are pure: a thousand-page
 // traversal leaves no pins, no registry entries, no leases. Restart
@@ -168,13 +170,16 @@ export class HmacExactHeadBoundaryProvider implements ChainBoundaryProvider {
     if (typeof incarnation !== 'string' || incarnation.length === 0) return null;
     if (typeof keyId !== 'string' || keyId.length === 0) return null;
     if (typeof tag !== 'string' || tag.length === 0) return null;
-    // Plaintext boundary check first: a cursor minted under another
-    // incarnation or key is an unknown boundary (§8.2), not a broken seal.
-    if (incarnation !== opts.incarnation || keyId !== this.keyId) return { unknownBoundary: true };
+    // Unknown key first: under a retired or foreign key the seal cannot be
+    // checked, so the cursor is an unknown boundary (§8.2), not a break-in.
+    if (keyId !== this.keyId) return { unknownBoundary: true };
+    // Seal first, with the token-carried incarnation: any altered plaintext
+    // field breaks the seal (null → invalid-command). Only a valid seal
+    // under a foreign incarnation is an unknown boundary.
     const expected = this.mac(
       opts.moduleId,
       opts.scope,
-      opts.incarnation,
+      incarnation as string,
       this.keyId,
       selection,
       position as number,
@@ -185,6 +190,7 @@ export class HmacExactHeadBoundaryProvider implements ChainBoundaryProvider {
     const actual = Buffer.from(tag, 'utf8');
     const wanted = Buffer.from(expected, 'utf8');
     if (actual.length !== wanted.length || !timingSafeEqual(actual, wanted)) return null;
+    if (incarnation !== opts.incarnation) return { unknownBoundary: true };
     return { position: position as number, head: head as string, seq: seq as number, allocation: allocation as string };
   }
 }
