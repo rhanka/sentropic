@@ -73,7 +73,14 @@ const toBinding = (row: BindingRow): SessionWorkspaceBinding => ({
   endedAt: row.endedAt ? row.endedAt.toISOString() : undefined,
 });
 
-export const createDrizzleBindingStore = (client: BindingDbClient): SessionWorkspaceBindingStore => ({
+export interface DrizzleBindingStoreHooks {
+  beforeCompareAndSet?: (current: SessionWorkspaceBinding | null, next: SessionWorkspaceBinding) => Promise<void>;
+}
+
+export const createDrizzleBindingStore = (
+  client: BindingDbClient,
+  hooks?: DrizzleBindingStoreHooks,
+): SessionWorkspaceBindingStore => ({
   async findBySession(sessionId: string): Promise<SessionWorkspaceBinding | null> {
     const [row] = await client.select().from(sessionWorkspaceBindings)
       .where(eq(sessionWorkspaceBindings.sessionId, sessionId)).limit(1);
@@ -83,6 +90,9 @@ export const createDrizzleBindingStore = (client: BindingDbClient): SessionWorks
     current: SessionWorkspaceBinding | null,
     next: SessionWorkspaceBinding,
   ): Promise<boolean> {
+    if (hooks?.beforeCompareAndSet) {
+      await hooks.beforeCompareAndSet(current, next);
+    }
     if (current === null) {
       const inserted = await client.insert(sessionWorkspaceBindings).values(toRow(next))
         .onConflictDoNothing()
@@ -105,10 +115,16 @@ export const createDrizzleBindingStore = (client: BindingDbClient): SessionWorks
   },
 });
 
-const drizzleBindingStore = createDrizzleBindingStore(db);
-
 export class SessionWorkspaceService {
-  private readonly mesh = createSessionWorkspaceBindingService(drizzleBindingStore);
+  private readonly storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore;
+  private readonly mesh: ReturnType<typeof createSessionWorkspaceBindingService>;
+
+  constructor(
+    storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore = createDrizzleBindingStore,
+  ) {
+    this.storeFactory = storeFactory;
+    this.mesh = createSessionWorkspaceBindingService(storeFactory(db));
+  }
 
   private async checkTenantMember(tenantId: string, principalId: string): Promise<void> {
     const [membership] = await db.select({ status: tenantMemberships.status }).from(tenantMemberships)
@@ -171,7 +187,7 @@ export class SessionWorkspaceService {
     // ended session cannot be resurrected, and a failed attach leaves no
     // orphan workspace behind.
     const { binding, seed: pendingSeed } = await db.transaction(async (tx) => {
-      const store = createDrizzleBindingStore(tx);
+      const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       let seed: {
         readonly workspaceId: string; readonly type: WorkspaceType; readonly globalRole: string;
@@ -229,7 +245,7 @@ export class SessionWorkspaceService {
     // Membership first: a non-member learns nothing about binding existence.
     await this.checkTenantMember(tenantId, principalId);
     return await db.transaction(async (tx) => {
-      const store = createDrizzleBindingStore(tx);
+      const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       const existing = await store.findBySession(sessionId);
       if (!existing || existing.tenantId !== tenantId) {
@@ -258,7 +274,7 @@ export class SessionWorkspaceService {
     // Membership first: a non-member learns nothing about binding existence.
     await this.checkTenantMember(tenantId, principalId);
     return await db.transaction(async (tx) => {
-      const store = createDrizzleBindingStore(tx);
+      const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       const existing = await store.findBySession(sessionId);
       if (!existing || existing.tenantId !== tenantId) {
@@ -289,7 +305,7 @@ export class SessionWorkspaceService {
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
     await this.checkTenantMember(tenantId, principalId);
-    const existing = await drizzleBindingStore.findBySession(sessionId);
+    const existing = await this.storeFactory(db).findBySession(sessionId);
     if (!existing || existing.tenantId !== tenantId) return null;
     const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
     const binding = await this.mesh.get({ sessionId, tenantId, principalId, isAdmin });

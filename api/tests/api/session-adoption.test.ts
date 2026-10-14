@@ -27,21 +27,21 @@ const sessionIds = [
   'sess-adopt-29', 'sess-adopt-30',
 ];
 
-// One-shot forced-interleave hook for the API race tests (m1, m2): the next
-// `hasWorkspaceRole` call runs the hook first, then answers normally. The
-// hook itself (a full adopt/detach sequence on another service instance) sees
-// no hook, so there is no recursion. `vi.mock` is file-scoped but the hook
-// is only armed inside the two tests below.
-const interleaveHook = vi.hoisted(() => ({ current: null as null | (() => Promise<void>) }));
+// One-shot forced-interleave hooks for API race tests:
+// 1. `accessHook` triggers inside `hasWorkspaceRole` (testing rights resolution races: detach/get).
+// 2. `interleaveHook` triggers inside `beforeCompareAndSet` (after the domain read in `authorize`,
+//    immediately before the Postgres CAS UPDATE, testing CAS-lost and post-CAS re-authorization).
+const accessHook = vi.hoisted(() => ({ current: null as null | (() => Promise<void>) }));
+const interleaveHook = { current: null as null | (() => Promise<void>) };
 
 vi.mock('../../src/services/workspace-access', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../src/services/workspace-access')>();
   return {
     ...mod,
     hasWorkspaceRole: async (...args: Parameters<typeof mod.hasWorkspaceRole>) => {
-      const hook = interleaveHook.current;
+      const hook = accessHook.current;
       if (hook) {
-        interleaveHook.current = null;
+        accessHook.current = null;
         await hook();
       }
       return mod.hasWorkspaceRole(...args);
@@ -75,6 +75,8 @@ describe('session adoption workspace binding', () => {
   });
 
   afterEach(async () => {
+    accessHook.current = null;
+    interleaveHook.current = null;
     await db.delete(sessionWorkspaceBindings)
       .where(inArray(sessionWorkspaceBindings.sessionId, sessionIds));
     const tenantWorkspaces = await db.select({ id: workspaces.id }).from(workspaces)
@@ -405,12 +407,20 @@ describe('session adoption workspace binding', () => {
   });
 
   it('should reject concurrent end when CAS loses the race and allow idempotent retry (forced interleave)', async () => {
-    // Deterministic m1: the interleave is forced inside `hasWorkspaceRole`
-    // (no `Promise.allSettled` race). Outer end reads row at version 1; while
-    // resolving workspace rights, inner end commits version 2 (ended). Outer
-    // loses the CAS, re-authorizes against the winning state, and fails closed
-    // with session_not_attached.
-    const service = new SessionWorkspaceService();
+    // Deterministic m1: forced interleave where concurrent end commits between
+    // the domain read and the Postgres CAS update. Outer end passes version and
+    // status pre-checks (expectedVersion 1), but loses the Postgres CAS UPDATE.
+    // It re-authorizes against the winning state (ended v2) post-CAS and fails
+    // closed with session_not_attached.
+    const service = new SessionWorkspaceService((tx) => createDrizzleBindingStore(tx, {
+      beforeCompareAndSet: async () => {
+        const hook = interleaveHook.current;
+        if (hook) {
+          interleaveHook.current = null;
+          await hook();
+        }
+      },
+    }));
     await service.adopt({
       sessionId: 'sess-adopt-29', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
@@ -429,11 +439,12 @@ describe('session adoption workspace binding', () => {
   });
 
   it('should refuse a stale end when concurrent race changes binding owner (forced interleave)', async () => {
-    // Deterministic m1: forced interleave where concurrent race swaps workspace and owner.
-    // Outer end is invoked by original user; while resolving rights on wsA,
+    // Deterministic m1: forced interleave where concurrent race swaps workspace
+    // and owner between the domain read and the Postgres CAS update.
+    // Outer end is invoked by original user (wsA, regularUser); before CAS,
     // inner sequence detaches wsA and adopts workspaceB with userB (v3).
-    // Outer loses CAS, re-authorizes against workspaceB/userB, and rejects
-    // with workspace_rights_refused.
+    // Outer loses Postgres CAS, re-authorizes against workspaceB/userB post-CAS,
+    // and rejects with workspace_rights_refused.
     const regularUser = await createAuthenticatedUser('editor');
     await db.insert(tenantMemberships).values({
       tenantId: TENANT_A, userId: regularUser.id, status: 'approved', role: 'member',
@@ -441,7 +452,15 @@ describe('session adoption workspace binding', () => {
     await db.insert(workspaceMemberships).values({
       workspaceId, userId: regularUser.id, role: 'editor',
     });
-    const service = new SessionWorkspaceService();
+    const service = new SessionWorkspaceService((tx) => createDrizzleBindingStore(tx, {
+      beforeCompareAndSet: async () => {
+        const hook = interleaveHook.current;
+        if (hook) {
+          interleaveHook.current = null;
+          await hook();
+        }
+      },
+    }));
     await service.adopt({
       sessionId: 'sess-adopt-30', tenantId: TENANT_A, principalId: regularUser.id, workspaceId,
     });
@@ -631,7 +650,7 @@ describe('session adoption workspace binding', () => {
 
     // Forced interleave: while the outer detach resolves rights on wsA, the
     // owner detaches wsA and userB re-attaches workspaceB (v3) first.
-    interleaveHook.current = async () => {
+    accessHook.current = async () => {
       const inner = new SessionWorkspaceService();
       await inner.detach('sess-adopt-24', TENANT_A, user.id);
       await inner.adopt({
@@ -675,7 +694,7 @@ describe('session adoption workspace binding', () => {
       workspaceId: workspaceB, userId: userB.id, role: 'admin',
     });
 
-    interleaveHook.current = async () => {
+    accessHook.current = async () => {
       const inner = new SessionWorkspaceService();
       await inner.detach('sess-adopt-26', TENANT_A, user.id);
       await inner.adopt({
