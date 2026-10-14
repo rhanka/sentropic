@@ -239,6 +239,11 @@ export const createGwNamespaceModule = async (
         router.use('/responses', authenticate);
         router.use('/responses', settlementMode);
         router.use('/responses', bridgeCaller);
+        // R5-MAJ-2: the Muse catalog shares the product caller admission —
+        // without this bridge the shared handler always answers 401 here.
+        router.use('/muse-code/*', authenticate);
+        router.use('/muse-code/*', settlementMode);
+        router.use('/muse-code/*', bridgeCaller);
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
           nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens, nativeCountRate: options.nativeCountRate,
