@@ -204,6 +204,15 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
     async () => bound.readHead('comment-orphan'),
     'K2b-RED barriers: coverage links the orphan chain to its barrier scope',
   );
+  await expectCode(
+    async () => bound.declareCoverage('thread-2', 'comment-0'),
+    'invalid-command',
+    'K2b-RED barriers: a covered child cannot escape its barrier',
+  );
+  await expectDenied(
+    async () => bound.readHead('comment-0'),
+    'K2b-RED barriers: coverage survives a rejected escape',
+  );
 
   await bound.declareCoverage('thread-1', 'comment-12');
   await expectCode(
