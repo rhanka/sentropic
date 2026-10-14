@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { channel } from 'node:diagnostics_channel';
+import { qualificationFetch } from './gw-native-qualification-transport';
 
 // Fetch headers/producer EOF do not establish outbound completion. Node's
 // transport notification does; weak keys never retain the internal request.
@@ -21,7 +22,7 @@ channel('undici:request:error').subscribe(terminal);
 export const confirmedNativeFetch = async (url: string, init: RequestInit, onResponseStarted?: () => void): Promise<Response> => {
   let done!: () => void;
   const uploaded = new Promise<void>(resolve => { done = resolve; });
-  const response = await context.run(done, () => fetch(url, init));
+  const response = await context.run(done, () => qualificationFetch(url, init));
   try {
     if (response.status === 200) onResponseStarted?.();
     await uploaded;
