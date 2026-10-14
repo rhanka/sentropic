@@ -169,7 +169,7 @@ next to it (remove that gateway copy or align its llm-mesh).
 **Consumer rules.** Every manifest that declares cluster-mesh and imports a leaf
 also declares that leaf's selected peers at the qualified versions; the installed
 tree must hold exactly one cluster-mesh and one llm-mesh shared with the gateway.
-0.14.0 is qualified with **npm only** (flat project installs, `npm ci` from a lockfile,
+0.15.0 is qualified with **npm only** (flat project installs, `npm ci` from a lockfile,
 and a global consumer beside a separately installed runtime); other package managers
 are not qualified. The tested bundler is esbuild with `@sentropic/cluster-mesh` **and**
 `@sentropic/cluster-mesh/*` (and the peer packages) externalized, which keeps the
@@ -177,13 +177,13 @@ resolution anchor at the installed package; bundling the root inline (as the API
 build does) embeds no provider code. TypeScript >= 5.7 is required with
 `skipLibCheck: false` (hono's declarations); with `skipLibCheck: true`, a missing
 peer surfaces as TS2305 on the named import. Frozen tuple (committed lockfile):
-cluster-mesh 0.14.0, llm-mesh 0.26.0, llm-gateway 0.20.0, mcp-auth 0.2.1,
+cluster-mesh 0.15.0, llm-mesh 0.26.0, llm-gateway 0.20.0, mcp-auth 0.2.1,
 oauth-verify 0.1.0, jose 5.10.0, hono 4.10.7; session mode with auth-hono 0.15.0
 (llm-gateway 0.20.0's declared peer range `^0.15.0`); the latest versions inside
 every declared range are re-qualified on each release run. The previous tuple
 (llm-mesh 0.21.x, llm-gateway 0.18.x) is refused, see "Upgrading to 0.13" below.
 
-The current release target is **cluster-mesh 0.14.0, llm-mesh 0.26.0 and
+The current release target is **cluster-mesh 0.15.0, llm-mesh 0.26.0 and
 llm-gateway 0.20.0**, all still unpublished. Final sibling archive qualification
 and the selected-lock integrity refresh remain release gates; the selected fixture
 retains the baseline until that final refresh. The widened ranges retain the prior
@@ -197,9 +197,9 @@ SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json`
 receipt for cluster-mesh itself replaces the local pack as the qualified candidate. The
 committed `selected` lockfile carries their registry URL and the sha512 of those bytes.
 
-**Upgrading to 0.14.** Gateway 0.20.0 requires llm-mesh `^0.26.0`: upgrade both
+**Upgrading to 0.15.** Gateway 0.20.0 requires llm-mesh `^0.26.0`: upgrade both
 providers in the same artifact and keep their physical llm-mesh instance shared.
-Cluster-mesh 0.14.0 also accepts the prior 0.22.x / 0.19.x tuple. Prereleases
+Cluster-mesh 0.15.0 also accepts the prior 0.22.x / 0.19.x tuple. Prereleases
 are refused.
 
 **Upgrading to 0.13.** Bump cluster-mesh 0.13, llm-mesh 0.22 and llm-gateway 0.19 in
@@ -215,9 +215,10 @@ loaders (`modules.load('gateway')`) refuse with `cluster_mesh_module_unavailable
 `incompatible_version` as well. `verifyClusterMeshTopology()` is an optional earlier
 check for hosts that mount routes before importing any leaf.
 
-**Upgrading to 0.14.** Cluster-mesh 0.14.0 is a minor with no runtime change: it keeps
+**Upgrading to 0.15.** Cluster-mesh 0.15.0 is a minor with no runtime change: it keeps
 the `>=0.22.0 <0.27.0` / `>=0.19.0 <0.21.0` peer ceilings and qualifies the
-llm-mesh 0.26.0 + llm-gateway 0.20.0 train. A new upstream 0.x minor needs an
+llm-mesh 0.26.0 + llm-gateway 0.20.0 train. It supersedes main's 0.14.0 with the
+same train strictly greater than npm and main. A new upstream 0.x minor needs an
 explicit cluster-mesh minor and a new matrix, so the train ships here and PR #664
 re-releases the next minor after this PR merges.
 
