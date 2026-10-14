@@ -8,7 +8,9 @@
   `prompt_cache_key`, ordered reasoning items) and translated Muse/Mistral
   execution (named choice, parallel control, `max_tokens`, strict schemas,
   qualified tool-name return). Real-planner fixture replay pins every
-  committed Muse/Codex body at 200 with usage preserved.
+  committed Codex body at 200 with usage preserved; committed Muse bodies
+  are refused at 400 before dispatch (R5-MAJ-1: no proven Meta Chat
+  reasoning slot).
 - `mistral-vibe-cli-latest` alias resolving to the pinned
   `mistral:mistral-medium-3.5`/`mistral-vibe` target (no duplicate profile).
 - Unknown-model 404 (BR-REL-Q3): plan-path, quote-path and terminal upstream
@@ -28,6 +30,28 @@
   replaces the terminal `unknown-model` 404 (or any other terminal refusal)
   with a sanitized 503 `overloaded_error`. Settlement is attempted once and the
   terminal error wins, including admitted-ledger failures.
+- Native Anthropic relay delivered INACTIVE (`LLM_GATEWAY_NATIVE_MESSAGES`
+  must be exactly `enabled`; the qualified model list is empty and frozen):
+  no caller-selected native transport exists in this release.
+- Real `count_tokens` relay through the host `NativeCountTokensPort`
+  (provider count verbatim on 200); counting errors never degrade the
+  account (neutral lease outcome, account stays `active`).
+- **Behavior change:** `safeguards` is refused with 400
+  `invalid_request_error` in every configuration (OFF and ON): the qualified
+  list is empty, so classifier auto-mode traffic carrying `safeguards` is
+  rejected until a later qualification (owner ack pending).
+- **Behavior change:** shared 32 000 000-byte body pool with fail-closed
+  bounds (413/503 capacity refusals); concurrent large contexts may observe
+  `capacity temporarily exhausted` (owner ack pending).
+- **Behavior change:** named `tool_choice` / explicit
+  `disable_parallel_tool_use` on Messages/Chat without a supporting
+  transport is a 400 capacity refusal (was: silently served, control
+  ignored) (owner ack pending).
+- `GET /muse-code/models`: caller-filtered catalog shared with
+  `GET /v1/models` (401 pre-pool), served on the product mount with the
+  same caller admission as `/v1/*` and `/responses`.
+- **Rupture:** `admitRoute` requires `subject` (budget admission). This
+  required field justifies the minor bump.
 
 ## 0.19.0
 

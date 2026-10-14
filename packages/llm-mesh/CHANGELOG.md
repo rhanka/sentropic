@@ -4,7 +4,9 @@
 
 - Responses execution features: per-transport support table
   (`reasoning-context`, `custom-tools`, `verbosity` on Codex;
-  `reasoning-controls`, `explicit-output-ceiling`, `strict-schema` on Muse;
+  `named-tool-choice`, `parallel-tool-control`, `explicit-output-ceiling`,
+  `strict-schema` on Muse — no `reasoning-controls` (R5-MAJ-1: no proven
+  Meta Chat reasoning slot, reasoning requests fail closed);
   `strict-schema` on Mistral Vibe) with fail-closed planning/quoting
   eligibility, plus the native Responses carrier (`customTools`,
   `functionToolRefs`, reasoning artifacts, context, verbosity, cache hints)
@@ -14,8 +16,17 @@
   `mistral:mistral-medium-3.5`/`mistral-vibe` target (no duplicate profile).
 - Muse Wonder (`muse-wonder-1.0`) + Wonder Full (`muse-wonder-full-1.0`)
   catalog entries, `muse`/`muse` routing targets and council listing
-  (owner request 2026-10-13); same transport-keyed Responses execution set
-  as Spark, gateway default unchanged.
+  (owner request 2026-10-13, Full id corrected 2026-10-14); same
+  transport-keyed Responses execution set as Spark (minus
+  `reasoning-controls`, R5-MAJ-1), gateway default unchanged.
+- **Rupture:** `admitRoute` requires `subject` (budget admission). This
+  required field justifies the minor bump.
+- Codex device-flow network tolerance: poll + token-exchange retry (3
+  retries, linear backoff); exhaustion carries cause + URL, never bare
+  `fetch failed`.
+- 503 diagnostics in body: per-transport causes on no-route, subsystem
+  naming (`authentication` / `account` / `budget service temporarily
+  unavailable`), expiry timestamp + repair action on reauth-required.
 
 ## 0.24.1
 
