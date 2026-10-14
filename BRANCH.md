@@ -221,7 +221,7 @@
   - [x] m2: no constant default incarnation (random per kernel unless configured); restart tests pin explicit incarnations.
   - [x] m3: every joined grant revalidated at commit; revocation-of-B test.
   - [x] m4: joined calls share the final outer receipt; outer-failure receipt test.
-  - [ ] m5: versioned K3M4 race test plus MAC module/scope binding tests.
+  - [x] m5: versioned K3M4 race test plus MAC module/scope binding tests.
   - [ ] m6: every fix3 commit atomic (under 150 lines) with `BRANCH.md` in-commit.
   - [ ] m7: coherent `BRANCH.md` (true boxes checked, CI failures recorded, gates per lot).
   - [ ] m8: accurate `.h2a/build/k3_fix3_report.md` with exit SHA (no `all gates green` without exit 0).
