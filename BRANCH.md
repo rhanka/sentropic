@@ -182,10 +182,15 @@ Attach or create an existing Sentropic workspace to an adopted session durably.
   - [x] GREEN: domain unreachable loops and fallback removed in detach/end, align CAS tuple doc (m1, m2)
   - [x] Sub-lot gate: test-cluster-mesh (428 pass), test-api-unit adoption (35/35), scope-check PASS
 - [x] **Lot 8 — Opus r7 minor fixes (m1..m3)**
-  - [x] RED/GREEN domain: deterministic lost-CAS and rights-refusal race tests for end (m1)
-  - [x] RED/GREEN API: deterministic forced-interleave lost-CAS and rights-refusal tests for end (m1)
+  - [x] COVERAGE domain: deterministic lost-CAS and rights-refusal race tests for end (m1)
+  - [x] COVERAGE API: deterministic forced-interleave lost-CAS and rights-refusal tests for end (m1)
   - [x] Docs: correct r7 report claims (m2) and clean BRANCH.md residues (m3)
   - [x] Sub-lot gate: test-cluster-mesh (429 pass / 31 scoped), test-api-unit adoption (36/36), scope-check PASS
+- [x] **Lot 9 — Opus r8 fixes (M1, m1, m2)**
+  - [x] Merge origin/main to run PR checks and resolve BRANCH.md conflict keeping branch content (M1)
+  - [x] COVERAGE API: instrument Drizzle store beforeCompareAndSet to reach lost-CAS branch (m1)
+  - [x] Docs: correct Lot 8 labels in BRANCH.md (m2) and report r9
+  - [x] Sub-lot gate: test-cluster-mesh (31/31 scoped), test-api-unit adoption (36/36), scope-check PASS
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (no UI changes in Lot 1)
