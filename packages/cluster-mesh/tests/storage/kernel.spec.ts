@@ -753,6 +753,59 @@ describe('K3 runtime: token-bound cursors', () => {
   });
 });
 
+describe('K3 seal mutants: cross-boundary cursor reuse', () => {
+  const sealSetup = async (bound: ScopedRuntime): Promise<void> => {
+    await bound.appendChain('seal-chain', { id: 'm1', bytes: '{}', hash: 'hash-seal-m1' }, { kind: 'absent', allocation: '0' });
+    await bound.appendChain('seal-chain', { id: 'm2', bytes: '{}', hash: 'hash-seal-m2' }, { kind: 'head', hash: 'hash-seal-m1' });
+  };
+
+  it('K3M5-minus-module-seal is killed by cross-module reuse', async () => {
+    // Mutant: moduleId removed from the MAC input array, so a cursor minted
+    // under one module verifies under another (page). The reference below
+    // demands invalid-command; run it against the mutant to observe the kill.
+    const secret = 'k3-test-secret-seal-m5';
+    const incarnation = 'store-seal-m5';
+    const home = createKernel({ moduleId: 'comments', incarnation, cursorSecret: secret });
+    const bound = home.bindNew(writeGrant('token-seal-m5-a'));
+    await sealSetup(bound);
+    const owned = ((await bound.readPage('seal-chain', 1, null, 4096)).nextCursor) as unknown as string;
+    const foreign = createKernel({ moduleId: 'engram-live', incarnation, cursorSecret: secret });
+    const foreignBound = foreign.bindNew(grantFor({ token: 'token-seal-m5-b', moduleId: 'engram-live' }));
+    await sealSetup(foreignBound);
+    await expectCode(() => foreignBound.readPage('seal-chain', 10, owned, 4096), 'invalid-command', 'K3M5: a cross-module cursor is refused');
+  });
+
+  it('K3M6-minus-tenant-seal is killed by cross-tenant reuse', async () => {
+    // Mutant: tenantId removed from the MAC input array, so a cursor minted
+    // under one tenant verifies under another (page).
+    const secret = 'k3-test-secret-seal-m6';
+    const kernel = createKernel({ moduleId: 'comments', incarnation: 'store-seal-m6', cursorSecret: secret });
+    const bound = kernel.bindNew(writeGrant('token-seal-m6-a'));
+    await sealSetup(bound);
+    const owned = ((await bound.readPage('seal-chain', 1, null, 4096)).nextCursor) as unknown as string;
+    const foreignBound = kernel.bindNew(
+      grantFor({ token: 'token-seal-m6-b', scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
+    );
+    await sealSetup(foreignBound);
+    await expectCode(() => foreignBound.readPage('seal-chain', 10, owned, 4096), 'invalid-command', 'K3M6: a cross-tenant cursor is refused');
+  });
+
+  it('K3M7-minus-workspace-seal is killed by cross-workspace reuse', async () => {
+    // Mutant: workspaceId removed from the MAC input array, so a cursor
+    // minted under one workspace verifies under another (page).
+    const secret = 'k3-test-secret-seal-m7';
+    const kernel = createKernel({ moduleId: 'comments', incarnation: 'store-seal-m7', cursorSecret: secret });
+    const bound = kernel.bindNew(writeGrant('token-seal-m7-a'));
+    await sealSetup(bound);
+    const owned = ((await bound.readPage('seal-chain', 1, null, 4096)).nextCursor) as unknown as string;
+    const foreignBound = kernel.bindNew(
+      grantFor({ token: 'token-seal-m7-b', scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' } }),
+    );
+    await sealSetup(foreignBound);
+    await expectCode(() => foreignBound.readPage('seal-chain', 10, owned, 4096), 'invalid-command', 'K3M7: a cross-workspace cursor is refused');
+  });
+});
+
 describe('K3 runtime: detached and unauthorized transaction work', () => {
   it('K3-FIX a detached transact on a closed overlay is refused', async () => {
     const bound = bindKernel();
