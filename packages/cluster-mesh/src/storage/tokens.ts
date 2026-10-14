@@ -1,14 +1,21 @@
 // K3 chain-boundary tokens and opaque identities (L3a v4.1 frozen §8.2).
 // G3: readChainPage uses the HMAC exact-head boundary provider below.
-// Cursors are self-contained opaque strings: [version, position, head, mac]
-// base64url-encoded. Module, scope, incarnation, selection, ordering and the
-// exact head travel inside the MAC, never in the token, so verification binds
-// every field server-side and any alteration fails closed. Minting and
-// verification are pure: a thousand-page traversal leaves no pins, no
-// registry entries, no leases. Restart stability comes from the secret: two
-// kernels sharing moduleId, incarnation and cursorSecret verify each other's
-// cursors; without a configured secret each kernel mints with a fresh random
-// key. Tokens stay compact by construction (fixed-size MAC plus the
+// Cursors are self-contained opaque strings: [version, position, head, seq,
+// allocation, incarnation, keyId, mac] base64url-encoded. Position, head,
+// sequence, allocation, incarnation and key id travel in plaintext: the
+// reader needs them to resolve the immutable boundary and to tell an
+// unknown boundary (changed incarnation, retired or default key) apart from
+// a broken seal. Every plaintext field is integrity-protected by the MAC,
+// so any alteration fails closed. Head hashes stay readable in the token;
+// comments retains hashes required by its contract without an anonymity
+// claim (§5.1). Minting and verification are pure: a thousand-page
+// traversal leaves no pins, no registry entries, no leases. Restart
+// stability comes from the secret: two kernels sharing moduleId,
+// incarnation and cursorSecret verify each other's cursors; without a
+// configured secret each kernel mints with a fresh random key, so its
+// cursors read as an unknown boundary after a restart (explicit
+// `incomplete`, never `invalid-command`, never a redirect to the latest
+// head). Tokens stay compact by construction (fixed-size MAC plus the
 // caller-sized head), so the §8.2 oversized server-side recipe is not needed.
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -18,7 +25,23 @@ import type { StorageScope } from './contracts.js';
 export interface ChainCursor {
   readonly position: number;
   readonly head: string;
+  readonly seq: number;
+  readonly allocation: string;
 }
+
+/** The cursor is well-formed but bound to an incarnation or key this kernel
+ * does not hold (§8.2 changed incarnation): the caller gets an explicit
+ * unavailable/incomplete result, not an invalid-command refusal. */
+export interface UnknownCursorBoundary {
+  readonly unknownBoundary: true;
+}
+
+export const isUnknownCursorBoundary = (value: unknown): value is UnknownCursorBoundary =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as { unknownBoundary?: unknown }).unknownBoundary === true;
+
+export type CursorVerification = ChainCursor | UnknownCursorBoundary | null;
 
 export interface ChainBoundaryRecord {
   readonly moduleId: string;
@@ -27,6 +50,8 @@ export interface ChainBoundaryRecord {
   readonly selection: string;
   readonly position: number;
   readonly head: string;
+  readonly seq: number;
+  readonly allocation: string;
 }
 
 export interface ChainBoundaryProvider {
@@ -35,45 +60,55 @@ export interface ChainBoundaryProvider {
     selection: string,
     cursor: unknown,
     opts: { readonly moduleId: string; readonly scope: StorageScope; readonly incarnation: string },
-  ): ChainCursor | null;
+  ): CursorVerification;
 }
 
-const CURSOR_VERSION = 1;
+const CURSOR_VERSION = 2;
 const CURSOR_ORDERING = 'seq-asc';
 
-/** G3 designated provider for readChainPage: exact head, immutable. */
+/** G3 designated provider for readChainPage: exact head, sequence and
+ * allocation, immutable. */
 export class HmacExactHeadBoundaryProvider implements ChainBoundaryProvider {
   private readonly key: Buffer;
+  private readonly keyId: string;
 
   constructor(secret?: string) {
     if (secret === undefined) {
       this.key = randomBytes(32);
+      this.keyId = randomBytes(9).toString('base64url');
       return;
     }
     if (typeof secret !== 'string' || secret.length === 0) {
       throw new StorageInvalidCommandError('cursor secret must be a non-empty string');
     }
     this.key = createHash('sha256').update(secret, 'utf8').digest();
+    this.keyId = createHash('sha256').update(`k3-cursor-key-id-v1:${secret}`, 'utf8').digest().subarray(0, 9).toString('base64url');
   }
 
   private mac(
     moduleId: string,
     scope: StorageScope,
     incarnation: string,
+    keyId: string,
     selection: string,
     position: number,
     head: string,
+    seq: number,
+    allocation: string,
   ): string {
     return createHmac('sha256', this.key)
       .update(
         JSON.stringify([
-          'k3-cursor-v1',
+          'k3-cursor-v2',
           moduleId,
           scope.tenantId,
           scope.workspaceId,
           incarnation,
+          keyId,
           selection,
           head,
+          seq,
+          allocation,
           CURSOR_ORDERING,
           position,
         ]),
@@ -89,20 +124,33 @@ export class HmacExactHeadBoundaryProvider implements ChainBoundaryProvider {
       record.moduleId,
       record.scope,
       record.incarnation,
+      this.keyId,
       record.selection,
       record.position,
       record.head,
+      record.seq,
+      record.allocation,
     );
-    return Buffer.from(JSON.stringify([CURSOR_VERSION, record.position, record.head, tag]), 'utf8').toString(
-      'base64url',
-    );
+    return Buffer.from(
+      JSON.stringify([
+        CURSOR_VERSION,
+        record.position,
+        record.head,
+        record.seq,
+        record.allocation,
+        record.incarnation,
+        this.keyId,
+        tag,
+      ]),
+      'utf8',
+    ).toString('base64url');
   }
 
   verify(
     selection: string,
     cursor: unknown,
     opts: { readonly moduleId: string; readonly scope: StorageScope; readonly incarnation: string },
-  ): ChainCursor | null {
+  ): CursorVerification {
     if (typeof cursor !== 'string' || cursor.length === 0) return null;
     let parts: unknown;
     try {
@@ -110,17 +158,34 @@ export class HmacExactHeadBoundaryProvider implements ChainBoundaryProvider {
     } catch {
       return null;
     }
-    if (!Array.isArray(parts) || parts.length !== 4) return null;
-    const [version, position, head, tag] = parts as readonly unknown[];
+    if (!Array.isArray(parts) || parts.length !== 8) return null;
+    const [version, position, head, seq, allocation, incarnation, keyId, tag] = parts as readonly unknown[];
     if (version !== CURSOR_VERSION) return null;
     if (!Number.isSafeInteger(position) || (position as number) < 0) return null;
     if (typeof head !== 'string' || head.length === 0) return null;
+    if (!Number.isSafeInteger(seq) || (seq as number) < 0) return null;
+    if (typeof allocation !== 'string' || allocation.length === 0) return null;
+    if (typeof incarnation !== 'string' || incarnation.length === 0) return null;
+    if (typeof keyId !== 'string' || keyId.length === 0) return null;
     if (typeof tag !== 'string' || tag.length === 0) return null;
-    const expected = this.mac(opts.moduleId, opts.scope, opts.incarnation, selection, position as number, head);
+    // Plaintext boundary check first: a cursor minted under another
+    // incarnation or key is an unknown boundary (§8.2), not a broken seal.
+    if (incarnation !== opts.incarnation || keyId !== this.keyId) return { unknownBoundary: true };
+    const expected = this.mac(
+      opts.moduleId,
+      opts.scope,
+      opts.incarnation,
+      this.keyId,
+      selection,
+      position as number,
+      head as string,
+      seq as number,
+      allocation as string,
+    );
     const actual = Buffer.from(tag, 'utf8');
     const wanted = Buffer.from(expected, 'utf8');
     if (actual.length !== wanted.length || !timingSafeEqual(actual, wanted)) return null;
-    return { position: position as number, head };
+    return { position: position as number, head: head as string, seq: seq as number, allocation: allocation as string };
   }
 }
 
