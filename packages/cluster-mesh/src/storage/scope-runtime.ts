@@ -137,6 +137,8 @@ export interface KernelTransaction {
  * so no issuance, revocation or backend state is reachable from a handle. */
 export interface ScopedRuntimeDeps {
   readonly moduleId: string;
+  /** Unique owning-kernel identity: transactions never join across kernels. */
+  readonly kernelId: string;
   readonly backend: MemoryBackend;
   readonly provider: ChainBoundaryProvider;
   readonly incarnation: string;
@@ -149,13 +151,16 @@ export interface ScopedRuntimeDeps {
 }
 
 // Request-local transaction contexts (§5.5 isolation between concurrent
-// contexts): one overlay per module-plus-scope per asynchronous call chain,
-// so two handles bound to the same grant and scope join instead of
-// committing independently (m3). Distinct modules or scopes never join.
+// contexts): one overlay per kernel-plus-module-plus-scope per asynchronous
+// call chain, so two handles of one kernel bound to the same grant and
+// scope join instead of committing independently (m3). Distinct kernels,
+// modules or scopes never join (Sol-2): independent kernels own independent
+// backends, and a cross-kernel join would commit foreign units to the wrong
+// store under one receipt.
 const txScope = new AsyncLocalStorage<Map<string, TxOverlay>>();
 
-const txJoinKey = (moduleId: string, scope: StorageScope): string =>
-  JSON.stringify(['tx', moduleId, scope.tenantId, scope.workspaceId]);
+const txJoinKey = (kernelId: string, moduleId: string, scope: StorageScope): string =>
+  JSON.stringify(['tx', kernelId, moduleId, scope.tenantId, scope.workspaceId]);
 
 export class ScopedRuntime {
   readonly grant: ScopeGrant<unknown>;
@@ -310,7 +315,7 @@ export class ScopedRuntime {
   async transact<T>(options: CommitOptions, operation: (tx: KernelTransaction) => Promise<T>): Promise<{ readonly value: T; readonly receipt: CommitReceipt }> {
     this.requireOperation('write');
     const ambient = txScope.getStore();
-    const joinKey = txJoinKey(this.moduleId, this.boundScope);
+    const joinKey = txJoinKey(this.#deps.kernelId, this.moduleId, this.boundScope);
     const joined = ambient?.get(joinKey);
     if (joined) {
       // A live overlay for this module and scope joins (§5.5). A closed one
