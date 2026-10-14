@@ -21,7 +21,7 @@ import {
 } from './errors.js';
 import type { AtomicUnit, CommitOptions, CommitReceipt, IdempotencyEntry, IdempotencySelector } from './atomic.js';
 import { requireProfile, type ProfileClaim, type ProfileId } from './profiles.js';
-import type { MemoryBackend } from './backend.js';
+import { incrementBackendAllocation, type BackendScopeState, type MemoryBackend } from './backend.js';
 import {
   appendChainToScope,
   commitAtomicToScope,
@@ -36,7 +36,7 @@ import {
   type ReadPageResult,
 } from './record-runtime.js';
 import type { ChainBoundaryProvider } from './tokens.js';
-import type { PageLimits, StorageScope } from './contracts.js';
+import { validatePageLimits, type PageLimits, type StorageScope } from './contracts.js';
 
 // Semantic profile definitions: each digest is the SHA-256 of the K3
 // ordinary meaning of the profile, not of its bare label (m8). A mutant
@@ -93,22 +93,38 @@ interface TxOverlay {
   readonly receipt: CommitReceipt;
 }
 
-export interface TxRecordRead {
+/** §5.2 record read: one entry per found key, in key order. Absent keys
+ * are absent from the result (never null entries). */
+export interface RecordRead {
   readonly key: string;
   readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string };
   readonly contentHash: string;
 }
+
+/** §5.2 paginated chain read request: limit and byte budget are mandatory,
+ * the cursor carries the resume position. */
+export interface ChainReadRequest {
+  readonly chainId: string;
+  readonly limit: number;
+  readonly cursor?: unknown;
+  readonly maxEncodedBytes: number;
+}
+
+/** §5.2 paginated chain read result: the committed readPage shape, over the
+ * combined committed-plus-pending view. */
+export type RecordPage = ReadPageResult;
 
 export interface KernelTransaction {
   apply(unit: AtomicUnit): Promise<void>;
   readHead(chainId: string): Promise<string | null>;
   readAggregate(key: string): Promise<{ readonly version: number; readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string } } | null>;
   readRecord(key: string): Promise<{ readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; readonly contentHash: string } | null>;
-  readChain(chainId: string): Promise<readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[]>;
+  /** §5.2 paginated chain read over pending appends plus committed state. */
+  readChain(input: ChainReadRequest): Promise<RecordPage>;
   /** §5.2 command-index lookup over pending writes plus committed state. */
   findIdempotency(selector: IdempotencySelector): Promise<IdempotencyEntry | null>;
   /** §5.2 bounded multi-record read over pending writes plus committed state. */
-  readRecords(keys: readonly string[], limits?: PageLimits): Promise<readonly (TxRecordRead | null)[]>;
+  readRecords(keys: readonly string[], limits: PageLimits): Promise<readonly RecordRead[]>;
 }
 
 /** Internal kernel wiring. Not part of the public surface (R-MAJ-5): the
@@ -470,15 +486,43 @@ export class ScopedRuntime {
         if (!stored) return null;
         return { bytes: { ...stored.bytes }, contentHash: stored.contentHash };
       },
-      readChain: async (chainId: string): Promise<readonly { readonly id: string; readonly seq: number; readonly hash: string; readonly bytes: string }[]> => {
+      readChain: async (input: ChainReadRequest): Promise<RecordPage> => {
         txReadGuard();
-        const chain = backendState().chains.get(chainId);
-        if (chain?.disposed) throw new StorageDeniedError('chain disposed');
-        const combined = (chain?.records ?? []).map((entry) => ({ ...entry }));
+        if (typeof input !== 'object' || input === null) throw new StorageInvalidCommandError('chain read requires a request');
+        const { chainId, limit, maxEncodedBytes } = input;
+        const cursor = input.cursor ?? null;
+        if (!nonEmpty(chainId)) throw new StorageInvalidCommandError('chain read requires a chainId');
+        if (!Number.isSafeInteger(limit) || limit <= 0) throw new StorageInvalidCommandError('invalid limit');
+        if (!Number.isSafeInteger(maxEncodedBytes) || maxEncodedBytes <= 0) {
+          throw new StorageInvalidCommandError('invalid byte budget');
+        }
+        // Paginated over the combined committed-plus-pending view: delegate
+        // to the committed pager on a scratch scope state, so tx pages share
+        // the exact budget, floor and cursor semantics of readPage (§5.2).
+        // The scratch state is discarded; canonical state is never touched.
+        const state = backendState();
+        const committed = state.chains.get(chainId);
+        let allocation = committed?.allocation ?? '0';
+        const combined = (committed?.records ?? []).map((entry) => ({ ...entry }));
         for (const record of overlay.chainAppends.get(chainId) ?? []) {
+          allocation = incrementBackendAllocation(allocation);
           combined.push({ id: record.id, seq: combined.length, hash: record.hash, bytes: record.bytes });
         }
-        return combined;
+        const scratch: BackendScopeState = {
+          ...state,
+          chains: new Map(state.chains).set(chainId, {
+            allocation,
+            head: combined.length === 0 ? null : combined[combined.length - 1].hash,
+            records: combined,
+            disposed: committed?.disposed ?? false,
+          }),
+        };
+        return readPageFromScope(scratch, chainId, limit, cursor, maxEncodedBytes, {
+          moduleId: this.moduleId,
+          scope: this.boundScope,
+          incarnation: this.#deps.incarnation,
+          provider: this.#deps.provider,
+        });
       },
       findIdempotency: async (selector: IdempotencySelector): Promise<IdempotencyEntry | null> => {
         txReadGuard();
@@ -490,18 +534,30 @@ export class ScopedRuntime {
         if (!stored) return null;
         return { digest: stored.digest, resultIds: [...stored.resultIds], resultHash: stored.resultHash };
       },
-      readRecords: async (keys: readonly string[], limits?: PageLimits): Promise<readonly (TxRecordRead | null)[]> => {
+      readRecords: async (keys: readonly string[], limits: PageLimits): Promise<readonly RecordRead[]> => {
         txReadGuard();
-        if (limits !== undefined && keys.length > limits.maxRecords) {
+        // Limits are mandatory (§5.2): an absent or malformed budget refuses
+        // instead of reading unbounded.
+        if (!validatePageLimits(limits).ok) throw new StorageInvalidCommandError('record read requires valid limits');
+        if (keys.length > limits.maxRecords) {
           throw new StorageInvalidCommandError('record read exceeds maxRecords');
         }
-        return keys.map((key) => {
+        const rows: RecordRead[] = [];
+        for (const key of keys) {
           const pending = overlay.recordWrites.get(key);
-          if (pending) return { key, bytes: { ...pending.bytes }, contentHash: pending.contentHash };
+          if (pending) {
+            rows.push({ key, bytes: { ...pending.bytes }, contentHash: pending.contentHash });
+            continue;
+          }
           const stored = backendState().records.get(key);
-          if (!stored) return null;
-          return { key, bytes: { ...stored.bytes }, contentHash: stored.contentHash };
-        });
+          if (stored) rows.push({ key, bytes: { ...stored.bytes }, contentHash: stored.contentHash });
+        }
+        // The byte budget applies to the encoded result: an over-budget
+        // result refuses fail-closed instead of truncating silently.
+        if (Buffer.byteLength(JSON.stringify(rows), 'utf8') > limits.maxEncodedBytes) {
+          throw new StorageInvalidCommandError('record read exceeds maxEncodedBytes');
+        }
+        return rows;
       },
     };
   }
