@@ -210,18 +210,21 @@ describe('K3 runtime: R3 full-sweep resume', () => {
 
 describe('K3 discriminating mutants', () => {
   it('K3M1-frozen-resume-cursor is killed by the resume sweep', async () => {
-    const bound = bindKernel();
-    await setupSweepChain(bound);
-    const inner = bound.readPage.bind(bound);
-    bound.readPage = (async (chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) => {
-      const page = await inner(chainId, limit, cursor, maxEncodedBytes);
-      if (page.outcome !== 'incomplete' || page.records.length === 0 || page.nextCursor === null) return page;
-      // Frozen-cursor defect: the surviving cursor never advances past the
-      // input position, so the resume re-delivers records the caller already
-      // holds. The sweep detects the duplicate as a record-set mismatch.
-      return { ...page, nextCursor: (cursor as string | null) ?? page.nextCursor };
-    }) as ScopedRuntime['readPage'];
-    await expect(runResumeSweep(bound)).rejects.toThrow(/exact full record set/);
+    // Frozen-cursor defect through the injectable boundary seam (handles are
+    // sealed, never patched): every minted cursor pins position 0, so the
+    // resume re-delivers records the caller already holds and the sweep
+    // detects the duplicate as a record-set mismatch.
+    const secret = 'k3-test-secret-frozen';
+    const real = new HmacExactHeadBoundaryProvider(secret);
+    const frozen: ChainBoundaryProvider = {
+      mint: (record) => real.mint({ ...record, position: 0 }),
+      verify: (selection, cursor, opts) => real.verify(selection, cursor, opts),
+    };
+    const mutant = createKernel({ moduleId: 'comments', cursorSecret: secret, boundaryProvider: frozen }).bindNew(
+      writeGrant('token-m1-mutant-1'),
+    );
+    await setupSweepChain(mutant);
+    await expect(runResumeSweep(mutant)).rejects.toThrow(/exact full record set/);
   });
 
   it('K3M2-unevaluated-predicates is killed by the predicate guard', async () => {
