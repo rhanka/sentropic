@@ -273,6 +273,28 @@ class SealBlindStore extends TestStagedReferenceStore {
   }
 }
 
+class OverlayBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.commitAtomic.bind(bound);
+    bound.commitAtomic = (unit, options) =>
+      inner(
+        {
+          ...unit,
+          appends: unit.appends
+            .filter((append) => append.record.id !== 'd1')
+            .map((append) =>
+              append.record.id === 'd2'
+                ? { ...append, expectation: { kind: 'head', hash: 'hash-dep-0' } as const }
+                : append,
+            ),
+        },
+        options,
+      );
+    return bound;
+  }
+}
+
 class CrossBlindStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -413,6 +435,13 @@ describe('K2b discriminating mutations: staged', () => {
     );
     await expect(runStagedCorpus(primary, stagedHooks(store, primary), foreign)).rejects.toThrow(
       /a foreign handle cannot stage/,
+    );
+  });
+
+  it('S12-overlay-blind is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new OverlayBlindStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /successive fragments publish the full ordered history/,
     );
   });
 });
@@ -655,6 +684,7 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'S10-begin-blind', brokenSemantic: 'divergent begins recover silently', corpus: 'staged', verdict: 'killed' },
   { id: 'S10b-seal-blind', brokenSemantic: 'divergent seals pass validation', corpus: 'staged', verdict: 'killed' },
   { id: 'S11-cross-blind', brokenSemantic: 'foreign handles stage across scopes', corpus: 'staged', verdict: 'killed' },
+  { id: 'S12-overlay-blind', brokenSemantic: 'successive fragments drop intermediate history', corpus: 'staged', verdict: 'killed' },
   { id: 'J1-no-checkpoint-cas', brokenSemantic: 'checkpoints skip CAS protection', corpus: 'replay', verdict: 'killed' },
   { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
   { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
@@ -697,6 +727,7 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
       'killed',
       'killed',
       'killed',
