@@ -222,11 +222,14 @@ export class TestBoundStore {
     }
     const scopeState = getScopeState(this.state, this.scope);
     const chain = scopeState.chains.get(chainId);
-    if (chain?.disposed) return { outcome: 'inaccessible', records: [], nextCursor: retained };
+    if (chain?.disposed) return { outcome: 'inaccessible', records: [], nextCursor: null };
     const records = chain?.records ?? [];
     const boundHead = cursorHead ?? chain?.head ?? null;
     const boundIdx = boundHead === null ? records.length : records.findIndex((entry) => entry.hash === boundHead);
     if (boundHead !== null && boundIdx === -1) {
+      if (retained !== null && encodedPageBytes('incomplete', [], retained) > maxEncodedBytes) {
+        return { outcome: 'incomplete', records: [], nextCursor: null };
+      }
       return { outcome: 'incomplete', records: [], nextCursor: retained };
     }
     const visible = boundHead === null ? [] : records.slice(0, boundIdx + 1);

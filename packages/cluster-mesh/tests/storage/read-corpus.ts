@@ -72,11 +72,14 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   );
   const exhausted = await bound.readPage('readable', 10, null, 1);
   assert.equal(exhausted.outcome, 'incomplete');
+  assert.equal(exhausted.records.length, 0);
+  assert.equal(exhausted.nextCursor, null);
 
   await bound.appendChain('tiny', { id: 't1', bytes: 'x', hash: 'hash-t-1' }, { kind: 'absent', allocation: '0' });
   const encodedTiny = await bound.readPage('tiny', 10, null, 2);
   assert.equal(encodedTiny.outcome, 'incomplete');
   assert.equal(encodedTiny.records.length, 0);
+  assert.equal(encodedTiny.nextCursor, null);
 
   const envelope = await bound.readPage('tiny', 10, null, 49);
   assert.equal(
@@ -85,11 +88,13 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
     'K2aR3-RED reads: the budget covers the full encoded page, not the record alone',
   );
   assert.equal(envelope.records.length, 0);
+  assert.equal(envelope.nextCursor, null);
 
   await bound.appendChain('heavy', { id: 'big', bytes: `{"pad":"${'x'.repeat(200)}"}`, hash: 'hash-big-1' }, { kind: 'absent', allocation: '0' });
   const over = await bound.readPage('heavy', 10, null, 16);
   assert.equal(over.outcome, 'incomplete');
   assert.equal(over.records.length, 0);
+  assert.equal(over.nextCursor, null);
 
   await expectCode(
     async () => bound.readPage('readable', 2, 'forged-cursor', 4096),
@@ -111,10 +116,12 @@ export const runReadCorpus = async (bound: ReadCorpusStore): Promise<void> => {
   const unavailable = await bound.readPage('doomed-read', 1, acquired.nextCursor, 4096);
   assert.equal(unavailable.outcome, 'inaccessible');
   assert.equal(unavailable.records.length, 0);
+  assert.equal(unavailable.nextCursor, null);
 
   const fresh = await bound.readPage('doomed-read', 1, null, 4096);
   assert.equal(fresh.outcome, 'inaccessible');
   assert.equal(fresh.records.length, 0);
+  assert.equal(fresh.nextCursor, null);
 
   const missing = await bound.readPage('no-such-chain', 10, null, 4096);
   assert.equal(missing.outcome, 'page');
