@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { createKernel } from '../../src/storage/kernel.js';
 import type { ScopedRuntime } from '../../src/storage/scope-runtime.js';
-import type { ChainBoundaryProvider } from '../../src/storage/tokens.js';
+import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from '../../src/storage/tokens.js';
 import type { AtomicUnit, CommitReceipt } from '../../src/storage/atomic.js';
 import { appendChainToScope, disposeChainInScope } from '../../src/storage/record-runtime.js';
 import { createBackendScopeState } from '../../src/storage/backend.js';
@@ -715,6 +715,29 @@ describe('K3 runtime: token-bound cursors', () => {
     expect(unknownKey.records).toEqual([]);
     expect(unknownKey.nextCursor).toBe(null);
   });
+
+  it('K3-FIX cursors bind module and scope in the seal', async () => {
+    const secret = 'k3-test-secret-binding';
+    const kernel = createKernel({ moduleId: 'comments', incarnation: 'store-bind-1', cursorSecret: secret });
+    const bound = kernel.bindNew(writeGrant('token-bind-a'));
+    await bound.appendChain('bind-chain', { id: 'b1', bytes: '{}', hash: 'hash-bind-1' }, { kind: 'absent', allocation: '0' });
+    await bound.appendChain('bind-chain', { id: 'b2', bytes: '{}', hash: 'hash-bind-2' }, { kind: 'head', hash: 'hash-bind-1' });
+    const page = await bound.readPage('bind-chain', 1, null, 4096);
+    const owned = page.nextCursor as unknown as string;
+    // Same secret and incarnation, other scope: the seal binds the scope, so
+    // the foreign cursor is refused, never accepted.
+    const other = kernel.bindNew(grantFor({ token: 'token-bind-b', scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' } }));
+    await other.appendChain('bind-chain', { id: 'b1', bytes: '{}', hash: 'hash-bind-1' }, { kind: 'absent', allocation: '0' });
+    await other.appendChain('bind-chain', { id: 'b2', bytes: '{}', hash: 'hash-bind-2' }, { kind: 'head', hash: 'hash-bind-1' });
+    await expectCode(async () => other.readPage('bind-chain', 10, owned, 4096), 'invalid-command', 'K3-FIX tokens: a cross-scope cursor is refused');
+    // Module and scope binding at the provider level, on the kernel-minted
+    // cursor: stripping either from the seal breaks verification.
+    const provider = new HmacExactHeadBoundaryProvider(secret);
+    const home = { moduleId: 'comments', scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' }, incarnation: 'store-bind-1' };
+    expect(provider.verify('bind-chain', owned, home)).toEqual({ position: 1, head: 'hash-bind-2', seq: 1, allocation: '2' });
+    expect(provider.verify('bind-chain', owned, { ...home, moduleId: 'other-module' })).toBe(null);
+    expect(provider.verify('bind-chain', owned, { ...home, scope: { tenantId: 'tenant-a', workspaceId: 'workspace-other' } })).toBe(null);
+  });
 });
 
 describe('K3 runtime: detached and unauthorized transaction work', () => {
@@ -814,7 +837,11 @@ describe('K3 runtime: single-apply dependents and commit races', () => {
     expect(await bound.readHead('solo-dep-2')).toBe(null);
   });
 
-  it('K3-FIX a commit-time head race on one chain conflicts the loser', async () => {
+  it('K3M4-dropped-commit-time-CAS is killed by the same-chain race', async () => {
+    // Mutant: the commit-time head check in stageEffects is removed, so a
+    // stale staged head commits over the winner. The kill below fails then:
+    // no cas-conflict surfaces and the loser head wins. This name is the
+    // versioned K3M4 evidence (grep K3M4).
     const bound = bindKernel();
     await bound.appendChain('race-chain', { id: 'r0', bytes: '{}', hash: 'hash-race-0' }, { kind: 'absent', allocation: '0' });
     let release!: () => void;
