@@ -1,8 +1,11 @@
 // K3 gate: scope binding proof (L3a v4.1 frozen §4, §17.1 K3).
 // Test-first RED: imports the K3 kernel before it exists.
 
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createKernel, createStaticAuthorityPort } from '../../src/storage/kernel.js';
+import { StorageDeniedError } from '../../src/storage/errors.js';
+import * as storageIndex from '../../src/storage/index.js';
 import { grantFor, runAuthorityCorpus } from './authority-corpus.js';
 import { expectCode } from './atomic-corpus.js';
 
@@ -88,6 +91,71 @@ describe('K3 binding: revalidation and capabilities', () => {
       async () => kernel.bindNew(grantFor({ token: 'token-rogue-1', issuer: 'rogue' })),
       'denied',
       'K3-FIX binding: a grant with an unexpected issuer is refused',
+    );
+  });
+
+  it('K3-FIX adapter handles expose no issuance state', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const grant = grantFor({ token: 'token-surface-1' });
+    kernel.bindNew(grant);
+    const bound = kernel.adapter().bind(grant);
+    const surface = bound as unknown as Record<string, unknown>;
+    expect(surface['deps']).toBe(undefined);
+    for (const key of Object.keys(surface)) {
+      expect(['issued', 'revoked', 'backend', 'provider', 'nextCommitId', 'predicates', 'authority']).not.toContain(key);
+    }
+    // The public entry point carries no constructor and no deps interface.
+    expect('ScopedRuntime' in storageIndex).toBe(false);
+    expect('ScopedRuntimeDeps' in storageIndex).toBe(false);
+    expect('ORDINARY_PROFILES' in storageIndex).toBe(true);
+    // The frozen grant copy stays readable; the scope getter returns a copy.
+    const view = bound.scope;
+    view.tenantId = 'evil-tenant';
+    view.workspaceId = 'evil-workspace';
+    expect(bound.scope).toEqual({ tenantId: 'tenant-a', workspaceId: 'workspace-a' });
+    expect(await bound.readHead('nothing')).toBe(null);
+  });
+
+  it('K3-FIX the authority port is re-attested on every operation', async () => {
+    let attestations = 0;
+    let open = true;
+    const kernel = createKernel({
+      moduleId: 'comments',
+      authority: {
+        attest: (): void => {
+          attestations += 1;
+          if (!open) throw new StorageDeniedError('policy changed');
+        },
+      },
+    });
+    const bound = kernel.bindNew(grantFor({ token: 'token-attest-1' }));
+    const afterBind = attestations;
+    expect(afterBind).toBeGreaterThan(0);
+    await bound.readHead('nothing');
+    expect(attestations).toBeGreaterThan(afterBind);
+    open = false;
+    await expectCode(
+      async () => bound.readHead('nothing'),
+      'denied',
+      'K3-FIX binding: a changed authority policy denies without touching the grant',
+    );
+  });
+
+  it('K3-FIX profile digests hash semantic definitions, not bare labels', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const bound = kernel.bindNew(grantFor({ token: 'token-digest-1' }));
+    const labelDigest = (profile: string): string =>
+      createHash('sha256').update(`k3-ordinary-v1:${profile}:1`, 'utf8').digest('hex');
+    for (const claim of bound.profiles) {
+      expect(claim.digest).not.toBe(labelDigest(claim.profile));
+    }
+    expect(bound.capability('immutable-boundaries-v1').digest).toBe(
+      createHash('sha256')
+        .update(
+          'k3-ordinary-v1:immutable-boundaries-v1:immutable-boundaries-v1:cursor-v2[HMAC-SHA256-128(module,scope,incarnation,keyId,selection,head,seq,allocation,ordering,position)];unknown-boundary-incomplete;no-lease;no-clock-expiry',
+          'utf8',
+        )
+        .digest('hex'),
     );
   });
 
