@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { NativeCountTokensRateLimiter } from '@sentropic/llm-gateway';
 import { db } from '../../src/db/client';
+import { env } from '../../src/config/env';
 import { routePartitionHash } from '../../src/services/llm-metering';
 import { gwNativeFixture, message } from './gw-native-fixture';
 vi.mock('../../src/services/llm-runtime/index', () => ({
@@ -80,6 +81,10 @@ it('releases concurrent count slots after error and refills without generation l
   expect(h.budget.admit).not.toHaveBeenCalled(); expect(h.settlement.settleRoute).not.toHaveBeenCalled();
 });
 it.each([false, true])('OFF refusal names safeguards when present (%s)', async safeguards => {
+  // Hermetic credential: the parsed env snapshot (not process.env) feeds the
+  // real fallback port, so a live ANTHROPIC_API_KEY would prepare and call
+  // the provider instead of refusing.
+  vi.spyOn(env, 'ANTHROPIC_API_KEY', 'get').mockReturnValue('');
   const h = await gwNativeFixture(false);
   const response = await h.post({ ...message, ...(safeguards ? { safeguards: {} } : {}) }, {}, path);
   expect(response.status).toBe(400);
