@@ -188,6 +188,41 @@ class MutableBufferStore extends TestStagedReferenceStore {
   }
 }
 
+class DigestTrustStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.stageFragment.bind(bound);
+    bound.stageFragment = async (input) => {
+      try {
+        return await inner(input);
+      } catch (error) {
+        if (isStorageError(error) && error.code === 'idempotency-conflict' && input.fragmentDigest === 'digest-0') {
+          return { unitId: input.unit.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
+        }
+        throw error;
+      }
+    };
+    return bound;
+  }
+}
+
+class ReceiptMutableStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.commitStaged.bind(bound);
+    let shared: { commitId: string } | null = null;
+    bound.commitStaged = async (input) => {
+      const receipt = await inner(input);
+      if (shared === null) {
+        shared = receipt as unknown as { commitId: string };
+        return receipt;
+      }
+      return shared as unknown as typeof receipt;
+    };
+    return bound;
+  }
+}
+
 class NoCheckpointCasStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
@@ -267,6 +302,20 @@ describe('K2b discriminating mutations: staged', () => {
     const { store, bound } = bindStaged(new MutableBufferStore('comments'));
     await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
       /buffers are immutable after acceptance/,
+    );
+  });
+
+  it('S8-digest-trust is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new DigestTrustStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /changed effects under a repeated digest/,
+    );
+  });
+
+  it('S9-receipt-mutable is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new ReceiptMutableStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /stored receipts stay immutable after delivery/,
     );
   });
 });
@@ -504,6 +553,8 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'S5-abort-kept-effects', brokenSemantic: 'aborted units keep publishable effects', corpus: 'staged', verdict: 'killed' },
   { id: 'S6-stale-blind-staging', brokenSemantic: 'stale writers publish without fence revalidation', corpus: 'staged', verdict: 'killed' },
   { id: 'S7-mutable-buffer', brokenSemantic: 'caller buffers mutate accepted staged effects', corpus: 'staged', verdict: 'killed' },
+  { id: 'S8-digest-trust', brokenSemantic: 'repeated digests mask divergent effects', corpus: 'staged', verdict: 'killed' },
+  { id: 'S9-receipt-mutable', brokenSemantic: 'returned receipts mutate stored commitments', corpus: 'staged', verdict: 'killed' },
   { id: 'J1-no-checkpoint-cas', brokenSemantic: 'checkpoints skip CAS protection', corpus: 'replay', verdict: 'killed' },
   { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
   { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
@@ -546,6 +597,8 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
+      'killed',
       'killed',
       'killed',
       'killed',

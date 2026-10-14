@@ -145,6 +145,20 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     async () =>
       bound.stageFragment({
         unit,
+        ordinal: '0',
+        predecessorHash: null,
+        fragmentDigest: 'digest-0',
+        effects: appendUnit('chain-s1', 's1-divergent', 'hash-s1-divergent', null),
+        fence: FENCE,
+      }),
+    'idempotency-conflict',
+    'K2b-RED staged: changed effects under a repeated digest conflict',
+  );
+
+  await expectCode(
+    async () =>
+      bound.stageFragment({
+        unit,
         ordinal: '1',
         predecessorHash: 'digest-wrong',
         fragmentDigest: 'digest-1',
@@ -268,6 +282,13 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     null,
     'K2b-RED staged: buffers are immutable after acceptance',
   );
+  mutableEffects.appends[0].record.bytes = '{"tampered":true}';
+  assert.equal(await bound.readHead('chain-immutable'), 'hash-im1');
+  const tamperedReceipt = await bound.commitStaged({ seal: immutableSeal, fence: FENCE });
+  const receiptCopy = tamperedReceipt.commitId;
+  (tamperedReceipt as { commitId: string }).commitId = 'tampered-commit';
+  const recoveredImmutable = await bound.commitStaged({ seal: immutableSeal, fence: FENCE });
+  assert.equal(recoveredImmutable.commitId, receiptCopy, 'K2b-RED staged: stored receipts stay immutable after delivery');
 
   await expectCode(
     async () => bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-1', '5') }),

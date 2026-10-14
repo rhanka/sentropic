@@ -444,7 +444,10 @@ export class TestStagedStore {
     if (!shape.ok) throw new StorageInvalidCommandError(shape.errors.join('; '));
     const same = op.fragments.find((entry) => entry.ordinal === input.ordinal);
     if (same) {
-      if (same.fragmentDigest === input.fragmentDigest) {
+      if (
+        same.fragmentDigest === input.fragmentDigest &&
+        JSON.stringify(same.effects) === JSON.stringify(input.effects)
+      ) {
         return { unitId: op.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
       }
       throw new StorageIdempotencyConflictError('changed bytes at an accepted ordinal conflict');
@@ -512,7 +515,7 @@ export class TestStagedStore {
     if (!fence.ok) throw new StorageInvalidCommandError(fence.errors.join('; '));
     const op = [...this.staged.units.values()].find((entry) => entry.unitId === input.seal.unitId);
     if (!op) throw new StorageInvalidCommandError('unknown staged seal');
-    if (op.state === 'committed' && op.receipt) return op.receipt;
+    if (op.state === 'committed' && op.receipt) return { ...op.receipt, scope: { ...op.receipt.scope } };
     // §7.5 step 2 + §13.4: a successful CAS does not authorize a stale
     // writer. The commit fence must match the begin fence and must not
     // regress to an earlier epoch.
@@ -546,7 +549,7 @@ export class TestStagedStore {
     const receipt = this.commitWithSegment(merged, {}, op.operationKey);
     op.state = 'committed';
     op.receipt = receipt;
-    return receipt;
+    return { ...receipt, scope: { ...receipt.scope } };
   }
 
   inspectStaged(operationKey: string): StagedUnitStatus {
