@@ -290,6 +290,25 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
   const recoveredImmutable = await bound.commitStaged({ seal: immutableSeal, fence: FENCE });
   assert.equal(recoveredImmutable.commitId, receiptCopy, 'K2b-RED staged: stored receipts stay immutable after delivery');
 
+  const sameBegin = await bound.beginStaged({
+    operationKey: 'op-staged-1',
+    inputDigest: 'input-1',
+    contractDigest: 'contract-k2b',
+    sourceBoundary: 'boundary-k2b',
+    fence: FENCE,
+  });
+  assert.equal(sameBegin.unitId, unit.unitId);
+  for (const divergent of [
+    { inputDigest: 'input-other', contractDigest: 'contract-k2b', sourceBoundary: 'boundary-k2b' },
+    { inputDigest: 'input-1', contractDigest: 'contract-other', sourceBoundary: 'boundary-k2b' },
+    { inputDigest: 'input-1', contractDigest: 'contract-k2b', sourceBoundary: 'boundary-other' },
+  ]) {
+    await expectCode(
+      async () => bound.beginStaged({ operationKey: 'op-staged-1', fence: FENCE, ...divergent }),
+      'idempotency-conflict',
+      'K2b-RED staged: a divergent begin conflicts',
+    );
+  }
   await expectCode(
     async () => bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-1', '5') }),
     'invalid-command',
@@ -300,8 +319,29 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     'invalid-command',
     'K2b-RED staged: truncated chains cannot seal',
   );
+  for (const [label, root] of [
+    ['operation', { ...sealRoot('op-staged-1', 'digest-1', '2'), operationId: 'op-other' }],
+    ['contract', { ...sealRoot('op-staged-1', 'digest-1', '2'), contractDigest: 'contract-other' }],
+    ['boundary', { ...sealRoot('op-staged-1', 'digest-1', '2'), sourceBoundary: 'boundary-other' }],
+    ['dependencies', { ...sealRoot('op-staged-1', 'digest-1', '2'), dependencyRoot: 'dep-other' }],
+    ['effects', { ...sealRoot('op-staged-1', 'digest-1', '2'), effectRoot: 'eff-other' }],
+  ] as const) {
+    await expectCode(
+      async () => bound.sealStaged({ unit, root }),
+      'invalid-command',
+      `K2b-RED staged: a divergent seal ${label} cannot seal`,
+    );
+  }
   const seal = await bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-1', '2') });
-  assert.deepEqual(await bound.inspectStaged('op-staged-1'), { state: 'sealed', seal });
+  const tamperedRoot = { ...seal.commitRoot, dependencyRoot: 'tampered-root' };
+  await expectCode(
+    async () => bound.commitStaged({ seal: { unitId: seal.unitId, commitRoot: tamperedRoot }, fence: FENCE }),
+    'invalid-command',
+    'K2b-RED staged: a mutated seal cannot publish',
+  );
+  (seal.commitRoot as { dependencyRoot: string }).dependencyRoot = 'tampered-root';
+  const freshSeal = { unitId: seal.unitId, commitRoot: sealRoot('op-staged-1', 'digest-1', '2') };
+  assert.deepEqual(await bound.inspectStaged('op-staged-1'), { state: 'sealed', seal: freshSeal });
 
   await expectCode(
     async () =>
@@ -317,7 +357,7 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     'K2b-RED staged: sealing freezes fragment input',
   );
 
-  const receipt = await bound.commitStaged({ seal, fence: FENCE });
+  const receipt = await bound.commitStaged({ seal: freshSeal, fence: FENCE });
   assert.deepEqual(await bound.inspectStaged('op-staged-1'), { state: 'committed', commitId: receipt.commitId });
   assert.equal(await bound.readHead('chain-s1'), 'hash-s1');
   assert.equal(await bound.readHead('chain-s2'), 'hash-s2');
@@ -327,11 +367,23 @@ export const runStagedCorpus = async (bound: StagedCorpusStore, hooks: StagedCor
     'K2b-RED staged: staged index writes publish atomically with their unit',
   );
 
-  const recovered = await bound.commitStaged({ seal, fence: FENCE });
+  const recovered = await bound.commitStaged({ seal: freshSeal, fence: FENCE });
   assert.equal(
     recovered.commitId,
     receipt.commitId,
     'K2b-RED staged: commit before response recovers the same receipt',
+  );
+  await expectCode(
+    async () =>
+      bound.beginStaged({
+        operationKey: 'op-staged-1',
+        inputDigest: 'input-divergent-after-commit',
+        contractDigest: 'contract-k2b',
+        sourceBoundary: 'boundary-k2b',
+        fence: FENCE,
+      }),
+    'idempotency-conflict',
+    'K2b-RED staged: a divergent begin conflicts after completion',
   );
 
   const guarded = await bound.beginStaged({
