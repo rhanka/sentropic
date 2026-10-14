@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { db, pool } from '../../../db/client';
+import { db } from '../../../db/client';
 import {
   chatGenerationTraces,
   chatSessions,
@@ -25,10 +25,11 @@ import {
 } from '../../../db/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
-import { createId } from '../../../utils/id';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../../services/workspace-access';
-import { getDefaultGateConfig } from '../../../services/gate-service';
-import { todoOrchestrationService } from '../../../services/todo-orchestration';
+import {
+  notifyWorkspaceCreated, notifyWorkspaceEvent, notifyWorkspaceMembershipEvent,
+  provisionWorkspace, seedWorkspaceTypeResources,
+} from '../../../services/workspace-provisioning';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
@@ -38,38 +39,6 @@ import {
 export const workspacesRouter = new Hono();
 
 const roleSchema = z.enum(['viewer', 'commenter', 'editor', 'admin']);
-
-function escapeNotifyPayload(payload: Record<string, unknown>): string {
-  return JSON.stringify(payload).replace(/'/g, "''");
-}
-
-async function notifyWorkspaceEvent(workspaceId: string, data: Record<string, unknown> = {}, userIds?: string[]) {
-  const client = await pool.connect();
-  try {
-    const payload = {
-      workspace_id: workspaceId,
-      data,
-      ...(userIds && userIds.length > 0 ? { user_ids: userIds } : {}),
-    };
-    await client.query(`NOTIFY workspace_events, '${escapeNotifyPayload(payload)}'`);
-  } finally {
-    client.release();
-  }
-}
-
-async function notifyWorkspaceMembershipEvent(
-  workspaceId: string,
-  userId: string,
-  data: Record<string, unknown> = {}
-) {
-  const client = await pool.connect();
-  try {
-    const payload = { workspace_id: workspaceId, user_id: userId, data };
-    await client.query(`NOTIFY workspace_membership_events, '${escapeNotifyPayload(payload)}'`);
-  } finally {
-    client.release();
-  }
-}
 
 workspacesRouter.get('/', async (c) => {
   const user = c.get('user') as { userId: string };
@@ -96,53 +65,24 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
     return c.json({ error: 'Neutral workspaces cannot be created manually' }, 400);
   }
 
-  const id = createId();
-  const now = new Date();
-
-  // Seed default gate config for this workspace type (§6.3)
-  const defaultGateConfig = getDefaultGateConfig(type as import('../../../services/workspace-access').WorkspaceType);
-
-  await db.transaction(async (tx) => {
-    await tx.insert(workspaces).values({
-      id,
+  // Canonical rows via the shared provisioning service (same gate config,
+  // same creator-as-admin membership, same transaction atomicity).
+  const id = await db.transaction((tx) =>
+    provisionWorkspace(tx, {
       ownerUserId: user.userId,
       name,
-      type,
-      gateConfig: defaultGateConfig ?? undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
+      type: type as import('../../../services/workspace-access').WorkspaceType,
+    }),
+  );
 
-    await tx.insert(workspaceMemberships).values({
-      workspaceId: id,
-      userId: user.userId,
-      role: 'admin',
-      createdAt: now,
-    });
+  // Seed default workflows/agents (§7.6, §8.1) and view templates (§12.6)
+  // via the shared provisioning path (same steps as session adoption).
+  await seedWorkspaceTypeResources({
+    userId: user.userId, role: user.role, workspaceId: id,
+    type: type as import('../../../services/workspace-access').WorkspaceType,
   });
 
-  // Seed default workflows and agents for this workspace type (§7.6, §8.1)
-  try {
-    await todoOrchestrationService.seedWorkflowsForType(
-      { userId: user.userId, role: user.role, workspaceId: id },
-      type,
-    );
-  } catch (seedErr) {
-    console.error('Failed to seed workflows for workspace type', type, seedErr);
-    // Non-fatal: workspace is created, seeding can be retried
-  }
-
-  // Seed default view templates for this workspace type (§12.6)
-  try {
-    const { viewTemplateService } = await import('../../../services/view-template-service');
-    await viewTemplateService.seedForWorkspace(id, type);
-  } catch (seedErr) {
-    console.error('Failed to seed view templates for workspace type', type, seedErr);
-    // Non-fatal: workspace is created, seeding can be retried
-  }
-
-  await notifyWorkspaceEvent(id, { action: 'created' });
-  await notifyWorkspaceMembershipEvent(id, user.userId, { action: 'added', role: 'admin' });
+  await notifyWorkspaceCreated(id, user.userId);
 
   return c.json({ id }, 201);
 });

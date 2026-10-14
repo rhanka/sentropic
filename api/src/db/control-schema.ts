@@ -892,3 +892,49 @@ export const clusterMeshNamespaceCutovers = controlSchema.table(
     ),
   }),
 );
+
+/**
+ * control.session_workspace_bindings — durable adopted-session to Sentropic
+ * workspace edge (LOT1 D1). `workspace_id` is a SOFT ref to
+ * `public.workspaces` (NO cross-namespace FK; integrity is service-enforced).
+ * One row per session (`session_id` UNIQUE). Detach and end only flip
+ * `status`; the workspace row and its history are never deleted here.
+ */
+export const sessionWorkspaceBindings = controlSchema.table(
+  'session_workspace_bindings',
+  {
+    bindingId: text('binding_id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    principalId: text('principal_id').notNull(),
+    status: text('status').notNull().default('attached'),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+    detachedAt: timestamp('detached_at', { withTimezone: true }),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+  },
+  (table) => ({
+    sessionUnique: uniqueIndex('session_workspace_bindings_session_unique').on(table.sessionId),
+    tenantWorkspaceIdx: index('session_workspace_bindings_tenant_workspace_idx').on(
+      table.tenantId,
+      table.workspaceId,
+    ),
+    tenantPrincipalIdx: index('session_workspace_bindings_tenant_principal_idx').on(
+      table.tenantId,
+      table.principalId,
+    ),
+    statusCheck: check(
+      'session_workspace_bindings_status_check',
+      sql`${table.status} IN ('attached', 'detached', 'ended')`,
+    ),
+    versionCheck: check(
+      'session_workspace_bindings_version_check',
+      sql`${table.version} >= 1`,
+    ),
+  }),
+);
+
+export type SessionWorkspaceBindingRow = typeof sessionWorkspaceBindings.$inferSelect;
+export type SessionWorkspaceBindingInsert = typeof sessionWorkspaceBindings.$inferInsert;
