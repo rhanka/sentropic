@@ -105,6 +105,7 @@ interface StagedOp {
   state: 'staging' | 'sealed' | 'committed' | 'aborted';
   seal?: { readonly unitId: string; readonly commitRoot: StagedCommitRoot };
   base?: Map<string, { readonly head: string | null; readonly disposed: boolean }>;
+  indexBase?: Map<string, { readonly digest: string; readonly resultIds: readonly string[] } | null>;
   receipt?: CommitReceipt;
   abortReason?: string;
   beginFence?: WriterFence;
@@ -517,19 +518,27 @@ export class TestStagedStore {
       throw new StorageInvalidCommandError('seal transition closed');
     }
     const touched = new Set<string>();
+    const touchedIndex = new Set<string>();
     for (const fragment of op.fragments) {
       for (const guard of fragment.effects.guards) {
         if (guard.kind === 'head' || guard.kind === 'absent') touched.add(guard.chainId);
       }
       for (const append of fragment.effects.appends) touched.add(append.chainId);
+      for (const write of fragment.effects.indexWrites) touchedIndex.add(write.key);
     }
     const base = new Map<string, { readonly head: string | null; readonly disposed: boolean }>();
     for (const chainId of touched) {
       base.set(chainId, { head: this.inner.readHead(chainId), disposed: this.staged.disposed.has(chainId) });
     }
+    const indexBase = new Map<string, { readonly digest: string; readonly resultIds: readonly string[] } | null>();
+    for (const key of touchedIndex) {
+      const entry = this.inner.indexGet(key);
+      indexBase.set(key, entry ? { digest: entry.digest, resultIds: [...entry.resultIds] } : null);
+    }
     op.state = 'sealed';
     op.seal = { unitId: op.unitId, commitRoot: { ...input.root } };
     op.base = base;
+    op.indexBase = indexBase;
     return { unitId: op.seal.unitId, commitRoot: { ...op.seal.commitRoot } };
   }
 
@@ -566,6 +575,16 @@ export class TestStagedStore {
     for (const [chainId, captured] of op.base) {
       if (this.inner.readHead(chainId) !== captured.head || this.staged.disposed.has(chainId) !== captured.disposed) {
         throw new StorageCasConflictError('changed base without publication');
+      }
+    }
+    if (op.indexBase) {
+      for (const [key, captured] of op.indexBase) {
+        const current = this.inner.indexGet(key);
+        const currentSig = current ? `${current.digest}:${[...current.resultIds].join(',')}` : null;
+        const capturedSig = captured ? `${captured.digest}:${[...captured.resultIds].join(',')}` : null;
+        if (currentSig !== capturedSig) {
+          throw new StorageCasConflictError('changed base without publication');
+        }
       }
     }
     const merged: AtomicUnit = {
