@@ -311,6 +311,28 @@ describe('provider-shaped error mapper (unit)', () => {
     }
   });
 
+  // R7-MIN-3: `strict-schema` has two caller sources (`text.format.strict`
+  // and `tools[i].strict`) but the refusal carries only the feature name, so
+  // the mapper stays on the frozen bare 400 instead of naming one field.
+  it.each([['openai-responses'], ['openai-chat-completions']] as const)(
+    'keeps the bare 400 for strict-schema on %s (dual text/tools source)',
+    (wire) => {
+      for (const error of [
+        new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+          undefined, undefined, ['strict-schema']),
+        new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet',
+          ['strict-schema']),
+      ]) {
+        const mapped = toProviderShapedError(wire, error, 'known-model');
+        expect(mapped.status).toBe(400);
+        const body = mapped.body as { error: { type: string; code: string } };
+        expect(body.error.type).toBe('invalid_request_error');
+        expect(body.error.code).toBe('invalid_request');
+        expect(JSON.stringify(mapped.body)).not.toContain('param');
+      }
+    },
+  );
+
   it('keeps the enrollment-action branch ahead of structural recognition', () => {
     const error = {
       name: 'RoutePlanError', code: 'no-route',

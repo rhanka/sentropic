@@ -158,7 +158,11 @@ export interface FieldError {
 const EXECUTION_FEATURE_FIELD_PATH: Readonly<Record<ExecutionFeature, string | undefined>> = {
   'named-tool-choice': 'tool_choice',
   'parallel-tool-control': 'parallel_tool_calls',
-  'strict-schema': 'text.format.strict',
+  // R7-MIN-3: `strict-schema` has two caller sources (`text.format.strict`
+  // and `tools[i].strict`) but the refusal carries only the feature name, so
+  // no single static path is exact. Stay on the frozen bare 400 rather than
+  // naming the wrong field.
+  'strict-schema': undefined,
   'structured-output': 'text.format',
   'reasoning-controls': 'reasoning',
   'reasoning-context': 'reasoning.context',

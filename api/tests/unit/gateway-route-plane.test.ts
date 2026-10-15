@@ -26,5 +26,8 @@ describe('application gateway route plane execution features', () => {
     }).then(() => null, (error: unknown) => error);
     expect(failure).toBeInstanceOf(RoutePlanError);
     expect((failure as RoutePlanError).code).toBe('capabilities-unmet');
+    expect((failure as RoutePlanError).unmetExecutionFeatures).toEqual(
+      ['named-tool-choice', 'parallel-tool-control'],
+    );
   });
 });
