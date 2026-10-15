@@ -486,5 +486,5 @@
   - [x] R7-MIN-2: stale lines fixed (Lot N step 2 run `38637223538`, R5-MAJ-3 gate wording, Lot N versions 0.26.0/0.20.0/0.16.0).
   - [x] R7-MIN-3: `strict-schema` has dual sources (`text.format.strict`, `tools[i].strict`) — mapper stays on the frozen bare 400; plan/quote test on both OpenAI wires.
   - [ ] R7-MIN-1: PR body refresh from this BRANCH.md after push + green CI.
-  - [ ] R7-MIN-4: reword `09184d39d` subject (`honesty` → `accuracy`, content identical) via rebase on `origin/main`, then Post-Rebase Gate.
+  - [x] R7-MIN-4: reworded (`honesty` → `accuracy`, tree identical) via rebase on `origin/main` (292/292, linear, 0 behind); Post-Rebase Gate green (mesh 0.26.0 > npm 0.25.0, gateway 0.20.0 > 0.19.5, cluster-mesh 0.16.0 > 0.15.0; lock unchanged).
   - [ ] R5-BLQ-3: owner-owned (real UAT + native qualification disposition) — not this lane.
