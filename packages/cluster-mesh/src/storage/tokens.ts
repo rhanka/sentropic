@@ -200,3 +200,9 @@ export const createOpaqueIssuer = (prefix: string): (() => string) => {
   let seq = 0;
   return () => `${prefix}-${(seq += 1)}`;
 };
+
+// The provider forges the cursors every handle reads: freezing the shared
+// prototype closes the cross-module channel (O1, same realm limit as
+// Sol-1), so replacing mint or verify throws instead of minting forged
+// cursors inside a handle's scope.
+Object.freeze(HmacExactHeadBoundaryProvider.prototype);

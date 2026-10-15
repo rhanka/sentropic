@@ -99,3 +99,10 @@ export const satisfiesRequirements = (
 export const requireProfile = (advertised: readonly ProfileId[], profile: ProfileId): void => {
   if (!advertised.includes(profile)) throw new UnsupportedProfileError(profile);
 };
+
+// Frozen public catalogues (O6): PROFILE_IDS and CONSUMER_REQUIREMENTS are
+// exported for adapters, so planting an entry through one handle must never
+// widen negotiation on another. Every requirement list is frozen too.
+Object.freeze(PROFILE_IDS);
+for (const entry of Object.values(CONSUMER_REQUIREMENTS)) Object.freeze(entry);
+Object.freeze(CONSUMER_REQUIREMENTS);

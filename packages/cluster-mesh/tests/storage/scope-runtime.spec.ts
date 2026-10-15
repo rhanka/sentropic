@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { createKernel, createStaticAuthorityPort } from '../../src/storage/kernel.js';
 import { StorageDeniedError } from '../../src/storage/errors.js';
 import * as storageIndex from '../../src/storage/index.js';
+import { CONSUMER_REQUIREMENTS, PROFILE_IDS } from '../../src/storage/profiles.js';
 import { grantFor, runAuthorityCorpus } from './authority-corpus.js';
 import { expectCode } from './atomic-corpus.js';
 
@@ -128,6 +129,29 @@ describe('K3 binding: sealed handle invariants', () => {
       (alien as unknown as Record<string, unknown>)['boundScope'] = { tenantId: 'tenant-b', workspaceId: 'workspace-a' };
     }).toThrow();
     expect(await alien.readHead('brand-secret')).toBe(null);
+  });
+
+  it('K3-R5 backend and provider prototype replacement throws and handles stay bound (O1)', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const victim = kernel.bindNew(
+      grantFor({ token: 'token-o1-victim', scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
+    );
+    await victim.appendChain('o1-secret', { id: 's', bytes: '{}', hash: 'h-o1-secret' }, { kind: 'absent', allocation: '0' });
+    const alien = kernel.bindNew(grantFor({ token: 'token-o1-alien' }));
+    const backendProto = storageIndex.MemoryBackend.prototype as unknown as Record<string, unknown>;
+    const providerProto = storageIndex.HmacExactHeadBoundaryProvider.prototype as unknown as Record<string, unknown>;
+    // Negative controls: without the O1 freeze these assignments hold and
+    // every handle below addresses the attacker-chosen scope.
+    expect(Object.isFrozen(backendProto)).toBe(true);
+    expect(Object.isFrozen(providerProto)).toBe(true);
+    expect(() => {
+      backendProto['scopeState'] = () => ({ chains: new Map([['o1-secret', { head: 'h-forged' }]]) });
+    }).toThrow();
+    expect(() => {
+      providerProto['verify'] = () => null;
+    }).toThrow();
+    expect(await alien.readHead('o1-secret')).toBe(null);
+    expect(await victim.readHead('o1-secret')).toBe('h-o1-secret');
   });
 });
 
@@ -269,5 +293,19 @@ describe('K3 binding: revalidation and capabilities', () => {
     }).toThrow();
     expect(() => witness.capability('fenced-writers-v1' as never)).toThrow();
     expect(witness.profiles.map((entry) => entry.profile)).toEqual(['atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1']);
+  });
+
+  it('K3-R5 exported profile catalogues are frozen against planting (O6)', async () => {
+    // Negative control: without the O6 freeze the push below holds and a
+    // planted id passes isProfileId on every handle.
+    expect(Object.isFrozen(PROFILE_IDS)).toBe(true);
+    expect(() => {
+      (PROFILE_IDS as unknown as unknown[]).push('fenced-writers-v1');
+    }).toThrow();
+    expect(Object.isFrozen(CONSUMER_REQUIREMENTS)).toBe(true);
+    for (const entry of Object.values(CONSUMER_REQUIREMENTS)) expect(Object.isFrozen(entry)).toBe(true);
+    expect(() => {
+      (CONSUMER_REQUIREMENTS as unknown as Record<string, unknown>)['m1-adapter'] = ['fenced-writers-v1'];
+    }).toThrow();
   });
 });
