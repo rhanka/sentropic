@@ -246,7 +246,7 @@
 - [ ] **Lot 9 — Fix4 pass (Sol-1 residue tour 3/3, 4 lift conditions, PR #670)**
   - [x] Seal: freeze the `ScopedRuntime` prototype plus `boundScope`; tests (a) prototype-check replacement, (b) scope mutation, (c) prototype wrappers, with negative controls.
   - [x] Freeze `ORDINARY_PROFILES` (m1) with cross-handle planting test; joined receipt as frozen copy (m2) with provisional/final plus tamper tests.
-  - [ ] Correct the `scope-runtime.ts` seal comment, the Sol-1 line above and the fix4 report; document the realm limit (intrinsics out of guarantee, spec §6.5).
+  - [x] Correct the `scope-runtime.ts` seal comment, the Sol-1 line above and the fix4 report; document the realm limit (intrinsics out of guarantee, spec §6.5).
   - [x] Execute mutants K3M5..K3M7 in-suite via the `boundaryProvider` seam (kill-proof `page` tests; reference refusal proved by the existing kill tests).
   - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` sealed block (a)(b)(c).
   - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` m1 freeze proof plus `packages/cluster-mesh/tests/storage/kernel.spec.ts` m2 copy semantics.
@@ -261,7 +261,7 @@
     - [ ] CI green on PR #670 with no reserves.
 - [ ] **Lot 10 — R5 reserves pass (r5 review, PR #670)**
   - [x] m1: type and document the joined provisional receipt (`transact` JSDoc); fix stale header and commit comments.
-  - [ ] m2: check the Lot 9 seal-comment box above (seal comment, Sol-1 line, fix4 report and realm limit corrected).
+  - [x] m2: check the Lot 9 seal-comment box above (seal comment, Sol-1 line, fix4 report and realm limit corrected).
   - [x] m3: mark the `k3_fix3_report.md` Sol-1 claim as superseded (untracked file).
   - [x] n1: correct the seal comment last sentence (inline revalidation, direct frozen-scope addressing).
   - [x] n2: correct the fix4 report seal-comment line reference (untracked file).
@@ -270,9 +270,9 @@
   - [x] O6: freeze `PROFILE_IDS` and `CONSUMER_REQUIREMENTS`, with planting test.
   - [x] Adapt the joined-receipt outer-failure test to typed-error discipline (rebased `expectCode` has no message fallback).
   - [ ] Lot gate:
-    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (advisory FAIL C2 on `profiles.ts` under owner-mandated `BR-K3-EX3`; harness excuses conditional paths only, CI does not gate on scope-check)
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (pass, final code tree)
+    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (clean)
+    - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (164/164, 5 files)
+    - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (602 passed, 34 skipped, 0 failed, exit 0)
+    - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (advisory FAIL C2 on `profiles.ts` under owner-mandated `BR-K3-EX3`; harness excuses conditional paths only, CI does not gate on scope-check)
     - [ ] CI green on PR #670 with no reserves.
