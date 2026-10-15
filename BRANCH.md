@@ -36,6 +36,7 @@
   - [ ] `.h2a/build/k3_fix_report.md` (BR-K3-EX1 opus fix report)
   - [ ] `.h2a/build/k3_fix2_report.md` (BR-K3 Lot 6 opus-r2 plus Sol fix2 report)
   - [ ] `.h2a/build/k3_fix3_report.md` (BR-K3 Lot 7 opus-r3 fix3 report)
+  - [ ] `.h2a/build/k3_fix4_report.md` (BR-K3 Lot 9 fix4 report)
 - [ ] **Forbidden Paths (must not change in this branch)**:
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -87,6 +88,7 @@
 - [ ] `BR-K3-DISC3` — Opus fix files land as one coherent file per commit when they exceed 150 lines (single review unit per finding; `BR-K3-DISC2` precedent); all other fix commits stay under 150 lines with `BRANCH.md` in-commit.
 - [x] `BR-K3-EX2` — Merge-only intake of `origin/main` into K3 (opus r3 M1; PR #670 `CONFLICTING`). Reason: the PR targets `main` and needs PR CI plus mergeability. Impact: `Makefile` plus `.github/workflows/ci.yml` taken verbatim from `main` with no hand-edits (forbidden paths); `BRANCH.md` conflict resolved by keeping the K3 version; all other main files merged normally. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
 - [x] `BR-K3-CI-R3` — CI run `38490269426` (`workflow_dispatch`, HEAD `1d2bfea8e`): `validate-cluster-mesh` failure is branch-related (B1 unhandled rejection, `StorageInvalidCommandError: transaction closed` from `kernel.spec.ts:655`), fixed in Lot 7 and verified green in PR run `38494759359`, never flaky-accepted.
+- [ ] `BR-K3-FIX4` — Fix4 round (owner decision 2026-10-14, one targeted round beyond the review cap): exactly the 4 tour-3 lift conditions (seal freeze plus tests (a)(b)(c) with negative controls; profiles freeze plus receipt copies; doc corrections with realm limit; K3M5..M7 seam execution); report `.h2a/build/k3_fix4_report.md` untracked; never merge.
 - [ ] `BR-K3-CI-AI` — CI run `38490269426`: `test-api-unit-integration (ai, chat-sync,executive-summary-auto,comment-assistant)` failure is provider/model nondeterminism on the AI flaky list (`rules/testing.md`); K3 touches no API file; recorded pending owner sign-off before merge. Fix3 note: the same suite passed on `e59b2af8f` in PR run `38494759359`.
 - [ ] `BR-K3-CI-E2E3` — CI run `38494473542` (`workflow_dispatch`, HEAD `e59b2af8f`): `test-e2e (group-c, 03)` failure is provider/model timing nondeterminism on the AI flaky list (`e2e/tests/03-chat.spec.ts:281`, `Timeout 60000ms exceeded while waiting on the predicate` in `waitForComposerCanSend`, after two retries); the same job passed on the same SHA in PR run `38494759359`; K3 touches no UI/API/e2e file; recorded pending owner sign-off before merge.
 
@@ -235,8 +237,23 @@
     - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (PASS C2)
     - [x] CI green on PR #670 with no reserves (`pull_request` run `38494759359` on `e59b2af8f`: success; dispatch-run e2e flake recorded as `BR-K3-CI-E2E3`, owner sign-off before merge still pending).
 - [x] **Lot 8 — Sol round-2 pass (4 MAJEUR, REJETÉ tour 2/3, PR #670)**
-  - [x] Sol-1: sealed handle invariants (grant, scope, module, checks unreplaceable); escalation plus tenant-switch tests.
+  - [x] Sol-1: sealed handle (instance, prototype and boundScope frozen, realm-limited per fix4 report); prototype-escalation, tenant-switch and wrapper tests with negative controls.
   - [x] Sol-2: transaction bound to its kernel/backend identity; cross-kernel join refused, same-kernel join kept.
   - [x] Sol-3: `readRecords` byte budget enforced on the full encoded result; exact plus exact-minus-one tests on committed and overlay rows.
   - [x] Sol-4: seal mutants K3M5/K3M6/K3M7 (minus module/tenant/workspace) killed by cross-boundary reuse tests demanding `invalid-command`.
   - [x] Lot gate: typecheck, lint, storage (140/140) plus package tests (538 green), scope-check PASS, PR CI green on `7db7ed16e` (run `38561291117` success); report updated with Sol-2 section.
+- [ ] **Lot 9 — Fix4 pass (Sol-1 residue tour 3/3, 4 lift conditions, PR #670)**
+  - [x] Seal: freeze the `ScopedRuntime` prototype plus `boundScope`; tests (a) prototype-check replacement, (b) scope mutation, (c) prototype wrappers, with negative controls.
+  - [ ] Freeze `ORDINARY_PROFILES` (m1) with cross-handle planting test; joined receipt as frozen copy (m2) with provisional/final plus tamper tests.
+  - [ ] Correct the `scope-runtime.ts` seal comment, the Sol-1 line above and the fix4 report; document the realm limit (intrinsics out of guarantee, spec §6.5).
+  - [ ] Execute mutants K3M5..K3M7 in-suite via the `boundaryProvider` seam (kill-proof `page` tests; reference refusal proved by the existing kill tests).
+  - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` sealed block (a)(b)(c).
+  - [ ] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` m1 freeze proof plus `packages/cluster-mesh/tests/storage/kernel.spec.ts` (m2 copy semantics, K3M5..M7 mutant seam).
+  - [ ] Write `.h2a/build/k3_fix4_report.md` (untracked) with exit SHA plus Reporting Contract.
+  - [ ] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (143/143 at seal commit)
+    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] CI green on PR #670 with no reserves.

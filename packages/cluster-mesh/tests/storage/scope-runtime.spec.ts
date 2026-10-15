@@ -45,6 +45,63 @@ describe('K3 binding: frozen grant copies', () => {
 });
 
 describe('K3 binding: sealed handle invariants', () => {
+  it('K3-FIX4 prototype check replacement throws and reads stay denied (a)', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const reader = kernel.bindNew(grantFor({ token: 'token-seal4-a', operations: ['read'] }));
+    const proto = Object.getPrototypeOf(reader) as Record<string, unknown>;
+    // Negative control: without the prototype freeze this assignment holds
+    // and the read-only handle below escalates to write.
+    expect(Object.isFrozen(proto)).toBe(true);
+    expect(() => {
+      proto['requireOperation'] = () => undefined;
+    }).toThrow();
+    await expectCode(
+      async () => reader.appendChain('seal4-esc', { id: 'e', bytes: '{}', hash: 'h-seal4-esc' }, { kind: 'absent', allocation: '0' }),
+      'denied',
+      'K3-FIX4 sealed prototype: a replaced check cannot escalate a read-only handle',
+    );
+  });
+
+  it('K3-FIX4 bound scope mutation throws and the victim chain stays put (b)', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const victim = kernel.bindNew(
+      grantFor({ token: 'token-seal4-victim', scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
+    );
+    await victim.appendChain('seal4-secret', { id: 's', bytes: '{}', hash: 'h-seal4-secret' }, { kind: 'absent', allocation: '0' });
+    const alien = kernel.bindNew(grantFor({ token: 'token-seal4-alien' }));
+    const alienScope = (alien as unknown as { boundScope: { tenantId: string } }).boundScope;
+    // Negative control: without the scope freeze this assignment holds.
+    expect(Object.isFrozen(alienScope)).toBe(true);
+    expect(() => {
+      alienScope.tenantId = 'tenant-b';
+    }).toThrow();
+    expect(await alien.readHead('seal4-secret')).toBe(null);
+    expect(await victim.readHead('seal4-secret')).toBe('h-seal4-secret');
+  });
+
+  it('K3-FIX4 prototype method wrappers throw and foreign bytes persist clean (c)', async () => {
+    const kernelA = createKernel({ moduleId: 'comments' });
+    const kernelB = createKernel({ moduleId: 'engram-live' });
+    const writer = kernelB.bindNew(grantFor({ token: 'token-seal4-c', moduleId: 'engram-live' }));
+    const proto = Object.getPrototypeOf(writer) as Record<string, unknown>;
+    // Negative control: without the prototype freeze the wrapper installs
+    // and the persisted bytes below come back tampered.
+    expect(Object.isFrozen(proto)).toBe(true);
+    expect(() => {
+      proto['appendChain'] = async () => ({ seq: 0, hash: 'h-tampered' });
+    }).toThrow();
+    expect(() => {
+      proto['readChain'] = async () => [];
+    }).toThrow();
+    await writer.appendChain('seal4-chain', { id: 'c', bytes: '{"clean":true}', hash: 'h-seal4-clean' }, { kind: 'absent', allocation: '0' });
+    const rows = await writer.readChain('seal4-chain');
+    expect(rows.map((entry) => entry.bytes)).toEqual(['{"clean":true}']);
+    // One shared prototype across kernels: a handle of kernelA is sealed by
+    // the same freeze.
+    const readerA = kernelA.bindNew(grantFor({ token: 'token-seal4-c-a', operations: ['read'] }));
+    expect(Object.getPrototypeOf(readerA)).toBe(proto);
+  });
+
   it('K3-FIX handle invariants cannot be replaced at runtime', async () => {
     const kernel = createKernel({ moduleId: 'comments' });
     const reader = kernel.bindNew(grantFor({ token: 'token-brand-read', operations: ['read'] }));
