@@ -250,11 +250,11 @@
   - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` sealed block (a)(b)(c).
   - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` m1 freeze proof plus `packages/cluster-mesh/tests/storage/kernel.spec.ts` m2 copy semantics.
   - [x] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` K3M5..M7 mutant seam.
-  - [ ] Write `.h2a/build/k3_fix4_report.md` (untracked) with exit SHA plus Reporting Contract.
+  - [x] Write `.h2a/build/k3_fix4_report.md` (untracked) with exit SHA plus Reporting Contract.
   - [ ] Lot gate:
     - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (143/143 seal, 145/145 profiles/receipts, 148/148 seam)
-    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (546 passed, 0 failed, exit 0)
+    - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (PASS C2 before each fix4 commit)
     - [ ] CI green on PR #670 with no reserves.
