@@ -85,3 +85,9 @@ export const incrementBackendAllocation = (allocation: string): string => {
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`invalid allocation: ${allocation}`);
   return String(parsed + 1);
 };
+
+// The backend addresses every handle of every kernel in this realm:
+// freezing the shared prototype closes the cross-module channel (O1, same
+// realm limit as Sol-1), so replacing scopeState throws instead of
+// redirecting all handles to another tenant.
+Object.freeze(MemoryBackend.prototype);
