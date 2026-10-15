@@ -246,15 +246,15 @@
   - [x] Seal: freeze the `ScopedRuntime` prototype plus `boundScope`; tests (a) prototype-check replacement, (b) scope mutation, (c) prototype wrappers, with negative controls.
   - [x] Freeze `ORDINARY_PROFILES` (m1) with cross-handle planting test; joined receipt as frozen copy (m2) with provisional/final plus tamper tests.
   - [ ] Correct the `scope-runtime.ts` seal comment, the Sol-1 line above and the fix4 report; document the realm limit (intrinsics out of guarantee, spec §6.5).
-  - [ ] Execute mutants K3M5..K3M7 in-suite via the `boundaryProvider` seam (kill-proof `page` tests; reference refusal proved by the existing kill tests).
+  - [x] Execute mutants K3M5..K3M7 in-suite via the `boundaryProvider` seam (kill-proof `page` tests; reference refusal proved by the existing kill tests).
   - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` sealed block (a)(b)(c).
   - [x] Evolve `packages/cluster-mesh/tests/storage/scope-runtime.spec.ts` m1 freeze proof plus `packages/cluster-mesh/tests/storage/kernel.spec.ts` m2 copy semantics.
-  - [ ] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` K3M5..M7 mutant seam.
+  - [x] Evolve `packages/cluster-mesh/tests/storage/kernel.spec.ts` K3M5..M7 mutant seam.
   - [ ] Write `.h2a/build/k3_fix4_report.md` (untracked) with exit SHA plus Reporting Contract.
   - [ ] Lot gate:
     - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [x] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
-    - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (143/143 seal, 145/145 profiles/receipts)
+    - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (143/143 seal, 145/145 profiles/receipts, 148/148 seam)
     - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] CI green on PR #670 with no reserves.
