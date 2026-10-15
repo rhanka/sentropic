@@ -15,7 +15,7 @@
 - [ ] All new text in English.
 - [ ] Zero Python.
 - [ ] Frozen comments M1 and merged engram L6a identity contract unchanged.
-- [ ] No version bump (stays on the 0.15.0 candidate from PR #666).
+- [ ] No version bump (stack on rebased PR #666 at 0.17.0).
 - [ ] Corpus stays backend-agnostic: async, port-shaped, typed outcomes only, no reference internals, no message matching.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -155,7 +155,7 @@
   - [x] Typecheck and Lint (`make typecheck-cluster-mesh`: 0 errors; `make lint-cluster-mesh`: clean)
   - [x] Retest cluster-mesh: `make test-cluster-mesh API_PORT=9505 UI_PORT=5705 MAILDEV_UI_PORT=1605 ENV=test-cm-k2b` (56 files passed, 464 tests passed, 34 skipped, 0 failed)
   - [x] `make scope-check API_PORT=9505 UI_PORT=5705 MAILDEV_UI_PORT=1605 ENV=test-cm-k2b` (PASS C2)
-  - [x] No version bump: stays on the 0.15.0 candidate.
+  - [x] No version bump: inherits the 0.17.0 post-rebase gate version from PR #666.
   - [x] Final gate step 1: push only this branch and open a DRAFT PR to main noting "stacked on #666" (never merge; PR #669).
   - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers (PR #669: 55 checks pass, 0 fail; `validate-cluster-mesh` pass).
   - [x] Write .h2a/build/k2b_report.md with finding/behavior to commit to test to mutation plus the exit SHA.
