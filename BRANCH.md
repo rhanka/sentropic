@@ -260,15 +260,15 @@
     - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (PASS C2 before each fix4 commit)
     - [ ] CI green on PR #670 with no reserves.
 - [ ] **Lot 10 — R5 reserves pass (r5 review, PR #670)**
-  - [ ] m1: type and document the joined provisional receipt (`transact` JSDoc); fix stale header and commit comments.
+  - [x] m1: type and document the joined provisional receipt (`transact` JSDoc); fix stale header and commit comments.
   - [ ] m2: check the Lot 9 seal-comment box above (seal comment, Sol-1 line, fix4 report and realm limit corrected).
-  - [ ] m3: mark the `k3_fix3_report.md` Sol-1 claim as superseded (untracked file).
-  - [ ] n1: correct the seal comment last sentence (inline revalidation, direct frozen-scope addressing).
-  - [ ] n2: correct the fix4 report seal-comment line reference (untracked file).
+  - [x] m3: mark the `k3_fix3_report.md` Sol-1 claim as superseded (untracked file).
+  - [x] n1: correct the seal comment last sentence (inline revalidation, direct frozen-scope addressing).
+  - [x] n2: correct the fix4 report seal-comment line reference (untracked file).
   - [x] O1: freeze `MemoryBackend` and `HmacExactHeadBoundaryProvider` prototypes, with handle-redirection test.
-  - [ ] O3: own-property predicate lookup in both guard paths, with inherited-key test.
+  - [x] O3: own-property predicate lookup in both guard paths, with inherited-key test.
   - [x] O6: freeze `PROFILE_IDS` and `CONSUMER_REQUIREMENTS`, with planting test.
-  - [ ] Adapt the joined-receipt outer-failure test to typed-error discipline (rebased `expectCode` has no message fallback).
+  - [x] Adapt the joined-receipt outer-failure test to typed-error discipline (rebased `expectCode` has no message fallback).
   - [ ] Lot gate:
     - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
     - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
