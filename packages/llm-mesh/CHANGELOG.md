@@ -23,6 +23,15 @@
   routing target and council listing (owner request 2026-10-14); same
   `gemini-3.8-flash` pattern (`gemini-4-argon-low|medium|high` resolve per
   effort through the generic Cloud Code wire suffix, no transport change).
+- Argon/Wonder serving table (owner request 2026-10-15, Artificial Analysis
+  Intelligence Index read 2026-10-15): the cloud slot serves `gemini-4-argon`
+  at high effort for Opus 5.5 (base/medium/high/xhigh/max), Sonnet 5.5
+  (high/xhigh/max) and every Fable 5.1 row (Opus 5.5 low + Sonnet 5.5 medium
+  keep 3.8 Flash high, Sonnet 5.5 low moves to 3.8 Flash medium); the muse
+  slot serves `muse-wonder-full-1.0` on Opus 5-5 max/xhigh + Sonnet 5-5 max,
+  `muse-wonder-1.0` on Opus 5-5 base/medium/high + Sonnet 5-5 xhigh + every
+  Fable 5.1 row, Spark kept elsewhere. Muse efforts and the named-400
+  capability rule unchanged.
 - **Rupture:** `admitRoute` requires `subject` (budget admission). This
   required field justifies the minor bump.
 - Codex device-flow network tolerance: poll + token-exchange retry (3
