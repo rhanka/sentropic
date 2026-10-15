@@ -974,23 +974,48 @@ describe('K3 runtime: single-apply dependents and commit races', () => {
     expect(await first.readHead('belongs-to-B')).toBe(null);
   });
 
-  it('K3-FIX joined calls share the final outer receipt', async () => {
+  it('K3-FIX4 joined calls get a frozen provisional copy, the outer the final (m2)', async () => {
     const bound = bindKernel();
-    let shared: CommitReceipt | null = null;
+    let provisional: CommitReceipt | null = null;
     const outer = await bound.transact({}, async () => {
       const inner = await bound.transact({}, async (tx) => {
         await tx.apply(appendUnit('snap-chain', 'p1', 'hash-snap-1', null));
         return 'inner';
       });
-      shared = inner.receipt;
+      provisional = inner.receipt;
       // Before the outer commit: the reserved commit id with zero effects.
       expect(inner.receipt.effectiveAppends).toBe(0);
+      expect(Object.isFrozen(inner.receipt)).toBe(true);
       return 'outer';
     });
-    // After the outer commit the same object reads the final counts.
-    expect(shared).toBe(outer.receipt);
-    expect(shared?.commitId).toBe(outer.receipt.commitId);
-    expect(shared?.effectiveAppends).toBe(1);
+    // The joined caller keeps its own frozen copy: same commit id, never
+    // the shared mutable object, still reading the provisional counts.
+    expect(provisional).not.toBe(outer.receipt);
+    expect(provisional?.commitId).toBe(outer.receipt.commitId);
+    expect(provisional?.effectiveAppends).toBe(0);
+    expect(Object.isFrozen(outer.receipt)).toBe(true);
+    expect(outer.receipt.effectiveAppends).toBe(1);
+  });
+
+  it('K3-FIX4 a joined receipt copy cannot rewrite the outer receipt (m2)', async () => {
+    const bound = bindKernel();
+    const outer = await bound.transact({}, async () => {
+      const inner = await bound.transact({}, async (tx) => {
+        await tx.apply(appendUnit('snap-copy-chain', 'k1', 'hash-snap-copy-1', null));
+        return 'inner';
+      });
+      // Negative control: without the frozen copy this assignment holds and
+      // the outer receipt below reads the forged values.
+      expect(() => {
+        (inner.receipt as unknown as Record<string, unknown>)['commitId'] = 'forged-after';
+      }).toThrow();
+      expect(() => {
+        (inner.receipt as unknown as Record<string, unknown>)['effectiveAppends'] = 99;
+      }).toThrow();
+      return 'outer';
+    });
+    expect(outer.receipt.commitId).not.toBe('forged-after');
+    expect(outer.receipt.effectiveAppends).toBe(1);
   });
 
   it('K3-FIX a failed outer leaves the joined receipt uncommitted', async () => {

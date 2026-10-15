@@ -67,6 +67,12 @@ export const ORDINARY_PROFILES: readonly ProfileClaim[] = [
   { profile: 'immutable-boundaries-v1', version: '1', digest: profileDigest('immutable-boundaries-v1') },
 ];
 
+// Frozen capability advertisements (m1): the array and every declaration
+// are sealed, so planting an entry through one handle can never widen what
+// another handle advertises.
+for (const entry of ORDINARY_PROFILES) Object.freeze(entry);
+Object.freeze(ORDINARY_PROFILES);
+
 const deepCopyGrant = (grant: ScopeGrant<unknown>): ScopeGrant<unknown> =>
   JSON.parse(JSON.stringify(grant)) as ScopeGrant<unknown>;
 
@@ -328,12 +334,15 @@ export class ScopedRuntime {
       joined.contributors.set(this.grant.token, this.grant);
       try {
         const value = await operation(this.makeTx(joined));
-        // Shared final receipt (m4): the joined call returns the outer
-        // commit's receipt object itself. It reads the reserved commit id
-        // with zero effects before the outer commits, and the final counts
-        // after. A reserved commit id that never commits means the outer
-        // failed (§5.5: the callback result returns only after commit).
-        return { value, receipt: joined.receipt };
+        // Provisional receipt copy (m2): the joined call returns a frozen
+        // snapshot of the reserved commit (zero effects before the outer
+        // commits), never the shared mutable receipt object. A reserved
+        // commit id that never commits means the outer failed (§5.5: the
+        // callback result returns only after commit).
+        const provisional: CommitReceipt = { ...joined.receipt, scope: { ...joined.receipt.scope } };
+        Object.freeze(provisional.scope);
+        Object.freeze(provisional);
+        return { value, receipt: provisional };
       } catch (error) {
         joined.rollbackOnly = true;
         joined.savedError = error;
@@ -373,7 +382,13 @@ export class ScopedRuntime {
         predicates: this.#deps.predicates,
       });
       Object.assign(overlay.receipt, committed);
-      return { value, receipt: overlay.receipt };
+      // Final receipt copy (m2): the outer commit returns its own frozen
+      // snapshot, so a joined contributor holding a provisional copy can
+      // never rewrite the committed counts.
+      const finalReceipt: CommitReceipt = { ...overlay.receipt, scope: { ...overlay.receipt.scope } };
+      Object.freeze(finalReceipt.scope);
+      Object.freeze(finalReceipt);
+      return { value, receipt: finalReceipt };
     } catch (error) {
       if (!overlay.rollbackOnly) {
         overlay.rollbackOnly = true;
