@@ -255,4 +255,19 @@ describe('K3 binding: revalidation and capabilities', () => {
     expect(profiles).toContain('immutable-boundaries-v1');
     expect(() => bound.capability('staged-units-v1' as never)).toThrow();
   });
+
+  it('K3-FIX4 ordinary profiles are frozen against cross-handle planting (m1)', async () => {
+    const kernel = createKernel({ moduleId: 'comments' });
+    const planter = kernel.bindNew(grantFor({ token: 'token-prof4-planter' }));
+    const witness = kernel.bindNew(grantFor({ token: 'token-prof4-witness' }));
+    // Negative control: without the freeze the push below holds and the
+    // planted profile becomes advertisable on the witness handle.
+    expect(Object.isFrozen(planter.profiles)).toBe(true);
+    for (const entry of planter.profiles) expect(Object.isFrozen(entry)).toBe(true);
+    expect(() => {
+      (planter.profiles as unknown as unknown[]).push({ profile: 'fenced-writers-v1', version: '1', digest: 'planted' });
+    }).toThrow();
+    expect(() => witness.capability('fenced-writers-v1' as never)).toThrow();
+    expect(witness.profiles.map((entry) => entry.profile)).toEqual(['atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1']);
+  });
 });
