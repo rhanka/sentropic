@@ -7,7 +7,7 @@
 - [x] Fix the opus r3 findings (1 BLOQUANT, 2 MAJEUR, 9 MINEUR) on draft PR #670 with CI green and no reserves (fix3 pass, Lot 7).
 
 ## Scope / Guardrails
-- [x] Scope limited to K3 runtime files and K3 specs plus the K3 report (merge-only intakes via BR-K3-EX1/EX2).
+- [x] Scope limited to K3 runtime files and K3 specs plus the K3 report (merge-only intakes via BR-K3-EX1/EX2, O6 catalogue freeze via BR-K3-EX3).
 - [x] Make-only workflow, no direct Docker commands.
 - [x] Root workspace ~/src/sentropic is reserved for user dev/UAT (ENV=dev) and must remain stable.
 - [x] Branch development happens in worktree tmp/worktrees/cluster-mesh-storage-k3.
@@ -87,6 +87,7 @@
 - [x] `BR-K3-EX1` — Merge-only intake of `origin/feat/cluster-mesh-storage-k2b` (#669 r2, opus §1). Reason: K3 is stacked on K2b and must carry the R3 resume fix, the `readers.ts` envelope floor, the disposal evidence and the corpus deltas; `readers.ts` is otherwise forbidden on K3. Impact: K2b-owned files only (`readers.ts`, `reference-store.ts`, `read-corpus.ts`, `atomic-corpus.ts`, staged/replay/barrier/lifecycle corpora, `mutations.spec.ts`, `profile-mutations.spec.ts`, `reference.spec.ts`, `reference-staged.ts`); no K3 runtime hand-edits outside allowed paths; `BRANCH.md` conflict resolved by keeping the K3 version. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
 - [ ] `BR-K3-DISC3` — Opus fix files land as one coherent file per commit when they exceed 150 lines (single review unit per finding; `BR-K3-DISC2` precedent); all other fix commits stay under 150 lines with `BRANCH.md` in-commit.
 - [x] `BR-K3-EX2` — Merge-only intake of `origin/main` into K3 (opus r3 M1; PR #670 `CONFLICTING`). Reason: the PR targets `main` and needs PR CI plus mergeability. Impact: `Makefile` plus `.github/workflows/ci.yml` taken verbatim from `main` with no hand-edits (forbidden paths); `BRANCH.md` conflict resolved by keeping the K3 version; all other main files merged normally. Rollback: `git revert -m 1` the merge; K3 runtime untouched by the merge itself.
+- [x] `BR-K3-EX3` — R5 observation O6: freeze the exported `PROFILE_IDS` and `CONSUMER_REQUIREMENTS` in `packages/cluster-mesh/src/storage/profiles.ts` (forbidden path). Reason: the r5 review mandates freezing the kernel-owned public catalogues before any public subpath exposure, same realm limit as Sol-1. Impact: four runtime `Object.freeze` lines only, no type or API change (`includes`/`filter`/indexing behavior unchanged); one planting test in the allowed `scope-runtime.spec.ts`. Rollback: remove the freeze block; catalogues return to mutable exports.
 - [x] `BR-K3-CI-R3` — CI run `38490269426` (`workflow_dispatch`, HEAD `1d2bfea8e`): `validate-cluster-mesh` failure is branch-related (B1 unhandled rejection, `StorageInvalidCommandError: transaction closed` from `kernel.spec.ts:655`), fixed in Lot 7 and verified green in PR run `38494759359`, never flaky-accepted.
 - [ ] `BR-K3-FIX4` — Fix4 round (owner decision 2026-10-14, one targeted round beyond the review cap): exactly the 4 tour-3 lift conditions (seal freeze plus tests (a)(b)(c) with negative controls; profiles freeze plus receipt copies; doc corrections with realm limit; K3M5..M7 seam execution); report `.h2a/build/k3_fix4_report.md` untracked; never merge.
 - [ ] `BR-K3-CI-AI` — CI run `38490269426`: `test-api-unit-integration (ai, chat-sync,executive-summary-auto,comment-assistant)` failure is provider/model nondeterminism on the AI flaky list (`rules/testing.md`); K3 touches no API file; recorded pending owner sign-off before merge. Fix3 note: the same suite passed on `e59b2af8f` in PR run `38494759359`.
@@ -257,4 +258,21 @@
     - [x] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (143/143 seal, 145/145 profiles/receipts, 148/148 seam)
     - [x] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (546 passed, 0 failed, exit 0)
     - [x] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (PASS C2 before each fix4 commit)
+    - [ ] CI green on PR #670 with no reserves.
+- [ ] **Lot 10 — R5 reserves pass (r5 review, PR #670)**
+  - [ ] m1: type and document the joined provisional receipt (`transact` JSDoc); fix stale header and commit comments.
+  - [ ] m2: check the Lot 9 seal-comment box above (seal comment, Sol-1 line, fix4 report and realm limit corrected).
+  - [ ] m3: mark the `k3_fix3_report.md` Sol-1 claim as superseded (untracked file).
+  - [ ] n1: correct the seal comment last sentence (inline revalidation, direct frozen-scope addressing).
+  - [ ] n2: correct the fix4 report seal-comment line reference (untracked file).
+  - [x] O1: freeze `MemoryBackend` and `HmacExactHeadBoundaryProvider` prototypes, with handle-redirection test.
+  - [ ] O3: own-property predicate lookup in both guard paths, with inherited-key test.
+  - [x] O6: freeze `PROFILE_IDS` and `CONSUMER_REQUIREMENTS`, with planting test.
+  - [ ] Adapt the joined-receipt outer-failure test to typed-error discipline (rebased `expectCode` has no message fallback).
+  - [ ] Lot gate:
+    - [x] `make typecheck-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make lint-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make test-cluster-mesh SCOPE=tests/storage/ API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make test-cluster-mesh API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3`
+    - [ ] `make scope-check API_PORT=9515 UI_PORT=5715 MAILDEV_UI_PORT=1615 ENV=test-cm-k3` (advisory FAIL C2 on `profiles.ts` under owner-mandated `BR-K3-EX3`; harness excuses conditional paths only, CI does not gate on scope-check)
     - [ ] CI green on PR #670 with no reserves.
