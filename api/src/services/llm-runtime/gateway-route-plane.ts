@@ -77,6 +77,9 @@ const withExecutionFeatureSupport = (planner: RoutePlanner): RoutePlanner => ({
       throw new RoutePlanError(
         `application runtime does not support execution features: ${unsupported.join(', ')}`,
         'capabilities-unmet',
+        undefined,
+        undefined,
+        unsupported,
       );
     }
     return planner.plan(subject, input);

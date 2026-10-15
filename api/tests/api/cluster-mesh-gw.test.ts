@@ -296,6 +296,33 @@ describe('cluster mesh gateway namespace', () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  // R7-MAJ-1 (spec §16.7): the product plan refusal carries the cause — the
+  // HTTP body names it (`unsupported_parameter` + `reasoning`) without dispatch.
+  it('names the unmet execution feature on POST /api/v1/gw/responses (R7-MAJ-1)', async () => {
+    const cost = { tenantId: TENANT, workspaceId: `${TENANT}-ws`, principalId: 'user-1',
+      ownerScopeRef: `workspace:${TENANT}-ws:principal:user-1`, source: 'test', correlationId: 'request-1' };
+    const generate = vi.fn();
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate, stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller: () => cost,
+      })],
+    }));
+    await activate(R1);
+    const response = await app.request('/api/v1/gw/responses', { method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-5.6-terra', input: 'hello', reasoning: { effort: 'high' } }) });
+    expect(response.status).toBe(400);
+    const body = await response.json() as { error: { type: string; code: string; param: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('unsupported_parameter');
+    expect(body.error.param).toBe('reasoning');
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it('fails the unavailable gateway module closed on both Responses aliases', async () => {
     const registry = createClusterMeshModules();
     const broken = {
