@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { createKernel } from '../../src/storage/kernel.js';
 import type { ScopedRuntime } from '../../src/storage/scope-runtime.js';
-import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from '../../src/storage/tokens.js';
+import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider, type ChainBoundaryRecord, type CursorVerification } from '../../src/storage/tokens.js';
+import type { StorageScope } from '../../src/storage/contracts.js';
 import type { AtomicUnit, CommitReceipt } from '../../src/storage/atomic.js';
 import { appendChainToScope, disposeChainInScope } from '../../src/storage/record-runtime.js';
 import { createBackendScopeState } from '../../src/storage/backend.js';
@@ -803,6 +804,103 @@ describe('K3 seal mutants: cross-boundary cursor reuse', () => {
     );
     await sealSetup(foreignBound);
     await expectCode(() => foreignBound.readPage('seal-chain', 10, owned, 4096), 'invalid-command', 'K3M7: a cross-workspace cursor is refused');
+  });
+});
+
+describe('K3 seal mutants executed via provider seam (K3M5..K3M7)', () => {
+  // A ChainBoundaryProvider that delegates every seal to the HMAC reference
+  // but neutralizes one binding dimension at mint and verify time: the
+  // mutant accepts cross-boundary reuse (page) where the reference refuses
+  // (invalid-command, proved by the three tests above). Each test below
+  // executes its mutant in-suite through the kernel boundaryProvider seam.
+  class ConstantBindingProvider implements ChainBoundaryProvider {
+    constructor(
+      private readonly inner: HmacExactHeadBoundaryProvider,
+      private readonly dimension: 'module' | 'tenant' | 'workspace',
+    ) {}
+
+    private neutralScope(scope: StorageScope): StorageScope {
+      return {
+        tenantId: this.dimension === 'tenant' ? 'mutant-constant-tenant' : scope.tenantId,
+        workspaceId: this.dimension === 'workspace' ? 'mutant-constant-workspace' : scope.workspaceId,
+      };
+    }
+
+    mint(record: ChainBoundaryRecord): string {
+      return this.inner.mint({
+        ...record,
+        moduleId: this.dimension === 'module' ? 'mutant-constant-module' : record.moduleId,
+        scope: this.neutralScope(record.scope),
+      });
+    }
+
+    verify(
+      selection: string,
+      cursor: unknown,
+      opts: { readonly moduleId: string; readonly scope: StorageScope; readonly incarnation: string },
+    ): CursorVerification {
+      return this.inner.verify(selection, cursor, {
+        moduleId: this.dimension === 'module' ? 'mutant-constant-module' : opts.moduleId,
+        scope: this.neutralScope(opts.scope),
+        incarnation: opts.incarnation,
+      });
+    }
+  }
+
+  const mutantSetup = async (bound: ScopedRuntime): Promise<void> => {
+    await bound.appendChain('mutant-seal-chain', { id: 'm1', bytes: '{}', hash: 'hash-mutant-m1' }, { kind: 'absent', allocation: '0' });
+    await bound.appendChain('mutant-seal-chain', { id: 'm2', bytes: '{}', hash: 'hash-mutant-m2' }, { kind: 'head', hash: 'hash-mutant-m1' });
+  };
+
+  it('K3M5-minus-module mutant accepts cross-module reuse (kill proof)', async () => {
+    const secret = 'k3-test-secret-mutant-m5';
+    const incarnation = 'store-mutant-m5';
+    const mutant = new ConstantBindingProvider(new HmacExactHeadBoundaryProvider(secret), 'module');
+    const home = createKernel({ moduleId: 'comments', incarnation, boundaryProvider: mutant });
+    const foreign = createKernel({ moduleId: 'engram-live', incarnation, boundaryProvider: mutant });
+    const bound = home.bindNew(writeGrant('token-mutant-m5-a'));
+    await mutantSetup(bound);
+    const owned = ((await bound.readPage('mutant-seal-chain', 1, null, 4096)).nextCursor) as unknown as string;
+    const foreignBound = foreign.bindNew(grantFor({ token: 'token-mutant-m5-b', moduleId: 'engram-live' }));
+    await mutantSetup(foreignBound);
+    // The weakened seal verifies across modules: page, never a refusal.
+    const resumed = await foreignBound.readPage('mutant-seal-chain', 10, owned, 4096);
+    expect(resumed.outcome).toBe('page');
+    expect(resumed.records.map((entry) => entry.hash)).toEqual(['hash-mutant-m2']);
+  });
+
+  it('K3M6-minus-tenant mutant accepts cross-tenant reuse (kill proof)', async () => {
+    const secret = 'k3-test-secret-mutant-m6';
+    const incarnation = 'store-mutant-m6';
+    const mutant = new ConstantBindingProvider(new HmacExactHeadBoundaryProvider(secret), 'tenant');
+    const kernel = createKernel({ moduleId: 'comments', incarnation, boundaryProvider: mutant });
+    const bound = kernel.bindNew(writeGrant('token-mutant-m6-a'));
+    await mutantSetup(bound);
+    const owned = ((await bound.readPage('mutant-seal-chain', 1, null, 4096)).nextCursor) as unknown as string;
+    const foreignBound = kernel.bindNew(
+      grantFor({ token: 'token-mutant-m6-b', scope: { tenantId: 'tenant-b', workspaceId: 'workspace-a' } }),
+    );
+    await mutantSetup(foreignBound);
+    const resumed = await foreignBound.readPage('mutant-seal-chain', 10, owned, 4096);
+    expect(resumed.outcome).toBe('page');
+    expect(resumed.records.map((entry) => entry.hash)).toEqual(['hash-mutant-m2']);
+  });
+
+  it('K3M7-minus-workspace mutant accepts cross-workspace reuse (kill proof)', async () => {
+    const secret = 'k3-test-secret-mutant-m7';
+    const incarnation = 'store-mutant-m7';
+    const mutant = new ConstantBindingProvider(new HmacExactHeadBoundaryProvider(secret), 'workspace');
+    const kernel = createKernel({ moduleId: 'comments', incarnation, boundaryProvider: mutant });
+    const bound = kernel.bindNew(writeGrant('token-mutant-m7-a'));
+    await mutantSetup(bound);
+    const owned = ((await bound.readPage('mutant-seal-chain', 1, null, 4096)).nextCursor) as unknown as string;
+    const foreignBound = kernel.bindNew(
+      grantFor({ token: 'token-mutant-m7-b', scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' } }),
+    );
+    await mutantSetup(foreignBound);
+    const resumed = await foreignBound.readPage('mutant-seal-chain', 10, owned, 4096);
+    expect(resumed.outcome).toBe('page');
+    expect(resumed.records.map((entry) => entry.hash)).toEqual(['hash-mutant-m2']);
   });
 });
 
