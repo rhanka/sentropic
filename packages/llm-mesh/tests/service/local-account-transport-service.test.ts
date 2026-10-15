@@ -1168,7 +1168,7 @@ describe('LocalAccountTransportService', () => {
 
   it('lets the standard alias target effort override the request effort', async () => {
     expect(LAUNCH_ALIAS_TARGET_MAPPINGS['claude-opus-5-5'])
-      .toMatchObject({ providerId: 'muse', model: 'muse-spark-1.3-contributor' });
+      .toMatchObject({ providerId: 'muse', model: 'muse-wonder-1.0' });
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
     );
@@ -1284,11 +1284,11 @@ describe('LocalAccountTransportService', () => {
       },
       {
         accountId: 'cloud-account', targetProviderId: 'gemini',
-        transportProviderId: 'cloud-code', modelIds: ['gemini-3.8-flash'],
+        transportProviderId: 'cloud-code', modelIds: ['gemini-4-argon'],
       },
       {
         accountId: 'muse-account', targetProviderId: 'muse',
-        transportProviderId: 'muse', modelIds: ['muse-spark-1.3-contributor'],
+        transportProviderId: 'muse', modelIds: ['muse-wonder-1.0'],
       },
       {
         accountId: 'sol-account', targetProviderId: 'openai',
