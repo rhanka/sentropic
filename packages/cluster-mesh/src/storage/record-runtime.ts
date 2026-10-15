@@ -268,7 +268,10 @@ const checkGuards = (guards: AtomicUnit['guards'], staged: StagedCommit, ctx: Co
       if (!nonEmpty(guard.predicateId) || !nonEmpty(guard.dependency)) {
         throw new StorageInvalidCommandError('predicate guard requires an id and dependency');
       }
-      const evaluator = ctx.predicates?.[guard.predicateId];
+      // Own-property lookup only (O3): an inherited key such as
+      // 'constructor' must read as unregistered, never as an evaluator.
+      const evaluator =
+        ctx.predicates !== undefined && Object.hasOwn(ctx.predicates, guard.predicateId) ? ctx.predicates[guard.predicateId] : undefined;
       if (!evaluator) throw new UnsupportedProfileError(`predicate:${guard.predicateId}`);
       if (
         !evaluator(guard.dependency, {
