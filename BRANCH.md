@@ -160,7 +160,7 @@
 - [ ] Lot N — Final validation
   - [x] Typecheck and Lint
   - [x] Retest cluster-mesh
-  - [x] Bumped packages/cluster-mesh/package.json version to 0.15.0 (proposal, not published).
+  - [x] Bumped packages/cluster-mesh/package.json version to 0.17.0 (post-rebase gate: npm 0.15.0, main 0.15.0, PR #662 holds 0.16.0; proposal, not published).
   - [x] make scope-check API_PORT=9495 UI_PORT=5695 MAILDEV_UI_PORT=1595 ENV=test-cm-storage
   - [x] Final gate step 1: push branch and open DRAFT PR to main using BRANCH.md text as PR body (never merge).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
