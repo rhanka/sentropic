@@ -550,7 +550,7 @@ describe('opaque route planner', () => {
         {
           accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
           targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-          supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          supportedModelIds: ['gemini-4-argon'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
           readiness: 'ready', revision: 'r1',
         },
       ]);
@@ -563,12 +563,12 @@ describe('opaque route planner', () => {
         routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
       )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope });
 
-      // The suppressed Sol route yields to the healthy Flash route.
+      // The suppressed Sol route yields to the healthy Argon route.
       const fallback = await planner.plan(routingSubject(), {
         requestedModel: 'claude-opus-5-5',
       });
       expect(fallback.diagnostics[0]).toMatchObject({
-        actualProviderId: 'gemini', actualModelId: 'gemini-3.8-flash', reason: 'alias',
+        actualProviderId: 'gemini', actualModelId: 'gemini-4-argon', reason: 'alias',
       });
       await (await planner.prepareAttempt(
         routingSubject(), fallback.planRef, fallback.candidateRefs[0]!, 'req-2', 0,

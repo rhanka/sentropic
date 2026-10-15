@@ -267,7 +267,7 @@ describe('pure route quote', () => {
     expect(quote.requestedModel).toBe('claude-opus-5-5');
     expect(quote.candidates).toEqual([
       {
-        providerId: 'muse', modelId: 'muse-spark-1.3-contributor',
+        providerId: 'muse', modelId: 'muse-wonder-1.0',
         transportProviderId: 'muse', reason: 'alias',
         allowance: { inputTokens: 1_000, outputTokens: 100_000 },
         outputCeilingEnforced: true,
@@ -280,7 +280,7 @@ describe('pure route quote', () => {
         outputCeilingEnforced: false,
       },
       {
-        providerId: 'gemini', modelId: 'gemini-3.8-flash',
+        providerId: 'gemini', modelId: 'gemini-4-argon',
         transportProviderId: 'cloud-code', reason: 'alias',
         allowance: { inputTokens: 1_000, outputTokens: 65_536 },
         outputCeilingEnforced: true,
@@ -326,9 +326,9 @@ describe('pure route quote', () => {
     const expanded = quoteRoute(quoteInput('claude-opus-5-5'), { council });
     expect(expanded.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
       .toEqual([
-        'muse/muse-spark-1.3-contributor',
+        'muse/muse-wonder-1.0',
         'openai/gpt-6.1-sol',
-        'gemini/gemini-3.8-flash',
+        'gemini/gemini-4-argon',
         'mistral/zai-glm-5-3',
         'openai/gpt-6-luna',
       ]);

@@ -382,13 +382,13 @@ describe('route candidate selection', () => {
       {
         accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
+        supportedModelIds: ['gemini-4-argon'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {
         accountRef: 'muse-internal', diagnosticAccountRef: 'muse-redacted',
         targetProviderId: 'muse', transportProviderId: 'muse',
-        supportedModelIds: ['muse-spark-1.3-contributor'],
+        supportedModelIds: ['muse-wonder-1.0'],
         enrollmentCompletedAt: '2026-08-05T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
@@ -418,7 +418,7 @@ describe('route candidate selection', () => {
     expect(candidates).toHaveLength(3);
     expect(candidates[0]?.target).toMatchObject({
       requestedModel: 'claude-opus-5-5',
-      providerId: 'muse', modelId: 'muse-spark-1.3-contributor',
+      providerId: 'muse', modelId: 'muse-wonder-1.0',
       transportProviderId: 'muse', reason: 'alias',
     });
     expect(candidates.map((candidate) => candidate.account.diagnosticAccountRef))
@@ -511,7 +511,7 @@ describe('route candidate selection', () => {
     const cloudReady = {
       ...solReady, accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
       targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-      supportedModelIds: ['gemini-3.8-flash'],
+      supportedModelIds: ['gemini-4-argon'],
     };
     const selectAlias = (
       extra: {
@@ -556,7 +556,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'muse-internal', diagnosticAccountRef: 'muse-redacted',
         targetProviderId: 'muse', transportProviderId: 'muse',
-        supportedModelIds: ['muse-spark-1.3-contributor'],
+        supportedModelIds: ['muse-wonder-1.0'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
@@ -569,7 +569,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
+        supportedModelIds: ['gemini-4-argon'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
     ];
