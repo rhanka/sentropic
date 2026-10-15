@@ -301,8 +301,11 @@ describe('canonical model targets', () => {
       };
       const expectedPrimaryModel = candidates[0]?.model ?? '';
       expect(candidates[0]).toMatchObject(expectedPrimary);
+      const definition = STANDARD_ROUTE_DEFINITIONS.find(
+        (entry) => entry.requestedId === alias,
+      );
       expect(candidates).toContainEqual(expect.objectContaining({
-        providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
+        providerId: 'gemini', transportProviderId: 'cloud-code', model: definition?.cloudModel,
       }));
       expect(descriptions.find((route) => route.requestedId === alias))
         .toMatchObject({
@@ -360,7 +363,7 @@ describe('canonical model targets', () => {
       const candidates = resolveCandidates(alias);
       expect(candidates[1]).toEqual({
         providerId: 'muse', transportProviderId: 'muse',
-        model: 'muse-spark-1.3-contributor', effort: muse,
+        model: 'muse-wonder-1.0', effort: muse,
       });
       expect(candidates[2]).toEqual({
         providerId: 'openai', transportProviderId: 'codex',
@@ -368,7 +371,7 @@ describe('canonical model targets', () => {
       });
       expect(candidates[3]).toEqual({
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-3.8-flash', effort: 'high',
+        model: 'gemini-4-argon', effort: 'high',
       });
     }
   });
@@ -543,7 +546,18 @@ describe('canonical model targets', () => {
     });
   });
 
-  it('routes every Claude tier to 3.8 Flash on the Cloud Code transport', () => {
+  it('routes every Claude tier to its mapped Cloud Code model', () => {
+    // Argon rows (owner request 2026-10-15): Opus 5.5 base/medium/high/xhigh/max,
+    // Sonnet 5.5 high/xhigh/max and every Fable 5.1 row serve Gemini 4 Argon at
+    // high effort; Sonnet 5.5 low keeps 3.8 Flash at medium effort; every other
+    // row keeps 3.8 Flash at high effort.
+    const argonHigh = new Set([
+      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
+      'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
+      'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
+      'claude-opus-5-5-max', 'claude-opus-5-5-medium',
+      'claude-sonnet-5-5-high', 'claude-sonnet-5-5-xhigh', 'claude-sonnet-5-5-max',
+    ]);
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
       'claude-opus-5-max', 'claude-opus-5-medium', 'claude-opus-5-low',
@@ -553,15 +567,17 @@ describe('canonical model targets', () => {
       'claude-sonnet-5-low', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
-      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
-      'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
-      'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
-      'claude-opus-5-5-max', 'claude-opus-5-5-medium', 'claude-opus-5-5-low',
-      'claude-sonnet-5-5', 'claude-sonnet-5-5-high', 'claude-sonnet-5-5-xhigh',
-      'claude-sonnet-5-5-max', 'claude-sonnet-5-5-medium', 'claude-sonnet-5-5-low',
+      ...argonHigh,
+      'claude-opus-5-5-low',
+      'claude-sonnet-5-5', 'claude-sonnet-5-5-medium', 'claude-sonnet-5-5-low',
     ];
 
     for (const alias of aliases) {
+      const expected = argonHigh.has(alias)
+        ? { model: 'gemini-4-argon', effort: 'high' }
+        : alias === 'claude-sonnet-5-5-low'
+          ? { model: 'gemini-3.8-flash', effort: 'medium' }
+          : { model: 'gemini-3.8-flash', effort: 'high' };
       const candidates = resolveCandidates(alias);
       const cloudCodeTargets = candidates.filter(
         ({ transportProviderId }) => transportProviderId === 'cloud-code',
@@ -570,12 +586,12 @@ describe('canonical model targets', () => {
       expect(cloudCodeTargets[0]).toMatchObject({
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.8-flash',
+        ...expected,
       });
       expect(resolveTargetCapabilitySource(cloudCodeTargets[0]!)).toMatchObject({
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.8-flash',
+        ...expected,
       });
     }
   });
@@ -639,10 +655,10 @@ describe('canonical model targets', () => {
     );
   });
 
-  it('routes claude-opus-5-5 through muse, Sol 6.1 and Flash without a faithful target', () => {
+  it('routes claude-opus-5-5 through Wonder, Sol 6.1 and Argon without a faithful target', () => {
     const muse = {
       providerId: 'muse', transportProviderId: 'muse',
-      model: 'muse-spark-1.3-contributor', effort: 'high',
+      model: 'muse-wonder-1.0', effort: 'high',
     };
     const codex = {
       providerId: 'openai', transportProviderId: 'codex',
@@ -650,7 +666,7 @@ describe('canonical model targets', () => {
     };
     const cloud = {
       providerId: 'gemini', transportProviderId: 'cloud-code',
-      model: 'gemini-3.8-flash', effort: 'high',
+      model: 'gemini-4-argon', effort: 'high',
     };
     const glm = {
       providerId: 'mistral', transportProviderId: 'mistral-vibe',
@@ -667,11 +683,11 @@ describe('canonical model targets', () => {
       ]);
   });
 
-  it('routes claude-opus-5-5-max through Astra max with a muse max candidate', () => {
+  it('routes claude-opus-5-5-max through Astra max with a Wonder Full max candidate', () => {
     expect(resolveCandidates('claude-opus-5-5-max')).toEqual([
       {
         providerId: 'muse', transportProviderId: 'muse',
-        model: 'muse-spark-1.3-contributor', effort: 'max',
+        model: 'muse-wonder-full-1.0', effort: 'max',
       },
       {
         providerId: 'openai', transportProviderId: 'codex',
@@ -679,7 +695,7 @@ describe('canonical model targets', () => {
       },
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-3.8-flash', effort: 'high',
+        model: 'gemini-4-argon', effort: 'high',
       },
       {
         providerId: 'mistral', transportProviderId: 'mistral-vibe',
@@ -692,13 +708,29 @@ describe('canonical model targets', () => {
     const plusOne: Readonly<Record<string, string>> = {
       base: 'high', high: 'xhigh', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
     };
+    // Muse slot (owner request 2026-10-15): Wonder Full on max, Wonder on xhigh,
+    // Spark kept on base/high/medium/low. Cloud slot: Argon high on
+    // high/xhigh/max, 3.8 Flash high on base/medium, 3.8 Flash medium on low.
+    const museModel: Readonly<Record<string, string>> = {
+      base: 'muse-spark-1.3-contributor', high: 'muse-spark-1.3-contributor',
+      xhigh: 'muse-wonder-1.0', max: 'muse-wonder-full-1.0',
+      medium: 'muse-spark-1.3-contributor', low: 'muse-spark-1.3-contributor',
+    };
+    const cloud: Readonly<Record<string, { model: string; effort: string }>> = {
+      base: { model: 'gemini-3.8-flash', effort: 'high' },
+      high: { model: 'gemini-4-argon', effort: 'high' },
+      xhigh: { model: 'gemini-4-argon', effort: 'high' },
+      max: { model: 'gemini-4-argon', effort: 'high' },
+      medium: { model: 'gemini-3.8-flash', effort: 'high' },
+      low: { model: 'gemini-3.8-flash', effort: 'medium' },
+    };
     for (const [suffix, effort] of Object.entries(plusOne)) {
       const alias = suffix === 'base' ? 'claude-sonnet-5-5' : `claude-sonnet-5-5-${suffix}`;
       const glmEffort = suffix === 'high' || suffix === 'xhigh' || suffix === 'max' ? 'max' : 'high';
       expect(resolveCandidates(alias)).toEqual([
         {
           providerId: 'muse', transportProviderId: 'muse',
-          model: 'muse-spark-1.3-contributor', effort,
+          model: museModel[suffix], effort,
         },
         {
           providerId: 'openai', transportProviderId: 'codex',
@@ -706,7 +738,7 @@ describe('canonical model targets', () => {
         },
         {
           providerId: 'gemini', transportProviderId: 'cloud-code',
-          model: 'gemini-3.8-flash', effort: 'high',
+          ...cloud[suffix],
         },
         {
           providerId: 'mistral', transportProviderId: 'mistral-vibe',
@@ -716,8 +748,49 @@ describe('canonical model targets', () => {
     }
     expect(resolve('claude-sonnet-5-5-max')).toEqual({
       providerId: 'muse', transportProviderId: 'muse',
-      model: 'muse-spark-1.3-contributor', effort: 'max',
+      model: 'muse-wonder-full-1.0', effort: 'max',
     });
+  });
+
+  it('maps the Argon/Wonder table on the muse and cloud slots (owner request 2026-10-15)', () => {
+    const spark = 'muse-spark-1.3-contributor';
+    const wonder = 'muse-wonder-1.0';
+    const wonderFull = 'muse-wonder-full-1.0';
+    const argon = { model: 'gemini-4-argon', effort: 'high' };
+    // [alias, muse model, muse effort, cloud model, cloud effort]
+    const rows: ReadonlyArray<readonly [string, string, string, string, string]> = [
+      ['claude-opus-5-5', wonder, 'high', argon.model, argon.effort],
+      ['claude-opus-5-5-high', wonder, 'xhigh', argon.model, argon.effort],
+      ['claude-opus-5-5-xhigh', wonderFull, 'max', argon.model, argon.effort],
+      ['claude-opus-5-5-max', wonderFull, 'max', argon.model, argon.effort],
+      ['claude-opus-5-5-medium', wonder, 'high', argon.model, argon.effort],
+      ['claude-opus-5-5-low', spark, 'medium', 'gemini-3.8-flash', 'high'],
+      ['claude-sonnet-5-5', spark, 'high', 'gemini-3.8-flash', 'high'],
+      ['claude-sonnet-5-5-high', spark, 'xhigh', argon.model, argon.effort],
+      ['claude-sonnet-5-5-xhigh', wonder, 'max', argon.model, argon.effort],
+      ['claude-sonnet-5-5-max', wonderFull, 'max', argon.model, argon.effort],
+      ['claude-sonnet-5-5-medium', spark, 'high', 'gemini-3.8-flash', 'high'],
+      ['claude-sonnet-5-5-low', spark, 'medium', 'gemini-3.8-flash', 'medium'],
+      ['claude-fable-5-1', wonder, 'max', argon.model, argon.effort],
+      ['claude-fable-5-1-high', wonder, 'max', argon.model, argon.effort],
+      ['claude-fable-5-1-xhigh', wonder, 'max', argon.model, argon.effort],
+      ['claude-fable-5-1-max', wonder, 'max', argon.model, argon.effort],
+      ['claude-fable-5-1-medium', wonder, 'high', argon.model, argon.effort],
+      ['claude-fable-5-1-low', wonder, 'medium', argon.model, argon.effort],
+    ];
+    for (const [alias, museModel, museEffort, cloudModel, cloudEffort] of rows) {
+      const byTransport = new Map(
+        resolveCandidates(alias).map((target) => [target.transportProviderId, target]),
+      );
+      expect(byTransport.get('muse'), `${alias} muse`).toEqual({
+        providerId: 'muse', transportProviderId: 'muse',
+        model: museModel, effort: museEffort,
+      });
+      expect(byTransport.get('cloud-code'), `${alias} cloud`).toEqual({
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: cloudModel, effort: cloudEffort,
+      });
+    }
   });
 
   it('keeps all four fallback transports for the 5.5 families on every muse position', () => {
