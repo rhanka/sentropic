@@ -5,9 +5,11 @@
 // transact() runs in a request-local asynchronous context: independent calls
 // stay isolated while a nested call on the same handle joins the outer
 // overlay and can only mark it rollback-only. The commit id is reserved
-// upfront so joined calls share one receipt; an empty transaction commits
-// nothing and is refused. Physically disposed chains deny full getters and
-// leak no continuation. Reads return copies, never canonical state.
+// upfront; a joined call returns a frozen provisional copy of the reserved
+// receipt (zero effects before the outer commits) and only the outer commit
+// returns the final counts. An empty transaction commits nothing and is
+// refused. Physically disposed chains deny full getters and leak no
+// continuation. Reads return copies, never canonical state.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
@@ -191,8 +193,11 @@ export class ScopedRuntime {
     // escalation, tenant-switch or method wrapping by property assignment
     // throws instead of redirecting authority. Intrinsic realm objects
     // (Array.prototype and friends) stay outside this guarantee: full
-    // isolation needs a realm or process boundary (spec §6.5). All internal
-    // paths read these sealed invariants through requireOperation.
+    // isolation needs a realm or process boundary (spec §6.5). Every
+    // operation re-attests authority and grant/scope equality through
+    // requireOperation; the commit-time contributor revalidation below is
+    // inline, and backend addressing reads the frozen boundScope directly
+    // (safe: frozen at bind, and the scope getter copies).
     Object.freeze(this);
   }
 
@@ -321,6 +326,16 @@ export class ScopedRuntime {
     });
   }
 
+  /** §5.5 ordinary transaction with kernel-bound join.
+   *
+   * A joined call (same kernel, module and scope) never receives the shared
+   * mutable receipt: it returns a frozen provisional copy carrying the
+   * reserved commit id with zero effects (`effectiveRecords` and
+   * `effectiveAppends` read 0 until the outer commits). Only the outer
+   * commit returns the final counts, likewise as a frozen copy, so a joined
+   * contributor holding a provisional copy can never rewrite them. A
+   * reserved commit id whose outer fails never commits.
+   */
   async transact<T>(options: CommitOptions, operation: (tx: KernelTransaction) => Promise<T>): Promise<{ readonly value: T; readonly receipt: CommitReceipt }> {
     this.requireOperation('write');
     const ambient = txScope.getStore();
@@ -349,8 +364,9 @@ export class ScopedRuntime {
         throw error;
       }
     }
-    // The commit id is reserved before the operation runs so every joined
-    // call shares the single receipt of the one commit that follows.
+    // The commit id is reserved before the operation runs; every joined call
+    // reports that id on its own frozen provisional copy, never the shared
+    // mutable receipt, and only the outer commit returns the final counts.
     const commitId = this.#deps.nextCommitId();
     const receipt: CommitReceipt = { commitId, moduleId: this.moduleId, scope: { ...this.boundScope }, committedAt: this.#deps.clock(), effectiveRecords: 0, effectiveAppends: 0, journalCursor: `cursor-${commitId}` };
     const overlay: TxOverlay = { units: [], heads: new Map(), created: new Set(), aggregateVersions: new Map(), aggregateWrites: new Map(), recordWrites: new Map(), chainAppends: new Map(), indexAppends: new Map(), rollbackOnly: false, savedError: null, closed: false, receipt, contributors: new Map([[this.grant.token, this.grant]]), scope: { ...this.boundScope } };
@@ -453,7 +469,10 @@ export class ScopedRuntime {
         if (!nonEmpty(guard.predicateId) || !nonEmpty(guard.dependency)) {
           throw new StorageInvalidCommandError('predicate guard requires an id and dependency');
         }
-        const evaluator = this.#deps.predicates?.[guard.predicateId];
+        // Own-property lookup only (O3): an inherited key such as
+        // 'constructor' must read as unregistered, never as an evaluator.
+        const registry = this.#deps.predicates;
+        const evaluator = registry !== undefined && Object.hasOwn(registry, guard.predicateId) ? registry[guard.predicateId] : undefined;
         if (!evaluator) throw new UnsupportedProfileError(`predicate:${guard.predicateId}`);
         if (!evaluator(guard.dependency, predicateContext(guard.predicateId))) {
           throw new StorageCasConflictError('predicate guard mismatch');

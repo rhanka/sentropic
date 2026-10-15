@@ -376,6 +376,33 @@ describe('K3 runtime: evaluated predicates', () => {
     );
     expect(await bound.readHead('pred-unknown')).toBe(null);
   });
+
+  it('K3-R5 an inherited predicate key is refused as unregistered (O3)', async () => {
+    const kernel = createKernel({ moduleId: 'comments', predicates: {} });
+    const bound = kernel.bindNew(writeGrant('token-pred-inherited-1'));
+    // Negative control: without the hasOwn guard 'constructor' resolves via
+    // the prototype chain to a truthy evaluator and both carriers commit.
+    const inheritedUnit = (chainId: string): AtomicUnit => ({
+      ...appendUnit(chainId, 'i1', 'hash-pred-inherited-1', null),
+      guards: [{ kind: 'predicate', predicateId: 'constructor', dependency: 'dep-x' }],
+    });
+    await expectCode(
+      async () => bound.commitAtomic(inheritedUnit('pred-inherited-commit')),
+      'unsupported-profile',
+      'K3-R5 predicates: an inherited key is refused at commitAtomic',
+    );
+    expect(await bound.readHead('pred-inherited-commit')).toBe(null);
+    await expectCode(
+      async () =>
+        bound.transact({}, async (tx) => {
+          await tx.apply(inheritedUnit('pred-inherited-tx'));
+          return 'ok';
+        }),
+      'unsupported-profile',
+      'K3-R5 predicates: an inherited key is refused at transact apply',
+    );
+    expect(await bound.readHead('pred-inherited-tx')).toBe(null);
+  });
 });
 
 describe('K3 runtime: transaction reads', () => {
@@ -1119,19 +1146,22 @@ describe('K3 runtime: single-apply dependents and commit races', () => {
   it('K3-FIX a failed outer leaves the joined receipt uncommitted', async () => {
     const bound = bindKernel();
     let shared: CommitReceipt | null = null;
-    await expectCode(
-      async () =>
-        bound.transact({}, async () => {
-          const inner = await bound.transact({}, async (tx) => {
-            await tx.apply(appendUnit('snap-fail-chain', 'q1', 'hash-snap-fail-1', null));
-            return 'inner';
-          });
-          shared = inner.receipt;
-          throw new Error('outer-boom');
-        }),
-      'outer-boom',
-      'K3-FIX receipts: the outer failure propagates and nothing commits',
-    );
+    let failure: unknown = null;
+    try {
+      await bound.transact({}, async () => {
+        const inner = await bound.transact({}, async (tx) => {
+          await tx.apply(appendUnit('snap-fail-chain', 'q1', 'hash-snap-fail-1', null));
+          return 'inner';
+        });
+        shared = inner.receipt;
+        throw new Error('outer-boom');
+      });
+    } catch (error) {
+      failure = error;
+    }
+    // Typed-error discipline (no message fallback in expectCode): a plain
+    // failure propagates unwrapped and is asserted by message.
+    expect((failure as Error)?.message).toBe('outer-boom');
     // The reserved commit id never committed: zero effects, no chain.
     expect(shared?.effectiveAppends).toBe(0);
     expect(await bound.readHead('snap-fail-chain')).toBe(null);
