@@ -178,11 +178,14 @@ export class ScopedRuntime {
     const copy = deepCopyGrant(grant);
     deepFreeze(copy);
     this.grant = copy;
-    this.boundScope = { tenantId: copy.scope.tenantId, workspaceId: copy.scope.workspaceId };
+    this.boundScope = Object.freeze({ tenantId: copy.scope.tenantId, workspaceId: copy.scope.workspaceId });
     this.#deps = deps;
-    // Sealed handle (Sol-1): grant, scope, module and checks cannot be
-    // replaced at runtime, so escalation or tenant-switch by property
-    // assignment throws instead of redirecting authority. All internal
+    // Sealed handle (Sol-1, realm-limited): the instance is frozen, the
+    // shared prototype is frozen (see below) and boundScope is frozen, so
+    // escalation, tenant-switch or method wrapping by property assignment
+    // throws instead of redirecting authority. Intrinsic realm objects
+    // (Array.prototype and friends) stay outside this guarantee: full
+    // isolation needs a realm or process boundary (spec §6.5). All internal
     // paths read these sealed invariants through requireOperation.
     Object.freeze(this);
   }
@@ -591,3 +594,8 @@ export class ScopedRuntime {
     };
   }
 }
+
+// The prototype is shared by every handle of every kernel in this realm:
+// freezing it closes the cross-module channel (Sol-1 cases A and D), so
+// replacing requireOperation or wrapping a method throws for all handles.
+Object.freeze(ScopedRuntime.prototype);
