@@ -284,10 +284,19 @@ export function computeHandlersDigest(
 // ---------------------------------------------------------------------------
 
 const HANDLER_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
-// Generic scheme guard (R2-m2): any `scheme:` prefix is forbidden (empty allowlist).
-const GENERIC_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i;
-const BEARER_VALUE_PATTERN = /^bearer\s+/i;
-const BASIC_VALUE_PATTERN = /^basic\s+/i;
+// Bounded scheme guard (R3-m1): only hierarchical `scheme://` forms, known
+// dangerous schemes (`javascript:`, `data:`, `vbscript:`, `file:`, `node:`)
+// and `mailto:`/`ssh:` forms are forbidden. Bare typed settings
+// (`Mode: fast`, `T09:30`, `urn:…`, `immo:cfg-12`, `role:owner`) pass.
+// Documented allowlist in README/ADOPTION_GUIDE. Bounded heuristic.
+const GENERIC_SCHEME_HIER_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
+const DANGEROUS_SCHEME_PATTERN = /^(javascript|data|vbscript|file|node):/i;
+const MAILTO_SSH_SCHEME_PATTERN = /^(mailto|ssh):/i;
+// Bearer/Basic (R3-m1): require an opaque token of at least 8 non-space
+// chars after the scheme, so labels like `Basic plan` pass while real
+// credentials (`Bearer [REDACTED]…`, `Basic dXNlcjpwYXNz`) are rejected.
+const BEARER_VALUE_PATTERN = /^bearer\s+\S{8,}/i;
+const BASIC_VALUE_PATTERN = /^basic\s+\S{8,}/i;
 const EMAIL_VALUE_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SQL_LEADER_PATTERN = /^(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC(UTE)?)\b/i;
 const SQL_STRUCTURE_PATTERN = /(;|--|\/\*|\b(FROM|WHERE|INTO|VALUES|TABLE|JOIN|UNION)\b)/i;
@@ -519,15 +528,20 @@ function checkForbiddenValue(
     // A bare SQL leader word is a legitimate label ("Select a city"); only a
     // leader combined with SQL structure (statement terminator, comment or a
     // FROM/WHERE/INTO/VALUES/TABLE/JOIN/UNION clause) is treated as SQL.
-    // Bearer/Basic match case-insensitively (R2-m2); any URI scheme is
-    // forbidden (R2-m2 generic guard); email-address values are user data.
-    // Scope/claim identifiers (`domain:action`) legitimately contain one
-    // colon, so overlay scope checks opt out of the scheme guard.
+    // Bearer/Basic match case-insensitively with an opaque 8+ char token
+    // (R3-m1); only hierarchical `scheme://`, dangerous schemes and
+    // `mailto:`/`ssh:` are forbidden (R3-m1 bounded guard); email-address
+    // values are user data. Scope/claim identifiers (`domain:action`)
+    // legitimately contain one colon, so overlay scope checks opt out of
+    // the scheme guard.
     if (
       BEARER_VALUE_PATTERN.test(trimmed) ||
       BASIC_VALUE_PATTERN.test(trimmed) ||
       trimmed.startsWith('//') ||
-      (!options?.allowScheme && GENERIC_SCHEME_PATTERN.test(trimmed)) ||
+      (!options?.allowScheme &&
+        (GENERIC_SCHEME_HIER_PATTERN.test(trimmed) ||
+          DANGEROUS_SCHEME_PATTERN.test(trimmed) ||
+          MAILTO_SSH_SCHEME_PATTERN.test(trimmed))) ||
       JWT_VALUE_PATTERN.test(trimmed) ||
       EMAIL_VALUE_PATTERN.test(trimmed) ||
       (SQL_LEADER_PATTERN.test(trimmed) && SQL_STRUCTURE_PATTERN.test(trimmed))
