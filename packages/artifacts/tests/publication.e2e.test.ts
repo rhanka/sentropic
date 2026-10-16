@@ -64,10 +64,10 @@ const HTML = new TextEncoder().encode('<!doctype html><html><body>Hello</body></
 const INPUT = {
   ownerId: 'owner-1',
   storageScopeId: 'scope-1',
-  artifactId: '11111111-1111-4111-8111-111111111111',
   profile: { title: 'Hello' },
   files: [{ path: 'index.html', mimeType: 'text/html', bytes: HTML }],
 };
+let ARTIFACT_ID = '';
 
 beforeAll(async () => {
   const setup = new Pool({ connectionString: required('DATABASE_URL') });
@@ -76,6 +76,13 @@ beforeAll(async () => {
   await setup.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-1', 'org-1')`);
   await setup.end();
   await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
+  const bound = await pgStore.ensureArtifact({
+    storageScopeId: 'scope-1',
+    ownerId: 'owner-1',
+    bindingName: 'e2e-site',
+    profile: { title: 'Hello' },
+  });
+  ARTIFACT_ID = bound.artifactId;
 });
 
 afterAll(async () => {
@@ -94,12 +101,13 @@ describe('publication end to end', () => {
   it('serves the view only after bytes and transaction succeed', async () => {
     const { releaseId, manifest } = await service.publish({
       ...INPUT,
+      artifactId: ARTIFACT_ID,
       idempotencyKey: 'e2e-1',
       paramsHash: 'h-1',
     });
     const parsed = parseManifest(manifest);
     expect(parsed.digest).toMatch(/^[0-9a-f]{64}$/);
-    const current = await service.getCurrent(INPUT.artifactId);
+    const current = await service.getCurrent(ARTIFACT_ID);
     expect(current?.releaseId).toBe(releaseId);
     const [file] = parsed.files as { digest: string; size: number }[];
     const hex = (file?.digest ?? '').replace(/^sha256:/, '');
@@ -126,7 +134,7 @@ describe('publication end to end', () => {
       idempotency: pgStore,
     });
     await expect(
-      crashingService.publish({ ...INPUT, idempotencyKey: 'e2e-2', paramsHash: 'h-1' }),
+      crashingService.publish({ ...INPUT, artifactId: ARTIFACT_ID, idempotencyKey: 'e2e-2', paramsHash: 'h-1' }),
     ).rejects.toThrow(/e2e crash/);
     const pending = await pgStore.listPending();
     expect(pending.length).toBe(1);
@@ -137,8 +145,8 @@ describe('publication end to end', () => {
       return stored === undefined ? 'failed' : 'done';
     });
     expect(report.failed.length).toBe(1);
-    const retried = await service.publish({ ...INPUT, idempotencyKey: 'e2e-3', paramsHash: 'h-1' });
-    expect((await service.getCurrent(INPUT.artifactId))?.releaseId).toBe(retried.releaseId);
+    const retried = await service.publish({ ...INPUT, artifactId: ARTIFACT_ID, idempotencyKey: 'e2e-3', paramsHash: 'h-1' });
+    expect((await service.getCurrent(ARTIFACT_ID))?.releaseId).toBe(retried.releaseId);
     expect(await pgStore.listPending()).toEqual([]);
   });
 });
