@@ -74,6 +74,20 @@ make test-llm-mesh SCOPE=tests/enrollment/seat-bundle.test.ts ENV=test-ci-seat-c
 make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-ci-seat-contract
 ```
 
+## One-command enrollment surface (L3, from spec section 6.2, not implemented in L0a)
+
+```bash
+make seat-reenroll CLI=<cli>            # agy | codex | vibe | muse | claude
+make seat-replace SEAT_REF=<ref> CLI=<cli>
+make seat-reenroll-all
+make seat-local-probe CLI=<cli>
+make test-ci-seats SCOPE=<file> ENV=test-ci-seat-contract
+```
+
+agy re-enrollment goes through the official CLI flow or a profile snapshot.
+These targets are recorded here for the UAT walkthrough; their implementation
+belongs to a later lot.
+
 Package-only gates expose no API/UI/Maildev ports and need no service slot.
 API tests, UI tests and E2E are N/A in this lot. UAT is a credential-free
 walkthrough of five synthetic labels, static errors, metadata-only receipts
