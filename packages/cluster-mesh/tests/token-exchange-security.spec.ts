@@ -131,7 +131,9 @@ describe('token exchange refusals', () => {
   ])('should refuse an unverifiable subject token (%s)', async (_name, makeToken) => {
     const { fake, client } = setup();
 
-    await expect(refusalReason(client.exchange(baseRequest(await makeToken(fake))))).resolves.toBe('subject_unverified');
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest(await makeToken(fake)), scope: ['workspace:read'] })),
+    ).resolves.toBe('subject_unverified');
   });
 
   it('should refuse a subject whose audience is not the configured one', async () => {
