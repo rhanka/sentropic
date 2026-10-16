@@ -831,6 +831,102 @@ export const createContentConsentService = (
     return next;
   };
 
+  /** Record a locally observed denial; applied as revocation on reconnect. */
+  const recordLocalDeny = async (sessionId: string): Promise<SessionContentGrant> => {
+    const grant = await store.readGrant(requireId(sessionId, 'sessionId'));
+    if (!grant) throw new ContentConsentError('invalid_request', 'no child grant for local denial');
+    const next: SessionContentGrant = { ...grant, localDenyPending: true, updatedAt: nowMs() };
+    if (!await store.writeGrant(grant.version, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry local denial');
+    }
+    return next;
+  };
+
+  /** Reconnect reconciliation: settle the pending local denial without purging copies. */
+  const reconcileLocalDeny = async (sessionId: string): Promise<SessionContentGrant> => {
+    const grant = await store.readGrant(requireId(sessionId, 'sessionId'));
+    if (!grant) throw new ContentConsentError('invalid_request', 'no child grant to reconcile');
+    if (!grant.localDenyPending) return grant;
+    const next: SessionContentGrant = { ...grant, state: 'revoked', localDenyPending: false, updatedAt: nowMs() };
+    if (!await store.writeGrant(grant.version, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry reconciliation');
+    }
+    return next;
+  };
+
+  const acknowledgeFreshness = async (sessionId: string): Promise<SessionContentGrant> => {
+    const grant = await store.readGrant(requireId(sessionId, 'sessionId'));
+    if (!grant) throw new ContentConsentError('invalid_request', 'no child grant for freshness');
+    const next: SessionContentGrant = { ...grant, lastFreshnessAckAt: nowMs(), updatedAt: nowMs() };
+    if (!await store.writeGrant(grant.version, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry acknowledgement');
+    }
+    return next;
+  };
+
+  /**
+   * Distinct closed-history authorization over already retained copies.
+   * Ceilings must mirror the covered objects' immutable deadlines: a finite
+   * ceiling requires a `duration` channel in the accepted project policy, so
+   * this authorization can never create a duration.
+   */
+  const authorizeHistoryRead = async (
+    sessionId: string,
+    coveredDeadlines: Record<RetainedChannel, number | null>,
+  ): Promise<HistoryReadAuthorization> => {
+    const target = requireId(sessionId, 'sessionId');
+    const grant = await store.readGrant(target);
+    if (!grant || !grant.retainedCopies) {
+      throw new ContentConsentError('invalid_request', 'no retained closed copies for this session');
+    }
+    const project = await readActiveProject(grant.projectId);
+    for (const channel of RETAINED_CHANNELS) {
+      const deadline = coveredDeadlines[channel];
+      if (deadline !== null && !(typeof deadline === 'number' && Number.isSafeInteger(deadline) && deadline > 0)) {
+        throw new ContentConsentError('invalid_request', `covered deadline for ${channel} is malformed`);
+      }
+      if (deadline !== null && project.retentionByChannel[channel].mode !== 'duration') {
+        throw new ContentConsentError('invalid_retention', `history authorization cannot create a ${channel} duration`);
+      }
+    }
+    const next: HistoryReadAuthorization = {
+      authorizationId: newId(),
+      projectId: grant.projectId,
+      sessionId: target,
+      bindingId: grant.bindingId,
+      projectRevision: project.projectRevision,
+      ceilings: { ...coveredDeadlines },
+      state: 'active',
+      version: 1,
+      createdAt: nowMs(),
+    };
+    if (!await store.writeHistoryAuthorization(null, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent authorization; retry');
+    }
+    return next;
+  };
+
+  const revokeHistoryAuthorization = async (authorizationId: string): Promise<HistoryReadAuthorization> => {
+    const authorization = await store.readHistoryAuthorization(requireId(authorizationId, 'authorizationId'));
+    if (!authorization) throw new ContentConsentError('invalid_request', 'no history authorization to revoke');
+    const next: HistoryReadAuthorization = { ...authorization, state: 'revoked' };
+    if (!await store.writeHistoryAuthorization(authorization.version, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent authorization change; retry revocation');
+    }
+    return next;
+  };
+
+  /** Closed copies are readable only through a distinct active history authority. */
+  const canReadClosed = async (sessionId: string, authorizationId: string): Promise<boolean> => {
+    const grant = await store.readGrant(sessionId);
+    if (!grant || !grant.retainedCopies) return false;
+    const authorization = await store.readHistoryAuthorization(authorizationId);
+    return authorization !== null
+      && authorization.state === 'active'
+      && authorization.sessionId === sessionId
+      && authorization.projectId === grant.projectId;
+  };
+
   return {
     prepareProject,
     acceptProject,
@@ -842,5 +938,11 @@ export const createContentConsentService = (
     clearExclusion,
     revokeGrant,
     closeGrant,
+    recordLocalDeny,
+    reconcileLocalDeny,
+    acknowledgeFreshness,
+    authorizeHistoryRead,
+    revokeHistoryAuthorization,
+    canReadClosed,
   };
 };
