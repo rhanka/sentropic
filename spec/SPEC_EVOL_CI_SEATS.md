@@ -11,12 +11,16 @@ seats only, never per-token API cost. No live provider call in this lot.
 
 - Identity: `schemaVersion` 1, opaque `seatRef`, `refreshFamilyRef`
   (absent for static keys), verified `ownerScope`, `cli`, layer-qualified
-  `packageProviderId`, `credentialFormatVersion`, `nativeCliVersion`, `os`.
+  `packageProviderId`, opaque `issuingClientRef`, `endpointFamily`,
+  `credentialFormatVersion`, `nativeCliVersion`, `os`.
 - Provenance: `enrollmentSource: 'cli'`, verified `accountBinding`,
   `entitlementClass`. A later `--from token` delivery preserves that source.
-- Authority: `custodian`, `consumer`, `native-store`. A JSON field claiming
-  an owner is not authorization; `resolveEffectiveAuthority` keeps the
-  trusted path authority. Consumer status cannot be upgraded by bundle data.
+- Authority: `custodian`, `consumer`, `native-store`. Authority comes from the
+  trusted channel, never from bundle data: a claim above the granted channel
+  (`consumer` < `native-store` < `custodian`) is an escalation, decided through
+  `resolveEffectiveAuthority`. `native-store` accepts `store-reference` with no
+  refresh authority; `consumer` never carries renewable material or canonical
+  payloads.
 - Credential classes: `renewable`, `static-key`, `access-only`,
   `store-reference`. Non-custodian payloads carry no refresh authority,
   no renewable class and no canonical material.
@@ -30,8 +34,12 @@ seats only, never per-token API cost. No live provider call in this lot.
 - Static failure categories: `schema-mismatch`, `size-exceeded`,
   `owner-mismatch`, `client-mismatch`, `stale-generation`, `unknown-field`,
   `refresh-material-present`, `nested-refresh-field`, `authority-escalation`,
-  `invalid-lifecycle`. Receipts carry metadata only, never credential bytes.
-- Size bound: each serialized bundle must fit the 48 KiB secret limit.
+  `invalid-lifecycle`, `generation-conflict`, `epoch-replacement-required`.
+  Lineage classifies each import as `idempotent`, `forward`, `stale`,
+  `epoch-replacement-required` or `conflict`; only `idempotent` and `forward`
+  proceed without a controlled operation. Receipts carry metadata only.
+- Size bound: each serialized bundle must fit the 48 KiB secret limit,
+  measured in UTF-8 bytes.
 
 The contract is exported through `@sentropic/llm-mesh/node` only;
 no browser export of native readers exists in this lot.

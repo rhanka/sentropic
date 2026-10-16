@@ -343,8 +343,8 @@ grace period, or explicitly accept that revocation breaks enrollment for older p
 central custody store, h2a native tests and mesh import. It carries identity,
 `cli` provenance, custodian/consumer authority, lifecycle epoch/generation and
 refresh-less consumer projections; validation rejects oversize bundles,
-owner/client mismatches, unknown fields, hidden refresh material and authority
-escalation. Package enrollment keeps existing identifiers: agy enrolls as
+owner/client mismatches, unknown fields, hidden refresh material, channel
+authority escalation and lineage conflicts. Package enrollment keeps existing identifiers: agy enrolls as
 `cloud-code`; the application receiver maps agy to `antigravity` transport,
 `cloudcode-pa` target and `productAccountSource: antigravity`, and refuses the
 `gemini` route. Native profile variants stay unverified until observed; see

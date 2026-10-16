@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.1
+
+- CI seat envelope `SeatBundleV1` for the five CLI seats (agy, codex, vibe,
+  muse, claude): frozen identity with issuing client and endpoint family,
+  channel-granted authority validation, native-store references and refresh-less
+  consumer projections, exported from `@sentropic/llm-mesh/node` only.
+  Synthetic fixtures and validators; native profiles stay unverified.
+
 ## Unreleased
 
 - Responses execution features: per-transport support table
