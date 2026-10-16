@@ -262,7 +262,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
       - [ ] Effective overlays enforced; missing/unknown/unguarded/stale calls have no effects.
 
 - [ ] **Lot 6 — Sentropic support for 2b-MCP cutover (coordination; Radar integration owned by i-cond)**
-  - [ ] Hand immutable published receipts to 2b-MCP: auth-hono 0.16.0, cluster-mesh 0.18.0, mcp-auth 0.2.2 (main), exchange policy + cache contract.
+  - [x] Hand immutable published receipts to 2b-MCP: auth-hono 0.16.0 (`fc11f7ba…`, repack-verified identical), cluster-mesh 0.18.0 (repacked `c9b18a60…`: exhaustive tgz diff proves code-identical, only README version lines moved 0.13→0.16 by the post-#662/#664 rebase), mcp-auth 0.2.2 (`3aa54660…`, repack-verified identical); all `mode=block` pack PASS; `SHA256SUMS` + `BRANCH_SHA=b361e1e3b` refreshed under `/home/antoinefa/src/sentropic/.tmp/immo-861-tarballs/` (i-cond: re-pull cluster-mesh, the other two are unchanged).
   - [ ] Keep the faithful `#674` request/response/refusal contract stable for `mesh-token-exchange` integration.
   - [ ] Verify `PREPROD_CD_ENABLED=true` and production protections at merge time (read-only check, no deployment act).
   - [ ] UAT (owner-executed with i-cond, per environment preprod then prod):
