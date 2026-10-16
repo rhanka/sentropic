@@ -842,6 +842,10 @@ describe('session adoption workspace binding', () => {
   });
 
   it('should close D2 live on detach/end with copies retained and D1 preserved', async () => {
+    await db.delete(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-adopt-30'));
+    await db.delete(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-adopt-30'));
     const now = 1_700_000_000_000;
     const fakeEpoch = createFakeContentAuthorityEpochPort();
     const content = new SessionContentService({ nowMs: () => now, epochs: fakeEpoch });
