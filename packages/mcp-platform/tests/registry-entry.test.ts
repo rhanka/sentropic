@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   buildRegistryEntry,
@@ -62,6 +63,23 @@ describe('registry entry abstraction (RC-M2a)', () => {
     const mapped = mapEntryArguments(entry, ARGS);
     expect(mapped).toEqual(ARGS);
     expect(Object.isFrozen(mapped)).toBe(true);
+  });
+
+  it('is exposed as the ./registry/entry subpath with types (packed proof)', async () => {
+    const pkgUrl = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgUrl, 'utf8')) as {
+      exports?: Record<string, { types?: string; import?: string }>;
+    };
+    expect(pkg.exports?.['./registry/entry']).toEqual({
+      types: './dist/registry-entry.d.ts',
+      import: './dist/registry-entry.js',
+    });
+    const distUrl = new URL('../dist/registry-entry.js', import.meta.url).href;
+    const packaged = (await import(distUrl)) as typeof import('../src/registry-entry.js');
+    const fromSrc = canonicalizeRegistryRequest({ tool: COMPILED.toolName, args: ARGS });
+    const fromDist = packaged.canonicalizeRegistryRequest({ tool: COMPILED.toolName, args: ARGS });
+    expect(fromDist.digest).toBe(fromSrc.digest);
+    expect(fromDist.canonicalText).toBe(fromSrc.canonicalText);
   });
 
   it('rejects unknown slots, missing slots and out-of-bounds values', () => {
