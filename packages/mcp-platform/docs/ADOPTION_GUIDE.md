@@ -368,7 +368,7 @@ The effective compiled policy is authoritative: a configuration may add `require
 enforce the compiled `requiredScopes`/`requiredClaims` per tool, not the manifest baseline alone.
 Configuration alone can never rename, remove or add tools, nor change parameters or results.
 
-### Configuration provenance and registry contract (spec-v3 §5/§11)
+### Configuration provenance and registry contract (spec-v5 §5/§11)
 
 - `approvalRef`/`reviewedBy` are consumer-local opaque review references.
   No fixed Sentropic approver and no cross-repository equality is required.
@@ -411,7 +411,7 @@ MUST NOT be pre-empted by a connector build — they are owner/architect decisio
   on service tokens, refresh-token in token responses — affect pinned prod RPs.
 - **Refresh-token policy for native/MCP clients (P3).** A security-posture reversal.
 - **RS-middleware relocation / auth-hono 1.0 timing (P4).**
-- **mcp-registry residence (P5) — settled: consumer-local configuration, Immo embeds the cluster-mesh MCP registry** (no central Sentropic approval/residence requirement; customizations live in Immo per spec-v3 §3/§11) and **39h identities-table fusion (P6).**
+- **mcp-registry residence (P5) — settled: consumer-local configuration, Immo embeds the cluster-mesh MCP registry** (no central Sentropic approval/residence requirement; customizations live in Immo per spec-v5 §3/§11) and **39h identities-table fusion (P6).**
 - **Production audit retention + PII policy** and **production secret-store
   selection + rotation policy** (spec §13) — the in-memory `MockSecretStore` /
   `InMemoryAuditSink` are deliberately not production stores.

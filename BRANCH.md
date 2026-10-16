@@ -1,7 +1,7 @@
 # Feature: Generic codec/compiler (Lot 1a)
 
 ## Objective
-Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platform as specified in spec-v3.md §5/§11 (supersedes spec-v2.md §1a) with challenge-opus-r2/r3 corrections touching 1a.
+Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platform as specified in spec-v5.md §5/§11 (supersedes spec-v3.md §5/§11 and spec-v2.md §1a) with challenge-opus-r2/r3 corrections touching 1a.
 
 ## Scope / Guardrails
 - Scope limited to generic codec/compiler, synthetic fixtures only, no Immo-specific fixture inside generic package.
@@ -57,6 +57,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
 - [ ] `attention` R3-m6 history note: Lot 3 commits `73622ad66` (176 lines) and `0ee8d58d9` (156 lines) exceed 150 lines and 5/7 Lot 3 commits omit `BRANCH.md`; pushed history stays as-is (no rewrite without owner decision). Fix3 commits stay ≤150 lines each with `BRANCH.md` updated in the same commit.
 - [ ] `attention` manifests-gate-local: `make check-publishable-manifests` fails locally only (inventory requires validated CI context `MANIFEST_CONTEXT_FILE`/`CI_MANIFEST_CONTEXT`); covered by CI `validate-publishable-manifests` (green on run `38845923219`). Owner judges merge readiness.
 - [ ] `attention` CI on fix3 final head: run ID + per-job status recorded in `.h2a/build/immo_1a_fix3_report.md` (required: e2e groups + `security-container` green). Last reviewed run `38845923219` (50 pass, 6 pending, 22 skipping, 0 fail). Merge stays owner-gated per packet stop rule.
+- [ ] `attention` v5 relay: conductor relayed spec-v5 (sha256 `42002031b3c26aae…`) superseding v3 while `.tmp/packets/immo-1a-fix3.md` still cites v3; per spec-v5 §11 this relay message is the superseding authority for §5/§11, and `BRANCH.md` now points to spec-v5 (new probe trap-before-import + v5 pointers in this commit).
 - [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
 - [ ] `attention`: npm published `@sentropic/mcp-platform` is `0.2.0`, source is `0.2.0`, candidate `0.3.0` is strictly above both (verified 2026-10-16)
 - [ ] `attention` BR1a-EX1: bump `packages/connector-host/package.json` range `^0.2.0` -> `^0.3.0` and refresh root `package-lock.json` via `make lock-root`. Reason: minor bump exits the `^0.2.0` range (`0.x` caret pins minor) and desyncs the lockfile, blocking every Make gate (`npm ci` fails). Impact: two files outside Allowed Paths, consumer-only range bump, no source change. Rollback: revert range and lockfile.
@@ -208,7 +209,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
     - [x] Report `.h2a/build/immo_1a_fix2_report.md` with per-mutation command + failing output
 - [ ] **Lot 4 — Immo 1a R3 findings fix3 (`.h2a/reviews/immo_1a_opus_r3.md`: 2 MAJEUR R3-M1..M2, 6 MINEUR R3-m1..m6)**
   - [x] R3-M1: restore `token` in `FORBIDDEN_CONTENT_SUBSTRINGS` with test rejecting `authToken`/`githubToken`/`sessionToken`/`apiToken` and accepting `maxTokens`
-  - [x] R3-M2: apply spec-v3 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v3)
+  - [x] R3-M2: apply spec-v5 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v5; carries the v4 corrections, no v3 baseline)
   - [x] R3-m1: bound scheme/basic guards with both-direction tests
   - [x] R3-m2: discriminating tests for overlay/provenance/schema/identity controls
   - [x] R3-m3: full mutation evidence with exact diff and failing output (7 executed mutations A-G plus 3 test-first failures, `.h2a/build/immo_1a_fix3_report.md` §3)
