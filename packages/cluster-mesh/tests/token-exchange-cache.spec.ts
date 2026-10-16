@@ -199,4 +199,67 @@ describe('token exchange cache', () => {
     expect(second.accessToken).not.toBe(first.accessToken);
     expect(fake.mintCalls).toBe(2);
   });
+
+  it('should resolve residency as min(minted exp, subject exp, insertedAt + 60s) minus margin', () => {
+    expect(
+      resolveTokenExchangeCacheTtlMs({ mintedExpiresAtSec: 1_700_010_000, subjectExpiresAtSec: 1_700_010_000, insertedAtMs: 1_700_000_000_000 }),
+    ).toBe(1_700_000_000_000 + TOKEN_EXCHANGE_CACHE_TTL_MS);
+    expect(
+      resolveTokenExchangeCacheTtlMs({ mintedExpiresAtSec: 1_700_000_030, subjectExpiresAtSec: 1_700_010_000, insertedAtMs: 1_700_000_000_000 }),
+    ).toBe(1_700_000_030_000);
+    expect(
+      resolveTokenExchangeCacheTtlMs({ mintedExpiresAtSec: 1_700_010_000, subjectExpiresAtSec: 1_700_000_045, insertedAtMs: 1_700_000_000_000 }),
+    ).toBe(1_700_000_045_000);
+    expect(
+      resolveTokenExchangeCacheTtlMs({
+        mintedExpiresAtSec: 1_700_010_000,
+        subjectExpiresAtSec: 1_700_010_000,
+        insertedAtMs: 1_700_000_000_000,
+        marginMs: 5_000,
+      }),
+    ).toBe(1_700_000_000_000 + TOKEN_EXCHANGE_CACHE_TTL_MS - 5_000);
+  });
+
+  it('should build a stable key sensitive to every identity and policy field', () => {
+    const request = baseRequest('opaque');
+    const subject = {
+      issuer: ISSUER,
+      subject: 'user-1',
+      audience: [SUBJECT_AUDIENCE],
+      issuedAtSec: 1,
+      expiresAtSec: 2,
+      scope: ['y', 'x'],
+      clientId: 'public-client',
+      tenantId: 'tenant-a',
+      jti: 'jti-1',
+    };
+    const identity = {
+      subjectTokenFingerprint: 'fp-1',
+      originClientId: 'public-client',
+      workloadClientId: WORKLOAD_CLIENT_ID,
+      environment: 'test',
+      tenantId: 'tenant-a',
+      policyRevision: 'rev-1',
+    };
+    const key = buildTokenExchangeCacheKey(request, subject, identity);
+
+    expect(typeof key).toBe('string');
+    expect(buildTokenExchangeCacheKey(request, subject, identity)).toBe(key);
+    const variants = [
+      buildTokenExchangeCacheKey({ ...request, scope: ['other'] }, subject, identity),
+      buildTokenExchangeCacheKey({ ...request, audience: 'https://other.example.test' }, subject, identity),
+      buildTokenExchangeCacheKey(request, { ...subject, subject: 'user-2' }, identity),
+      buildTokenExchangeCacheKey(request, { ...subject, jti: 'jti-2' }, identity),
+      buildTokenExchangeCacheKey(request, subject, { ...identity, subjectTokenFingerprint: 'fp-2' }),
+      buildTokenExchangeCacheKey(request, subject, { ...identity, originClientId: 'other-client' }),
+      buildTokenExchangeCacheKey(request, subject, { ...identity, workloadClientId: 'other-workload' }),
+      buildTokenExchangeCacheKey(request, subject, { ...identity, environment: 'prod' }),
+      buildTokenExchangeCacheKey(request, subject, { ...identity, tenantId: 'tenant-b' }),
+      buildTokenExchangeCacheKey(request, subject, { ...identity, policyRevision: 'rev-2' }),
+    ];
+    for (const variant of variants) expect(variant).not.toBe(key);
+    expect(buildTokenExchangeCacheKey({ ...request, scope: ['x', 'y'] }, subject, identity)).toBe(
+      buildTokenExchangeCacheKey({ ...request, scope: ['y', 'x'] }, subject, identity),
+    );
+  });
 });
