@@ -53,7 +53,7 @@ Implement the RFC 8693 token-exchange client in `@sentropic/cluster-mesh`: mesh 
 - `attention` BR2A-EX1: new `packages/cluster-mesh/src/trust/token-exchange-http.ts` (RFC 8693 HTTP binding, mandated by spec-v3 §6 + review B1). Reason: no allowed `src/` path hosts the issuer HTTP adapter. Impact: one additive module, no existing export changed. Rollback: delete file + revert `index.ts`/`mesh.ts` imports.
 - `attention` BR2A-EX2: new `packages/cluster-mesh/tests/token-exchange-integration.spec.ts` (mandated by spec-v3 §6 + review M8). Reason: required file absent from Allowed Paths. Impact: test-only addition. Rollback: delete file.
 - `attention` BR2A-EX3: `packages/cluster-mesh/README.md` + `packages/cluster-mesh/CHANGELOG.md` (mandated by spec-v3 §6 + review m10). Reason: docs absent from Allowed Paths. Impact: docs only. Rollback: `git checkout` both files.
-- `attention` BR2A-EX4: `packages/cluster-mesh/src/modules/catalog.ts` (one-line `AUTH_HONO_RANGE` parity with #674) + `packages/cluster-mesh/package.json` peer range (same line, already allowed) + selected-fixture regen if packaging tests require it (review m13, merge-safe in either order). Reason: out-of-scope file for merge-order safety. Impact: range widening only, no behavior. Rollback: `git checkout` the file.
+- `attention` BR2A-EX4: `packages/cluster-mesh/src/modules/catalog.ts` (one-line `AUTH_HONO_RANGE` parity with #674) + `packages/cluster-mesh/package.json` peer range (same line, already allowed) + selected-fixture regen if packaging tests require it (review m13, pending #674 merge). Reason: out-of-scope file for merge-order safety. Impact: range widening only, no behavior. Rollback: `git checkout` the file. Merge order #674 then #676 per spec-v5 §4/§11: rebase onto main after #674 merges (rebase only, never merge main) with version re-check; no rebase in this packet.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -127,7 +127,7 @@ Implement the RFC 8693 token-exchange client in `@sentropic/cluster-mesh`: mesh 
   - [x] m10: README gated-seam note + `available` semantics + CHANGELOG 0.18.0 entry (BR2A-EX3)
   - [x] m11: this lot (truthful claims; UAT negatives corrected: proof-bound subject refused at binding, no caller DPoP toggle)
   - [x] m12: every commit `<= 150` lines (`git diff --stat` before each `make commit`)
-  - [x] m13: keep `0.18.0` (strictly above npm `0.15.0`, main `0.15.0`, avoids held `0.16.0`/`0.17.0`/`0.15.1`); peer/catalog range parity with #674 under BR2A-EX4; no rebase (spec does not require it), never merge main
+  - [x] m13: keep `0.18.0` (strictly above npm `0.15.0`, main `0.15.0`, avoids held `0.16.0`/`0.17.0`/`0.15.1`); peer/catalog range parity with #674 under BR2A-EX4; merge order #674 then #676 per spec-v5 §4/§11: rebase onto main after #674 merges (rebase only, never merge main) with version re-check
   - [x] **Package tests**
     - [x] Updated `packages/cluster-mesh/tests/token-exchange.spec.ts` (empty-scope refusal, caller-actor refusal, workload-act assertion)
     - [x] Updated `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (refusal per new reason)
