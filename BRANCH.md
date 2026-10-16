@@ -79,7 +79,7 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [ ] Define SeatBundleV1 in packages/llm-mesh/src/enrollment/seat-bundle.ts.
   - [ ] Export contract through packages/llm-mesh/src/node/index.ts, no browser export.
   - [ ] Bump packages/llm-mesh/package.json 0.25.0 to 0.25.1 and match package-lock.json.
-  - [ ] Add packages/llm-mesh/tests/enrollment/seat-bundle.test.ts covering five schemas, size, owner, client, unknown and nested refresh fields, rollback, authority escalation.
+  - [x] Add packages/llm-mesh/tests/enrollment/seat-bundle.test.ts covering five schemas, size, owner, client, unknown and nested refresh fields, rollback, authority escalation.
   - [ ] Add spec/SPEC_EVOL_CI_SEATS.md with frozen interfaces and supported/unverified table.
   - [ ] Document contract in packages/llm-mesh/README.md.
   - [ ] UAT credential-free walkthrough:
