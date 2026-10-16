@@ -89,7 +89,7 @@ Qualify mcp-auth for Immo application scopes without source changes.
   - [x] Evaluate `packages/mcp-auth/tests/core.test.ts` as regression gate (update only on defect)
   - [x] Evaluate `packages/mcp-auth/tests/hono.test.ts` as regression gate (update only on defect)
   - [x] Evaluate `packages/mcp-auth/tests/prm.test.ts` as regression gate (update only on defect)
-  - [ ] No change to `packages/mcp-auth/src/**` unless a test proves a defect
+  - [x] Fix `packages/mcp-auth/src/core.ts` under `BR01-EX1` (test proved the defect) + bump to `0.2.2` + relock
   - [ ] Lot gate:
     - [ ] `make typecheck-mcp-auth ENV=test-mcp-scope-qualification`
     - [ ] **API tests**
