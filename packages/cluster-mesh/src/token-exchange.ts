@@ -167,6 +167,22 @@ export interface TokenExchangeClientInput {
   readonly nowMs?: () => number;
 }
 
+/**
+ * Cryptographic port consumed by the RFC 8693 HTTP binding. Supplied by the host
+ * (tests inject the real library through a fixture); `src/` keeps no static
+ * reference to any JWT library, preserving root-graph isolation of optional peers.
+ */
+export interface TokenExchangeCryptoPort {
+  /** Build a verification key set from a JWKS document (parsed JSON). */
+  createKeySet(jwks: unknown): unknown;
+  /** Verify a JWT and return its payload; throws the library error on failure. */
+  verifyJwt(
+    token: string,
+    key: unknown,
+    options: { issuer: string; audience?: string; subject?: string; currentDate: Date },
+  ): Promise<Record<string, unknown>>;
+}
+
 /** Identity material isolating one cache entry; raw tokens never enter the key. */
 export interface TokenExchangeCacheIdentity {
   readonly subjectTokenFingerprint: string;
