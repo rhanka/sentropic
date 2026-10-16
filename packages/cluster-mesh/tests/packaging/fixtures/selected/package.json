@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.20.0.tgz",
+    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.21.0.tgz",
     "@sentropic/comments": "0.3.0",
     "@sentropic/llm-gateway": "0.19.2",
     "@sentropic/llm-mesh": "0.22.3",
