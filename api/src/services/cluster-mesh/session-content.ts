@@ -817,6 +817,205 @@ export class SessionContentService {
     });
   }
 
+  /** Revocation commits before readers/producers close: the grant is
+   * fenced first, uncommitted work settles, committed copies persist for
+   * writer-settled purge. */
+  async revokeGrant(sessionId: string, ctx: SessionContentContext) {
+    requireContext(ctx);
+    return db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+      if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      await tx
+        .update(sessionContentGrants)
+        .set({ state: 'revoked', updatedAt: new Date(this.nowMs()) })
+        .where(eq(sessionContentGrants.sessionId, sessionId));
+      await tx
+        .update(sessionContentReservations)
+        .set({ state: 'cancelled', updatedAt: new Date(this.nowMs()) })
+        .where(
+          and(
+            eq(sessionContentReservations.sessionId, sessionId),
+            eq(sessionContentReservations.state, 'reserved'),
+          ),
+        );
+      return { sessionId, state: 'revoked' as const };
+    });
+  }
+
+  /** Retained-closed transition (O4=B): live closes, committed copies stay
+   * readable only under a distinct history authorization. Never enqueues
+   * committed-copy purge; merely closing a viewer purges nothing. */
+  async closeGrant(sessionId: string, ctx: SessionContentContext) {
+    requireContext(ctx);
+    return db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+      if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      const [committed] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sessionContentObjects)
+        .where(
+          and(
+            eq(sessionContentObjects.sessionId, sessionId),
+            eq(sessionContentObjects.state, 'committed'),
+          ),
+        );
+      await tx
+        .update(sessionContentGrants)
+        .set({
+          state: 'closed',
+          retainedCopies: (committed?.count ?? 0) > 0,
+          updatedAt: new Date(this.nowMs()),
+        })
+        .where(eq(sessionContentGrants.sessionId, sessionId));
+      await tx
+        .update(sessionContentReservations)
+        .set({ state: 'cancelled', updatedAt: new Date(this.nowMs()) })
+        .where(
+          and(
+            eq(sessionContentReservations.sessionId, sessionId),
+            eq(sessionContentReservations.state, 'reserved'),
+          ),
+        );
+      return { sessionId, state: 'closed' as const, retainedCopies: (committed?.count ?? 0) > 0 };
+    });
+  }
+
+  /** Distinct closed-history reading authority. Ceilings mirror the covered
+   * objects' existing immutable deadlines and can never create a duration. */
+  async grantHistoryAuthorization(
+    sessionId: string,
+    ctx: SessionContentContext,
+  ) {
+    requireContext(ctx);
+    await this.checkEpoch();
+    return db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+      if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      if (grant.state !== 'closed') {
+        throw new SessionContentError('history_authorization_required', 'session is not closed');
+      }
+      const objects = await tx
+        .select()
+        .from(sessionContentObjects)
+        .where(
+          and(
+            eq(sessionContentObjects.sessionId, sessionId),
+            eq(sessionContentObjects.state, 'committed'),
+          ),
+        );
+      const ceilings: Record<string, number | null> = {
+        'terminal.cache': null,
+        'native.mirror': null,
+      };
+      for (const object of objects) {
+        const channel = object.channel as 'terminal.cache' | 'native.mirror';
+        const deadline = object.expiresAt ?? null;
+        if (ceilings[channel] === null) ceilings[channel] = deadline;
+        else if (deadline === null) ceilings[channel] = null;
+        else ceilings[channel] = Math.min(ceilings[channel] as number, deadline);
+      }
+      const authorizationId = this.newId();
+      await tx.insert(sessionContentHistoryAuthorizations).values({
+        authorizationId,
+        projectId: grant.projectId,
+        sessionId,
+        bindingId: grant.bindingId,
+        projectRevision: grant.projectRevision,
+        ceilings,
+        state: 'active',
+        version: 1,
+      });
+      return { authorizationId, sessionId, ceilings };
+    });
+  }
+
+  async revokeHistoryAuthorization(authorizationId: string, ctx: SessionContentContext) {
+    requireContext(ctx);
+    return db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      const [authorization] = await tx
+        .select()
+        .from(sessionContentHistoryAuthorizations)
+        .where(eq(sessionContentHistoryAuthorizations.authorizationId, authorizationId))
+        .limit(1);
+      if (!authorization) throw new SessionContentError('not_found', 'unknown authorization');
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, authorization.sessionId))
+        .limit(1);
+      if (!grant || grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'authorization belongs elsewhere');
+      }
+      await tx
+        .update(sessionContentHistoryAuthorizations)
+        .set({ state: 'revoked' })
+        .where(eq(sessionContentHistoryAuthorizations.authorizationId, authorizationId));
+      await tx
+        .update(sessionContentObjects)
+        .set({ state: 'purge_pending', updatedAt: new Date(this.nowMs()) })
+        .where(
+          and(
+            eq(sessionContentObjects.sessionId, authorization.sessionId),
+            eq(sessionContentObjects.state, 'committed'),
+          ),
+        );
+      const [covered] = await tx
+        .select({ namespaceId: sessionContentObjects.namespaceId })
+        .from(sessionContentObjects)
+        .where(eq(sessionContentObjects.sessionId, authorization.sessionId))
+        .limit(1);
+      let namespaceId = covered?.namespaceId;
+      if (!namespaceId) {
+        const [fallback] = await tx
+          .select({ namespaceId: sessionContentNamespaces.namespaceId })
+          .from(sessionContentNamespaces)
+          .where(
+            and(
+              eq(sessionContentNamespaces.tenantId, ctx.tenantId),
+              eq(sessionContentNamespaces.ownerId, ctx.ownerId),
+            ),
+          )
+          .limit(1);
+        namespaceId = fallback?.namespaceId;
+      }
+      if (namespaceId) {
+        await tx.insert(sessionContentPurgeJobs).values({
+          purgeJobId: this.newId(),
+          namespaceId,
+          bindingId: grant.bindingId,
+          scope: 'history',
+          state: 'pending',
+        });
+      }
+      return { authorizationId, state: 'revoked' as const };
+    });
+  }
+
   async clearExclusion(projectId: string, sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
     return db.transaction(async (tx) => {
