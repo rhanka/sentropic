@@ -36,6 +36,8 @@ export interface PublicationStateStore {
 export interface PublicationBlobStore {
   putBlob(key: string, bytes: Uint8Array): Promise<void>;
   getBlob(key: string): Promise<Uint8Array | undefined>;
+  /** List keys under a prefix (orphan enumeration for crash recovery/GC). */
+  listKeys(prefix: string): Promise<string[]>;
 }
 
 /** In-memory state-store double for unit tests (synchronous CAS). */
@@ -72,6 +74,9 @@ export function createMemoryBlobStore(): PublicationBlobStore {
     },
     getBlob(key: string): Promise<Uint8Array | undefined> {
       return Promise.resolve(blobs.get(key));
+    },
+    listKeys(prefix: string): Promise<string[]> {
+      return Promise.resolve([...blobs.keys()].filter((key) => key.startsWith(prefix)).sort());
     },
   };
   return store;
