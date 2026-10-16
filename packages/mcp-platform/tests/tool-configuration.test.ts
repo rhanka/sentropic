@@ -343,6 +343,38 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     expect(compileToolConfiguration({ snapshot: executable, manifest, handlers }).ok).toBe(false);
   });
 
+  it('never freezes caller inputs and isolates compiled values', () => {
+    const snapshot = buildSnapshot();
+    const manifestCopy = structuredClone(manifest);
+    const result = compileToolConfiguration({ snapshot, manifest: manifestCopy, handlers });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.isFrozen(result.config)).toBe(true);
+    expect(Object.isFrozen(snapshot)).toBe(false);
+    expect(Object.isFrozen(snapshot.bindings[0].values)).toBe(false);
+    expect(Object.isFrozen(manifestCopy)).toBe(false);
+    expect(Object.isFrozen(manifestCopy.tools[0].gates)).toBe(false);
+    snapshot.bindings[0].values['maxResults'] = 99;
+    expect(result.config.tools.find((tool) => tool.toolName === 'synth_search')?.values).toEqual({ maxResults: 20, mode: 'fast' });
+  });
+
+  it('rejects foreign configurations on activate and counts generations', () => {
+    const store = new ToolConfigurationStore();
+    expect(store.getGeneration()).toBe(0);
+    const valid = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
+    expect(valid.ok).toBe(true);
+    if (!valid.ok) return;
+    const foreign = { ok: true as const, config: structuredClone(valid.config) };
+    const rejected = store.activate(foreign);
+    expect(rejected.ok).toBe(false);
+    expect(store.getActive()).toBeNull();
+    expect(store.getGeneration()).toBe(0);
+    expect(store.activate(valid).ok).toBe(true);
+    expect(store.getGeneration()).toBe(1);
+    expect(store.activate(valid).ok).toBe(true);
+    expect(store.getGeneration()).toBe(2);
+  });
+
   it('retains the active generation when a candidate is rejected', () => {
     const store = new ToolConfigurationStore();
     const valid = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
