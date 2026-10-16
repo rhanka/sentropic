@@ -91,6 +91,22 @@
     "./compose/gateway": {
       "types": "./dist/compose/gateway.d.ts",
       "import": "./dist/compose/gateway.js"
+    },
+    "./mcp/registry": {
+      "types": "./dist/mcp/registry.d.ts",
+      "import": "./dist/mcp/registry.js"
+    },
+    "./mcp/stdio": {
+      "types": "./dist/mcp/stdio.d.ts",
+      "import": "./dist/mcp/stdio.js"
+    },
+    "./compose/mcp": {
+      "types": "./dist/compose/mcp.d.ts",
+      "import": "./dist/compose/mcp.js"
+    },
+    "./loaders/mcp": {
+      "types": "./dist/loaders/mcp/index.d.ts",
+      "import": "./dist/loaders/mcp/index.js"
     }
   },
   "files": [

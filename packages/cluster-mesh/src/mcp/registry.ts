@@ -21,8 +21,8 @@ import type {
   ProviderCatalogEntry,
   ProviderParameterSchema,
   RegistryDefinition,
-  ToolConfigurationDiagnostic,
 } from '@sentropic/mcp-platform/registry';
+import type { ToolConfigurationDiagnostic } from '@sentropic/mcp-platform/tool-configuration';
 
 /** Static mesh-supplied builtin: metadata descriptor plus a loader (no dynamic code). */
 export interface McpRegistryBuiltin {
