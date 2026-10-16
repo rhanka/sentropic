@@ -923,3 +923,168 @@ describe('session consent durable lifecycle', () => {
       );
     expect(wsTombs).toHaveLength(1);
   });
+
+  it('should refuse storage_unavailable with zero S3 calls when D2 storage is unset', async () => {
+    process.env.DOC_STORAGE_BUCKET = 'sentropic-docs-test';
+    process.env.DOC_STORAGE_ENDPOINT = 'http://minio:9000';
+    const unconfigured = new SessionContentService({ nowMs: () => now, epochs: fakeEpoch });
+    await expectContentError(
+      () => unconfigured.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'storage_unavailable',
+    );
+    await expectContentError(
+      () => unconfigured.runPurge('purge:missing'),
+      'storage_unavailable',
+    );
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    delete process.env.DOC_STORAGE_BUCKET;
+    delete process.env.DOC_STORAGE_ENDPOINT;
+  });
+
+  it('should not fabricate a namespace from login admission alone', async () => {
+    const admission = await service.recordAdmission({
+      authSessionId: 'auth-session-1',
+      tokenHash: 'hash-1',
+      credentialId: 'cred-1',
+      origin: 'http://localhost:5581',
+      userVerified: true,
+    });
+    expect(await service.checkAdmission('auth-session-1', 'cred-1')).toBe(true);
+    expect(await service.checkAdmission('auth-session-1', 'cred-unknown')).toBe(false);
+    await expectContentError(
+      () => service.recordAdmission({
+        authSessionId: 'auth-session-2',
+        tokenHash: 'hash-2',
+        credentialId: 'cred-2',
+        origin: 'http://localhost:5581',
+        userVerified: false,
+      }),
+      'invalid_request',
+    );
+    const state = await service.probeEmptyState(TENANT_A);
+    expect(state.empty).toBe(true);
+    expect(state.namespaces).toBe(0);
+    void admission;
+  });
+
+  it('should fence old namespaces on epoch rotation and require fresh consent', async () => {
+    await acceptProject();
+    await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: bindings[0]!.bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('pre-rotation-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-e1', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    const oldNamespace = `scc:${TENANT_A}:${owner.id}:epoch-test-1`;
+    await service.fenceForRestore(oldNamespace);
+    fakeEpoch.rotate('epoch-test-2');
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-e2', ctx,
+    ), 'grant_revoked');
+    const jobs = await db
+      .select()
+      .from(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.namespaceId, oldNamespace));
+    expect(jobs).toHaveLength(1);
+    const purged = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(purged.deletedObjects).toBe(1);
+    expect(purged.remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    const namespaces = await db
+      .select()
+      .from(sessionContentNamespaces)
+      .where(eq(sessionContentNamespaces.namespaceId, oldNamespace));
+    expect(namespaces[0]!.status).toBe('purged');
+    fakeEpoch.setUnavailable();
+    await expectContentError(() => service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s9',
+      bindingId: 'binding:missing',
+      bindingVersion: 1,
+      d1Version: 1,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx), 'epoch_unavailable');
+  });
+
+  it('should reconcile local-only deny on reconnect without purging copies', async () => {
+    await acceptProject();
+    await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: bindings[0]!.bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('local-deny-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-d1', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    await service.recordLocalDeny('sess-content-s1', ctx);
+    const reconciled = await service.reconcileLocalDeny('sess-content-s1', ctx);
+    expect(reconciled.reconciled).toBe(true);
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.committedBytes).toBe(body.length);
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'grant_revoked',
+    );
+  });
+
+  it('should preserve a non-deleted identity on rollback without false purge', async () => {
+    await acceptProject();
+    const jobsBefore = await db.select().from(sessionContentPurgeJobs);
+    const tombsBefore = await db.select().from(sessionContentTombstones);
+    try {
+      await db.transaction(async (tx) => {
+        await tx.delete(tenants).where(eq(tenants.id, TENANT_B));
+        throw new Error('intentional rollback');
+      });
+    } catch (err) {
+      expect((err as Error).message).toBe('intentional rollback');
+    }
+    const tenantsAfter = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.id, TENANT_B));
+    expect(tenantsAfter).toHaveLength(1);
+    expect(await db.select().from(sessionContentPurgeJobs)).toHaveLength(jobsBefore.length);
+    expect(await db.select().from(sessionContentTombstones)).toHaveLength(tombsBefore.length);
+  });
+});
