@@ -79,6 +79,8 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   'gateway/auth-hono': gateway('gateway/auth-hono', './auth-hono', ['AuthHonoVerifyToken'], SESSION_AUTH_PEERS),
   'mcp-platform/registry': mcpPlatform('mcp-platform/registry', './registry', ['createProviderRegistry']),
   'mcp-platform/entry': mcpPlatform('mcp-platform/entry', './registry/entry', ['buildRegistryEntry', 'resolveRegistryEntry']),
+  'mcp-platform/bridge': mcpPlatform('mcp-platform/bridge', './transport/bridge', ['registerBridgeTools', 'identityFromExtra']),
+  'mcp-platform/hono': mcpPlatform('mcp-platform/hono', './hono', ['createMcpPlatformHono']),
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {
