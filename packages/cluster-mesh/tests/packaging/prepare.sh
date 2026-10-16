@@ -158,7 +158,8 @@ case "$latest_mesh$latest_gateway" in
     $(case "$latest_gateway" in file:*) echo "@sentropic/llm-gateway=$latest_gateway" ;; esac) ;;
 esac
 sources "$work/latest"
-(cd "$work/latest" && npm install $quiet >/dev/null)
+: > "$work/latest/npm-install-detail"
+attempt "$work/latest" plain
 tuple latest
 
 # Real global topology: runtime installed separately in the global prefix, then the consumer.
