@@ -44,6 +44,42 @@
       "types": "./dist/server/idempotency.d.ts",
       "import": "./dist/server/idempotency.js"
     },
+    "./server/object-intents": {
+      "types": "./dist/server/object-intents.d.ts",
+      "import": "./dist/server/object-intents.js"
+    },
+    "./server/uploads": {
+      "types": "./dist/server/uploads.d.ts",
+      "import": "./dist/server/uploads.js"
+    },
+    "./server/publication": {
+      "types": "./dist/server/publication.d.ts",
+      "import": "./dist/server/publication.js"
+    },
+    "./server/access": {
+      "types": "./dist/server/access.d.ts",
+      "import": "./dist/server/access.js"
+    },
+    "./server/sources": {
+      "types": "./dist/server/sources.d.ts",
+      "import": "./dist/server/sources.js"
+    },
+    "./server/fork": {
+      "types": "./dist/server/fork.d.ts",
+      "import": "./dist/server/fork.js"
+    },
+    "./server/lifecycle": {
+      "types": "./dist/server/lifecycle.d.ts",
+      "import": "./dist/server/lifecycle.js"
+    },
+    "./server/gc": {
+      "types": "./dist/server/gc.d.ts",
+      "import": "./dist/server/gc.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
     "./parameters": {
       "types": "./dist/parameters.d.ts",
       "import": "./dist/parameters.js"
