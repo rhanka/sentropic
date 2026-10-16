@@ -9,6 +9,7 @@
 import type { Pool } from 'pg';
 import type { JsonValue } from '../contracts.js';
 import type { AccessGrant, AclStore, ArtifactAcl } from '../server/access.js';
+import type { RefcountStore } from '../server/gc.js';
 import type { ArtifactState, LifecycleStore, ReleaseState } from '../server/lifecycle.js';
 import type { SourceRef, SourceStore } from '../server/sources.js';
 import type { IntentKind, IntentStore, ObjectIntent } from '../server/object-intents.js';
@@ -37,7 +38,8 @@ export interface PostgresArtifactStore
     IdempotencyStore,
     AclStore,
     SourceStore,
-    LifecycleStore {
+    LifecycleStore,
+    RefcountStore {
   listRegisteredBlobs(storageScopeId: string): Promise<string[]>;
 }
 
@@ -425,6 +427,55 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         state,
       ]);
       if ((updated.rowCount ?? 0) === 0) throw new Error(`unknown release: ${releaseId}`);
+    },
+    async addRef(digest: string, holder: string): Promise<void> {
+      await pool.query(
+        `INSERT INTO artifacts.blob_ref_holders (digest, holder) VALUES ($1, $2)
+         ON CONFLICT (digest, holder) DO NOTHING`,
+        [digest, holder],
+      );
+    },
+    async releaseRef(digest: string, holder: string): Promise<void> {
+      const deleted = await pool.query(
+        `DELETE FROM artifacts.blob_ref_holders WHERE digest = $1 AND holder = $2`,
+        [digest, holder],
+      );
+      if ((deleted.rowCount ?? 0) === 0) {
+        throw new Error(`refcount not held: ${digest} by ${holder}`);
+      }
+    },
+    async pin(digest: string, reason: string): Promise<void> {
+      const inserted = await pool.query(
+        `INSERT INTO artifacts.blob_pins (digest, reason) VALUES ($1, $2)
+         ON CONFLICT (digest, reason) DO NOTHING RETURNING digest`,
+        [digest, reason],
+      );
+      if ((inserted.rowCount ?? 0) === 0) {
+        throw new Error(`duplicate pin: ${digest} (${reason})`);
+      }
+    },
+    async unpin(digest: string, reason: string): Promise<void> {
+      const deleted = await pool.query(
+        `DELETE FROM artifacts.blob_pins WHERE digest = $1 AND reason = $2`,
+        [digest, reason],
+      );
+      if ((deleted.rowCount ?? 0) === 0) {
+        throw new Error(`not pinned: ${digest} (${reason})`);
+      }
+    },
+    async count(digest: string): Promise<number> {
+      const { rows } = await pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total FROM artifacts.blob_ref_holders WHERE digest = $1`,
+        [digest],
+      );
+      return Number(rows[0]?.total ?? 0);
+    },
+    async isPinned(digest: string): Promise<boolean> {
+      const { rows } = await pool.query<{ found: boolean }>(
+        `SELECT EXISTS (SELECT 1 FROM artifacts.blob_pins WHERE digest = $1) AS found`,
+        [digest],
+      );
+      return rows[0]?.found ?? false;
     },
   };
 }
