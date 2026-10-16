@@ -132,7 +132,7 @@ export class SessionWorkspaceService {
     this.storeFactory = storeFactory;
     this.mesh = createSessionWorkspaceBindingService(storeFactory(db));
     if (contentHooks === undefined) {
-      this.contentHooks = new SessionContentService();
+      this.contentHooks = new SessionContentService({ issuer: 'sentropic-product' });
     } else {
       this.contentHooks = contentHooks;
     }
