@@ -139,7 +139,7 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
       - [x] `api/tests/unit/auth/oauth-state-adapter.test.ts` (updated carried, 5/5 consolidated head)
       - [x] `api/tests/api/auth/oauth-wellknown.test.ts` (updated carried, 6/6 consolidated head)
       - [x] `api/tests/api/cluster-mesh-oauth-roots.test.ts` (updated carried, 3/3 consolidated head)
-      - [ ] Sub-lot gate: `make test-api API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (full serial run in progress)
+      - [x] Sub-lot gate: `make test-api API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> exit 0, 261 files passed, 0 failures (consolidated head)
     - [ ] **UI tests (TypeScript only)**
       - [ ] None; no login UI change.
     - [ ] **E2E tests**
