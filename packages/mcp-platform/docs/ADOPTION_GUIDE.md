@@ -324,17 +324,36 @@ checks.
 Import the additive subpath (preserves the root contract):
 
 ```ts
-import { compileToolConfiguration } from '@sentropic/mcp-platform/tool-configuration';
+import { compileToolConfiguration, computeCompatibilityDigest } from '@sentropic/mcp-platform/tool-configuration';
 ```
 
-Supply the versioned approved snapshot, the provider manifest and the local handler table.
+Supply the versioned approved snapshot, the provider manifest, the local handler table and the
+consumer compatibility digest. `computeCompatibilityDigest` covers the generic public
+schemas/result codec (names, descriptions, input/output schemas); a 1b consumer computes its own
+digest over its SDK `tools/list` snapshot plus the `content`/`isError` envelope and passes it as
+`compatibilityDigest` — the compiler compares it, never derives it.
 The compiler validates the whole candidate before activation: schema `v1`, provider/connector refs,
-revision, manifest and compatibility digests, exact tool coverage (configuration alone cannot rename,
-remove, add or change parameters/results), known local handlers only, typed per-tool values (unknown
-keys/handlers and invalid values rejected), reused manifest policy with no weakening, and provenance
-without credentials, bearers or user data. It performs zero I/O; an invalid candidate retains the
-active generation and a cold start without valid embedded configuration fails closed. Tests use
-synthetic providers only (`tests/tool-configuration.test.ts`).
+revision, manifest digest, consumer compatibility digest, exact tool coverage (configuration alone
+cannot rename, remove, add or change parameters/results), known local handlers only (table keys must
+equal `handlerId`), closed-schema typed per-tool values (unsupported keywords rejected), manifest
+policy merged field by field with no weakening (scopes/claims stay supersets, mutability/idempotency
+equal, freshness keeps a finite bound at or below the baseline with `acr`/`amr` supersets, gates
+merged per gate including `requiresPolicy`, redaction monotonic), strict canonical JSON (aligned
+with `sentropic-json-v1`: `undefined`/non-finite/non-plain/cyclic values rejected), and provenance
+carrying the mandatory payload digest (which binds the manifest and compatibility digests) plus the
+handler-table shape digest. The compiled configuration is deep-cloned (caller inputs are never
+frozen) and deeply frozen, and exposes `payloadDigest`, `approvalRef`, `providerVersion`/
+`platformVersion` and `handlersDigest` for 1b diagnostics. It performs zero I/O; an invalid
+candidate retains the active generation, `activate` only accepts compiler-branded configurations
+(generation counter via `getGeneration`), and a cold start without valid embedded configuration
+fails closed. Tests use synthetic providers only (`tests/tool-configuration.test.ts`).
+
+### Scope source of truth for 3-policy
+
+The effective compiled policy is authoritative: a configuration may add `requiredScopes` or
+`requiredClaims` (strengthening only — the manifest baseline stays covered), so 3-policy MUST
+enforce the compiled `requiredScopes`/`requiredClaims` per tool, not the manifest baseline alone.
+Configuration alone can never rename, remove or add tools, nor change parameters or results.
 
 ## 9. Verifying your connector (mock harness)
 
