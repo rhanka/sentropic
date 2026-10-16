@@ -18,8 +18,8 @@ import type { ParameterSchema } from './parameters.js';
 import type { ArtifactService } from './server/service.js';
 import type { PublicationService } from './server/publication.js';
 import type { LifecycleService } from './server/lifecycle.js';
-import type { ForkService } from './server/fork.js';
-import type { AclStore, ArtifactAcl } from './server/access.js';
+import type { ForkRecord, ForkService } from './server/fork.js';
+import { evaluateAccess, grantAccess, revokeAccess, type AclStore, type ArtifactAcl } from './server/access.js';
 import { attachSource, type SourceStore } from './server/sources.js';
 import { assertArtifactAccess } from './server/authorization.js';
 
@@ -49,7 +49,7 @@ export interface HttpAppDeps {
 function errorStatus(message: string): number {
   if (/access denied/.test(message)) return 403;
   if (/can only purge|already |conflict|lost/.test(message)) return 409;
-  if (/unknown artifact|unknown release|unknown intent|unknown upload|unknown blob|not found|no source/.test(message)) {
+  if (/unknown artifact|unknown release|unknown intent|unknown upload|unknown blob|not found|no source|no release/.test(message)) {
     return 404;
   }
   if (/terminal|purged|deleted/.test(message)) return 410;
@@ -131,6 +131,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
               grants: [],
             });
           }
+          await deps.lifecycle.register(result.artifactId, request.actorId);
           return { status: 201, body: result };
         }
 
@@ -161,6 +162,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
             paramsHash: typeof body['paramsHash'] === 'string' ? body['paramsHash'] : undefined,
           });
           if (attached !== undefined) await deps.sources.putSource(artifactId, attached);
+          await deps.lifecycle.trackRelease(artifactId, result.releaseId);
           return { status: 201, body: result };
         }
 
@@ -175,6 +177,123 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           const current = await deps.publication.getCurrent(artifactId);
           if (current === undefined) return { status: 404, body: { error: 'not found' } };
           return { status: 200, body: current };
+        }
+
+        if (request.method === 'POST' && ['/withdraw', '/restore', '/delete'].includes(request.path)) {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          await requireAcl(artifactId);
+          if (request.path === '/withdraw') await deps.lifecycle.withdraw(artifactId, request.actorId);
+          if (request.path === '/restore') await deps.lifecycle.restore(artifactId, request.actorId);
+          if (request.path === '/delete') await deps.lifecycle.deleteArtifact(artifactId, request.actorId);
+          return { status: 200, body: { artifactId, state: await deps.lifecycle.stateOf(artifactId) } };
+        }
+
+        if (request.method === 'POST' && request.path === '/purge') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          await requireAcl(artifactId);
+          const digests: string[] = [];
+          for (const releaseId of await deps.lifecycle.listReleases(artifactId)) {
+            const release = await deps.publication.getRelease(releaseId);
+            if (release === undefined) throw new Error(`unknown release: ${releaseId}`);
+            const manifest = JSON.parse(release.manifest) as { files?: { digest?: unknown }[] };
+            for (const file of manifest.files ?? []) {
+              if (typeof file.digest === 'string') digests.push(file.digest);
+            }
+          }
+          const report = await deps.lifecycle.purge(artifactId, request.actorId, digests);
+          return { status: 200, body: report };
+        }
+
+        if (request.method === 'POST' && request.path === '/promote') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          await requireAcl(artifactId);
+          const result = await deps.lifecycle.promote(
+            artifactId,
+            request.actorId,
+            needString(body['releaseId'], 'releaseId'),
+            needString(body['expectedCurrent'], 'expectedCurrent'),
+          );
+          return { status: 200, body: result };
+        }
+
+        if (request.method === 'POST' && request.path === '/renew') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          await requireAcl(artifactId);
+          const result = await deps.lifecycle.renew(artifactId, request.actorId);
+          return { status: 200, body: result };
+        }
+
+        if (request.method === 'POST' && request.path === '/fork') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          const acl = await requireAcl(artifactId);
+          // Right first (403), terminal state second (410): like other
+          // mutations, a known object reports its state instead of hiding it.
+          if (!evaluateAccess(acl, request.actorId, 'read', isApproved)) {
+            throw new Error('access denied: cannot read artifact to fork');
+          }
+          const state = await deps.lifecycle.stateOf(artifactId);
+          if (state === 'deleted' || state === 'purged') {
+            throw new Error(`cannot fork ${state} artifact: ${artifactId}`);
+          }
+          const current = await deps.publication.getCurrent(artifactId);
+          if (current === undefined) throw new Error(`no release to fork for ${artifactId}`);
+          const manifest = JSON.parse(current.manifest) as { files?: { digest?: unknown }[] };
+          const parent: ForkRecord = {
+            artifactId,
+            ownerId: acl.ownerId,
+            releaseId: current.releaseId,
+            manifest: current.manifest,
+            state,
+            readerIds: acl.grants.map((grant) => grant.principalId),
+            blobDigests: (manifest.files ?? []).flatMap((file) =>
+              typeof file.digest === 'string' ? [file.digest] : [],
+            ),
+          };
+          await deps.forks.track(parent);
+          const forked = await deps.forks.fork({ actorId: request.actorId, artifactId });
+          return { status: 201, body: forked };
+        }
+
+        if (request.method === 'POST' && request.path === '/access/grant') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          const acl = await requireAcl(artifactId);
+          const grant = body['grant'];
+          if (grant !== 'read' && grant !== 'source') throw new Error('invalid grant: must be read or source');
+          const updated = grantAccess(acl, request.actorId, {
+            principalId: needString(body['principalId'], 'principalId'),
+            grant,
+          });
+          await deps.acls.putArtifactAcl(artifactId, updated);
+          return { status: 200, body: { grants: updated.grants } };
+        }
+
+        if (request.method === 'POST' && request.path === '/access/revoke') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          const acl = await requireAcl(artifactId);
+          const updated = revokeAccess(acl, request.actorId, needString(body['principalId'], 'principalId'));
+          await deps.acls.putArtifactAcl(artifactId, updated);
+          return { status: 200, body: { grants: updated.grants } };
+        }
+
+        if (request.method === 'POST' && request.path === '/sources') {
+          const artifactId = needString(body['artifactId'], 'artifactId');
+          const acl = await requireAcl(artifactId);
+          assertArtifactAccess({ actorUserId: request.actorId, artifactOwnerId: acl.ownerId, action: 'mutate' });
+          const attached = attachSource((body['source'] ?? {}) as never);
+          await deps.sources.putSource(artifactId, attached);
+          return { status: 200, body: attached };
+        }
+
+        if (request.method === 'GET' && request.path.startsWith('/source/')) {
+          const artifactId = request.path.slice('/source/'.length);
+          if (artifactId.length === 0) return { status: 404, body: { error: 'not found' } };
+          const acl = await requireAcl(artifactId);
+          if (!evaluateAccess(acl, request.actorId, 'source', isApproved)) {
+            throw new Error('access denied: source export requires a source grant');
+          }
+          const source = await deps.sources.getSource(artifactId);
+          if (source === undefined) return { status: 404, body: { error: 'no source attached' } };
+          return { status: 200, body: source };
         }
 
         return { status: 404, body: { error: 'unknown route' } };
