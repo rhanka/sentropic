@@ -1271,6 +1271,200 @@ export class SessionContentService {
     });
   }
 
+  /** Owner-only read: active grants read live committed copies; closed
+   * sessions require a distinct history authorization. Reads never extend
+   * a configured deadline; expired finite copies deny with zero bytes. */
+  async readCommitted(
+    sessionId: string,
+    channel: 'terminal.cache' | 'native.mirror',
+    ctx: SessionContentContext,
+    historyAuthorizationId?: string,
+  ): Promise<Uint8Array> {
+    requireContext(ctx);
+    const { client } = this.storage();
+    const target = await db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+      if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      if (grant.state === 'active') {
+        // Live read; no history authorization needed.
+      } else if (grant.state === 'closed') {
+        if (!historyAuthorizationId) {
+          throw new SessionContentError(
+            'history_authorization_required',
+            'closed copies need a distinct history authorization',
+          );
+        }
+        const [authorization] = await tx
+          .select()
+          .from(sessionContentHistoryAuthorizations)
+          .where(
+            eq(sessionContentHistoryAuthorizations.authorizationId, historyAuthorizationId),
+          )
+          .limit(1);
+        if (!authorization || authorization.state !== 'active' || authorization.sessionId !== sessionId) {
+          throw new SessionContentError('history_authorization_revoked', 'history grant is not active');
+        }
+      } else {
+        throw new SessionContentError('grant_revoked', 'grant is not readable');
+      }
+      const objects = await tx
+        .select()
+        .from(sessionContentObjects)
+        .where(
+          and(
+            eq(sessionContentObjects.sessionId, sessionId),
+            eq(sessionContentObjects.channel, channel),
+            eq(sessionContentObjects.state, 'committed'),
+          ),
+        );
+      if (objects.length === 0) throw new SessionContentError('not_found', 'no committed copy');
+      const now = this.nowMs();
+      const live = objects.filter((o) => o.expiresAt === null || o.expiresAt === undefined || now < o.expiresAt);
+      if (live.length === 0) throw new SessionContentError('object_expired', 'copies past deadline');
+      live.sort((a, b) => b.capturedAt - a.capturedAt);
+      return live[0]!;
+    });
+    const response = await client.send(
+      new GetObjectCommand({ Bucket: target.bucket, Key: target.objectKey }),
+    );
+    return response.Body?.transformToByteArray() ?? new Uint8Array(0);
+  }
+
+  /** Scoped paginated inventory over committed metadata. Cross-prefix
+   * access is rejected; payload bytes never appear here. */
+  async listObjects(
+    namespaceId: string,
+    cursor: string | null,
+    limit: number,
+    ctx: SessionContentContext,
+  ): Promise<PaginatedObjectInventory> {
+    requireContext(ctx);
+    if (!namespaceId.startsWith(`scc:${ctx.tenantId}:${ctx.ownerId}:`)) {
+      throw new SessionContentError('cross_prefix_refused', 'namespace is outside the caller scope');
+    }
+    const page = Math.min(Math.max(limit, 1), 100);
+    const rows = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(
+        and(
+          eq(sessionContentObjects.namespaceId, namespaceId),
+          eq(sessionContentObjects.state, 'committed'),
+          cursor ? gt(sessionContentObjects.objectId, cursor) : sql`TRUE`,
+        ),
+      )
+      .orderBy(sessionContentObjects.objectId)
+      .limit(page + 1);
+    const slice = rows.slice(0, page);
+    return {
+      objects: slice.map((o) => ({
+        objectId: o.objectId,
+        sessionId: o.sessionId,
+        channel: o.channel,
+        bytesRaw: o.bytesRaw,
+        bytesEncoded: o.bytesEncoded,
+        expiresAt: o.expiresAt,
+        state: o.state,
+      })),
+      nextCursor: rows.length > page ? slice[ slice.length - 1 ]!.objectId : null,
+    };
+  }
+
+  /** Exact stored-byte accounting: closed copies, staging and pending
+   * deletion stay charged. Quotas pause new capture; nothing is evicted. */
+  async accountUsage(scope: { tenantId?: string; sessionId?: string }): Promise<SessionContentUsage> {
+    let tenantNamespaces: string[] | null = null;
+    if (scope.tenantId && !scope.sessionId) {
+      const rows = await db
+        .select({ namespaceId: sessionContentNamespaces.namespaceId })
+        .from(sessionContentNamespaces)
+        .where(eq(sessionContentNamespaces.tenantId, scope.tenantId));
+      tenantNamespaces = rows.map((r) => r.namespaceId);
+    }
+    const inTenantScope =
+      tenantNamespaces === null
+        ? sql`TRUE`
+        : tenantNamespaces.length === 0
+          ? sql`FALSE`
+          : inArray(sessionContentObjects.namespaceId, tenantNamespaces);
+    const committed = await db
+      .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int`, count: sql<number>`count(*)::int` })
+      .from(sessionContentObjects)
+      .where(
+        and(
+          eq(sessionContentObjects.state, 'committed'),
+          inTenantScope,
+          scope.sessionId ? eq(sessionContentObjects.sessionId, scope.sessionId) : sql`TRUE`,
+        ),
+      );
+    const staged = await db
+      .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+      .from(sessionContentObjects)
+      .where(
+        and(
+          inArray(sessionContentObjects.state, ['staged']),
+          inTenantScope,
+          scope.sessionId ? eq(sessionContentObjects.sessionId, scope.sessionId) : sql`TRUE`,
+        ),
+      );
+    const reservedInScope =
+      tenantNamespaces === null
+        ? sql`TRUE`
+        : tenantNamespaces.length === 0
+          ? sql`FALSE`
+          : inArray(sessionContentReservations.namespaceId, tenantNamespaces);
+    const reserved = await db
+      .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+      .from(sessionContentReservations)
+      .where(
+        and(
+          eq(sessionContentReservations.state, 'reserved'),
+          reservedInScope,
+          scope.sessionId ? eq(sessionContentReservations.sessionId, scope.sessionId) : sql`TRUE`,
+        ),
+      );
+    const pending = await db
+      .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+      .from(sessionContentObjects)
+      .where(
+        and(
+          eq(sessionContentObjects.state, 'purge_pending'),
+          inTenantScope,
+          scope.sessionId ? eq(sessionContentObjects.sessionId, scope.sessionId) : sql`TRUE`,
+        ),
+      );
+    const closed = await db
+      .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+      .from(sessionContentObjects)
+      .innerJoin(
+        sessionContentGrants,
+        eq(sessionContentObjects.sessionId, sessionContentGrants.sessionId),
+      )
+      .where(
+        and(
+          eq(sessionContentObjects.state, 'committed'),
+          eq(sessionContentGrants.state, 'closed'),
+          scope.sessionId ? eq(sessionContentObjects.sessionId, scope.sessionId) : sql`TRUE`,
+        ),
+      );
+    return {
+      committedBytes: committed[0]?.bytes ?? 0,
+      stagedBytes: staged[0]?.bytes ?? 0,
+      reservedBytes: reserved[0]?.bytes ?? 0,
+      pendingDeletionBytes: pending[0]?.bytes ?? 0,
+      closedBytes: closed[0]?.bytes ?? 0,
+      objectCount: committed[0]?.count ?? 0,
+    };
+  }
+
   async clearExclusion(projectId: string, sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
     return db.transaction(async (tx) => {
