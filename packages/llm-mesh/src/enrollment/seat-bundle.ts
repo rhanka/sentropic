@@ -53,7 +53,8 @@ const TOP_LEVEL_KEYS = [
 
 const IDENTITY_KEYS = [
   'schemaVersion', 'seatRef', 'refreshFamilyRef', 'ownerScope', 'cli',
-  'packageProviderId', 'credentialFormatVersion', 'nativeCliVersion', 'os',
+  'packageProviderId', 'issuingClientRef', 'endpointFamily',
+  'credentialFormatVersion', 'nativeCliVersion', 'os',
 ] as const;
 
 const PROVENANCE_KEYS = ['enrollmentSource', 'accountBinding', 'entitlementClass'] as const;
@@ -74,6 +75,8 @@ export interface SeatBundleIdentity {
   ownerScope: string;
   cli: SeatCli;
   packageProviderId: string;
+  issuingClientRef: string;
+  endpointFamily: string;
   credentialFormatVersion: string;
   nativeCliVersion?: string;
   os?: 'linux' | 'macos' | 'windows';
@@ -133,6 +136,15 @@ export type SeatValidationResult =
   | { ok: true; bundle: SeatBundleV1; idempotentReimport?: boolean }
   | { ok: false; code: SeatValidationCode; detail: string };
 
+/** Trusted channel context; absent authority defaults to least-privilege consumer. */
+export interface SeatValidationContext {
+  ownerScope?: string;
+  trustedAuthority?: SeatAuthority;
+  issuingClientRef?: string;
+  endpointFamily?: string;
+  predecessor?: Pick<SeatBundleLifecycle, 'epoch' | 'generation' | 'operationId'>;
+}
+
 export interface SeatReceipt {
   seatRef: string;
   cli: SeatCli;
@@ -186,7 +198,7 @@ function validInt(value: unknown, min: number): value is number {
 }
 
 /** Structural validation of one bundle; predecessor comparison stays in isStaleGeneration. */
-export function validateSeatBundle(bundle: unknown, ctx?: { ownerScope?: string }): SeatValidationResult {
+export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext): SeatValidationResult {
   let serialized = '';
   try {
     serialized = JSON.stringify(bundle) ?? '';
@@ -217,6 +229,18 @@ export function validateSeatBundle(bundle: unknown, ctx?: { ownerScope?: string 
   }
   if (identity['packageProviderId'] !== SEAT_PACKAGE_PROVIDER_ID[cli]) {
     return fail('client-mismatch', `identity.packageProviderId must be ${SEAT_PACKAGE_PROVIDER_ID[cli]}`);
+  }
+  if (!nonEmpty(identity['issuingClientRef'])) {
+    return fail('client-mismatch', 'identity.issuingClientRef must be non-empty');
+  }
+  if (!nonEmpty(identity['endpointFamily'])) {
+    return fail('client-mismatch', 'identity.endpointFamily must be non-empty');
+  }
+  if (ctx?.issuingClientRef !== undefined && identity['issuingClientRef'] !== ctx.issuingClientRef) {
+    return fail('client-mismatch', 'identity.issuingClientRef does not match the expected client');
+  }
+  if (ctx?.endpointFamily !== undefined && identity['endpointFamily'] !== ctx.endpointFamily) {
+    return fail('client-mismatch', 'identity.endpointFamily does not match the expected family');
   }
   if (!nonEmpty(identity['seatRef'])) return fail('schema-mismatch', 'identity.seatRef must be non-empty');
   if (!nonEmpty(identity['ownerScope'])) return fail('schema-mismatch', 'identity.ownerScope must be non-empty');
