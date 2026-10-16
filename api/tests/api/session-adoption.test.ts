@@ -857,7 +857,7 @@ describe('session adoption workspace binding', () => {
       .where(eq(sessionContentTombstones.tenantId, TENANT_A));
     const now = 1_700_000_000_000;
     const fakeEpoch = createFakeContentAuthorityEpochPort();
-    const content = new SessionContentService({ nowMs: () => now, epochs: fakeEpoch });
+    const content = new SessionContentService({ nowMs: () => now, issuer: 'test-issuer', epochs: fakeEpoch });
     const service = new SessionWorkspaceService(undefined, {
       fenceSessionOnDetachEnd: (sessionId, tenantId) =>
         content.fenceSessionOnDetachEnd(sessionId, tenantId),
