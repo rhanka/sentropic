@@ -64,7 +64,7 @@ Qualify mcp-auth for Immo application scopes with a minimal guarded source fix (
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-- Record: `e2e/tests/09-chat-org-update-tool.spec.ts:49` (`Chat organization_update tool › updates the organization technologies field on request (default model)`, AI-flaky allowlist) failed once in CI job `test-e2e (group-d, 08 09)`, run `38833573638` attempt 1 (job `116759969101`), commit `90831b41a`. Command: `make test-e2e ENV=e2e-ci`. Signature: `expect(after).not.toBe(before)` at line 167 → `Expected: not "Legacy mainframe"` after 2.1 min polling; trace `technologies before="Legacy mainframe" after="Legacy mainframe" toolCallObserved=false`; model did not call `organization_update` in the 120 s window; no mcp-auth code path involved. Non-systematic: same commit and same command green at run `38833573638` attempt 2 (job `116766881777`); also green on `1db814905` (run `38836550713`) and on head `cba46c559` (run `38844992840`, job `116795604719`). `flaky accepted` per non-systematic rule. Explicit user sign-off still required before any merge: pending.
+- Record: `e2e/tests/09-chat-org-update-tool.spec.ts:49` (`Chat organization_update tool › updates the organization technologies field on request (default model)`, AI-flaky allowlist) failed once in CI job `test-e2e (group-d, 08 09)`, run `38833573638` attempt 1 (job `116759969101`), commit `90831b41a`. Command: `make test-e2e ENV=e2e-ci`. Signature: `expect(after).not.toBe(before)` at line 167 → `Expected: not "Legacy mainframe"` after 2.1 min polling; trace `technologies before="Legacy mainframe" after="Legacy mainframe" toolCallObserved=false`; model did not call `organization_update` in the 120 s window; no mcp-auth code path involved. Non-systematic: same commit and same command green at run `38833573638` attempt 2 (job `116766881777`); also green on `1db814905` (run `38836550713`) and on head `cba46c559` (run `38844992840`, job `116795604719`). `flaky accepted` per non-systematic rule. Owner sign-off: GO for merge and publication given 2026-10-16 (track decision recorded); AI-flaky failure `e2e/tests/09-chat-org-update-tool.spec.ts:49` (run `38833573638` attempt 1, toolCallObserved=false) explicitly signed off.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -135,7 +135,7 @@ Qualify mcp-auth for Immo application scopes with a minimal guarded source fix (
   - [ ] Retest API (cf Lot1, copy checklist)
   - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [x] Record explicit user sign-off if any AI flaky test is accepted (owner GO + sign-off 2026-10-16, see `## AI Flaky tests`)
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
   - [x] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
