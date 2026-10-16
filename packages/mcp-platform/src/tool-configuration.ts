@@ -110,7 +110,7 @@ export type ApprovedToolSnapshot = {
   providerVersion: string;
   platformVersion: string;
   compatibilityDigest: string;
-  handlersDigest?: string;
+  handlersDigest: string;
   provenance: ToolConfigurationProvenance;
   bindings: ApprovedToolBinding[];
 };
@@ -1160,10 +1160,10 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
   } catch {
     diag(diagnostics, 'unknown_handler', 'handlers', 'handler table cannot be canonically encoded');
   }
-  if (typeof snapshot.handlersDigest === 'string' && snapshot.handlersDigest.length > 0) {
-    if (handlersDigest !== '' && snapshot.handlersDigest !== handlersDigest) {
-      diag(diagnostics, 'handlers_digest_mismatch', 'snapshot.handlersDigest', 'handlersDigest does not match the local handler table');
-    }
+  if (typeof snapshot.handlersDigest !== 'string' || snapshot.handlersDigest.length === 0) {
+    diag(diagnostics, 'handlers_digest_mismatch', 'snapshot.handlersDigest', 'handlersDigest is mandatory and must be non-empty');
+  } else if (handlersDigest !== '' && snapshot.handlersDigest !== handlersDigest) {
+    diag(diagnostics, 'handlers_digest_mismatch', 'snapshot.handlersDigest', 'handlersDigest does not match the local handler table');
   }
 
   if (diagnostics.length > 0) return { ok: false, diagnostics };
