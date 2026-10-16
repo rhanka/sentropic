@@ -1,7 +1,8 @@
 # Feature: immo-861-mcp-registry (Sentropic consolidation: 1a + 2-IdP + 2a)
 
 ## Objective
-Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token-exchange (L-2IdP) and origin/feat/cluster-mesh-token-exchange (L-2a) onto ONE branch with linear history, then execute the open findings and the next Sentropic lots in spec order on this single branch with ONE PR and ONE final CI cycle. Governing spec: spec-v7 (`26a59bbd03d4e125dc5e5d9cfee9fa81c484d8e06dfa0d4b5432700895e2b79a`; spec-v8 in progress, v7 applies until it lands). Sentropic scope runs through L-5e; Radar lots are i-cond owned.
+Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token-exchange (L-2IdP) and origin/feat/cluster-mesh-token-exchange (L-2a) onto ONE branch with linear history, then execute the open findings and the next Sentropic lots in spec order on this single branch with ONE PR and ONE final CI cycle. Sentropic scope runs through L-5e; Radar lots are i-cond owned.
+- [ ] Governing acceptance references: Immo `.tmp/immo-mcp-enablers/spec-v8.md` SHA-256 `6459675be17575251800efe658d27134df14b7d87f09b250df5f8ed32e06e666`, superseding v7 `26a59bbd03d4e125dc5e5d9cfee9fa81c484d8e06dfa0d4b5432700895e2b79a`, plus `.tmp/registry-contract/registry-entry-contract-v3.md`; record its separately supplied SHA-256 in the i-cond acknowledgement and acceptance receipt before checking this item.
 
 ## Scope / Guardrails
 - Scope limited to Sentropic-side immo #861 lots: carried 1a/2-IdP/2a, then 1b-core, 3-policy/4a, 2b-MCP Sentropic support, 4b-leaves (incl. 1b-facade), 5a pages contracts.
@@ -13,6 +14,9 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
 - UAT branch/worktree must be commit-identical to the branch under qualification.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
+- [ ] Keep RC-M2(a)-(c) and the pure remote-bound seam in Lot 4, guarded transport integration in Lot 5, and the generic remote adapter/SDK stdio bridge library in Lot 7; one platform writer then one mesh writer.
+- [ ] Exclude R7a's `packages/cluster-mesh/src/registry/cli.ts`, `bootstrap.ts`, `selection-lock.ts`, `host-formats.ts`, npm bin, host-format installer and lock CLI from this PR; R7a runs after the full Immo merge with R3 under one later skills/mesh writer.
+- [ ] Preserve one final platform candidate and one release per changed published contract under spec-v8's ledger; do not restore an intermediate 0.3.0-to-0.4.0 publication. RC-6 blocks Lot 4's version/final-candidate acceptance and lot gate until its new requirements pass.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -63,7 +67,8 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
 - `acknowledge` V7-M1 (applied): llm-gateway 0.19.6 + auth-ui 0.7.5 bumps kept (auth-hono `|| ^0.16.0` widening; removal would break installs). cluster-mesh optional peers widened to the #662 union (llm-mesh `>=0.22.0 <0.27.0`, llm-gateway `>=0.19.0 <0.21.0`; lower bounds unchanged). Strict published-tuple install test added (`tests/packaging/tuple-strict.spec.ts`, real proof in CI lazy-package with sibling receipts). Minimal parser never sees `||` (npm-only range); no parser change.
 - `acknowledge` V7-m5 (applied per spec-v7 §11): L-1b-core commits kept as uncheckpointed WIP, close only after the L-1a checkpoint; no 0.4.0 bump; scope extended through L-5e.
 - `attention` V7-m3 (applied): all runs use `ENV=test-immo-861-mcp-registry` (no other test env on this branch).
-- `blocked` none.
+- [ ] `blocked` RC-6 (owner: i-cond + consolidated platform writer; severity: major): Lot 4's existing kernel/tests omit contract-v3 RC-M2(a)-(c) and the remote-bound seam. Evidence: PR #679 packet head `6f2609e2fc7bfcdc0df5a1fd75591cf8bf386ccc`, BRANCH.md SHA-256 `917ef5b42b899ecde0ea82153f8cde8514d2bc6d2b28f6f4db59f38ff954b3ae`; v7/v8 contain no such contract delta. Hold any Lot 4 version bump, replacement final-candidate acceptance and lot gate. Close only with the explicit acknowledgement below and checked Lot 4 implementation, scoped tests, packed proof and integrated checkpoint evidence; Lot 5/7 transport/mesh gates remain independently required.
+- [ ] `attention` RC-6-ACK (owner: i-cond; acknowledgement pending): record acceptance of the exact contract-v3 SHA-256, the v8-aligned spec incorporation path/hash, revised BRANCH.md hash/head and assigned Lot 4/5/7 writers; acknowledge that R7a and R3 belong after the full Immo merge under one later mesh writer and that R5 consumes that later packed tuple. A planning acknowledgement alone does not close RC-6's implementation gate.
 
 ## AI Flaky tests
 - `e2e/tests/09-chat-org-update-tool.spec.ts:49` (assertion line 167, `toolCallObserved=false`): failed run `38833573638` attempt 1 at `90831b41a`, same-command/same-commit green attempt 2, later green group-d on `cba46c559`. Owner GO + sign-off recorded at `442e034f8` on main. Carried as accepted; no repeat sign-off required.
@@ -178,12 +183,46 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
       - [ ] Revoke/invalidate a cached identity and rotate credentials/scopes mid-session; no old entry authorizes the next call.
       - [ ] Measure cold-call extra latency and warm-call token-endpoint avoidance.
 
-- [ ] **Lot 4 — L-1b-core portable registry kernel (in progress; uncheckpointed WIP per spec-v7 §11 V7-m5)**
-  - [x] New `packages/mcp-platform/src/registry.ts`, registry subpath/export/type declarations, `tests/registry.test.ts`, `tests/registry-configuration.test.ts`, `tests/registry-dispatch.test.ts`; package/API docs and reports. Reuse manifest/runtime/config compiler. No cluster-mesh source in this lot.
-  - [x] Test-first: new suites RED before impl (`Cannot find module '../src/registry.js'`), GREEN after (11 + 6 + 3).
-  - [x] provider-cascade checked: not applicable (MCP provider registry; no `api/src/services/llm-runtime/**` or `providers/**` change, no `test-api-ai` trigger).
-  - [x] Disposition of `6d06e5205`/`e566f0313`: kept as uncheckpointed WIP; cannot close before the L-1a checkpoint; no 0.4.0 bump (single 0.3.0 candidate per spec-v7 §11; 0.4.0 bump reverted). Scoped L-1b-core gates rerun after any L-1a change to `packages/mcp-platform/**`.
-  - [x] Packed-subpath import proof with zero registry I/O (isolated process): `probe-mcp-platform-clean-consumer` extended (I861-EX1) to import `@sentropic/mcp-platform/registry`, compile and resolve in the fetch-trapped consumer — `CLEAN_CONSUMER_OK`, frozen digests, `fetchCalls=0`.
+- [ ] **Lot 4 — L-1b-core registry kernel plus contract-v3 extensions (RC-6 blocked)**
+  - [x] Preserve existing kernel `788bfe47bc485aba0a5050c9e7fe88cd2fd6d0f2` and tests `f668dc66a6f25d304ae0cabc5e1cba0c262978e4` as uncheckpointed WIP; their earlier RED/GREEN report does not accept this expanded contract.
+  - [ ] Accept L-1a and the carried checkpoint chain first; after every relevant L-1a platform edit rerun the affected registry suites, packed-subpath zero-I/O probe and integrated Lot 4 gate.
+  - [ ] RC-M2(a): update `packages/mcp-platform/src/registry.ts` and public declarations to accept `LoadedDefinition | LazyDefinition`; preserve Immo's loaded definition and `register/select/configure/compile` signatures; freeze validated metadata, never load on register/catalog/unselected entries, and load selected entries only after preflight with atomic refusal.
+  - [ ] RC-M2(b): add `packages/mcp-platform/src/registry-entry.ts` and `src/registry-canonical.ts`; validate the closed registry-entry/v1 envelope, required extensions, raw-JSON duplicate keys and package-root asset closure; expose `./registry/entry`, full RFC 8785 SHA-256 and exact-byte asset digest APIs with no SDK/eager optional import.
+  - [ ] RC-M2(c): add `packages/mcp-platform/src/registry-parameters.ts`; implement dependency-free `sentropic.parameters/2020-12-bounded-v1`, the fixed safe pattern, structural const/enum, defaults, budgets and refusal of unsupported keywords; freeze the validator-port seam and retain the separate Lot 1a compiler.
+  - [ ] Remote seam: extend the kernel's public definition/binding types with `remote-bound` and a versioned injected client port; synthetic plan-resolution tests reject unknown/unselected names and schema mismatches before forwarding, with zero resource acquisition on invalid candidates. No h2a import; actual shared transport guards close in Lot 5.
+  - [ ] Update platform package exports/type declarations/API report and docs; pass the scoped suites below and clean packed fixtures for `./registry`, `./registry/entry` and synthetic publishers' `./registry/manifest` before accepting the final candidate.
+  - [ ] RC-6 version/final-candidate acceptance: only after RC-6-ACK and all preceding delivery/test/probe evidence pass at the integrated checkpoint, accept the single spec-v8-ledger platform candidate (0.3.0 if compatible/free and above refreshed main/npm, otherwise the audited higher version); no separate 0.4.0 lot release and no intermediate publication.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+    - [ ] **API tests**
+      - [ ] `packages/mcp-platform/tests/registry.test.ts` (existing, updated for loaded/lazy lifecycle)
+      - [ ] `packages/mcp-platform/tests/registry-configuration.test.ts` (existing, updated for bounded parameters and provider isolation)
+      - [ ] `packages/mcp-platform/tests/registry-dispatch.test.ts` (existing, updated for exact plan resolution and candidate atomicity)
+      - [ ] `packages/mcp-platform/tests/registry-entry.test.ts` (new: closed envelope/extensions/assets and packed publisher JSON export)
+      - [ ] `packages/mcp-platform/tests/registry-canonical.test.ts` (new: RFC 8785 Unicode ordering/escaping/IEEE-754/negative zero; reject duplicate keys, non-finite numbers and lone surrogates)
+      - [ ] `packages/mcp-platform/tests/registry-parameters.test.ts` (new: bounded 2020-12, safe-pattern semantics, budgets, unsupported keywords and independent configurations)
+      - [ ] `packages/mcp-platform/tests/registry-remote-binding.test.ts` (new: pure remote-bound seam, selected exact names/schema and preflight zero-effects)
+      - [ ] `packages/mcp-platform/tests/manifest.test.ts` (existing regression)
+      - [ ] `packages/mcp-platform/tests/authz.test.ts` (existing regression)
+      - [ ] `packages/mcp-platform/tests/tool-configuration.test.ts` (existing regression, including token-family negatives and typed maxTokens positive)
+      - [ ] Scoped runs while evolving: `make test-mcp-platform SCOPE=tests/registry.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [ ] `make test-mcp-platform SCOPE=tests/registry-configuration.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [ ] `make test-mcp-platform SCOPE=tests/registry-dispatch.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [ ] `make test-mcp-platform SCOPE=tests/registry-entry.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [ ] `make test-mcp-platform SCOPE=tests/registry-canonical.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [ ] `make test-mcp-platform SCOPE=tests/registry-parameters.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [ ] `make test-mcp-platform SCOPE=tests/registry-remote-binding.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [ ] Sub-lot gate: `make test-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None for this pure kernel; no web/Chrome/VSCode change.
+    - [ ] **E2E tests**
+      - [ ] None for the pure kernel; HTTP/stdio qualification remains in Lots 5/7 and actual Immo parity remains with i-cond.
+    - [ ] UAT (packed kernel, isolated process):
+      - [ ] Install the exact packed candidate and synthetic publisher fixtures; import public registry/entry exports and inspect metadata with loader/network counters at zero.
+      - [ ] Register a loaded Immo-shaped provider and an unselected lazy provider; select/configure the first, compile, and show the second loader never executes.
+      - [ ] Select both with distinct configurations; change one and prove the other's metadata/values/policy are unchanged; tamper descriptor/asset/schema and reject the candidate without replacing the valid plan.
+      - [ ] Attempt unknown/unselected remote dispatch and malformed upstream metadata through the synthetic port; no call or effect occurs before valid compilation.
+      - [ ] Record checkpoint SHA, exact commands/results, tarball hashes, i-cond acknowledgement and updated spec/plan hashes; RC-6 remains blocked if any are missing.
   - [ ] Lot gate:
     - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
     - [ ] **API tests**
