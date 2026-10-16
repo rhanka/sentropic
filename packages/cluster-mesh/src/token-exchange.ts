@@ -177,7 +177,7 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
         refuse('actor_invalid');
       }
 
-      let subject: VerifiedSubjectToken;
+      let subject: VerifiedSubjectToken | undefined;
       try {
         subject = await input.issuer.verify(request.subjectToken);
       } catch (error) {
@@ -186,28 +186,29 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
         }
         refuse('subject_unverified');
       }
+      if (subject === undefined) refuse('subject_unverified');
       const nowSec = Math.floor(nowMs() / 1000);
-      if (subject!.expiresAtSec <= nowSec) refuse('subject_expired');
-      if (subject!.subject.length === 0) refuse('subject_unverified', 'Token exchange refused: verified subject is empty');
-      if (request.actor !== undefined && request.actor.iss !== subject!.issuer) refuse('actor_invalid');
+      if (subject.expiresAtSec <= nowSec) refuse('subject_expired');
+      if (subject.subject.length === 0) refuse('subject_unverified', 'Token exchange refused: verified subject is empty');
+      if (request.actor !== undefined && request.actor.iss !== subject.issuer) refuse('actor_invalid');
 
       const grantedScope: readonly string[] =
-        request.scope.length === 0 ? [...subject!.scope] : [...request.scope];
+        request.scope.length === 0 ? [...subject.scope] : [...request.scope];
       for (const scope of grantedScope) {
-        if (!subject!.scope.includes(scope)) refuse('scope_not_granted');
+        if (!subject.scope.includes(scope)) refuse('scope_not_granted');
       }
 
-      const key = JSON.stringify(buildTokenExchangeCacheKey(request, subject!));
+      const key = JSON.stringify(buildTokenExchangeCacheKey(request, subject));
       const hit = cache.get(key);
       if (hit !== undefined) {
         if (hit.expiresAtMs > nowMs()) return hit.response;
         cache.delete(key);
       }
 
-      const ttlSec = Math.min(subject!.expiresAtSec - nowSec, maxTtlSec);
+      const ttlSec = Math.min(subject.expiresAtSec - nowSec, maxTtlSec);
       if (ttlSec <= 0) refuse('ttl_non_positive');
       const minted = await input.issuer.mint({
-        subject: subject!,
+        subject,
         audience: request.audience,
         scope: grantedScope,
         actor: request.actor,
@@ -230,7 +231,7 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
         response,
         expiresAtMs: resolveTokenExchangeCacheTtlMs({
           mintedExpiresAtSec: minted.expiresAtSec,
-          subjectExpiresAtSec: subject!.expiresAtSec,
+          subjectExpiresAtSec: subject.expiresAtSec,
           insertedAtMs,
         }),
       });
