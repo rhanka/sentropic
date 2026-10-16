@@ -196,6 +196,23 @@ describe('postgres artifact store', () => {
     expect(await store.getReleaseState('dddddddd-dddd-4ddd-8ddd-dddddddddddd')).toBe('retired');
   });
 
+  it('counts holders and pins exactly', async () => {
+    expect(await store.count('sha256:aa')).toBe(0);
+    expect(await store.isPinned('sha256:aa')).toBe(false);
+    await store.addRef('sha256:aa', 'release-r1');
+    await store.addRef('sha256:aa', 'release-r1');
+    expect(await store.count('sha256:aa')).toBe(1);
+    await store.pin('sha256:aa', 'legal-hold');
+    expect(await store.isPinned('sha256:aa')).toBe(true);
+    await expect(store.pin('sha256:aa', 'legal-hold')).rejects.toThrow(/duplicate/);
+    await store.releaseRef('sha256:aa', 'release-r1');
+    expect(await store.count('sha256:aa')).toBe(0);
+    await expect(store.releaseRef('sha256:aa', 'release-r1')).rejects.toThrow(/not held/);
+    await store.unpin('sha256:aa', 'legal-hold');
+    expect(await store.isPinned('sha256:aa')).toBe(false);
+    await expect(store.unpin('sha256:aa', 'legal-hold')).rejects.toThrow(/not pinned/);
+  });
+
   it('registers blob rows with the release', async () => {
     const ensured = await store.ensureArtifact({
       storageScopeId: 'scope-1',
