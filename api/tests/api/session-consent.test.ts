@@ -204,6 +204,9 @@ describe('session consent durable lifecycle', () => {
     expect(amended.revision).toBe(1);
     await expectContentError(() => service.revokeProject('sess-content-project-1', {
       tenantId: TENANT_B, principalId: outsider.id, ownerId: outsider.id,
+    }), 'cross_owner_refused');
+    await expectContentError(() => service.revokeProject('sess-content-project-1', {
+      tenantId: TENANT_A, principalId: 'ghost-principal', ownerId: owner.id,
     }), 'membership_required');
   });
 
@@ -744,6 +747,7 @@ describe('session consent durable lifecycle', () => {
       'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-t1', ctx,
     );
     await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await db.delete(tenants).where(eq(tenants.id, TENANT_A));
     const grants = await db
       .select()
