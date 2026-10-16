@@ -100,6 +100,8 @@ const handlers: Record<string, ToolConfigurationHandlerBinding> = {
   'local-read': { handlerId: 'local-read', capabilityRef: 'synth_read', configSchema: readSchema },
 };
 
+const consumerDigest = computeCompatibilityDigest(manifest);
+
 function buildSnapshot(): ApprovedToolSnapshot {
   const revision = 'rev-1';
   const base = {
@@ -137,7 +139,7 @@ function buildSnapshot(): ApprovedToolSnapshot {
 
 describe('tool-configuration compiler — synthetic providers only', () => {
   it('compiles two synthetic tools with distinct settings on the intended binding only', () => {
-    const result = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
+    const result = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.config.tools.map((tool) => tool.toolName)).toEqual(['synth_read', 'synth_search']);
@@ -152,8 +154,8 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   });
 
   it('is deterministic across round trips and key order', () => {
-    const first = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
-    const second = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
+    const first = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
+    const second = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
@@ -166,7 +168,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
 
   it('rejects a wrong schema version before activation', () => {
     const snapshot = { ...buildSnapshot(), schemaVersion: 'v9' };
-    const result = compileToolConfiguration({ snapshot, manifest, handlers });
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics.some((entry) => entry.code === 'invalid_schema_version')).toBe(true);
@@ -175,7 +177,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   it('rejects an unknown handler', () => {
     const snapshot = buildSnapshot();
     snapshot.bindings[0] = { ...snapshot.bindings[0], handlerId: 'no-such-handler' };
-    const result = compileToolConfiguration({ snapshot, manifest, handlers });
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics.some((entry) => entry.code === 'unknown_handler')).toBe(true);
@@ -186,7 +188,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
       ...handlers,
       'local-search': { handlerId: 'local-search', capabilityRef: 'synth_read', configSchema: searchSchema },
     };
-    const result = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers: badHandlers });
+    const result = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers: badHandlers, compatibilityDigest: consumerDigest });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics.some((entry) => entry.code === 'handler_capability_mismatch')).toBe(true);
@@ -195,7 +197,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   it('rejects a duplicate external name', () => {
     const snapshot = buildSnapshot();
     snapshot.bindings.push({ ...snapshot.bindings[0] });
-    const result = compileToolConfiguration({ snapshot, manifest, handlers });
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics.some((entry) => entry.code === 'duplicate_tool_name')).toBe(true);
@@ -204,7 +206,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   it('rejects a missing binding for a manifest tool', () => {
     const snapshot = buildSnapshot();
     snapshot.bindings = [snapshot.bindings[0]];
-    const result = compileToolConfiguration({ snapshot, manifest, handlers });
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics.some((entry) => entry.code === 'missing_binding')).toBe(true);
@@ -213,14 +215,14 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   it('rejects an unknown tool and a capability rename', () => {
     const unknown = buildSnapshot();
     unknown.bindings[1] = { ...unknown.bindings[1], toolName: 'synth_unknown', capabilityRef: 'synth_unknown' };
-    const unknownResult = compileToolConfiguration({ snapshot: unknown, manifest, handlers });
+    const unknownResult = compileToolConfiguration({ snapshot: unknown, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(unknownResult.ok).toBe(false);
     if (!unknownResult.ok) {
       expect(unknownResult.diagnostics.some((entry) => entry.code === 'unknown_tool')).toBe(true);
     }
     const renamed = buildSnapshot();
     renamed.bindings[0] = { ...renamed.bindings[0], capabilityRef: 'synth_read' };
-    const renamedResult = compileToolConfiguration({ snapshot: renamed, manifest, handlers });
+    const renamedResult = compileToolConfiguration({ snapshot: renamed, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(renamedResult.ok).toBe(false);
     if (!renamedResult.ok) {
       expect(renamedResult.diagnostics.some((entry) => entry.code === 'capability_ref_mismatch')).toBe(true);
@@ -230,14 +232,14 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   it('rejects policy weakening before activation', () => {
     const droppedScope = buildSnapshot();
     droppedScope.bindings[0] = { ...droppedScope.bindings[0], policy: { requiredScopes: [] } };
-    const dropped = compileToolConfiguration({ snapshot: droppedScope, manifest, handlers });
+    const dropped = compileToolConfiguration({ snapshot: droppedScope, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(dropped.ok).toBe(false);
     if (!dropped.ok) {
       expect(dropped.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
     }
     const relaxedRedaction = buildSnapshot();
     relaxedRedaction.bindings[1] = { ...relaxedRedaction.bindings[1], policy: { redactionClass: 'none' } };
-    const relaxed = compileToolConfiguration({ snapshot: relaxedRedaction, manifest, handlers });
+    const relaxed = compileToolConfiguration({ snapshot: relaxedRedaction, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(relaxed.ok).toBe(false);
     if (!relaxed.ok) {
       expect(relaxed.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
@@ -247,7 +249,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
       ...relaxedFreshness.bindings[1],
       policy: { freshness: { maxAgeSeconds: 3600, stepUp: 'auth' } },
     };
-    const stale = compileToolConfiguration({ snapshot: relaxedFreshness, manifest, handlers });
+    const stale = compileToolConfiguration({ snapshot: relaxedFreshness, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(stale.ok).toBe(false);
     if (!stale.ok) {
       expect(stale.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
@@ -257,21 +259,21 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   it('rejects unknown keys and invalid values', () => {
     const unknownKey = buildSnapshot();
     unknownKey.bindings[0] = { ...unknownKey.bindings[0], values: { maxResults: 20, extra: true } };
-    const unknownResult = compileToolConfiguration({ snapshot: unknownKey, manifest, handlers });
+    const unknownResult = compileToolConfiguration({ snapshot: unknownKey, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(unknownResult.ok).toBe(false);
     if (!unknownResult.ok) {
       expect(unknownResult.diagnostics.some((entry) => entry.code === 'unknown_config_key')).toBe(true);
     }
     const outOfBounds = buildSnapshot();
     outOfBounds.bindings[0] = { ...outOfBounds.bindings[0], values: { maxResults: 5000 } };
-    const boundsResult = compileToolConfiguration({ snapshot: outOfBounds, manifest, handlers });
+    const boundsResult = compileToolConfiguration({ snapshot: outOfBounds, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(boundsResult.ok).toBe(false);
     if (!boundsResult.ok) {
       expect(boundsResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
     }
     const wrongType = buildSnapshot();
     wrongType.bindings[1] = { ...wrongType.bindings[1], values: { maxChars: 'many' } };
-    const typeResult = compileToolConfiguration({ snapshot: wrongType, manifest, handlers });
+    const typeResult = compileToolConfiguration({ snapshot: wrongType, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(typeResult.ok).toBe(false);
     if (!typeResult.ok) {
       expect(typeResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
@@ -294,14 +296,14 @@ describe('tool-configuration compiler — synthetic providers only', () => {
         type: 'object',
         properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, mode: { type: 'string', enum: ['fast', 'deep'], pattern: '^f' } },
         required: ['maxResults'], additionalProperties: false } } };
-    const keywordResult = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers: patternedHandlers });
+    const keywordResult = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers: patternedHandlers, compatibilityDigest: consumerDigest });
     expect(keywordResult.ok).toBe(false);
     if (!keywordResult.ok) {
       expect(keywordResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
     }
     const infinite = buildSnapshot();
     infinite.bindings[0] = { ...infinite.bindings[0], values: { maxResults: Number.POSITIVE_INFINITY } };
-    const infiniteResult = compileToolConfiguration({ snapshot: infinite, manifest, handlers });
+    const infiniteResult = compileToolConfiguration({ snapshot: infinite, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(infiniteResult.ok).toBe(false);
     if (!infiniteResult.ok) {
       expect(infiniteResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
@@ -310,7 +312,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
 
   it('rejects digest mismatches', () => {
     const manifestMismatch = { ...buildSnapshot(), manifestDigest: '0'.repeat(64) };
-    const manifestResult = compileToolConfiguration({ snapshot: manifestMismatch, manifest, handlers });
+    const manifestResult = compileToolConfiguration({ snapshot: manifestMismatch, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(manifestResult.ok).toBe(false);
     if (!manifestResult.ok) {
       expect(
@@ -318,7 +320,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
       ).toBe(true);
     }
     const compatMismatch = { ...buildSnapshot(), compatibilityDigest: '1'.repeat(64) };
-    const compatResult = compileToolConfiguration({ snapshot: compatMismatch, manifest, handlers });
+    const compatResult = compileToolConfiguration({ snapshot: compatMismatch, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(compatResult.ok).toBe(false);
     if (!compatResult.ok) {
       expect(
@@ -327,26 +329,49 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     }
   });
 
+  it('binds the consumer-supplied compatibility digest', () => {
+    const tampered = compileToolConfiguration({
+      snapshot: buildSnapshot(),
+      manifest,
+      handlers,
+      compatibilityDigest: '2'.repeat(64),
+    });
+    expect(tampered.ok).toBe(false);
+    if (!tampered.ok) {
+      expect(tampered.diagnostics.some((entry) => entry.code === 'compatibility_digest_mismatch')).toBe(true);
+    }
+    const missing = compileToolConfiguration({
+      snapshot: buildSnapshot(),
+      manifest,
+      handlers,
+      compatibilityDigest: '',
+    });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.diagnostics.some((entry) => entry.code === 'compatibility_digest_mismatch')).toBe(true);
+    }
+  });
+
   it('rejects credentials, bearers, user data and executable values', () => {
     const credential = buildSnapshot();
     credential.bindings[0] = { ...credential.bindings[0], values: { maxResults: 20, api_key: 'secret' } };
-    expect(compileToolConfiguration({ snapshot: credential, manifest, handlers }).ok).toBe(false);
+    expect(compileToolConfiguration({ snapshot: credential, manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(false);
     const bearer = buildSnapshot();
     bearer.bindings[0] = { ...bearer.bindings[0], values: { maxResults: 20, mode: 'Bearer abc' } };
-    const bearerResult = compileToolConfiguration({ snapshot: bearer, manifest, handlers });
+    const bearerResult = compileToolConfiguration({ snapshot: bearer, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(bearerResult.ok).toBe(false);
     const owner = buildSnapshot();
     owner.bindings[0] = { ...owner.bindings[0], values: { maxResults: 20, ownerSub: 'user-1' } };
-    expect(compileToolConfiguration({ snapshot: owner, manifest, handlers }).ok).toBe(false);
+    expect(compileToolConfiguration({ snapshot: owner, manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(false);
     const executable = buildSnapshot();
     executable.bindings[0] = { ...executable.bindings[0], values: { maxResults: 20, mode: 'https://example.test/x' } };
-    expect(compileToolConfiguration({ snapshot: executable, manifest, handlers }).ok).toBe(false);
+    expect(compileToolConfiguration({ snapshot: executable, manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(false);
   });
 
   it('never freezes caller inputs and isolates compiled values', () => {
     const snapshot = buildSnapshot();
     const manifestCopy = structuredClone(manifest);
-    const result = compileToolConfiguration({ snapshot, manifest: manifestCopy, handlers });
+    const result = compileToolConfiguration({ snapshot, manifest: manifestCopy, handlers, compatibilityDigest: consumerDigest });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(Object.isFrozen(result.config)).toBe(true);
@@ -361,7 +386,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
   it('rejects foreign configurations on activate and counts generations', () => {
     const store = new ToolConfigurationStore();
     expect(store.getGeneration()).toBe(0);
-    const valid = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
+    const valid = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
     expect(valid.ok).toBe(true);
     if (!valid.ok) return;
     const foreign = { ok: true as const, config: structuredClone(valid.config) };
@@ -377,14 +402,14 @@ describe('tool-configuration compiler — synthetic providers only', () => {
 
   it('retains the active generation when a candidate is rejected', () => {
     const store = new ToolConfigurationStore();
-    const valid = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
-    expect(store.compileAndActivate({ snapshot: buildSnapshot(), manifest, handlers }).ok).toBe(true);
+    const valid = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(store.compileAndActivate({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(true);
     expect(valid.ok).toBe(true);
     const before = store.getActive();
     expect(before).not.toBeNull();
     const invalidSnapshot = buildSnapshot();
     invalidSnapshot.bindings[0] = { ...invalidSnapshot.bindings[0], handlerId: 'missing' };
-    const rejected = store.compileAndActivate({ snapshot: invalidSnapshot, manifest, handlers });
+    const rejected = store.compileAndActivate({ snapshot: invalidSnapshot, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(rejected.ok).toBe(false);
     expect(store.getActive()).toBe(before);
   });
@@ -393,7 +418,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     const store = new ToolConfigurationStore();
     const invalidSnapshot = buildSnapshot();
     invalidSnapshot.bindings = [];
-    expect(() => store.coldStart({ snapshot: invalidSnapshot, manifest, handlers })).toThrow();
+    expect(() => store.coldStart({ snapshot: invalidSnapshot, manifest, handlers, compatibilityDigest: consumerDigest })).toThrow();
     expect(store.getActive()).toBeNull();
   });
 
@@ -406,13 +431,14 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     };
     try {
       const snapshot = buildSnapshot();
-      const first = compileToolConfiguration({ snapshot, manifest, handlers });
+      const first = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
       expect(first.ok).toBe(true);
       const freshStore = new ToolConfigurationStore();
       const activated = freshStore.compileAndActivate({
         snapshot: structuredClone(snapshot),
         manifest: structuredClone(manifest),
         handlers,
+        compatibilityDigest: consumerDigest,
       });
       expect(activated.ok).toBe(true);
       if (!first.ok || !activated.ok) return;
