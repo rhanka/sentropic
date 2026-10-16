@@ -774,6 +774,146 @@ process.stdin.on('end', () => {
     expect(store.getActive()).toBeNull();
   });
 
+  it('closes provenance to known keys and inspects its strings', () => {
+    const tokenKey = buildSnapshot();
+    (tokenKey.provenance as Record<string, unknown>)['accessToken'] = 'x';
+    reseal(tokenKey);
+    const tokenKeyResult = compileToolConfiguration({ snapshot: tokenKey, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(tokenKeyResult.ok).toBe(false);
+    if (!tokenKeyResult.ok) {
+      expect(tokenKeyResult.diagnostics.some((entry) => entry.code === 'invalid_provenance' && entry.path === 'snapshot.provenance.accessToken')).toBe(true);
+    }
+    const unknownKey = buildSnapshot();
+    (unknownKey.provenance as Record<string, unknown>)['reviewedAt'] = '2026-01-01';
+    reseal(unknownKey);
+    const unknownKeyResult = compileToolConfiguration({ snapshot: unknownKey, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(unknownKeyResult.ok).toBe(false);
+    if (!unknownKeyResult.ok) {
+      expect(unknownKeyResult.diagnostics.some((entry) => entry.code === 'invalid_provenance' && entry.path === 'snapshot.provenance.reviewedAt')).toBe(true);
+    }
+    const bearerReviewer = buildSnapshot();
+    bearerReviewer.provenance = { ...bearerReviewer.provenance, reviewedBy: ['sentropic-architect', 'bearer abc123'] };
+    reseal(bearerReviewer);
+    const bearerResult = compileToolConfiguration({ snapshot: bearerReviewer, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(bearerResult.ok).toBe(false);
+    if (!bearerResult.ok) {
+      expect(bearerResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.provenance.reviewedBy[1]')).toBe(true);
+    }
+    const emailReviewer = buildSnapshot();
+    emailReviewer.provenance = { ...emailReviewer.provenance, reviewedBy: ['ops@example.test'] };
+    reseal(emailReviewer);
+    const emailResult = compileToolConfiguration({ snapshot: emailReviewer, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(emailResult.ok).toBe(false);
+    if (!emailResult.ok) {
+      expect(emailResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.provenance.reviewedBy[0]')).toBe(true);
+    }
+  });
+
+  it('rejects mistyped schema-keyword values instead of ignoring them', () => {
+    const cases: Array<{ properties: Record<string, unknown>; values: Record<string, unknown> }> = [
+      { properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, mode: { type: 'string', maxLength: '10' } }, values: { maxResults: 20, mode: 'fast' } },
+      { properties: { maxResults: { type: 'integer', minimum: 1, maximum: '100' } }, values: { maxResults: 20 } },
+      { properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, mode: { type: 'string', enum: 'fast' } }, values: { maxResults: 20, mode: 'fast' } },
+      { properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, tags: { type: 'array', items: [{ type: 'string' }] } }, values: { maxResults: 20, tags: ['a'] } },
+    ];
+    for (const { properties, values } of cases) {
+      const keywordHandlers = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: { type: 'object', properties, required: ['maxResults'], additionalProperties: false } } };
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values };
+      snapshot.handlersDigest = computeHandlersDigest(keywordHandlers);
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: keywordHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
+      }
+    }
+  });
+
+  it('matches bearer and schemes case-insensitively and spares maxTokens', () => {
+    for (const value of ['bearer abc123', 'BEARER abc123', 'Basic dXNlcjpwYXNz', 'mailto:a@example.test', 'ssh://host/x', 's3://bucket/key', 'vbscript:msgbox(1)']) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note: value, tags: ['paris'] } };
+      snapshot.handlersDigest = computeHandlersDigest(noteHandlers);
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'forbidden_content')).toBe(true);
+      }
+    }
+    const contactSchema = {
+      type: 'object',
+      properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, contactEmail: { type: 'string' } },
+      required: ['maxResults'],
+      additionalProperties: false,
+    };
+    const contactHandlers = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: contactSchema } };
+    const contactEmail = buildSnapshot();
+    contactEmail.bindings[0] = { ...contactEmail.bindings[0], values: { maxResults: 20, contactEmail: 'x' } };
+    contactEmail.handlersDigest = computeHandlersDigest(contactHandlers);
+    reseal(contactEmail);
+    const contactResult = compileToolConfiguration({ snapshot: contactEmail, manifest, handlers: contactHandlers, compatibilityDigest: consumerDigest });
+    expect(contactResult.ok).toBe(false);
+    if (!contactResult.ok) {
+      expect(contactResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].values.contactEmail')).toBe(true);
+    }
+    const capped = buildSnapshot();
+    capped.bindings[0] = { ...capped.bindings[0], values: { maxResults: 20, maxTokens: 512 } };
+    const cappedHandlers = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: { type: 'object', properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, maxTokens: { type: 'integer', minimum: 1, maximum: 4096 } }, required: ['maxResults'], additionalProperties: false } } };
+    capped.handlersDigest = computeHandlersDigest(cappedHandlers);
+    reseal(capped);
+    const cappedResult = compileToolConfiguration({ snapshot: capped, manifest, handlers: cappedHandlers, compatibilityDigest: consumerDigest });
+    expect(cappedResult.ok).toBe(true);
+  });
+
+  it('requires qualified provider and platform versions', () => {
+    const missing = buildSnapshot();
+    delete (missing as Partial<ApprovedToolSnapshot>).providerVersion;
+    delete (missing as Partial<ApprovedToolSnapshot>).platformVersion;
+    const missingResult = compileToolConfiguration({ snapshot: missing, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(missingResult.ok).toBe(false);
+    if (!missingResult.ok) {
+      expect(missingResult.diagnostics.some((entry) => entry.code === 'invalid_identity' && entry.path === 'snapshot.providerVersion')).toBe(true);
+      expect(missingResult.diagnostics.some((entry) => entry.code === 'invalid_identity' && entry.path === 'snapshot.platformVersion')).toBe(true);
+    }
+    const wrongPlatform = buildSnapshot();
+    wrongPlatform.platformVersion = '9.9.9';
+    reseal(wrongPlatform);
+    const wrongResult = compileToolConfiguration({ snapshot: wrongPlatform, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(wrongResult.ok).toBe(false);
+    if (!wrongResult.ok) {
+      expect(wrongResult.diagnostics.some((entry) => entry.code === 'invalid_identity' && entry.path === 'snapshot.platformVersion')).toBe(true);
+    }
+  });
+
+  it('never freezes overlay arrays and rejects explicit undefined gates', () => {
+    const snapshot = buildSnapshot();
+    const scopes = ['synth:search', 'synth:extra'];
+    const claims: string[] = [];
+    snapshot.bindings[0] = { ...snapshot.bindings[0], policy: { requiredScopes: scopes } };
+    snapshot.bindings[1] = { ...snapshot.bindings[1], policy: { requiredClaims: claims } };
+    reseal(snapshot);
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(result.ok).toBe(true);
+    expect(Object.isFrozen(scopes)).toBe(false);
+    expect(Object.isFrozen(claims)).toBe(false);
+    expect(Object.isFrozen(snapshot.bindings[0].policy)).toBe(false);
+    if (!result.ok) return;
+    scopes.push('synth:late');
+    expect(result.config.tools.find((tool) => tool.toolName === 'synth_search')?.requiredScopes).toEqual(['synth:search', 'synth:extra']);
+    // An explicit `undefined` gate value cannot be resealed (the canonical
+    // encoder rejects it), so the mutation is applied after sealing: the
+    // compiler must still refuse it with `policy_weakening`, not crash.
+    const undefinedGates = snapshotFor(gatedManifest, gatedBindings({}));
+    (undefinedGates.bindings[0] as ApprovedToolBinding).policy = { gates: { requiresHumanConfirmation: undefined } as unknown as ToolPolicyOverlay['gates'] };
+    const undefinedResult = compileToolConfiguration({ snapshot: undefinedGates, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(undefinedResult.ok).toBe(false);
+    if (!undefinedResult.ok) {
+      expect(undefinedResult.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
+    }
+  });
+
   it('performs zero configuration I/O and reloads identically in a fresh holder', async () => {
     const previousFetch = (globalThis as Record<string, unknown>)['fetch'];
     let calls = 0;
