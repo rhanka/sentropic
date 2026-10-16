@@ -4,7 +4,7 @@
 -- No secrets in this file: only audiences, scopes, actor, TTL and environment.
 CREATE TEMP TABLE desired_service_policy_raw ON COMMIT DROP AS
 SELECT 'immo-mcp-workload'::text AS client_id,
-  '{"enabled": true, "allowedSubjectClients": ["immo-mcp"], "allowedSubjectAudiences": ["https://immo.sent-tech.ca/mcp"], "allowedTargetAudiences": ["https://immo.sent-tech.ca"], "actorSub": "immo-mcp-workload", "allowedScopes": ["immo:read", "immo:search"], "maxTtlSeconds": 300, "environment": null, "allowClientCredentials": false}'::jsonb AS exchange_policy;
+  '{"enabled": true, "allowedSubjectClients": ["immo-mcp"], "allowedSubjectAudiences": ["https://immo.sent-tech.ca/mcp"], "allowedTargetAudiences": ["https://immo.sent-tech.ca"], "actorSub": "immo-mcp-workload", "allowedScopes": ["immo:search"], "maxTtlSeconds": 300, "environment": null, "allowClientCredentials": false}'::jsonb AS exchange_policy;
 DO $$
 DECLARE policy jsonb;
 BEGIN
