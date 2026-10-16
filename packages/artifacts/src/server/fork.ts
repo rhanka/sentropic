@@ -35,6 +35,8 @@ export interface ForkService {
     origin: { artifactId: string; releaseId: string };
   }>;
   setState(artifactId: string, state: ForkableState): Promise<void>;
+  /** Track a parent record so hosts can sync the source of truth (no-op read). */
+  track(record: ForkRecord): Promise<void>;
 }
 
 /** In-memory ForkStore double for unit tests (also exposes test readers). */
@@ -112,6 +114,9 @@ export function createForkService(
     },
     async setState(artifactId: string, state: ForkableState): Promise<void> {
       await store.setState(artifactId, state);
+    },
+    async track(record: ForkRecord): Promise<void> {
+      await store.put(record);
     },
   };
 }
