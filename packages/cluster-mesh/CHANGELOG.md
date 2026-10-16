@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.18.0
+
+- Add the production RFC 8693 exchange binding (`src/trust/token-exchange-http.ts`):
+  authenticated form POST with `client_secret_basic` to the configured issuer,
+  bounded timeout/body, no redirects, redacted errors, and full validation of the
+  returned token (signature, issuer, exact audience, subject, workload `client_id`,
+  mandatory `act`, scope subset, 300-second and subject-expiry TTL ceilings).
+- Harden the exchange client: caller-supplied actors refused, empty requested
+  scopes refused, exact target-audience allowlist and single subject-audience
+  equality required at construction, workload `act`/`client_id` always asserted,
+  `maxTtlSec` hard-capped at 300 seconds.
+- Harden the mandatory cache: identity key (subject fingerprint/`jti`, origin and
+  workload clients, environment, tenant, policy revision), bounded entries with
+  insertion-order eviction, single-flight, subject/tenant invalidation hooks,
+  early-use safety margin, and recomputed `expiresIn` on hits.
+- `createDegenerateClusterMesh({ tokenExchange })` replaces `tokenExchangeIssuer`:
+  `capabilities.tokenExchange` is `'available'` only after the binding plus policy
+  passes its local preflight, `'gated'` otherwise. `available` proves only this
+  trust/egress port, not registry or module delivery.
+
 ## 0.16.0
 
 - Post-#664 version bump strictly greater than npm (0.15.0) and main
