@@ -241,24 +241,24 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
 
 - [ ] **Lot 5 — L-3policy/4a guarded SDK dispatch (in progress, sequential on L-1b-core WIP)**
   - [x] Pure policy slice: `src/transport/dispatch.ts` (`authorizeDispatch`: exact-name resolve + scope/claim coverage, stable refusal codes) with `tests/capability-scopes.test.ts` (5/5, RED-first).
-  - [ ] SDK transport slice: add `@modelcontextprotocol/sdk` dependency + lockfile, `streamable-http.ts`, `stdio.ts`, `result-codec.ts`, remaining tests (see below).
-  - [ ] Update `packages/mcp-platform/src/hono.ts`, new `src/transport/dispatch.ts`, `streamable-http.ts`, `stdio.ts`, `result-codec.ts`; add `tests/capability-scopes.test.ts`, `streamable-http.test.ts`, `stdio.test.ts`, `wire-parity.test.ts`, `request-identity.test.ts`; update `tests/hono.test.ts`, `transport.test.ts`; regress `authz.test.ts`, `writes.test.ts`, `elicitation.test.ts`; API consumer regression `api/tests/api/mcp-resource-server.test.ts`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
-    - [ ] **API tests**
-      - [ ] `packages/mcp-platform/tests/capability-scopes.test.ts` (new)
-      - [ ] `packages/mcp-platform/tests/wire-parity.test.ts` (new)
-      - [ ] `packages/mcp-platform/tests/request-identity.test.ts` (new)
-      - [ ] `packages/mcp-platform/tests/streamable-http.test.ts` (new)
-      - [ ] `packages/mcp-platform/tests/stdio.test.ts` (new)
-      - [ ] `api/tests/api/mcp-resource-server.test.ts` (existing regression)
-      - [ ] Sub-lot gate: `make test-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+  - [x] SDK transport slice: `@modelcontextprotocol/sdk ^1.31.0` runtime dep + lockfile (`f2e90e5ef`, +3 lines), `result-codec.ts` (`1e513d2aa`), `streamable-http.ts` (`cdac37bb7`), `stdio.ts` (`869399923`), identity propagation (`498e31369`, `333760a49`).
+  - [x] Update `packages/mcp-platform/src/hono.ts` (`McpSdkMount` `/mcp`, stateful/stateless, `99cf1db26`), `streamable-http.ts`, `stdio.ts`, `result-codec.ts`; add `tests/streamable-http.test.ts` (7/7), `stdio.test.ts` (4/4), `wire-parity.test.ts` (4/4), `request-identity.test.ts` (3/3); update `tests/hono.test.ts` (8/8); `transport.test.ts` untouched (mock slice, green); regress `authz.test.ts`, `writes.test.ts`, `elicitation.test.ts` (green in full run); API consumer regression `api/tests/api/mcp-resource-server.test.ts` (16/16) + `typecheck-api` clean.
+  - [x] Lot gate:
+    - [x] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (typecheck OK; 26 files / 216 tests GREEN; api-extract clean; pack `0.3.0 sha256=9b3d1c3b…`; probe `CLEAN_CONSUMER_OK` frozen digests `fetchCalls=0`)
+    - [x] **API tests**
+      - [x] `packages/mcp-platform/tests/capability-scopes.test.ts` (pre-existing 5/5, green in full run)
+      - [x] `packages/mcp-platform/tests/wire-parity.test.ts` (4/4)
+      - [x] `packages/mcp-platform/tests/request-identity.test.ts` (3/3)
+      - [x] `packages/mcp-platform/tests/streamable-http.test.ts` (7/7)
+      - [x] `packages/mcp-platform/tests/stdio.test.ts` (4/4)
+      - [x] `api/tests/api/mcp-resource-server.test.ts` (16/16 on the test stack)
+      - [x] Sub-lot gate: `make test-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (26/216 GREEN)
     - [ ] **UI tests (TypeScript only)**
       - [ ] None.
     - [ ] **E2E tests**
       - [ ] None; Immo parity stays open until 1b-Immo/4b-parity.
     - [ ] UAT (both transports, synthetic providers):
-      - [ ] Both transports discover/call the same compiled surface with exact wire envelopes.
+      - [x] Both transports discover/call the same compiled surface with exact wire envelopes (in-memory SDK link: `stdio.test.ts` asserts byte-identical `'{"echo":{"surface":80}}'`; both list the plan tool; formal packed-process UAT deferred to Lot N).
       - [ ] Effective overlays enforced; missing/unknown/unguarded/stale calls have no effects.
 
 - [ ] **Lot 6 — Sentropic support for 2b-MCP cutover (coordination; Radar integration owned by i-cond)**
