@@ -163,7 +163,7 @@ export const seedServiceClients = async (): Promise<SeededServiceClient[]> => {
     // below is dev/test-only and must never be used in production; operational
     // credentials are provisioned through the established protected channel.
     {
-      allowedScopes: ['immo:read', 'immo:search'],
+      allowedScopes: ['immo:search'],
       clientId: 'immo-mcp-workload',
       clientSecret: 'immo-mcp-workload-secret-dev-only',
       displayName: 'Immo MCP workload (token exchange only)',
@@ -171,7 +171,7 @@ export const seedServiceClients = async (): Promise<SeededServiceClient[]> => {
       exchangePolicy: {
         actorSub: 'immo-mcp-workload',
         allowClientCredentials: false,
-        allowedScopes: ['immo:read', 'immo:search'],
+        allowedScopes: ['immo:search'],
         allowedSubjectAudiences: ['https://immo.sent-tech.ca/mcp'],
         allowedSubjectClients: ['immo-mcp'],
         allowedTargetAudiences: ['https://immo.sent-tech.ca'],

@@ -59,7 +59,7 @@ VALUES ('duplicate-revocation', 'synthetic-client', '9f11d240-fc75-4d55-80be-1ba
 -- secret rotation) plus an unrelated service client (proves non-interference).
 INSERT INTO service_clients (id, client_id, client_secret_hash, display_name, allowed_scopes, resource_indicators, tenant_id, exchange_policy, created_at)
 VALUES ('preprod-workload', 'immo-mcp-workload', 'synthetic-preprod-workload-hash', 'Immo MCP workload',
-        ARRAY['immo:read','immo:search'], ARRAY['https://preprod.immo.sent-tech.ca'], 'sentropic',
+        ARRAY['immo:search'], ARRAY['https://preprod.immo.sent-tech.ca'], 'sentropic',
         '{"enabled": true, "allowedSubjectClients": ["immo-mcp"], "allowedSubjectAudiences": ["https://preprod.immo.sent-tech.ca/mcp"], "allowedTargetAudiences": ["https://preprod.immo.sent-tech.ca"], "actorSub": "immo-mcp-workload", "allowedScopes": ["immo:read"], "maxTtlSeconds": 900, "environment": null, "allowClientCredentials": false}', '2026-01-01'),
        ('preprod-decoy', 'other-svc', 'synthetic-decoy-hash', 'Unrelated service', ARRAY['service:ping'],
         ARRAY['https://preprod.sentropic.sent-tech.ca'], 'sentropic', NULL, '2026-01-01');
