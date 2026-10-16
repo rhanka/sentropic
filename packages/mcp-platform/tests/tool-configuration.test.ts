@@ -183,6 +183,19 @@ function gatedBindings(policy: ApprovedToolBinding['policy']): ApprovedToolBindi
   ];
 }
 
+function reseal(snapshot: ApprovedToolSnapshot): ApprovedToolSnapshot {
+  snapshot.provenance = { ...snapshot.provenance, payloadDigest: computePayloadDigest(snapshot) };
+  return snapshot;
+}
+
+const noteHandlers: Record<string, ToolConfigurationHandlerBinding> = {
+  'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: {
+    type: 'object',
+    properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, note: { type: 'string', maxLength: 200 }, tags: { type: 'array', items: { type: 'string' } } },
+    required: ['maxResults'], additionalProperties: false } },
+  'local-read': handlers['local-read'],
+};
+
 describe('tool-configuration compiler — synthetic providers only', () => {
   it('compiles two synthetic tools with distinct settings on the intended binding only', () => {
     const result = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
@@ -519,6 +532,89 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     const executable = buildSnapshot();
     executable.bindings[0] = { ...executable.bindings[0], values: { maxResults: 20, mode: 'https://example.test/x' } };
     expect(compileToolConfiguration({ snapshot: executable, manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(false);
+  });
+
+  it('flags forbidden keys with the forbidden_content code', () => {
+    const forbiddenKeys = ['refresh_token', 'id_token', 'client_secret', 'tenant_id', 'workspace_id', 'credentials', 'token', 'mySecretValue', 'apiKey'];
+    for (const key of forbiddenKeys) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, [key]: 'x' } };
+      const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'forbidden_content')).toBe(true);
+      }
+    }
+  });
+
+  it('traverses arrays and nested objects for forbidden content', () => {
+    const snapshot = buildSnapshot();
+    snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, tags: ['ok', 'Bearer abc'] } };
+    const arrayResult = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(arrayResult.ok).toBe(false);
+    if (!arrayResult.ok) {
+      expect(arrayResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].values.tags[1]')).toBe(true);
+    }
+    const nested = buildSnapshot();
+    nested.bindings[0] = { ...nested.bindings[0], values: { maxResults: 20, filters: { password: 'x' } } };
+    const nestedResult = compileToolConfiguration({ snapshot: nested, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(nestedResult.ok).toBe(false);
+    if (!nestedResult.ok) {
+      expect(nestedResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].values.filters.password')).toBe(true);
+    }
+  });
+
+  it('blocks attacks but passes legitimate labels', () => {
+    for (const note of ['Select a city', 'Update profile', 'Create report', 'Delete my account', 'node list']) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note, tags: ['paris', 'lyon'] } };
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(true);
+    }
+    const attacks = ['SELECT * FROM users WHERE id = 1', 'DROP TABLE users;', 'wss://example.test/x', 'javascript:alert(1)', '//host/path', 'node:fs', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature', 'Bearer abc'];
+    for (const note of attacks) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note } };
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'forbidden_content')).toBe(true);
+      }
+    }
+  });
+
+  it('rejects forged provenance bindings', () => {
+    const diverged = buildSnapshot();
+    diverged.provenance = { ...diverged.provenance, revision: 'rev-2' };
+    reseal(diverged);
+    const divergedResult = compileToolConfiguration({ snapshot: diverged, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(divergedResult.ok).toBe(false);
+    if (!divergedResult.ok) {
+      expect(divergedResult.diagnostics.some((entry) => entry.code === 'invalid_provenance')).toBe(true);
+    }
+    const noReviewers = buildSnapshot();
+    noReviewers.provenance = { ...noReviewers.provenance, reviewedBy: [] };
+    reseal(noReviewers);
+    const reviewersResult = compileToolConfiguration({ snapshot: noReviewers, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(reviewersResult.ok).toBe(false);
+    if (!reviewersResult.ok) {
+      expect(reviewersResult.diagnostics.some((entry) => entry.code === 'invalid_provenance')).toBe(true);
+    }
+    const forged = buildSnapshot();
+    forged.provenance = { ...forged.provenance, payloadDigest: 'f'.repeat(64) };
+    const forgedResult = compileToolConfiguration({ snapshot: forged, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(forgedResult.ok).toBe(false);
+    if (!forgedResult.ok) {
+      expect(forgedResult.diagnostics.some((entry) => entry.code === 'invalid_provenance')).toBe(true);
+    }
+    const missing = buildSnapshot();
+    delete missing.provenance.payloadDigest;
+    const missingResult = compileToolConfiguration({ snapshot: missing, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(missingResult.ok).toBe(false);
+    if (!missingResult.ok) {
+      expect(missingResult.diagnostics.some((entry) => entry.code === 'invalid_provenance')).toBe(true);
+    }
   });
 
   it('never freezes caller inputs and isolates compiled values', () => {
