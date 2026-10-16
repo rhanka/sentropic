@@ -260,3 +260,98 @@ function requireConfigured(value: string, name: string): void {
   if (value.trim().length === 0) {
     throw new TypeError(`token exchange ${name} must be a non-empty string`);
   }
+}
+
+/**
+ * RFC 8693 exchange client. Fail-closed on every path: any refusal rejects with
+ * TokenExchangeRefusedError, the subject token is never returned as the access token,
+ * expired cache entries are never served, and no fallback or retry with the original
+ * Bearer [REDACTED] happens. The caller never supplies an actor: the mandatory `act`
+ * comes from the configured workload identity and the minted token is fully
+ * validated (issuer, exact audience, subject, client, actor, scope subset, TTL caps,
+ * token types) before admission.
+ */
+export function createTokenExchangeClient(input: TokenExchangeClientInput): TokenExchangeClient {
+  if (input.audiences.length === 0) {
+    throw new TypeError('token exchange audiences must list at least one exact target audience');
+  }
+  requireConfigured(input.subjectAudience, 'subjectAudience');
+  requireConfigured(input.workloadClientId, 'workloadClientId');
+  requireConfigured(input.workloadActorSub, 'workloadActorSub');
+  requireConfigured(input.environment, 'environment');
+  if (input.maxTtlSec !== undefined && !(input.maxTtlSec > 0)) {
+    throw new TypeError('token exchange maxTtlSec must be positive');
+  }
+  if (input.maxEntries !== undefined && (!Number.isInteger(input.maxEntries) || input.maxEntries < 1)) {
+    throw new TypeError('token exchange maxEntries must be a positive integer');
+  }
+  if (input.expiryMarginMs !== undefined && !(input.expiryMarginMs >= 0)) {
+    throw new TypeError('token exchange expiryMarginMs must not be negative');
+  }
+
+  const nowMs = input.nowMs ?? Date.now;
+  const maxTtlSec = Math.min(input.maxTtlSec ?? DEFAULT_TOKEN_EXCHANGE_MAX_TTL_SEC, TOKEN_EXCHANGE_MAX_TTL_SEC);
+  const maxEntries = input.maxEntries ?? DEFAULT_TOKEN_EXCHANGE_CACHE_MAX_ENTRIES;
+  const marginMs = input.expiryMarginMs ?? DEFAULT_TOKEN_EXCHANGE_EXPIRY_MARGIN_MS;
+  const policyRevision = input.policyRevision ?? '';
+  const cache = new Map<string, CachedExchange>();
+  const inflight = new Map<string, Promise<CachedExchange>>();
+
+  function identityFor(request: TokenExchangeRequest, subject: VerifiedSubjectToken): TokenExchangeCacheIdentity {
+    return {
+      subjectTokenFingerprint: fingerprintTokenExchangeSubject(request.subjectToken),
+      originClientId: subject.clientId ?? '',
+      workloadClientId: input.workloadClientId,
+      environment: input.environment,
+      tenantId: subject.tenantId ?? '',
+      policyRevision,
+    };
+  }
+
+  function matches(entry: CachedExchange, filter: TokenExchangeCacheInvalidation | 'all'): boolean {
+    if (filter === 'all') return true;
+    if (filter.subject !== undefined && entry.subject !== filter.subject) return false;
+    if (filter.tenantId !== undefined && entry.tenantId !== (filter.tenantId ?? '')) return false;
+    return true;
+  }
+
+  function evict(key: string): void {
+    cache.delete(key);
+    inflight.delete(key);
+  }
+
+  function admit(key: string, entry: CachedExchange): void {
+    while (cache.size >= maxEntries) {
+      const oldest = cache.keys().next();
+      if (oldest.done) break;
+      cache.delete(oldest.value);
+    }
+    cache.set(key, entry);
+  }
+
+  function checkMinted(minted: MintedToken, request: TokenExchangeRequest, subject: VerifiedSubjectToken, nowSec: number): void {
+    if (minted.accessToken === request.subjectToken) refuse('mint_passthrough');
+    if ('refreshToken' in (minted as unknown as Record<string, unknown>)) refuse('mint_refresh_present');
+    if (minted.tokenType !== undefined && minted.tokenType !== 'Bearer') refuse('minted_token_type_unsupported');
+    if (minted.issuedTokenType !== undefined && minted.issuedTokenType !== ACCESS_TOKEN_TYPE) {
+      refuse('minted_token_type_unsupported');
+    }
+    const verified = (minted as Partial<MintedToken>).verified;
+    if (verified === undefined) refuse('minted_token_invalid', 'Token exchange refused: minted token carries no verified claims');
+    if (verified.issuer !== subject.issuer) refuse('minted_issuer_invalid');
+    if (verified.audience !== request.audience) refuse('minted_audience_invalid');
+    if (verified.subject.length === 0 || verified.subject !== subject.subject) refuse('minted_subject_invalid');
+    if (verified.actorSub !== input.workloadActorSub || verified.clientId !== input.workloadClientId) {
+      refuse('minted_actor_invalid');
+    }
+    for (const scope of verified.scope) {
+      if (!request.scope.includes(scope)) refuse('minted_scope_invalid');
+    }
+    if (!(verified.expiresAtSec > nowSec)) refuse('ttl_non_positive');
+    if (verified.expiresAtSec > subject.expiresAtSec) refuse('minted_ttl_invalid');
+    if (verified.expiresAtSec - verified.issuedAtSec > TOKEN_EXCHANGE_MAX_TTL_SEC) refuse('minted_ttl_invalid');
+    if (minted.expiresAtSec !== verified.expiresAtSec) refuse('minted_ttl_invalid');
+    if ([...minted.scope].sort().join(' ') !== [...verified.scope].sort().join(' ')) refuse('minted_scope_invalid');
+  }
+
+  async function perform(request: TokenExchangeRequest, subject: VerifiedSubjectToken, key: string): Promise<CachedExchange> {
