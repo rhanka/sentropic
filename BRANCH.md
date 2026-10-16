@@ -140,8 +140,8 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] m1: unsupported schema keywords rejected (pattern, const, exclusiveMinimum/Maximum, multipleOf, format, oneOf, uniqueItems); test
   - [ ] m2: SQL heuristic tightened (leader + structure, `Select a city` passes); executable values cover wss/javascript/protocol-relative/node/JWT; both-direction tests
   - [ ] m3: unknown keys rejected (snapshot, binding, overlay, gates); providerVersion/platformVersion/connectorId validated (providerVersion equals manifest.version); duplicate manifest tool names rejected; handler table key/handlerId mismatch rejected
-  - [ ] m4: deep clone before freeze; caller manifest/snapshot never frozen; test
-  - [ ] m5: compiled-brand WeakSet on activate (fake configs rejected); generation counter; test
+  - [x] m4: deep clone before freeze; caller manifest/snapshot never frozen; test
+  - [x] m5: compiled-brand WeakSet on activate (fake configs rejected); generation counter; test
   - [ ] m6: scope source of truth documented in `ADOPTION_GUIDE.md` (3-policy consumes effective compiled policy)
   - [ ] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform`
   - [ ] m8: every commit < 150 lines with `BRANCH.md` updated in the same commit
