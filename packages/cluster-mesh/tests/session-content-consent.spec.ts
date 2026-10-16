@@ -347,3 +347,70 @@ describe('content consent project activation', () => {
     expect(verifyPolicyDigest(amended.acceptedPolicy, amended.retentionDigest)).toBe(true);
   });
 });
+
+describe('content consent child derivation', () => {
+  it('should derive two eligible future sessions from one proof without a second prompt', async () => {
+    const { service } = await readyConsent();
+    const first = await service.deriveChild(sharedChildInput());
+    const second = await service.deriveChild(sharedChildInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
+    expect(first.state).toBe('active');
+    expect(second.state).toBe('active');
+    expect(first.grantId).not.toBe(second.grantId);
+    expect(second.projectRevision).toBe(1);
+  });
+
+  it('should bind the new D1 version and freeze the native boundary', async () => {
+    const { service } = await readyConsent();
+    const grant = await service.deriveChild(sharedChildInput());
+    expect(grant.d1Version).toBe(3);
+    expect(grant.d1Incarnation).toBe(1);
+    expect(grant.d1StartSeq).toBe(40);
+    expect(grant.nativeBoundarySeq).toBe(40);
+    expect(grant.channels).toEqual({
+      'terminal.live': true, 'terminal.cache': true, 'native.mirror': false, 'keyboard.control': false,
+    });
+  });
+
+  it('should return the same grant when the same binding derives again', async () => {
+    const { service } = await readyConsent();
+    const first = await service.deriveChild(sharedChildInput());
+    const again = await service.deriveChild(sharedChildInput());
+    expect(again.grantId).toBe(first.grantId);
+    expect(again.version).toBe(first.version);
+  });
+
+  it('should refuse an unnamed pre-existing session outside the project scope', async () => {
+    const { service } = await readyConsent();
+    await expectConsentCodeAsync(
+      () => service.deriveChild(sharedChildInput({ sessionCreatedAt: 999_999 })),
+      'ineligible_session',
+    );
+  });
+
+  it('should refuse another project, source, owner and tenant', async () => {
+    const { service } = await readyConsent();
+    await expectConsentCodeAsync(
+      () => service.deriveChild(sharedChildInput({ ownerId: 'user-2' })),
+      'cross_owner_refused',
+    );
+    await expectConsentCodeAsync(
+      () => service.deriveChild(sharedChildInput({ tenantId: 'tenant-b' })),
+      'cross_tenant_refused',
+    );
+    await expectConsentCodeAsync(
+      () => service.deriveChild(sharedChildInput({ sourceTrustVersion: 'h2a-9.9+d2-9' })),
+      'source_reauthorization_required',
+    );
+    await expectConsentCodeAsync(
+      () => service.deriveChild(sharedChildInput({ projectId: 'project-2' })),
+      'project_not_active',
+    );
+  });
+
+  it('should keep a grant bound to its own binding only', async () => {
+    const { service } = await readyConsent();
+    const grant = await service.deriveChild(sharedChildInput());
+    expect(isGrantValidForBinding(grant, 'binding-1')).toBe(true);
+    expect(isGrantValidForBinding(grant, 'binding-2')).toBe(false);
+  });
+});
