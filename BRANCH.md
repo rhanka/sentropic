@@ -5,11 +5,11 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
 
 ## Scope / Guardrails
 - Scope limited to generic codec/compiler, synthetic fixtures only, no Immo-specific fixture inside generic package.
-- One migration max in `api/drizzle/*.sql` (if applicable).
+- No migration in `api/drizzle/*.sql` (library slice, none applicable).
 - Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/worktrees/mcp-registry-codec` (ENV `test-mcp-registry-codec`, API 9550, UI 5750, Maildev 1650).
+- Automated test campaigns run on dedicated environments (`ENV=test-mcp-registry-codec`), never on root `dev`.
 - UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
@@ -24,6 +24,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - `packages/mcp-platform/etc/mcp-platform.api.md`
   - `BRANCH.md`
   - `.h2a/build/immo_1a_report.md`
+  - `.h2a/build/immo_1a_fix_report.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -49,6 +50,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
 - [ ] `attention`: npm published `@sentropic/mcp-platform` is `0.2.0`, source is `0.2.0`, candidate `0.3.0` is strictly above both (verified 2026-10-16)
 - [ ] `attention` BR1a-EX1: bump `packages/connector-host/package.json` range `^0.2.0` -> `^0.3.0` and refresh root `package-lock.json` via `make lock-root`. Reason: minor bump exits the `^0.2.0` range (`0.x` caret pins minor) and desyncs the lockfile, blocking every Make gate (`npm ci` fails). Impact: two files outside Allowed Paths, consumer-only range bump, no source change. Rollback: revert range and lockfile.
 
@@ -70,10 +72,10 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
 - **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
 - UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
 - Execution flow (mandatory):
-  - Develop and run tests in `tmp/feat-<slug>`.
+  - Develop and run tests in `tmp/worktrees/mcp-registry-codec`.
   - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/feat-<slug>` after UAT.
+  - Run user UAT from root workspace (`/home/antoinefa/src/sentropic`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/mcp-registry-codec` after UAT.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
@@ -124,16 +126,60 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
       - [x] Reject wrong schema/type, unknown handler, duplicate external name, policy weakening before activation
       - [x] Run with fetch throwing and assert zero calls, reproduce same compiled result in fresh process
       - [x] Install packed subpath from clean consumer, report compiler delivered without claiming Immo registry integration
+- [ ] **Lot 2 — Immo 1a review findings fix (`.h2a/reviews/immo_1a_opus.md`: 1 BLOQUANT, 6 MAJEUR, 10 MINEUR)**
+  - [ ] B1: merge gates field by field (requiresElicitation, requiresHumanConfirmation, requiresPrincipalGate, requiresPolicy); overlay `{}` keeps baseline; requiresPolicy compared
+  - [ ] B1: freshness merged field by field; finite `maxAgeSeconds` with `0 < x <= base`; `stepUp` equality; `acr`/`amr` supersets, never removed
+  - [ ] B1: regression tests per field (`gates: {}`, requiresPolicy drop, freshness without maxAge, NaN maxAge, acr/amr removal)
+  - [ ] M1: typed diagnostics for malformed overlays (`idempotency`/`gates`/`freshness` null, wrong types, non-string arrays); no TypeError
+  - [ ] M2: normalized-only forbidden-key set (refresh_token, id_token, client_secret, tenant_id, workspace_id, credentials, token); substring families token|secret|password|credential|apikey|privatekey; arrays traversed
+  - [ ] M3: payload digest binds manifestDigest+compatibilityDigest (only `provenance.payloadDigest` excluded); payloadDigest mandatory; handlers digest (id+capabilityRef+configSchema); compiled exposes payloadDigest, approvalRef, providerVersion, platformVersion
+  - [ ] M4: consumer-supplied `compatibilityDigest` compiler input, compared to snapshot; scope documented (public schemas/result codec for 1b)
+  - [ ] M5: strict canonical-json aligned with `sentropic-json-v1` (reject undefined/non-finite/non-plain/cycles); reject Infinity in validator; golden hex digests
+  - [ ] M6: one discriminating test per diagnostic code (values otherwise schema-valid, assert `code`+`path`); strengthening-overlay accepted; requiredScopes exposed; nested arrays; null overlays
+  - [ ] M6: determinism test permuting snapshot key order, binding order, manifest tool order plus JSON round trip, with frozen reference digest
+  - [ ] m1: unsupported schema keywords rejected (pattern, const, exclusiveMinimum/Maximum, multipleOf, format, oneOf, uniqueItems); test
+  - [ ] m2: SQL heuristic tightened (leader + structure, `Select a city` passes); executable values cover wss/javascript/protocol-relative/node/JWT; both-direction tests
+  - [ ] m3: unknown keys rejected (snapshot, binding, overlay, gates); providerVersion/platformVersion/connectorId validated (providerVersion equals manifest.version); duplicate manifest tool names rejected; handler table key/handlerId mismatch rejected
+  - [ ] m4: deep clone before freeze; caller manifest/snapshot never frozen; test
+  - [ ] m5: compiled-brand WeakSet on activate (fake configs rejected); generation counter; test
+  - [ ] m6: scope source of truth documented in `ADOPTION_GUIDE.md` (3-policy consumes effective compiled policy)
+  - [ ] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform`
+  - [ ] m8: every commit < 150 lines with `BRANCH.md` updated in the same commit
+  - [ ] m9: `BRANCH.md` truthful (this lot; no template rests; no false checks)
+  - [ ] m10: `serverInfo.version` aligned to `0.3.0` (BR1a-EX2)
+  - [ ] Lot gate:
+    - [ ] `make typecheck-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] **API tests**
+      - [ ] Existing regression `packages/mcp-platform/tests/manifest.test.ts` (unchanged)
+      - [ ] Existing regression `packages/mcp-platform/tests/authz.test.ts` (unchanged)
+      - [ ] Updated `packages/mcp-platform/tests/tool-configuration.test.ts` (B1, M1-M6, m1-m5, m7 discriminating tests)
+      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec`
+      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/manifest.test.ts ENV=test-mcp-registry-codec`
+      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/authz.test.ts ENV=test-mcp-registry-codec`
+      - [ ] Sub-lot gate: `make test-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None (pure library slice, no UI change)
+      - [ ] Sub-lot gate: not applicable, no `ui/tests/**` touched
+    - [ ] **E2E tests**
+      - [ ] None (pure library slice, no app wiring)
+      - [ ] Sub-lot gate: not applicable, no `e2e/tests/**` touched
+    - [ ] Package gates: `make api-extract-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] Package gates: `make pack-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] UAT (compiler delivered, no Immo claim):
+      - [ ] Compile two synthetic tools with distinct settings, confirm only intended binding receives each value
+      - [ ] Reject per-field policy weakening, malformed overlays, forbidden keys (incl. arrays), digest mismatches before activation
+      - [ ] Run with fetch throwing and assert zero calls; reproduce digests in a separate Node process
+      - [ ] Install packed subpath from clean consumer via Make-driven probe, report compiler delivered without claiming Immo registry integration
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
   - [x] Delete `spec/BRANCH_SPEC_EVOL.md` after integration.
   - [x] Confirm no `spec/BRANCH_SPEC_EVOL.md` needed (S slice, no spec evolution file created)
   - [x] Confirm `README.md` and `docs/ADOPTION_GUIDE.md` updated, no stale publication/Make notes introduced
 - [ ] **Lot N — Final validation**
-  - [x] Typecheck & Lint
-  - [x] Retest UI (cf Lot1, copy checklist)
-  - [x] Retest API (cf Lot1, copy checklist)
-  - [x] Retest e2e (cf lots e2e_groups like in Lot1)
+  - [ ] Typecheck & Lint (`make typecheck-mcp-platform`, lint)
+  - [ ] Retest UI (library slice: none per Lot 1/Lot 2 gates, not applicable)
+  - [ ] Retest API (Lot 2 gate: `make test-mcp-platform`)
+  - [ ] Retest e2e (library slice: none per Lot 1/Lot 2 gates, not applicable)
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
