@@ -283,3 +283,79 @@ function deepFreeze<T>(value: T): T {
   return Object.freeze(value);
 }
 
+function checkForbiddenContent(
+  diagnostics: ToolConfigurationDiagnostic[],
+  basePath: string,
+  values: Record<string, unknown>,
+): void {
+  for (const [key, entry] of Object.entries(values)) {
+    const lowered = key.toLowerCase().replace(/[^a-z]/g, '');
+    if (FORBIDDEN_CONTENT_KEYS.has(lowered)) {
+      diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `forbidden key "${key}"`);
+    }
+    if (FORBIDDEN_VALUE_KEYS.has(lowered)) {
+      diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `executable/upstream key "${key}" is not allowed`);
+    }
+    if (typeof entry === 'string') {
+      const trimmed = entry.trim();
+      if (
+        trimmed.startsWith('Bearer ') ||
+        trimmed.startsWith('Basic ') ||
+        EXECUTABLE_VALUE_PATTERN.test(trimmed) ||
+        SQL_LEADER_PATTERN.test(trimmed)
+      ) {
+        diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `forbidden string value for "${key}"`);
+      }
+    } else if (isRecord(entry)) {
+      checkForbiddenContent(diagnostics, `${basePath}.${key}`, entry);
+    }
+  }
+}
+
+// Minimal strict JSON-schema subset used for per-tool typed values.
+function validateAgainstSchema(
+  diagnostics: ToolConfigurationDiagnostic[],
+  basePath: string,
+  schema: unknown,
+  values: unknown,
+): boolean {
+  if (!isRecord(schema)) {
+    diag(diagnostics, 'invalid_values', basePath, 'handler configSchema must be an object');
+    return false;
+  }
+  if (schema['type'] !== 'object') {
+    diag(diagnostics, 'invalid_values', basePath, 'top-level configSchema type must be "object"');
+    return false;
+  }
+  if (!isRecord(values)) {
+    diag(diagnostics, 'invalid_values', basePath, 'values must be an object');
+    return false;
+  }
+  let valid = true;
+  const properties = isRecord(schema['properties']) ? schema['properties'] : {};
+  const required = Array.isArray(schema['required'])
+    ? schema['required'].filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  const additional = schema['additionalProperties'];
+  const allowAdditional = additional === true;
+  for (const name of required) {
+    if (values[name] === undefined) {
+      diag(diagnostics, 'invalid_values', `${basePath}.${name}`, `missing required key "${name}"`);
+      valid = false;
+    }
+  }
+  for (const [key, entry] of Object.entries(values)) {
+    const subSchema = properties[key];
+    const subPath = `${basePath}.${key}`;
+    if (!isRecord(subSchema)) {
+      if (!allowAdditional) {
+        diag(diagnostics, 'unknown_config_key', subPath, `unknown key "${key}"`);
+        valid = false;
+      }
+      continue;
+    }
+    if (!checkValueType(diagnostics, subPath, subSchema, entry)) valid = false;
+  }
+  return valid;
+}
+
