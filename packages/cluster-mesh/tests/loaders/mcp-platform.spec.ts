@@ -5,7 +5,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createModuleRegistry } from '../../src/modules/registry.js';
-import { loadMcpPlatformEntry, loadMcpPlatformRegistry } from '../../src/loaders/mcp/index.js';
+import {
+  loadMcpPlatformBridge,
+  loadMcpPlatformEntry,
+  loadMcpPlatformHono,
+  loadMcpPlatformRegistry,
+} from '../../src/loaders/mcp/index.js';
 import {
   evaluations,
   moduleSource,
@@ -34,6 +39,10 @@ function fakeMcpPlatform(version = '0.3.0'): FakePackage {
       './registry/entry': {
         source: moduleSource('mcp-platform/entry', ['buildRegistryEntry', 'resolveRegistryEntry']),
       },
+      './transport/bridge': {
+        source: moduleSource('mcp-platform/bridge', ['registerBridgeTools', 'identityFromExtra']),
+      },
+      './hono': { source: moduleSource('mcp-platform/hono', ['createMcpPlatformHono']) },
     },
   };
 }
@@ -58,6 +67,19 @@ describe('mcp-platform loaders', () => {
       resolveRegistryEntry(): string;
     };
     expect(namespace.resolveRegistryEntry()).toBe('mcp-platform/entry:resolveRegistryEntry');
+  });
+
+  it('loads the bridge and hono leaves through the same catalog', async () => {
+    tree.install('app', fakeMcpPlatform());
+    const modules = registry();
+    const bridge = (await loadMcpPlatformBridge(modules)) as {
+      registerBridgeTools(): string;
+    };
+    expect(bridge.registerBridgeTools()).toBe('mcp-platform/bridge:registerBridgeTools');
+    const hono = (await loadMcpPlatformHono(modules)) as {
+      createMcpPlatformHono(): string;
+    };
+    expect(hono.createMcpPlatformHono()).toBe('mcp-platform/hono:createMcpPlatformHono');
   });
 
   it('refuses a missing platform with the stable code', async () => {
