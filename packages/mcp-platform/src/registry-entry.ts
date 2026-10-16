@@ -12,7 +12,10 @@ import {
   canonicalJsonText,
   entryDigestHex,
 } from './registry-canonical.js';
-import type { CompiledToolEntry } from './tool-configuration.js';
+import type {
+  CompiledToolConfiguration,
+  CompiledToolEntry,
+} from './tool-configuration.js';
 import {
   validateBoundedValue,
   type JSONValue,
@@ -79,6 +82,35 @@ export function buildRegistryEntry(
  * against the entry's bounded schema; unknown slots are rejected by the
  * schema's `additionalProperties: false`, missing slots by its `required`.
  */
+export interface ResolvedRegistryEntry {
+  readonly entry: RegistryEntry;
+  readonly args: Readonly<Record<string, JSONValue>>;
+}
+
+/**
+ * RC-M2(b) — resolve a runtime call against a compiled configuration in one
+ * call: find the compiled tool by exact name, canonicalize the request, bind
+ * the entry and map the arguments. Unknown tools are rejected before any
+ * argument is inspected.
+ */
+export function resolveRegistryEntry(
+  config: CompiledToolConfiguration,
+  schema: unknown,
+  input: {
+    readonly tool: string;
+    readonly args: Readonly<Record<string, JSONValue>>;
+    readonly tenant?: string;
+  },
+): ResolvedRegistryEntry {
+  const compiled = config.tools.find((candidate) => candidate.toolName === input.tool);
+  if (compiled === undefined) {
+    throw new Error(`Unknown tool '${input.tool}': no compiled entry`);
+  }
+  const canonical = canonicalizeRegistryRequest(input);
+  const entry = buildRegistryEntry(compiled, schema, canonical);
+  return { entry, args: mapEntryArguments(entry, input.args) };
+}
+
 export function mapEntryArguments(
   entry: RegistryEntry,
   args: Readonly<Record<string, JSONValue>>,
