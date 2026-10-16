@@ -57,7 +57,8 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- None.
+- `attention` ATX-EX1: minor bump auth-hono 0.15.2 to 0.16.0 breaks `^0.15.0` ranges in auth-ui, cluster-mesh, llm-gateway (npm ERESOLVE on typecheck-api). Reason: new RFC 8693 grant is a feature, spec fixes 0.16.0. Impact: range-only widening in three consumer package.json plus root lockfile refresh, no source change. Rollback: revert range lines and lockfile.
+- `acknowledge` ATX-EX1: applied as declared, no source change in consumers.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -98,7 +99,7 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - [x] Update `src/oauth/token-handler.ts` to dispatch token-exchange grant and enforce grant eligibility.
   - [x] Update `src/ports.ts`, `src/oauth/router.ts`, `src/index.ts` exports as required.
   - [x] Update `src/oauth/wellknown-handler.ts` to advertise exchange grant only when configured.
-  - [ ] Update `tests/__fixtures__/memory-oauth-state-store.ts`, `tests/__fixtures__/oauth-fixtures.ts`.
+  - [x] Test doubles via new `tests/__fixtures__/token-exchange-fixtures.ts` (existing memory store and oauth fixtures already support service clients).
   - [ ] Lot gate:
     - [ ] `make typecheck-auth-hono API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
     - [ ] **API tests**
@@ -122,14 +123,14 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
     - [ ] **E2E tests**
       - [ ] None for 2-IdP; existing-client E2E is cross-repository receipt in 2b.
 - [ ] **Lot 2 — Host wiring, migration, workload client**
-  - [ ] Update `api/src/routes/auth/oauth.ts` host options for exchange policy and TTL.
-  - [ ] Update `api/src/routes/namespaces/oauth-ingress.ts` union scopes including `immo:read`, `immo:search`, `immo:documents:read`.
-  - [ ] Update `api/src/services/auth/oauth-state-adapter.ts` persistence and mapping for exchange policy.
-  - [ ] Update `api/src/db/schema.ts` for nullable default-deny service-client exchange policy.
-  - [ ] Add one additive `api/drizzle/0042_immo_token_exchange.sql` with journal and snapshot.
-  - [ ] Update `spec/DATA_MODEL.md` for new exchange policy columns.
-  - [ ] Register `immo-mcp-workload` confidential exchange-only service client; keep public `immo-mcp` unchanged; disable client_credentials for workload.
-  - [ ] Update `packages/auth-hono/package.json` to `0.16.0`; update README.
+  - [x] Update `api/src/routes/auth/oauth.ts` host options for exchange policy and TTL.
+  - [x] Update `api/src/routes/namespaces/oauth-ingress.ts` union scopes including `immo:read`, `immo:search`, `immo:documents:read`.
+  - [x] Update `api/src/services/auth/oauth-state-adapter.ts` persistence and mapping for exchange policy.
+  - [x] Update `api/src/db/schema.ts` for nullable default-deny service-client exchange policy.
+  - [x] Add one additive `api/drizzle/0042_immo_token_exchange.sql` with journal and snapshot.
+  - [x] Update `spec/DATA_MODEL.md` for new exchange policy columns.
+  - [x] Register `immo-mcp-workload` confidential exchange-only service client; keep public `immo-mcp` unchanged; disable client_credentials for workload.
+  - [x] Update `packages/auth-hono/package.json` to `0.16.0`; update README.
   - [ ] Lot gate:
     - [ ] `make typecheck-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` + `make lint-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
     - [ ] **API tests**

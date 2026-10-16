@@ -295,6 +295,13 @@
       "when": 1785110400000,
       "tag": "0041_track_owner_signatures",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1785196800000,
+      "tag": "0042_immo_token_exchange",
+      "breakpoints": true
     }
   ]
 }
