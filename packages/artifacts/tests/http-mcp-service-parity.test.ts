@@ -1,0 +1,149 @@
+/**
+ * L-5c — HTTP/MCP service parity, part 1: ensure + publish (spec-v8 §9 5c).
+ * The transport-free HTTP app delegates to the same services as direct
+ * calls (401 anonymous, 403 denied, 404 absent, 409 conflict, 422 failed
+ * verification, 400 invalid). Artifacts are addressed by server UUID; only
+ * ensure takes a binding.
+ */
+import { describe, expect, it } from 'vitest';
+import { createHttpArtifactApp, type HttpRequest } from '../src/http.js';
+import { createArtifactService } from '../src/server/service.js';
+import {
+  createPublicationService,
+  createMemoryStateStore,
+  createMemoryBlobStore,
+} from '../src/server/publication.js';
+import { createMemoryIntentStore } from '../src/server/object-intents.js';
+import { createIdempotencyStore, createMemoryIdempotencyKv } from '../src/server/idempotency.js';
+import {
+  createLifecycleService,
+  createMemoryLifecycleStore,
+} from '../src/server/lifecycle.js';
+import { createForkService, createMemoryForkStore } from '../src/server/fork.js';
+import { createMemoryAclStore } from '../src/server/access.js';
+import { createMemorySourceStore } from '../src/server/sources.js';
+import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
+import { defineParameters } from '../src/parameters.js';
+
+const OWNER = 'owner-1';
+const READER = 'reader-1';
+const STRANGER = 'stranger-1';
+const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
+
+function makeApp() {
+  const kv = createMemoryKv();
+  const artifacts = createArtifactService({ kv, uuid: createCryptoUuid() });
+  const publication = createPublicationService({
+    state: createMemoryStateStore(),
+    blobs: createMemoryBlobStore(),
+    intents: createMemoryIntentStore(),
+    idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
+  });
+  const app = createHttpArtifactApp({
+    parameterSchema: SCHEMA,
+    artifacts,
+    publication,
+    lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z'),
+    forks: createForkService(createMemoryForkStore()),
+    acls: createMemoryAclStore(),
+    sources: createMemorySourceStore(),
+  });
+  return { app, artifacts };
+}
+
+function req(method: string, path: string, body: unknown, actorId: string): HttpRequest {
+  return { method, path, body, actorId };
+}
+
+function asId(body: unknown): string {
+  return (body as { artifactId: string }).artifactId;
+}
+
+async function ensureSite(app: ReturnType<typeof makeApp>['app'], actor = OWNER, key = 'k-1'): Promise<string> {
+  const res = await app.handle(
+    req('POST', '/ensure', {
+      bindingName: 'site',
+      storageScopeId: 'scope-1',
+      idempotencyKey: key,
+      paramsHash: 'h-1',
+      parameters: { title: 'Hello' },
+    }, actor),
+  );
+  expect(res.status).toBe(201);
+  return asId(res.body);
+}
+
+const FILES = [{ path: 'index.html', mimeType: 'text/html', bytes: [1, 2, 3] }];
+
+describe('http service parity', () => {
+  it('ensures identically through HTTP and direct calls', async () => {
+    const { app, artifacts } = makeApp();
+    const direct = await artifacts.ensurePrivateView({
+      actorUserId: OWNER,
+      ownerId: OWNER,
+      storageScopeId: 'scope-1',
+      bindingName: 'direct',
+      idempotencyKey: 'k-direct',
+      paramsHash: 'h-d',
+    });
+    expect(direct).toMatchObject({ created: true, replayed: false });
+    const http = await app.handle(
+      req('POST', '/ensure', {
+        bindingName: 'site',
+        storageScopeId: 'scope-1',
+        idempotencyKey: 'k-1',
+        paramsHash: 'h-1',
+        parameters: { title: 'Hello' },
+      }, OWNER),
+    );
+    expect(http.status).toBe(201);
+    expect(http.body).toMatchObject({ created: true, replayed: false });
+    expect(typeof asId(http.body)).toBe('string');
+    const forged = await app.handle(req('POST', '/ensure', {}, ''));
+    expect(forged.status).toBe(401);
+    const invalid = await app.handle(
+      req('POST', '/ensure', {
+        bindingName: 'site',
+        storageScopeId: 'scope-1',
+        idempotencyKey: 'k-2',
+        paramsHash: 'h-2',
+        parameters: {},
+      }, OWNER),
+    );
+    expect(invalid.status).toBe(400);
+  });
+
+  it('publishes with conflict and verification mapping', async () => {
+    const { app } = makeApp();
+    const id = await ensureSite(app);
+    const grant = await app.handle(
+      req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, OWNER),
+    );
+    expect(grant.status).toBe(200);
+    const publish = { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'p-1', paramsHash: 'h-1' };
+    const first = await app.handle(req('POST', '/publish', publish, OWNER));
+    expect(first.status).toBe(201);
+    const replay = await app.handle(req('POST', '/publish', publish, OWNER));
+    expect(replay.status).toBe(201);
+    expect(replay.body).toEqual(first.body);
+    const conflict = await app.handle(
+      req('POST', '/publish', { ...publish, paramsHash: 'h-2' }, OWNER),
+    );
+    expect(conflict.status).toBe(409);
+    const badBytes = await app.handle(
+      req('POST', '/publish', {
+        ...publish,
+        files: [{ path: 'x', mimeType: 't', bytes: [256] }],
+        idempotencyKey: 'p-9',
+        paramsHash: 'h-9',
+      }, OWNER),
+    );
+    expect(badBytes.status).toBe(400);
+    const forged = await app.handle(req('POST', '/publish', { ...publish, idempotencyKey: 'p-3' }, READER));
+    expect(forged.status).toBe(403);
+    const unknown = await app.handle(
+      req('POST', '/publish', { ...publish, artifactId: '00000000-0000-4000-8000-000000000000', idempotencyKey: 'p-4' }, OWNER),
+    );
+    expect(unknown.status).toBe(404);
+  });
+});
