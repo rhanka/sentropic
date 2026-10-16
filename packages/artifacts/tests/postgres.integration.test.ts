@@ -162,6 +162,40 @@ describe('postgres artifact store', () => {
     expect(await store.getSource(ensured.artifactId)).toEqual({ kind: 'inline-original' });
   });
 
+  it('tracks lifecycle states on real rows', async () => {
+    const ensured = await store.ensureArtifact({
+      storageScopeId: 'scope-1',
+      ownerId: 'owner-life',
+      bindingName: 'life',
+      profile: {},
+    });
+    await expect(store.register('00000000-0000-4000-8000-000000000000', 'owner-life')).rejects.toThrow(
+      /unknown artifact/,
+    );
+    await store.register(ensured.artifactId, 'owner-life');
+    expect(await store.getOwner(ensured.artifactId)).toBe('owner-life');
+    expect(await store.getArtifactState(ensured.artifactId)).toBe('active');
+    await store.setArtifactState(ensured.artifactId, 'withdrawn');
+    expect(await store.getArtifactState(ensured.artifactId)).toBe('withdrawn');
+    await store.setRenewedAt(ensured.artifactId, '2026-01-01T00:00:00.000Z');
+    expect(await store.getRenewedAt(ensured.artifactId)).toBe('2026-01-01T00:00:00.000Z');
+    await store.putRelease({
+      releaseId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      artifactId: ensured.artifactId,
+      manifestDigest: 'dd'.repeat(32),
+      manifest: '{"schemaVersion":"artifacts/v1","files":[]}',
+      state: 'ready',
+      createdAt: new Date().toISOString(),
+    });
+    await store.addRelease(ensured.artifactId, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    expect(await store.listArtifactReleases(ensured.artifactId)).toEqual([
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    ]);
+    expect(await store.getReleaseState('dddddddd-dddd-4ddd-8ddd-dddddddddddd')).toBe('ready');
+    await store.setReleaseState('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'retired');
+    expect(await store.getReleaseState('dddddddd-dddd-4ddd-8ddd-dddddddddddd')).toBe('retired');
+  });
+
   it('registers blob rows with the release', async () => {
     const ensured = await store.ensureArtifact({
       storageScopeId: 'scope-1',
