@@ -22,6 +22,8 @@ function canonical(cli: SeatCli): SeatBundleV1 {
       ownerScope: 'owner-synth-01',
       cli,
       packageProviderId: SEAT_PACKAGE_PROVIDER_ID[cli],
+      issuingClientRef: `client-synth-${cli}-01`,
+      endpointFamily: `endpoint-synth-${cli}-01`,
       credentialFormatVersion: 'v1',
       os: 'linux',
     },
@@ -79,6 +81,18 @@ describe('seat-bundle envelope', () => {
     const bundle = canonical('agy');
     bundle.identity.packageProviderId = 'gemini';
     expect(validateSeatBundle(bundle)).toMatchObject({ ok: false, code: 'client-mismatch' });
+  });
+
+  it('refuses a missing issuing client', () => {
+    const bundle = canonical('codex');
+    bundle.identity.issuingClientRef = '';
+    expect(validateSeatBundle(bundle)).toMatchObject({ ok: false, code: 'client-mismatch' });
+  });
+
+  it('refuses a mismatched endpoint family', () => {
+    const bundle = canonical('muse');
+    const result = validateSeatBundle(bundle, { endpointFamily: 'endpoint-synth-other-01' });
+    expect(result).toMatchObject({ ok: false, code: 'client-mismatch' });
   });
 
   it('rejects an unknown top-level field', () => {
