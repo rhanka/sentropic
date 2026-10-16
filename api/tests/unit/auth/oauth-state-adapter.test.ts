@@ -243,7 +243,7 @@ describe('createOauthStateStoreAdapter', () => {
     });
     await expect(
       adapter.findServiceClient?.('service-malformed')?.then((client) => client?.exchangePolicy ?? null),
-    ).resolves.toBeNull();
+    ).resolves.toMatchObject({ allowClientCredentials: false, enabled: false });
     await expect(
       adapter.findServiceClient?.('service-legacy')?.then((client) => client?.exchangePolicy ?? null),
     ).resolves.toBeNull();

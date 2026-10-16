@@ -52,9 +52,24 @@ describe('OAuth token exchange', () => {
     const { router } = createOauthRouterForTest({ ports });
     const subject = await mintSubject(ports, store, { scope: 'immo:read immo:search' });
 
-    const response = await exchangeRequest(router, { scope: 'immo:read', subject });
+    const response = await exchangeRequest(router, { scope: 'immo:search', subject });
     expect(response.status).toBe(200);
-    expect(((await response.json()) as { scope: string }).scope).toBe('immo:read');
+    expect(((await response.json()) as { scope: string }).scope).toBe('immo:search');
+  });
+
+  it('rejects immo:read under the search-only downstream policy', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient()],
+    });
+    const { router } = createOauthRouterForTest({ ports });
+    const subject = await mintSubject(ports, store, { scope: 'immo:read immo:search' });
+
+    const response = await exchangeRequest(router, { scope: 'immo:read', subject });
+    expect(response.status).toBe(400);
+    expect((await response.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: 'invalid_scope' },
+    });
   });
 
   it('caps expiry at the subject expiry when it is sooner than 300 seconds', async () => {
@@ -92,6 +107,33 @@ describe('OAuth token exchange', () => {
       method: 'POST',
     });
     expect(response.status).toBe(400);
+    expect((await response.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: 'unauthorized_client' },
+    });
+  });
+
+  it('rejects client_credentials when exchange is disabled (fail-closed)', async () => {
+    const { ports } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient({ enabled: false })],
+    });
+    const { router } = createOauthRouterForTest({ ports });
+
+    const response = await router.request('/oauth/token', {
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        scope: 'immo:search',
+      }).toString(),
+      headers: {
+        authorization: basicAuth('immo-mcp-workload', 'workload-secret'),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      method: 'POST',
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: 'unauthorized_client' },
+    });
   });
 });
 

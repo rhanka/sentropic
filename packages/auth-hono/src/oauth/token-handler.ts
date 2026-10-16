@@ -122,13 +122,23 @@ const parseClientCredentials = (
   authorization: string | undefined,
   form: URLSearchParams
 ): { clientId: string | null; secret?: string } => {
+  // m8: a malformed Basic header fails closed with 401 downstream instead of
+  // throwing into a 500; client_id/secret are RFC 6749 §2.3.1 URL-decoded.
   if (authorization?.startsWith('Basic ')) {
-    const decoded = atob(authorization.slice('Basic '.length));
+    let decoded: string;
+    try {
+      decoded = atob(authorization.slice('Basic '.length).trim());
+    } catch {
+      return { clientId: null, secret: undefined };
+    }
     const separator = decoded.indexOf(':');
-    return {
-      clientId: separator >= 0 ? decoded.slice(0, separator) : decoded,
-      secret: separator >= 0 ? decoded.slice(separator + 1) : '',
-    };
+    const rawId = separator >= 0 ? decoded.slice(0, separator) : decoded;
+    const rawSecret = separator >= 0 ? decoded.slice(separator + 1) : '';
+    try {
+      return { clientId: decodeURIComponent(rawId), secret: decodeURIComponent(rawSecret) };
+    } catch {
+      return { clientId: null, secret: undefined };
+    }
   }
 
   return {
@@ -205,8 +215,12 @@ const handleClientCredentials = async (
   const auth = await authenticateServiceClient(c, form, options.ports, findServiceClient);
   if (auth instanceof Response) return auth;
 
-  if (auth.client.exchangePolicy?.enabled && auth.client.exchangePolicy.allowClientCredentials === false) {
-    return oauthJsonError(c, 400, 'invalid_grant', 'This client is restricted to token exchange.');
+  // M1 fail-closed: any present exchange policy that does not explicitly allow
+  // client_credentials denies it, regardless of `enabled`. A null/absent policy
+  // preserves legacy service-client defaults; a malformed row is normalized by
+  // the host adapter to a disabled deny-all marker, never to null.
+  if (auth.client.exchangePolicy != null && auth.client.exchangePolicy.allowClientCredentials !== true) {
+    return oauthJsonError(c, 400, 'unauthorized_client', 'This client is restricted to token exchange.');
   }
 
   const scope = resolveServiceScope(c, form, auth.client);
