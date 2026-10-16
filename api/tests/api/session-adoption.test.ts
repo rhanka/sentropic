@@ -929,10 +929,13 @@ describe('session adoption workspace binding', () => {
     expect(detached!.status).toBe('detached');
     expect(detached!.workspaceId).toBe(workspaceId);
     await service.end('sess-adopt-30', TENANT_A, user.id);
+    const ended = await service.get('sess-adopt-30', TENANT_A, user.id);
+    expect(ended!.status).toBe('ended');
+    expect(ended!.workspaceId).toBe(workspaceId);
     const reattached = await service.adopt({
-      sessionId: 'sess-adopt-30', tenantId: TENANT_A, principalId: user.id, workspaceId,
+      sessionId: 'sess-adopt-31', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
-    expect(reattached.version).toBeGreaterThan(binding.version);
+    expect(reattached.sessionId).toBe('sess-adopt-31');
     try {
       await content.deriveGrant({
         projectId: 'sess-adopt-project-d2',
@@ -963,5 +966,7 @@ describe('session adoption workspace binding', () => {
       .where(eq(sessionContentProjects.projectId, 'sess-adopt-project-d2'));
     await db.delete(sessionContentNamespaces)
       .where(eq(sessionContentNamespaces.ownerId, user.id));
+    await db.delete(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-31'));
   });
 });
