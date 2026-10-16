@@ -1075,6 +1075,92 @@ describe('session consent durable lifecycle', () => {
     );
   });
 
+  it('should refuse reads when the authority is unavailable or stale (M1)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('epoch-fenced-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-m1e', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    fakeEpoch.setUnavailable();
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'epoch_unavailable',
+    );
+    fakeEpoch.restore({ epoch: 'epoch-test-1', revision: 1, enabled: true, validUntil: Number.MAX_SAFE_INTEGER });
+    fakeEpoch.expireRead();
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'epoch_stale',
+    );
+  });
+
+  it('should refuse reserve/publish/read after rotation without restore fencing (M1)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('pre-rotation-live');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-m1r', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    const inFlight = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m1f', ctx,
+    );
+    fakeEpoch.rotate('epoch-test-2');
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m1n', ctx,
+    ), 'epoch_mismatch');
+    await expectContentError(() => service.publishAfterUpload(
+      inFlight.reservationId, new Uint8Array([1, 2, 3, 4]), ctx,
+    ), 'epoch_mismatch');
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'epoch_mismatch',
+    );
+    const grants = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(grants[0]!.authorityEpoch).toBe('epoch-test-1');
+  });
+
   it('should preserve a non-deleted identity on rollback without false purge', async () => {
     await acceptProject();
     const jobsBefore = await db.select().from(sessionContentPurgeJobs);
