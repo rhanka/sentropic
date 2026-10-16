@@ -170,10 +170,22 @@ export interface CanonicalProjectPolicy {
 
 export type ProjectConsentState = 'active' | 'revoked' | 'excluded';
 
+/** A resumed/forked provider conversation a new child wants to mirror. */
+export interface ResumedConversation {
+  readonly conversationId: string;
+  readonly lineage: string;
+  /** True only when record ordering against the child boundary is provable. */
+  readonly ordered: boolean;
+}
+
 /** One owner-confirmed project grant covering future sessions and named histories. */
 export interface ProjectContentConsent extends CanonicalProjectPolicy {
   readonly state: ProjectConsentState;
   readonly exclusionRevision: number;
+  /** Sessions fenced by denial suppression; clearing one needs a fresh amendment. */
+  readonly excludedSessionIds: readonly string[];
+  /** Set by clearExclusion; derivation stays refused until the next amendment. */
+  readonly requiresFreshAmendment: boolean;
   readonly retentionDigest: string;
   readonly acceptedPolicy: CanonicalProjectPolicy;
   readonly activatedAt: number;
@@ -211,18 +223,41 @@ export interface SessionContentGrant {
 }
 
 /** Narrow CAS store; the service never reads without rechecking revisions. */
+export type HistoryAuthorizationState = 'active' | 'revoked';
+
+/**
+ * Distinct closed-session reading authority. Ceilings record the covered
+ * objects' existing immutable deadlines (`null` = no expiry); this grant can
+ * never shorten, extend or create a duration.
+ */
+export interface HistoryReadAuthorization {
+  readonly authorizationId: string;
+  readonly projectId: string;
+  readonly sessionId: string;
+  readonly bindingId: string;
+  readonly projectRevision: number;
+  readonly ceilings: Record<RetainedChannel, number | null>;
+  readonly state: HistoryAuthorizationState;
+  readonly version: number;
+  readonly createdAt: number;
+}
+
+/** Narrow CAS store; the service never reads without rechecking revisions. */
 export interface ContentConsentStore {
   readProject(projectId: string): Promise<ProjectContentConsent | null>;
   writeProject(expectedRevision: number | null, next: ProjectContentConsent): Promise<boolean>;
   readGrant(sessionId: string): Promise<SessionContentGrant | null>;
   writeGrant(expectedVersion: number | null, next: SessionContentGrant): Promise<boolean>;
   listGrants(projectId: string): Promise<SessionContentGrant[]>;
+  readHistoryAuthorization(authorizationId: string): Promise<HistoryReadAuthorization | null>;
+  writeHistoryAuthorization(expectedVersion: number | null, next: HistoryReadAuthorization): Promise<boolean>;
   projectCount(): number;
 }
 
 export const createMemoryContentConsentStore = (): ContentConsentStore => {
   const projects = new Map<string, ProjectContentConsent>();
   const grants = new Map<string, SessionContentGrant>();
+  const historyAuthorizations = new Map<string, HistoryReadAuthorization>();
   return {
     async readProject(projectId: string) { return projects.get(projectId) ?? null; },
     async writeProject(expectedRevision: number | null, next: ProjectContentConsent) {
@@ -244,6 +279,17 @@ export const createMemoryContentConsentStore = (): ContentConsentStore => {
     },
     async listGrants(projectId: string) {
       return [...grants.values()].filter((grant) => grant.projectId === projectId);
+    },
+    async readHistoryAuthorization(authorizationId: string) {
+      return historyAuthorizations.get(authorizationId) ?? null;
+    },
+    async writeHistoryAuthorization(expectedVersion: number | null, next: HistoryReadAuthorization) {
+      const existing = historyAuthorizations.get(next.authorizationId) ?? null;
+      if (expectedVersion === null) {
+        if (existing) return false;
+      } else if (!existing || existing.version !== expectedVersion) return false;
+      historyAuthorizations.set(next.authorizationId, next);
+      return true;
     },
     projectCount() { return projects.size; },
   };
@@ -302,6 +348,27 @@ export interface DeriveChildInput {
   readonly sourceGeneration: string;
   readonly sourceTrustVersion: string;
   readonly nativeStartSeq: number;
+  /** Set when the new child locally resumes/forks an older provider conversation. */
+  readonly resumedConversation?: ResumedConversation;
+}
+
+/** One native record reference submitted for pre-export boundary filtering. */
+export interface NativeRecordRef {
+  readonly seq: number;
+  readonly lineage: string;
+  readonly conversationId: string;
+  readonly ordered: boolean;
+}
+
+export type WithheldReason = 'pre_boundary' | 'unprovable_range' | 'grant_inactive';
+
+export interface WithheldNativeRecord extends NativeRecordRef {
+  readonly reason: WithheldReason;
+}
+
+export interface ExportableNativePartition {
+  readonly exportable: NativeRecordRef[];
+  readonly withheld: WithheldNativeRecord[];
 }
 
 const requireId = (value: unknown, field: string): string => {
@@ -371,6 +438,80 @@ export interface ContentConsentServiceOptions {
 }
 
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60_000;
+
+/**
+ * Immutable capture deadline for one retained object: `{ mode: 'none' }`
+ * never ages out (`null`); a duration is bound once at capture and no later
+ * read, upload, reconnect or config change extends it.
+ */
+export const captureExpiresAt = (retention: RetentionPolicy, capturedAt: number): number | null =>
+  retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
+
+/**
+ * Live/control liveness against a fake-clock-friendly `nowMs`. A grant whose
+ * last source freshness acknowledgement is older than `maxStaleMs` is
+ * `live_expired`; a `nowMs` running behind the last acknowledgement beyond
+ * `maxSkewMs` is `lease_skew_exceeded`. Stored-copy reads are unaffected.
+ */
+export const checkGrantLiveness = (
+  grant: SessionContentGrant,
+  nowMs: number,
+  maxStaleMs: number,
+  maxSkewMs = maxStaleMs,
+): void => {
+  if (nowMs < grant.lastFreshnessAckAt - maxSkewMs) {
+    throw new ContentConsentError('lease_skew_exceeded', 'grant clock runs behind its freshness acknowledgement');
+  }
+  if (nowMs - grant.lastFreshnessAckAt > maxStaleMs) {
+    throw new ContentConsentError('live_expired', 'grant source freshness expired');
+  }
+};
+
+/** A grant only ever authorizes its own binding; nothing crosses bindings. */
+export const isGrantValidForBinding = (
+  grant: SessionContentGrant,
+  bindingId: string,
+): boolean => grant.bindingId === bindingId;
+
+/**
+ * Pre-export native boundary filter (CM2-R4-4). Only complete records at or
+ * after the child's authenticated consent boundary copy, plus exact
+ * lineage/range coverage already named in the accepted project revision.
+ * Everything older, unordered or unprovable is withheld with zero bytes.
+ */
+export const partitionExportableNativeRecords = (
+  grant: SessionContentGrant,
+  project: ProjectContentConsent,
+  records: readonly NativeRecordRef[],
+): ExportableNativePartition => {
+  const exportable: NativeRecordRef[] = [];
+  const withheld: WithheldNativeRecord[] = [];
+  for (const record of records) {
+    if (grant.state !== 'active') {
+      withheld.push({ ...record, reason: 'grant_inactive' });
+      continue;
+    }
+    if (!record.ordered) {
+      withheld.push({ ...record, reason: 'unprovable_range' });
+      continue;
+    }
+    if (record.seq >= grant.nativeBoundarySeq) {
+      exportable.push(record);
+      continue;
+    }
+    const named = project.namedHistories.find(
+      (history) => history.conversationId === record.conversationId && history.lineage === record.lineage,
+    );
+    const covered = named !== undefined
+      && named.startSeq !== undefined
+      && named.endSeq !== undefined
+      && record.seq >= named.startSeq
+      && record.seq <= named.endSeq;
+    if (covered) exportable.push(record);
+    else withheld.push({ ...record, reason: 'pre_boundary' });
+  }
+  return { exportable, withheld };
+};
 
 export const createContentConsentService = (
   store: ContentConsentStore,
@@ -461,6 +602,8 @@ export const createContentConsentService = (
         projectRevision: 1,
         state: 'active',
         exclusionRevision: 0,
+        excludedSessionIds: [],
+        requiresFreshAmendment: false,
         retentionDigest: prepared.digest,
         acceptedPolicy: prepared.policy,
         activatedAt: timestamp,
