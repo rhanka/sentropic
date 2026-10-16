@@ -9,6 +9,8 @@
 import type { Pool } from 'pg';
 import type { JsonValue } from '../contracts.js';
 import type { IntentKind, IntentStore, ObjectIntent } from '../server/object-intents.js';
+import type { IdempotencyStore, IdempotentResult } from '../server/idempotency.js';
+import type { PublicationStateStore, ReleaseRecord } from '../server/publication.js';
 
 export interface ArtifactBindingInput {
   storageScopeId: string;
@@ -24,6 +26,13 @@ export interface ArtifactBinding {
 
 export interface PostgresArtifactBasics extends IntentStore {
   ensureArtifact(input: ArtifactBindingInput): Promise<ArtifactBinding>;
+}
+
+export interface PostgresArtifactStore
+  extends PostgresArtifactBasics,
+    PublicationStateStore,
+    IdempotencyStore {
+  listRegisteredBlobs(storageScopeId: string): Promise<string[]>;
 }
 
 interface IntentRow {
@@ -48,8 +57,28 @@ function toIntent(row: IntentRow): ObjectIntent {
   };
 }
 
+interface ReleaseRow {
+  id: string;
+  artifact_id: string;
+  manifest_digest: string;
+  manifest: string;
+  state: 'ready';
+  created_at: Date;
+}
+
+function toRelease(row: ReleaseRow): ReleaseRecord {
+  return {
+    releaseId: row.id,
+    artifactId: row.artifact_id,
+    manifestDigest: row.manifest_digest,
+    manifest: row.manifest,
+    state: row.state,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
 /** Create the Postgres-backed store over an injected pool (no DDL). */
-export function createPostgresArtifactStore(pool: Pool): PostgresArtifactBasics {
+export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
   return {
     async ensureArtifact(input: ArtifactBindingInput): Promise<ArtifactBinding> {
       const where = `WHERE storage_scope_id = $1 AND owner_id = $2 AND binding_name = $3`;
@@ -121,6 +150,117 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactBasics 
          FROM artifacts.object_intents WHERE state = 'pending' ORDER BY created_at`,
       );
       return rows.map(toIntent);
+    },
+    async putRelease(release: ReleaseRecord): Promise<void> {
+      const parsed = JSON.parse(release.manifest) as {
+        files?: { digest?: unknown; size?: unknown }[];
+      };
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO artifacts.releases (id, artifact_id, manifest_digest, manifest, state, created_at)
+           VALUES ($1, $2, $3, $4, 'ready', $5)`,
+          [release.releaseId, release.artifactId, release.manifestDigest, release.manifest, release.createdAt],
+        );
+        const scope = await client.query<{ storage_scope_id: string }>(
+          `SELECT storage_scope_id FROM artifacts.artifacts WHERE id = $1`,
+          [release.artifactId],
+        );
+        const scopeId = scope.rows[0]?.storage_scope_id;
+        if (scopeId === undefined) throw new Error(`unknown artifact: ${release.artifactId}`);
+        for (const file of parsed.files ?? []) {
+          if (typeof file.digest !== 'string' || typeof file.size !== 'number') continue;
+          await client.query(
+            `INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
+             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+            [scopeId, file.digest, file.size],
+          );
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async getRelease(releaseId: string): Promise<ReleaseRecord | undefined> {
+      const { rows } = await pool.query<ReleaseRow>(
+        `SELECT id, artifact_id, manifest_digest, manifest, state, created_at
+         FROM artifacts.releases WHERE id = $1`,
+        [releaseId],
+      );
+      const row = rows[0];
+      return row === undefined ? undefined : toRelease(row);
+    },
+    async getCurrentReleaseId(artifactId: string): Promise<string | undefined> {
+      const { rows } = await pool.query<{ release_id: string }>(
+        `SELECT release_id FROM artifacts.artifact_current WHERE artifact_id = $1`,
+        [artifactId],
+      );
+      return rows[0]?.release_id;
+    },
+    async compareAndSwapCurrent(
+      artifactId: string,
+      expected: string | null,
+      next: string,
+    ): Promise<boolean> {
+      if (expected === null) {
+        const inserted = await pool.query(
+          `INSERT INTO artifacts.artifact_current (artifact_id, release_id)
+           VALUES ($1, $2) ON CONFLICT (artifact_id) DO NOTHING`,
+          [artifactId, next],
+        );
+        return (inserted.rowCount ?? 0) !== 0;
+      }
+      const updated = await pool.query(
+        `UPDATE artifacts.artifact_current SET release_id = $3
+         WHERE artifact_id = $1 AND release_id = $2`,
+        [artifactId, expected, next],
+      );
+      return (updated.rowCount ?? 0) !== 0;
+    },
+    async execute<T>(
+      key: string,
+      paramsHash: string,
+      work: () => Promise<T>,
+    ): Promise<IdempotentResult<T>> {
+      const found = await pool.query<{ params_hash: string; result: T }>(
+        `SELECT params_hash, result FROM artifacts.idempotency_keys WHERE key = $1`,
+        [`idempotency:${key}`],
+      );
+      const stored = found.rows[0];
+      if (stored !== undefined) {
+        if (stored.params_hash !== paramsHash) {
+          throw new Error(`idempotency conflict: key ${key} already used with different parameters`);
+        }
+        return { result: stored.result, replayed: true };
+      }
+      const result = await work();
+      const inserted = await pool.query(
+        `INSERT INTO artifacts.idempotency_keys (key, params_hash, result)
+         VALUES ($1, $2, $3) ON CONFLICT (key) DO NOTHING RETURNING key`,
+        [`idempotency:${key}`, paramsHash, JSON.stringify(result)],
+      );
+      if ((inserted.rowCount ?? 0) !== 0) return { result, replayed: false };
+      const raced = await pool.query<{ params_hash: string; result: T }>(
+        `SELECT params_hash, result FROM artifacts.idempotency_keys WHERE key = $1`,
+        [`idempotency:${key}`],
+      );
+      const winner = raced.rows[0];
+      if (winner === undefined) throw new Error(`idempotency record lost for ${key}`);
+      if (winner.params_hash !== paramsHash) {
+        throw new Error(`idempotency conflict: key ${key} already used with different parameters`);
+      }
+      return { result: winner.result, replayed: true };
+    },
+    async listRegisteredBlobs(storageScopeId: string): Promise<string[]> {
+      const { rows } = await pool.query<{ digest: string }>(
+        `SELECT digest FROM artifacts.blobs WHERE storage_scope_id = $1 ORDER BY digest`,
+        [storageScopeId],
+      );
+      return rows.map((row) => row.digest);
     },
   };
 }
