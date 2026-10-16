@@ -214,11 +214,26 @@ const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): Service
   tenantId: row.tenantId,
 });
 
-// 2-IdP: the exchange policy is stored as nullable jsonb (default-deny). Malformed or
-// disabled payloads map to null (no exchange); validation of the allowlists is fail-closed
-// in the token-exchange handler, never here.
+// 2-IdP: the exchange policy is stored as nullable jsonb (default-deny). A NULL
+// column preserves legacy service-client defaults (no exchange, client_credentials
+// allowed). A non-null but malformed payload maps to a disabled deny-all marker
+// (M1 fail-closed): both exchange and client_credentials are refused, never
+// assimilated to a legacy row. Allowlist validation stays fail-closed in the
+// token-exchange handler, never here.
+const FAIL_CLOSED_EXCHANGE_POLICY: NonNullable<ServiceClientRecord['exchangePolicy']> = {
+  actorSub: 'invalid',
+  allowClientCredentials: false,
+  allowedScopes: [],
+  allowedSubjectAudiences: [],
+  allowedSubjectClients: [],
+  allowedTargetAudiences: [],
+  enabled: false,
+  maxTtlSeconds: 1,
+};
+
 const toExchangePolicy = (value: unknown): ServiceClientRecord['exchangePolicy'] => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (value == null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) return FAIL_CLOSED_EXCHANGE_POLICY;
   const policy = value as Record<string, unknown>;
   const stringList = (key: string): string[] | null => {
     const list = policy[key];
@@ -238,7 +253,7 @@ const toExchangePolicy = (value: unknown): ServiceClientRecord['exchangePolicy']
     typeof maxTtlSeconds !== 'number' || !(maxTtlSeconds > 0) ||
     typeof policy.allowClientCredentials !== 'boolean'
   ) {
-    return null;
+    return FAIL_CLOSED_EXCHANGE_POLICY;
   }
   const environment = policy.environment;
   return {
