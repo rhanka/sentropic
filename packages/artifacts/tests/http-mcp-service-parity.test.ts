@@ -146,4 +146,60 @@ describe('http service parity', () => {
     );
     expect(unknown.status).toBe(404);
   });
+  it('reads 200/404 without oracling existence', async () => {
+    const { app } = makeApp();
+    const id = await ensureSite(app);
+    await app.handle(req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, OWNER));
+    await app.handle(req('POST', '/publish', { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'p-1', paramsHash: 'h-1' }, OWNER));
+    expect((await app.handle(req('GET', `/current/${id}`, undefined, OWNER))).status).toBe(200);
+    expect((await app.handle(req('GET', `/current/${id}`, undefined, READER))).status).toBe(200);
+    expect((await app.handle(req('GET', '/current/00000000-0000-4000-8000-000000000000', undefined, OWNER))).status).toBe(404);
+    await app.handle(req('POST', '/withdraw', { artifactId: id }, OWNER));
+    expect((await app.handle(req('GET', `/current/${id}`, undefined, READER))).status).toBe(404);
+    expect((await app.handle(req('GET', `/current/${id}`, undefined, OWNER))).status).toBe(200);
+    expect((await app.handle(req('GET', `/current/${id}`, undefined, ''))).status).toBe(401);
+  });
+
+  it('runs lifecycle, fork, source and grants with status mapping', async () => {
+    const { app } = makeApp();
+    const id = await ensureSite(app);
+    const grantOther = await app.handle(
+      req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, READER),
+    );
+    expect(grantOther.status).toBe(403);
+    await app.handle(req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'source' }, OWNER));
+    const forked = await app.handle(req('POST', '/fork', { artifactId: id }, READER));
+    expect(forked.status).toBe(201);
+    expect(asId(forked.body)).not.toBe(id);
+    const strangerFork = await app.handle(req('POST', '/fork', { artifactId: id }, STRANGER));
+    expect(strangerFork.status).toBe(403);
+    const noSource = await app.handle(req('GET', `/source/${id}`, undefined, READER));
+    expect(noSource.status).toBe(404);
+    const strangerSource = await app.handle(req('GET', `/source/${id}`, undefined, STRANGER));
+    expect(strangerSource.status).toBe(403);
+    const putBadSource = await app.handle(
+      req('POST', '/sources', { artifactId: id, source: { kind: 'recipe', steps: [] } }, OWNER),
+    );
+    expect(putBadSource.status).toBe(400);
+    await app.handle(req('POST', '/sources', { artifactId: id, source: { kind: 'base-commit', commit: 'abc' } }, OWNER));
+    const sourceRead = await app.handle(req('GET', `/source/${id}`, undefined, READER));
+    expect(sourceRead.status).toBe(200);
+    expect(sourceRead.body).toEqual({ kind: 'base-commit', commit: 'abc' });
+    const dupGrant = await app.handle(
+      req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, OWNER),
+    );
+    expect(dupGrant.status).toBe(400);
+    const renew = await app.handle(req('POST', '/renew', { artifactId: id }, OWNER));
+    expect(renew.status).toBe(200);
+    const unknownRoute = await app.handle(req('GET', '/nope', undefined, OWNER));
+    expect(unknownRoute.status).toBe(404);
+    const purgeEarly = await app.handle(req('POST', '/purge', { artifactId: id }, OWNER));
+    expect(purgeEarly.status).toBe(409);
+    await app.handle(req('POST', '/delete', { artifactId: id }, OWNER));
+    const purged = await app.handle(req('POST', '/purge', { artifactId: id }, OWNER));
+    expect(purged.status).toBe(200);
+    expect((await app.handle(req('GET', `/current/${id}`, undefined, OWNER))).status).toBe(404);
+    const forkGone = await app.handle(req('POST', '/fork', { artifactId: id }, OWNER));
+    expect(forkGone.status).toBe(410);
+  });
 });
