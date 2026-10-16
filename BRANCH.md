@@ -143,7 +143,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] m10: `serverInfo.version` aligned to `0.3.0` (BR1a-EX2)
   - [x] m4: deep clone before freeze; caller manifest/snapshot never frozen; test
   - [x] m5: compiled-brand WeakSet on activate (fake configs rejected); generation counter; test
-  - [ ] m6: scope source of truth documented in `ADOPTION_GUIDE.md` (3-policy consumes effective compiled policy)
+  - [x] m6: scope source of truth documented in `ADOPTION_GUIDE.md` (3-policy consumes effective compiled policy)
   - [x] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform`
   - [ ] m8: every commit < 150 lines with `BRANCH.md` updated in the same commit
   - [ ] m9: `BRANCH.md` truthful (this lot; no template rests; no false checks)
