@@ -26,7 +26,9 @@ export interface Run {
 /** Execute an ES module natively (no Vitest resolution) inside a fixture tree. */
 export function runNode(dir: string, source: string, file?: string): Run {
   counter += 1;
-  const path = join(dir, file ?? `probe-${counter}.mjs`);
+  // Probe files must be unique across parallel spec workers sharing one
+  // fixture dir (each worker restarts its own counter): pid + counter.
+  const path = join(dir, file ?? `probe-${process.pid}-${counter}.mjs`);
   writeFileSync(path, source);
   const result = spawnSync(process.execPath, [path], { cwd: dir, encoding: 'utf8' });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };

@@ -19,6 +19,8 @@ train_version() {
 }
 MESH="$(train_version llm-mesh)"
 GATEWAY="$(train_version llm-gateway)"
+AHONO="$(train_version auth-hono)"
+MPLATFORM="$(train_version mcp-platform)"
 rm -rf "$work"
 mkdir -p "$work/tools" "$work/src"
 quiet="--no-audit --no-fund --loglevel=error"
@@ -81,7 +83,7 @@ fixture() {
 
 tuple() {
   for name in @sentropic/cluster-mesh @sentropic/llm-mesh @sentropic/llm-gateway @sentropic/mcp-auth \
-    @sentropic/oauth-verify @sentropic/auth-hono jose hono; do
+    @sentropic/oauth-verify @sentropic/auth-hono @sentropic/mcp-platform jose hono; do
     version="$(node -p "require('$work/$1/node_modules/$name/package.json').version" 2>/dev/null || echo absent)"
     echo "$name@$version"
   done > "$work/$1/tuple.txt"
@@ -115,7 +117,9 @@ mkdir -p "$work/selected"
 cp "$fixtures/selected/package.json" "$work/selected/"
 cp "$fixtures/selected/package-lock.json" "$work/selected/committed-lock.json"
 consumer "$work/selected" "@sentropic/llm-mesh=$(src @sentropic/llm-mesh "$MESH")" \
-  "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")"
+  "@sentropic/llm-gateway=$(src @sentropic/llm-gateway "$GATEWAY")" \
+  "@sentropic/auth-hono=$(src @sentropic/auth-hono "$AHONO")" \
+  "@sentropic/mcp-platform=$(src @sentropic/mcp-platform "$MPLATFORM")"
 sources "$work/selected"
 if grep -q ' sibling ' "$work/selected/sources.txt"; then
   [ "${REFRESH_LOCK:-}" = 1 ] || cp "$fixtures/selected/package-lock.json" "$work/selected/"
@@ -152,34 +156,6 @@ consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mc
 (cd "$work/mcp-consumer" && npm install $quiet >/dev/null)
 tuple mcp-consumer
 
-# Latest within every declared peer range (both auth modes), resolved by npm at run time; a train package
-# with a sibling archive is the candidate of its range.
-fixture latest
-node -e 'const fs = require("fs"); const cm = JSON.parse(fs.readFileSync(process.argv[1] + "/package.json", "utf8"));
-  const dir = process.argv[2]; const pkg = JSON.parse(fs.readFileSync(dir + "/package.json", "utf8"));
-  pkg.dependencies = { "@sentropic/cluster-mesh": "file:" + process.argv[3], ...cm.peerDependencies, hono: cm.dependencies.hono };
-  fs.writeFileSync(dir + "/package.json", JSON.stringify(pkg, null, 2));' "$(pwd)" "$work/latest" "$tgz"
-latest_mesh="$(src @sentropic/llm-mesh "$MESH")"
-latest_gateway="$(src @sentropic/llm-gateway "$GATEWAY")"
-case "$latest_mesh$latest_gateway" in
-  *file:*) consumer "$work/latest" \
-    $(case "$latest_mesh" in file:*) echo "@sentropic/llm-mesh=$latest_mesh" ;; esac) \
-    $(case "$latest_gateway" in file:*) echo "@sentropic/llm-gateway=$latest_gateway" ;; esac) ;;
-esac
-sources "$work/latest"
-: > "$work/latest/npm-install-detail"
-attempt "$work/latest" plain
-tuple latest
-
-# Real global topology: runtime installed separately in the global prefix, then the consumer.
-stage separate-runtime
-stage global-consumer
-stage global-consumer-pinned
-npm install -g --prefix "$work/global" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
-npm install -g --prefix "$work/global" $quiet "$work/src/fixture-global-consumer-1.0.0.tgz" >/dev/null
-npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
-npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-global-consumer-pinned-1.0.0.tgz" >/dev/null
-
 # installed DIR: installed versions of the candidate and both train packages in DIR.
 installed() {
   for name in @sentropic/cluster-mesh @sentropic/llm-mesh @sentropic/llm-gateway; do
@@ -197,6 +173,34 @@ attempt() {
   printf '%s-exit=%s\n%s-eresolve=%s\n%s-installed=%s\n' "$label" "$code" "$label" "$eresolve" "$label" "$(installed "$dir")" \
     >> "$dir/npm-install-detail"
 }
+# Latest within every declared peer range (both auth modes), resolved by npm at run time; a train package
+# with a sibling archive is the candidate of its range.
+fixture latest
+node -e 'const fs = require("fs"); const cm = JSON.parse(fs.readFileSync(process.argv[1] + "/package.json", "utf8"));
+  const dir = process.argv[2]; const pkg = JSON.parse(fs.readFileSync(dir + "/package.json", "utf8"));
+  pkg.dependencies = { "@sentropic/cluster-mesh": "file:" + process.argv[3], ...cm.peerDependencies, hono: cm.dependencies.hono };
+  fs.writeFileSync(dir + "/package.json", JSON.stringify(pkg, null, 2));' "$(pwd)" "$work/latest" "$tgz"
+latest_overrides=""
+for sib in llm-mesh llm-gateway auth-hono mcp-platform mcp-auth oauth-verify contracts events; do
+  sib_ver="$(train_version "$sib")"
+  sib_spec="$(src @sentropic/"$sib" "$sib_ver")"
+  case "$sib_spec" in file:*) latest_overrides="$latest_overrides @sentropic/$sib=$sib_spec" ;; esac
+done
+consumer "$work/latest" $latest_overrides
+sources "$work/latest"
+: > "$work/latest/npm-install-detail"
+attempt "$work/latest" plain
+tuple latest
+
+# Real global topology: runtime installed separately in the global prefix, then the consumer.
+stage separate-runtime
+stage global-consumer
+stage global-consumer-pinned
+npm install -g --prefix "$work/global" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
+npm install -g --prefix "$work/global" $quiet "$work/src/fixture-global-consumer-1.0.0.tgz" >/dev/null
+npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
+npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-global-consumer-pinned-1.0.0.tgz" >/dev/null
+
 old_installed="@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0"
 
 # Old tuple (llm-mesh 0.21.2, llm-gateway 0.18.0), registry only: npm must refuse the out-of-range optional
