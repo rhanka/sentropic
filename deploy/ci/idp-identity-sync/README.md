@@ -211,9 +211,13 @@ secret material transits. Only `service_clients.exchange_policy` on the
 pre-existing `immo-mcp-workload` row may change; ids, secret hashes and every
 other row are verified unchanged (`service post-condition failed` otherwise). A
 missing workload row is counted as `services_skipped_missing` and never created:
-its secret is provisioned through the established protected channel. Prod
+its secret is created once through the protected provisioning path below. Prod
 audiences are rewritten to preprod through the same host-map as clients. Fixture
-hashes are test-only. Rotate or revoke the workload credential with
+hashes are test-only. Create the workload row (absent → created, replay no-op,
+conflict refused, public row untouched) with
+`make oauth-provision-exchange-client ENV=<env>`
+(`OAUTH_WORKLOAD_CLIENT_SECRET` via the protected channel, never committed).
+Rotate or revoke the workload credential with
 `make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload ENV=<env>`
 without rotating users or the public client.
 
