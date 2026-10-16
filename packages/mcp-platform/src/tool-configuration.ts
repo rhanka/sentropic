@@ -538,23 +538,50 @@ function isWeakeningOverlay(manifestTool: CapabilityTool, overlay: ToolPolicyOve
     return 'mutatesExternalSystem must equal the manifest baseline';
   }
   if (overlay.idempotency !== undefined) {
-    if (overlay.idempotency.required !== manifestTool.idempotency.required) {
+    const idempotency = overlay.idempotency as Record<string, unknown>;
+    for (const key of Object.keys(idempotency)) {
+      if (key !== 'required' && key !== 'scope') return `unknown idempotency key "${key}"`;
+    }
+    if (typeof idempotency.required !== 'boolean') return 'idempotency.required must be a boolean';
+    if (idempotency.required !== manifestTool.idempotency.required) {
       return 'idempotency.required must equal the manifest baseline';
     }
-    if (
-      manifestTool.idempotency.scope !== undefined &&
-      overlay.idempotency.scope !== manifestTool.idempotency.scope
-    ) {
+    if (idempotency.scope !== undefined && typeof idempotency.scope !== 'string') {
+      return 'idempotency.scope must be a string';
+    }
+    if (idempotency.scope !== manifestTool.idempotency.scope) {
       return 'idempotency.scope must equal the manifest baseline';
     }
   }
   if (overlay.freshness !== undefined) {
-    if (manifestTool.freshness !== undefined) {
-      if (overlay.freshness.maxAgeSeconds > manifestTool.freshness.maxAgeSeconds) {
-        return 'freshness.maxAgeSeconds exceeds the manifest baseline';
+    const freshness = overlay.freshness as Record<string, unknown>;
+    for (const key of Object.keys(freshness)) {
+      if (key !== 'maxAgeSeconds' && key !== 'acr' && key !== 'amr' && key !== 'stepUp') {
+        return `unknown freshness key "${key}"`;
       }
-      if (overlay.freshness.stepUp !== manifestTool.freshness.stepUp) {
-        return 'freshness.stepUp must equal the manifest baseline';
+    }
+    const base = manifestTool.freshness;
+    const maxAge = freshness.maxAgeSeconds !== undefined ? freshness.maxAgeSeconds : base?.maxAgeSeconds;
+    if (typeof maxAge !== 'number' || !Number.isFinite(maxAge) || maxAge <= 0) {
+      return 'freshness.maxAgeSeconds must be a finite number > 0';
+    }
+    if (base !== undefined && maxAge > base.maxAgeSeconds) {
+      return 'freshness.maxAgeSeconds exceeds the manifest baseline';
+    }
+    const stepUp = freshness.stepUp !== undefined ? freshness.stepUp : base?.stepUp;
+    if (typeof stepUp !== 'string' || (stepUp !== 'auth' && stepUp !== 'scope' && stepUp !== 'either')) {
+      return 'freshness.stepUp must be a known step-up value';
+    }
+    if (base !== undefined && stepUp !== base.stepUp) {
+      return 'freshness.stepUp must equal the manifest baseline';
+    }
+    for (const key of ['acr', 'amr'] as const) {
+      const value = freshness[key] !== undefined ? freshness[key] : base?.[key];
+      if (value !== undefined) {
+        if (!isStringArray(value)) return `freshness.${key} must be a string array`;
+        for (const entry of base?.[key] ?? []) {
+          if (!value.includes(entry)) return `freshness.${key} drops manifest value "${entry}"`;
+        }
       }
     }
   }
@@ -740,14 +767,20 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
 
     const policy = (entry.policy ?? {}) as ToolPolicyOverlay;
     // Field-by-field merge: an absent overlay field inherits the manifest
-    // baseline, so `gates: {}` can never drop a required gate (B1).
+    // baseline, so `gates: {}` or a partial freshness object can never drop a
+    // required gate, age bound, acr or amr entry (B1).
     const mergedGates = { ...manifestTool.gates, ...policy.gates };
+    const mergedFreshness =
+      policy.freshness === undefined && manifestTool.freshness === undefined
+        ? undefined
+        : ({ ...manifestTool.freshness, ...policy.freshness } as CapabilityTool['freshness']);
+    const mergedIdempotency = { ...manifestTool.idempotency, ...policy.idempotency };
     compiled.push({
       capabilityRef: entry.toolName,
-      freshness: policy.freshness ?? manifestTool.freshness,
+      freshness: mergedFreshness,
       gates: mergedGates,
       handlerId: entry.handlerId,
-      idempotency: policy.idempotency ?? manifestTool.idempotency,
+      idempotency: mergedIdempotency,
       mutability: policy.mutability ?? manifestTool.mutability,
       mutatesExternalSystem: policy.mutatesExternalSystem ?? manifestTool.mutatesExternalSystem,
       redactionClass: policy.redactionClass ?? manifestTool.redactionClass,
