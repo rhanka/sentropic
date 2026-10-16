@@ -9,6 +9,7 @@ import {
 } from './membership.js';
 import { createH2aNhiLifecycle, type CommandRunnerPort, type NhiLifecyclePort } from './nhi.js';
 import { createLocalProjectionDomain, type LocalProjectionPort, type ProjectionDomain, type ProjectionKind } from './projection.js';
+import { createTokenExchangeClient, type TokenExchangeIssuer } from './token-exchange.js';
 import { createGatedTrustDomain, type TrustDomain } from './trust.js';
 import type { ClusterMeshModules, ModuleCapabilityMap } from './modules/contracts.js';
 
@@ -31,7 +32,8 @@ export interface ClusterMesh {
     /** Effective kinds; optional for compatibility with older capability providers. */
     readonly localProjectionKinds?: readonly ProjectionKind[];
     readonly interServerDirectory: 'gated';
-    readonly tokenExchange: 'gated';
+    /** 'available' when a token-exchange issuer binding is configured, 'gated' otherwise. */
+    readonly tokenExchange: 'available' | 'gated';
     readonly memoryReplication: 'gated';
     /** Package availability snapshot; present only when a module registry is injected. */
     readonly modules?: ModuleCapabilityMap;
@@ -48,6 +50,8 @@ export function createDegenerateClusterMesh(input: {
   readonly nhi?: NhiLifecyclePort;
   readonly devices: LocalDeviceAttachmentPort;
   readonly modules?: ClusterMeshModules;
+  /** Issuer binding for RFC 8693 exchange. Absent until lot 2-IdP: the seam stays gated. */
+  readonly tokenExchangeIssuer?: TokenExchangeIssuer;
 }): ClusterMesh {
   if (input.nhi !== undefined) {
     for (const method of ['attest', 'offboard', 'exportBundle'] as const) {
@@ -71,7 +75,7 @@ export function createDegenerateClusterMesh(input: {
       return [...(input.projections.supportedKinds ?? ['human_identity', 'agent_identity', 'memory_snapshot'])];
     },
     interServerDirectory: 'gated',
-    tokenExchange: 'gated',
+    get tokenExchange() { return input.tokenExchangeIssuer ? 'available' : 'gated'; },
     memoryReplication: 'gated',
   };
   const modules = input.modules;
@@ -81,7 +85,9 @@ export function createDegenerateClusterMesh(input: {
   }
   return {
     membership: createSingleNodeMembership({ ...input, boundaries }),
-    trust: createGatedTrustDomain(),
+    trust: input.tokenExchangeIssuer
+      ? { tokenExchange: createTokenExchangeClient({ issuer: input.tokenExchangeIssuer }) }
+      : createGatedTrustDomain(),
     wrap: {
       projections: createLocalProjectionDomain({ homeNodeId: input.self.nodeId, local: input.projections }),
       nhi,
