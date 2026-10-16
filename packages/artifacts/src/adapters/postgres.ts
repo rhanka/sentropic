@@ -8,6 +8,9 @@
  */
 import type { Pool } from 'pg';
 import type { JsonValue } from '../contracts.js';
+import type { AccessGrant, AclStore, ArtifactAcl } from '../server/access.js';
+import type { ArtifactState } from '../server/lifecycle.js';
+import type { SourceRef, SourceStore } from '../server/sources.js';
 import type { IntentKind, IntentStore, ObjectIntent } from '../server/object-intents.js';
 import type { IdempotencyStore, IdempotentResult } from '../server/idempotency.js';
 import type { PublicationStateStore, ReleaseRecord } from '../server/publication.js';
@@ -31,7 +34,9 @@ export interface PostgresArtifactBasics extends IntentStore {
 export interface PostgresArtifactStore
   extends PostgresArtifactBasics,
     PublicationStateStore,
-    IdempotencyStore {
+    IdempotencyStore,
+    AclStore,
+    SourceStore {
   listRegisteredBlobs(storageScopeId: string): Promise<string[]>;
 }
 
@@ -261,6 +266,89 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         [storageScopeId],
       );
       return rows.map((row) => row.digest);
+    },
+    async getArtifactAcl(artifactId: string): Promise<ArtifactAcl | undefined> {
+      const { rows } = await pool.query<{
+        owner_id: string;
+        storage_scope_id: string;
+        is_public: boolean;
+        lifecycle_state: ArtifactState;
+      }>(
+        `SELECT owner_id, storage_scope_id, is_public, lifecycle_state
+         FROM artifacts.artifacts WHERE id = $1`,
+        [artifactId],
+      );
+      const row = rows[0];
+      if (row === undefined) return undefined;
+      const grants = await pool.query<{ principal_id: string; permission: AccessGrant }>(
+        `SELECT principal_id, permission FROM artifacts.artifact_access
+         WHERE artifact_id = $1 ORDER BY principal_id`,
+        [artifactId],
+      );
+      return {
+        ownerId: row.owner_id,
+        storageScopeId: row.storage_scope_id,
+        isPublic: row.is_public,
+        withdrawn: row.lifecycle_state === 'withdrawn',
+        grants: grants.rows.map((grant) => ({
+          principalId: grant.principal_id,
+          grant: grant.permission,
+        })),
+      };
+    },
+    async putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void> {
+      await pool.query(
+        `UPDATE artifacts.artifacts SET is_public = $2,
+         lifecycle_state = CASE WHEN $3 THEN 'withdrawn'
+           WHEN lifecycle_state = 'withdrawn' THEN 'active'
+           ELSE lifecycle_state END
+         WHERE id = $1`,
+        [artifactId, acl.isPublic, acl.withdrawn],
+      );
+      await pool.query(`DELETE FROM artifacts.artifact_access WHERE artifact_id = $1`, [
+        artifactId,
+      ]);
+      for (const grant of acl.grants) {
+        await pool.query(
+          `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission)
+           VALUES ($1, $2, $3)`,
+          [artifactId, grant.principalId, grant.grant],
+        );
+      }
+    },
+    async getSource(artifactId: string): Promise<SourceRef | undefined> {
+      const { rows } = await pool.query<{
+        kind: string;
+        commit_tx: string | null;
+        steps: unknown;
+      }>(
+        `SELECT kind, commit_tx, steps FROM artifacts.artifact_sources WHERE artifact_id = $1`,
+        [artifactId],
+      );
+      const row = rows[0];
+      if (row === undefined) return undefined;
+      if (row.kind === 'inline-original') return { kind: 'inline-original' };
+      if (row.kind === 'base-commit') {
+        return { kind: 'base-commit', commit: row.commit_tx ?? '' };
+      }
+      if (row.kind === 'recipe') {
+        return {
+          kind: 'recipe',
+          steps: Array.isArray(row.steps) ? row.steps.map((step) => String(step)) : [],
+        };
+      }
+      throw new Error(`unknown source kind: ${row.kind}`);
+    },
+    async putSource(artifactId: string, source: SourceRef): Promise<void> {
+      const commit = source.kind === 'base-commit' ? source.commit : null;
+      const steps = source.kind === 'recipe' ? JSON.stringify(source.steps) : null;
+      await pool.query(
+        `INSERT INTO artifacts.artifact_sources (artifact_id, kind, commit_tx, steps)
+         VALUES ($1, $2, $3, $4::jsonb)
+         ON CONFLICT (artifact_id) DO UPDATE
+         SET kind = EXCLUDED.kind, commit_tx = EXCLUDED.commit_tx, steps = EXCLUDED.steps`,
+        [artifactId, source.kind, commit, steps],
+      );
     },
   };
 }
