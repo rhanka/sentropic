@@ -123,6 +123,7 @@ export type TokenExchangeRefusalReason =
   | 'mint_failed'
   | 'mint_passthrough'
   | 'mint_refresh_present'
+  | 'minted_signature_invalid'
   | 'minted_token_invalid'
   | 'minted_token_type_unsupported'
   | 'minted_issuer_invalid'
@@ -422,7 +423,7 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
       if (request.subjectToken.length === 0) refuse('subject_token_missing');
       if (request.audience.length === 0) refuse('audience_missing');
       if (!input.audiences.includes(request.audience)) refuse('audience_not_allowed');
-      if ('actor' in (request as Record<string, unknown>)) refuse('actor_invalid');
+      if ('actor' in (request as unknown as Record<string, unknown>)) refuse('actor_invalid');
       if (request.scope.length === 0) refuse('scope_empty');
 
       let subject: VerifiedSubjectToken;
