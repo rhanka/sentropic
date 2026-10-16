@@ -61,11 +61,11 @@ IFS=, read -r snapshot users credentials consents clients < snapshot.csv
 [ "$users" = 8 ] && [ "$credentials" = 18 ] && [ "$consents" = 1 ] && [ "$clients" = 4 ]
 [ "$(wc -l < users.csv)" -eq 9 ] && [ "$(wc -l < webauthn.csv)" -eq 19 ]
 [ "$(head -n 1 clients.csv)" = 'client_id,has_secret,name,redirect_uris,allowed_scopes,grant_types,response_types,token_endpoint_auth_method,dpop_bound_access_tokens,require_pkce,resource_indicators,tenant_id,owner_user_id,created_at,updated_at' ]
-! grep -Fq -e 'synthetic-prod-hash' -e 'synthetic-new-prod-hash' -e 'prod-immo' -e 'prod-confidential' /tmp/relay/*
+! grep -Fq -e 'synthetic-prod-hash' -e 'synthetic-new-prod-hash' -e 'prod-immo' -e 'prod-confidential' -e 'synthetic-prod-workload-hash' /tmp/relay/*
 echo 'PASS: read-only snapshot users=8 credentials=18'
 mkdir -p /sql
 cp "$map" /sql/client-map.csv
-for policy in host-map.csv client-policy.sql sync-clients.sql client-postcondition.sql; do
+for policy in host-map.csv client-policy.sql sync-clients.sql client-postcondition.sql service-policy.sql sync-services.sql; do
   cp "/workspace/deploy/k8s/overlays/preprod/idp-identity-sync/$policy" "/sql/$policy"
 done
 pair='9f11d240-fc75-4d55-80be-1bafcd79eadb>1b9b9e15-2956-4df4-9ee1-a42273f0d096'
@@ -299,3 +299,4 @@ assert_sql "SELECT test_assert(NOT EXISTS (SELECT FROM oauth_consents WHERE user
 assert_sql 'SELECT test_assert(test_dv5() = (SELECT dv5 FROM test_before), '\''protected clients, keys and grants unchanged'\'')'
 echo 'PASS: tenant grants remain separate; prod revocation removes only its mapped grant'
 . /workspace/deploy/ci/idp-identity-sync/clients-test.sh
+. /workspace/deploy/ci/idp-identity-sync/services-test.sh
