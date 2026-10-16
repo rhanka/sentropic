@@ -332,21 +332,30 @@ consumer compatibility digest. `computeCompatibilityDigest` covers the generic p
 schemas/result codec (names, descriptions, input/output schemas); a 1b consumer computes its own
 digest over its SDK `tools/list` snapshot plus the `content`/`isError` envelope and passes it as
 `compatibilityDigest` — the compiler compares it, never derives it.
-The compiler validates the whole candidate before activation: schema `v1`, provider/connector refs,
-revision, manifest digest, consumer compatibility digest, exact tool coverage (configuration alone
-cannot rename, remove, add or change parameters/results), known local handlers only (table keys must
-equal `handlerId`), closed-schema typed per-tool values (unsupported keywords rejected), manifest
-policy merged field by field with no weakening (scopes/claims stay supersets, mutability/idempotency
-equal, freshness keeps a finite bound at or below the baseline with `acr`/`amr` supersets, gates
-merged per gate including `requiresPolicy`, redaction monotonic), strict canonical JSON (aligned
-with `sentropic-json-v1`: `undefined`/non-finite/non-plain/cyclic values rejected), and provenance
-carrying the mandatory payload digest (which binds the manifest and compatibility digests) plus the
-handler-table shape digest. The compiled configuration is deep-cloned (caller inputs are never
-frozen) and deeply frozen, and exposes `payloadDigest`, `approvalRef`, `providerVersion`/
-`platformVersion` and `handlersDigest` for 1b diagnostics. It performs zero I/O; an invalid
-candidate retains the active generation, `activate` only accepts compiler-branded configurations
-(generation counter via `getGeneration`), and a cold start without valid embedded configuration
-fails closed. Tests use synthetic providers only (`tests/tool-configuration.test.ts`).
+The compiler validates the whole candidate before activation: schema `v1`, mandatory qualified
+versions (`providerVersion` equals the manifest version, `platformVersion` equals the package
+version), provider/connector refs, revision, manifest digest, consumer compatibility digest, exact
+tool coverage (configuration alone cannot rename, remove, add or change parameters/results), known
+local handlers only (table keys must equal `handlerId`), closed-schema typed per-tool values
+(unsupported keywords rejected, mistyped keyword values rejected), manifest policy merged field by
+field with no weakening (scopes/claims stay supersets, mutability/idempotency equal, freshness keeps
+a finite bound at or below the baseline with `acr`/`amr` supersets, gates merged per gate including
+`requiresPolicy`, redaction monotonic), strict canonical JSON (aligned with `sentropic-json-v1`:
+`undefined`/non-finite/non-plain/cyclic values rejected, explicit `undefined` gates rejected), and
+a closed provenance (`approvalRef`, `revision`, `manifestDigest`, `payloadDigest`, `reviewedBy`
+only) carrying the mandatory payload digest (which binds the manifest, compatibility and
+handler-table shape digests) plus the snapshot-carried handler-table shape digest (`handlersDigest`,
+compared to the local table). Approval, reviewer and overlay strings are inspected
+(`reviewedBy` carries role/review identifiers only — no addresses, bearers, JWTs or `sub`;
+any URI scheme is forbidden in values, `maxTokens` excepted as an allowlisted key). The compiled
+configuration is deep-cloned (caller inputs, including overlay arrays, are never frozen) and deeply
+frozen, and exposes `payloadDigest`, `approvalRef`, `providerVersion`/`platformVersion` and
+`handlersDigest` for 1b diagnostics. It performs zero I/O; an invalid candidate retains the active
+generation, `activate` only accepts compiler-branded configurations (generation counter via
+`getGeneration`), and a cold start without valid embedded configuration fails closed. Tests use
+synthetic providers only (`tests/tool-configuration.test.ts`, one discriminating test per control;
+the separate-process test loads the compiled `dist/` package and the clean-consumer probe installs
+the packed tarball via `make probe-mcp-platform-clean-consumer`).
 
 ### Scope source of truth for 3-policy
 
@@ -357,11 +366,13 @@ Configuration alone can never rename, remove or add tools, nor change parameters
 
 ## 9. Verifying your connector (mock harness)
 
-This package has no Makefile target by design (it is private and unactivated). Run
-its own ephemeral toolchain inside the repo's Docker node image (see the package
-`README.md` "Running the gates"): a typecheck (`tsc --noEmit`) and the vitest suite
-(80/80 across 10 files at the time of writing). Real validation against Claude.ai or
-another external MCP client is **UAT, not a CI dependency** (spec §11).
+Run the package gates through the repo Makefile (see the package `README.md`
+"Running the gates"): `make typecheck-mcp-platform`, `make test-mcp-platform`
+(builds `dist/` first), `make pack-mcp-platform`,
+`make probe-mcp-platform-clean-consumer` (clean-container install + subpath import)
+and `make api-extract-mcp-platform`, each with `ENV=<env>` last. Real validation
+against Claude.ai or another external MCP client is **UAT, not a CI dependency**
+(spec §11).
 
 ---
 
