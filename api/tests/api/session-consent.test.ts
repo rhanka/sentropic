@@ -369,3 +369,186 @@ describe('session consent durable lifecycle', () => {
     await expectContentError(() => service.readCommitted('sess-content-s1', 'terminal.cache', ctx), 'grant_revoked');
     await expectContentError(() => service.reserveBeforeUpload('sess-content-s1', 'terminal.cache', { raw: 10, encoded: 10 }, 'k-late', ctx), 'grant_revoked');
   });
+
+  it('should upload, publish and read committed bytes', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('live-terminal-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-1', ctx,
+    );
+    expect(reserved.duplicate).toBe(false);
+    const published = await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    expect(published.expiresAt).toBeNull();
+    const read = await service.readCommitted('sess-content-s1', 'terminal.cache', ctx);
+    expect(new TextDecoder().decode(read)).toBe('live-terminal-bytes');
+    const physical = await fixture.listPhysical('');
+    expect(physical).toHaveLength(1);
+    const usage = await service.accountUsage({ tenantId: TENANT_A });
+    expect(usage.committedBytes).toBe(body.length);
+    expect(usage.objectCount).toBe(1);
+    const inventory = await service.listObjects(
+      `scc:${TENANT_A}:${owner.id}:epoch-test-1`, null, 10, ctx,
+    );
+    expect(inventory.objects).toHaveLength(1);
+    expect(inventory.nextCursor).toBeNull();
+    await expectContentError(() => service.listObjects(
+      `scc:${TENANT_B}:${outsider.id}:epoch-test-1`, null, 10, ctx,
+    ), 'cross_prefix_refused');
+    await fixture.assertAnonymousDenied(physical[0]!);
+  });
+
+  it('should deduplicate retries, conflict on changed bytes and charge unknown outcomes', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const first = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 8, encoded: 8 }, 'k-dup', ctx,
+    );
+    const retry = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 8, encoded: 8 }, 'k-dup', ctx,
+    );
+    expect(retry.duplicate).toBe(true);
+    expect(retry.reservationId).toBe(first.reservationId);
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 9, encoded: 9 }, 'k-dup', ctx,
+    ), 'attempt_conflict');
+    const unknown = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 8, encoded: 8 }, 'k-unknown', ctx,
+    );
+    await service.markAttemptUnknown(unknown.reservationId, ctx);
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.reservedBytes).toBe(16);
+    const headBefore = await fixture.head('no-such-key');
+    expect(headBefore).toBe('missing');
+    await expectContentError(() => service.publishAfterUpload(
+      unknown.reservationId, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), ctx,
+    ), 'unknown_outcome');
+  });
+
+  it('should expire finite copies at their capture deadline without extension', async () => {
+    await acceptProject({
+      retentionByChannel: {
+        'terminal.cache': { mode: 'duration', durationSeconds: 3600 },
+        'native.mirror': { mode: 'none' },
+      },
+    });
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('finite-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-fin', ctx,
+    );
+    const published = await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    expect(published.expiresAt).toBe(now + 3_600_000);
+    now += 3_600_000 + 1;
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'object_expired',
+    );
+    const mirrorReserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'native.mirror', { raw: 4, encoded: 4 }, 'k-mirror', ctx,
+    );
+    const mirrorBody = new Uint8Array([9, 9, 9, 9]);
+    const mirrorPublished = await service.publishAfterUpload(mirrorReserved.reservationId, mirrorBody, ctx);
+    expect(mirrorPublished.expiresAt).toBeNull();
+    const mirrorRead = await service.readCommitted('sess-content-s1', 'native.mirror', ctx);
+    expect(mirrorRead).toEqual(mirrorBody);
+    now += 10_000_000_000;
+    const stillThere = await service.readCommitted('sess-content-s1', 'native.mirror', ctx);
+    expect(stillThere).toEqual(mirrorBody);
+  });
+
+  it('should pause new capture at quota with prior objects preserved', async () => {
+    service = makeService({ maxBytesPerSession: 32, maxBytesPerTenant: 48, maxObjectsPerSession: 8 });
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const first = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 16, encoded: 16 }, 'k-q1', ctx,
+    );
+    await service.publishAfterUpload(first.reservationId, new Uint8Array(16), ctx);
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 17, encoded: 17 }, 'k-q2', ctx,
+    ), 'quota_exceeded');
+    const read = await service.readCommitted('sess-content-s1', 'terminal.cache', ctx);
+    expect(read).toHaveLength(16);
+    const concurrent = await Promise.all([0, 1, 2].map((index) =>
+      service.reserveBeforeUpload(
+        'sess-content-s1', 'native.mirror', { raw: 4, encoded: 4 }, `k-qc-${index}`, ctx,
+      ),
+    ));
+    expect(concurrent).toHaveLength(3);
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.committedBytes).toBe(16);
+    expect(usage.reservedBytes).toBe(12);
+  });
