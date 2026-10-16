@@ -347,7 +347,7 @@ export interface PaginatedObjectInventory {
   readonly nextCursor: string | null;
 }
 
-type DbClient = typeof db;
+type DbClient = Pick<typeof db, 'select' | 'insert' | 'update' | 'delete' | 'execute'>;
 
 export class SessionContentService {
   private readonly nowMs: () => number;
