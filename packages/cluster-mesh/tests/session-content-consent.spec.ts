@@ -414,3 +414,57 @@ describe('content consent child derivation', () => {
     expect(isGrantValidForBinding(grant, 'binding-2')).toBe(false);
   });
 });
+
+describe('content consent revoke and exclusion', () => {
+  it('should revoke one session grant while its sibling stays usable', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    await service.deriveChild(sharedChildInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
+    await service.revokeGrant('session-1');
+    await expectConsentCodeAsync(() => service.deriveChild(sharedChildInput()), 'grant_revoked');
+    const sibling = await service.deriveChild(sharedChildInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
+    expect(sibling.state).toBe('active');
+  });
+
+  it('should fence derived children when their project is revoked', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    await service.revokeProject('project-1');
+    await expectConsentCodeAsync(() => service.deriveChild(sharedChildInput()), 'project_revoked');
+    const grant = await service.readGrant('session-1');
+    expect(grant?.state).toBe('revoked');
+  });
+
+  it('should refuse derivation for an excluded session and fence its grant', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    await service.excludeSession('project-1', 'session-1');
+    await expectConsentCodeAsync(() => service.deriveChild(sharedChildInput()), 'session_excluded');
+    const grant = await service.readGrant('session-1');
+    expect(grant?.state).toBe('excluded');
+  });
+
+  it('should keep a cleared exclusion suppressed until a fresh amendment', async () => {
+    const { service, advance } = await readyConsent();
+    advance(1_000);
+    await service.deriveChild(sharedChildInput());
+    await service.excludeSession('project-1', 'session-1');
+    await service.clearExclusion('project-1', 'session-1');
+    await expectConsentCodeAsync(() => service.deriveChild(sharedChildInput()), 'suppressed_scope');
+    const project = await service.readProject('project-1');
+    const rePrepared = service.prepareProject(sharedBaseInput({ expectedProjectRevision: project?.projectRevision }));
+    await service.acceptProject(rePrepared, { challengeId: rePrepared.challengeId });
+    const grant = await service.deriveChild(sharedChildInput({ bindingId: 'binding-2' }));
+    expect(grant.state).toBe('active');
+  });
+
+  it('should settle a pending local denial on reconnect without purging copies', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    const denied = await service.recordLocalDeny('session-1');
+    expect(denied.localDenyPending).toBe(true);
+    const reconciled = await service.reconcileLocalDeny('session-1');
+    expect(reconciled.state).toBe('revoked');
+    expect(reconciled.localDenyPending).toBe(false);
+  });
+});
