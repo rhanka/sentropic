@@ -208,7 +208,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
 - [ ] **Lot 4 — Immo 1a R3 findings fix3 (`.h2a/reviews/immo_1a_opus_r3.md`: 2 MAJEUR R3-M1..M2, 6 MINEUR R3-m1..m6)**
   - [x] R3-M1: restore `token` in `FORBIDDEN_CONTENT_SUBSTRINGS` with test rejecting `authToken`/`githubToken`/`sessionToken`/`apiToken` and accepting `maxTokens`
   - [ ] R3-M2: apply spec-v3 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v3)
-  - [ ] R3-m1: bound scheme/basic guards with both-direction tests
+  - [x] R3-m1: bound scheme/basic guards with both-direction tests
   - [ ] R3-m2: discriminating tests for overlay/provenance/schema/identity controls
   - [ ] R3-m3: full mutation evidence with exact diff and failing output
   - [ ] R3-m4: clean-consumer probe compares frozen digests and traps fetch
