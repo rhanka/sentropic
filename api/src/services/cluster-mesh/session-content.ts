@@ -1016,6 +1016,155 @@ export class SessionContentService {
     });
   }
 
+  private async chargedBytes(
+    client: DbClient,
+    scope: { namespaceId?: string; sessionId?: string; tenantId?: string },
+  ): Promise<number> {
+    const conditions = [inArray(sessionContentObjects.state, ['staged', 'committed', 'purge_pending'])];
+    if (scope.namespaceId) conditions.push(eq(sessionContentObjects.namespaceId, scope.namespaceId));
+    if (scope.sessionId) conditions.push(eq(sessionContentObjects.sessionId, scope.sessionId));
+    const [objects] = await client
+      .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+      .from(sessionContentObjects)
+      .where(and(...conditions));
+    const reservedConditions = [eq(sessionContentReservations.state, 'reserved')];
+    if (scope.namespaceId) {
+      reservedConditions.push(eq(sessionContentReservations.namespaceId, scope.namespaceId));
+    }
+    if (scope.sessionId) {
+      reservedConditions.push(eq(sessionContentReservations.sessionId, scope.sessionId));
+    }
+    const [reserved] = await client
+      .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+      .from(sessionContentReservations)
+      .where(and(...reservedConditions));
+    let tenantBytes = 0;
+    if (scope.tenantId && !scope.namespaceId && !scope.sessionId) {
+      const namespaces = await client
+        .select({ namespaceId: sessionContentNamespaces.namespaceId })
+        .from(sessionContentNamespaces)
+        .where(eq(sessionContentNamespaces.tenantId, scope.tenantId));
+      const ids = namespaces.map((n) => n.namespaceId);
+      if (ids.length > 0) {
+        const [o] = await client
+          .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+          .from(sessionContentObjects)
+          .where(
+            and(
+              inArray(sessionContentObjects.namespaceId, ids),
+              inArray(sessionContentObjects.state, ['staged', 'committed', 'purge_pending']),
+            ),
+          );
+        const [r] = await client
+          .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
+          .from(sessionContentReservations)
+          .where(
+            and(
+              inArray(sessionContentReservations.namespaceId, ids),
+              eq(sessionContentReservations.state, 'reserved'),
+            ),
+          );
+        tenantBytes = (o?.bytes ?? 0) + (r?.bytes ?? 0);
+      }
+    }
+    return (objects?.bytes ?? 0) + (reserved?.bytes ?? 0) + tenantBytes;
+  }
+
+  /** Persist quota reservation before upload. Duplicate same-key
+   * submissions return the recorded outcome; changed payloads conflict. */
+  async reserveBeforeUpload(
+    sessionId: string,
+    channel: 'terminal.cache' | 'native.mirror',
+    bytes: { raw: number; encoded: number },
+    idempotencyKey: string,
+    ctx: SessionContentContext,
+  ) {
+    requireContext(ctx);
+    if (!Number.isSafeInteger(bytes.raw) || bytes.raw <= 0 || bytes.raw > this.quotas.maxFrameBytesRaw) {
+      throw new SessionContentError('frame_too_large', 'raw frame exceeds the bounded buffer');
+    }
+    if (!Number.isSafeInteger(bytes.encoded) || bytes.encoded <= 0 || bytes.encoded > this.quotas.maxFrameBytesEncoded) {
+      throw new SessionContentError('frame_too_large', 'encoded frame exceeds the bounded buffer');
+    }
+    const epoch = await this.checkEpoch();
+    const namespaceId = namespaceIdFor(ctx.tenantId, ctx.ownerId, epoch.epoch);
+    return db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+      if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      if (grant.state !== 'active') {
+        throw new SessionContentError('grant_revoked', 'grant is not active');
+      }
+      const [duplicate] = await tx
+        .select()
+        .from(sessionContentAttempts)
+        .where(
+          and(
+            eq(sessionContentAttempts.namespaceId, namespaceId),
+            eq(sessionContentAttempts.idempotencyKey, idempotencyKey),
+          ),
+        )
+        .limit(1);
+      const payloadDigest = computePolicyDigest({ sessionId, channel, raw: bytes.raw, encoded: bytes.encoded });
+      if (duplicate) {
+        if (duplicate.payloadDigest !== payloadDigest) {
+          await tx
+            .update(sessionContentAttempts)
+            .set({ outcome: 'conflicted' })
+            .where(eq(sessionContentAttempts.attemptId, duplicate.attemptId));
+          throw new SessionContentError('attempt_conflict', 'idempotency key reused with changed bytes');
+        }
+        return { reservationId: duplicate.attemptId, duplicate: true as const, outcome: duplicate.outcome };
+      }
+      const sessionCharged = await this.chargedBytes(tx, { sessionId });
+      if (sessionCharged + bytes.encoded > this.quotas.maxBytesPerSession) {
+        throw new SessionContentError('quota_exceeded', 'session quota is full; capture pauses');
+      }
+      const tenantCharged = await this.chargedBytes(tx, { tenantId: ctx.tenantId });
+      if (tenantCharged + bytes.encoded > this.quotas.maxBytesPerTenant) {
+        throw new SessionContentError('quota_exceeded', 'tenant quota is full; capture pauses');
+      }
+      const [sessionObjects] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sessionContentObjects)
+        .where(eq(sessionContentObjects.sessionId, sessionId));
+      if ((sessionObjects?.count ?? 0) >= this.quotas.maxObjectsPerSession) {
+        throw new SessionContentError('quota_exceeded', 'session object count is full');
+      }
+      const reservationId = this.newId();
+      await tx.insert(sessionContentReservations).values({
+        reservationId,
+        namespaceId,
+        sessionId,
+        channel,
+        bytesRaw: bytes.raw,
+        bytesEncoded: bytes.encoded,
+        state: 'reserved',
+        attemptDigest: payloadDigest,
+      });
+      await tx.insert(sessionContentAttempts).values({
+        attemptId: reservationId,
+        namespaceId,
+        sessionId,
+        idempotencyKey,
+        payloadDigest,
+        outcome: 'attempted',
+      });
+      await tx
+        .insert(sessionContentNamespaces)
+        .values({ namespaceId, tenantId: ctx.tenantId, ownerId: ctx.ownerId, epoch: epoch.epoch, status: 'active' })
+        .onConflictDoNothing();
+      return { reservationId, duplicate: false as const, outcome: 'attempted' as const };
+    });
+  }
+
   async clearExclusion(projectId: string, sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
     return db.transaction(async (tx) => {
