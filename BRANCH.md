@@ -42,6 +42,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - `packages/mcp-auth/**` (main already holds qualified 0.2.2)
   - Radar repository (separate repo, i-cond owned)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/Dockerfile` (build-order lines only, I861-EX5)
   - `api/drizzle/*.sql` (max 1 file: 0042)
   - `api/drizzle/meta/_journal.json` (0042 journal entry)
   - `api/package.json` (one additive script entry, I861-EX2)
@@ -55,6 +56,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - `I861-EX2` (was ATX-EX4): `Makefile` + `api/package.json` workload provisioning — `oauth-provision-exchange-client` Make target + `oauth:provision-exchange-client` npm script + `api/src/scripts/oauth-provision-exchange-client.ts`. Reason: M3 protected idempotent creation needs a runnable target. Impact: additive only. Rollback: delete target, script entry and script.
   - `I861-EX3` (was ATX-EX5): search-only narrowing (`api/src/services/auth/oauth-client-seed.ts`, service-policy.sql, fixtures) + `packages/cluster-mesh/tests/packaging/check-lock-integrity.mjs` + `lock-integrity.spec.ts` optional-only-absent-sibling follow-through. Reason: M4 downstream scope + m11 path declaration. Impact: no supply-chain gate weakening. Rollback: revert narrowing, restore stricter gate.
   - `I861-EX4` (was BR2A-EX1..EX4): new `packages/cluster-mesh/src/trust/token-exchange-http.ts`, new `tests/token-exchange-integration.spec.ts`, README + CHANGELOG 0.18.0 entries, `catalog.ts` range line + peer range + selected fixtures. Reason: B1/M8/m10/m13 findings. Impact: additive + declared range widening, now inside Allowed Paths. Rollback: not applicable (paths are Allowed on this branch; kept for traceability).
+  - `I861-EX5` (new, unlisted path): `api/Dockerfile` build-order line move (2 lines: `mcp-platform` build before `cluster-mesh` build, no other change). Reason: conductor-ordered API image for i-cond 2b qualification failed to build — the mesh typechecks against the platform `dist`, which does not exist yet when `cluster-mesh` builds first (reproduced locally by removing the platform `dist`: same TS2307). The path is in none of the Allowed/Forbidden/Conditional lists. Impact: build order only, reflecting the real Lot 7 type dependency; no runtime, layer or registry change. Rollback: move the line back (image build breaks again on this branch).
 
 ## Feedback Loop
 - `attention` I861-F1 (recorded, sign-off batched with the final merge request per conductor decision): 2-IdP m10 e2e flake, non-systematic. Test `e2e/tests/05-usecase-detail.spec.ts:690`, command `test-e2e (group-e, 05 07)`, signature `expect(acquiredByA.status()).toBe(201)` got 409. Same job passed on run `38833429815` at identical product code; rerun `gh run rerun --job 116765363067` concluded success. No branch change touches locking/initiatives/UI; no test or timeout touched.
