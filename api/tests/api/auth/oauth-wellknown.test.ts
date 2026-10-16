@@ -24,7 +24,11 @@ describe('OAuth well-known routes', () => {
     expect(payload.end_session_endpoint).toBe(
       'http://localhost:9197/api/v1/oauth/end_session',
     );
-    expect(payload.grant_types_supported).toEqual(['authorization_code', 'client_credentials']);
+    expect(payload.grant_types_supported).toEqual([
+      'authorization_code',
+      'client_credentials',
+      'urn:ietf:params:oauth:grant-type:token-exchange',
+    ]);
     expect(payload.code_challenge_methods_supported).toEqual(['S256']);
     expect(payload.prompt_values_supported).toEqual([
       'none',
@@ -76,6 +80,24 @@ describe('OAuth well-known routes', () => {
     );
     // No duplicates: the union is deduplicated, so a repeated value would signal the merge broke.
     expect(new Set(payload.scopes_supported).size).toBe(payload.scopes_supported.length);
+    // 2-IdP: the host union also advertises the grantable Immo scopes (descriptive only).
+    expect(payload.scopes_supported).toEqual(
+      expect.arrayContaining(['immo:read', 'immo:search', 'immo:documents:read']),
+    );
+  });
+
+  it('advertises the token-exchange grant on both issuer metadata URLs', async () => {
+    for (const path of ['/.well-known/openid-configuration', '/.well-known/oauth-authorization-server']) {
+      const res = await app.request(`http://localhost:9197${path}`, {
+        headers: { Origin: allowedOrigin },
+      });
+
+      expect(res.status).toBe(200);
+      const payload = (await res.json()) as { grant_types_supported: string[] };
+      expect(payload.grant_types_supported).toContain(
+        'urn:ietf:params:oauth:grant-type:token-exchange',
+      );
+    }
   });
 
   it('mounts the advertised end_session endpoint (route reachable, not 404)', async () => {
