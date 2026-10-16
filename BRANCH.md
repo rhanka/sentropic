@@ -52,10 +52,11 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [ ] `attention` BR1a-EX3: touch `Makefile` (add `probe-mcp-platform-clean-consumer` target, ~25 lines). Reason: R2-M4 requires a Make-driven clean-consumer install probe for the unpublished `0.3.0` candidate; `Makefile` is Forbidden by default. Impact: additive `.PHONY` target only, no existing target modified, runs `pack-mcp-platform` + clean-container install + subpath import. Rollback: delete the target. Approved by the conductor under the owner default authorization per launch packet.
+- [ ] `attention` BR1a-EX3: touch `Makefile` (`test-mcp-platform` prereq `install-internal-packages` -> `build-mcp-platform` for the packaged `dist/` test plus new `probe-mcp-platform-clean-consumer` target, 8-line diff; R3-m4 hardens the probe to compare frozen `payloadDigest`/`handlersDigest`/`compiledDigest` and trap `fetch`). Reason: R2-M4 requires a Make-driven clean-consumer install probe for the unpublished `0.3.0` candidate; `Makefile` is Forbidden by default. Impact: one prereq line changed plus additive `.PHONY` probe (pack + clean-container install + subpath import + digest/fetch checks). Rollback: revert prereq and delete the target. Approved by the conductor under the owner default authorization per launch packet.
 - [x] `attention` Lot 2 UAT-4 closed: `probe-mcp-platform-clean-consumer` (BR1a-EX3) passes — `CLEAN_CONSUMER_OK payloadDigest=81148c5d…4cb9a5c8547 handlersDigest=163e199a…abeeef206b8`, pack sha `bca230787f7dedb43e0e2f35b3fd93b1e158e2b9203596b9bfb605d2469a906d` (supersedes pre-fix2 pack sha `704bf8c7…`).
-- [ ] `attention` manifests-gate-local: `make check-publishable-manifests` fails locally only (inventory requires validated CI context `MANIFEST_CONTEXT_FILE`/`CI_MANIFEST_CONTEXT`); covered by CI `validate-publishable-manifests` (green on run `38836535941`). Owner judges merge readiness.
-- [ ] `attention` CI green on run `38836535941` (55 pass, 0 fail): `enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests` pass. Merge stays owner-gated per packet stop rule.
+- [ ] `attention` R3-m6 history note: Lot 3 commits `73622ad66` (176 lines) and `0ee8d58d9` (156 lines) exceed 150 lines and 5/7 Lot 3 commits omit `BRANCH.md`; pushed history stays as-is (no rewrite without owner decision). Fix3 commits stay ≤150 lines each with `BRANCH.md` updated in the same commit.
+- [ ] `attention` manifests-gate-local: `make check-publishable-manifests` fails locally only (inventory requires validated CI context `MANIFEST_CONTEXT_FILE`/`CI_MANIFEST_CONTEXT`); covered by CI `validate-publishable-manifests` (green on run `38845923219`). Owner judges merge readiness.
+- [ ] `attention` CI green on run `38845923219` (50 pass, 6 pending, 22 skipping, 0 fail): `enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests`, `security-sast-sca` pass; e2e groups + `security-container` pending at review. Merge stays owner-gated per packet stop rule.
 - [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
 - [ ] `attention`: npm published `@sentropic/mcp-platform` is `0.2.0`, source is `0.2.0`, candidate `0.3.0` is strictly above both (verified 2026-10-16)
 - [ ] `attention` BR1a-EX1: bump `packages/connector-host/package.json` range `^0.2.0` -> `^0.3.0` and refresh root `package-lock.json` via `make lock-root`. Reason: minor bump exits the `^0.2.0` range (`0.x` caret pins minor) and desyncs the lockfile, blocking every Make gate (`npm ci` fails). Impact: two files outside Allowed Paths, consumer-only range bump, no source change. Rollback: revert range and lockfile.
@@ -207,12 +208,12 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
     - [x] Report `.h2a/build/immo_1a_fix2_report.md` with per-mutation command + failing output
 - [ ] **Lot 4 — Immo 1a R3 findings fix3 (`.h2a/reviews/immo_1a_opus_r3.md`: 2 MAJEUR R3-M1..M2, 6 MINEUR R3-m1..m6)**
   - [x] R3-M1: restore `token` in `FORBIDDEN_CONTENT_SUBSTRINGS` with test rejecting `authToken`/`githubToken`/`sessionToken`/`apiToken` and accepting `maxTokens`
-  - [ ] R3-M2: apply spec-v3 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v3)
+  - [x] R3-M2: apply spec-v3 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v3)
   - [x] R3-m1: bound scheme/basic guards with both-direction tests
   - [x] R3-m2: discriminating tests for overlay/provenance/schema/identity controls
   - [ ] R3-m3: full mutation evidence with exact diff and failing output
-  - [ ] R3-m4: clean-consumer probe compares frozen digests and traps fetch
-  - [ ] R3-m5: platform version tied to `package.json` by test with strict-equality decision
+  - [x] R3-m4: clean-consumer probe compares frozen digests and traps fetch
+  - [x] R3-m5: platform version tied to `package.json` by test with strict-equality decision
   - [ ] R3-m6: `BRANCH.md` exact incl. BR1a-EX3 and commit sizes ≤150 lines each with `BRANCH.md`
   - [ ] Lot gate: `make typecheck-mcp-platform`, `make test-mcp-platform`, `make pack-mcp-platform`, `make probe-mcp-platform-clean-consumer` (all `ENV=test-mcp-registry-codec` last)
 - [ ] **Lot N-1 — Docs consolidation**

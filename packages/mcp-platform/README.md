@@ -53,14 +53,22 @@ Strict, pure, zero-I/O compiler for an approved per-tool configuration snapshot:
   digests), exact tool coverage (no rename, remove, add or param/result change), handler allowlist
   (table keys equal `handlerId`), closed-schema typed per-tool values (mistyped keywords rejected),
   manifest policy merged field by field with no weakening, closed provenance keys (`approvalRef`,
-  `revision`, `manifestDigest`, `payloadDigest`, `reviewedBy`) with inspected strings (role-only
-  reviewers, no credentials, bearers, user data or executable/upstream values, including overlays).
+  `revision`, `manifestDigest`, `payloadDigest`, `reviewedBy`) with inspected strings as bounded
+  heuristics (role/review identifiers expected; opaque `sub`/UUID undetectable by value; known
+  credential/bearer/JWT/email and dangerous/`scheme://`/`mailto:`/`ssh:` patterns rejected without
+  claiming universal secret/PII detection, including overlays).
 - Output: deep-cloned then deeply frozen `CompiledToolConfiguration` (exposes `payloadDigest`,
   `approvalRef`, versions and `handlersDigest`) or typed diagnostics; invalid candidates retain
   the active generation, `activate` accepts compiler-branded configurations only, and cold starts
-  fail closed. See `tests/tool-configuration.test.ts` (40 tests, one discriminating test per
-  control; the separate-process test loads `dist/` and the clean-consumer probe installs the packed
-  tarball via `make probe-mcp-platform-clean-consumer`).
+  fail closed. See `tests/tool-configuration.test.ts` (discriminating tests per control;
+  the separate-process test loads `dist/` and the clean-consumer probe installs the packed
+  tarball via `make probe-mcp-platform-clean-consumer`, comparing frozen digests with zero fetch).
+- Provenance and registry contract (spec-v3 §5/§11): `approvalRef`/`reviewedBy` are
+  consumer-local opaque review references (no Sentropic approver, no cross-repo equality);
+  the compiler is a subordinate validator of the future `@sentropic/mcp-platform/registry`
+  (§3.1), not the product registry; a digest proves integrity, not authorization;
+  `handlersDigest` is a shape digest, not code attestation (code bound via package/image
+  receipts); `platformVersion` strictly equals the package version.
 
 ### Slice 1 — manifest & adapter schemas (`src/manifest.ts`, `src/runtime.ts`)
 

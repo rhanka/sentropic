@@ -7,6 +7,7 @@
  * policy, rejection preserving active state, and the zero-I/O sentinel.
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { AppMcpProviderManifest, CapabilityTool } from '../src/manifest.js';
 import {
@@ -1100,6 +1101,11 @@ process.stdin.on('end', () => {
     if (!unknownGatesResult.ok) {
       expect(unknownGatesResult.diagnostics.some((entry) => entry.code === 'policy_weakening' && entry.path === 'snapshot.bindings[0].policy')).toBe(true);
     }
+  });
+
+  it('ties platform version to package.json with strict equality (R3-m5)', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    expect(TOOL_CONFIGURATION_PLATFORM_VERSION).toBe(pkg.version);
   });
 
   it('requires qualified provider and platform versions', () => {
