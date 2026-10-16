@@ -641,5 +641,122 @@ export const createContentConsentService = (
   const readProject = (projectId: string): Promise<ProjectContentConsent | null> =>
     store.readProject(projectId);
 
-  return { prepareProject, acceptProject, readProject };
+  const readActiveProject = async (projectId: string): Promise<ProjectContentConsent> => {
+    const project = await store.readProject(projectId);
+    if (!project) throw new ContentConsentError('project_not_active', 'no active project grant');
+    if (project.state === 'revoked') throw new ContentConsentError('project_revoked', 'project grant revoked');
+    if (project.state === 'excluded') throw new ContentConsentError('project_excluded', 'project grant excluded');
+    return project;
+  };
+
+  /**
+   * Derive one eligible future/selected child from the durable accepted
+   * project proof with no new human prompt, binding its new D1
+   * version/incarnation/start sequence and freezing its native boundary.
+   * Reattachment under a new binding never reuses the old child grant.
+   */
+  const deriveChild = async (input: DeriveChildInput): Promise<SessionContentGrant> => {
+    const projectId = requireId(input.projectId, 'projectId');
+    const sessionId = requireId(input.sessionId, 'sessionId');
+    const bindingId = requireId(input.bindingId, 'bindingId');
+    const project = await readActiveProject(projectId);
+    if (input.tenantId !== project.tenantId) {
+      throw new ContentConsentError('cross_tenant_refused', 'session tenant does not match project');
+    }
+    if (input.ownerId !== project.ownerId) {
+      throw new ContentConsentError('cross_owner_refused', 'session owner does not match project');
+    }
+    if (input.workspaceId !== project.workspaceId) {
+      throw new ContentConsentError('invalid_request', 'session workspace does not match project');
+    }
+    if (!project.sourceTrustVersions.includes(input.sourceTrustVersion)) {
+      throw new ContentConsentError('source_reauthorization_required', 'source trust version is not enrolled');
+    }
+    if (project.excludedSessionIds.includes(sessionId)) {
+      throw new ContentConsentError('session_excluded', 'session is excluded from this project');
+    }
+    if (project.requiresFreshAmendment) {
+      throw new ContentConsentError('suppressed_scope', 'cleared exclusion needs a fresh scope amendment');
+    }
+    const existing = await store.readGrant(sessionId);
+    if (existing && existing.projectId !== projectId) {
+      throw new ContentConsentError('cross_project_refused', 'session already derives from another project');
+    }
+    if (existing && existing.bindingId === bindingId) {
+      if (existing.sourceTrustVersion !== input.sourceTrustVersion
+        || existing.sourceGeneration !== input.sourceGeneration) {
+        throw new ContentConsentError('source_reauthorization_required', 'source replaced; reauthorize first');
+      }
+      if (existing.state === 'revoked') throw new ContentConsentError('grant_revoked', 'child grant revoked');
+      if (existing.state === 'excluded') throw new ContentConsentError('session_excluded', 'child grant excluded');
+      if (existing.state === 'closed') throw new ContentConsentError('grant_closed', 'child grant is closed');
+      if (existing.state === 'expired') throw new ContentConsentError('live_expired', 'child grant expired');
+      return existing;
+    }
+    if (existing && existing.state !== 'active' && existing.state !== 'closed') {
+      throw new ContentConsentError('grant_revoked', 'previous child grant is not derivable');
+    }
+    const selected = project.selectedSessionIds.includes(sessionId);
+    const resumed = input.resumedConversation;
+    const eligibleFuture = project.futureSessions && input.sessionCreatedAt >= project.activatedAt;
+    let nativeBoundarySeq = Math.max(input.d1StartSeq, input.nativeStartSeq);
+    if (!selected && !eligibleFuture) {
+      if (!resumed) throw new ContentConsentError('ineligible_session', 'session is outside the project scope');
+      if (!resumed.ordered) throw new ContentConsentError('unprovable_range', 'resumed range ordering is unprovable');
+      const named = project.namedHistories.find(
+        (history) => history.conversationId === resumed.conversationId && history.lineage === resumed.lineage,
+      );
+      if (!named || named.startSeq === undefined) {
+        throw new ContentConsentError('not_resumable', 'resumed history lacks exact named coverage');
+      }
+      nativeBoundarySeq = named.startSeq;
+    } else if (resumed && !resumed.ordered) {
+      throw new ContentConsentError('unprovable_range', 'resumed range ordering is unprovable');
+    }
+    const timestamp = nowMs();
+    const next: SessionContentGrant = {
+      grantId: newId(),
+      projectId,
+      projectRevision: project.projectRevision,
+      sessionId,
+      bindingId,
+      bindingVersion: input.bindingVersion,
+      d1Version: input.d1Version,
+      d1Incarnation: input.d1Incarnation,
+      d1StartSeq: input.d1StartSeq,
+      tenantId: project.tenantId,
+      workspaceId: project.workspaceId,
+      ownerId: project.ownerId,
+      sourceGeneration: input.sourceGeneration,
+      sourceTrustVersion: input.sourceTrustVersion,
+      nativeBoundarySeq,
+      channels: { ...project.channels },
+      retentionSnapshot: {
+        'terminal.cache': { ...project.retentionByChannel['terminal.cache'] },
+        'native.mirror': { ...project.retentionByChannel['native.mirror'] },
+      },
+      state: 'active',
+      version: (existing?.version ?? 0) + 1,
+      lastFreshnessAckAt: timestamp,
+      localDenyPending: false,
+      retainedCopies: existing?.retainedCopies ?? false,
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    };
+    if (!await store.writeGrant(existing ? existing.version : null, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent child derivation; retry derivation');
+    }
+    return next;
+  };
+
+  const readGrant = (sessionId: string): Promise<SessionContentGrant | null> =>
+    store.readGrant(sessionId);
+
+  return {
+    prepareProject,
+    acceptProject,
+    readProject,
+    deriveChild,
+    readGrant,
+  };
 };
