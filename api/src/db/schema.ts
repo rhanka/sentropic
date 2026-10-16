@@ -460,6 +460,11 @@ export const serviceClients = pgTable('service_clients', {
   secretRotatedAt: timestamp('secret_rotated_at', { withTimezone: false }),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   revokedAt: timestamp('revoked_at', { withTimezone: false }),
+  // 2-IdP: RFC 8693 token-exchange policy (nullable, default-deny). NULL means the client
+  // cannot perform token exchange; existing client_credentials behavior is unchanged.
+  // The `immo-mcp-workload` exchange-only client carries an enabled policy with
+  // `allowClientCredentials: false`. Never copy the workload tenant as the human tenant.
+  exchangePolicy: jsonb('exchange_policy'),
 }, (table) => ({
   clientIdIdx: index('service_clients_client_id_idx').on(table.clientId),
   tenantIdIdx: index('service_clients_tenant_id_idx').on(table.tenantId),
