@@ -31,6 +31,7 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - `packages/auth-hono/package.json`
   - `packages/auth-hono/README.md`
   - `api/src/routes/auth/oauth.ts`
+  - `api/src/scripts/oauth-provision-exchange-client.ts` (ATX-EX4)
   - `api/src/routes/namespaces/oauth-ingress.ts`
   - `api/src/services/auth/oauth-state-adapter.ts`
   - `api/src/db/schema.ts`
@@ -61,7 +62,10 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (ATX-EX1 follow-through: runtime gate, pins, lazy fixture)
   - `api/tests/api/cluster-mesh-transfers-cutover.test.ts`
   - `api/tests/fixtures/historical/transfers-0c5aef04/**` (ATX-EX3: parity re-pin only)
-  - `api/package.json`
+  - `api/package.json` (ATX-EX4: provision script entry only)
+  - `api/src/services/auth/oauth-client-seed.ts` (ATX-EX5: M4 search-only narrowing only)
+  - `packages/cluster-mesh/tests/packaging/check-lock-integrity.mjs` (ATX-EX5: EX1 optional-only tolerance, no further change)
+  - `packages/cluster-mesh/tests/packaging/lock-integrity.spec.ts` (ATX-EX5: EX1 optional-only tolerance, no further change)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -75,6 +79,10 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
 - `attention` ATX-EX3: migration 0042 advances the export schema tag, which trips the transfer cutover parity tripwire by design; re-pin the executable history snapshot (`api/tests/fixtures/historical/transfers-0c5aef04/`, route bytes shared with be37d69f6, journal advanced) and the test's fixture/journal pins. Reason: parity must be explicit per migration. Impact: new fixture dir + 3 pin lines, no product change. Rollback: delete the new dir, restore pins.
 - `acknowledge` ATX-EX3: applied as declared, route and bridge pins intact.
 - `attention` e2e group-e 05-usecase-detail lock-acquire 409 vs 201: isolated, non-systematic. Same job passed on run 38833429815 at identical product code and passed on rerun (`gh run rerun --job 116765363067`, conclusion success). No branch change touches locking/initiatives/UI; no test or timeout touched. Command: `test-e2e (group-e, 05 07)`, signature `expect(acquiredByA.status()).toBe(201)` got 409 at spec 05-usecase-detail.spec.ts:690.
+- `attention` ATX-EX4: M3 protected workload creation touches `Makefile` (forbidden), adds `api/src/scripts/oauth-provision-exchange-client.ts` (unlisted) and an `api/package.json` script entry (conditional, already listed). Reason: Make-only workflow needs a runnable prod-safe creation target; secret via protected env only. Impact: one additive Make target + one script + one script line, no existing target modified. Rollback: delete the target, the script and the script line.
+- `acknowledge` ATX-EX4: applied as declared; script refuses non-workload ids, weak secrets, revoked/conflicting rows; replay is a no-op; public row untouched.
+- `attention` ATX-EX5: M4/m11 path declarations: `api/src/services/auth/oauth-client-seed.ts` (unlisted, search-only narrowing) and `packages/cluster-mesh/tests/packaging/check-lock-integrity.mjs` + `lock-integrity.spec.ts` (unlisted, ATX-EX1 optional-only tolerance with unit tests; no further weakening). Reason: M4 requires seed narrowing; the integrity change is the already-reviewed EX1 follow-through. Impact: scope lines only + 2 path entries, no behavior beyond declared. Rollback: revert scope lines.
+- `acknowledge` ATX-EX5: applied as declared.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -109,7 +117,7 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-- [ ] **Lot 1 — auth-hono RFC 8693 exchange core**
+- [x] **Lot 1 — auth-hono RFC 8693 exchange core**
   - [x] Extend `state-store-types.ts` with default-deny exchange policy for confidential clients.
   - [x] Add `src/oauth/token-exchange-handler.ts` with fail-closed policy enforcement.
   - [x] Update `src/oauth/token-handler.ts` to dispatch token-exchange grant and enforce grant eligibility.
@@ -118,20 +126,20 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - [x] Test doubles via new `tests/__fixtures__/token-exchange-fixtures.ts` (existing memory store and oauth fixtures already support service clients).
   - [ ] Lot gate:
     - [ ] `make typecheck-auth-hono API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
-    - [ ] **API tests**
-      - [ ] New `packages/auth-hono/tests/token-exchange.test.ts` (policy table happy paths, scope intersection, TTL ceilings, act claim, no refresh).
-      - [ ] New `packages/auth-hono/tests/token-exchange-security.test.ts` (every refusal path).
-      - [ ] Existing `packages/auth-hono/tests/oauth-token.test.ts` (regress authorization_code unchanged).
-      - [ ] Existing `packages/auth-hono/tests/oauth-authorize.test.ts` (regress).
-      - [ ] Existing `packages/auth-hono/tests/oauth-client-credentials.test.ts` (regress, workload exchange-only no upgrade).
-      - [ ] Existing `packages/auth-hono/tests/oauth-resource-indicator.test.ts` (regress).
-      - [ ] Existing `packages/auth-hono/tests/oauth-revoke.test.ts` (regress revocation).
-      - [ ] Existing `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (regress Bearer-only, DPoP rejected).
-      - [ ] Existing `packages/auth-hono/tests/oauth-wellknown.test.ts` (regress grant advertisement).
-      - [ ] Existing `packages/auth-hono/tests/oauth-router-factory.test.ts` (regress).
-      - [ ] Scoped runs while evolving tests: `make test-auth-hono SCOPE=tests/token-exchange.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
-      - [ ] Scoped runs while evolving tests: `make test-auth-hono SCOPE=tests/token-exchange-security.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
-      - [ ] Sub-lot gate: `make test-auth-hono API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [x] **API tests**
+      - [x] New `packages/auth-hono/tests/token-exchange.test.ts` (policy table happy paths, scope intersection, TTL ceilings, act claim, no refresh).
+      - [x] New `packages/auth-hono/tests/token-exchange-security.test.ts` (every refusal path).
+      - [x] Existing `packages/auth-hono/tests/oauth-token.test.ts` (regress authorization_code unchanged).
+      - [x] Existing `packages/auth-hono/tests/oauth-authorize.test.ts` (regress).
+      - [x] Existing `packages/auth-hono/tests/oauth-client-credentials.test.ts` (regress, workload exchange-only no upgrade).
+      - [x] Existing `packages/auth-hono/tests/oauth-resource-indicator.test.ts` (regress).
+      - [x] Existing `packages/auth-hono/tests/oauth-revoke.test.ts` (regress revocation).
+      - [x] Existing `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (regress Bearer-only, DPoP rejected).
+      - [x] Existing `packages/auth-hono/tests/oauth-wellknown.test.ts` (regress grant advertisement).
+      - [x] Existing `packages/auth-hono/tests/oauth-router-factory.test.ts` (regress).
+      - [x] Scoped runs while evolving tests: `make test-auth-hono SCOPE=tests/token-exchange.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+      - [x] Scoped runs while evolving tests: `make test-auth-hono SCOPE=tests/token-exchange-security.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+      - [x] Sub-lot gate: `make test-auth-hono API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
       - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` and document status/signature in `BRANCH.md`
     - [ ] **UI tests (TypeScript only)**
       - [ ] None; no login UI change in 2-IdP.
@@ -188,7 +196,7 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
     - [x] Verify both metadata documents advertise configured grant and grantable Immo scopes; existing public authorization/renewal works without new consent.
     - [x] Rotate/revoke workload credential; prove effect without rotating users or public-client identity.
     - [x] Pass import/migration/replay and non-interference checks; hand immutable version/policy receipt to 2a/2b.
-- [x] **Lot N-1 — Docs consolidation** (no branch evol file created; spec/BRANCH_SPEC_EVOL.md on disk belongs to another branch, untouched)
+- [ ] **Lot N-1 — Docs consolidation** (no branch evol file created; spec/BRANCH_SPEC_EVOL.md on disk belongs to another branch, untouched)
   - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
   - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration.
 - [ ] **Lot N — Final validation**
