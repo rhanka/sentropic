@@ -42,13 +42,17 @@ afterAll(async () => {
 });
 
 describe('0001_artifacts migration', () => {
-  it('creates the domain tables', async () => {
+  it('creates the domain tables (plus the 0002 upgrade applied in beforeAll)', async () => {
     const { rows } = await client.query(
       `SELECT tablename FROM pg_tables WHERE schemaname = 'artifacts' ORDER BY tablename`,
     );
     expect(rows.map((r: { tablename: string }) => r.tablename)).toEqual([
+      'artifact_access',
       'artifact_current',
+      'artifact_sources',
       'artifacts',
+      'blob_pins',
+      'blob_ref_holders',
       'blobs',
       'idempotency_keys',
       'object_intents',
@@ -154,18 +158,18 @@ describe('0002_lifecycle migration', () => {
   it('guards grants, sources, holders and pins', async () => {
     const artifact = '99999999-9999-4999-8999-999999999999';
     await client.query(
-      `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, grant)
+      `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission)
        VALUES ('${artifact}', 'reader-1', 'read')`,
     );
     await expect(
       client.query(
-        `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, grant)
+        `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission)
          VALUES ('${artifact}', 'reader-1', 'source')`,
       ),
     ).rejects.toThrow(/duplicate key|23505/);
     await expect(
       client.query(
-        `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, grant)
+        `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission)
          VALUES ('${artifact}', 'reader-2', 'admin')`,
       ),
     ).rejects.toThrow(/check constraint|23514/);
