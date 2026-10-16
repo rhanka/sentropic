@@ -87,16 +87,16 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
     - [ ] Inspect static validation errors for mismatched owner, client and oversize bundle.
     - [ ] Inspect metadata-only receipts with no credential payload.
     - [ ] Review one-command enrollment instructions for initial enrollment and replacement.
-  - [ ] Lot gate:
-    - [ ] `make test-llm-mesh SCOPE=tests/enrollment/seat-bundle.test.ts ENV=test-ci-seat-contract`
-    - [ ] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-ci-seat-contract`
+  - [x] Lot gate:
+    - [x] `make test-llm-mesh SCOPE=tests/enrollment/seat-bundle.test.ts ENV=test-ci-seat-contract`
+    - [x] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-ci-seat-contract`
     - [ ] **API tests**: N/A in this lot, no api/** change.
     - [ ] **UI tests (TypeScript only)**: N/A in this lot, no UI change.
     - [ ] **E2E tests**: N/A in this lot, no browser or native E2E.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck and Lint for llm-mesh package.
-  - [ ] Retest llm-mesh package gate.
-  - [ ] Bumped packages/llm-mesh/package.json version 0.25.1, matching package-lock.json.
+  - [x] Typecheck and Lint for llm-mesh package.
+  - [x] Retest llm-mesh package gate.
+  - [x] Bumped packages/llm-mesh/package.json version 0.25.1, matching package-lock.json.
   - [ ] Final gate step 1: create DRAFT PR using BRANCH.md text as PR body.
   - [ ] Final gate step 2: run and verify branch CI on that PR and resolve remaining blockers.
   - [ ] Stop at end of L0a: never merge, never publish.
