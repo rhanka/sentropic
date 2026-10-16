@@ -9,7 +9,7 @@
 import type { Pool } from 'pg';
 import type { JsonValue } from '../contracts.js';
 import type { AccessGrant, AclStore, ArtifactAcl } from '../server/access.js';
-import type { ArtifactState } from '../server/lifecycle.js';
+import type { ArtifactState, LifecycleStore, ReleaseState } from '../server/lifecycle.js';
 import type { SourceRef, SourceStore } from '../server/sources.js';
 import type { IntentKind, IntentStore, ObjectIntent } from '../server/object-intents.js';
 import type { IdempotencyStore, IdempotentResult } from '../server/idempotency.js';
@@ -36,7 +36,8 @@ export interface PostgresArtifactStore
     PublicationStateStore,
     IdempotencyStore,
     AclStore,
-    SourceStore {
+    SourceStore,
+    LifecycleStore {
   listRegisteredBlobs(storageScopeId: string): Promise<string[]>;
 }
 
@@ -349,6 +350,81 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
          SET kind = EXCLUDED.kind, commit_tx = EXCLUDED.commit_tx, steps = EXCLUDED.steps`,
         [artifactId, source.kind, commit, steps],
       );
+    },
+    async register(artifactId: string, ownerId: string): Promise<void> {
+      const { rows } = await pool.query<{ owner_id: string }>(
+        `SELECT owner_id FROM artifacts.artifacts WHERE id = $1`,
+        [artifactId],
+      );
+      const row = rows[0];
+      if (row === undefined) throw new Error(`unknown artifact: ${artifactId}`);
+      if (row.owner_id !== ownerId) throw new Error(`owner mismatch for ${artifactId}`);
+    },
+    async getOwner(artifactId: string): Promise<string | undefined> {
+      const { rows } = await pool.query<{ owner_id: string }>(
+        `SELECT owner_id FROM artifacts.artifacts WHERE id = $1`,
+        [artifactId],
+      );
+      return rows[0]?.owner_id;
+    },
+    async getArtifactState(artifactId: string): Promise<ArtifactState> {
+      const { rows } = await pool.query<{ lifecycle_state: ArtifactState }>(
+        `SELECT lifecycle_state FROM artifacts.artifacts WHERE id = $1`,
+        [artifactId],
+      );
+      return rows[0]?.lifecycle_state ?? 'active';
+    },
+    async setArtifactState(artifactId: string, state: ArtifactState): Promise<void> {
+      const updated = await pool.query(
+        `UPDATE artifacts.artifacts SET lifecycle_state = $2 WHERE id = $1`,
+        [artifactId, state],
+      );
+      if ((updated.rowCount ?? 0) === 0) throw new Error(`unknown artifact: ${artifactId}`);
+    },
+    async getRenewedAt(artifactId: string): Promise<string | undefined> {
+      const { rows } = await pool.query<{ renewed_at: Date | null }>(
+        `SELECT renewed_at FROM artifacts.artifacts WHERE id = $1`,
+        [artifactId],
+      );
+      return rows[0]?.renewed_at?.toISOString();
+    },
+    async setRenewedAt(artifactId: string, renewedAt: string): Promise<void> {
+      const updated = await pool.query(
+        `UPDATE artifacts.artifacts SET renewed_at = $2 WHERE id = $1`,
+        [artifactId, renewedAt],
+      );
+      if ((updated.rowCount ?? 0) === 0) throw new Error(`unknown artifact: ${artifactId}`);
+    },
+    async addRelease(artifactId: string, releaseId: string): Promise<void> {
+      const artifact = await pool.query(`SELECT id FROM artifacts.artifacts WHERE id = $1`, [
+        artifactId,
+      ]);
+      if ((artifact.rowCount ?? 0) === 0) throw new Error(`unknown artifact: ${artifactId}`);
+      const release = await pool.query(`SELECT id FROM artifacts.releases WHERE id = $1`, [
+        releaseId,
+      ]);
+      if ((release.rowCount ?? 0) === 0) throw new Error(`unknown release: ${releaseId}`);
+    },
+    async listArtifactReleases(artifactId: string): Promise<string[]> {
+      const { rows } = await pool.query<{ id: string }>(
+        `SELECT id FROM artifacts.releases WHERE artifact_id = $1 ORDER BY created_at, id`,
+        [artifactId],
+      );
+      return rows.map((row) => row.id);
+    },
+    async getReleaseState(releaseId: string): Promise<ReleaseState> {
+      const { rows } = await pool.query<{ state: ReleaseState }>(
+        `SELECT state FROM artifacts.releases WHERE id = $1`,
+        [releaseId],
+      );
+      return rows[0]?.state ?? 'ready';
+    },
+    async setReleaseState(releaseId: string, state: ReleaseState): Promise<void> {
+      const updated = await pool.query(`UPDATE artifacts.releases SET state = $2 WHERE id = $1`, [
+        releaseId,
+        state,
+      ]);
+      if ((updated.rowCount ?? 0) === 0) throw new Error(`unknown release: ${releaseId}`);
     },
   };
 }
