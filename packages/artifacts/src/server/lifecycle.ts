@@ -9,6 +9,9 @@
  * production (ensureArtifact before any lifecycle step), artifacts register
  * with their owner first. Part 2 adds the service.
  */
+import { assertArtifactAccess } from './authorization.js';
+import { evaluateAccess, type AccessAction, type ArtifactAcl } from './access.js';
+
 export type ArtifactState = 'active' | 'withdrawn' | 'deleted' | 'purged';
 export type ReleaseState = 'active' | 'retired' | 'purged';
 
@@ -99,4 +102,127 @@ export function createMemoryLifecycleStore(): LifecycleStore & {
     },
   };
   return store;
+}
+
+export interface LifecycleService {
+  stateOf(artifactId: string): Promise<ArtifactState>;
+  canRead(
+    artifact: { artifactId: string; state: ArtifactState },
+    acl: ArtifactAcl,
+    actorId: string,
+    action?: AccessAction,
+    isApproved?: (principalId: string) => boolean,
+  ): boolean;
+  withdraw(artifactId: string, actorId: string): Promise<void>;
+  restore(artifactId: string, actorId: string): Promise<void>;
+  deleteArtifact(artifactId: string, actorId: string): Promise<void>;
+  purge(
+    artifactId: string,
+    actorId: string,
+    blobDigests: string[],
+  ): Promise<{ artifactId: string; purgedReleases: string[]; blobDigests: string[] }>;
+  promote(
+    artifactId: string,
+    actorId: string,
+    releaseId: string,
+    expectedCurrent: string,
+  ): Promise<{ releaseId: string }>;
+  renew(artifactId: string, actorId: string): Promise<{ renewedAt: string }>;
+}
+
+/** Create a lifecycle service over an injected store (mutations owner-only). */
+export function createLifecycleService(
+  store: LifecycleStore,
+  clock: () => string = () => new Date().toISOString(),
+): LifecycleService {
+  async function ownerOf(artifactId: string): Promise<string> {
+    const owner = await store.getOwner(artifactId);
+    if (owner === undefined) throw new Error(`unknown artifact: ${artifactId}`);
+    return owner;
+  }
+
+  async function assertOwner(artifactId: string, actorId: string): Promise<void> {
+    assertArtifactAccess({ actorUserId: actorId, artifactOwnerId: await ownerOf(artifactId), action: 'mutate' });
+  }
+
+  return {
+    async stateOf(artifactId: string): Promise<ArtifactState> {
+      return store.getArtifactState(artifactId);
+    },
+    canRead(
+      artifact: { artifactId: string; state: ArtifactState },
+      acl: ArtifactAcl,
+      actorId: string,
+      action: AccessAction = 'read',
+      isApproved: (principalId: string) => boolean = () => false,
+    ): boolean {
+      if (artifact.state === 'deleted' || artifact.state === 'purged') return false;
+      if (artifact.state === 'withdrawn') return actorId === acl.ownerId;
+      return evaluateAccess(acl, actorId, action, isApproved);
+    },
+    async withdraw(artifactId: string, actorId: string): Promise<void> {
+      await assertOwner(artifactId, actorId);
+      const state = await store.getArtifactState(artifactId);
+      if (state === 'purged') throw new Error(`cannot withdraw purged artifact: terminal ${artifactId}`);
+      if (state === 'deleted') throw new Error(`cannot withdraw deleted artifact: ${artifactId}`);
+      if (state === 'withdrawn') throw new Error(`already withdrawn: ${artifactId}`);
+      await store.setArtifactState(artifactId, 'withdrawn');
+    },
+    async restore(artifactId: string, actorId: string): Promise<void> {
+      await assertOwner(artifactId, actorId);
+      const state = await store.getArtifactState(artifactId);
+      if (state === 'purged') throw new Error(`cannot restore purged artifact: terminal ${artifactId}`);
+      if (state === 'active') throw new Error(`already active: ${artifactId}`);
+      await store.setArtifactState(artifactId, 'active');
+    },
+    async deleteArtifact(artifactId: string, actorId: string): Promise<void> {
+      await assertOwner(artifactId, actorId);
+      const state = await store.getArtifactState(artifactId);
+      if (state === 'purged') throw new Error(`cannot delete purged artifact: terminal ${artifactId}`);
+      if (state === 'deleted') throw new Error(`already deleted: ${artifactId}`);
+      await store.setArtifactState(artifactId, 'deleted');
+    },
+    async purge(artifactId: string, actorId: string, blobDigests: string[]) {
+      await assertOwner(artifactId, actorId);
+      const state = await store.getArtifactState(artifactId);
+      if (state !== 'deleted') {
+        throw new Error(`can only purge a deleted artifact: ${artifactId} is ${state}`);
+      }
+      const releases = await store.listArtifactReleases(artifactId);
+      for (const releaseId of releases) {
+        await store.setReleaseState(releaseId, 'purged');
+      }
+      await store.setArtifactState(artifactId, 'purged');
+      return { artifactId, purgedReleases: releases, blobDigests: [...blobDigests] };
+    },
+    async promote(artifactId: string, actorId: string, releaseId: string, expectedCurrent: string) {
+      await assertOwner(artifactId, actorId);
+      const state = await store.getArtifactState(artifactId);
+      if (state !== 'active') throw new Error(`cannot promote on ${state} artifact: ${artifactId}`);
+      const releases = await store.listArtifactReleases(artifactId);
+      if (!releases.includes(releaseId)) throw new Error(`unknown release: ${releaseId}`);
+      if ((await store.getReleaseState(releaseId)) === 'purged') {
+        throw new Error(`cannot promote purged release: ${releaseId}`);
+      }
+      const current = await store.getCurrent(artifactId);
+      if (current !== expectedCurrent) {
+        throw new Error(`promotion conflict for ${artifactId}: expected ${expectedCurrent}`);
+      }
+      await store.setCurrent(artifactId, releaseId);
+      if (current !== undefined && current !== releaseId) {
+        await store.setReleaseState(current, 'retired');
+      }
+      await store.setReleaseState(releaseId, 'active');
+      return { releaseId };
+    },
+    async renew(artifactId: string, actorId: string) {
+      await assertOwner(artifactId, actorId);
+      const state = await store.getArtifactState(artifactId);
+      if (state === 'deleted') throw new Error(`cannot renew deleted artifact: ${artifactId}`);
+      if (state === 'purged') throw new Error(`cannot renew purged artifact: terminal ${artifactId}`);
+      const renewedAt = clock();
+      await store.setRenewedAt(artifactId, renewedAt);
+      return { renewedAt };
+    },
+  };
 }
