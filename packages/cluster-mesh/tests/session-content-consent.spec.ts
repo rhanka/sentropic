@@ -468,3 +468,59 @@ describe('content consent revoke and exclusion', () => {
     expect(reconciled.localDenyPending).toBe(false);
   });
 });
+
+describe('content consent freshness and closed history', () => {
+  it('should bind a finite capture deadline once and never extend it', () => {
+    expect(captureExpiresAt({ mode: 'none' }, 1_000_000)).toBe(null);
+    const deadline = captureExpiresAt({ mode: 'duration', durationSeconds: 3600 }, 1_000_000);
+    expect(deadline).toBe(1_000_000 + 3_600_000);
+    expect(captureExpiresAt({ mode: 'duration', durationSeconds: 3600 }, 1_000_000)).toBe(deadline);
+  });
+
+  it('should expire live freshness on a fake clock while keeping stored reads available', async () => {
+    const { service, advance, now } = await readyConsent();
+    const grant = await service.deriveChild(sharedChildInput());
+    checkGrantLiveness(grant, now(), 60_000);
+    advance(61_000);
+    expectConsentCode(() => checkGrantLiveness(grant, now(), 60_000), 'live_expired');
+    const refreshed = await service.acknowledgeFreshness('session-1');
+    checkGrantLiveness(refreshed, now(), 60_000);
+  });
+
+  it('should refuse a grant clock running behind its acknowledgement', async () => {
+    const { service } = await readyConsent();
+    const grant = await service.deriveChild(sharedChildInput());
+    expectConsentCode(() => checkGrantLiveness(grant, 1_000_000 - 120_000, 60_000, 60_000), 'lease_skew_exceeded');
+  });
+
+  it('should retain closed copies but deny closed reads without history authority', async () => {
+    const { service } = await readyConsent();
+    const grant = await service.deriveChild(sharedChildInput());
+    const closed = await service.closeGrant('session-1');
+    expect(closed.state).toBe('closed');
+    expect(closed.retainedCopies).toBe(true);
+    expect(await service.canReadClosed('session-1', 'auth-unknown')).toBe(false);
+    const authorization = await service.authorizeHistoryRead('session-1', {
+      'terminal.cache': null,
+      'native.mirror': null,
+    });
+    expect(await service.canReadClosed('session-1', authorization.authorizationId)).toBe(true);
+    await service.revokeHistoryAuthorization(authorization.authorizationId);
+    expect(await service.canReadClosed('session-1', authorization.authorizationId)).toBe(false);
+    expect(grant.retainedCopies).toBe(false);
+  });
+
+  it('should never let a history authorization create a duration', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    await service.closeGrant('session-1');
+    await expectConsentCodeAsync(
+      () => service.authorizeHistoryRead('session-1', { 'terminal.cache': 2_000_000, 'native.mirror': null }),
+      'invalid_retention',
+    );
+    await expectConsentCodeAsync(
+      () => service.authorizeHistoryRead('session-9', { 'terminal.cache': null, 'native.mirror': null }),
+      'invalid_request',
+    );
+  });
+});
