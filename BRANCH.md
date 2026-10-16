@@ -45,6 +45,10 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
 - **Reserved downstream exception**:
   - `CISEAT-EX3` recorded for L1 owner-machine native helper use; grants no host execution or forbidden-path edit in L0a.
 
+## Owner GO
+
+- `acknowledge` owner gave GO for merge on 2026-10-16 (track recorded).
+
 ## Feedback Loop
 - `attention` CISEAT-EX3 reserved: owner-machine native Node helper for L1 local inspect and L3 re-enroll; rationale macOS Keychain, Windows Credential Manager, Linux session D-Bus; rollback disable helper targets and retire disposable lab profile; no L0a host execution under this exception.
 - `attention` CISEAT-EX4 declared: same-PR downstream version-pin sync outside exhaustive L0a paths; reason spec-mandated mesh bump 0.26.0 to 0.26.1 breaks two cluster-mesh assertions pinning installedVersion 0.26.0 and CI cannot go green without sync; impact two lines in packages/cluster-mesh/tests/integrations/llm-surface.spec.ts and gateway-surface.spec.ts, no behavior change; rollback revert the two lines.
