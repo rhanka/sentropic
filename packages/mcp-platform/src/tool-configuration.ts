@@ -337,6 +337,21 @@ const FORBIDDEN_CONTENT_SUBSTRINGS = [
   'privatekey',
   'bearer',
 ];
+const SNAPSHOT_KEYS = new Set([
+  'schemaVersion',
+  'providerId',
+  'connectorId',
+  'revision',
+  'manifestDigest',
+  'providerVersion',
+  'platformVersion',
+  'compatibilityDigest',
+  'provenance',
+  'bindings',
+]);
+
+const BINDING_KEYS = new Set(['toolName', 'capabilityRef', 'handlerId', 'values', 'policy']);
+
 const REDACTION_ORDER = ['none', 'low', 'moderate', 'high', 'secret'] as const;
 
 const OVERLAY_KEYS = new Set([
@@ -806,6 +821,20 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     return { ok: false, diagnostics };
   }
 
+  // A misspelled snapshot key (e.g. `requiredScope`) is rejected instead of
+  // being silently ignored (m3).
+  for (const key of Object.keys(snapshot)) {
+    if (!SNAPSHOT_KEYS.has(key)) {
+      diag(diagnostics, 'malformed_snapshot', `snapshot.${key}`, `unknown snapshot key "${key}"`);
+    }
+  }
+
+  for (const [key, binding] of handlerTable) {
+    if (binding?.handlerId !== key) {
+      diag(diagnostics, 'unknown_handler', `handlers.${key}`, `handler table key "${key}" does not match handlerId`);
+    }
+  }
+
   // Identity / version.
   if (snapshot.schemaVersion !== TOOL_CONFIGURATION_SCHEMA_VERSION) {
     diag(diagnostics, 'invalid_schema_version', 'snapshot.schemaVersion', 'schemaVersion must be "v1"');
@@ -817,6 +846,19 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
   }
   if (typeof snapshot.revision !== 'string' || snapshot.revision.length === 0) {
     diag(diagnostics, 'invalid_identity', 'snapshot.revision', 'revision must be a non-empty string');
+  }
+  if (snapshot.connectorId !== undefined && (typeof snapshot.connectorId !== 'string' || snapshot.connectorId.length === 0)) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.connectorId', 'connectorId must be a non-empty string');
+  }
+  if (snapshot.providerVersion !== undefined) {
+    if (typeof snapshot.providerVersion !== 'string' || snapshot.providerVersion.length === 0) {
+      diag(diagnostics, 'invalid_identity', 'snapshot.providerVersion', 'providerVersion must be a non-empty string');
+    } else if (snapshot.providerVersion !== manifest.version) {
+      diag(diagnostics, 'invalid_identity', 'snapshot.providerVersion', 'providerVersion must equal the manifest version');
+    }
+  }
+  if (snapshot.platformVersion !== undefined && (typeof snapshot.platformVersion !== 'string' || snapshot.platformVersion.length === 0)) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.platformVersion', 'platformVersion must be a non-empty string');
   }
 
   // Digest inputs may carry non-canonical values (undefined, non-finite
@@ -894,7 +936,15 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     return { ok: false, diagnostics };
   }
 
-  const manifestTools = new Map<string, CapabilityTool>(manifest.tools.map((tool) => [tool.name, tool]));
+  // A duplicated manifest tool name no longer silently collapses in the map.
+  const manifestTools = new Map<string, CapabilityTool>();
+  for (const tool of manifest.tools) {
+    if (manifestTools.has(tool.name)) {
+      diag(diagnostics, 'duplicate_tool_name', `manifest.tools.${tool.name}`, `duplicate manifest tool "${tool.name}"`);
+    } else {
+      manifestTools.set(tool.name, tool);
+    }
+  }
   const seen = new Set<string>();
   const compiled: CompiledToolEntry[] = [];
 
@@ -903,6 +953,11 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     if (!isRecord(binding)) {
       diag(diagnostics, 'malformed_snapshot', path, 'binding must be an object');
       return;
+    }
+    for (const key of Object.keys(binding)) {
+      if (!BINDING_KEYS.has(key)) {
+        diag(diagnostics, 'malformed_snapshot', `${path}.${key}`, `unknown binding key "${key}"`);
+      }
     }
     const entry = binding as Partial<ApprovedToolBinding>;
     if (typeof entry.toolName !== 'string' || entry.toolName.length === 0) {
