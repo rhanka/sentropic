@@ -47,10 +47,18 @@ export const handleTokenExchange = async (
   if (auth instanceof Response) return auth;
   const policy = auth.exchangePolicy;
   if (!policy || !policy.enabled) {
-    return oauthJsonError(c, 400, 'invalid_grant', 'Token exchange is not enabled for this client.');
+    return oauthJsonError(c, 400, 'unauthorized_client', 'Token exchange is not enabled for this client.');
   }
-  if (policy.environment && options.exchangeEnvironment && policy.environment !== options.exchangeEnvironment) {
+  // m6 fail-closed: a policy-declared environment that the host does not supply
+  // (null/undefined/mismatch) refuses. An unset policy environment keeps the
+  // audience-separated deployment (per-environment rows and credentials).
+  if (policy.environment && policy.environment !== options.exchangeEnvironment) {
     return oauthJsonError(c, 400, 'invalid_grant', 'Token exchange environment mismatch.');
+  }
+  // m7: the actor is bound to the authenticated client, never to a caller parameter.
+  // A policy actor that does not match the authenticated client refuses.
+  if (policy.actorSub !== auth.clientId) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Token exchange actor mismatch.');
   }
   if (!policy.allowedTargetAudiences.includes(target)) {
     return oauthJsonError(c, 400, 'invalid_target', 'Requested audience is not allowed for this client.');
@@ -79,7 +87,7 @@ export const handleTokenExchange = async (
   const jti = options.ports.random.uuid();
   const accessToken = await jwks.signJwt(
     {
-      act: { sub: policy.actorSub },
+      act: { sub: auth.clientId },
       client_id: auth.clientId,
       scope: issued.join(' '),
       ...(verified.tenantId ? { tid: verified.tenantId } : {}),
@@ -108,11 +116,12 @@ export const handleTokenExchange = async (
 
 const resolveTarget = (c: Context, form: URLSearchParams): string | Response => {
   const values = [...form.getAll('resource'), ...form.getAll('audience')].filter((v) => v.length > 0);
-  if (new Set(values).size > 1) {
-    return oauthJsonError(c, 400, 'invalid_target', 'Conflicting target audiences are not supported.');
-  }
   if (values.length === 0) {
     return oauthJsonError(c, 400, 'invalid_target', 'A target audience is required.');
+  }
+  // m8: any repeated target parameter refuses, even when the values are identical.
+  if (values.length > 1) {
+    return oauthJsonError(c, 400, 'invalid_target', 'Duplicate target parameters are not supported.');
   }
   return values[0];
 };
@@ -124,7 +133,13 @@ const authenticateWorkload = async (
   form: URLSearchParams,
   ports: AuthHonoPorts
 ): Promise<ServiceClientRecord | Response> => {
-  const { clientId, secret } = parseCredentials(c.req.header('authorization'), form);
+  const authorization = c.req.header('authorization');
+  // m8: the exchange profile is client_secret_basic only. Dual credentials
+  // (Basic plus form) refuse; form-only POST refuses.
+  if (authorization?.startsWith('Basic ') && (form.get('client_id') ?? form.get('client_secret'))) {
+    return oauthJsonError(c, 400, 'invalid_request', 'Multiple client authentication methods are not supported.');
+  }
+  const { clientId, secret } = parseCredentials(authorization, form);
   if (!clientId || !secret) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication is required.');
   const findServiceClient = ports.oauthStateStore.findServiceClient;
   if (!findServiceClient) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
@@ -133,6 +148,7 @@ const authenticateWorkload = async (
   }
   const client = await findServiceClient(clientId);
   if (!client) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
+  if (client.revokedAt) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
   if ((await ports.tokens.hashSecret(secret)) !== client.clientSecretHash) {
     return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
   }
@@ -141,17 +157,30 @@ const authenticateWorkload = async (
 
 const parseCredentials = (
   authorization: string | undefined,
-  form: URLSearchParams
+  _form: URLSearchParams
 ): { clientId: string | null; secret?: string } => {
+  // m8: Basic-only for token exchange. A malformed Basic header fails closed
+  // (null credentials downstream refuse with 401) instead of throwing into a
+  // 500; client_id/secret are RFC 6749 §2.3.1 URL-decoded. Form-only POST
+  // refuses via the null return; dual credentials refuse earlier.
+  void _form;
   if (authorization?.startsWith('Basic ')) {
-    const decoded = atob(authorization.slice('Basic '.length));
+    let decoded: string;
+    try {
+      decoded = atob(authorization.slice('Basic '.length).trim());
+    } catch {
+      return { clientId: null, secret: undefined };
+    }
     const separator = decoded.indexOf(':');
-    return {
-      clientId: separator >= 0 ? decoded.slice(0, separator) : decoded,
-      secret: separator >= 0 ? decoded.slice(separator + 1) : '',
-    };
+    const rawId = separator >= 0 ? decoded.slice(0, separator) : decoded;
+    const rawSecret = separator >= 0 ? decoded.slice(separator + 1) : '';
+    try {
+      return { clientId: decodeURIComponent(rawId), secret: decodeURIComponent(rawSecret) };
+    } catch {
+      return { clientId: null, secret: undefined };
+    }
   }
-  return { clientId: form.get('client_id'), secret: form.get('client_secret') ?? undefined };
+  return { clientId: null, secret: undefined };
 };
 
 const verifySubject = async (
@@ -200,16 +229,34 @@ const verifySubject = async (
   if (subjectScopes.length === 0) {
     return oauthJsonError(c, 400, 'invalid_grant', 'Subject token carries no scope.');
   }
+  // M2 fail-closed: the subject token must carry a registered token id whose
+  // stored metadata matches the token (type/client/user/audience) and is live.
   const jti = payload.jti;
-  if (typeof jti === 'string' && jti) {
-    const meta = await options.ports.oauthStateStore.findTokenMeta(jti);
-    if (!meta) return oauthJsonError(c, 400, 'invalid_grant', 'Subject token is unknown.');
-    if (await options.ports.oauthStateStore.isTokenRevoked(jti)) {
-      return oauthJsonError(c, 400, 'invalid_grant', 'Subject token is revoked.');
-    }
+  if (typeof jti !== 'string' || !jti) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Subject token has no token id.');
+  }
+  const meta = await options.ports.oauthStateStore.findTokenMeta(jti);
+  if (!meta) return oauthJsonError(c, 400, 'invalid_grant', 'Subject token is unknown.');
+  if (meta.tokenType !== 'access_token') {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Subject token type mismatch.');
+  }
+  if (meta.clientId !== clientId) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Subject token client mismatch.');
+  }
+  if (meta.userId !== subject) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Subject token subject mismatch.');
+  }
+  if (meta.audience !== audience) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Subject token audience mismatch.');
+  }
+  if (await options.ports.oauthStateStore.isTokenRevoked(jti)) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Subject token is revoked.');
   }
   const user = await options.ports.users.findById(subject);
   if (!user) return oauthJsonError(c, 400, 'invalid_grant', 'Subject identity is unknown.');
+  if (user.accountStatus !== 'active') {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Subject account is not active.');
+  }
   void workload;
   const tid = payload.tid;
   if (typeof tid === 'string' && tid) {
