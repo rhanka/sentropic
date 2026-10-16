@@ -55,29 +55,37 @@ export interface McpNamespaceOptions {
   stateful?: boolean;
 }
 
+export interface GuardedRunnerOptions {
+  contextResolver(
+    identity: RequestIdentity | undefined,
+  ): McpPrincipal | Promise<McpPrincipal>;
+  invocation: McpInvocationGuard;
+  runner: BridgeRunner;
+}
+
 type GuardedRun = (
   tool: string,
   args: Parameters<BridgeRunner['run']>[1],
   identity: RequestIdentity | undefined,
 ) => Promise<AppToolResult>;
 
-async function guarded(
-  options: McpNamespaceOptions,
-  tool: string,
-  args: Parameters<BridgeRunner['run']>[1],
-  identity: RequestIdentity | undefined,
-): Promise<AppToolResult> {
-  const principal = await options.contextResolver(identity);
-  const decision = await options.invocation.authorize({ operation: 'invoke', principal, tool });
-  if (!decision.allowed) {
-    return {
-      ok: false,
-      auditId: 'namespace-guard',
-      redactionClass: 'low',
-      error: { code: 'invocation_refused', message: decision.reason, retriable: false },
-    };
-  }
-  return options.runner.run(tool, args, identity);
+/** Chain boundary identity → context → guard → runner; refusals stop before effects. */
+export function createGuardedRunner(options: GuardedRunnerOptions): BridgeRunner {
+  return {
+    run: async (tool, args, identity) => {
+      const principal = await options.contextResolver(identity);
+      const decision = await options.invocation.authorize({ operation: 'invoke', principal, tool });
+      if (!decision.allowed) {
+        return {
+          ok: false,
+          auditId: 'namespace-guard',
+          redactionClass: 'low',
+          error: { code: 'invocation_refused', message: decision.reason, retriable: false },
+        };
+      }
+      return options.runner.run(tool, args, identity);
+    },
+  };
 }
 
 function refused(code: string, message: string): AppToolResult {
@@ -108,7 +116,8 @@ export async function createMcpNamespaceModule(
       throw new Error(`Bridge tool '${tool.name}' is not in the compiled plan`);
     }
   }
-  const guardedRun: GuardedRun = (tool, args, identity) => guarded(options, tool, args, identity);
+  const guardedRunner = createGuardedRunner(options);
+  const guardedRun: GuardedRun = (tool, args, identity) => guardedRunner.run(tool, args, identity);
   const server = new SdkServer(
     { name: '@sentropic/cluster-mesh/mcp', version: '0.18.0' },
     { capabilities: { tools: {} } },
