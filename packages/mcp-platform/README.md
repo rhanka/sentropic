@@ -23,6 +23,10 @@ The `exports` map (not discipline) enforces the tiers; only the root `.` carries
 - **`./testing` — `@internal`, NOT frozen**: mocks/fixtures/reference (mock OIDC, in-memory
   MCP transport, fake connector, in-memory audit/secret/tenant/consent/durable stores) that
   a real host replaces.
+- **`./tool-configuration` — `@public`, additive in `0.3.0`**: the generic approved
+  tool-configuration codec/compiler (Lot 1a). It compiles a versioned approved snapshot
+  against a provider manifest and a local handler table into an immutable configuration
+  or typed diagnostics before activation. Synthetic providers only; no Immo fixture.
 
 _The internal composition below (build slices 1/2/3/7) describes what lives in each tier._
 
@@ -34,6 +38,17 @@ security-critical isolation properties — with **no real network, no production
 credentials, no real Claude.ai dependency, no DB, and no `mcp-wave` coupling**.
 
 Wave / immo are consumers/examples only; nothing domain-specific is baked in.
+
+### Tool-configuration compiler (`src/tool-configuration.ts`, `./tool-configuration`)
+
+Strict, pure, zero-I/O compiler for an approved per-tool configuration snapshot:
+
+- Inputs: versioned snapshot (`schemaVersion: "v1"`), provider manifest, local handler table.
+- Checks: identity/version, manifest and compatibility digests, exact tool coverage (no rename,
+  remove or add), handler allowlist, typed per-tool values, no policy weakening, no credentials,
+  bearers, user data or executable/upstream values.
+- Output: deeply frozen `CompiledToolConfiguration` or typed diagnostics; invalid candidates retain
+  the active generation and cold starts fail closed. See `tests/tool-configuration.test.ts`.
 
 ### Slice 1 — manifest & adapter schemas (`src/manifest.ts`, `src/runtime.ts`)
 
