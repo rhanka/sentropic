@@ -137,6 +137,14 @@ export type CompiledToolConfiguration = {
   revision: string;
   manifestDigest: string;
   compatibilityDigest: string;
+  /** Payload digest the approval applies to (binds manifest + compatibility). */
+  payloadDigest: string;
+  /** Approval reference the payload digest was approved under. */
+  approvalRef: string;
+  providerVersion?: string;
+  platformVersion?: string;
+  /** Digest of the local handler table shape (id + capabilityRef + schema). */
+  handlersDigest: string;
   tools: CompiledToolEntry[];
 };
 
@@ -230,17 +238,36 @@ export function computeCompatibilityDigest(manifest: AppMcpProviderManifest): st
 }
 
 /**
- * Payload digest over the snapshot excluding every digest envelope field, so
- * approval of the payload digest is never self-referential.
+ * Payload digest over the snapshot binding every envelope field except the
+ * approval's own `provenance.payloadDigest` (excluded to avoid
+ * self-reference). The manifest and compatibility digests are INCLUDED, so an
+ * approval of this digest cannot be re-targeted at another manifest (M3).
  */
 export function computePayloadDigest(snapshot: ApprovedToolSnapshot): string {
-  const { compatibilityDigest: _compat, manifestDigest: _manifest, provenance, ...rest } = snapshot;
-  void _compat;
-  void _manifest;
-  const { manifestDigest: _provManifest, payloadDigest: _provPayload, ...provRest } = provenance;
-  void _provManifest;
-  void _provPayload;
+  const { provenance, ...rest } = snapshot;
+  const { payloadDigest: _omitted, ...provRest } = provenance;
+  void _omitted;
   return sha256Hex(canonicalJson({ ...rest, provenance: provRest }));
+}
+
+/**
+ * Code-shape digest over the local handler binding table: each entry's id,
+ * capabilityRef and canonical configSchema, sorted by handlerId. Exposed on
+ * the compiled configuration so 1b can bind the approved payload to the exact
+ * local code shape it was compiled against (M3).
+ */
+export function computeHandlersDigest(
+  handlers: Record<string, ToolConfigurationHandlerBinding> | Map<string, ToolConfigurationHandlerBinding>,
+): string {
+  const table = handlers instanceof Map ? [...handlers.values()] : Object.values(handlers ?? {});
+  const entries = table
+    .map((binding) => ({
+      capabilityRef: binding?.capabilityRef,
+      configSchema: binding?.configSchema,
+      handlerId: binding?.handlerId,
+    }))
+    .sort((a, b) => (a.handlerId < b.handlerId ? -1 : a.handlerId > b.handlerId ? 1 : 0));
+  return sha256Hex(canonicalJson({ handlers: entries }));
 }
 
 // ---------------------------------------------------------------------------
@@ -806,10 +833,18 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     if (provenance.manifestDigest !== manifestDigest) {
       diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.provenance.manifestDigest', 'provenance manifestDigest mismatch');
     }
-    if (!Array.isArray(provenance.reviewedBy) || provenance.reviewedBy.length === 0) {
+    if (
+      !Array.isArray(provenance.reviewedBy) ||
+      provenance.reviewedBy.length === 0 ||
+      !provenance.reviewedBy.every((entry) => typeof entry === 'string' && entry.length > 0)
+    ) {
       diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.reviewedBy', 'reviewedBy must list at least one reviewer');
     }
-    if (provenance.payloadDigest !== undefined && typeof provenance.payloadDigest === 'string') {
+    // The payload digest is mandatory: approval applies to it, and it binds
+    // the manifest and compatibility digests (M3).
+    if (typeof provenance.payloadDigest !== 'string' || provenance.payloadDigest.length === 0) {
+      diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.payloadDigest', 'payloadDigest is mandatory and must be non-empty');
+    } else {
       const full = snapshot as ApprovedToolSnapshot;
       let expected: string | null = null;
       try {
@@ -928,11 +963,24 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     }
   }
 
+  const approval = snapshot.provenance as ToolConfigurationProvenance;
+  let handlersDigest = '';
+  try {
+    handlersDigest = computeHandlersDigest(input.handlers);
+  } catch {
+    diag(diagnostics, 'unknown_handler', 'handlers', 'handler table cannot be canonically encoded');
+  }
+
   if (diagnostics.length > 0) return { ok: false, diagnostics };
 
   const config: CompiledToolConfiguration = {
+    approvalRef: approval.approvalRef,
     compatibilityDigest,
+    handlersDigest,
     manifestDigest,
+    ...(typeof snapshot.providerVersion === 'string' ? { providerVersion: snapshot.providerVersion } : {}),
+    ...(typeof snapshot.platformVersion === 'string' ? { platformVersion: snapshot.platformVersion } : {}),
+    payloadDigest: approval.payloadDigest as string,
     providerId: manifest.providerId,
     revision: snapshot.revision as string,
     schemaVersion: TOOL_CONFIGURATION_SCHEMA_VERSION,
