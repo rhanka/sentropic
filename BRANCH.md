@@ -62,7 +62,7 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
 
 ## Feedback Loop
 - `attention` ATX-EX1: minor bump auth-hono 0.15.2 to 0.16.0 breaks `^0.15.0` ranges in auth-ui, cluster-mesh, llm-gateway (npm ERESOLVE on typecheck-api). Reason: new RFC 8693 grant is a feature, spec fixes 0.16.0. Impact: range-only widening in three consumer package.json plus root lockfile refresh, no source change. Rollback: revert range lines and lockfile.
-- `acknowledge` ATX-EX1: applied as declared, no source change in consumers.
+- `acknowledge` ATX-EX1: applied as declared; follow-through: consumer patch bumps (auth-ui 0.7.5, cluster-mesh 0.15.1, llm-gateway 0.19.6), cluster-mesh runtime gate widened to `>=0.15.0 <0.17.0` (minimal parser has no `||`), gateway-surface pins moved to 0.19.6, parser table extended.
 - `attention` ATX-EX2: R2 firm service_clients extension touches `deploy/k8s/overlays/*/idp-identity-sync/**` (outside Allowed). Reason: the real client import path lives in the k8s overlay SQL, not in deploy/ci. Impact: two new SQL files plus wiring in import-preprod.sql, kustomization.yaml and fixtures; export side untouched; policy-only sync, never secret material. Rollback: delete the two new files and revert wiring lines.
 - `acknowledge` ATX-EX2: applied as declared, export and oauth_clients paths untouched.
 
