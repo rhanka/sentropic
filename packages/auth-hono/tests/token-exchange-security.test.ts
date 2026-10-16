@@ -402,6 +402,80 @@ describe('OAuth token exchange security', () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
 
+  it('rejects a revoked workload client', async () => {
+    const revoked = workloadClient();
+    revoked.revokedAt = new Date('2026-01-02T00:00:00.000Z');
+    const { router, subject } = await setup([revoked]);
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject,
+    });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+  });
+
+  it('caps an oversized policy TTL at 300 seconds', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient({ maxTtlSeconds: 900 })],
+    });
+    const { router } = createOauthRouterForTest({ ports });
+    const subject = await mintSubject(ports, store, { subjectTtlSeconds: 3600 });
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject,
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { expires_in: number };
+    expect(body.expires_in).toBeLessThanOrEqual(300);
+  });
+
+  it('rejects an expired subject token', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient()],
+    });
+    const { router } = createOauthRouterForTest({ ports });
+    const subject = await mintSubject(ports, store, { subjectTtlSeconds: -10 });
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject,
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+  });
+
+  it('rejects a subject from an untrusted issuer', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient()],
+    });
+    const { router } = createOauthRouterForTest({ ports });
+    const jwks = createJwksService({ clock: ports.clock, jwksPort: ports.jwks });
+    const forged = await jwks.signJwt(
+      { client_id: 'immo-mcp', scope: 'immo:search' },
+      {
+        audience: MCP_AUDIENCE,
+        expiresAt: new Date(oauthNow.getTime() + 3600 * 1000),
+        issuer: 'https://evil.example/issuer',
+        jti: 'forged-jti',
+        subject: oauthUser.id,
+        type: 'JWT',
+      }
+    );
+    void store;
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject: forged,
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+  });
+
 });
 
 const baseForm = (subject: string): URLSearchParams =>
