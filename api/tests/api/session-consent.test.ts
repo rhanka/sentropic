@@ -1389,6 +1389,81 @@ describe('session consent durable lifecycle', () => {
     expect(projects[0]!.projectRevision).toBe(2);
   });
 
+  it('should not oversubscribe quota under concurrent reservations (R5)', async () => {
+    service = makeService({ maxBytesPerSession: 20, maxBytesPerTenant: 40, maxObjectsPerSession: 16 });
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const outcomes = await Promise.allSettled([0, 1, 2, 3, 4].map((index) =>
+      service.reserveBeforeUpload(
+        'sess-content-s1', 'terminal.cache', { raw: 8, encoded: 8 }, `k-r5-${index}`, ctx,
+      ),
+    ));
+    const won = outcomes.filter((o) => o.status === 'fulfilled');
+    const lost = outcomes.filter((o) => o.status === 'rejected');
+    expect(won).toHaveLength(2);
+    expect(lost).toHaveLength(3);
+    for (const rejection of lost) {
+      expect((((rejection as PromiseRejectedResult).reason) as SessionContentError).code).toBe('quota_exceeded');
+    }
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.reservedBytes).toBeLessThanOrEqual(20);
+    void bindingId;
+  });
+
+  it('should require origin-workspace membership on bounded reads (R6)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('workspace-scoped-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-r6', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'membership_required',
+    );
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.committedBytes).toBe(body.length);
+    void bindingId;
+  });
+
   it('should preserve a non-deleted identity on rollback without false purge', async () => {
     await acceptProject();
     const jobsBefore = await db.select().from(sessionContentPurgeJobs);
