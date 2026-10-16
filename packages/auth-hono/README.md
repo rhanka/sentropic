@@ -77,7 +77,7 @@ All package handlers emit structured responses to keep contracts predictable acr
 | Endpoint | Description |
 | --- | --- |
 | `GET /oauth/authorize` | Authorization Code + PKCE entry point (S256 required) |
-| `POST /oauth/token` | Token issuance (`grant_type=authorization_code` and `client_credentials` since 0.4.0) |
+| `POST /oauth/token` | Token issuance (`grant_type=authorization_code` and `client_credentials` since 0.4.0, plus RFC 8693 `urn:ietf:params:oauth:grant-type:token-exchange` since 0.16.0) |
 | `GET\|POST /oauth/userinfo` | Returns claims for a valid access token |
 | `POST /oauth/revoke` | Revokes an access token (RFC 7009) |
 | `POST /oauth/introspect` | Token introspection (RFC 7662, client-auth required) |
