@@ -359,3 +359,96 @@ function validateAgainstSchema(
   return valid;
 }
 
+function checkValueType(
+  diagnostics: ToolConfigurationDiagnostic[],
+  path: string,
+  schema: Record<string, unknown>,
+  value: unknown,
+): boolean {
+  const type = schema['type'];
+  if (type === 'string') {
+    if (typeof value !== 'string') {
+      diag(diagnostics, 'invalid_values', path, 'expected string');
+      return false;
+    }
+    if (typeof schema['minLength'] === 'number' && value.length < schema['minLength']) {
+      diag(diagnostics, 'invalid_values', path, 'string below minLength');
+      return false;
+    }
+    if (typeof schema['maxLength'] === 'number' && value.length > schema['maxLength']) {
+      diag(diagnostics, 'invalid_values', path, 'string above maxLength');
+      return false;
+    }
+    if (Array.isArray(schema['enum']) && !schema['enum'].includes(value)) {
+      diag(diagnostics, 'invalid_values', path, 'string not in enum');
+      return false;
+    }
+    return true;
+  }
+  if (type === 'boolean') {
+    if (typeof value !== 'boolean') {
+      diag(diagnostics, 'invalid_values', path, 'expected boolean');
+      return false;
+    }
+    return true;
+  }
+  if (type === 'number' || type === 'integer') {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+      diag(diagnostics, 'invalid_values', path, 'expected number');
+      return false;
+    }
+    if (type === 'integer' && !Number.isInteger(value)) {
+      diag(diagnostics, 'invalid_values', path, 'expected integer');
+      return false;
+    }
+    if (typeof schema['minimum'] === 'number' && value < schema['minimum']) {
+      diag(diagnostics, 'invalid_values', path, 'number below minimum');
+      return false;
+    }
+    if (typeof schema['maximum'] === 'number' && value > schema['maximum']) {
+      diag(diagnostics, 'invalid_values', path, 'number above maximum');
+      return false;
+    }
+    if (Array.isArray(schema['enum']) && !schema['enum'].includes(value)) {
+      diag(diagnostics, 'invalid_values', path, 'number not in enum');
+      return false;
+    }
+    return true;
+  }
+  if (type === 'array') {
+    if (!Array.isArray(value)) {
+      diag(diagnostics, 'invalid_values', path, 'expected array');
+      return false;
+    }
+    if (typeof schema['minItems'] === 'number' && value.length < schema['minItems']) {
+      diag(diagnostics, 'invalid_values', path, 'array below minItems');
+      return false;
+    }
+    if (typeof schema['maxItems'] === 'number' && value.length > schema['maxItems']) {
+      diag(diagnostics, 'invalid_values', path, 'array above maxItems');
+      return false;
+    }
+    if (isRecord(schema['items'])) {
+      let ok = true;
+      value.forEach((entry, index) => {
+        if (!checkValueType(diagnostics, `${path}[${index}]`, schema['items'] as Record<string, unknown>, entry)) ok = false;
+      });
+      return ok;
+    }
+    return true;
+  }
+  if (type === 'object') {
+    if (!isRecord(value)) {
+      diag(diagnostics, 'invalid_values', path, 'expected object');
+      return false;
+    }
+    // Reuse the object validator through a synthetic diagnostic scope.
+    const nested: ToolConfigurationDiagnostic[] = [];
+    const nestedSchemaOk = validateAgainstSchema(nested, path, schema, value);
+    for (const entry of nested) diagnostics.push(entry);
+    return nestedSchemaOk;
+  }
+  diag(diagnostics, 'invalid_values', path, 'unsupported schema type');
+  return false;
+}
+
