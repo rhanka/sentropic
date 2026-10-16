@@ -3,6 +3,7 @@ import {
   ACCESS_TOKEN_TYPE,
   createGatedTrustDomain,
   RFC8693_GRANT_TYPE,
+  TokenExchangeRefusedError,
   type TokenExchangeRequest,
 } from '../src/index.js';
 
@@ -24,6 +25,13 @@ describe('inter-server trust', () => {
 
     expect(request.grantType).toBe('urn:ietf:params:oauth:grant-type:token-exchange');
     expect(request.actor?.h2aEngagement).toBe('engagement:opaque');
+  });
+
+  it('should keep refusal errors free of token material', () => {
+    const error = new TokenExchangeRefusedError('scope_not_granted');
+
+    expect(error).toMatchObject({ code: 'token_exchange_refused', reason: 'scope_not_granted' });
+    expect(error.name).toBe('TokenExchangeRefusedError');
   });
 
   it('should fail closed for every exchange while the broker gate is closed', async () => {
