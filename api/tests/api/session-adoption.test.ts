@@ -912,6 +912,7 @@ describe('session adoption workspace binding', () => {
     await db.insert(sessionContentObjects).values({
       objectId: 'sess-adopt-object-1',
       namespaceId,
+      authorityEpoch: 'epoch-test-1',
       bindingId: binding.bindingId,
       sessionId: 'sess-adopt-30',
       channel: 'terminal.cache',
