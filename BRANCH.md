@@ -101,13 +101,13 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
   - [ ] Obtain r4 review bound to the consolidated head (I861-F2).
   - [ ] Run final CI on the consolidated PR and require e2e groups + `security-container` green (I861-F3).
   - [ ] Lot gate:
-    - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+    - [x] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> 12 files / 138 passed, pack PASS 0.3.0 (consolidated head)
     - [ ] **API tests**
-      - [ ] `packages/mcp-platform/tests/tool-configuration.test.ts` (existing, 44 tests incl. R3-M1/m1/m2/m5 regressions)
-      - [ ] `packages/mcp-platform/tests/manifest.test.ts` (existing regression)
-      - [ ] `packages/mcp-platform/tests/authz.test.ts` (existing regression)
+      - [x] `packages/mcp-platform/tests/tool-configuration.test.ts` (existing, 44 tests incl. R3-M1/m1/m2/m5 regressions)
+      - [x] `packages/mcp-platform/tests/manifest.test.ts` (existing regression)
+      - [x] `packages/mcp-platform/tests/authz.test.ts` (existing regression)
       - [ ] Scoped runs while evolving: `make test-mcp-platform SCOPE=tests/tool-configuration.test.ts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
-      - [ ] Sub-lot gate: `make test-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [x] Sub-lot gate: `make test-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
     - [ ] **UI tests (TypeScript only)**
       - [ ] None for this pure library slice.
     - [ ] **E2E tests**
@@ -121,9 +121,9 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
   - [ ] Obtain owner sign-off for m10 e2e flake (I861-F1).
   - [ ] Run full `test-api` serially on the consolidated head plus final CI (I861-F3).
   - [ ] Lot gate:
-    - [ ] `make typecheck-auth-hono test-auth-hono pack-auth-hono API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
-    - [ ] `make test-idp-sync-selftest API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
-    - [ ] `make test-idp-sync-sql API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+    - [x] `make typecheck-auth-hono test-auth-hono pack-auth-hono API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> 40 files / 214 passed, pack PASS 0.16.0 (consolidated head)
+    - [x] `make test-idp-sync-selftest API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> 47 PASS, 0 failures
+    - [x] `make test-idp-sync-sql API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> PASS
     - [ ] **API tests**
       - [ ] `packages/auth-hono/tests/token-exchange.test.ts` (existing)
       - [ ] `packages/auth-hono/tests/token-exchange-security.test.ts` (existing, 35 tests)
@@ -135,11 +135,11 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
       - [ ] `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (existing regression)
       - [ ] `packages/auth-hono/tests/oauth-wellknown.test.ts` (existing regression)
       - [ ] `packages/auth-hono/tests/oauth-router-factory.test.ts` (existing regression)
-      - [ ] `api/tests/api/auth/oauth-token-exchange.test.ts` (new carried)
-      - [ ] `api/tests/unit/auth/oauth-state-adapter.test.ts` (updated carried)
-      - [ ] `api/tests/api/auth/oauth-wellknown.test.ts` (updated carried)
-      - [ ] `api/tests/api/cluster-mesh-oauth-roots.test.ts` (updated carried)
-      - [ ] Sub-lot gate: `make test-api API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [x] `api/tests/api/auth/oauth-token-exchange.test.ts` (new carried, 4/4 consolidated head)
+      - [x] `api/tests/unit/auth/oauth-state-adapter.test.ts` (updated carried, 5/5 consolidated head)
+      - [x] `api/tests/api/auth/oauth-wellknown.test.ts` (updated carried, 6/6 consolidated head)
+      - [x] `api/tests/api/cluster-mesh-oauth-roots.test.ts` (updated carried, 3/3 consolidated head)
+      - [ ] Sub-lot gate: `make test-api API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (full serial run in progress)
     - [ ] **UI tests (TypeScript only)**
       - [ ] None; no login UI change.
     - [ ] **E2E tests**
@@ -155,17 +155,17 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
   - [ ] Consolidation satisfied the post-#674 rebase structurally (2-IdP commits precede 2a commits); version re-check 0.18.0 above npm/main done in Lot 0.
   - [ ] Re-run package gates on the consolidated head; real auth-hono/Radar acceptance stays in 2b.
   - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh pack-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+    - [x] `make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh pack-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> 60 passed / 5 skipped files, 515 passed / 34 skipped tests, pack PASS 0.18.0 (consolidated head)
     - [ ] **API tests**
-      - [ ] `packages/cluster-mesh/tests/token-exchange.spec.ts` (existing carried)
-      - [ ] `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (existing carried)
-      - [ ] `packages/cluster-mesh/tests/token-exchange-cache.spec.ts` (existing carried)
-      - [ ] `packages/cluster-mesh/tests/token-exchange-integration.spec.ts` (existing carried, faithful #674 double)
-      - [ ] `packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts` (retained regression)
-      - [ ] `packages/cluster-mesh/tests/trust.spec.ts` (updated carried)
-      - [ ] `packages/cluster-mesh/tests/mesh.spec.ts` (updated carried)
-      - [ ] `packages/cluster-mesh/conformance/h2a-contract.spec.ts` (updated carried)
-      - [ ] Sub-lot gate: `make test-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+      - [x] `packages/cluster-mesh/tests/token-exchange.spec.ts` (existing carried)
+      - [x] `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (existing carried)
+      - [x] `packages/cluster-mesh/tests/token-exchange-cache.spec.ts` (existing carried)
+      - [x] `packages/cluster-mesh/tests/token-exchange-integration.spec.ts` (existing carried, faithful #674 double)
+      - [x] `packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts` (retained regression)
+      - [x] `packages/cluster-mesh/tests/trust.spec.ts` (updated carried)
+      - [x] `packages/cluster-mesh/tests/mesh.spec.ts` (updated carried)
+      - [x] `packages/cluster-mesh/conformance/h2a-contract.spec.ts` (updated carried)
+      - [x] Sub-lot gate: `make test-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
     - [ ] **UI tests (TypeScript only)**
       - [ ] None for this package slice.
     - [ ] **E2E tests**
@@ -256,11 +256,11 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
   - [ ] Record r4 verdict, final CI run, owner sign-offs and PR numbers in this file before merge-prep.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint (touched packages + api).
-  - [ ] Retest carried suites (Lots 1-3 gates).
+  - [x] Typecheck & Lint (touched packages + api: typecheck-mcp-platform/auth-hono/cluster-mesh/api exit 0; lint-cluster-mesh exit 0; lint-api 0 errors / 217 warnings).
+  - [x] Retest carried suites (Lots 1-3 gates: package gates + scoped API suites green on the consolidated head; full test-api running).
   - [ ] Retest e2e groups + security-container on the consolidated PR.
   - [ ] Retest AI flaky set only under the acceptance rule; record signatures + sign-off.
   - [ ] Bumped versions verified strictly above npm and merged main for every touched package (Post-Rebase Gate, incl. #662 watch I861-F4).
-  - [ ] Final gate step 1: create/update PR using this `BRANCH.md` text as PR body.
+  - [x] Final gate step 1: create/update PR using this `BRANCH.md` text as PR body (draft PR #679 opened; #673/#674/#676 closed with pointers).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK` and owner sign-offs recorded, commit removal of `BRANCH.md`, push, and merge (owner-gated; never in this execution).
