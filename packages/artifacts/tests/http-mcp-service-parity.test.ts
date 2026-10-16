@@ -163,6 +163,22 @@ describe('http service parity', () => {
   it('runs lifecycle, fork, source and grants with status mapping', async () => {
     const { app } = makeApp();
     const id = await ensureSite(app);
+    const rel1 = await app.handle(
+      req('POST', '/publish', { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'pp-1', paramsHash: 'h-1' }, OWNER),
+    );
+    const rel2 = await app.handle(
+      req('POST', '/publish', { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'pp-2', paramsHash: 'h-2' }, OWNER),
+    );
+    const r1 = (rel1.body as { releaseId: string }).releaseId;
+    const r2 = (rel2.body as { releaseId: string }).releaseId;
+    const rollback = await app.handle(
+      req('POST', '/promote', { artifactId: id, releaseId: r1, expectedCurrent: r2 }, OWNER),
+    );
+    expect(rollback.status).toBe(200);
+    const stale = await app.handle(
+      req('POST', '/promote', { artifactId: id, releaseId: r2, expectedCurrent: r2 }, OWNER),
+    );
+    expect(stale.status).toBe(409);
     const grantOther = await app.handle(
       req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, READER),
     );
@@ -191,6 +207,12 @@ describe('http service parity', () => {
     expect(dupGrant.status).toBe(400);
     const renew = await app.handle(req('POST', '/renew', { artifactId: id }, OWNER));
     expect(renew.status).toBe(200);
+    const revoked = await app.handle(
+      req('POST', '/access/revoke', { artifactId: id, principalId: READER }, OWNER),
+    );
+    expect(revoked.status).toBe(200);
+    const afterRevoke = await app.handle(req('GET', `/source/${id}`, undefined, READER));
+    expect(afterRevoke.status).toBe(403);
     const unknownRoute = await app.handle(req('GET', '/nope', undefined, OWNER));
     expect(unknownRoute.status).toBe(404);
     const purgeEarly = await app.handle(req('POST', '/purge', { artifactId: id }, OWNER));
