@@ -2384,3 +2384,53 @@ Notes :
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
 - `context_documents.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases`.
 - `chat_message_feedback` stocke le feedback par utilisateur sur les messages assistant (unique par `message_id` + `user_id`).
+
+## Session content consent (D2, BRCM2-EX2, Lot 2)
+
+Source of truth: `api/src/db/control-schema.ts` (control stream) + migration
+`api/drizzle/control/0012_session_content_consent.sql` (hand-written triggers;
+`db-generate-control` cannot emit or track them).
+
+Tables (`control` schema, soft references only, no cross-namespace FK):
+- `session_content_projects` (PK `project_id`): durable owner-confirmed
+  consent, CAS revision, owner-only `retention_by_channel` + source-verified
+  `retention_digest`, exclusion/suppression floors.
+- `session_content_grants` (UNIQUE `session_id`): derived session grants
+  bound to D1 `binding_id`/`binding_version`, CAS version, retained-closed
+  state, immutable retention snapshot.
+- `session_content_history_authorizations`: distinct closed-read authority
+  with ceiling-only deadlines (never creates a duration).
+- `session_content_namespaces` (PK `scc:<tenant>:<owner>:<epoch>`): R2-3
+  empty-state probe target; ordinary login admission never allocates one.
+- `session_content_objects`: committed/staged index (accounting + immutable
+  `expires_at`, `null` = no expiry). No payload bodies.
+- `session_content_reservations` / `session_content_attempts`: pre-upload
+  quota holds + durable idempotent writer journal (duplicates query,
+  changed bytes conflict, unknown outcomes stay charged).
+- `session_content_purge_jobs`: writer-settled purge work + verified
+  inventory evidence. `session_content_tombstones`: surviving offboarding
+  markers blocking grant reuse by recreated textual IDs.
+- `session_content_admissions` (Lot 3a writers) / `session_content_offline_receipts` (O2=B).
+
+Public-to-control coupling (hard exception, no-op without D2 state):
+- `BEFORE DELETE ON public.tenants` -> `session_content_fence_tenant_delete`
+- `BEFORE DELETE ON public.users` -> `session_content_fence_user_delete`
+- `BEFORE DELETE ON public.workspaces` -> `session_content_fence_workspace_delete`
+- `BEFORE UPDATE ON public.tenants WHEN (NEW.status = 'offboarded')` ->
+  `session_content_fence_tenant_offboard`
+Each fences live grants, marks namespaces `purge_pending`, enqueues purge
+jobs and persists tombstones; populated-D2 fencing errors abort the
+statement. Review drift in `pg_trigger`/`pg_proc`, never in Drizzle text.
+
+Rollback (after D2 disabled, writers fenced/drained and purge verified):
+```sql
+DROP TRIGGER IF EXISTS "session_content_fence_tenant_delete_trigger" ON "public"."tenants";
+DROP TRIGGER IF EXISTS "session_content_fence_user_delete_trigger" ON "public"."users";
+DROP TRIGGER IF EXISTS "session_content_fence_workspace_delete_trigger" ON "public"."workspaces";
+DROP TRIGGER IF EXISTS "session_content_fence_tenant_offboard_trigger" ON "public"."tenants";
+DROP FUNCTION IF EXISTS "control"."session_content_fence_tenant_delete"();
+DROP FUNCTION IF EXISTS "control"."session_content_fence_user_delete"();
+DROP FUNCTION IF EXISTS "control"."session_content_fence_workspace_delete"();
+DROP FUNCTION IF EXISTS "control"."session_content_fence_tenant_offboard"();
+```
+Retain required purge evidence; never infer content purge from hiding a surface.
