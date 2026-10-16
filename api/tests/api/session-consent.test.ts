@@ -552,3 +552,58 @@ describe('session consent durable lifecycle', () => {
     expect(usage.committedBytes).toBe(16);
     expect(usage.reservedBytes).toBe(12);
   });
+
+  it('should deny capture after membership withdrawal while retaining committed copies', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('retained-under-withdrawal');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-m1', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    await db.delete(tenantMemberships).where(
+      and(eq(tenantMemberships.tenantId, TENANT_A), eq(tenantMemberships.userId, owner.id)),
+    );
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'membership_required',
+    );
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m2', ctx,
+    ), 'membership_required');
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.committedBytes).toBe(body.length);
+    const handles = await service.listRetainedHandles(owner.id, TENANT_A);
+    expect(handles).toHaveLength(1);
+    expect(handles[0]!.retainedScopeId).toContain(bindingId);
+    expect(handles[0]!.bytes).toBe(body.length);
+    const foreignHandles = await service.listRetainedHandles(other.id, TENANT_A);
+    expect(foreignHandles).toHaveLength(0);
+    const purged = await service.requestRetainedPurge(handles[0]!.retainedScopeId, owner.id);
+    expect(purged.deletedObjects).toBe(1);
+    expect(purged.remainingObjects).toBe(0);
+    const physical = await fixture.listPhysical('');
+    expect(physical).toHaveLength(0);
+    await expectContentError(
+      () => service.requestRetainedPurge(handles[0]!.retainedScopeId, other.id),
+      'cross_owner_refused',
+    );
+  });
