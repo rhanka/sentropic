@@ -114,39 +114,39 @@ Implement the RFC 8693 token-exchange client in `@sentropic/cluster-mesh`: mesh 
     - [ ] **E2E tests**
       - [ ] None for 2a; cross-repository receipt lands in 2b.
 
-- [ ] **Lot 2a-fix — Close review immo_2a_opus.md (2 BLOQUANT, 6 MAJEUR, 5 MINEUR)**
-  - [ ] B1: new `src/trust/token-exchange-http.ts` (RFC 8693 form POST, `client_secret_basic` from protected port, approved endpoint, bounded timeout/body, no redirects, redacted errors); raw subject only to trusted issuer; mesh `available` only after policy preflight (BR2A-EX1)
-  - [ ] B2: full minted-token validation (signature/issuer/exact audience/sub/client_id/mandatory act/scope subset/TTL caps/token types, no refresh); scope inclusion enforced before caching
-  - [ ] M3: `act` mandatory from workload config, caller-supplied actor refused (`TokenExchangeRequest.actor` removed)
-  - [ ] M4: empty requested scope refused (`scope_empty`), never widened
-  - [ ] M5: `audiences` allowlist required at construction, subject single-audience equality enforced
-  - [ ] M6: cache key with subject fingerprint/`jti`, origin/workload clients, environment, tenant, policy revision (BR2A-EX2-adjacent unit updates)
-  - [ ] M7: bounded cache + single-flight + invalidation hooks + expiry margin + recomputed `expiresIn` on hit
-  - [ ] M8: new `tests/token-exchange-integration.spec.ts` vs faithful #674 wire double (form/Basic/response/`invalid_*`) (BR2A-EX2)
-  - [ ] m9: `maxTtlSec` hard-capped at 300, `<= 0` refused at construction
-  - [ ] m10: README gated-seam note + `available` semantics + CHANGELOG 0.18.0 entry (BR2A-EX3)
-  - [ ] m11: this lot (truthful claims; UAT negatives corrected: proof-bound subject refused at binding, no caller DPoP toggle)
-  - [ ] m12: every commit `<= 150` lines (`git diff --stat` before each `make commit`)
-  - [ ] m13: keep `0.18.0` (strictly above npm `0.15.0`, main `0.15.0`, avoids held `0.16.0`/`0.17.0`/`0.15.1`); peer/catalog range parity with #674 under BR2A-EX4; no rebase (spec does not require it), never merge main
-  - [ ] **Package tests**
-    - [ ] Updated `packages/cluster-mesh/tests/token-exchange.spec.ts` (empty-scope refusal, caller-actor refusal, workload-act assertion)
-    - [ ] Updated `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (refusal per new reason)
-    - [ ] Updated `packages/cluster-mesh/tests/token-exchange-cache.spec.ts` (key sensitivity, bound, single-flight, invalidation, margin, `expiresIn` recompute)
-    - [ ] Updated `packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts` (non-empty scopes, no stale serve)
-    - [ ] New `packages/cluster-mesh/tests/token-exchange-integration.spec.ts` (faithful #674 double + fault injection)
-    - [ ] Updated `packages/cluster-mesh/tests/trust.spec.ts` (actor removed from request contract)
-    - [ ] Updated `packages/cluster-mesh/tests/mesh.spec.ts` (policy-gated availability)
-    - [ ] Updated `packages/cluster-mesh/tests/conformance/h2a-contract.spec.ts` + `h2a-contract.json` (configured case carries policy)
-    - [ ] Updated `packages/cluster-mesh/tests/fixtures/fake-token-issuer.ts` (verified claims: `jti`/`client_id`/`tenant`, workload-act mint, raw subject input)
-    - [ ] Scoped runs per file: `make test-cluster-mesh SCOPE=tests/<file> ENV=test-cm-token-exchange`
-    - [ ] Sub-lot gate: `make test-cluster-mesh ENV=test-cm-token-exchange`
-  - [ ] **API tests**
-    - [ ] None; no API change in 2a-fix.
-  - [ ] **UI tests (TypeScript only)**
-    - [ ] None; no UI change in 2a-fix.
-  - [ ] **E2E tests**
-    - [ ] None for 2a-fix; cross-repository receipt lands in 2b.
-  - [ ] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-token-exchange` + `make lint-cluster-mesh ENV=test-cm-token-exchange` + `make scope-check`
+- [x] **Lot 2a-fix — Close review immo_2a_opus.md (2 BLOQUANT, 6 MAJEUR, 5 MINEUR)**
+  - [x] B1: new `src/trust/token-exchange-http.ts` (RFC 8693 form POST, `client_secret_basic` from protected port, approved endpoint, bounded timeout/body, no redirects, redacted errors); raw subject only to trusted issuer; mesh `available` only after policy preflight (BR2A-EX1)
+  - [x] B2: full minted-token validation (signature/issuer/exact audience/sub/client_id/mandatory act/scope subset/TTL caps/token types, no refresh); scope inclusion enforced before caching
+  - [x] M3: `act` mandatory from workload config, caller-supplied actor refused (`TokenExchangeRequest.actor` removed)
+  - [x] M4: empty requested scope refused (`scope_empty`), never widened
+  - [x] M5: `audiences` allowlist required at construction, subject single-audience equality enforced
+  - [x] M6: cache key with subject fingerprint/`jti`, origin/workload clients, environment, tenant, policy revision (BR2A-EX2-adjacent unit updates)
+  - [x] M7: bounded cache + single-flight + invalidation hooks + expiry margin + recomputed `expiresIn` on hit
+  - [x] M8: new `tests/token-exchange-integration.spec.ts` vs faithful #674 wire double (form/Basic/response/`invalid_*`) (BR2A-EX2)
+  - [x] m9: `maxTtlSec` hard-capped at 300, `<= 0` refused at construction
+  - [x] m10: README gated-seam note + `available` semantics + CHANGELOG 0.18.0 entry (BR2A-EX3)
+  - [x] m11: this lot (truthful claims; UAT negatives corrected: proof-bound subject refused at binding, no caller DPoP toggle)
+  - [x] m12: every commit `<= 150` lines (`git diff --stat` before each `make commit`)
+  - [x] m13: keep `0.18.0` (strictly above npm `0.15.0`, main `0.15.0`, avoids held `0.16.0`/`0.17.0`/`0.15.1`); peer/catalog range parity with #674 under BR2A-EX4; no rebase (spec does not require it), never merge main
+  - [x] **Package tests**
+    - [x] Updated `packages/cluster-mesh/tests/token-exchange.spec.ts` (empty-scope refusal, caller-actor refusal, workload-act assertion)
+    - [x] Updated `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (refusal per new reason)
+    - [x] Updated `packages/cluster-mesh/tests/token-exchange-cache.spec.ts` (key sensitivity, bound, single-flight, invalidation, margin, `expiresIn` recompute)
+    - [x] Updated `packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts` (non-empty scopes, no stale serve)
+    - [x] New `packages/cluster-mesh/tests/token-exchange-integration.spec.ts` (faithful #674 double + fault injection)
+    - [x] Updated `packages/cluster-mesh/tests/trust.spec.ts` (actor removed from request contract)
+    - [x] Updated `packages/cluster-mesh/tests/mesh.spec.ts` (policy-gated availability)
+    - [x] Updated `packages/cluster-mesh/tests/conformance/h2a-contract.spec.ts` + `h2a-contract.json` (configured case carries policy)
+    - [x] Updated `packages/cluster-mesh/tests/fixtures/fake-token-issuer.ts` (verified claims: `jti`/`client_id`/`tenant`, workload-act mint, raw subject input)
+    - [x] Scoped runs per file: `make test-cluster-mesh SCOPE=tests/<file> ENV=test-cm-token-exchange`
+    - [x] Sub-lot gate: `make test-cluster-mesh ENV=test-cm-token-exchange`
+  - [x] **API tests**
+    - [x] None; no API change in 2a-fix.
+  - [x] **UI tests (TypeScript only)**
+    - [x] None; no UI change in 2a-fix.
+  - [x] **E2E tests**
+    - [x] None for 2a-fix; cross-repository receipt lands in 2b.
+  - [x] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-token-exchange` + `make lint-cluster-mesh ENV=test-cm-token-exchange` + `make scope-check`
   - [ ] **UAT corrections (step-level, no UI change)**
     - [ ] Exchange with configured HTTP binding: valid subject yields verified claims, human sub, workload act, scope intersection, bounded expiry
     - [ ] Negatives: wrong grant/type, empty scope, caller actor, forged signature, wrong issuer, wrong subject audience, unallowed target audience, excess scope, TTL above ceiling, proof-bound (`cnf`) subject, already-exchanged (`act`) subject, revoked subject/client; every refusal before any downstream call
