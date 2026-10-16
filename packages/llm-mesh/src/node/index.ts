@@ -12,6 +12,7 @@ export type {
   SeatReceipt,
   SeatRefreshAuthority,
   SeatValidationCode,
+  SeatValidationContext,
   SeatValidationResult,
 } from '../enrollment/seat-bundle.js';
 export {

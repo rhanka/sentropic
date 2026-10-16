@@ -86,6 +86,14 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] Add packages/llm-mesh/tests/enrollment/seat-bundle.test.ts covering five schemas, size, owner, client, unknown and nested refresh fields, rollback, authority escalation.
   - [x] Add spec/SPEC_EVOL_CI_SEATS.md with frozen interfaces and supported/unverified table.
   - [x] Document contract in packages/llm-mesh/README.md.
+  - [ ] R1 version 0.26.1 with EX4/EX5 resync and regenerated fixture digest.
+  - [x] R2 issuing client and endpoint family in the frozen envelope.
+  - [ ] R3 channel-granted authority wired into validation.
+  - [ ] R4 native-store with store-reference accepted.
+  - [ ] R5 case-insensitive and structural refresh-material rejection.
+  - [ ] R6 lineage classification for all five transitions.
+  - [ ] R7 five-CLI coverage, nativeUse shapes and enum checks.
+  - [ ] R8 UTF-8 byte size, R9 truthful report, R10 branch boxes, R11 changelog.
   - [ ] UAT credential-free walkthrough:
     - [ ] Select five synthetic profile labels, one per CLI.
     - [ ] Inspect static validation errors for mismatched owner, client and oversize bundle.
