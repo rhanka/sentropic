@@ -174,6 +174,74 @@ describe('3-qualification — negatives fail closed', () => {
     expect(res.headers.get('WWW-Authenticate')).toContain(IMMO_SEARCH);
   });
 
+  it('refuses an immo:read-only token at the documents gate', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { scope: IMMO_READ });
+    const error = await mcp
+      .verify(immoRequest(token), { requiredScopes: [IMMO_DOCUMENTS_READ] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 403, code: 'insufficient_scope' });
+    const res = mcp.challenge(error);
+    expect(res.status).toBe(403);
+    expect(res.headers.get('WWW-Authenticate')).toContain(IMMO_DOCUMENTS_READ);
+  });
+
+  it('refuses a token without immo:read at the ingress gate', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { scope: `${IMMO_SEARCH} ${IMMO_DOCUMENTS_READ}` });
+    const error = await mcp
+      .verify(immoRequest(token), { requiredScopes: [IMMO_READ] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 403, code: 'insufficient_scope' });
+    expect(mcp.challenge(error).status).toBe(403);
+  });
+
+  it('grants no implicit hierarchy between immo:read and immo:documents:read', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const documentsToken = await signImmoToken(key, { scope: IMMO_DOCUMENTS_READ });
+    const readError = await mcp
+      .verify(immoRequest(documentsToken), { requiredScopes: [IMMO_READ] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(readError).toBeInstanceOf(McpAuthError);
+    expect(readError).toMatchObject({ status: 403, code: 'insufficient_scope' });
+    const readToken = await signImmoToken(key, { scope: IMMO_READ });
+    const documentsError = await mcp
+      .verify(immoRequest(readToken), { requiredScopes: [IMMO_DOCUMENTS_READ] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(documentsError).toBeInstanceOf(McpAuthError);
+    expect(documentsError).toMatchObject({ status: 403, code: 'insufficient_scope' });
+  });
+
+  it('fails a partially satisfied multi-scope requirement and echoes only the missing scope', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { scope: IMMO_READ });
+    const error = await mcp
+      .verify(immoRequest(token), { requiredScopes: [IMMO_READ, IMMO_SEARCH] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 403, code: 'insufficient_scope' });
+    const www = mcp.challenge(error).headers.get('WWW-Authenticate')!;
+    expect(www).toContain(`scope="${IMMO_SEARCH}"`);
+    expect(www).not.toContain(IMMO_READ);
+  });
+
   it('does not let a generic mcp:* scope satisfy an Immo requirement', async () => {
     const { key, mcp } = await makeImmoMcp();
     const token = await signImmoToken(key, { scope: 'mcp:tools:invoke' });
