@@ -554,10 +554,12 @@ export class SessionContentService {
         .where(eq(sessionContentProjects.projectId, String(policy['projectId'])))
         .limit(1);
       const revision = input.expectedRevision ?? 0;
-      if (input.expectedRevision === null) {
+      const expectedRevision: number | undefined =
+        input.expectedRevision === null ? undefined : input.expectedRevision;
+      if (expectedRevision === undefined) {
         if (existing) throw new SessionContentError('revision_conflict', 'project already exists');
       } else {
-        if (!existing || existing.projectRevision !== input.expectedRevision) {
+        if (!existing || existing.projectRevision !== expectedRevision) {
           throw new SessionContentError('revision_conflict', 'project revision mismatch');
         }
       }
@@ -586,13 +588,16 @@ export class SessionContentService {
         updatedAt: now,
       };
       if (existing) {
+        if (expectedRevision === undefined) {
+          throw new SessionContentError('revision_conflict', 'project already exists');
+        }
         await tx
           .update(sessionContentProjects)
           .set({ ...row, createdAt: existing.createdAt })
           .where(
             and(
               eq(sessionContentProjects.projectId, row.projectId),
-              eq(sessionContentProjects.projectRevision, input.expectedRevision),
+              eq(sessionContentProjects.projectRevision, expectedRevision),
             ),
           );
       } else {
