@@ -144,3 +144,142 @@ export type CompileToolConfigurationResult =
   | { ok: true; config: CompiledToolConfiguration }
   | { ok: false; diagnostics: ToolConfigurationDiagnostic[] };
 
+// ---------------------------------------------------------------------------
+// Deterministic JSON + digests
+// ---------------------------------------------------------------------------
+
+/** Canonical JSON: object keys sorted recursively, arrays keep order. */
+export function canonicalJson(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const parts = keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
+  return `{${parts.join(',')}}`;
+}
+
+export function sha256Hex(input: string): string {
+  return createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
+/** Digest binding the manifest identity and full capability surface. */
+export function computeManifestDigest(manifest: AppMcpProviderManifest): string {
+  return sha256Hex(
+    canonicalJson({
+      appId: manifest.appId,
+      providerId: manifest.providerId,
+      version: manifest.version,
+      audit: manifest.audit,
+      authz: manifest.authz,
+      durability: manifest.durability,
+      prompts: manifest.prompts,
+      resources: manifest.resources,
+      tools: manifest.tools,
+    }),
+  );
+}
+
+/**
+ * Consumer-supplied digest scope: the public tool schemas/result codec.
+ * Covers exactly what configuration alone MUST NOT change: names,
+ * descriptions and input/output schemas.
+ */
+export function computeCompatibilityDigest(manifest: AppMcpProviderManifest): string {
+  const tools = [...manifest.tools]
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map((tool) => ({
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+      name: tool.name,
+      outputSchema: tool.outputSchema,
+    }));
+  return sha256Hex(canonicalJson({ tools }));
+}
+
+/**
+ * Payload digest over the snapshot excluding every digest envelope field, so
+ * approval of the payload digest is never self-referential.
+ */
+export function computePayloadDigest(snapshot: ApprovedToolSnapshot): string {
+  const { compatibilityDigest: _compat, manifestDigest: _manifest, provenance, ...rest } = snapshot;
+  void _compat;
+  void _manifest;
+  const { manifestDigest: _provManifest, payloadDigest: _provPayload, ...provRest } = provenance;
+  void _provManifest;
+  void _provPayload;
+  return sha256Hex(canonicalJson({ ...rest, provenance: provRest }));
+}
+
+// ---------------------------------------------------------------------------
+// Internal guards
+// ---------------------------------------------------------------------------
+
+const HANDLER_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
+const EXECUTABLE_VALUE_PATTERN = /^(file|https?|data|ftp|ws):/i;
+const SQL_LEADER_PATTERN = /^(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC(UTE)?)\b/i;
+const FORBIDDEN_VALUE_KEYS = new Set([
+  'sql',
+  'query',
+  'url',
+  'upstream',
+  'import',
+  'exec',
+  'code',
+  'script',
+  'command',
+]);
+const FORBIDDEN_CONTENT_KEYS = new Set([
+  'password',
+  'passwd',
+  'secret',
+  'bearer',
+  'access_token',
+  'accesstoken',
+  'refresh_token',
+  'id_token',
+  'private_key',
+  'privatekey',
+  'client_secret',
+  'api_key',
+  'apikey',
+  'authorization',
+  'credential',
+  'ownersub',
+  'tenant',
+  'tenantref',
+  'workspace',
+  'workspaceref',
+  'sub',
+  'email',
+  'userid',
+  'serviceidentity',
+]);
+const REDACTION_ORDER = ['none', 'low', 'moderate', 'high', 'secret'] as const;
+
+function diag(
+  diagnostics: ToolConfigurationDiagnostic[],
+  code: ToolConfigurationDiagnosticCode,
+  path: string,
+  message: string,
+): void {
+  diagnostics.push({ code, path, message });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    for (const entry of value) deepFreeze(entry);
+    return Object.freeze(value);
+  }
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    deepFreeze((value as Record<string, unknown>)[key]);
+  }
+  return Object.freeze(value);
+}
+
