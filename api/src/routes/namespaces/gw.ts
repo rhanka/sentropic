@@ -10,12 +10,13 @@ import {
 } from '@sentropic/cluster-mesh';
 import { createGatewayNamespaceModule } from '@sentropic/cluster-mesh/compose/gateway';
 import type {
-  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink,
+  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink, NativeCountTokensRateLimiter,
 } from '@sentropic/llm-gateway';
 import { sql } from 'drizzle-orm';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { db } from '../../db/client';
+import { logger } from '../../logger';
 import { requireAuth, type AuthUser } from '../../middleware/auth';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { createLlmCallerIdentity, type LlmCallerIdentity } from '../../services/llm-identity/caller-auth';
@@ -25,10 +26,19 @@ import {
   withSettlementMode, type RoutePartitionConfig, type RoutePartitionRevision, type RoutePartitionSource,
 } from '../../services/llm-metering';
 import { createApplicationGatewayRoutePlane } from '../../services/llm-runtime/gateway-route-plane';
+import { gatewayNativeMessagesEnabled } from '../../services/llm-runtime/gateway-native-config';
+import { gatewayStartupRecord, resolveGatewayPackageVersion } from '../../services/llm-runtime/gateway-package-version';
 
 export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
-  '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/chat/completions',
+  '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/messages/count_tokens',
+  '/v1/chat/completions', '/muse-code/models',
+  // Spec §16.2: Responses ingress aliases. `/v1/responses` rides the `/v1/*`
+  // middleware below; `/responses` needs its own registrations (once each).
+  '/responses', '/v1/responses',
+  // The mounted gateway router registers a global body-limit middleware
+  // (Hono reports it as `/*`): fence it so the completeness gate holds.
+  '/*',
 ] as const;
 /** Default reserved output ceiling for a request without max tokens (the Claude code default). */
 export const GW_DEFAULT_OUTPUT_TOKENS = 4_096;
@@ -117,6 +127,8 @@ const refused = (what: string) => async (): Promise<never> => {
 type Probed<T> = T & { probe?(): Promise<boolean> };
 
 export interface CreateGwNamespaceModuleOptions {
+  readonly nativeMessagesEnabled?: boolean;
+  readonly nativeCountRate?: NativeCountTokensRateLimiter;
   readonly enabled?: boolean;
   readonly authenticate?: MiddlewareHandler;
   /** Verified caller → directory-resolved cost context; undefined refuses (401), a throw is 503. */
@@ -145,7 +157,9 @@ const unavailableGwModule = (): ClusterMeshHonoNamespaceModule => ({
 export const createGwNamespaceModule = async (
   options: CreateGwNamespaceModuleOptions = {},
 ): Promise<ClusterMeshHonoNamespaceModule> => {
-  const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane();
+  const nativeMessagesEnabled = options.nativeMessagesEnabled ?? gatewayNativeMessagesEnabled(process.env.LLM_GATEWAY_NATIVE_MESSAGES);
+  logger.info(gatewayStartupRecord(await resolveGatewayPackageVersion(), nativeMessagesEnabled), 'Gateway native startup');
+  const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane({ nativeMessages: nativeMessagesEnabled });
   const identity = options.resolveCaller ? undefined : productIdentity();
   const resolveCaller = options.resolveCaller ?? resolveProductCaller(identity!);
   const ownerRef = `product-api:${control.runtime.generation.generationId}`;
@@ -194,9 +208,17 @@ export const createGwNamespaceModule = async (
       createRouter: ({ gateway }) => {
         const router = new Hono();
         applyAuthorFence(router);
-        router.use('/v1/*', options.authenticate ?? requireAuth);
-        router.use('/v1/*', settlementModeMiddleware());
-        router.use('/v1/*', async (context, next) => {
+        const authenticate = options.authenticate ?? requireAuth;
+        // Spec §17.4: one checked-body policy shared by settlement middleware
+        // and the gateway router under the trusted product mount prefix, so a
+        // gateway body is parsed once and the router reuses the same owner.
+        const gatewayBodyOptions = { mountPrefix: '/api/v1/gw' };
+        const settlementMode = settlementModeMiddleware(gatewayBodyOptions);
+        // One-shot caller bridge: resolves the verified product caller and
+        // hands it to the gateway caller-auth port via a single-use header
+        // token (consumed + cleaned up per request). Registered once per path
+        // prefix — `/v1/responses` matches `/v1/*` only, never both.
+        const bridgeCaller = async (context: Context, next: () => Promise<void>) => {
           const token = crypto.randomUUID();
           try {
             const cost = await resolveCaller(context);
@@ -210,10 +232,25 @@ export const createGwNamespaceModule = async (
           } finally {
             callers.delete(token);
           }
-        });
+        };
+        router.use('/v1/*', authenticate);
+        router.use('/v1/*', settlementMode);
+        router.use('/v1/*', bridgeCaller);
+        router.use('/responses', authenticate);
+        router.use('/responses', settlementMode);
+        router.use('/responses', bridgeCaller);
+        // R5-MAJ-2: the Muse catalog shares the product caller admission —
+        // without this bridge the shared handler always answers 401 here.
+        // Exact path (not a wildcard): the fence contract lists fenced
+        // paths exactly, and `/muse-code/models` is the only route served.
+        router.use('/muse-code/models', authenticate);
+        router.use('/muse-code/models', settlementMode);
+        router.use('/muse-code/models', bridgeCaller);
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
+          nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens, nativeCountRate: options.nativeCountRate,
           budget: { port: budget, defaultOutputTokens: options.defaultOutputTokens ?? GW_DEFAULT_OUTPUT_TOKENS },
+          requestBody: gatewayBodyOptions,
         }));
         return router;
       },

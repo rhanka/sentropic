@@ -23,6 +23,15 @@ const candidate = (modelId = 'gpt-5.6-sol') => ({
 });
 
 describe('route health cache', () => {
+  it('records no suppression for a non-retryable local bound failure (R4-MIN-2)', () => {
+    const health = new InMemoryRouteHealth({ now: () => new Date('2026-10-13T00:00:00Z') });
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: false, healthScope: 'route',
+    }, DEFAULT_ROUTE_POLICY);
+    expect(health.isSuppressed(candidate())).toBe(false);
+    expect(health.suppressedDegradable(candidate())).toBe(false);
+  });
+
   it('suppresses a retryable route only until its TTL expires', () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const health = new InMemoryRouteHealth({ now: () => new Date(now) });
@@ -62,6 +71,62 @@ describe('route health cache', () => {
     }, DEFAULT_ROUTE_POLICY);
 
     expect(health.isSuppressed(candidate('gpt-5.6-terra'))).toBe(true);
+  });
+
+  it('keeps a committed suppression when a later uncommitted outcome lands on the same key', () => {
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const health = new InMemoryRouteHealth({ now: () => new Date(now) });
+    const policy = { ...DEFAULT_ROUTE_POLICY, negativeCacheTtlMs: 300_000 };
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: true,
+    }, policy);
+    now += 1_000;
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: false,
+    }, policy);
+
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(false);
+
+    // Past the committed entry's own TTL the route is suppressible again,
+    // and a fresh uncommitted outcome degrades as before.
+    now += 300_000;
+    expect(health.isSuppressed(candidate())).toBe(false);
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: false,
+    }, policy);
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(true);
+  });
+
+  it('still degrades a lone route suppressed only by uncommitted failures', () => {
+    const health = new InMemoryRouteHealth({
+      now: () => new Date('2026-08-08T00:00:00Z'),
+    });
+    health.record(candidate(), {
+      reason: 'provider-5xx', retryable: true, healthScope: 'route', committed: false,
+    }, DEFAULT_ROUTE_POLICY);
+
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(true);
+  });
+
+  it('never degrades a route suppressed by a provider rate limit', () => {
+    // A provider-issued 429 carries its own Retry-After; redispatching a lone
+    // seat during that window is a retry storm, not an availability gap.
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const health = new InMemoryRouteHealth({ now: () => new Date(now) });
+    health.record(candidate(), {
+      reason: 'rate-limited', retryable: true, retryAfterMs: 10_000,
+      healthScope: 'route', committed: false,
+    }, DEFAULT_ROUTE_POLICY);
+
+    expect(health.isSuppressed(candidate())).toBe(true);
+    expect(health.suppressedDegradable(candidate())).toBe(false);
+
+    // The route becomes dispatchable again only once Retry-After elapses.
+    now += 10_000;
+    expect(health.isSuppressed(candidate())).toBe(false);
   });
 
   it('does not poison health for invalid requests', () => {

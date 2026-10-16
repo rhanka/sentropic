@@ -1,0 +1,434 @@
+/**
+ * Responses egress shared builders (spec §16.5): the item/usage/terminal
+ * constructors used by both the JSON envelope and the SSE encoder. Pure
+ * functions — bounds enforcement and event lifecycle live in the accumulator
+ * below and in `responses-stream.ts`. Nothing here fabricates counts or ids.
+ */
+import type {
+  FinishReason,
+  GenerateResponse,
+  StreamEvent,
+  TokenUsage,
+  ToolCall,
+} from '@sentropic/llm-mesh';
+
+/** Engineering-default operation bounds (spec §16.7); a stricter host limit wins. */
+export interface ResponsesLimits {
+  readonly maxBodyBytes: number;
+  readonly maxInputItems: number;
+  readonly maxTools: number;
+  readonly maxOutputItems: number;
+  readonly maxSseEventBytes: number;
+  readonly maxAccumulatedBytes: number;
+}
+
+export const DEFAULT_RESPONSES_LIMITS: ResponsesLimits = {
+  maxBodyBytes: 16_777_216,
+  maxInputItems: 4096,
+  maxTools: 256,
+  maxOutputItems: 1024,
+  maxSseEventBytes: 1_048_576,
+  maxAccumulatedBytes: 8_388_608,
+};
+
+const LIMIT_KEYS = [
+  'maxBodyBytes', 'maxInputItems', 'maxTools',
+  'maxOutputItems', 'maxSseEventBytes', 'maxAccumulatedBytes',
+] as const satisfies readonly (keyof ResponsesLimits)[];
+
+/**
+ * Resolve validated host overrides against the spec defaults. Each field
+ * takes the stricter (lower) of the default and the override; a
+ * non-finite or non-positive override fails fast at router construction.
+ * Unknown keys are ignored.
+ */
+export const resolveResponsesLimits = (
+  overrides?: { readonly [key: string]: unknown },
+): ResponsesLimits => {
+  if (!overrides) return { ...DEFAULT_RESPONSES_LIMITS };
+  const resolved = { ...DEFAULT_RESPONSES_LIMITS };
+  for (const key of LIMIT_KEYS) {
+    const value = overrides[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      throw new Error(`responsesLimits.${key} must be a finite positive number`);
+    }
+    resolved[key] = Math.min(DEFAULT_RESPONSES_LIMITS[key], value);
+  }
+  return resolved;
+};
+
+/** Overflow or protocol breach: aborts upstream and fails neutrally, never truncates silently. */
+export class ResponsesBoundError extends Error {
+  readonly code: 'responses_overflow' | 'responses_protocol';
+  constructor(code: ResponsesBoundError['code'], message: string) {
+    super(message);
+    this.name = 'ResponsesBoundError';
+    this.code = code;
+  }
+}
+
+export type ResponsesStatus = 'completed' | 'incomplete' | 'failed';
+
+export const responsesTerminal = (finishReason: FinishReason): {
+  status: ResponsesStatus;
+  incomplete_details: { reason: string } | null;
+} => {
+  if (finishReason === 'length') {
+    return { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } };
+  }
+  if (finishReason === 'content_filter') {
+    return { status: 'incomplete', incomplete_details: { reason: 'content_filter' } };
+  }
+  if (finishReason === 'error' || finishReason === 'cancelled' || finishReason === 'unknown') {
+    return { status: 'failed', incomplete_details: null };
+  }
+  return { status: 'completed', incomplete_details: null };
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : undefined;
+
+const finiteOrUndefined = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+/**
+ * Provider usage mapped to the Responses shape with native detail preserved
+ * through `providerRawUsage` (cached input tokens, reasoning output
+ * tokens). Total is provider-reported or computed from known components.
+ * Fully unknown usage is null, and a partially known usage carries only its
+ * known components — never a fabricated exact zero (spec §16.5, R4-MIN-4).
+ */
+export const responsesUsage = (usage?: TokenUsage): {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  input_tokens_details?: { cached_tokens: number };
+  output_tokens_details?: { reasoning_tokens: number };
+} | null => {
+  if (!usage) return null;
+  const raw = asRecord(usage.providerRawUsage) ?? {};
+  const cached = finiteOrUndefined(asRecord(raw.input_tokens_details)?.cached_tokens);
+  const reasoning = usage.reasoningTokens
+    ?? finiteOrUndefined(asRecord(raw.output_tokens_details)?.reasoning_tokens);
+  const input = usage.inputTokens ?? finiteOrUndefined(raw.input_tokens);
+  const output = usage.outputTokens ?? finiteOrUndefined(raw.output_tokens);
+  const total = usage.totalTokens ?? finiteOrUndefined(raw.total_tokens)
+    ?? (input !== undefined && output !== undefined ? input + output : undefined);
+  if (input === undefined && output === undefined && total === undefined) return null;
+  return {
+    ...(input !== undefined ? { input_tokens: input } : {}),
+    ...(output !== undefined ? { output_tokens: output } : {}),
+    ...(total !== undefined ? { total_tokens: total } : {}),
+    ...(cached !== undefined ? { input_tokens_details: { cached_tokens: cached } } : {}),
+    ...(reasoning !== undefined ? { output_tokens_details: { reasoning_tokens: reasoning } } : {}),
+  };
+};
+
+export const messageItem = (id: string, text: string): Record<string, unknown> => ({
+  type: 'message', id, role: 'assistant',
+  content: [{ type: 'output_text', text, annotations: [] }],
+});
+
+export const functionCallItem = (id: string, call: Pick<ToolCall, 'toolCallId' | 'providerCallId' | 'name' | 'argumentsText'>): Record<string, unknown> => ({
+  type: 'function_call', id, call_id: call.providerCallId ?? call.toolCallId,
+  name: call.name, arguments: call.argumentsText,
+});
+
+export const reasoningItem = (id: string, summaryText: string): Record<string, unknown> => ({
+  type: 'reasoning', id, summary: [{ type: 'summary_text', text: summaryText }],
+});
+
+export interface ResponsesSnapshot {
+  readonly items: readonly Record<string, unknown>[];
+  readonly terminal: { finishReason: FinishReason };
+  readonly usage?: TokenUsage;
+  readonly failure?: { message: string; code?: string; type?: string };
+}
+
+/** Item allocation for one observed event: stable id, positional output index. */
+export interface ResponsesAllocation {
+  readonly itemId: string;
+  readonly outputIndex: number;
+  /** True when this observation created the item. */
+  readonly isNew: boolean;
+  /** True when this observation replaced previously buffered content. */
+  readonly replaced: boolean;
+}
+
+export interface ResponsesAccumulator {
+  observe(event: StreamEvent): ResponsesAllocation | undefined;
+  ingest(response: GenerateResponse): void;
+  snapshot(): ResponsesSnapshot;
+}
+
+/**
+ * Shared bounded output accumulator for the JSON envelope and the SSE
+ * encoder (spec §16.5): first-observation allocation with stable ids,
+ * snapshot-wins dedup, bounded growth. Overflow or unknown call ids throw
+ * `ResponsesBoundError` — abort upstream and fail neutrally.
+ */
+export const createResponsesAccumulator = (
+  limits: ResponsesLimits = DEFAULT_RESPONSES_LIMITS,
+): ResponsesAccumulator => {
+  let text = '';
+  let summary = '';
+  const calls = new Map<string, { providerCallId?: string; name: string; args: string }>();
+  const order: Array<{ kind: 'message' | 'reasoning' | 'tool'; key: string; itemId: string; outputIndex: number }> = [];
+  let bytes = 0;
+  let messageCount = 0;
+  let reasoningCount = 0;
+  let toolCount = 0;
+  let terminal: { finishReason: FinishReason } = { finishReason: 'unknown' };
+  let usage: TokenUsage | undefined;
+  let failure: ResponsesSnapshot['failure'];
+
+  const itemCount = () => (text ? 1 : 0) + (summary ? 1 : 0) + calls.size;
+
+  const pushOrder = (
+    kind: 'message' | 'reasoning' | 'tool', key: string,
+  ): { itemId: string; outputIndex: number } => {
+    const outputIndex = order.length;
+    const itemId = kind === 'message' ? `msg_${messageCount++}`
+      : kind === 'reasoning' ? `rs_${reasoningCount++}` : `fc_${toolCount++}`;
+    order.push({ kind, key, itemId, outputIndex });
+    return { itemId, outputIndex };
+  };
+
+  const locate = (
+    kind: 'message' | 'reasoning' | 'tool', key: string,
+  ): { itemId: string; outputIndex: number } => {
+    const index = order.findIndex((entry) => entry.kind === kind && entry.key === key);
+    const entry = index >= 0 ? order[index] : undefined;
+    if (!entry) {
+      throw new ResponsesBoundError('responses_protocol', 'responses item vanished');
+    }
+    return { itemId: entry.itemId, outputIndex: entry.outputIndex };
+  };
+
+  const checkBounds = (growth: number, extraItems: number): void => {
+    if (itemCount() + extraItems > limits.maxOutputItems) {
+      throw new ResponsesBoundError('responses_overflow', 'responses output item cap exceeded');
+    }
+    if (bytes + growth > limits.maxAccumulatedBytes) {
+      throw new ResponsesBoundError('responses_overflow', 'responses accumulated output cap exceeded');
+    }
+    bytes += growth;
+  };
+
+  const observe = (event: StreamEvent): ResponsesAllocation | undefined => {
+    // Spec §16.7: a single content-carrying event above the cap aborts
+    // upstream — no partial buffering of an unbounded frame, no silent
+    // truncation. Terminal and control events (done/error/status) are
+    // bookkeeping, never buffered output, so the encoder's own terminal
+    // failure always fits through.
+    if (event.type === 'content_delta' || event.type === 'reasoning_delta'
+      || event.type === 'tool_call_start' || event.type === 'tool_call_delta') {
+      const eventSize = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+      if (eventSize > limits.maxSseEventBytes) {
+        throw new ResponsesBoundError('responses_overflow', 'responses event size cap exceeded');
+      }
+    }
+    if (event.type === 'content_delta') {
+      const isNew = !text;
+      checkBounds(event.data.delta.length, isNew ? 1 : 0);
+      const alloc = isNew ? pushOrder('message', '') : locate('message', '');
+      text += event.data.delta;
+      return { ...alloc, isNew, replaced: false };
+    }
+    if (event.type === 'reasoning_delta') {
+      // Completed summaries replace streamed fragments (authoritative
+      // artifact, spec §16.4); hidden/signature kinds never render.
+      const kind = event.data.kind ?? 'summary';
+      if (kind !== 'summary' && kind !== 'summary_done') return undefined;
+      const isNew = !order.some((entry) => entry.kind === 'reasoning');
+      checkBounds(event.data.delta.length, isNew ? 1 : 0);
+      const alloc = isNew ? pushOrder('reasoning', '') : locate('reasoning', '');
+      const replaced = kind === 'summary_done' && summary.length > 0;
+      if (kind === 'summary_done') {
+        bytes -= summary.length;
+        summary = event.data.delta;
+      } else {
+        summary += event.data.delta;
+      }
+      return { ...alloc, isNew, replaced };
+    }
+    if (event.type === 'tool_call_start') {
+      const current = calls.get(event.data.toolCallId);
+      const args = event.data.argumentsText ?? '';
+      if (current) {
+        const replaced = args.length > 0;
+        if (args) {
+          checkBounds(args.length, 0);
+          bytes -= current.args.length;
+          current.args = args;
+        }
+        return { ...locate('tool', event.data.toolCallId), isNew: false, replaced };
+      }
+      checkBounds(args.length, 1);
+      const alloc = pushOrder('tool', event.data.toolCallId);
+      calls.set(event.data.toolCallId, {
+        ...(event.data.providerCallId ? { providerCallId: event.data.providerCallId } : {}),
+        name: event.data.name,
+        args,
+      });
+      return { ...alloc, isNew: true, replaced: false };
+    }
+    if (event.type === 'tool_call_delta') {
+      const current = calls.get(event.data.toolCallId);
+      if (!current) {
+        throw new ResponsesBoundError(
+          'responses_protocol',
+          `responses delta for unknown tool call ${event.data.toolCallId}`,
+        );
+      }
+      checkBounds(event.data.delta.length, 0);
+      current.args += event.data.delta;
+      return { ...locate('tool', event.data.toolCallId), isNew: false, replaced: false };
+    }
+    if (event.type === 'done') {
+      terminal = { finishReason: event.data.finishReason ?? 'unknown' };
+      if (event.data.usage) usage = event.data.usage;
+      return undefined;
+    }
+    if (event.type === 'error') {
+      terminal = { finishReason: 'error' };
+      failure = {
+        message: event.data.message,
+        ...(event.data.code ? { code: event.data.code } : {}),
+      };
+      return undefined;
+    }
+    return undefined;
+  };
+
+  const ingest = (response: GenerateResponse): void => {
+    const content = response.message.content;
+    const incomingText = typeof content === 'string' ? content : content
+      .map((part) => (part.type === 'text' ? part.text : ''))
+      .join('');
+    if (incomingText) {
+      checkBounds(incomingText.length, text ? 0 : 1);
+      if (!text) pushOrder('message', '');
+      text = incomingText;
+    }
+    if (typeof content !== 'string') {
+      const incomingSummary = content
+        .map((part) => (part.type === 'reasoning' ? part.text : ''))
+        .join('');
+      if (incomingSummary) {
+        checkBounds(incomingSummary.length, summary ? 0 : 1);
+        if (!summary) pushOrder('reasoning', '');
+        summary = incomingSummary;
+      }
+    }
+    for (const call of response.toolCalls) {
+      if (calls.has(call.toolCallId)) continue;
+      checkBounds(call.argumentsText.length, 1);
+      pushOrder('tool', call.toolCallId);
+      calls.set(call.toolCallId, {
+        ...(call.providerCallId ? { providerCallId: call.providerCallId } : {}),
+        name: call.name,
+        args: call.argumentsText,
+      });
+    }
+    terminal = { finishReason: response.finishReason };
+    if (response.usage) usage = response.usage;
+  };
+
+  const snapshot = (): ResponsesSnapshot => {
+    const items: Record<string, unknown>[] = [];
+    for (const entry of order) {
+      if (entry.kind === 'message') {
+        if (!text) continue;
+        items.push(messageItem(entry.itemId, text));
+      } else if (entry.kind === 'reasoning') {
+        if (!summary) continue;
+        items.push(reasoningItem(entry.itemId, summary));
+      } else {
+        const call = calls.get(entry.key);
+        if (!call) continue;
+        items.push(functionCallItem(entry.itemId, {
+          toolCallId: entry.key, ...(call.providerCallId ? { providerCallId: call.providerCallId } : {}),
+          name: call.name, argumentsText: call.args,
+        }));
+      }
+    }
+    return {
+      items,
+      terminal,
+      ...(usage ? { usage } : {}),
+      ...(failure ? { failure } : {}),
+    };
+  };
+
+  return { observe, ingest, snapshot };
+};
+
+/**
+ * JSON envelope (spec §16.5): `object:"response"` with stable id,
+ * `created_at`, served model, ordered output, terminal status, usage and
+ * `store:false`. Content-filter keeps an actual refusal when the turn
+ * produced text; unknown/error termination is a failed envelope.
+ */
+/**
+ * Refusal conversion shared by the JSON envelope and the SSE item closure:
+ * a content-filtered turn keeps an actual refusal part when it produced
+ * text, never an invented one.
+ */
+export const finalizeMessageItem = (
+  item: Record<string, unknown>, finishReason: FinishReason,
+): Record<string, unknown> => {
+  if (item.type === 'message' && finishReason === 'content_filter') {
+    const text = (item.content as Array<Record<string, unknown>>)
+      .filter((part) => part.type === 'output_text')
+      .map((part) => String(part.text ?? ''))
+      .join('');
+    if (text) return { ...item, content: [{ type: 'refusal', refusal: text }] };
+  }
+  return item;
+};
+
+/** Envelope assembly from a terminal snapshot, shared by JSON and SSE terminals. */
+export const envelopeFromSnapshot = (input: {
+  responseId: string;
+  model: string;
+  createdAt: number;
+  snap: ResponsesSnapshot;
+}): Record<string, unknown> => {
+  const terminal = responsesTerminal(input.snap.terminal.finishReason);
+  return {
+    id: input.responseId,
+    object: 'response',
+    created_at: input.createdAt,
+    model: input.model,
+    status: terminal.status,
+    error: terminal.status === 'failed'
+      ? input.snap.failure ?? { message: 'response did not complete' }
+      : null,
+    incomplete_details: terminal.incomplete_details,
+    output: input.snap.items.map((item) => finalizeMessageItem(item, input.snap.terminal.finishReason)),
+    usage: responsesUsage(input.snap.usage),
+    store: false,
+  };
+};
+
+export const buildResponsesJson = (input: {
+  responseId: string;
+  model: string;
+  createdAt?: number;
+  response: GenerateResponse;
+  failure?: { message: string; code?: string; type?: string };
+  limits?: ResponsesLimits;
+}): Record<string, unknown> => {
+  const acc = createResponsesAccumulator(input.limits);
+  acc.ingest(input.response);
+  const snap = acc.snapshot();
+  return envelopeFromSnapshot({
+    responseId: input.responseId,
+    model: input.model,
+    createdAt: input.createdAt ?? Math.floor(Date.now() / 1000),
+    snap: snap.failure || !input.failure ? snap : { ...snap, failure: input.failure },
+  });
+};

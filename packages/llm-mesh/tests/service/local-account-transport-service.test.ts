@@ -342,6 +342,7 @@ describe('LocalAccountTransportService', () => {
       'claude-opus-4-6-thinking',
       'gemini-3.7-flash',
       'gemini-3.8-flash',
+      'gemini-4-argon',
       'gemini-3.1-pro',
     ]);
     expect(accounts[0]?.supportedModelIds).not.toContain('gemini-3.5-flash');
@@ -389,7 +390,157 @@ describe('LocalAccountTransportService', () => {
     expect(await directory.listEligible(subject)).toEqual([]);
     expect(await directory.listDiagnostics?.(subject)).toEqual([{
       code: 'reenrollment-required', transportProviderId: 'codex',
-      message: 'Codex enrollment must be renewed for owner-scoped routing',
+      message: 'Codex enrollment must be renewed for owner-scoped routing;'
+        + ' re-enroll the codex account to restore routing',
+    }]);
+  });
+
+  it('surfaces an expired credential as reauth-required instead of routing silently', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'expired-claude', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'active', modelIds: ['claude-opus-4-7'],
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    const eligible = await directory.listEligible(subject);
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0]).toMatchObject({ readiness: 'reauth-required' });
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code credential expired at 2000-01-01T00:00:00.000Z;'
+        + ' reauthenticate the claude-code account to restore routing',
+    }]);
+  });
+
+  it('refreshes an expired access token with a valid refresh token instead of excluding the account', async () => {
+    const keyring = new InMemoryKeyring();
+    const refresh = vi.fn(async (input: { accountId: string }) => ({
+      accountId: input.accountId, accessToken: 'fresh-access',
+      refreshToken: 'rotated-refresh', expiresAt: '2099-01-01T00:00:00.000Z',
+      authClientConfigVersion: 'v1.0.0',
+    }));
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map([['codex', { refresh } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'refreshable-expired', targetProviderId: 'openai', transportProviderId: 'codex',
+      accessToken: 'stale-access', refreshToken: 'valid-refresh', status: 'active',
+      modelIds: ['gpt-6.1-sol'], expiresAt: '2000-01-01T00:00:00.000Z',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z', ownerScopeRef: 'owner-a',
+    });
+    const generate = vi.fn(async (request) => ({
+      id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-6.1-sol' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+      finishReason: 'stop' as const, providerMetadata: { receivedAuth: request.auth },
+    }));
+    const directory = service.createRouteDirectory({
+      generate,
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const planner = new InMemoryRoutePlanner({ directory });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+
+    // An expired ACCESS token with a live refresh token is not a reauth
+    // condition: acquire() refreshes silently before dispatch.
+    const eligible = await directory.listEligible(subject);
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0]).toMatchObject({ readiness: 'ready' });
+    expect(await directory.listDiagnostics?.(subject)).toEqual([]);
+    expect(await planner.listModels(subject)).toContainEqual({
+      modelId: 'gpt-6.1-sol', providerId: 'openai',
+    });
+
+    const plan = await planner.plan(subject, { requestedModel: 'claude-opus-5-5' });
+    const attempt = await planner.prepareAttempt(
+      subject, plan.planRef, plan.candidateRefs[0]!, 'req-1', 0,
+    );
+    await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      auth: expect.objectContaining({
+        material: expect.objectContaining({ accessToken: 'fresh-access' }),
+      }),
+    }));
+    await attempt.complete();
+  });
+
+  it('should not interpolate an unparseable expiry timestamp into diagnostics', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'weird-expiry', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'reauth_required', modelIds: ['claude-opus-4-7'],
+      expiresAt: 'soon-ish',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code authentication must be renewed;'
+        + ' reauthenticate the claude-code account to restore routing',
+    }]);
+  });
+
+  it('describes a reauth-required credential with a future expiry as renewal, not expired', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'revoked-claude', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'reauth_required', modelIds: ['claude-opus-4-7'],
+      expiresAt: '2100-01-01T00:00:00.000Z',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code authentication must be renewed;'
+        + ' reauthenticate the claude-code account to restore routing',
+    }]);
+  });
+
+  it('emits only the canonical ISO instant for a non-canonical parseable expiry', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'annotated-expiry', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+      accessToken: 'secret-access-token', status: 'active', modelIds: ['claude-opus-4-7'],
+      expiresAt: 'Thu, 01 Jan 1970 00:00:00 GMT (private-note)',
+      enrollmentCompletedAt: '1999-12-31T00:00:00Z',
+      ownerScopeRef: 'owner-a',
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reauth-required', transportProviderId: 'claude-code',
+      message: 'claude-code credential expired at 1970-01-01T00:00:00.000Z;'
+        + ' reauthenticate the claude-code account to restore routing',
     }]);
   });
 
@@ -1017,7 +1168,7 @@ describe('LocalAccountTransportService', () => {
 
   it('lets the standard alias target effort override the request effort', async () => {
     expect(LAUNCH_ALIAS_TARGET_MAPPINGS['claude-opus-5-5'])
-      .toMatchObject({ providerId: 'muse', model: 'muse-spark-1.3-contributor' });
+      .toMatchObject({ providerId: 'muse', model: 'muse-wonder-1.0' });
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
     );
@@ -1133,11 +1284,11 @@ describe('LocalAccountTransportService', () => {
       },
       {
         accountId: 'cloud-account', targetProviderId: 'gemini',
-        transportProviderId: 'cloud-code', modelIds: ['gemini-3.8-flash'],
+        transportProviderId: 'cloud-code', modelIds: ['gemini-4-argon'],
       },
       {
         accountId: 'muse-account', targetProviderId: 'muse',
-        transportProviderId: 'muse', modelIds: ['muse-spark-1.3-contributor'],
+        transportProviderId: 'muse', modelIds: ['muse-wonder-1.0'],
       },
       {
         accountId: 'sol-account', targetProviderId: 'openai',
@@ -1168,5 +1319,52 @@ describe('LocalAccountTransportService', () => {
     for (const diagnostic of plan.diagnostics) {
       expect(diagnostic.actualProviderId).not.toBe('anthropic');
     }
+  });
+
+  it('should keep both accounts visible after enroll A then enroll B', async () => {
+    const keyring = new InMemoryKeyring();
+    const configResolver = { async resolveConfig() { return {}; } };
+    const museProvider = {
+      async complete() {
+        return {
+          accountId: 'acct-muse-1', accessToken: 'muse-token', refreshToken: 'muse-refresh',
+          expiresAt: '2027-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+        };
+      },
+    } as unknown as EnrollmentProvider;
+    const codexProvider = {
+      async start() {
+        return {
+          kind: 'device-code', enrollmentId: 'enr-codex-1',
+          verificationUrl: 'https://auth.openai.com/codex/device', userCode: 'XXXX-1',
+          pollIntervalMs: 1, expiresAt: '2027-01-01T00:00:00.000Z',
+        };
+      },
+      async pollForCompletion() {
+        return {
+          accountId: 'acct-codex-1', label: 'Codex Account', ownerScope: 'owner-a',
+          credential: {
+            accountId: 'acct-codex-1', accessToken: 'codex-token', refreshToken: 'codex-refresh',
+            expiresAt: '2027-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+          },
+        };
+      },
+    } as unknown as EnrollmentProvider;
+
+    const svcA = new LocalAccountTransportService(
+      keyring, new Map([['muse', museProvider]]), configResolver);
+    await svcA.completeMuseImport('enr-muse-1', 'code', 'owner-a');
+
+    const svcB = new LocalAccountTransportService(
+      keyring, new Map([['codex', codexProvider]]), configResolver);
+    const session = await svcB.enroll('codex', {
+      configRef: 'vault://codex', mode: 'cli', redirectUri: 'http://localhost', ownerScope: 'owner-a',
+    });
+    await svcB.pollForCompletion(session.enrollmentId);
+
+    const svcC = new LocalAccountTransportService(keyring, new Map(), configResolver);
+    const accounts = await svcC.listAccounts('owner-a');
+    expect(accounts.map((account) => account.accountId).sort())
+      .toEqual(['acct-codex-1', 'acct-muse-1']);
   });
 });

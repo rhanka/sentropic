@@ -1,8 +1,11 @@
 /**
- * Gateway Hono router — the FROZEN v1 wire surface (spec §3, D7):
+ * Gateway Hono router — the FROZEN v1 wire surface (spec §3, D7, §16.2):
  *   POST /v1/messages            (Anthropic Messages compat)
  *   POST /v1/chat/completions    (OpenAI Chat Completions compat)
+ *   POST /responses              (OpenAI Responses compat, no redirect)
+ *   POST /v1/responses           (OpenAI Responses compat, same handler)
  *   GET  /v1/models              (filtered by caller/pool policy)
+ *   GET  /muse-code/models       (Muse CLI catalog; same filtered list)
  *   GET  /healthz                (liveness — real)
  *   GET  /readyz                 (readiness — real; DB + secret-store + pool)
  *
@@ -16,7 +19,7 @@
  */
 
 import { Hono } from 'hono';
-import type { RoutePlanner } from '@sentropic/llm-mesh';
+import { resolveRequestedTargets, type RoutePlanner } from '@sentropic/llm-mesh';
 
 import type { GatewayConfig } from '../config.js';
 import type { GatewayFlowDeps, MeteringSink, ResolvedTarget, TargetResolver } from '../flow.js';
@@ -37,10 +40,22 @@ import {
   type ProviderShapedError,
 } from './errors.js';
 import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
+import { resolveResponsesLimits, type ResponsesLimits } from '../responses-egress.js';
+import {
+  ensureCheckedGatewayBody, gatewayRequestBodyLimit,
+  type CheckedGatewayBody, type RequestBodyLimitOptions,
+} from '../request-body-limit.js';
 import { authenticateCaller, validateAuthContext } from '../internal/caller-auth.js';
 import type { CallerAuthRequestContext, CallerAuthResult } from '../ports/caller-auth.js';
 import type { GatewayBudgetOptions } from '../ports/budget.js';
 import { assertBudgetRouteDeps } from '../admission.js';
+import { buildNativeResponseHeaders } from '../native-headers.js';
+import { retainGatewayStreamBody } from '../request-body-retention.js';
+import {
+  NativeCountTokensRefusal, NativeCountUpstreamError, runNativeCountTokens,
+  type NativeCountTokensPort,
+} from '../native-count-tokens.js';
+import type { NativeCountTokensRateLimiter } from '../native-count-rate.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -76,6 +91,30 @@ export interface CreateGatewayRouterOptions {
    * and `routeMetering`; construction fails otherwise. Absent: no quote call.
    */
   readonly budget?: GatewayBudgetOptions;
+  /** Trusted construction-time switch; absent hosts rely on capability gates. */
+  readonly nativeMessagesEnabled?: boolean;
+  /**
+   * Host-owned provider count transport (spec §15.2): when present,
+   * `POST /v1/messages/count_tokens` relays the authenticated caller body and
+   * returns the provider count verbatim (real counting, never an estimate).
+   * Absent: explicit provider-shaped refusal — the client falls back to its
+   * own local counting. Trusted injection, never caller-selected.
+   */
+  readonly nativeCountTokens?: NativeCountTokensPort;
+  /** Per-principal count engineering limits; omitted routers share the process-wide limiter. */
+  readonly nativeCountRate?: NativeCountTokensRateLimiter;
+  /**
+   * Responses engineering bounds (spec §16.7). Validated at construction;
+   * each field takes the stricter of the spec default and the host value.
+   * Only the Responses wire enforces them; other wires stay frozen.
+   */
+  readonly responsesLimits?: Partial<ResponsesLimits>;
+  /**
+   * Trusted host body policy (spec §17.4): shared pool, host byte caps and
+   * mount prefix. Absent means the process-wide bounded default; the
+   * resolved Responses maxBodyBytes always bounds the Responses paths.
+   */
+  readonly requestBody?: RequestBodyLimitOptions;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -123,12 +162,15 @@ const FORWARDABLE_PROVIDER_HEADERS: ReadonlySet<string> = new Set([
 const forwardProviderHeaders = (
   c: import('hono').Context,
   headers: ProviderResponseHeaders | undefined,
+  native = false,
 ): void => {
   if (!headers) {
     return;
   }
-  for (const [key, value] of Object.entries(headers)) {
-    if (FORWARDABLE_PROVIDER_HEADERS.has(key.toLowerCase())) {
+  const forwarded = native ? buildNativeResponseHeaders(headers, FORWARDABLE_PROVIDER_HEADERS) : headers;
+  for (const [key, value] of Object.entries(forwarded)) {
+    const name = key.toLowerCase();
+    if (FORWARDABLE_PROVIDER_HEADERS.has(name) || (native && name.startsWith('anthropic-'))) {
       c.header(key, value);
     }
   }
@@ -180,7 +222,17 @@ export const createGatewayRouter = (
   }
   assertBudgetRouteDeps(options.routePlanner, Boolean(options.routeMetering), options.budget);
   const requestId = options.requestId ?? defaultRequestId;
+  // Spec §16.7: invalid host bounds fail fast here, before any route serves.
+  const responsesLimits = resolveResponsesLimits(options.responsesLimits);
+  // Spec §17.4: one checked-body policy for middleware and router; the
+  // resolved Responses cap always bounds the Responses paths.
+  const requestBodyOptions: RequestBodyLimitOptions = {
+    ...options.requestBody,
+    ...(options.requestBody?.responsesLimitBytes === undefined
+      ? { responsesLimitBytes: responsesLimits.maxBodyBytes } : {}),
+  };
   const app = new Hono();
+  app.use('*', gatewayRequestBodyLimit(requestBodyOptions, requestId));
   const authContextFor = (req: Request, id: string): CallerAuthRequestContext => {
     try {
       const context = {
@@ -218,6 +270,7 @@ export const createGatewayRouter = (
         ...(options.routeDispatch ? { dispatch: options.routeDispatch } : {}),
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
         ...(options.budget ? { budget: options.budget } : {}),
+        nativeMessagesEnabled: options.nativeMessagesEnabled,
       }
     : undefined;
 
@@ -229,10 +282,20 @@ export const createGatewayRouter = (
       return sendError(c, notImplemented(wire), id);
     }
 
-    // Parse the provider-native body (bad JSON -> provider-shaped 400, §3b).
-    let body: unknown;
+    // Spec §17.4: the checked owner supplies the sole parsed object; no
+    // second req.json(), clone or merged raw buffer. Malformed, over-cap and
+    // capacity refusals map here (bad JSON keeps the frozen 400; over-cap is
+    // now the numeric 413 on every wire, including both Responses aliases).
+    let owner: CheckedGatewayBody;
     try {
-      body = await c.req.json();
+      owner = await ensureCheckedGatewayBody(c.req.raw, requestBodyOptions);
+    } catch (error) {
+      return sendError(c, toProviderShapedError(wire, error, undefined), id);
+    }
+    let body: unknown;
+    const bodyLease = owner;
+    try {
+      body = bodyLease.body;
     } catch {
       return sendError(c, mapGatewayError(wire, 'bad-request'), id);
     }
@@ -251,19 +314,43 @@ export const createGatewayRouter = (
     } catch (error) {
       return sendError(c, toProviderShapedError(wire, error, model), id);
     }
+    // Spec §16.2: a legacy/scaffold-only router answers an authenticated
+    // OpenAI-shaped 501 for this wire without calling its legacy Chat
+    // Completions dispatch.
+    if (wire === 'openai-responses' && !routeFlowDeps) {
+      try {
+        const auth = await authenticateCaller(config.callerAuth, headers, authContext);
+        if (!auth.ok || !auth.cost) {
+          throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
+        }
+      } catch (error) {
+        return sendError(c, toProviderShapedError(wire, error, model), id);
+      }
+      return sendError(c, notImplemented(wire), id);
+    }
     const flowRequest = {
-      wire, headers, body, model, stream, authContext,
+      wire, headers, body, bodyLease, model, stream, authContext,
       signal: c.req.raw.signal,
+      ...(wire === 'openai-responses' ? { responsesLimits } : {}),
     };
+    body = undefined;
+    bodyLease.trackDetach(() => { flowRequest.body = undefined; });
 
     if (!stream) {
       try {
         const result = routeFlowDeps
           ? await runRouteJsonFlow(routeFlowDeps, flowRequest)
           : await runJsonFlow(flowDeps!, flowRequest);
-        forwardProviderHeaders(c, result.headers); // #4 allowlisted provider headers
+        const native = 'relay' in result && result.relay === 'native';
+        forwardProviderHeaders(c, result.headers, native);
         c.header(REQUEST_ID_HEADER, id);
-        c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
+        if (!native) c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
+        else {
+          c.header('X-Sentropic-Relay', 'native');
+          if ('nativeServedModelId' in result && typeof result.nativeServedModelId === 'string') {
+            c.header(SERVED_HEADER, servedHeaderValue({ ...result.servedTarget, model: result.nativeServedModelId }));
+          }
+        }
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
         return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
@@ -289,11 +376,17 @@ export const createGatewayRouter = (
       return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
     }
 
-    forwardProviderHeaders(c, streamResult.headers); // #4 allowlisted provider headers
+    const streamNative = 'relay' in streamResult && streamResult.relay === 'native';
+    forwardProviderHeaders(c, streamResult.headers, streamNative);
+    streamResult = { ...streamResult,
+      stream: retainGatewayStreamBody(streamResult.stream, bodyLease, cancellation.signal) };
     c.header('Content-Type', SSE_CONTENT_TYPE);
     c.header('Cache-Control', 'no-cache');
     c.header(REQUEST_ID_HEADER, id);
-    c.header(SERVED_HEADER, servedHeaderValue(streamResult.servedTarget));
+    if (streamNative) {
+      c.header('X-Sentropic-Relay', 'native');
+      c.header('X-Accel-Buffering', 'no');
+    } else c.header(SERVED_HEADER, servedHeaderValue(streamResult.servedTarget));
     // B3: relay provider frames VERBATIM. The gateway synthesizes NO terminator —
     // a real OpenAI transport emits its own `[DONE]`; Anthropic uses message_stop.
     // On a mid-stream error the stream simply ends (no synthetic [DONE]).
@@ -306,7 +399,7 @@ export const createGatewayRouter = (
             const next = await streamResult.stream.next();
             if (closed) return;
             if (next.done) { closed = true; detach(); controller.close(); }
-            else controller.enqueue(new TextEncoder().encode(next.value.raw));
+            else controller.enqueue('bytes' in next.value ? next.value.bytes : new TextEncoder().encode(next.value.raw));
           } catch (error) {
             if (!closed) { closed = true; detach(); controller.error(error); }
           }
@@ -324,11 +417,19 @@ export const createGatewayRouter = (
   // --- Provider-compat wire (FROZEN v1 surface) ---
   app.post('/v1/messages', handle('anthropic-messages'));
   app.post('/v1/chat/completions', handle('openai-chat-completions'));
+  // Responses ingress (spec §16.2): one routed handler on both aliases, no
+  // redirects. Caller admission, quota, budget and cancellation match the
+  // Messages/Chat flow; the wire only selects the normalizer and encoders.
+  app.post('/responses', handle('openai-responses'));
+  app.post('/v1/responses', handle('openai-responses'));
 
-  app.get('/v1/models', async (c) => {
+  // Caller-filtered model catalog (spec §3), shared by GET /v1/models and
+  // GET /muse-code/models. The Muse CLI joins `/muse-code/models` to its
+  // configured base URL; pointed at the gateway origin it gets the same
+  // OpenAI-list shape as /v1/models. Caller-auth gates the catalog: an
+  // unauthenticated caller gets a provider-shaped 401, never the pool.
+  const handleListModels = async (c: import('hono').Context) => {
     const id = requestId();
-    // Filtered by caller/pool policy (spec §3). Caller-auth gates the catalog:
-    // an unauthenticated caller gets a provider-shaped 401, never the pool.
     let auth: CallerAuthResult;
     try {
       auth = await authenticateCaller(
@@ -356,6 +457,107 @@ export const createGatewayRouter = (
         ? { id: m.modelId, object: 'model', owned_by: m.providerId }
         : { id: m.id, object: 'model', owned_by: m.ownedBy })),
     });
+  };
+
+  app.get('/v1/models', handleListModels);
+  app.get('/muse-code/models', handleListModels);
+
+  // Token counting (spec §15.2, Claude Code). The gateway relays the
+  // authenticated, recognized request to the host-owned NativeCountTokensPort
+  // and returns the provider count verbatim — real provider counting, never
+  // an estimate (an estimate would corrupt Anthropic cache accounting).
+  // Malformed bodies and missing models get a provider-shaped 400 before
+  // authentication; authenticated callers get the frozen unknown-model 404
+  // only for unrecognized IDs. Without a port the route keeps an explicit
+  // provider-shaped refusal (the client falls back to its own local
+  // counting). Authentication always precedes account/pool access. The
+  // gateway itself takes no lease and meters nothing on any count path; the
+  // host port may acquire an advisory account lease whose outcome never
+  // degrades the account (spec §15.2).
+  app.post('/v1/messages/count_tokens', async (c) => {
+    const id = requestId();
+    if (!routeFlowDeps && !flowDeps) {
+      return sendError(c, notImplemented('anthropic-messages'), id);
+    }
+    // Count reads through the same checked owner (no second parse) and
+    // skips every financial hook below; malformed/refused bodies release.
+    let countOwner: CheckedGatewayBody;
+    try {
+      countOwner = await ensureCheckedGatewayBody(c.req.raw, requestBodyOptions);
+    } catch (error) {
+      return sendError(c, toProviderShapedError('anthropic-messages', error, undefined), id);
+    }
+    const body = countOwner.body;
+    const model = readModel(body);
+    if (!model) {
+      return sendError(c, mapGatewayError('anthropic-messages', 'bad-request'), id);
+    }
+    let auth: CallerAuthResult;
+    try {
+      auth = await authenticateCaller(
+        config.callerAuth, readHeaders(c.req.raw.headers), authContextFor(c.req.raw, id),
+      );
+    } catch (error) {
+      return sendError(c, toProviderShapedError('anthropic-messages', error), id);
+    }
+    if (!auth.ok || !auth.cost) {
+      return sendError(
+        c,
+        mapGatewayError('anthropic-messages', 'caller-auth-failed'),
+        id,
+      );
+    }
+    if (config.mode === 'cross-user-pool' && !config.crossUserPoolEnabled) {
+      return sendError(
+        c,
+        mapGatewayError('anthropic-messages', 'cross-user-disabled'),
+        id,
+      );
+    }
+    if (flowDeps) {
+      if (!flowDeps.resolveTarget(model)) {
+        return sendError(
+          c,
+          toProviderShapedError(
+            'anthropic-messages', new GatewayError('unknown-model', 'unknown model'), model,
+          ),
+          id,
+        );
+      }
+    } else if (routeFlowDeps) {
+      // Account-independent catalog/alias recognition: the executable
+      // inventory only lists ready accounts, so an empty or unready pool
+      // must not turn a known model into an unknown-model 404. This is the
+      // same recognition the planner inference path starts from.
+      const resolution = resolveRequestedTargets({ requestedModel: model });
+      if (resolution.kind === 'unknown-model') {
+        return sendError(
+          c,
+          toProviderShapedError(
+            'anthropic-messages', new GatewayError('unknown-model', 'unknown model'), model,
+          ),
+          id,
+        );
+      }
+    }
+    try {
+      const result = await runNativeCountTokens({
+        port: options.nativeCountTokens,
+        rate: options.nativeCountRate,
+      }, {
+        cost: auth.cost, body, headers: readHeaders(c.req.raw.headers),
+        signal: c.req.raw.signal, requestId: id,
+      });
+      forwardProviderHeaders(c, result.headers, true);
+      c.header(REQUEST_ID_HEADER, id);
+      c.header('X-Sentropic-Relay', 'native');
+      return c.json(result.body as object, 200);
+    } catch (error) {
+      if (error instanceof NativeCountTokensRefusal || error instanceof NativeCountUpstreamError) {
+        return sendError(c, error.response, id);
+      }
+      return sendError(c, toProviderShapedError('anthropic-messages', error, model), id);
+    }
   });
 
   return app;

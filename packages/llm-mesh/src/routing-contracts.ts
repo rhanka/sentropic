@@ -1,5 +1,11 @@
 import type { CapabilityRequirement } from './equivalence-council.js';
+import type { ExecutionFeature } from './execution-features.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
+import type {
+  NativeMessagesAdvertisement,
+  NativeUsagePricing,
+  PreparedNativeMessages,
+} from './native-messages.js';
 import type { RoutePolicy, RouteSelector } from './routing-policy.js';
 import type { TargetMapping } from './routing-targets.js';
 
@@ -18,6 +24,15 @@ export interface EligibleAccountDescriptor {
   readonly enrollmentCompletedAt: string;
   readonly readiness: 'ready' | 'cooldown' | 'reauth-required' | 'disabled';
   readonly revision: string;
+  /**
+   * Trusted runtime execution-feature declaration for this account (spec
+   * §16.3): only controls the serving adapter actually forwards. Absent
+   * means the mesh-known transport table applies; unknown support is not
+   * support. Populated by the account directory from runtime declarations.
+   */
+  readonly supportedExecutionFeatures?: readonly ExecutionFeature[];
+  /** Credential-free native advertisement; executable closures stay host-side. */
+  readonly nativeMessages?: NativeMessagesAdvertisement;
 }
 
 export interface RouteAvailabilityDiagnostic {
@@ -41,11 +56,20 @@ export interface RoutePlanInput {
   readonly targetCandidatesOverride?: readonly TargetMapping[];
   readonly intent?: 'coding' | 'general' | 'reasoning' | 'fast';
   readonly requiredCapabilities?: readonly CapabilityRequirement[];
+  /**
+   * Finer-than-capability execution requirements (spec §16.3), derived by
+   * the gateway from validated input — never a caller-supplied feature
+   * list. Filters actual model/transport pairs in planning and quoting,
+   * before acquisition; unknown support is not support.
+   */
+  readonly requiredExecutionFeatures?: readonly ExecutionFeature[];
   readonly affinityKey?: string;
   readonly workspaceId?: string;
   readonly policyProfile?: string;
   readonly policyOverride?: Partial<RoutePolicy>;
   readonly explicit?: RouteSelector;
+  /** Required native execution; composes conjunctively with execution features. */
+  readonly nativeMessages?: true;
   /** Pins the plan to a previously issued quote: no unquoted target, no larger attempt count. */
   readonly quote?: RouteQuote;
 }
@@ -65,7 +89,8 @@ export interface RouteUsageCeiling {
 }
 
 export type RouteQuoteInput = Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'intent'
-  | 'requiredCapabilities' | 'policyProfile' | 'policyOverride' | 'explicit'>
+  | 'requiredCapabilities' | 'requiredExecutionFeatures' | 'policyProfile' | 'policyOverride' | 'explicit'
+  | 'nativeMessages'>
   & { readonly ceiling: RouteUsageCeiling; readonly now: Date };
 
 export interface QuotedRouteCandidate {
@@ -100,6 +125,7 @@ export interface RouteQuote {
 export type RouteQuoteErrorCode =
   | 'unknown-model'
   | 'capabilities-unmet'
+  | 'native-unavailable'
   | 'invalid-ceiling'
   | 'too-many-candidates';
 
@@ -145,9 +171,21 @@ export interface RouteFailureClassification {
   readonly retryable: boolean;
   readonly retryAfterMs?: number;
   readonly healthScope: 'route' | 'account' | 'transport' | 'provider-model';
+  /**
+   * True when the upstream produced output before failing (locally observed
+   * stream commitment). A committed failure must never be retried implicitly
+   * (duplicate dispatch risk); an uncommitted failure failed before any
+   * locally observed upstream output and degrades as an availability policy.
+   * Commitment is local observation only — it cannot prove the provider did
+   * not execute. Stamped by the local attempt wrapper; the public
+   * `recordOutcome` type also accepts the property and the wrapper forwards
+   * caller-supplied classifications.
+   */
+  readonly committed?: boolean;
 }
 
-export interface RouteAttemptUsage {
+/** Physical attempt counts; optional native pricing evidence is trusted observer data. */
+export interface RouteAttemptUsage extends NativeUsagePricing {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly estimated: boolean;
@@ -155,6 +193,7 @@ export interface RouteAttemptUsage {
 
 export interface PreparedRouteAttempt {
   readonly attemptRef: string;
+  readonly nativeMessages?: PreparedNativeMessages;
   generate(request: GenerateRequest): Promise<GenerateResponse>;
   stream(request: StreamRequest): Promise<StreamResult>;
   recordOutcome(classification: RouteFailureClassification, usage?: RouteAttemptUsage): Promise<void>;
@@ -212,6 +251,15 @@ export interface RoutePlanner {
   plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan>;
   /** Pure, synchronous candidate and usage bounds; never touches accounts. */
   quote?(input: RouteQuoteInput): RouteQuote;
+  /**
+   * Read-only per-transport availability for a requested model (Lot 7):
+   * the transport-matching `listDiagnostics` entries, no planning side
+   * effects. Optional so hand-rolled planners keep compiling.
+   */
+  describeAvailability?(
+    subject: VerifiedRoutingSubject,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+  ): Promise<readonly RouteAvailabilityDiagnostic[]>;
   prepareAttempt(
     subject: VerifiedRoutingSubject,
     planRef: string,

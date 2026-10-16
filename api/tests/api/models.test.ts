@@ -64,6 +64,7 @@ describe('llm-mesh model projections', () => {
       'gemini-3.5-flash',
       'gemini-3.7-flash',
       'gemini-3.8-flash',
+      'gemini-4-argon',
     ]);
     expect(modelsByProvider('anthropic')).toEqual([
       'claude-fable-5',
@@ -75,6 +76,7 @@ describe('llm-mesh model projections', () => {
     expect(modelsByProvider('mistral')).toEqual([
       'magistral-medium-2509',
       'mistral-large-4',
+      'mistral-medium-3.5',
       'mistral-small-2603',
       'zai-glm-5-3',
     ]);
@@ -88,8 +90,10 @@ describe('llm-mesh model projections', () => {
     expect(modelsByProvider('muse')).toEqual([
       'muse-spark-1.3',
       'muse-spark-1.3-contributor',
+      'muse-wonder-1.0',
+      'muse-wonder-full-1.0',
     ]);
-    expect(data.models).toHaveLength(31);
+    expect(data.models).toHaveLength(35);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');

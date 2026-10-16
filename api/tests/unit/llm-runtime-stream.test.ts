@@ -1470,12 +1470,14 @@ function addSharedNormalizerFixture(
 
 addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-large-4', 'Mistral Large 4');
+addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-medium-3.5', 'Mistral Medium 3.5');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'zai-glm-5-3', 'GLM 5.3 (Mistral)');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Astra');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-sol', 'GPT-6 Sol');
 addTransportEquivalentFixture('openai', 'gpt-6-sol', 'gpt-6.1-sol', 'GPT-6.1 Sol');
 addTransportEquivalentFixture('openai', 'gpt-5.6-luna', 'gpt-6-luna', 'GPT-6 Luna');
 addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 'Gemini 3.8 Flash');
+addTransportEquivalentFixture('gemini', 'gemini-3.8-flash', 'gemini-4-argon', 'Gemini 4 Argon');
 // Meta Muse (S4): callLLMStream falls through to the OpenAI Responses
 // normalization path for `muse`, and mesh-dispatch delegates to the registry
 // provider (spy-interposable like every other row). Clone the reasoning-model
@@ -1483,6 +1485,8 @@ addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 
 // [GAP] live Muse SSE chunk shape unverified — these rows pin the normalizer.
 addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-spark-1.3', 'Muse Spark 1.3');
 addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-spark-1.3-contributor', 'Muse Spark 1.3 Contributor');
+addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-wonder-1.0', 'Muse Wonder');
+addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-wonder-full-1.0', 'Muse Wonder Full');
 
 // ---------------------------------------------------------------------------
 // Additional Cohere-specific tests that don't fit the matrix pattern

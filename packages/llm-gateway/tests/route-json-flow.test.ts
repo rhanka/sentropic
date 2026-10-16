@@ -1,8 +1,9 @@
-import { RoutePlanError, type PreparedRouteAttempt, type RoutePlanner } from '@sentropic/llm-mesh';
+import { InMemoryRoutePlanner, NativeMessagesUpstreamError, RoutePlanError, type PreparedRouteAttempt, type RoutePlanner } from '@sentropic/llm-mesh';
+import { nativeHarness, sendNative } from './fixtures/native-flow.js';
 import { describe, expect, it, vi } from 'vitest';
 import { runRouteJsonFlow } from '../src/route-json-flow.js';
 import { RouteAttemptDispatch } from '../src/route-attempt-dispatch.js';
-import { toProviderShapedError } from '../src/index.js';
+import { CheckedGatewayBody, GatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import {
@@ -32,6 +33,13 @@ const config = {
   } },
 };
 
+const responsesRequest = {
+  ...request,
+  wire: 'openai-responses' as const,
+  authContext: { method: "POST", url: "https://gateway.test/responses", requestId: "req-test" },
+  body: { model: 'gpt-5.6-terra', input: 'what time is it' },
+};
+
 const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
   async plan() {
     return {
@@ -53,6 +61,96 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
   promoteAffinity() { throw new Error('unused'); },
   rebindAffinity() { throw new Error('unused'); },
   resetAffinity() { return false; },
+});
+
+describe('native route JSON flow', () => {
+  it('omits unverified served identity on an untyped native reader/transport failure', async () => {
+    const h = nativeHarness({ execute: async () => { throw new TypeError('private transport failure'); } });
+    const response = await sendNative(h);
+    expect(response.status).toBe(503); expect(response.headers.get('x-sentropic-served')).toBeNull();
+    expect(response.headers.get('x-sentropic-relay')).toBeNull();
+  });
+  it('forwards native response headers with credential/Connection exclusions and gateway authority last', async () => {
+    const h = nativeHarness({ execute: async () => ({ kind: 'json', status: 200,
+      headers: { 'anthropic-future': 'kept', 'anthropic-organization-id': 'org', 'request-id': 'provider',
+        'anthropic-api-key': 'secret', connection: 'Anthropic-Drop', 'Anthropic-Drop': 'hidden',
+        'set-cookie': 'secret', 'x-sentropic-relay': 'spoof', 'x-sentropic-request-id': 'spoof',
+        'x-sentropic-served': 'spoof', 'content-length': '999', 'other': 'hidden' }, body: { model: 'claude-opus-5' } }) });
+    const response = await sendNative(h);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('anthropic-future')).toBe('kept');
+    expect(response.headers.get('anthropic-organization-id')).toBe('org');
+    expect(response.headers.get('x-sentropic-request-id')).toBe('req-native');
+    expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    expect(response.headers.get('x-sentropic-served')).toContain('model=claude-opus-5');
+    for (const name of ['anthropic-api-key', 'anthropic-drop', 'set-cookie', 'other', 'content-length']) {
+      expect(response.headers.get(name)).toBeNull();
+    }
+  });
+  it.each([{ model: undefined }, { model: 'invalid model' },
+    { model: 'claude-sonnet-5', usage: { iterations: [{}] } },
+    { model: 'claude-sonnet-5', content: [{ type: 'fallback' }] }])(
+    'omits served certification for unverified or segmented JSON: %j', async body => {
+      const h = nativeHarness({ execute: async () => ({ kind: 'json', status: 200, headers: {}, body }) });
+      const response = await sendNative(h);
+      expect(response.headers.get('x-sentropic-served')).toBeNull();
+      expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    });
+  it('never forwards native upstream headers or a relay marker on refusal', async () => {
+    const h = nativeHarness({ execute: async () => { throw new NativeMessagesUpstreamError({ status: 400 }); } });
+    const response = await sendNative(h);
+    expect(response.status).toBe(400);
+    expect(response.headers.get('x-sentropic-relay')).toBeNull();
+    expect(response.headers.get('x-sentropic-served')).toBeNull();
+  });
+  it('relays all JSON fields and shallow body identity through the default native delegator', async () => {
+    const nested = { opaque: ['unchanged'] };
+    const h = nativeHarness({ body: { future: nested } });
+    const result = await runRouteJsonFlow({ ...h.deps, dispatch: { generate: vi.fn(), stream: vi.fn() } }, h.request);
+    expect(result).toMatchObject({ relay: 'native', nativeServedModelId: h.model,
+      body: { safeguard_results: { future: ['kept'] } } });
+    expect(result.body).toBe((await h.execute.mock.results[0]!.value).body);
+    const sent = h.execute.mock.calls[0]![0]!;
+    expect(sent.body.future).toBe(nested);
+    expect(sent).toMatchObject({ stream: false, requestId: 'req-native', headers: { anthropicVersion: '2023-06-01' } });
+    expect(sent.finalize).toBe(h.finalize);
+    expect(h.finalize).toHaveBeenCalledExactlyOnceWith(h.snapshots[0]);
+    expect(h.snapshots[0]).toMatchObject({ inputTokens: 2, outputTokens: 3, estimated: false, termination: 'completed' });
+    expect(h.recorder.settlements[0]!.attempts[0]!.usage).toMatchObject({ inputTokens: 2, outputTokens: 3, estimated: false });
+    expect(h.attempt.complete).toHaveBeenCalledTimes(1);
+  });
+  it.each(['unsupported-version', 'missing-capability'] as const)('falls back only before optional invocation: %s', async cause => {
+    const h = nativeHarness();
+    const { safeguards: _omitted, ...body } = h.request.body;
+    if (cause === 'missing-capability') h.attempt.nativeMessages = undefined as never;
+    h.attempt.generate = vi.fn(async () => ({ id: 'r', text: 'canonical', toolCalls: [],
+      finishReason: 'stop', providerId: 'anthropic', modelId: h.model,
+      message: { role: 'assistant', content: 'canonical' } })) as PreparedRouteAttempt['generate'];
+    const result = await runRouteJsonFlow(h.deps, { ...h.request, body,
+      headers: { 'anthropic-beta': '', 'anthropic-version': cause === 'unsupported-version' ? 'unknown' : '2023-06-01' } });
+    expect(result.relay).toBeUndefined();
+    expect(h.execute).not.toHaveBeenCalled(); expect(h.finalize).not.toHaveBeenCalled();
+    expect(h.attempt.generate).toHaveBeenCalledTimes(1);
+  });
+  it.each([null, { kind: 'stream', status: 200, body: {}, headers: {} },
+    { kind: 'json', status: 201, body: {}, headers: {} }, { kind: 'json', status: 200, body: [], headers: {} }])(
+    'rejects malformed contracts terminally with one finalize and settlement', async value => {
+      const h = nativeHarness({ execute: async () => value as never });
+      await expect(runRouteJsonFlow(h.deps, h.request)).rejects.toMatchObject({ code: 'native_protocol_error' });
+      expect(h.execute).toHaveBeenCalledTimes(1); expect(h.finalize).toHaveBeenCalledTimes(1);
+      expect(h.attempt.recordOutcome).toHaveBeenCalledTimes(1); expect(h.recorder.settlements).toHaveLength(1);
+      expect(h.snapshots[0]).toMatchObject({ termination: 'protocol_error', estimated: true });
+    });
+  it('preserves native validation refusal despite rejecting operational and settlement callbacks', async () => {
+    const error = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error',
+      validation: { type: 'invalid_request_error', message: 'future_field: invalid value' } });
+    const h = nativeHarness({ execute: async () => { throw error; } });
+    h.attempt.recordOutcome.mockRejectedValue(Error('callback'));
+    h.deps.metering = { settleRoute: vi.fn(async () => { throw Error('sink'); }) };
+    await expect(runRouteJsonFlow(h.deps, h.request)).rejects.toBe(error);
+    expect(toProviderShapedError('anthropic-messages', error).body).toMatchObject({ error: { message: 'future_field: invalid value' } });
+    expect(h.finalize).toHaveBeenCalledTimes(1); expect(h.deps.metering.settleRoute).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('route JSON flow', () => {
@@ -502,6 +600,48 @@ describe('route JSON flow with budget admission', () => {
     expect(hooks).toEqual(['cancelled']);
     expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'release:hold-1', 'settle']);
   });
+  it('serves Responses JSON with the response envelope and settles once', async () => {
+    const source = { generate: vi.fn(async () => ({
+      id: 'resp_9', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'morning' }, text: 'morning',
+      toolCalls: [{
+        toolCallId: 'c1', providerCallId: 'call_1', name: 'get_time', argumentsText: '{}',
+      }],
+      finishReason: 'tool_calls' as const,
+      usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+    })), complete: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn();
+    const result = await runRouteJsonFlow(
+      { config, routePlanner: routePlanner([source]), metering: { settleRoute } }, responsesRequest,
+    );
+    expect(result.body).toMatchObject({
+      id: 'resp_9', object: 'response', model: 'gpt-5.6-terra', status: 'completed',
+      output: [
+        { type: 'message', id: 'msg_0' },
+        { type: 'function_call', id: 'fc_0', call_id: 'call_1' },
+      ],
+      usage: { total_tokens: 6 },
+    });
+    expect(result.body).not.toHaveProperty('choices');
+    expect(result.servedTarget).toMatchObject({ model: 'gpt-5.6-terra' });
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
+    expect(source.complete).toHaveBeenCalledTimes(1);
+  });
+  it('settles an encoding overflow once with a single lease outcome', async () => {
+    const big = 'x'.repeat(8_388_609);
+    const source = { generate: vi.fn(async () => ({
+      id: 'resp_big', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: big }, text: big,
+      toolCalls: [], finishReason: 'stop' as const,
+    })), complete: vi.fn(), recordOutcome: vi.fn() } as unknown as PreparedRouteAttempt;
+    const settleRoute = vi.fn();
+    await expect(runRouteJsonFlow(
+      { config, routePlanner: routePlanner([source]), metering: { settleRoute } }, responsesRequest,
+    )).rejects.toThrow();
+    expect(source.recordOutcome).toHaveBeenCalledTimes(1);
+    expect(source.complete).not.toHaveBeenCalled();
+    expect(settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed' }));
+  });
   it('never redispatches after a settlement sink failure', async () => {
     const generate = vi.fn(textResponse({ inputTokens: 1, outputTokens: 1 }));
     const { planner } = quotingPlanner([jsonAttempt(generate), jsonAttempt(generate)]);
@@ -511,5 +651,59 @@ describe('route JSON flow with budget admission', () => {
       .rejects.toThrow('ledger down');
     expect(generate).toHaveBeenCalledTimes(1);
     expect(recorder.events).toEqual(['admit', 'mark:hold-1:0', 'settle']);
+  });
+});
+
+describe('route JSON flow with a real planner (Lot 7)', () => {
+  it('should surface an expired credential in the no-route 503 body', async () => {
+    const expiredCodex = {
+      code: 'reauth-required' as const, transportProviderId: 'codex',
+      message: 'codex credential expired at 2026-10-11T01:25:00.000Z;'
+        + ' reauthenticate the codex account to restore routing',
+    };
+    const directory = {
+      async listEligible() { return []; },
+      async listDiagnostics() { return [expiredCodex]; },
+      async prepareAttempt(): Promise<never> { throw new Error('unused'); },
+    };
+    const realPlanner = new InMemoryRoutePlanner({ directory });
+    const settleRoute = vi.fn();
+    const error = await runRouteJsonFlow(
+      { config, routePlanner: realPlanner, metering: { settleRoute } }, request,
+    ).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect(error).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
+    const mapped = toProviderShapedError('openai-chat-completions', error, 'gpt-5.6-terra');
+    expect(mapped.status).toBe(503);
+    expect(mapped.headers).toEqual({ 'X-Sentropic-Route-Action': 'reauthenticate-codex' });
+    const body = JSON.stringify(mapped.body);
+    expect(body).toContain('codex');
+    expect(body).toContain('expired at 2026-10-11T01:25:00.000Z');
+    expect(body).toContain('reauthenticate the codex account');
+    expect(settleRoute).toHaveBeenCalledOnce();
+  });
+
+  it('detaches the checked owner on JSON success and scrubs the retry projection', async () => {
+    const hooks: string[] = [];
+    const { planner } = quotingPlanner([jsonAttempt(textResponse(), hooks)]);
+    const recorder = recordingBudget();
+    const pool = new GatewayBodyBytePool(256);
+    const lease = pool.acquire(); lease.extend(10);
+    const owner = new CheckedGatewayBody({ model: 'gpt-5.6-terra' }, 10, lease);
+    const result = await runRouteJsonFlow(
+      { config: budgetConfig, routePlanner: planner, metering: recorder.metering, budget: recorder.options },
+      { ...request, body: { ...request.body, max_tokens: 64 }, bodyLease: owner },
+    );
+    expect(result.body).toMatchObject({ choices: [{ message: { content: 'answer' } }] });
+    // Success detaches (drops references, returns bytes); the terminal
+    // release stays with the middleware/transfer owner (N05/N22).
+    expect(owner.body).toBeUndefined();
+    expect(owner.retainedHolders).toBe(0);
+    expect(owner.lease.bytes).toBe(0);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, acquisitions: 1 });
+    owner.release();
+    expect(pool.stats).toMatchObject({ liveLeases: 0, releases: 1 });
   });
 });

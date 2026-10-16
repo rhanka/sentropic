@@ -11,8 +11,14 @@
  * separate RouteAttemptDispatchPort below, without provider credentials.
  */
 
-import type { SecretAuthMaterial } from '@sentropic/llm-mesh';
+import type { RequestSizeDetail, SecretAuthMaterial } from '@sentropic/llm-mesh';
 import type { GenerateResponse, PreparedRouteAttempt, StreamRequest, StreamResult } from '@sentropic/llm-mesh';
+import type { NativeMessagesRequest, NativeMessagesResult, PreparedNativeMessages } from '@sentropic/llm-mesh';
+
+export interface NativeAttemptDispatchRequest {
+  readonly capability: PreparedNativeMessages;
+  readonly request: NativeMessagesRequest;
+}
 
 export interface RouteAttemptDispatchRequest {
   readonly attempt: Pick<PreparedRouteAttempt, 'generate' | 'stream'>;
@@ -21,9 +27,10 @@ export interface RouteAttemptDispatchRequest {
 export interface RouteAttemptDispatchPort {
   generate(input: RouteAttemptDispatchRequest): Promise<GenerateResponse>;
   stream(input: RouteAttemptDispatchRequest): Promise<StreamResult>;
+  nativeMessages?(input: NativeAttemptDispatchRequest): Promise<NativeMessagesResult>;
 }
 
-export type GatewayWire = 'anthropic-messages' | 'openai-chat-completions';
+export type GatewayWire = 'anthropic-messages' | 'openai-chat-completions' | 'openai-responses';
 
 /**
  * One dispatch unit: the provider-native body passed through verbatim (spec
@@ -60,6 +67,8 @@ export interface GatewayDispatchResponse {
   readonly body: unknown;
   /** Provider response headers (lowercased). The router forwards the allowlist (#4). */
   readonly headers?: ProviderResponseHeaders;
+  /** Trusted measured size evidence; terminal 413 survives callback wrapping. */
+  readonly requestSize?: RequestSizeDetail;
 }
 
 /** Provider-native SSE event, framed by wire (Anthropic event/data; OpenAI data + [DONE]). */
