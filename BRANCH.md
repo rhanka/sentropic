@@ -137,7 +137,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [ ] M5: strict canonical-json aligned with `sentropic-json-v1` (reject undefined/non-finite/non-plain/cycles); reject Infinity in validator; golden hex digests
   - [ ] M6: one discriminating test per diagnostic code (values otherwise schema-valid, assert `code`+`path`); strengthening-overlay accepted; requiredScopes exposed; nested arrays; null overlays
   - [ ] M6: determinism test permuting snapshot key order, binding order, manifest tool order plus JSON round trip, with frozen reference digest
-  - [ ] m1: unsupported schema keywords rejected (pattern, const, exclusiveMinimum/Maximum, multipleOf, format, oneOf, uniqueItems); test
+  - [x] m1: unsupported schema keywords rejected (pattern, const, exclusiveMinimum/Maximum, multipleOf, format, oneOf, uniqueItems); test
   - [ ] m2: SQL heuristic tightened (leader + structure, `Select a city` passes); executable values cover wss/javascript/protocol-relative/node/JWT; both-direction tests
   - [ ] m3: unknown keys rejected (snapshot, binding, overlay, gates); providerVersion/platformVersion/connectorId validated (providerVersion equals manifest.version); duplicate manifest tool names rejected; handler table key/handlerId mismatch rejected
   - [ ] m4: deep clone before freeze; caller manifest/snapshot never frozen; test
