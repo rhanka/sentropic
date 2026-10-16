@@ -27,6 +27,7 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - `packages/auth-hono/tests/token-exchange-security.test.ts`
   - `packages/auth-hono/tests/__fixtures__/memory-oauth-state-store.ts`
   - `packages/auth-hono/tests/__fixtures__/oauth-fixtures.ts`
+  - `packages/auth-hono/tests/__fixtures__/token-exchange-fixtures.ts`
   - `packages/auth-hono/package.json`
   - `packages/auth-hono/README.md`
   - `api/src/routes/auth/oauth.ts`
