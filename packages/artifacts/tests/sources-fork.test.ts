@@ -83,8 +83,8 @@ describe('private forks', () => {
     const { store, service, parent } = makeFork();
     const fork = await service.fork({ actorId: 'reader-1', artifactId: parent });
     await service.setState(parent, 'deleted');
-    expect(store.get(fork.artifactId)?.state).toBe('active');
+    expect((await store.get(fork.artifactId))?.state).toBe('active');
     await expect(service.fork({ actorId: 'reader-1', artifactId: parent })).rejects.toThrow();
-    expect(store.get(parent)?.state).toBe('deleted');
+    expect((await store.get(parent))?.state).toBe('deleted');
   });
 });
