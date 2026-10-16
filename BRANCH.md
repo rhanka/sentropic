@@ -44,7 +44,7 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
 ## Feedback Loop
 - `attention` CISEAT-EX3 reserved: owner-machine native Node helper for L1 local inspect and L3 re-enroll; rationale macOS Keychain, Windows Credential Manager, Linux session D-Bus; rollback disable helper targets and retire disposable lab profile; no L0a host execution under this exception.
 - `attention` CISEAT-EX4 declared: same-PR downstream version-pin sync outside exhaustive L0a paths; reason spec-mandated mesh bump 0.25.0 to 0.25.1 breaks two cluster-mesh assertions pinning installedVersion 0.25.0 and CI cannot go green without sync; impact two lines in packages/cluster-mesh/tests/integrations/llm-surface.spec.ts and gateway-surface.spec.ts, no behavior change; rollback revert the two lines.
-- `blocked` CI lazy-package gate: validate-cluster-mesh fails at Qualify packed Cluster Mesh after the EX4 sync; evidence run 38851017045 job 116812116205, check-lock-integrity siblings mode, lock pins 0.25.0 sibling is 0.25.1 against tests/packaging/fixtures/selected/package-lock.json; options refresh the selected fixture to unpublished 0.25.1 or route the bump through the release train, both outside exhaustive L0a paths; recommendation maintainer decision required, L0a lot gates stay green and this branch stops here.
+- `acknowledge` CI lazy-package gate resolved: EX5 fixture refresh fixed the siblings check, run 38863986528 success with zero non-passing checks; no publishing was required.
 - `attention` CISEAT-EX5 declared: refresh the cluster-mesh selected fixture to sibling llm-mesh 0.25.1; rationale conductor authorization plus precedent ed4c298bf and a931e248e, siblings check needs exact version, registry URL and packed integrity, no publishing required; impact packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json llm-mesh entry only; rollback revert the entry to 0.25.0.
 
 ## AI Flaky tests
@@ -100,6 +100,6 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] Typecheck and Lint for llm-mesh package.
   - [x] Retest llm-mesh package gate.
   - [x] Bumped packages/llm-mesh/package.json version 0.25.1, matching package-lock.json.
-  - [ ] Final gate step 1: create DRAFT PR using BRANCH.md text as PR body.
-  - [ ] Final gate step 2: run and verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Stop at end of L0a: never merge, never publish.
+  - [x] Final gate step 1: create DRAFT PR using BRANCH.md text as PR body.
+  - [x] Final gate step 2: run and verify branch CI on that PR and resolve remaining blockers.
+  - [x] Stop at end of L0a: never merge, never publish.
