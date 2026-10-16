@@ -32,6 +32,10 @@
     "./tool-configuration": {
       "types": "./dist/tool-configuration.d.ts",
       "import": "./dist/tool-configuration.js"
+    },
+    "./registry": {
+      "types": "./dist/registry.d.ts",
+      "import": "./dist/registry.js"
     }
   },
   "typesVersions": {
@@ -47,6 +51,9 @@
       ],
       "tool-configuration": [
         "./dist/tool-configuration.d.ts"
+      ],
+      "registry": [
+        "./dist/registry.d.ts"
       ]
     }
   },
