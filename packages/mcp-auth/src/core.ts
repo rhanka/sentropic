@@ -151,13 +151,16 @@ export const createMcpAuth = (config: McpAuthConfig): McpAuth => {
     const { scheme, token } = parseAuthorization(req.headers.get('authorization'));
 
     let claims: AccessTokenClaims;
+    // Do NOT forward requiredScopes: the verifier maps a missing scope to a
+    // 401 invalid_token, which would shadow the documented 403
+    // insufficient_scope below. Scope enforcement lives in the local
+    // re-assertion so callers always get the RFC 6750 status.
     try {
       claims = await verifyAccessToken({
         token,
         keySource: getKeySource(),
         issuer: authorizationServers,
         audience: resource,
-        requiredScopes: opts?.requiredScopes,
       });
     } catch (error) {
       if (error instanceof TokenVerifyError) {
@@ -167,8 +170,8 @@ export const createMcpAuth = (config: McpAuthConfig): McpAuth => {
     }
 
     const scopes = parseScopes(claims.scope);
-    // Re-assert scopes locally so callers get a 403 (insufficient_scope) challenge with the
-    // missing scopes echoed, independent of how oauth-verify surfaced requiredScopes.
+    // Sole scope enforcer: missing scopes fail closed with a 403
+    // (insufficient_scope) challenge echoing the missing scopes.
     if (opts?.requiredScopes && opts.requiredScopes.length > 0) {
       const granted = new Set(scopes);
       const missing = opts.requiredScopes.filter((s) => !granted.has(s));

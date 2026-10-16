@@ -156,6 +156,22 @@ describe('createMcpAuth — verify() happy path', () => {
     expect(next.sub).toBe('user-1');
     expect(verifyAccessToken).toHaveBeenCalledTimes(2);
   });
+
+  it('does not forward requiredScopes to the token verifier (403 lives locally)', async () => {
+    vi.mocked(verifyAccessToken).mockResolvedValue({
+      sub: 'user-1',
+      iss: AS,
+      aud: RESOURCE,
+      exp: 0,
+      iat: 0,
+      scope: 'mcp:tools:invoke',
+    });
+    const mcp = makeMcp();
+    await mcp.verify(bearer(), { requiredScopes: ['mcp:tools:invoke'] });
+    expect(verifyAccessToken).toHaveBeenCalledTimes(1);
+    const args = vi.mocked(verifyAccessToken).mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args).not.toHaveProperty('requiredScopes');
+  });
 });
 
 describe('createMcpAuth — verify() rejections → challenge', () => {

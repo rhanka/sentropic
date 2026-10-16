@@ -1,34 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
-vi.mock('@sentropic/oauth-verify', () => {
-  class TokenVerifyError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = 'TokenVerifyError';
-    }
-  }
-  class DpopVerifyError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = 'DpopVerifyError';
-    }
-  }
+vi.mock('@sentropic/oauth-verify', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sentropic/oauth-verify')>();
+  // Keep the real TokenVerifyError/DpopVerifyError classes so the real verifier
+  // used in the Immo-scoped test throws instanceof-compatible errors (R2-5).
+  // Only the verify primitives are mocked; error identity stays real.
   return {
-    TokenVerifyError,
-    DpopVerifyError,
+    ...actual,
     fromRemoteJwks: vi.fn(() => ({ resolveKey: vi.fn() })),
     verifyAccessToken: vi.fn(),
     verifyDpopProof: vi.fn(),
   };
 });
 
-import { verifyAccessToken } from '@sentropic/oauth-verify';
+import { fromJwksPort, verifyAccessToken } from '@sentropic/oauth-verify';
 import { createMcpAuth } from '../src/core.js';
 import { mcpAuthRoutes, requireMcpAuth, getMcpAuthContext } from '../src/hono.js';
 
 const RESOURCE = 'https://mcp.example.com';
 const AS = 'https://auth.sent-tech.ca';
+const IMMO_RESOURCE = 'https://immo.sent-tech.ca/mcp';
 
 const buildApp = () => {
   const mcp = createMcpAuth({
@@ -144,5 +137,64 @@ describe('@sentropic/mcp-auth/hono', () => {
     });
     expect(res.status).toBe(403);
     expect(res.headers.get('WWW-Authenticate')).toContain('error="insufficient_scope"');
+  });
+
+  it('guards an Immo-scoped route with a real signed token', async () => {
+    const actual = await vi.importActual<typeof import('@sentropic/oauth-verify')>(
+      '@sentropic/oauth-verify',
+    );
+    vi.mocked(verifyAccessToken).mockImplementation(actual.verifyAccessToken);
+    const { privateKey, publicKey } = await generateKeyPair('EdDSA');
+    const publicJwk = { ...(await exportJWK(publicKey)), alg: 'EdDSA', kid: 'immo-hono-1', use: 'sig' };
+    const mcp = createMcpAuth({
+      resource: IMMO_RESOURCE,
+      authorizationServers: [AS],
+      scopesSupported: ['immo:read', 'immo:search', 'immo:documents:read'],
+      keySource: fromJwksPort({
+        async findKeyByKid(kid: string) {
+          return kid === 'immo-hono-1' ? { alg: 'EdDSA', publicJwk } : null;
+        },
+        async getActiveKey() {
+          return { alg: 'EdDSA', publicJwk };
+        },
+      }),
+    });
+    const app = new Hono();
+    app.route('/', mcpAuthRoutes(mcp));
+    app.use('/mcp/*', requireMcpAuth(mcp, { requiredScopes: ['immo:read'] }));
+    app.post('/mcp/invoke', (c) => {
+      const auth = getMcpAuthContext(c);
+      return c.json({ ok: true, sub: auth.sub });
+    });
+    const sign = (scope: string) => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      return new SignJWT({ client_id: 'immo-mcp', scope })
+        .setProtectedHeader({ alg: 'EdDSA', kid: 'immo-hono-1' })
+        .setIssuedAt(nowSec)
+        .setIssuer(AS)
+        .setAudience(IMMO_RESOURCE)
+        .setSubject('immo-user-1')
+        .setExpirationTime(nowSec + 600)
+        .sign(privateKey);
+    };
+
+    const anonymous = await app.request('/mcp/invoke', { method: 'POST' });
+    expect(anonymous.status).toBe(401);
+
+    const searchToken = await sign('immo:search');
+    const denied = await app.request('/mcp/invoke', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${searchToken}` },
+    });
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get('WWW-Authenticate')).toContain('error="insufficient_scope"');
+
+    const readToken = await sign('immo:read');
+    const allowed = await app.request('/mcp/invoke', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${readToken}` },
+    });
+    expect(allowed.status).toBe(200);
+    expect(await allowed.json()).toEqual({ ok: true, sub: 'immo-user-1' });
   });
 });
