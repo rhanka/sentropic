@@ -167,38 +167,53 @@ export const readAuthorityRecordFile = async (recordPath: string): Promise<unkno
 export const createFileContentAuthorityEpochPort = (
   recordPath = readEnv('SESSION_CONTENT_AUTHORITY_RECORD_PATH') ?? '',
   nowMs: () => number = () => Date.now(),
-): ContentAuthorityEpochPort => ({
-  async readCurrent(issuer: string): Promise<ContentAuthorityEpoch> {
-    if (!recordPath) {
-      throw new SessionContentError('epoch_unavailable', 'content authority is not activated');
-    }
-    let record: Record<string, unknown>;
-    try {
-      record = (await readAuthorityRecordFile(recordPath)) as Record<string, unknown>;
-    } catch {
-      throw new SessionContentError('epoch_unavailable', 'content authority record is unreadable');
-    }
-    if (record['issuer'] !== issuer) {
-      throw new SessionContentError('epoch_unavailable', 'content authority issuer mismatch');
-    }
-    const epoch: ContentAuthorityEpoch = {
-      epoch: String(record['epoch'] ?? ''),
-      revision: Number(record['revision'] ?? 0),
-      enabled: record['enabled'] === true,
-      validUntil: Number(record['validUntil'] ?? 0),
-    };
-    if (!epoch.epoch) {
-      throw new SessionContentError('epoch_unavailable', 'content authority epoch is missing');
-    }
-    if (!epoch.enabled) {
-      throw new SessionContentError('epoch_disabled', 'content authority is disabled');
-    }
-    if (nowMs() > epoch.validUntil) {
-      throw new SessionContentError('epoch_stale', 'content authority epoch expired');
-    }
-    return epoch;
-  },
-});
+  issuer: string,
+): ContentAuthorityEpochPort => {
+  if (!issuer || !issuer.trim()) {
+    throw new SessionContentError('invalid_request', 'authority issuer is explicit configuration');
+  }
+  return {
+    async readCurrent(requestIssuer: string): Promise<ContentAuthorityEpoch> {
+      if (requestIssuer !== issuer) {
+        throw new SessionContentError('epoch_unavailable', 'content authority issuer mismatch');
+      }
+      if (!recordPath) {
+        throw new SessionContentError('epoch_unavailable', 'content authority is not activated');
+      }
+      let record: Record<string, unknown>;
+      try {
+        record = (await readAuthorityRecordFile(recordPath)) as Record<string, unknown>;
+      } catch {
+        throw new SessionContentError('epoch_unavailable', 'content authority record is unreadable');
+      }
+      if (record['issuer'] !== issuer) {
+        throw new SessionContentError('epoch_unavailable', 'content authority issuer mismatch');
+      }
+      const epoch: ContentAuthorityEpoch = {
+        epoch: String(record['epoch'] ?? ''),
+        revision: Number(record['revision']),
+        enabled: record['enabled'] === true,
+        validUntil: Number(record['validUntil']),
+      };
+      if (!epoch.epoch) {
+        throw new SessionContentError('epoch_unavailable', 'content authority epoch is missing');
+      }
+      if (!Number.isSafeInteger(epoch.revision) || epoch.revision < 0) {
+        throw new SessionContentError('epoch_unavailable', 'content authority revision is invalid');
+      }
+      if (!Number.isFinite(epoch.validUntil)) {
+        throw new SessionContentError('epoch_unavailable', 'content authority validity is invalid');
+      }
+      if (!epoch.enabled) {
+        throw new SessionContentError('epoch_disabled', 'content authority is disabled');
+      }
+      if (nowMs() > epoch.validUntil) {
+        throw new SessionContentError('epoch_stale', 'content authority epoch expired');
+      }
+      return epoch;
+    },
+  };
+};
 
 /** Test-only epoch port: rotate/setUnavailable/expireRead with a fake
  * clock, preserved across service restarts and restored DB rows because the
@@ -290,7 +305,8 @@ export interface SessionContentOptions {
   readonly quotas?: Partial<SessionContentQuotas>;
   readonly storage?: Partial<SessionContentStorageConfig>;
   readonly epochs?: ContentAuthorityEpochPort;
-  readonly issuer?: string;
+  /** Explicit authority issuer configuration (R10): no hidden default. */
+  readonly issuer: string;
   /** Test-only barrier between PUT and commit (design §11). Never set in
    * production composition. */
   readonly publishHooks?: SessionContentPublishHooks;
@@ -368,13 +384,20 @@ export class SessionContentService {
   private s3: S3Client | null = null;
   private storageConfig: SessionContentStorageConfig | null = null;
 
-  constructor(options: SessionContentOptions = {}) {
+  constructor(options: SessionContentOptions) {
+    if (!options.issuer || !options.issuer.trim()) {
+      throw new SessionContentError('invalid_request', 'authority issuer is explicit configuration');
+    }
     this.nowMs = options.nowMs ?? (() => Date.now());
     this.newId = options.newId ?? (() => crypto.randomUUID());
     this.quotas = { ...DEFAULT_SESSION_CONTENT_QUOTAS, ...options.quotas };
     this.explicitStorage = options.storage;
-    this.epochs = options.epochs ?? createFileContentAuthorityEpochPort();
-    this.issuer = options.issuer ?? 'sentropic-product';
+    this.epochs = options.epochs ?? createFileContentAuthorityEpochPort(
+      readEnv('SESSION_CONTENT_AUTHORITY_RECORD_PATH') ?? '',
+      () => Date.now(),
+      options.issuer,
+    );
+    this.issuer = options.issuer;
     this.publishHooks = options.publishHooks;
   }
 

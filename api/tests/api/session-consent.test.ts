@@ -99,6 +99,7 @@ describe('session consent durable lifecycle', () => {
         : { quotas: quotasOrOptions as Record<string, number> | undefined };
     return new SessionContentService({
       nowMs: () => now,
+      issuer: 'test-issuer',
       storage: {
         endpoint: fixture.config.endpoint,
         region: fixture.config.region,
@@ -951,7 +952,7 @@ describe('session consent durable lifecycle', () => {
   it('should refuse storage_unavailable with zero S3 calls when D2 storage is unset', async () => {
     process.env.DOC_STORAGE_BUCKET = 'sentropic-docs-test';
     process.env.DOC_STORAGE_ENDPOINT = 'http://minio:9000';
-    const unconfigured = new SessionContentService({ nowMs: () => now, epochs: fakeEpoch });
+    const unconfigured = new SessionContentService({ nowMs: () => now, issuer: 'test-issuer', epochs: fakeEpoch });
     await expectContentError(
       () => unconfigured.readCommitted('sess-content-s1', 'terminal.cache', ctx),
       'storage_unavailable',
