@@ -87,6 +87,34 @@ describe('seat-bundle envelope', () => {
     expect(result).toMatchObject({ ok: false, code: 'size-exceeded' });
   });
 
+  it('measures the size limit in UTF-8 bytes, not code units', () => {
+    const bundle = canonical('vibe');
+    bundle.provenance.entitlementClass = 'é'.repeat(25000);
+    const serialized = JSON.stringify(bundle) ?? '';
+    expect(serialized.length).toBeLessThan(SEAT_BUNDLE_MAX_BYTES);
+    expect(validateSeatBundle(bundle, { trustedAuthority: 'custodian' })).toMatchObject({
+      ok: false,
+      code: 'size-exceeded',
+    });
+  });
+
+  it('refuses a higher claim on a lower channel by rank alone', () => {
+    const elevated: SeatBundleV1 = { ...consumer('vibe'), authority: 'native-store' };
+    expect(validateSeatBundle(elevated, { trustedAuthority: 'consumer' })).toMatchObject({
+      ok: false,
+      code: 'authority-escalation',
+    });
+  });
+
+  it('refuses an issuing client mismatch against the channel', () => {
+    const bundle = canonical('codex');
+    const result = validateSeatBundle(bundle, {
+      trustedAuthority: 'custodian',
+      issuingClientRef: 'client-synth-other-01',
+    });
+    expect(result).toMatchObject({ ok: false, code: 'client-mismatch' });
+  });
+
   it('rejects an owner mismatch', () => {
     const result = validateSeatBundle(canonical('muse'), { ownerScope: 'owner-synth-02' });
     expect(result).toMatchObject({ ok: false, code: 'owner-mismatch' });
