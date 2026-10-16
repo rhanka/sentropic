@@ -19,7 +19,7 @@ import { encodeToolResult } from './result-codec.js';
 import { validateBoundedValue, type JSONValue } from '../registry-parameters.js';
 import type { AppToolResult } from '../runtime.js';
 
-export type { AppToolResult };
+export type { AppToolResult } from '../runtime.js';
 
 export interface BridgeTool {
   readonly name: string;
