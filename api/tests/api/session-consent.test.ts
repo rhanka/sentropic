@@ -838,3 +838,88 @@ describe('session consent durable lifecycle', () => {
     `);
     expect(functions.rows).toHaveLength(4);
   });
+
+  it('should isolate user deletion per owner prefix across two tenants', async () => {
+    await acceptProject();
+    await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: bindings[0]!.bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('owner-prefix-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-u1', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    await db.delete(users).where(eq(users.id, other.id));
+    const namespaces = await db.select().from(sessionContentNamespaces);
+    expect(namespaces).toHaveLength(1);
+    expect(namespaces[0]!.ownerId).toBe(owner.id);
+    await db.delete(users).where(eq(users.id, owner.id));
+    const revoked = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(revoked[0]!.state).toBe('revoked');
+    const userTombs = await db
+      .select()
+      .from(sessionContentTombstones)
+      .where(eq(sessionContentTombstones.kind, 'user'));
+    expect(userTombs.map((t) => t.publicId)).toContain(owner.id);
+    const jobs = await db.select().from(sessionContentPurgeJobs);
+    const restarted = makeService();
+    void restarted;
+    const purged = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(purged.remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+  });
+
+  it('should revoke shared bindings on workspace deletion only for intended scope', async () => {
+    await acceptProject();
+    await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: bindings[0]!.bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    const grants = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(grants[0]!.state).toBe('revoked');
+    const wsTombs = await db
+      .select()
+      .from(sessionContentTombstones)
+      .where(
+        and(eq(sessionContentTombstones.kind, 'workspace'), eq(sessionContentTombstones.publicId, workspaceId)),
+      );
+    expect(wsTombs).toHaveLength(1);
+  });
