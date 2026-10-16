@@ -815,6 +815,29 @@ export class SessionContentService {
       if (binding.bindingId !== input.bindingId || binding.version !== input.bindingVersion) {
         throw new SessionContentError('ineligible_session', 'binding version mismatch (ABA)');
       }
+      if (input.workspaceId !== project.workspaceId || binding.workspaceId !== project.workspaceId) {
+        throw new SessionContentError('invalid_request', 'session workspace does not match project');
+      }
+      if (binding.status !== 'attached') {
+        throw new SessionContentError('ineligible_session', 'binding is not attached');
+      }
+      if (binding.principalId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'binding principal is not the project owner');
+      }
+      if (input.d1Incarnation !== binding.incarnation || input.d1StartSeq !== binding.startSeq) {
+        throw new SessionContentError('ineligible_session', 'D1 incarnation/start mismatch (ABA)');
+      }
+      const accepted = project.acceptedPolicy as Record<string, unknown> & {
+        futureSessions?: boolean;
+        selectedSessionIds?: string[];
+      };
+      const selected = ((accepted['selectedSessionIds'] as string[] | undefined) ?? []).map(String);
+      const futureEligible =
+        accepted['futureSessions'] === true &&
+        input.sessionCreatedAt >= new Date(project.activatedAt ?? 0).getTime();
+      if (!selected.includes(input.sessionId) && !futureEligible) {
+        throw new SessionContentError('ineligible_session', 'session is outside the project scope');
+      }
       const [existing] = await tx
         .select()
         .from(sessionContentGrants)
