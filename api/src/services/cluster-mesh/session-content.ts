@@ -280,6 +280,10 @@ const requireContext = (ctx: SessionContentContext): void => {
   }
 };
 
+export interface SessionContentPublishHooks {
+  readonly afterUpload?: (key: string) => Promise<void>;
+}
+
 export interface SessionContentOptions {
   readonly nowMs?: () => number;
   readonly newId?: () => string;
@@ -287,6 +291,9 @@ export interface SessionContentOptions {
   readonly storage?: Partial<SessionContentStorageConfig>;
   readonly epochs?: ContentAuthorityEpochPort;
   readonly issuer?: string;
+  /** Test-only barrier between PUT and commit (design §11). Never set in
+   * production composition. */
+  readonly publishHooks?: SessionContentPublishHooks;
 }
 
 /** CM2-R2-3 empty-state fast path: indexed lookup of affected D2 state. An
@@ -357,6 +364,7 @@ export class SessionContentService {
   private readonly explicitStorage?: Partial<SessionContentStorageConfig>;
   private readonly epochs: ContentAuthorityEpochPort;
   private readonly issuer: string;
+  private readonly publishHooks?: SessionContentPublishHooks;
   private s3: S3Client | null = null;
   private storageConfig: SessionContentStorageConfig | null = null;
 
@@ -367,6 +375,7 @@ export class SessionContentService {
     this.explicitStorage = options.storage;
     this.epochs = options.epochs ?? createFileContentAuthorityEpochPort();
     this.issuer = options.issuer ?? 'sentropic-product';
+    this.publishHooks = options.publishHooks;
   }
 
   /** Storage client with zero S3 calls when unconfigured: valid DOC_STORAGE
@@ -1758,18 +1767,26 @@ export class SessionContentService {
             eq(sessionContentReservations.state, 'reserved'),
           ),
         );
-      return { staged: staged.map((o) => ({ bucket: o.bucket, key: o.objectKey })) };
-    });
-    if (settled && settled.staged.length > 0) {
-      try {
-        const { client } = this.storage();
-        for (const { bucket, key } of settled.staged) {
-          await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-        }
-      } catch (err) {
-        if (!(err instanceof SessionContentError && err.code === 'storage_unavailable')) throw err;
+      await tx
+        .update(sessionContentAttempts)
+        .set({ outcome: 'cancelled' })
+        .where(
+          and(
+            eq(sessionContentAttempts.sessionId, sessionId),
+            eq(sessionContentAttempts.outcome, 'attempted'),
+          ),
+        );
+      if (staged.length > 0 && staged[0]) {
+        await tx.insert(sessionContentPurgeJobs).values({
+          purgeJobId: this.newId(),
+          namespaceId: staged[0].namespaceId,
+          bindingId: grant.bindingId,
+          scope: 'binding',
+          state: 'pending',
+        });
       }
-    }
+      return { sessionId };
+    });
     return { sessionId, fenced: settled !== null };
   }
 
