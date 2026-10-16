@@ -52,7 +52,8 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
 
 ## Feedback Loop
 - [ ] `attention` BR1a-EX3: touch `Makefile` (add `probe-mcp-platform-clean-consumer` target, ~25 lines). Reason: R2-M4 requires a Make-driven clean-consumer install probe for the unpublished `0.3.0` candidate; `Makefile` is Forbidden by default. Impact: additive `.PHONY` target only, no existing target modified, runs `pack-mcp-platform` + clean-container install + subpath import. Rollback: delete the target. Approved by the conductor under the owner default authorization per launch packet.
-- [ ] `attention` Lot 2 UAT-4 open: no Make target exists for a clean-consumer install of the unpublished `0.3.0` candidate; evidence stands on `pack-mcp-platform` PASS (sha `704bf8c7c5a4c30e6e82cf7d2882f5be3d7c2ea1ba0f4fbf326f06ed45d09b0b`) + `api-extract-mcp-platform` clean + separate-process digest test. Owner judges merge readiness.
+- [x] `attention` Lot 2 UAT-4 closed: `probe-mcp-platform-clean-consumer` (BR1a-EX3) passes — `CLEAN_CONSUMER_OK payloadDigest=81148c5d…4cb9a5c8547 handlersDigest=163e199a…abeeef206b8`, pack sha `bca230787f7dedb43e0e2f35b3fd93b1e158e2b9203596b9bfb605d2469a906d` (supersedes pre-fix2 pack sha `704bf8c7…`).
+- [ ] `attention` manifests-gate-local: `make check-publishable-manifests` fails locally only (inventory requires validated CI context `MANIFEST_CONTEXT_FILE`/`CI_MANIFEST_CONTEXT`); covered by CI `validate-publishable-manifests` (green on run `38836535941`). Owner judges merge readiness.
 - [ ] `attention` CI green on run `38836535941` (55 pass, 0 fail): `enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests` pass. Merge stays owner-gated per packet stop rule.
 - [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
 - [ ] `attention`: npm published `@sentropic/mcp-platform` is `0.2.0`, source is `0.2.0`, candidate `0.3.0` is strictly above both (verified 2026-10-16)
@@ -173,36 +174,36 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
       - [x] Compile two synthetic tools with distinct settings, confirm only intended binding receives each value
       - [x] Reject per-field policy weakening, malformed overlays, forbidden keys (incl. arrays), digest mismatches before activation
       - [x] Run with fetch throwing and assert zero calls; reproduce digests in a separate Node process
-      - [ ] Install packed subpath from clean consumer via Make-driven probe, report compiler delivered without claiming Immo registry integration
+      - [x] Install packed subpath from clean consumer via Make-driven probe, report compiler delivered without claiming Immo registry integration (`CLEAN_CONSUMER_OK`, BR1a-EX3)
 - [ ] **Lot 3 — Immo 1a R2 findings fix2 (`.h2a/reviews/immo_1a_opus_r2.md`: 4 MAJEUR R2-M1..M4, 5 MINEUR)**
-  - [ ] R2-M1: provenance closed keys + `checkForbiddenValue` on `approvalRef`/`revision`/`reviewedBy`/overlay strings, `reviewedBy` role-only rule; tests `forbidden_content`/`invalid_provenance` code+path
-  - [ ] R2-M2: `handlersDigest` in snapshot, covered by `payloadDigest`, compared to computed (`handlers_digest_mismatch`); falsification test; docs truthful
-  - [ ] R2-M3: 6 discriminating tests (`idempotency`, `mutability`, `mutatesExternalSystem`, `requiredClaims`, `provenance.manifestDigest`, unbounded `Infinity`); delete non-discriminating test
-  - [ ] R2-M4: separate-process test loads `dist/tool-configuration.js` and compares compiled `canonicalJson`; `probe-mcp-platform-clean-consumer` Make target under BR1a-EX3
-  - [ ] R2-m1: reject mistyped schema-keyword values (`invalid_values`); test
-  - [ ] R2-m2: case-insensitive `bearer`/`basic`, generic scheme `^[a-z][a-z0-9+.-]*:`, `maxTokens` allowlist, `email` substring + email-value detection; both-direction tests
-  - [ ] R2-m3: mandatory `providerVersion`/`platformVersion`, `platformVersion` equals package constant; tests
-  - [ ] R2-m4: clone overlay `requiredClaims`/`requiredScopes` arrays; overlay freeze test
-  - [ ] R2-m5 + docs: `BRANCH.md`/`README.md`/`ADOPTION_GUIDE.md` truthful; explicit `undefined` in `gates` rejected
-  - [ ] Lot gate:
-    - [ ] `make typecheck-mcp-platform ENV=test-mcp-registry-codec`
-    - [ ] **API tests**
-      - [ ] Existing regression `packages/mcp-platform/tests/manifest.test.ts` (unchanged)
-      - [ ] Existing regression `packages/mcp-platform/tests/authz.test.ts` (unchanged)
-      - [ ] Updated `packages/mcp-platform/tests/tool-configuration.test.ts` (R2-M1..M4, R2-m1..m4 discriminating tests)
-      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec`
-      - [ ] Sub-lot gate: `make test-mcp-platform ENV=test-mcp-registry-codec`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] None (pure library slice, no UI change)
-      - [ ] Sub-lot gate: not applicable, no `ui/tests/**` touched
-    - [ ] **E2E tests**
-      - [ ] None (pure library slice, no app wiring)
-      - [ ] Sub-lot gate: not applicable, no `e2e/tests/**` touched
-    - [ ] Package gates: `make api-extract-mcp-platform ENV=test-mcp-registry-codec`
-    - [ ] Package gates: `make pack-mcp-platform ENV=test-mcp-registry-codec`
-    - [ ] Package gates: `make check-publishable-manifests ENV=test-mcp-registry-codec`
-    - [ ] UAT via Make: `make probe-mcp-platform-clean-consumer ENV=test-mcp-registry-codec`
-    - [ ] Report `.h2a/build/immo_1a_fix2_report.md` with per-mutation command + failing output
+  - [x] R2-M1: provenance closed keys + `checkForbiddenValue` on `approvalRef`/`revision`/`reviewedBy`/overlay strings, `reviewedBy` role-only rule; tests `forbidden_content`/`invalid_provenance` code+path (9 executed mutations, report §3)
+  - [x] R2-M2: `handlersDigest` in snapshot, covered by `payloadDigest`, compared to computed (`handlers_digest_mismatch`); falsification test; docs truthful
+  - [x] R2-M3: 6 discriminating tests (`idempotency`, `mutability`, `mutatesExternalSystem`, `requiredClaims`, `provenance.manifestDigest`, unbounded `Infinity`); delete non-discriminating test
+  - [x] R2-M4: separate-process test loads `dist/tool-configuration.js` and compares compiled `canonicalJson`; `probe-mcp-platform-clean-consumer` Make target under BR1a-EX3 (`CLEAN_CONSUMER_OK`)
+  - [x] R2-m1: reject mistyped schema-keyword values (`invalid_values`); test
+  - [x] R2-m2: case-insensitive `bearer`/`basic`, generic scheme `^[a-z][a-z0-9+.-]*:`, `maxTokens` allowlist, `email` substring + email-value detection; both-direction tests
+  - [x] R2-m3: mandatory `providerVersion`/`platformVersion`, `platformVersion` equals package constant; tests
+  - [x] R2-m4: clone overlay `requiredClaims`/`requiredScopes` arrays; overlay freeze test
+  - [x] R2-m5 + docs: `BRANCH.md`/`README.md`/`ADOPTION_GUIDE.md` truthful; explicit `undefined` in `gates` rejected
+  - [x] Lot gate:
+    - [x] `make typecheck-mcp-platform ENV=test-mcp-registry-codec` (0 errors)
+    - [x] **API tests**
+      - [x] Existing regression `packages/mcp-platform/tests/manifest.test.ts` (unchanged, 5 passed in full run)
+      - [x] Existing regression `packages/mcp-platform/tests/authz.test.ts` (unchanged, 16 passed in full run)
+      - [x] Updated `packages/mcp-platform/tests/tool-configuration.test.ts` (R2-M1..M4, R2-m1..m4 discriminating tests, 40 passed)
+      - [x] Scoped run: `make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec`
+      - [x] Sub-lot gate: `make test-mcp-platform ENV=test-mcp-registry-codec` (12 files, 134 passed)
+    - [x] **UI tests (TypeScript only)**
+      - [x] None (pure library slice, no UI change)
+      - [x] Sub-lot gate: not applicable, no `ui/tests/**` touched
+    - [x] **E2E tests**
+      - [x] None (pure library slice, no app wiring)
+      - [x] Sub-lot gate: not applicable, no `e2e/tests/**` touched
+    - [x] Package gates: `make api-extract-mcp-platform ENV=test-mcp-registry-codec` (no drift)
+    - [x] Package gates: `make pack-mcp-platform ENV=test-mcp-registry-codec` (sha `bca230787f…`)
+    - [ ] Package gates: `make check-publishable-manifests ENV=test-mcp-registry-codec` (fails locally: no CI manifest context; CI covers)
+    - [x] UAT via Make: `make probe-mcp-platform-clean-consumer ENV=test-mcp-registry-codec` (`CLEAN_CONSUMER_OK`)
+    - [x] Report `.h2a/build/immo_1a_fix2_report.md` with per-mutation command + failing output
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (was [x]; corrected per R2-m5: N/A, no file ever existed)
   - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration. (was [x]; corrected per R2-m5: N/A, no file ever existed)
