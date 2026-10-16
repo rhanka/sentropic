@@ -30,8 +30,21 @@ candidate covering L-5a–5e; no publication before the final merge.
 ```sh
 make typecheck-artifacts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry
 make test-artifacts API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry
+make test-artifacts-integration API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry
 ```
 
-No Immo defaults, URLs or bindings in generic source. Storage adapters
-(Postgres/S3), publication lifecycle, content serving and MCP tools arrive
-in L-5b–5e.
+## What's here (L-5b–5c)
+
+- `src/server/access.ts` — owner/grants/approved-public evaluation + ACL store.
+- `src/server/sources.ts` — explicit source refs + source store.
+- `src/server/fork.ts` — private independent forks, no ACL copy, refcounted blobs.
+- `src/server/lifecycle.ts` — withdraw/restore/delete/purge, explicit
+  promote/rollback over the single publication current pointer, renew.
+- `src/server/gc.ts` — refcounts, pins, reported collection.
+- `src/http.ts` — transport-free HTTP app delegating to the same services
+  (401/403/404/409/410/422/400 mapping; reads never oracle existence).
+- `migrations/0001_artifacts.sql` — domain schema (manifest TEXT for
+  byte-identity). Sharing/lifecycle/GC tables arrive with the 0002 migration.
+
+No Immo defaults, URLs or bindings in generic source. Content serving and
+MCP tools arrive in L-5d–5e.
