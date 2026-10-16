@@ -29,12 +29,15 @@ const ACL: ArtifactAcl = { ownerId: OWNER, isPublic: false, withdrawn: false, gr
 
 async function makeLife() {
   const store = createMemoryLifecycleStore();
-  const service = createLifecycleService(store, () => '2026-01-01T00:00:00.000Z');
+  const state = createMemoryStateStore();
+  // One shared current pointer (publication state), like production where a
+  // single adapter backs both services on `artifact_current`.
+  const service = createLifecycleService(store, () => '2026-01-01T00:00:00.000Z', state);
   const id = '11111111-1111-4111-8111-111111111111';
   // Like production (ensureArtifact before any lifecycle step), the artifact
   // is registered with its owner first; states default to active.
   await store.register(id, OWNER);
-  return { store, service, id };
+  return { store, service, id, state };
 }
 
 describe('artifact lifecycle', () => {
@@ -67,16 +70,17 @@ describe('artifact lifecycle', () => {
   });
 
   it('promotes and rolls back with explicit CAS', async () => {
-    const { store, service, id } = await makeLife();
-    await store.setRelease(id, 'r-1');
-    await store.setRelease(id, 'r-2');
-    await store.setCurrent(id, 'r-1');
+    const { store, service, id, state } = await makeLife();
+    await store.addRelease(id, 'r-1');
+    await store.addRelease(id, 'r-2');
+    await state.putRelease({ releaseId: 'r-1', artifactId: id, manifestDigest: 'ab', manifest: '{}', state: 'ready', createdAt: '2026-01-01T00:00:00.000Z' });
+    await state.compareAndSwapCurrent(id, null, 'r-1');
     await service.promote(id, OWNER, 'r-2', 'r-1');
-    expect(await store.getCurrent(id)).toBe('r-2');
+    expect(await state.getCurrentReleaseId(id)).toBe('r-2');
     expect(await store.getReleaseState('r-1')).toBe('retired');
     await expect(service.promote(id, OWNER, 'r-1', 'r-1')).rejects.toThrow(/conflict/);
     await service.promote(id, OWNER, 'r-1', 'r-2');
-    expect(await store.getCurrent(id)).toBe('r-1');
+    expect(await state.getCurrentReleaseId(id)).toBe('r-1');
   });
 
   it('keeps replays against retired releases terminal', async () => {
