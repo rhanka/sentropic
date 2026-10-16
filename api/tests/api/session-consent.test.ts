@@ -1246,7 +1246,7 @@ describe('session consent durable lifecycle', () => {
   });
 
   it('should enforce O1=D scope on derive: workspace, status, principal, eligibility (M3)', async () => {
-    await acceptProject({}, { tenantId: TENANT_A, principalId: other.id, ownerId: other.id });
+    await acceptProject();
     const bindingId = await adoptSession('sess-content-s1');
     const bindings = await db
       .select()
@@ -1270,6 +1270,10 @@ describe('session consent durable lifecycle', () => {
       nativeStartSeq: 0,
     };
     await expectContentError(() => service.deriveGrant(base, otherCtx), 'cross_owner_refused');
+    await acceptProject({ projectId: 'sess-content-project-other' }, otherCtx);
+    await expectContentError(() => service.deriveGrant(
+      { ...base, projectId: 'sess-content-project-other' }, otherCtx,
+    ), 'cross_owner_refused');
     await db
       .update(sessionWorkspaceBindings)
       .set({ status: 'detached' })
@@ -1347,7 +1351,7 @@ describe('session consent durable lifecycle', () => {
     expect(derived.version).toBe(1);
   });
 
-  it('should serialize concurrent amendments: one wins, one conflicts (M4)', async () => {
+  it('should assign distinct monotonic revisions to concurrent amendments (M4)', async () => {
     await acceptProject();
     const policyFor = () => basePolicy({
       ownerId: owner.id, readers: [owner.id], workspaceId, futureSessions: false,
@@ -1356,17 +1360,16 @@ describe('session consent durable lifecycle', () => {
       service.amendProject('sess-content-project-1', policyFor(), ctx),
       service.amendProject('sess-content-project-1', policyFor(), ctx),
     ]);
-    const won = outcomes.filter((o) => o.status === 'fulfilled');
-    const lost = outcomes.filter((o) => o.status === 'rejected');
-    expect(won).toHaveLength(1);
-    expect(lost).toHaveLength(1);
-    expect((lost[0] as PromiseRejectedResult).reason).toBeInstanceOf(SessionContentError);
-    expect(((lost[0] as PromiseRejectedResult).reason as SessionContentError).code).toBe('revision_conflict');
+    const revisions = outcomes
+      .filter((o) => o.status === 'fulfilled')
+      .map((o) => (o as PromiseFulfilledResult<{ revision: number }>).value.revision)
+      .sort((a, b) => a - b);
+    expect(revisions).toEqual([1, 2]);
     const projects = await db
       .select()
       .from(sessionContentProjects)
       .where(eq(sessionContentProjects.projectId, 'sess-content-project-1'));
-    expect(projects[0]!.projectRevision).toBe(1);
+    expect(projects[0]!.projectRevision).toBe(2);
   });
 
   it('should increment on accept-at-N so a replayed accept conflicts (M4)', async () => {
