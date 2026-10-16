@@ -332,56 +332,40 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     expect(permutedResult.config.payloadDigest).not.toBe(GOLDEN_PAYLOAD_DIGEST);
   });
 
-  it('reproduces digests in a separate Node process', () => {
+  it('reproduces the compiled result in a separate process from packaged files', () => {
+    // R2-M4: the artifact under test is the compiled package (`dist`), built
+    // by `make build-mcp-platform` (a prerequisite of `make test-mcp-platform`).
+    // The child imports no repository source: it loads the packaged
+    // `tool-configuration.js` and its compiled result must equal this process.
+    const distUrl = new URL('../dist/tool-configuration.js', import.meta.url).href;
     const snapshot = buildSnapshot();
-    const payload = JSON.stringify({ manifest, snapshot });
+    const expected = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(expected.ok).toBe(true);
+    if (!expected.ok) return;
+    const payload = JSON.stringify({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
     const script = `
-import { createHash } from 'node:crypto';
-const encode = (value, seen) => {
-  if (value === null) return 'null';
-  if (typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new TypeError('non-finite');
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    if (seen.has(value)) throw new TypeError('circular');
-    seen.add(value);
-    const out = '[' + value.map((entry) => encode(entry, seen)).join(',') + ']';
-    seen.delete(value);
-    return out;
-  }
-  if (typeof value !== 'object') throw new TypeError('non-json');
-  if (seen.has(value)) throw new TypeError('circular');
-  const proto = Object.getPrototypeOf(value);
-  if (proto !== Object.prototype && proto !== null) throw new TypeError('non-plain');
-  seen.add(value);
-  const out = '{' + Object.keys(value).sort().map((key) => {
-    if (value[key] === undefined) throw new TypeError('undefined');
-    return JSON.stringify(key) + ':' + encode(value[key], seen);
-  }).join(',') + '}';
-  seen.delete(value);
-  return out;
-};
-const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
+const mod = await import(process.argv[1]);
 let input = '';
 process.stdin.on('data', (chunk) => { input += chunk; });
 process.stdin.on('end', () => {
   const parsed = JSON.parse(input);
-  const tools = [...parsed.manifest.tools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const manifestDigest = sha(encode({ appId: parsed.manifest.appId, providerId: parsed.manifest.providerId, version: parsed.manifest.version, audit: parsed.manifest.audit, authz: parsed.manifest.authz, durability: parsed.manifest.durability, prompts: parsed.manifest.prompts, resources: parsed.manifest.resources, tools }, new Set()));
-  const rest = { ...parsed.snapshot };
-  delete rest.provenance;
-  const prov = { ...parsed.snapshot.provenance };
-  delete prov.payloadDigest;
-  const payloadDigest = sha(encode({ ...rest, provenance: prov }, new Set()));
-  process.stdout.write(JSON.stringify({ manifestDigest, payloadDigest }));
+  const result = mod.compileToolConfiguration(parsed);
+  if (!result.ok) {
+    process.stderr.write(JSON.stringify(result.diagnostics));
+    process.exit(1);
+  }
+  process.stdout.write(JSON.stringify({ canonical: mod.canonicalJson(result.config), payloadDigest: result.config.payloadDigest }));
 });
 `;
-    const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], { input: payload, encoding: 'utf8' }) as string;
-    const parsed = JSON.parse(output) as { manifestDigest: string; payloadDigest: string };
-    expect(parsed.manifestDigest).toBe(computeManifestDigest(manifest));
-    expect(parsed.payloadDigest).toBe(computePayloadDigest(snapshot));
+    let output: string;
+    try {
+      output = execFileSync(process.execPath, ['--input-type=module', '-e', script, distUrl], { input: payload, encoding: 'utf8' }) as string;
+    } catch (error) {
+      throw new Error(`separate-process packaged compile failed (run make build-mcp-platform first): ${(error as Error).message}`);
+    }
+    const parsed = JSON.parse(output) as { canonical: string; payloadDigest: string };
+    expect(parsed.canonical).toBe(canonicalJson(expected.config));
+    expect(parsed.payloadDigest).toBe(GOLDEN_PAYLOAD_DIGEST);
   });
 
   it('rejects a wrong schema version before activation', () => {
