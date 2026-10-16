@@ -329,6 +329,35 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     }
   });
 
+  it('rejects unknown keys, version drift, duplicate tools and handler mismatches', () => {
+    const typo = { ...buildSnapshot(), requiredScope: ['synth:search'] };
+    const typoResult = compileToolConfiguration({ snapshot: typo, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(typoResult.ok).toBe(false);
+    if (!typoResult.ok) {
+      expect(typoResult.diagnostics.some((entry) => entry.code === 'malformed_snapshot')).toBe(true);
+    }
+    const drifted = { ...buildSnapshot(), providerVersion: '9.9.9' };
+    const driftResult = compileToolConfiguration({ snapshot: drifted, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(driftResult.ok).toBe(false);
+    if (!driftResult.ok) {
+      expect(driftResult.diagnostics.some((entry) => entry.code === 'invalid_identity')).toBe(true);
+    }
+    const dupManifest = { ...manifest, tools: [searchTool, searchTool] };
+    const dupBase = { ...buildSnapshot(), manifestDigest: computeManifestDigest(dupManifest), compatibilityDigest: computeCompatibilityDigest(dupManifest) };
+    dupBase.provenance = { ...dupBase.provenance, manifestDigest: dupBase.manifestDigest, payloadDigest: computePayloadDigest(dupBase) };
+    const dupResult = compileToolConfiguration({ snapshot: dupBase, manifest: dupManifest, handlers, compatibilityDigest: computeCompatibilityDigest(dupManifest) });
+    expect(dupResult.ok).toBe(false);
+    if (!dupResult.ok) {
+      expect(dupResult.diagnostics.some((entry) => entry.code === 'duplicate_tool_name')).toBe(true);
+    }
+    const mismatched = { ...handlers, 'other-key': handlers['local-search'] };
+    const mismatchResult = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers: mismatched, compatibilityDigest: consumerDigest });
+    expect(mismatchResult.ok).toBe(false);
+    if (!mismatchResult.ok) {
+      expect(mismatchResult.diagnostics.some((entry) => entry.path === 'handlers.other-key')).toBe(true);
+    }
+  });
+
   it('binds the consumer-supplied compatibility digest', () => {
     const tampered = compileToolConfiguration({
       snapshot: buildSnapshot(),
