@@ -9,6 +9,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   extractHttpRequestIdentity,
+  identityFromExtra,
   registerBridgeTools,
 } from '../src/transport/streamable-http.js';
 import { validateBoundedValue } from '../src/registry-parameters.js';
@@ -102,6 +103,22 @@ describe('streamable HTTP bridge (real SDK, in-memory link)', () => {
     const text = (result.content[0] as { text: string }).text;
     expect(text).toContain('unknown property');
     await client.close();
+  });
+
+  it('derives per-request identity from the SDK handler extra', () => {
+    expect(
+      identityFromExtra({
+        requestInfo: {
+          headers: new Headers({
+            'x-mcp-client-id': 'codex',
+            'x-mcp-tenant-ref': 't-1',
+            authorization: 'Bearer secret-token',
+          }),
+        },
+      }),
+    ).toEqual({ clientId: 'codex', tenantRef: 't-1', scopes: [], hasBearer: true });
+    expect(identityFromExtra({})).toBeUndefined();
+    expect(identityFromExtra(undefined)).toBeUndefined();
   });
 
   it('extracts request identity from headers without ever exposing the token', () => {
