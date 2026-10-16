@@ -607,3 +607,113 @@ describe('session consent durable lifecycle', () => {
       'cross_owner_refused',
     );
   });
+
+  it('should close live on D1 detach/end, retain copies and require history authority', async () => {
+    await acceptProject();
+    const adopting = new SessionWorkspaceService(undefined, null);
+    const first = await adopting.adopt({
+      sessionId: 'sess-content-s1', tenantId: TENANT_A, principalId: owner.id, workspaceId,
+    });
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: first.bindingId,
+      bindingVersion: first.version,
+      d1Version: first.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('closed-copy-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-c1', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    const closed = await service.closeGrant('sess-content-s1', ctx);
+    expect(closed.retainedCopies).toBe(true);
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx),
+      'history_authorization_required',
+    );
+    const authorization = await service.grantHistoryAuthorization('sess-content-s1', ctx);
+    expect(authorization.ceilings['terminal.cache']).toBeNull();
+    const read = await service.readCommitted(
+      'sess-content-s1', 'terminal.cache', ctx, authorization.authorizationId,
+    );
+    expect(new TextDecoder().decode(read)).toBe('closed-copy-bytes');
+    await adopting.detach('sess-content-s1', TENANT_A, owner.id);
+    const reattached = await adopting.adopt({
+      sessionId: 'sess-content-s1', tenantId: TENANT_A, principalId: owner.id, workspaceId,
+    });
+    expect(reattached.version).toBeGreaterThan(first.version);
+    await expectContentError(() => service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: first.bindingId,
+      bindingVersion: first.version,
+      d1Version: first.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx), 'ineligible_session');
+    const newCtx: SessionContentContext = {
+      tenantId: TENANT_A, principalId: other.id, ownerId: other.id,
+    };
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', newCtx, authorization.authorizationId),
+      'cross_owner_refused',
+    );
+  });
+
+  it('should purge history scope on authorization revoke without viewer-close purge', async () => {
+    await acceptProject();
+    await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: bindings[0]!.bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('history-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-h1', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    await service.closeGrant('sess-content-s1', ctx);
+    const first = await service.grantHistoryAuthorization('sess-content-s1', ctx);
+    const second = await service.grantHistoryAuthorization('sess-content-s1', ctx);
+    await service.revokeHistoryAuthorization(first.authorizationId, ctx);
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx, first.authorizationId),
+      'history_authorization_revoked',
+    );
+    await expectContentError(
+      () => service.readCommitted('sess-content-s1', 'terminal.cache', ctx, second.authorizationId),
+      'not_found',
+    );
+    const jobs = await db.select().from(sessionContentPurgeJobs);
+    expect(jobs.length).toBeGreaterThan(0);
+    const purged = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(purged.remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+  });
