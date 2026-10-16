@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  captureExpiresAt,
+  checkGrantLiveness,
   ContentConsentError,
   computePolicyDigest,
+  createContentConsentService,
+  createMemoryContentConsentStore,
+  isGrantValidForBinding,
+  partitionExportableNativeRecords,
   validateRetentionByChannel,
   verifyPolicyDigest,
+} from '../src/sessions/content-consent.js';
+import type {
+  DeriveChildInput,
+  NamedHistoryDescriptor,
+  ProjectPrepareInput,
 } from '../src/sessions/content-consent.js';
 
 const expectConsentCode = (fn: () => unknown, code: string) => {
@@ -15,6 +26,66 @@ const expectConsentCode = (fn: () => unknown, code: string) => {
   }
   expect.unreachable();
 };
+
+const expectConsentCodeAsync = async (fn: () => Promise<unknown>, code: string) => {
+  try {
+    await fn();
+  } catch (error) {
+    expect(error).toMatchObject({ code });
+    return;
+  }
+  expect.unreachable();
+};
+
+const sharedBaseInput = (overrides: Partial<ProjectPrepareInput> = {}): ProjectPrepareInput => ({
+  projectId: 'project-1',
+  tenantId: 'tenant-a',
+  workspaceId: 'workspace-1',
+  workspaceIncarnation: 1,
+  ownerId: 'user-1',
+  sourceIdentities: ['workstation-1'],
+  sourceTrustVersions: ['h2a-1.0+d2-1'],
+  channels: { 'terminal.live': true, 'terminal.cache': true, 'native.mirror': false, 'keyboard.control': false },
+  futureSessions: true,
+  selectedSessionIds: [] as string[],
+  namedHistories: [] as NamedHistoryDescriptor[],
+  retentionByChannel: { 'terminal.cache': { mode: 'none' }, 'native.mirror': { mode: 'none' } },
+  authorityEpoch: 'epoch-1',
+  offlineReadAccepted: true,
+  ...overrides,
+});
+
+const setupConsent = () => {
+  const store = createMemoryContentConsentStore();
+  let nowMs = 1_000_000;
+  const service = createContentConsentService(store, { nowMs: () => nowMs });
+  return { store, service, advance: (ms: number) => { nowMs += ms; }, now: () => nowMs };
+};
+
+const readyConsent = async () => {
+  const context = setupConsent();
+  const prepared = context.service.prepareProject(sharedBaseInput());
+  await context.service.acceptProject(prepared, { challengeId: prepared.challengeId });
+  return context;
+};
+
+const sharedChildInput = (overrides: Partial<DeriveChildInput> = {}): DeriveChildInput => ({
+  projectId: 'project-1',
+  sessionId: 'session-1',
+  bindingId: 'binding-1',
+  bindingVersion: 1,
+  d1Version: 3,
+  d1Incarnation: 1,
+  d1StartSeq: 40,
+  tenantId: 'tenant-a',
+  workspaceId: 'workspace-1',
+  ownerId: 'user-1',
+  sessionCreatedAt: 1_000_001,
+  sourceGeneration: 'gen-1',
+  sourceTrustVersion: 'h2a-1.0+d2-1',
+  nativeStartSeq: 40,
+  ...overrides,
+});
 
 describe('content consent retention validation', () => {
   it('should accept explicit no-expiry defaults for both retained channels', () => {
