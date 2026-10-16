@@ -216,7 +216,7 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
         nowSec,
       });
       if (minted.accessToken === request.subjectToken) refuse('mint_passthrough');
-      if ('refreshToken' in (minted as Record<string, unknown>)) refuse('mint_refresh_present');
+      if ('refreshToken' in (minted as unknown as Record<string, unknown>)) refuse('mint_refresh_present');
       if (minted.expiresAtSec <= nowSec) refuse('ttl_non_positive');
 
       const insertedAtMs = nowMs();
