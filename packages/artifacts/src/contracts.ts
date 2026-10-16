@@ -27,6 +27,11 @@ export function isArtifactId(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
 }
 
+/** JSON value (undefined only as an absent property, never serialized). */
+export type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
+export interface JsonObject {
+  [key: string]: JsonValue | undefined;
+}
 /**
  * Content-addressed manifest: canonical bytes + SHA-256 digest, versioned
  * schema. `digest` is optional: construction precedes sealing, so working
