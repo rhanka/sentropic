@@ -179,4 +179,131 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
       ...(typeof payload.jti === 'string' ? { jti: payload.jti } : {}),
     };
   }
-}
+
+  async mint(input: MintExchangedTokenInput): Promise<MintedToken> {
+    const timeoutMs = this.options.requestTimeoutMs ?? TOKEN_EXCHANGE_HTTP_TIMEOUT_MS;
+    const maxBytes = this.options.maxResponseBytes ?? TOKEN_EXCHANGE_HTTP_MAX_RESPONSE_BYTES;
+    const form = new URLSearchParams({
+      grant_type: RFC8693_GRANT_TYPE,
+      subject_token: input.subjectToken,
+      subject_token_type: ACCESS_TOKEN_TYPE,
+      requested_token_type: ACCESS_TOKEN_TYPE,
+      resource: input.audience,
+      scope: [...input.scope].join(' '),
+    });
+    const credentials = `${this.options.workloadClientId}:${this.options.clientSecret}`;
+    let response;
+    try {
+      response = await this.fetchFn(this.options.tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          accept: 'application/json',
+          authorization: `Basic ${Buffer.from(credentials, 'utf8').toString('base64')}`,
+        },
+        body: form.toString(),
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: 'manual',
+      });
+    } catch {
+      throw new TokenExchangeRefusedError('mint_failed', 'Token exchange failed: issuer is unreachable.');
+    }
+    if (response.status >= 300 && response.status < 400) {
+      throw new TokenExchangeRefusedError('mint_failed', 'Token exchange failed: issuer redirect refused.');
+    }
+    const length = response.headers.get('content-length');
+    if (length !== null && Number(length) > maxBytes) {
+      throw new TokenExchangeRefusedError('mint_failed', 'Token exchange failed: issuer response is oversized.');
+    }
+    const text = await response.text();
+    if (text.length > maxBytes) {
+      throw new TokenExchangeRefusedError('mint_failed', 'Token exchange failed: issuer response is oversized.');
+    }
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new TokenExchangeRefusedError('mint_failed', 'Token exchange failed: issuer response is not JSON.');
+    }
+    if (response.status < 200 || response.status >= 300) {
+      throw this.refuseIssuerError(body);
+    }
+    return this.validateMinted(body, input);
+  }
+
+  private refuseIssuerError(body: Record<string, unknown>): TokenExchangeRefusedError {
+    const code = typeof body.error === 'string' ? body.error : 'exchange_failed';
+    if (code === 'invalid_scope') return new TokenExchangeRefusedError('scope_not_granted');
+    if (code === 'invalid_target') return new TokenExchangeRefusedError('audience_not_allowed');
+    return new TokenExchangeRefusedError('mint_failed', `Token exchange failed: issuer refused (${code}).`);
+  }
+
+  private async validateMinted(body: Record<string, unknown>, input: MintExchangedTokenInput): Promise<MintedToken> {
+    if (typeof body.access_token !== 'string' || body.access_token.length === 0) {
+      throw new TokenExchangeRefusedError('minted_token_invalid');
+    }
+    if (body.access_token === input.subjectToken) throw new TokenExchangeRefusedError('mint_passthrough');
+    if (body.refresh_token !== undefined) throw new TokenExchangeRefusedError('mint_refresh_present');
+    if (body.id_token !== undefined) throw new TokenExchangeRefusedError('minted_token_invalid');
+    if (body.token_type !== 'Bearer') throw new TokenExchangeRefusedError('minted_token_type_unsupported');
+    if (body.issued_token_type !== undefined && body.issued_token_type !== ACCESS_TOKEN_TYPE) {
+      throw new TokenExchangeRefusedError('minted_token_type_unsupported');
+    }
+    const nowSec = Math.floor(this.nowMs() / 1000);
+    let payload: JWTPayload;
+    try {
+      const verified = await jwtVerify(body.access_token, await this.jwks(), {
+        issuer: this.expectedIssuer(),
+        audience: input.audience,
+        subject: input.subject.subject,
+        currentDate: new Date(this.nowMs()),
+      });
+      payload = verified.payload;
+    } catch {
+      throw new TokenExchangeRefusedError('minted_signature_invalid');
+    }
+    if (payload.act == null || typeof (payload.act as { sub?: unknown }).sub !== 'string') {
+      throw new TokenExchangeRefusedError('minted_actor_invalid');
+    }
+    if ((payload.act as { sub: string }).sub !== this.options.actorSub) {
+      throw new TokenExchangeRefusedError('minted_actor_invalid');
+    }
+    if (payload.client_id !== this.options.workloadClientId) throw new TokenExchangeRefusedError('minted_actor_invalid');
+    const issuedScope =
+      typeof payload.scope === 'string'
+        ? payload.scope.split(' ').filter(Boolean)
+        : Array.isArray(payload.scope)
+          ? payload.scope.filter((entry): entry is string => typeof entry === 'string')
+          : [];
+    for (const scope of issuedScope) {
+      if (!input.scope.includes(scope)) throw new TokenExchangeRefusedError('minted_scope_invalid');
+    }
+    if (typeof payload.exp !== 'number' || typeof payload.iat !== 'number' || !(payload.exp > nowSec)) {
+      throw new TokenExchangeRefusedError('minted_ttl_invalid');
+    }
+    if (payload.exp > input.subject.expiresAtSec) throw new TokenExchangeRefusedError('minted_ttl_invalid');
+    if (payload.exp - payload.iat > 300) throw new TokenExchangeRefusedError('minted_ttl_invalid');
+    const responseScope = typeof body.scope === 'string' ? body.scope.split(' ').filter(Boolean) : [];
+    if ([...responseScope].sort().join(' ') !== [...issuedScope].sort().join(' ')) {
+      throw new TokenExchangeRefusedError('minted_scope_invalid');
+    }
+    return {
+      accessToken: body.access_token,
+      tokenType: 'Bearer',
+      issuedTokenType: ACCESS_TOKEN_TYPE,
+      expiresAtSec: payload.exp,
+      scope: issuedScope,
+      verified: {
+        issuer: this.expectedIssuer(),
+        subject: input.subject.subject,
+        audience: input.audience,
+        clientId: this.options.workloadClientId,
+        actorSub: this.options.actorSub,
+        scope: issuedScope,
+        issuedAtSec: payload.iat,
+        expiresAtSec: payload.exp,
+        ...(typeof payload.jti === 'string' ? { jti: payload.jti } : {}),
+      },
+    };
+  }
+
