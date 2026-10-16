@@ -27,6 +27,17 @@ export function isArtifactId(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
 }
 
+/**
+ * Content-addressed manifest: canonical bytes + SHA-256 digest, versioned
+ * schema. `digest` is optional: construction precedes sealing, so working
+ * documents carry no digest and sealed documents must verify against it.
+ */
+export interface CanonicalManifest {
+  schemaVersion: string;
+  digest?: string;
+  [key: string]: unknown;
+}
+
 /** Allocate a server-side identity (UUID v4). */
 export function createArtifactId(): string {
   return crypto.randomUUID();
