@@ -34,6 +34,8 @@ Qualify mcp-auth for Immo application scopes without source changes.
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `packages/mcp-auth/src/**` (only if a test proves a defect)
   - `packages/mcp-auth/package.json` (version bump only if a source fix ships)
+  - `packages/mcp-auth/CHANGELOG.md` (only under `BR01-EX1`)
+  - `package-lock.json` (only under `BR01-EX1`)
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
 - **Exception process**:
@@ -83,10 +85,10 @@ Qualify mcp-auth for Immo application scopes without source changes.
   - [x] No `spec/BRANCH_SPEC_EVOL.md`: single-lot qualification branch, not complex.
 
 - [ ] **Lot 1 — 3-qualification mcp-auth scope tests**
-  - [ ] Add `packages/mcp-auth/tests/application-scopes.test.ts` with real signed Immo-only tokens
-  - [ ] Evaluate `packages/mcp-auth/tests/core.test.ts` as regression gate (update only on defect)
-  - [ ] Evaluate `packages/mcp-auth/tests/hono.test.ts` as regression gate (update only on defect)
-  - [ ] Evaluate `packages/mcp-auth/tests/prm.test.ts` as regression gate (update only on defect)
+  - [x] Add `packages/mcp-auth/tests/application-scopes.test.ts` with real signed Immo-only tokens (acceptance half green)
+  - [x] Evaluate `packages/mcp-auth/tests/core.test.ts` as regression gate (update only on defect)
+  - [x] Evaluate `packages/mcp-auth/tests/hono.test.ts` as regression gate (update only on defect)
+  - [x] Evaluate `packages/mcp-auth/tests/prm.test.ts` as regression gate (update only on defect)
   - [ ] No change to `packages/mcp-auth/src/**` unless a test proves a defect
   - [ ] Lot gate:
     - [ ] `make typecheck-mcp-auth ENV=test-mcp-scope-qualification`
