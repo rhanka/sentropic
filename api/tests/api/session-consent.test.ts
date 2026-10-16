@@ -260,7 +260,11 @@ describe('session consent durable lifecycle', () => {
     await expectContentError(
       () =>
         service.acceptProject(
-          { ...prepared, policy: { ...prepared.policy, projectRevision: 99 } },
+          {
+            ...prepared,
+            policy: { ...prepared.policy, projectRevision: 99 },
+            offlineReadAccepted: true,
+          },
           ctx,
         ),
       'policy_digest_mismatch',
