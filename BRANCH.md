@@ -316,9 +316,8 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - [x] `server/runtime.ts` (`createContentRuntime`: owner/granted/approved-public reads, withdrawal suspends readers, terminal reports 410, no digest oracle 404, manifest size check 422) + `server/reader-profile.ts` (pure `evaluateReaderProfile`: exact method/route, artifact/release bindings, owner bypass, listed subjects, approved-only opt-in, deny by default) + `GET /content/:artifactId/:digest` on the HTTP app (shared blob store). Suites: `runtime` 7, `reader-profile` 5, parity content case. Unit gate 77/77; integration gate 22/22; typecheck clean; `lint-artifacts` exit 0; `pack-artifacts` unpublished `sentropic-artifacts-0.1.0.tgz` (`2ddfd9e8…`). Actual Radar domain/TLS/activation remain external acceptance.
   - [ ] UAT per spec-v7.
 
-- [ ] **Lot 11 — L-5e pages provider + mesh leaf (future, after L-4b-leaves and L-5a-5d)**
-  - [ ] Complete reusable pages MCP, optional peer/facade and second-host packed consumer proof with branch tarballs.
-  - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented + packed consumer proof.
+- [ ] **Lot 11 — L-5e pages provider + mesh leaf (done, after L-4b-leaves and L-5a-5d)**
+  - [x] `server/pages.ts` (`definePagesProvider` 0.1.0: exact `pages_ensure_site`/`pages_publish_site`/`pages_read_page`/`pages_serve_content`; `createPagesDispatch` over any conforming app with per-request actor identity) + `probe-artifacts-packed-consumer` (EX7): branch tarball installed on an isolated consumer, `PACKED_CONSUMER_OK digest=sha256:039058c6… fetchCalls=0`, zero I/O. New `./server/runtime`, `./server/reader-profile`, `./server/pages` subpaths. Suites: `pages` 3. Unit gate 80/80; integration gate 22/22; typecheck clean; `lint-artifacts` exit 0; `pack-artifacts` unpublished `sentropic-artifacts-0.1.0.tgz` (`320a1b4b…`).
   - [ ] UAT per spec-v7.
 
 - [ ] **Lot N-2** UAT
