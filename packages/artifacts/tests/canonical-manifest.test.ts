@@ -51,7 +51,11 @@ describe('canonical manifests', () => {
   });
 
   it('parses canonical bytes back and refuses unknown schemas', () => {
-    expect(parseManifest(canonicalManifest(BASE))).toEqual(BASE);
+    // Round-trip is a canonical fixpoint (file order is normalized by
+    // canonicalization, so bytes — not the unnormalized input — compare).
+    const parsed = parseManifest(canonicalManifest(BASE));
+    expect(parsed.artifactId).toBe(BASE.artifactId);
+    expect(canonicalManifest(parsed)).toBe(canonicalManifest(BASE));
     expect(() => parseManifest('{"schemaVersion":"artifacts/v9"}')).toThrow(/unknown artifact schema/);
     expect(() => parseManifest('{oops')).toThrow(/parse/);
     expect(() => parseManifest('{"schemaVersion":"artifacts/v1"}')).toThrow(/artifactId/);
