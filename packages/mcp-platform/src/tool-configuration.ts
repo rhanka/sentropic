@@ -334,8 +334,10 @@ const FORBIDDEN_CONTENT_KEYS = new Set([
   'jwt',
   'token',
 ]);
-// Substring families (R2-m2): `token` excluded so `maxTokens` passes (allowlisted).
-// `email` included so `contactEmail` is forbidden.
+// Substring families (R2-m2, R3-M1): `token` included so composed keys
+// (`authToken`, `githubToken`, `sessionToken`, `apiToken`) are forbidden.
+// `maxTokens` passes via FORBIDDEN_CONTENT_ALLOWLIST. `email` included so
+// `contactEmail` is forbidden. Bounded heuristic, not a universal detector.
 const FORBIDDEN_CONTENT_SUBSTRINGS = [
   'secret',
   'password',
@@ -345,6 +347,7 @@ const FORBIDDEN_CONTENT_SUBSTRINGS = [
   'privatekey',
   'bearer',
   'email',
+  'token',
 ];
 // Exact normalized keys that are never forbidden despite matching a family.
 const FORBIDDEN_CONTENT_ALLOWLIST = new Set(['maxtokens']);
