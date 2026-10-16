@@ -452,3 +452,70 @@ function checkValueType(
   return false;
 }
 
+function isWeakeningOverlay(manifestTool: CapabilityTool, overlay: ToolPolicyOverlay): string | null {
+  if (overlay.requiredScopes !== undefined) {
+    if (!Array.isArray(overlay.requiredScopes)) return 'requiredScopes must be an array';
+    for (const scope of manifestTool.requiredScopes) {
+      if (!overlay.requiredScopes.includes(scope)) return `requiredScopes drops manifest scope "${scope}"`;
+    }
+  }
+  if (overlay.requiredClaims !== undefined) {
+    if (!Array.isArray(overlay.requiredClaims)) return 'requiredClaims must be an array';
+    for (const claim of manifestTool.requiredClaims) {
+      if (!overlay.requiredClaims.includes(claim)) return `requiredClaims drops manifest claim "${claim}"`;
+    }
+  }
+  if (overlay.mutability !== undefined && overlay.mutability !== manifestTool.mutability) {
+    return 'mutability must equal the manifest baseline';
+  }
+  if (overlay.mutatesExternalSystem !== undefined && overlay.mutatesExternalSystem !== manifestTool.mutatesExternalSystem) {
+    return 'mutatesExternalSystem must equal the manifest baseline';
+  }
+  if (overlay.idempotency !== undefined) {
+    if (overlay.idempotency.required !== manifestTool.idempotency.required) {
+      return 'idempotency.required must equal the manifest baseline';
+    }
+    if (
+      manifestTool.idempotency.scope !== undefined &&
+      overlay.idempotency.scope !== manifestTool.idempotency.scope
+    ) {
+      return 'idempotency.scope must equal the manifest baseline';
+    }
+  }
+  if (overlay.freshness !== undefined) {
+    if (manifestTool.freshness !== undefined) {
+      if (overlay.freshness.maxAgeSeconds > manifestTool.freshness.maxAgeSeconds) {
+        return 'freshness.maxAgeSeconds exceeds the manifest baseline';
+      }
+      if (overlay.freshness.stepUp !== manifestTool.freshness.stepUp) {
+        return 'freshness.stepUp must equal the manifest baseline';
+      }
+    }
+  }
+  if (overlay.redactionClass !== undefined) {
+    const base = REDACTION_ORDER.indexOf(manifestTool.redactionClass);
+    const next = REDACTION_ORDER.indexOf(overlay.redactionClass);
+    if (next < 0) return 'unknown redactionClass';
+    if (next < base) return 'redactionClass weakens the manifest baseline';
+  }
+  if (overlay.gates !== undefined) {
+    const pairs: Array<[keyof CapabilityTool['gates'], boolean]> = [
+      ['requiresElicitation', manifestTool.gates.requiresElicitation],
+      ['requiresHumanConfirmation', manifestTool.gates.requiresHumanConfirmation],
+      ['requiresPrincipalGate', manifestTool.gates.requiresPrincipalGate],
+    ];
+    for (const [key, base] of pairs) {
+      if (overlay.gates[key] !== undefined && overlay.gates[key] !== base) {
+        if (base && !overlay.gates[key]) return `gates.${key} weakens the manifest baseline`;
+        if (!base && overlay.gates[key]) continue;
+        if (overlay.gates[key] !== base) return `gates.${key} must equal the manifest baseline`;
+      }
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Compiler
+// ---------------------------------------------------------------------------
+
