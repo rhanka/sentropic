@@ -6,12 +6,15 @@ import { oauthJsonError } from './http-utils.js';
 import { sha256Base64url } from './crypto-utils.js';
 import { OAuthDpopProofError, verifyOAuthDpopProof } from './dpop.js';
 import type { AuthCodePayload, OauthClientRecord, ServiceClientRecord, TokenMeta } from './state-store-types.js';
+import { TOKEN_EXCHANGE_GRANT_TYPE } from './state-store-types.js';
+import { handleTokenExchange } from './token-exchange-handler.js';
 
 const DEFAULT_SERVICE_ACCESS_TOKEN_TTL_SECONDS = 900;
 
 export interface OAuthTokenHandlerOptions {
   accessTokenTtlSeconds?: number;
   dpopIatSkewSeconds?: number;
+  exchangeEnvironment?: string | null;
   idTokenTtlSeconds?: number;
   issuer: string;
   ports: AuthHonoPorts;
@@ -36,12 +39,19 @@ export const createOAuthTokenHandler =
     if (grantType === 'client_credentials') {
       return handleClientCredentials(c, form, options);
     }
+    if (grantType === TOKEN_EXCHANGE_GRANT_TYPE) {
+      return handleTokenExchange(c, form, {
+        exchangeEnvironment: options.exchangeEnvironment,
+        issuer: options.issuer,
+        ports: options.ports,
+      });
+    }
     if (grantType !== 'authorization_code') {
       return oauthJsonError(
         c,
         400,
         'unsupported_grant_type',
-        'Only authorization_code and client_credentials grants are supported.'
+        'Only authorization_code, client_credentials and token-exchange grants are supported.'
       );
     }
 
@@ -194,6 +204,10 @@ const handleClientCredentials = async (
 
   const auth = await authenticateServiceClient(c, form, options.ports, findServiceClient);
   if (auth instanceof Response) return auth;
+
+  if (auth.client.exchangePolicy?.enabled && auth.client.exchangePolicy.allowClientCredentials === false) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'This client is restricted to token exchange.');
+  }
 
   const scope = resolveServiceScope(c, form, auth.client);
   if (scope instanceof Response) return scope;
