@@ -221,9 +221,12 @@ export function computeManifestDigest(manifest: AppMcpProviderManifest): string 
 }
 
 /**
- * Consumer-supplied digest scope: the public tool schemas/result codec.
- * Covers exactly what configuration alone MUST NOT change: names,
- * descriptions and input/output schemas.
+ * Helper producing the generic consumer digest scope: the public tool
+ * schemas/result codec. Covers exactly what configuration alone MUST NOT
+ * change: names, descriptions and input/output schemas. A 1b consumer
+ * computes its own digest over its SDK `tools/list` snapshot plus the
+ * `content`/`isError` result envelope and supplies it as
+ * `CompileToolConfigurationInput.compatibilityDigest`.
  */
 export function computeCompatibilityDigest(manifest: AppMcpProviderManifest): string {
   const tools = [...manifest.tools]
@@ -775,6 +778,13 @@ export type CompileToolConfigurationInput = {
   snapshot: unknown;
   manifest: AppMcpProviderManifest;
   handlers: Record<string, ToolConfigurationHandlerBinding> | Map<string, ToolConfigurationHandlerBinding>;
+  /**
+   * Consumer-supplied digest covering the consumer's public schemas/result
+   * codec (1b: SDK `tools/list` snapshot plus the `content`/`isError`
+   * envelope). The compiler never derives it: the snapshot value MUST equal
+   * this input (M4).
+   */
+  compatibilityDigest: string;
 };
 
 /**
@@ -812,10 +822,8 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
   // Digest inputs may carry non-canonical values (undefined, non-finite
   // numbers); an unencodable manifest fails closed with a diagnostic (M5).
   let manifestDigest = '';
-  let compatibilityDigest = '';
   try {
     manifestDigest = computeManifestDigest(manifest);
-    compatibilityDigest = computeCompatibilityDigest(manifest);
   } catch {
     diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.manifestDigest', 'manifest cannot be canonically encoded');
     return { ok: false, diagnostics };
@@ -823,12 +831,18 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
   if (snapshot.manifestDigest !== manifestDigest) {
     diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.manifestDigest', 'manifestDigest does not match the manifest');
   }
-  if (snapshot.compatibilityDigest !== compatibilityDigest) {
+  // The compatibility digest is consumer-supplied (M4): the compiler compares
+  // the snapshot value to the consumer input and never derives it from the
+  // manifest itself.
+  const consumerDigest = input.compatibilityDigest;
+  if (typeof consumerDigest !== 'string' || consumerDigest.length === 0) {
+    diag(diagnostics, 'compatibility_digest_mismatch', 'snapshot.compatibilityDigest', 'consumer compatibilityDigest must be a non-empty string');
+  } else if (snapshot.compatibilityDigest !== consumerDigest) {
     diag(
       diagnostics,
       'compatibility_digest_mismatch',
       'snapshot.compatibilityDigest',
-      'compatibilityDigest does not cover the manifest public schemas',
+      'snapshot compatibilityDigest does not match the consumer-supplied digest',
     );
   }
 
@@ -990,7 +1004,7 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
 
   const config: CompiledToolConfiguration = {
     approvalRef: approval.approvalRef,
-    compatibilityDigest,
+    compatibilityDigest: snapshot.compatibilityDigest as string,
     handlersDigest,
     manifestDigest,
     ...(typeof snapshot.providerVersion === 'string' ? { providerVersion: snapshot.providerVersion } : {}),
