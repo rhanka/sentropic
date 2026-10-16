@@ -30,6 +30,7 @@ export * from './oauth/service-auth-middleware.js';
 export * from './oauth/session-resolver.js';
 export * from './oauth/state-store-types.js';
 export * from './oauth/state-codec.js';
+export * from './oauth/token-exchange-handler.js';
 export * from './oauth/token-handler.js';
 export * from './oauth/userinfo-handler.js';
 export * from './oauth/wellknown-handler.js';

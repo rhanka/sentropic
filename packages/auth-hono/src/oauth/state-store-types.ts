@@ -79,7 +79,38 @@ export interface ServiceClientRecord {
   secretRotatedAt: Date | null;
   createdAt: Date;
   revokedAt: Date | null;
+  /**
+   * RFC 8693 token-exchange policy (2-IdP). Default-deny: absent/null means the client
+   * cannot perform token exchange. The `immo-mcp-workload` exchange-only client carries
+   * an enabled policy with `allowClientCredentials: false`.
+   */
+  exchangePolicy?: ServiceClientExchangePolicy | null;
 }
+
+/**
+ * Issuer-side default-deny exchange policy for one confidential service client (2-IdP).
+ * Every list is an exact-match allowlist; a request value must select an allowed entry,
+ * never create one. No wildcards.
+ */
+export interface ServiceClientExchangePolicy {
+  enabled: boolean;
+  allowedSubjectClients: string[];
+  allowedSubjectAudiences: string[];
+  allowedTargetAudiences: string[];
+  actorSub: string;
+  allowedScopes: string[];
+  maxTtlSeconds: number;
+  environment?: string | null;
+  allowClientCredentials: boolean;
+}
+
+export const TOKEN_EXCHANGE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
+
+export const TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+
+export const TOKEN_EXCHANGE_REQUESTED_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+
+export const TOKEN_EXCHANGE_MAX_TTL_SECONDS = 300;
 
 export interface OauthStateStorePort {
   findClient(clientId: string): Promise<OauthClientRecord | null>;
