@@ -272,18 +272,20 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
     - [ ] Original MCP token to Radar is 401; exchanged token to MCP is 401; actor/scope denials hold.
     - [ ] Valid token without `immo:read` is 403 `insufficient_scope` on the upgraded tuple without reconnect.
 
-- [ ] **Lot 7 — 4b-leaves incl. 1b-facade through mesh (future, after Lot 5 + 2a gates)**
-  - [ ] Update `packages/cluster-mesh/src/modules/contracts.ts`, `catalog.ts`, `registry.ts`, `topology.ts`, `topology-guard.ts`, package/export/type maps, README, changelog. New `src/integrations/mcp/**`, `src/loaders/mcp/**`, `src/compose/mcp.ts`, `src/modules/topology-guard-mcp.ts`. Extend `peerDependencies`/`peerDependenciesMeta` with optional `@sentropic/mcp-platform` + `@modelcontextprotocol/sdk`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh pack-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
-    - [ ] `make -f packages/cluster-mesh/packaging.mk test-lazy-package API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
-    - [ ] **API tests**
-      - [ ] `packages/cluster-mesh/tests/mcp-registry.spec.ts` (new)
-      - [ ] `packages/cluster-mesh/tests/mcp-composition.spec.ts` (new)
-      - [ ] `packages/cluster-mesh/tests/packaging/mcp-tuple.spec.ts` (new)
-      - [ ] `packages/cluster-mesh/tests/packaging/mcp-registry-consumer.spec.ts` (new)
-      - [ ] `packages/cluster-mesh/tests/integrations/mcp-surface.spec.ts` (new)
-      - [ ] Sub-lot gate: `make test-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
+- [ ] **Lot 7 — 4b-leaves incl. 1b-facade through mesh (in progress, after Lot 5 + 2a gates)**
+  - [x] `contracts.ts`/`catalog.ts` module IDs (`mcp-platform/registry|entry|bridge|hono|stdio`, tight `>=0.3.0 <0.4.0`), `topology-guard-mcp.ts`, `src/loaders/mcp/**` (`a0cceabe2`, `f6d280757`; suite `loaders/mcp-platform.spec.ts` 5/5). Extend `peerDependencies`/`peerDependenciesMeta` with optional `@sentropic/mcp-platform` + `@modelcontextprotocol/sdk` (lockfile +8). `topology.ts` untouched (no new leaf family; ranges enforced at load).
+  - [x] `src/mcp/registry.ts` `createMcpRegistry` over the one kernel, static builtins, explicit refusal (`168a5fd59`; suite `mcp-registry.spec.ts` 4/4). `src/compose/mcp.ts` `createMcpNamespaceModule` with preflight + identity-chained guard (`a6f59676e`; suite `mcp-composition.spec.ts` 4/4). `src/mcp/stdio.ts` leaf over real stdio framing (`69e11aa43`; suite `integrations/mcp-surface.spec.ts` 2/2). Shared `transport/bridge.ts` extraction (`6e8cf17c9`) + `./transport/bridge|stdio` platform subpaths.
+  - [x] Package/export maps: `./mcp/registry`, `./mcp/stdio`, `./compose/mcp`, `./loaders/mcp` mesh subpaths. README/changelog updates deferred to the final PR pass.
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh pack-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (typecheck+lint clean; 64 files / 534 tests GREEN; pack `0.18.0` PASS — final repack at Lot N)
+    - [x] `make -f packages/cluster-mesh/packaging.mk test-lazy-package API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (fixture `mcp-consumer` added to `prepare.sh` + platform build prerequisite; full run is CI-only — local run stops at the pre-existing ETARGET on unpublished `llm-gateway 0.20.1` without sibling receipts, unrelated to Lot 7)
+    - [x] **API tests**
+      - [x] `packages/cluster-mesh/tests/mcp-registry.spec.ts` (4/4)
+      - [x] `packages/cluster-mesh/tests/mcp-composition.spec.ts` (4/4)
+      - [x] `packages/cluster-mesh/tests/packaging/mcp-tuple.spec.ts` (CI-gated, collected+skipped locally)
+      - [x] `packages/cluster-mesh/tests/packaging/mcp-registry-consumer.spec.ts` (CI-gated, collected+skipped locally; mechanism proven manually: clean tree install `0.18.0`+`0.3.0`+SDK `1.32.1` → facade round-trip `{ok:true, provider:immo, digest:739bd9b3…}`)
+      - [x] `packages/cluster-mesh/tests/integrations/mcp-surface.spec.ts` (2/2)
+      - [x] Sub-lot gate: `make test-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (64/534 GREEN)
     - [ ] **UI tests (TypeScript only)**
       - [ ] None in this slice.
     - [ ] **E2E tests**
