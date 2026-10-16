@@ -199,7 +199,9 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
       - [ ] Import the packed platform registry subpath, reproduce the immutable plan with zero registry I/O.
       - [ ] Register/select/configure two synthetic providers; changing one leaves the other unchanged.
 
-- [ ] **Lot 5 — 3-policy + 4a guarded SDK dispatch (future, sequential on 1b-core)**
+- [ ] **Lot 5 — L-3policy/4a guarded SDK dispatch (in progress, sequential on L-1b-core WIP)**
+  - [x] Pure policy slice: `src/transport/dispatch.ts` (`authorizeDispatch`: exact-name resolve + scope/claim coverage, stable refusal codes) with `tests/capability-scopes.test.ts` (5/5, RED-first).
+  - [ ] SDK transport slice: add `@modelcontextprotocol/sdk` dependency + lockfile, `streamable-http.ts`, `stdio.ts`, `result-codec.ts`, remaining tests (see below).
   - [ ] Update `packages/mcp-platform/src/hono.ts`, new `src/transport/dispatch.ts`, `streamable-http.ts`, `stdio.ts`, `result-codec.ts`; add `tests/capability-scopes.test.ts`, `streamable-http.test.ts`, `stdio.test.ts`, `wire-parity.test.ts`, `request-identity.test.ts`; update `tests/hono.test.ts`, `transport.test.ts`; regress `authz.test.ts`, `writes.test.ts`, `elicitation.test.ts`; API consumer regression `api/tests/api/mcp-resource-server.test.ts`.
   - [ ] Lot gate:
     - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
