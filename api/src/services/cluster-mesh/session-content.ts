@@ -6,7 +6,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import {
   computePolicyDigest,
   validateRetentionByChannel,
@@ -27,7 +27,7 @@ import {
   sessionContentTombstones,
   sessionWorkspaceBindings,
 } from '../../db/control-schema';
-import { tenantMemberships, tenants, users, workspaces } from '../../db/schema';
+import { tenantMemberships, tenants } from '../../db/schema';
 
 export type SessionContentErrorCode =
   | 'storage_unavailable'
@@ -1027,7 +1027,9 @@ export class SessionContentService {
       .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
       .from(sessionContentObjects)
       .where(and(...conditions));
-    const reservedConditions = [eq(sessionContentReservations.state, 'reserved')];
+    const reservedConditions = [
+      inArray(sessionContentReservations.state, ['reserved', 'stale']),
+    ];
     if (scope.namespaceId) {
       reservedConditions.push(eq(sessionContentReservations.namespaceId, scope.namespaceId));
     }
@@ -1061,7 +1063,7 @@ export class SessionContentService {
           .where(
             and(
               inArray(sessionContentReservations.namespaceId, ids),
-              eq(sessionContentReservations.state, 'reserved'),
+              inArray(sessionContentReservations.state, ['reserved', 'stale']),
             ),
           );
         tenantBytes = (o?.bytes ?? 0) + (r?.bytes ?? 0);
@@ -1426,7 +1428,7 @@ export class SessionContentService {
       .from(sessionContentReservations)
       .where(
         and(
-          eq(sessionContentReservations.state, 'reserved'),
+          inArray(sessionContentReservations.state, ['reserved', 'stale']),
           reservedInScope,
           scope.sessionId ? eq(sessionContentReservations.sessionId, scope.sessionId) : sql`TRUE`,
         ),
