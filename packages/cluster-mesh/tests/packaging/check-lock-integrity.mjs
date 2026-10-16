@@ -49,12 +49,31 @@ function refresh(workingLock, committedLock, packageJson, siblingsDir) {
   if (errors === 0) fs.writeFileSync(committedLock, text);
 }
 
+function isOptionalEverywhere(lock, name) {
+  let seen = false;
+  for (const pkg of Object.values(lock.packages ?? {})) {
+    if (!pkg || typeof pkg !== 'object') continue;
+    if (pkg.dependencies?.[name]) return false;
+    if (pkg.peerDependencies?.[name]) {
+      seen = true;
+      if (!pkg.peerDependenciesMeta?.[name]?.optional) return false;
+    }
+  }
+  return seen;
+}
+
 function siblings(committedLock, siblingsDir) {
   const lock = readJson(committedLock);
   for (const sibling of readIndex(siblingsDir)) {
     if (sibling.name === CANDIDATE) continue;
     const entry = lock.packages[`node_modules/${sibling.name}`];
     if (!entry) {
+      // A same-PR sibling no installed edge requires is absent from the frozen tuple by
+      // design (e.g. an optional-only session peer in the service-mode tuple): nothing to pin.
+      if (isOptionalEverywhere(lock, sibling.name)) {
+        console.log(`[lock] ${sibling.name}@${sibling.version} is optional-only and absent; nothing to pin`);
+        continue;
+      }
       error(`${sibling.name}@${sibling.version} is a sibling but absent from the committed lock`);
       continue;
     }
