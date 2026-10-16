@@ -1,0 +1,186 @@
+# Feature: Auth Token Exchange (2-IdP)
+
+## Objective
+Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo-mcp-workload client beside unchanged public immo-mcp.
+
+## Scope / Guardrails
+- Scope limited to 2-IdP issuer, workload client, host wiring, migration, idp-identity-sync extension.
+- One migration max in `api/drizzle/*.sql` (if applicable).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `packages/auth-hono/src/oauth/token-handler.ts`
+  - `packages/auth-hono/src/oauth/token-exchange-handler.ts`
+  - `packages/auth-hono/src/oauth/state-store-types.ts`
+  - `packages/auth-hono/src/oauth/wellknown-handler.ts`
+  - `packages/auth-hono/src/oauth/router.ts`
+  - `packages/auth-hono/src/ports.ts`
+  - `packages/auth-hono/src/index.ts`
+  - `packages/auth-hono/tests/token-exchange.test.ts`
+  - `packages/auth-hono/tests/token-exchange-security.test.ts`
+  - `packages/auth-hono/tests/__fixtures__/memory-oauth-state-store.ts`
+  - `packages/auth-hono/tests/__fixtures__/oauth-fixtures.ts`
+  - `packages/auth-hono/package.json`
+  - `packages/auth-hono/README.md`
+  - `api/src/routes/auth/oauth.ts`
+  - `api/src/routes/namespaces/oauth-ingress.ts`
+  - `api/src/services/auth/oauth-state-adapter.ts`
+  - `api/src/db/schema.ts`
+  - `api/tests/api/auth/oauth-token-exchange.test.ts`
+  - `api/tests/unit/auth/oauth-state-adapter.test.ts`
+  - `api/tests/api/auth/oauth-wellknown.test.ts`
+  - `api/tests/api/cluster-mesh-oauth-roots.test.ts`
+  - `deploy/ci/idp-identity-sync/**`
+  - `spec/DATA_MODEL.md`
+  - `.h2a/build/immo_2idp_report.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `package-lock.json`
+  - `api/package.json`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+- None.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single lot 2-IdP with one worktree, one test cycle, no orthogonal sub-branches.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-<slug>`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/feat-<slug>` after UAT.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`.
+  - [x] Read spec-v2 §2-IdP policy table and §6 2-IdP tasks, challenge-opus-r2 R2 firm service_clients extension.
+  - [x] Trace impact: service_clients consumers, token-handler consumers, idp-sync oauth_clients-only paths.
+  - [x] Confirm worktree `tmp/worktrees/auth-token-exchange` on `feat/auth-token-exchange` baseline `09b1c601d`.
+  - [x] Define environment mapping: `ENV=test-auth-token-exchange`, `API_PORT=9555`, `UI_PORT=5755`, `MAILDEV_UI_PORT=1655`.
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+- [ ] **Lot 1 — auth-hono RFC 8693 exchange core**
+  - [ ] Extend `state-store-types.ts` with default-deny exchange policy for confidential clients.
+  - [ ] Add `src/oauth/token-exchange-handler.ts` with fail-closed policy enforcement.
+  - [ ] Update `src/oauth/token-handler.ts` to dispatch token-exchange grant and enforce grant eligibility.
+  - [ ] Update `src/ports.ts`, `src/oauth/router.ts`, `src/index.ts` exports as required.
+  - [ ] Update `src/oauth/wellknown-handler.ts` to advertise exchange grant only when configured.
+  - [ ] Update `tests/__fixtures__/memory-oauth-state-store.ts`, `tests/__fixtures__/oauth-fixtures.ts`.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-auth-hono API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [ ] **API tests**
+      - [ ] New `packages/auth-hono/tests/token-exchange.test.ts` (policy table happy paths, scope intersection, TTL ceilings, act claim, no refresh).
+      - [ ] New `packages/auth-hono/tests/token-exchange-security.test.ts` (every refusal path).
+      - [ ] Existing `packages/auth-hono/tests/oauth-token.test.ts` (regress authorization_code unchanged).
+      - [ ] Existing `packages/auth-hono/tests/oauth-authorize.test.ts` (regress).
+      - [ ] Existing `packages/auth-hono/tests/oauth-client-credentials.test.ts` (regress, workload exchange-only no upgrade).
+      - [ ] Existing `packages/auth-hono/tests/oauth-resource-indicator.test.ts` (regress).
+      - [ ] Existing `packages/auth-hono/tests/oauth-revoke.test.ts` (regress revocation).
+      - [ ] Existing `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (regress Bearer-only, DPoP rejected).
+      - [ ] Existing `packages/auth-hono/tests/oauth-wellknown.test.ts` (regress grant advertisement).
+      - [ ] Existing `packages/auth-hono/tests/oauth-router-factory.test.ts` (regress).
+      - [ ] Scoped runs while evolving tests: `make test-auth-hono SCOPE=tests/token-exchange.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+      - [ ] Scoped runs while evolving tests: `make test-auth-hono SCOPE=tests/token-exchange-security.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+      - [ ] Sub-lot gate: `make test-auth-hono API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` and document status/signature in `BRANCH.md`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None; no login UI change in 2-IdP.
+      - [ ] Sub-lot gate: `make test-ui API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [ ] **E2E tests**
+      - [ ] None for 2-IdP; existing-client E2E is cross-repository receipt in 2b.
+- [ ] **Lot 2 — Host wiring, migration, workload client**
+  - [ ] Update `api/src/routes/auth/oauth.ts` host options for exchange policy and TTL.
+  - [ ] Update `api/src/routes/namespaces/oauth-ingress.ts` union scopes including `immo:read`, `immo:search`, `immo:documents:read`.
+  - [ ] Update `api/src/services/auth/oauth-state-adapter.ts` persistence and mapping for exchange policy.
+  - [ ] Update `api/src/db/schema.ts` for nullable default-deny service-client exchange policy.
+  - [ ] Add one additive `api/drizzle/0042_immo_token_exchange.sql` with journal and snapshot.
+  - [ ] Update `spec/DATA_MODEL.md` for new exchange policy columns.
+  - [ ] Register `immo-mcp-workload` confidential exchange-only service client; keep public `immo-mcp` unchanged; disable client_credentials for workload.
+  - [ ] Update `packages/auth-hono/package.json` to `0.16.0`; update README.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` + `make lint-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [ ] **API tests**
+      - [ ] New `api/tests/api/auth/oauth-token-exchange.test.ts` (issuer metadata both URLs, exchange happy path, unchanged public authorize/consent).
+      - [ ] Updated `api/tests/unit/auth/oauth-state-adapter.test.ts` (exchange policy mapping).
+      - [ ] Updated `api/tests/api/auth/oauth-wellknown.test.ts` (grant advertisement, Immo scopes).
+      - [ ] Updated `api/tests/api/cluster-mesh-oauth-roots.test.ts` (roots unchanged).
+      - [ ] Existing `api/tests/api/auth/oauth-token.test.ts` (regress).
+      - [ ] Existing `api/tests/api/auth/oauth-authorize.test.ts` (regress).
+      - [ ] Scoped runs while evolving tests: `make test-api SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+      - [ ] Sub-lot gate: `make test-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` and document status/signature in `BRANCH.md`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None; no login UI change.
+      - [ ] Sub-lot gate: `make test-ui API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [ ] **E2E tests**
+      - [ ] None for 2-IdP host slice.
+- [ ] **Lot 3 — idp-identity-sync service_clients extension (R2 firm) and rotation**
+  - [ ] Extend `deploy/ci/idp-identity-sync/run-core.mjs` and `bundle-checks.mjs` field allowlists for service_clients.
+  - [ ] Update `fixtures/prod.sql`, `fixtures/preprod.sql`, `fixtures/assertions.sql`, `fixtures/assert-committed.sql` with workload record and public-client non-interference.
+  - [ ] Update `idp-sync.selftest.mjs` and `run.selftest.mjs` for replay and non-interference.
+  - [ ] Update `README.md` and `CRED_CYCLE.md` with workload rotation procedure and test-only hashes.
+  - [ ] Prove rotation via `make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`.
+  - [ ] Lot gate:
+    - [ ] `make test-idp-sync-selftest API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [ ] `make test-idp-sync-sql API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [ ] **API tests**
+      - [ ] Existing `api/tests/api/auth/oauth-token.test.ts` (regress).
+      - [ ] Existing `api/tests/api/auth/oauth-authorize.test.ts` (regress).
+      - [ ] Sub-lot gate: `make test-api SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None.
+    - [ ] **E2E tests**
+      - [ ] None.
+- [ ] **Lot N-2 — UAT**
+  - [ ] Web app (no UI change; verify unchanged public authorize/consent and metadata)
+    - [ ] Acquire subject through unchanged public `immo-mcp`, exchange with workload credential; verify claims, human sub, scope intersection, expiry.
+    - [ ] Repeat negatives: public client, wrong workload, wrong/multiple audiences, wrong subject type, forged actor, revoked subject/client, excess scope; all fail before Radar call.
+    - [ ] Verify both metadata documents advertise configured grant and grantable Immo scopes; existing public authorization/renewal works without new consent.
+    - [ ] Rotate/revoke workload credential; prove effect without rotating users or public-client identity.
+    - [ ] Pass import/migration/replay and non-interference checks; hand immutable version/policy receipt to 2a/2b.
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
+  - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration.
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest UI (cf Lot1, copy checklist)
+  - [ ] Retest API (cf Lot1, copy checklist)
+  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
