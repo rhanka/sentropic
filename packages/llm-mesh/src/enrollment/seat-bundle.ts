@@ -116,3 +116,71 @@ export interface SeatBundleV1 {
   nativeUse?: SeatAccessProjection;
   meshUse: SeatAccessProjection;
 }
+
+export type SeatValidationCode =
+  | 'schema-mismatch'
+  | 'size-exceeded'
+  | 'owner-mismatch'
+  | 'client-mismatch'
+  | 'stale-generation'
+  | 'unknown-field'
+  | 'refresh-material-present'
+  | 'nested-refresh-field'
+  | 'authority-escalation'
+  | 'invalid-lifecycle';
+
+export type SeatValidationResult =
+  | { ok: true; bundle: SeatBundleV1; idempotentReimport?: boolean }
+  | { ok: false; code: SeatValidationCode; detail: string };
+
+export interface SeatReceipt {
+  seatRef: string;
+  cli: SeatCli;
+  epoch: number;
+  generation: number;
+  operationId: string;
+  outcome: 'valid' | 'invalid';
+  reason?: SeatValidationCode;
+  checkedAt: string;
+}
+
+function fail(code: SeatValidationCode, detail: string): SeatValidationResult {
+  return { ok: false, code, detail };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function unknownKey(value: Record<string, unknown>, allowed: readonly string[]): string | null {
+  return Object.keys(value).find((k) => !allowed.includes(k)) ?? null;
+}
+
+function findRefreshKey(value: unknown, depth: number): { key: string; depth: number } | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const hit = findRefreshKey(item, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (!isRecord(value)) return null;
+  for (const key of Object.keys(value)) {
+    if (FORBIDDEN_REFRESH_KEYS.has(key)) return { key, depth };
+    const hit = findRefreshKey(value[key], depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function nonEmpty(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function validDate(value: unknown): value is string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+}
+
+function validInt(value: unknown, min: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min;
+}
