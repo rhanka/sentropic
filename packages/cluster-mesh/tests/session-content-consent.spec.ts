@@ -6,6 +6,16 @@ import {
   verifyPolicyDigest,
 } from '../src/sessions/content-consent.js';
 
+const expectConsentCode = (fn: () => unknown, code: string) => {
+  try {
+    fn();
+  } catch (error) {
+    expect(error).toMatchObject({ code });
+    return;
+  }
+  expect.unreachable();
+};
+
 describe('content consent retention validation', () => {
   it('should accept explicit no-expiry defaults for both retained channels', () => {
     const map = validateRetentionByChannel({
@@ -25,55 +35,55 @@ describe('content consent retention validation', () => {
   });
 
   it('should refuse a zero duration', () => {
-    expect(() => validateRetentionByChannel({
+    expectConsentCode(() => validateRetentionByChannel({
       'terminal.cache': { mode: 'duration', durationSeconds: 0 },
       'native.mirror': { mode: 'none' },
-    })).toMatchObject({ code: 'invalid_retention' });
+    }), 'invalid_retention');
   });
 
   it('should refuse a negative duration', () => {
-    expect(() => validateRetentionByChannel({
+    expectConsentCode(() => validateRetentionByChannel({
       'terminal.cache': { mode: 'duration', durationSeconds: -60 },
       'native.mirror': { mode: 'none' },
-    })).toMatchObject({ code: 'invalid_retention' });
+    }), 'invalid_retention');
   });
 
   it('should refuse a fractional duration', () => {
-    expect(() => validateRetentionByChannel({
+    expectConsentCode(() => validateRetentionByChannel({
       'terminal.cache': { mode: 'duration', durationSeconds: 1.5 },
       'native.mirror': { mode: 'none' },
-    })).toMatchObject({ code: 'invalid_retention' });
+    }), 'invalid_retention');
   });
 
   it('should refuse an overflowing duration beyond the safe integer range', () => {
-    expect(() => validateRetentionByChannel({
+    expectConsentCode(() => validateRetentionByChannel({
       'terminal.cache': { mode: 'duration', durationSeconds: Number.MAX_SAFE_INTEGER + 1 },
       'native.mirror': { mode: 'none' },
-    })).toMatchObject({ code: 'invalid_retention' });
+    }), 'invalid_retention');
   });
 
   it('should refuse an omitted channel as unsigned retention', () => {
-    expect(() => validateRetentionByChannel({
+    expectConsentCode(() => validateRetentionByChannel({
       'terminal.cache': { mode: 'none' },
-    })).toMatchObject({ code: 'unsigned_retention' });
+    }), 'unsigned_retention');
   });
 
   it('should refuse an unsigned finite duration without an explicit tag', () => {
-    expect(() => validateRetentionByChannel({
+    expectConsentCode(() => validateRetentionByChannel({
       'terminal.cache': { durationSeconds: 3600 },
       'native.mirror': { mode: 'none' },
-    })).toMatchObject({ code: 'unsigned_retention' });
+    }), 'unsigned_retention');
   });
 
   it('should refuse a malformed retention tag', () => {
-    expect(() => validateRetentionByChannel({
+    expectConsentCode(() => validateRetentionByChannel({
       'terminal.cache': { mode: 'forever' },
       'native.mirror': { mode: 'none' },
-    })).toMatchObject({ code: 'invalid_retention' });
+    }), 'invalid_retention');
   });
 
   it('should refuse a non-object retention map', () => {
-    expect(() => validateRetentionByChannel(null)).toMatchObject({ code: 'invalid_retention' });
+    expectConsentCode(() => validateRetentionByChannel(null), 'invalid_retention');
   });
 
   it('should throw ContentConsentError instances', () => {
