@@ -36,9 +36,10 @@ function makeApp() {
   // One shared current pointer for publication and lifecycle (production
   // wires both services to the same adapter on `artifact_current`).
   const state = createMemoryStateStore();
+  const blobs = createMemoryBlobStore();
   const publication = createPublicationService({
     state,
-    blobs: createMemoryBlobStore(),
+    blobs,
     intents: createMemoryIntentStore(),
     idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
   });
@@ -50,6 +51,7 @@ function makeApp() {
     forks: createForkService(createMemoryForkStore()),
     acls: createMemoryAclStore(),
     sources: createMemorySourceStore(),
+    blobs,
   });
   return { app, artifacts };
 }
