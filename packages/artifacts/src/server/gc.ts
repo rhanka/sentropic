@@ -18,8 +18,8 @@ export interface RefcountStore {
   releaseRef(digest: string, holder: string): Promise<void>;
   pin(digest: string, reason: string): Promise<void>;
   unpin(digest: string, reason: string): Promise<void>;
-  count(digest: string): number;
-  isPinned(digest: string): boolean;
+  count(digest: string): Promise<number>;
+  isPinned(digest: string): Promise<boolean>;
 }
 
 /** In-memory RefcountStore double (yields mid-update to expose races). */
@@ -59,10 +59,10 @@ export function createMemoryRefcountStore(): RefcountStore {
       }
       set.delete(reason);
     },
-    count(digest: string): number {
+    async count(digest: string): Promise<number> {
       return holders.get(digest)?.size ?? 0;
     },
-    isPinned(digest: string): boolean {
+    async isPinned(digest: string): Promise<boolean> {
       return (pins.get(digest)?.size ?? 0) !== 0;
     },
   };
@@ -91,7 +91,7 @@ export function createGcService(refs: RefcountStore): GcService {
           report.retained.push(key);
           continue;
         }
-        if (refs.count(digest) !== 0 || refs.isPinned(digest)) {
+        if ((await refs.count(digest)) !== 0 || (await refs.isPinned(digest))) {
           report.retained.push(key);
           continue;
         }

@@ -69,11 +69,11 @@ describe('garbage collection', () => {
     const refs = createMemoryRefcountStore();
     const digest = digestOf(KEY_A);
     await Promise.all(Array.from({ length: 25 }, (_, i) => refs.addRef(digest, `holder-${i}`)));
-    expect(refs.count(digest)).toBe(25);
+    expect(await refs.count(digest)).toBe(25);
     await Promise.all(
       Array.from({ length: 25 }, (_, i) => refs.releaseRef(digest, `holder-${i}`)),
     );
-    expect(refs.count(digest)).toBe(0);
+    expect(await refs.count(digest)).toBe(0);
   });
 
   it('refuses to release unheld references and duplicate pins', async () => {
