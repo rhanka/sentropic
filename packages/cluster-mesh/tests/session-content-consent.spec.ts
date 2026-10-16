@@ -467,6 +467,22 @@ describe('content consent revoke and exclusion', () => {
     expect(reconciled.state).toBe('revoked');
     expect(reconciled.localDenyPending).toBe(false);
   });
+
+  it('should leave another project children alone when one project is revoked', async () => {
+    const { service } = setupConsent();
+    const first = service.prepareProject(sharedBaseInput());
+    await service.acceptProject(first, { challengeId: first.challengeId });
+    const second = service.prepareProject(sharedBaseInput({ projectId: 'project-2' }));
+    await service.acceptProject(second, { challengeId: second.challengeId });
+    await service.deriveChild(sharedChildInput());
+    await service.deriveChild(sharedChildInput({ projectId: 'project-2', sessionId: 'session-2', bindingId: 'binding-2' }));
+    await service.revokeProject('project-1');
+    await expectConsentCodeAsync(() => service.deriveChild(sharedChildInput()), 'project_revoked');
+    const survivor = await service.deriveChild(
+      sharedChildInput({ projectId: 'project-2', sessionId: 'session-2', bindingId: 'binding-2' }),
+    );
+    expect(survivor.state).toBe('active');
+  });
 });
 
 describe('content consent freshness and closed history', () => {
@@ -521,6 +537,88 @@ describe('content consent freshness and closed history', () => {
     await expectConsentCodeAsync(
       () => service.authorizeHistoryRead('session-9', { 'terminal.cache': null, 'native.mirror': null }),
       'invalid_request',
+    );
+  });
+});
+
+describe('content consent native boundary (CM2-R4-4)', () => {
+  const namedRange = {
+    provider: 'pty',
+    conversationId: 'conv-old',
+    lineage: 'lineage-old',
+    sourceIdentity: 'workstation-1',
+    checkpoint: 'checkpoint-7',
+    rangeDigest: 'digest-7',
+    startSeq: 5,
+    endSeq: 20,
+  };
+
+  it('should copy only new eligible records for a child resuming an old conversation', async () => {
+    const { service } = setupConsent();
+    const prepared = service.prepareProject(sharedBaseInput());
+    const project = await service.acceptProject(prepared, { challengeId: prepared.challengeId });
+    const grant = await service.deriveChild(sharedChildInput({
+      resumedConversation: { conversationId: 'conv-old', lineage: 'lineage-old', ordered: true },
+    }));
+    expect(grant.nativeBoundarySeq).toBe(40);
+    const partition = partitionExportableNativeRecords(grant, project, [
+      { seq: 10, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true },
+      { seq: 45, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true },
+    ]);
+    expect(partition.exportable.map((record) => record.seq)).toEqual([45]);
+    expect(partition.withheld).toEqual([
+      { seq: 10, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true, reason: 'pre_boundary' },
+    ]);
+  });
+
+  it('should add only the exact named older range after an amendment', async () => {
+    const { service } = setupConsent();
+    const prepared = service.prepareProject(sharedBaseInput());
+    await service.acceptProject(prepared, { challengeId: prepared.challengeId });
+    const grant = await service.deriveChild(sharedChildInput());
+    const rePrepared = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1, namedHistories: [namedRange] }));
+    const amended = await service.acceptProject(rePrepared, { challengeId: rePrepared.challengeId });
+    const partition = partitionExportableNativeRecords(grant, amended, [
+      { seq: 12, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true },
+      { seq: 3, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true },
+      { seq: 9, lineage: 'lineage-other', conversationId: 'conv-other', ordered: true },
+      { seq: 8, lineage: 'lineage-old', conversationId: 'conv-old', ordered: false },
+      { seq: 50, lineage: 'lineage-old', conversationId: 'conv-old', ordered: true },
+    ]);
+    expect(partition.exportable.map((record) => record.seq).sort((a, b) => a - b)).toEqual([12, 50]);
+    expect(partition.withheld.map((record) => `${record.seq}:${record.reason}`).sort()).toEqual([
+      '3:pre_boundary',
+      '8:unprovable_range',
+      '9:pre_boundary',
+    ]);
+  });
+
+  it('should derive a pre-existing session only through an exact named range', async () => {
+    const { service } = setupConsent();
+    const prepared = service.prepareProject(sharedBaseInput({ namedHistories: [namedRange] }));
+    await service.acceptProject(prepared, { challengeId: prepared.challengeId });
+    const grant = await service.deriveChild(sharedChildInput({
+      sessionCreatedAt: 999_999,
+      resumedConversation: { conversationId: 'conv-old', lineage: 'lineage-old', ordered: true },
+    }));
+    expect(grant.nativeBoundarySeq).toBe(5);
+    await expectConsentCodeAsync(
+      () => service.deriveChild(sharedChildInput({
+        sessionId: 'session-2',
+        bindingId: 'binding-2',
+        sessionCreatedAt: 999_999,
+        resumedConversation: { conversationId: 'conv-old', lineage: 'lineage-old', ordered: false },
+      })),
+      'unprovable_range',
+    );
+    await expectConsentCodeAsync(
+      () => service.deriveChild(sharedChildInput({
+        sessionId: 'session-3',
+        bindingId: 'binding-3',
+        sessionCreatedAt: 999_999,
+        resumedConversation: { conversationId: 'conv-unknown', lineage: 'lineage-unknown', ordered: true },
+      })),
+      'not_resumable',
     );
   });
 });
