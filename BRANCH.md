@@ -51,7 +51,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
 
 ## Feedback Loop
 - [ ] `attention` Lot 2 UAT-4 open: no Make target exists for a clean-consumer install of the unpublished `0.3.0` candidate; evidence stands on `pack-mcp-platform` PASS (sha `704bf8c7c5a4c30e6e82cf7d2882f5be3d7c2ea1ba0f4fbf326f06ed45d09b0b`) + `api-extract-mcp-platform` clean + separate-process digest test. Owner judges merge readiness.
-- [ ] `attention` CI: PR #673 checks must show green (`enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests`) before merge; `check-publishable-manifests` is CI-only by design.
+- [ ] `attention` CI green on run `38836535941` (55 pass, 0 fail): `enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests` pass. Merge stays owner-gated per packet stop rule.
 - [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
 - [ ] `attention`: npm published `@sentropic/mcp-platform` is `0.2.0`, source is `0.2.0`, candidate `0.3.0` is strictly above both (verified 2026-10-16)
 - [ ] `attention` BR1a-EX1: bump `packages/connector-host/package.json` range `^0.2.0` -> `^0.3.0` and refresh root `package-lock.json` via `make lock-root`. Reason: minor bump exits the `^0.2.0` range (`0.x` caret pins minor) and desyncs the lockfile, blocking every Make gate (`npm ci` fails). Impact: two files outside Allowed Paths, consumer-only range bump, no source change. Rollback: revert range and lockfile.
