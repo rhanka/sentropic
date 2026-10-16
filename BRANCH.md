@@ -23,7 +23,11 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - `packages/llm-mesh/tests/enrollment/seat-bundle.test.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/README.md`
+  - `packages/llm-mesh/CHANGELOG.md` (R11)
   - `package-lock.json`
+  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts` (CISEAT-EX4)
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts` (CISEAT-EX4)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (CISEAT-EX5)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -43,9 +47,9 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
 
 ## Feedback Loop
 - `attention` CISEAT-EX3 reserved: owner-machine native Node helper for L1 local inspect and L3 re-enroll; rationale macOS Keychain, Windows Credential Manager, Linux session D-Bus; rollback disable helper targets and retire disposable lab profile; no L0a host execution under this exception.
-- `attention` CISEAT-EX4 declared: same-PR downstream version-pin sync outside exhaustive L0a paths; reason spec-mandated mesh bump 0.25.0 to 0.25.1 breaks two cluster-mesh assertions pinning installedVersion 0.25.0 and CI cannot go green without sync; impact two lines in packages/cluster-mesh/tests/integrations/llm-surface.spec.ts and gateway-surface.spec.ts, no behavior change; rollback revert the two lines.
+- `attention` CISEAT-EX4 declared: same-PR downstream version-pin sync outside exhaustive L0a paths; reason spec-mandated mesh bump 0.26.0 to 0.26.1 breaks two cluster-mesh assertions pinning installedVersion 0.26.0 and CI cannot go green without sync; impact two lines in packages/cluster-mesh/tests/integrations/llm-surface.spec.ts and gateway-surface.spec.ts, no behavior change; rollback revert the two lines.
 - `acknowledge` CI lazy-package gate resolved: EX5 fixture refresh fixed the siblings check, run 38863986528 success with zero non-passing checks; no publishing was required.
-- `attention` CISEAT-EX5 declared: refresh the cluster-mesh selected fixture to sibling llm-mesh 0.25.1; rationale conductor authorization plus precedent ed4c298bf and a931e248e, siblings check needs exact version, registry URL and packed integrity, no publishing required; impact packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json llm-mesh entry only; rollback revert the entry to 0.25.0.
+- `attention` CISEAT-EX5 declared: refresh the cluster-mesh selected fixture to sibling llm-mesh 0.26.1; rationale conductor authorization plus precedent ed4c298bf and a931e248e, siblings check needs exact version, registry URL and packed integrity, no publishing required; impact packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json llm-mesh entry only; rollback revert the entry to 0.26.0.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -75,6 +79,7 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] Read spec v9 section 8 lot L0a and challenge-opus-r5 L0a verdict.
   - [x] Verify branch feat/ci-seat-contract on origin/main 09b1c601d and clean tree.
   - [x] Rebase onto origin/main 6138a8d55, post-rebase gate holds llm-mesh 0.25.1 above npm and main.
+  - [x] Rebase onto origin/main db314a67f, post-rebase gate holds llm-mesh 0.26.1 above npm and main.
   - [x] Verify L0a Make targets at Makefile:760, :764, :2007 and empty make ps-all.
   - [x] Define environment mapping: ENV=test-ci-seat-contract; reserved ports API_PORT=9570 UI_PORT=5770 MAILDEV_UI_PORT=1670; L0a package gates expose no ports and need no slot.
   - [x] Confirm command style: make ... ENV=<env> with ENV last.
@@ -82,33 +87,33 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
 - [ ] **Lot L0a — Five-CLI envelope and source contract, synthetic first**
   - [x] Define SeatBundleV1 in packages/llm-mesh/src/enrollment/seat-bundle.ts.
   - [x] Export contract through packages/llm-mesh/src/node/index.ts, no browser export.
-  - [x] Bump packages/llm-mesh/package.json 0.25.0 to 0.25.1 and match package-lock.json.
+  - [x] Bump packages/llm-mesh/package.json 0.26.0 to 0.26.1 and match package-lock.json.
   - [x] Add packages/llm-mesh/tests/enrollment/seat-bundle.test.ts covering five schemas, size, owner, client, unknown and nested refresh fields, rollback, authority escalation.
   - [x] Add spec/SPEC_EVOL_CI_SEATS.md with frozen interfaces and supported/unverified table.
   - [x] Document contract in packages/llm-mesh/README.md.
-  - [ ] R1 version 0.26.1 with EX4/EX5 resync and regenerated fixture digest.
+  - [x] R1 version 0.26.1 with EX4/EX5 resync and regenerated fixture digest.
+  - [x] R8 UTF-8 byte size, R9 truthful report, R10 branch boxes, R11 changelog.
   - [x] R2 issuing client and endpoint family in the frozen envelope.
   - [x] R3 channel-granted authority wired into validation.
   - [x] R4 native-store with store-reference accepted.
   - [x] R5 case-insensitive and structural refresh-material rejection.
   - [x] R6 lineage classification for all five transitions.
   - [x] R7 five-CLI coverage, nativeUse shapes and enum checks.
-  - [ ] R8 UTF-8 byte size, R9 truthful report, R10 branch boxes, R11 changelog.
-  - [ ] UAT credential-free walkthrough:
-    - [ ] Select five synthetic profile labels, one per CLI.
-    - [ ] Inspect static validation errors for mismatched owner, client and oversize bundle.
-    - [ ] Inspect metadata-only receipts with no credential payload.
-    - [ ] Review one-command enrollment instructions for initial enrollment and replacement.
+  - [x] UAT credential-free walkthrough:
+    - [x] Select five synthetic profile labels, one per CLI.
+    - [x] Inspect static validation errors for mismatched owner, client and oversize bundle.
+    - [x] Inspect metadata-only receipts with no credential payload.
+    - [x] Review one-command enrollment instructions for initial enrollment and replacement.
   - [x] Lot gate:
     - [x] `make test-llm-mesh SCOPE=tests/enrollment/seat-bundle.test.ts ENV=test-ci-seat-contract`
     - [x] `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-ci-seat-contract`
-    - [ ] **API tests**: N/A in this lot, no api/** change.
-    - [ ] **UI tests (TypeScript only)**: N/A in this lot, no UI change.
-    - [ ] **E2E tests**: N/A in this lot, no browser or native E2E.
+    - [x] **API tests**: N/A in this lot, no api/** change.
+    - [x] **UI tests (TypeScript only)**: N/A in this lot, no UI change.
+    - [x] **E2E tests**: N/A in this lot, no browser or native E2E.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck and Lint for llm-mesh package.
   - [x] Retest llm-mesh package gate.
-  - [x] Bumped packages/llm-mesh/package.json version 0.25.1, matching package-lock.json.
+  - [x] Bumped packages/llm-mesh/package.json version 0.26.1, matching package-lock.json.
   - [x] Final gate step 1: create DRAFT PR using BRANCH.md text as PR body.
   - [x] Final gate step 2: run and verify branch CI on that PR and resolve remaining blockers.
   - [x] Stop at end of L0a: never merge, never publish.
