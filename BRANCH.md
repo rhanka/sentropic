@@ -32,6 +32,8 @@ Implement the RFC 8693 token-exchange client in `@sentropic/cluster-mesh`: mesh 
   - `packages/cluster-mesh/tests/conformance/h2a-contract.json`
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (B3 candidate-tarball sync with version bump)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (B3 frozen-lock regen via `refresh-lazy-package-lock`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
