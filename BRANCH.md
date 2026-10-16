@@ -20,6 +20,7 @@ Qualify mcp-auth for Immo application scopes without source changes.
   - `packages/mcp-auth/tests/core.test.ts`
   - `packages/mcp-auth/tests/hono.test.ts`
   - `packages/mcp-auth/tests/prm.test.ts`
+  - `api/tests/api/mcp-resource-server.test.ts` (only under `BR01-EX2`)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -49,6 +50,10 @@ Qualify mcp-auth for Immo application scopes without source changes.
 - `BR01-EX1` reason: real-token tests prove missing scopes return `401` instead of the documented `403`.
 - `BR01-EX1` impact: one-line fix, patch bump, admitted by all consumer ranges.
 - `BR01-EX1` rollback: revert the three files, restore `0.2.1`, rerun `make test-mcp-auth`.
+- `BR01-EX2`: update one assertion in `api/tests/api/mcp-resource-server.test.ts` (`401` to `403`).
+- `BR01-EX2` reason: CI proves the test encoded the fixed bug; intent (reject before Google) is unchanged.
+- `BR01-EX2` impact: one assertion in a forbidden-path test file, no source change.
+- `BR01-EX2` rollback: revert the line, rerun the scoped API suite.
 
 ## AI Flaky tests
 - Acceptance rule:
