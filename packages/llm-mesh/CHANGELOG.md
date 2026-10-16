@@ -1,5 +1,7 @@
 # Changelog
 
+## Unreleased
+
 ## 0.26.1
 
 - CI seat envelope `SeatBundleV1` for the five CLI seats (agy, codex, vibe,
@@ -7,8 +9,6 @@
   channel-granted authority validation, native-store references and refresh-less
   consumer projections, exported from `@sentropic/llm-mesh/node` only.
   Synthetic fixtures and validators; native profiles stay unverified.
-
-## Unreleased
 
 - Responses execution features: per-transport support table
   (`reasoning-context`, `custom-tools`, `verbosity` on Codex;
