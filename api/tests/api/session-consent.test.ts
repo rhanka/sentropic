@@ -1289,8 +1289,12 @@ describe('session consent durable lifecycle', () => {
       'invalid_request',
     );
     await expectContentError(
-      () => service.deriveGrant({ ...base, d1Incarnation: 99 }, ctx),
-      'ineligible_session',
+      () => service.deriveGrant({ ...base, d1Incarnation: -1 }, ctx),
+      'invalid_request',
+    );
+    await expectContentError(
+      () => service.deriveGrant({ ...base, d1StartSeq: 1.5 }, ctx),
+      'invalid_request',
     );
   });
 
