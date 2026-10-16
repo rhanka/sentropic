@@ -1338,6 +1338,10 @@ lint-artifacts: ## Lint @sentropic/artifacts sources and tests (same generated c
 pack-artifacts: build-artifacts ## Pack @sentropic/artifacts tarball without publishing (L-5a proof)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; dest="$${PACK_DESTINATION:-/workspace/tmp/artifacts-pack}"; mkdir -p "$$dest"; rm -f "$$dest"/*.tgz; npm pack --pack-destination "$$dest" >/dev/null; sha256sum "$$dest"/*.tgz'
 
+.PHONY: probe-artifacts-packed-consumer
+probe-artifacts-packed-consumer: pack-artifacts ## Second-host packed-consumer proof of the @sentropic/artifacts tarball (L-5e proof)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR)/tmp/artifacts-pack:/pack:ro" -v "$(CURDIR)/packages/artifacts/probe:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; consumer="$$(mktemp -d)"; cd "$$consumer"; npm init -y >/dev/null 2>&1; npm install /pack/*.tgz --no-save --no-audit --no-fund >/dev/null 2>&1; cp /probe/packed-consumer.mjs ./packed-consumer.mjs; node ./packed-consumer.mjs'
+
 .PHONY: test-mcp-platform
 test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (builds dist first for the packaged test, BR1a-EX3)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
