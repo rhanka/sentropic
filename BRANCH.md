@@ -137,16 +137,16 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - [x] Update `spec/DATA_MODEL.md` for new exchange policy columns.
   - [x] Register `immo-mcp-workload` confidential exchange-only service client; keep public `immo-mcp` unchanged; disable client_credentials for workload.
   - [x] Update `packages/auth-hono/package.json` to `0.16.0`; update README.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` + `make lint-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
-    - [ ] **API tests**
-      - [ ] New `api/tests/api/auth/oauth-token-exchange.test.ts` (issuer metadata both URLs, exchange happy path, unchanged public authorize/consent).
-      - [ ] Updated `api/tests/unit/auth/oauth-state-adapter.test.ts` (exchange policy mapping).
-      - [ ] Updated `api/tests/api/auth/oauth-wellknown.test.ts` (grant advertisement, Immo scopes).
-      - [ ] Updated `api/tests/api/cluster-mesh-oauth-roots.test.ts` (roots unchanged).
-      - [ ] Existing `api/tests/api/auth/oauth-token.test.ts` (regress).
-      - [ ] Existing `api/tests/api/auth/oauth-authorize.test.ts` (regress).
-      - [ ] Scoped runs while evolving tests: `make test-api SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` + `make lint-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [x] **API tests**
+      - [x] New `api/tests/api/auth/oauth-token-exchange.test.ts` (3 pass: host-issued subject exchange, public/wrong-secret rejection, out-of-policy scope).
+      - [x] Updated `api/tests/unit/auth/oauth-state-adapter.test.ts` (5 pass: policy mapping, malformed and absent fail closed).
+      - [x] Updated `api/tests/api/auth/oauth-wellknown.test.ts` (6 pass: grant advertisement both URLs, Immo scopes).
+      - [x] Updated `api/tests/api/cluster-mesh-oauth-roots.test.ts` (3 pass both roots).
+      - [x] Existing `api/tests/api/auth/oauth-token.test.ts` (regress pass).
+      - [x] Existing `api/tests/api/auth/oauth-authorize.test.ts` (regress pass).
+      - [x] Scoped runs while evolving tests: `make test-api-endpoints SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
       - [ ] Sub-lot gate: `make test-api API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
       - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange` and document status/signature in `BRANCH.md`
     - [ ] **UI tests (TypeScript only)**
