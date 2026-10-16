@@ -128,6 +128,8 @@ export interface LifecycleService {
     expectedCurrent: string,
   ): Promise<{ releaseId: string }>;
   renew(artifactId: string, actorId: string): Promise<{ renewedAt: string }>;
+  /** List release IDs for purge derivation (delegates to the store). */
+  listReleases(artifactId: string): Promise<string[]>;
 }
 
 /** Create a lifecycle service over an injected store (mutations owner-only). */
@@ -223,6 +225,9 @@ export function createLifecycleService(
       const renewedAt = clock();
       await store.setRenewedAt(artifactId, renewedAt);
       return { renewedAt };
+    },
+    async listReleases(artifactId: string): Promise<string[]> {
+      return store.listArtifactReleases(artifactId);
     },
   };
 }
