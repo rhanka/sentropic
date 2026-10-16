@@ -381,6 +381,27 @@ Configuration alone can never rename, remove or add tools, nor change parameters
   package version under strict equality (snapshots are resealed on each
   platform patch).
 
+### Provider registry kernel (contract-v3 RC-M2, spec-v8 Lot 4)
+
+- `@sentropic/mcp-platform/registry` (`src/registry.ts`): `register` accepts
+  `LoadedDefinition | LazyDefinition`. Loaded definitions keep Immo's existing
+  shape; lazy definitions carry metadata plus a `load()` returning the heavy
+  payload. The loader is never called on register/catalog/unselected entries —
+  selected entries load only after preflight (compatibility receipt, required
+  ports), and a throwing loader is an atomic refusal.
+- `@sentropic/mcp-platform/registry/entry` (`src/registry-entry.ts`): frozen
+  `RegistryEntry` binding a compiled tool to its canonical request
+  (`canonicalizeRegistryRequest`, RFC 8785 digest) plus `mapEntryArguments`
+  and the one-call `resolveRegistryEntry` wiring.
+- Bounded 2020-12 parameters (`src/registry-parameters.ts`):
+  `validateBoundedSchema` / `validateBoundedValue` enforce finite budgets and
+  refuse unsupported keywords; runtime values map through this profile.
+- Remote-bound seam (`src/registry-remote-binding.ts`): `remote-bound`
+  definitions name tools served behind a versioned injected client port
+  (`RemoteClientPortV1`). Unknown tools, unselected providers and schema
+  mismatches are rejected before forwarding, with zero resource acquisition
+  on invalid candidates. Shared transport guards close in Lot 5.
+
 ## 9. Verifying your connector (mock harness)
 
 Run the package gates through the repo Makefile (see the package `README.md`
