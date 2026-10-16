@@ -54,6 +54,34 @@ describe('train lock integrity', () => {
     expect(packages['node_modules/@sentropic/cluster-mesh']).toEqual({ version: '0.13.0' });
   });
 
+  it('should tolerate an optional-only sibling absent from the committed lock, and still fail a required one', () => {
+    writeFileSync(join(dir, 'index.json'), JSON.stringify([
+      { name: '@sentropic/llm-mesh', version: '0.22.3', file: '/x/mesh.tgz', integrity: INTEGRITY },
+      { name: '@sentropic/cluster-mesh', version: '0.13.0', file: '/x/cluster.tgz', integrity: 'sha512-candidate' },
+      { name: '@sentropic/auth-hono', version: '0.16.0', file: '/x/hono.tgz', integrity: 'sha512-hono' },
+    ]));
+    const optionalPeer = (optional) => {
+      const path = join(dir, `optional-${optional}.json`);
+      writeFileSync(path, JSON.stringify({ packages: {
+        '': {},
+        'node_modules/@sentropic/cluster-mesh': { version: '0.13.0', integrity: 'sha512-build' },
+        'node_modules/@sentropic/llm-mesh': { version: '0.22.3', resolved: MESH_URL, integrity: INTEGRITY },
+        'node_modules/@sentropic/llm-gateway': {
+          version: '0.19.6',
+          peerDependencies: { '@sentropic/auth-hono': '^0.15.0' },
+          ...(optional ? { peerDependenciesMeta: { '@sentropic/auth-hono': { optional: true } } } : {}),
+        },
+      } }));
+      return path;
+    };
+    const tolerant = run('siblings', optionalPeer(true), dir);
+    expect(tolerant.status).toBe(0);
+    expect(tolerant.out).toContain('is optional-only and absent; nothing to pin');
+    const strict = run('siblings', optionalPeer(false), dir);
+    expect(strict.status).toBe(1);
+    expect(strict.out).toContain('is a sibling but absent from the committed lock');
+  });
+
   it('should fail a refresh whose working lock pins another version of a sibling and write nothing', () => {
     const working = lock('working.json', { version: '0.21.2', resolved: 'https://x', integrity: 'sha512-old' });
     const committed = join(dir, 'committed.json');
