@@ -7,6 +7,7 @@ import {
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import {
   computePolicyDigest,
+  ContentConsentError,
   validateRetentionByChannel,
   type RetentionByChannel,
 } from '@sentropic/cluster-mesh';
@@ -487,12 +488,22 @@ export class SessionContentService {
 
   /** Validate retention and bind the source-verified canonical digest
    * before any proof. Rejects zero/negative/malformed/unsigned durations
-   * and altered digests with zero authorization. */
+   * and altered digests with zero authorization. Domain validation faults
+   * surface as SessionContentError so routes see one error contract. */
   prepareProject(policy: Record<string, unknown>): PreparedSessionProject {
-    const retention = validateRetentionByChannel(
-      (policy as Record<string, unknown>)['retentionByChannel'],
-    );
-    void retention;
+    try {
+      validateRetentionByChannel(
+        (policy as Record<string, unknown>)['retentionByChannel'],
+      );
+    } catch (err) {
+      if (err instanceof ContentConsentError) {
+        throw new SessionContentError(
+          err.code as SessionContentErrorCode,
+          err.message,
+        );
+      }
+      throw err;
+    }
     const digest = computePolicyDigest(policy);
     const revisionRaw = (policy as Record<string, unknown>)['projectRevision'];
     const expectedRevision =
