@@ -278,6 +278,36 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     }
   });
 
+  it('rejects non-canonical values instead of coercing them', () => {
+    expect(() => canonicalJson({ a: undefined as unknown as null })).toThrow(TypeError);
+    expect(() => canonicalJson({ a: Number.NaN })).toThrow(TypeError);
+    expect(() => canonicalJson({ a: Number.POSITIVE_INFINITY })).toThrow(TypeError);
+    expect(() => canonicalJson(new Date('2026-01-01T00:00:00Z'))).toThrow(TypeError);
+    const cyclic: Record<string, unknown> = { self: null };
+    cyclic['self'] = cyclic;
+    expect(() => canonicalJson(cyclic)).toThrow(TypeError);
+  });
+
+  it('rejects unsupported schema keywords and non-finite numbers', () => {
+    const patternedHandlers = { ...handlers,
+      'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: {
+        type: 'object',
+        properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, mode: { type: 'string', enum: ['fast', 'deep'], pattern: '^f' } },
+        required: ['maxResults'], additionalProperties: false } } };
+    const keywordResult = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers: patternedHandlers });
+    expect(keywordResult.ok).toBe(false);
+    if (!keywordResult.ok) {
+      expect(keywordResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
+    }
+    const infinite = buildSnapshot();
+    infinite.bindings[0] = { ...infinite.bindings[0], values: { maxResults: Number.POSITIVE_INFINITY } };
+    const infiniteResult = compileToolConfiguration({ snapshot: infinite, manifest, handlers });
+    expect(infiniteResult.ok).toBe(false);
+    if (!infiniteResult.ok) {
+      expect(infiniteResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
+    }
+  });
+
   it('rejects digest mismatches', () => {
     const manifestMismatch = { ...buildSnapshot(), manifestDigest: '0'.repeat(64) };
     const manifestResult = compileToolConfiguration({ snapshot: manifestMismatch, manifest, handlers });
