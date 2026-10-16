@@ -16,7 +16,8 @@
 import { buildEnsureRequest } from './client.js';
 import type { ParameterSchema } from './parameters.js';
 import type { ArtifactService } from './server/service.js';
-import type { PublicationService } from './server/publication.js';
+import type { PublicationBlobStore, PublicationService } from './server/publication.js';
+import { createContentRuntime } from './server/runtime.js';
 import type { LifecycleService } from './server/lifecycle.js';
 import type { ForkRecord, ForkService } from './server/fork.js';
 import { evaluateAccess, grantAccess, revokeAccess, type AclStore, type ArtifactAcl } from './server/access.js';
@@ -43,6 +44,7 @@ export interface HttpAppDeps {
   forks: ForkService;
   acls: AclStore;
   sources: SourceStore;
+  blobs: PublicationBlobStore;
   isApprovedAccount?: (principalId: string) => boolean;
 }
 
@@ -93,6 +95,12 @@ function needBytes(value: unknown): Uint8Array {
 /** Create the HTTP app over injected services (no server, no fetch). */
 export function createHttpArtifactApp(deps: HttpAppDeps) {
   const isApproved = deps.isApprovedAccount ?? (() => false);
+  const runtime = createContentRuntime({
+    acls: deps.acls,
+    lifecycle: deps.lifecycle,
+    publication: deps.publication,
+    blobs: deps.blobs,
+  });
 
   async function requireAcl(artifactId: string): Promise<ArtifactAcl> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
@@ -282,6 +290,28 @@ export function createHttpArtifactApp(deps: HttpAppDeps) {
           const attached = attachSource((body['source'] ?? {}) as never);
           await deps.sources.putSource(artifactId, attached);
           return { status: 200, body: attached };
+        }
+
+        if (request.method === 'GET' && request.path.startsWith('/content/')) {
+          const rest = request.path.slice('/content/'.length).split('/');
+          if (rest.length !== 2 || (rest[0]?.length ?? 0) === 0 || (rest[1]?.length ?? 0) === 0) {
+            return { status: 404, body: { error: 'not found' } };
+          }
+          const served = await runtime.serveFile({
+            artifactId: rest[0] as string,
+            digest: rest[1] as string,
+            actorId: request.actorId,
+            isApproved,
+          });
+          return {
+            status: 200,
+            body: {
+              digest: served.digest,
+              mimeType: served.mimeType,
+              size: served.size,
+              bytes: Array.from(served.bytes),
+            },
+          };
         }
 
         if (request.method === 'GET' && request.path.startsWith('/source/')) {
