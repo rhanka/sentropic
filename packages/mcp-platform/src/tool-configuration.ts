@@ -203,8 +203,9 @@ export function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
 }
 
-/** Digest binding the manifest identity and full capability surface. */
+/** Digest binding the manifest identity and full capability surface (tools sorted by name). */
 export function computeManifestDigest(manifest: AppMcpProviderManifest): string {
+  const tools = [...manifest.tools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return sha256Hex(
     canonicalJson({
       appId: manifest.appId,
@@ -215,7 +216,7 @@ export function computeManifestDigest(manifest: AppMcpProviderManifest): string 
       durability: manifest.durability,
       prompts: manifest.prompts,
       resources: manifest.resources,
-      tools: manifest.tools,
+      tools,
     }),
   );
 }
