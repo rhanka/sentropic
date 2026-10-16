@@ -24,6 +24,7 @@ import {
   sessionContentOfflineReceipts,
   sessionContentProjects,
   sessionContentPurgeJobs,
+  sessionContentTombstones,
 } from '../../src/db/control-schema';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 
