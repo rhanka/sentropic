@@ -625,6 +625,8 @@ export const createContentConsentService = (
       projectRevision: existing.projectRevision + 1,
       state: 'active',
       exclusionRevision: existing.exclusionRevision,
+      excludedSessionIds: [...existing.excludedSessionIds],
+      requiresFreshAmendment: false,
       retentionDigest: prepared.digest,
       acceptedPolicy: prepared.policy,
       activatedAt: existing.activatedAt,
