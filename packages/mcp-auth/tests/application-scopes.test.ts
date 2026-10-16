@@ -3,6 +3,7 @@ import { exportJWK, generateKeyPair, importJWK, SignJWT, type JWK, type KeyLike 
 
 import { fromJwksPort } from '@sentropic/oauth-verify';
 
+import { McpAuthError } from '../src/challenge.js';
 import { createMcpAuth } from '../src/core.js';
 import { isMcpScope } from '../src/scopes.js';
 
@@ -150,7 +151,8 @@ describe('3-qualification — negatives fail closed', () => {
         () => null,
         (e: unknown) => e,
       );
-    expect(error).not.toBeNull();
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 403, code: 'insufficient_scope' });
     const res = mcp.challenge(error);
     expect(res.status).toBe(403);
     expect(res.headers.get('WWW-Authenticate')).toContain('error="insufficient_scope"');
@@ -166,6 +168,8 @@ describe('3-qualification — negatives fail closed', () => {
         () => null,
         (e: unknown) => e,
       );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 403, code: 'insufficient_scope' });
     expect(mcp.challenge(error).status).toBe(403);
   });
 
@@ -179,6 +183,8 @@ describe('3-qualification — negatives fail closed', () => {
       () => null,
       (e: unknown) => e,
     );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 401, code: 'invalid_token' });
     expect(mcp.challenge(error).status).toBe(401);
   });
 
@@ -192,6 +198,8 @@ describe('3-qualification — negatives fail closed', () => {
       () => null,
       (e: unknown) => e,
     );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 401, code: 'invalid_token' });
     expect(mcp.challenge(error).status).toBe(401);
   });
 
@@ -202,6 +210,8 @@ describe('3-qualification — negatives fail closed', () => {
       () => null,
       (e: unknown) => e,
     );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 401, code: 'invalid_token' });
     expect(mcp.challenge(error).status).toBe(401);
   });
 
@@ -219,6 +229,8 @@ describe('3-qualification — negatives fail closed', () => {
       () => null,
       (e: unknown) => e,
     );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 403, code: 'insufficient_scope' });
     expect(mcp.challenge(error).status).toBe(403);
   });
 });
