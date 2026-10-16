@@ -699,7 +699,7 @@ process.stdin.on('end', () => {
 
   it('traverses arrays and nested objects for forbidden content', () => {
     const snapshot = buildSnapshot();
-    snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, tags: ['ok', 'Bearer abc'] } };
+    snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, tags: ['ok', 'Bearer abcdefgh12345678'] } };
     const arrayResult = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(arrayResult.ok).toBe(false);
     if (!arrayResult.ok) {
@@ -724,7 +724,7 @@ process.stdin.on('end', () => {
       const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
       expect(result.ok).toBe(true);
     }
-    const attacks = ['SELECT * FROM users WHERE id = 1', 'DROP TABLE users;', 'wss://example.test/x', 'javascript:alert(1)', '//host/path', 'node:fs', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature', 'Bearer abc'];
+    const attacks = ['SELECT * FROM users WHERE id = 1', 'DROP TABLE users;', 'wss://example.test/x', 'javascript:alert(1)', '//host/path', 'node:fs', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature', 'Bearer abcdefgh12345678'];
     for (const note of attacks) {
       const snapshot = buildSnapshot();
       snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note } };
@@ -843,7 +843,7 @@ process.stdin.on('end', () => {
       expect(unknownKeyResult.diagnostics.some((entry) => entry.code === 'invalid_provenance' && entry.path === 'snapshot.provenance.reviewedAt')).toBe(true);
     }
     const bearerReviewer = buildSnapshot();
-    bearerReviewer.provenance = { ...bearerReviewer.provenance, reviewedBy: ['sentropic-architect', 'bearer abc123'] };
+    bearerReviewer.provenance = { ...bearerReviewer.provenance, reviewedBy: ['sentropic-architect', 'Bearer abcdefgh12345678'] };
     reseal(bearerReviewer);
     const bearerResult = compileToolConfiguration({ snapshot: bearerReviewer, manifest, handlers, compatibilityDigest: consumerDigest });
     expect(bearerResult.ok).toBe(false);
@@ -881,8 +881,8 @@ process.stdin.on('end', () => {
     }
   });
 
-  it('matches bearer and schemes case-insensitively and spares maxTokens', () => {
-    for (const value of ['bearer abc123', 'BEARER abc123', 'Basic dXNlcjpwYXNz', 'mailto:a@example.test', 'ssh://host/x', 's3://bucket/key', 'vbscript:msgbox(1)']) {
+  it('matches bearer abcdefgh12345678 schemes case-insensitively and spares maxTokens', () => {
+    for (const value of ['Bearer abcdefgh12345678', 'Bearer abcdefgh12345678', 'Basic dXNlcjpwYXNz', 'mailto:a@example.test', 'ssh://host/x', 's3://bucket/key', 'vbscript:msgbox(1)']) {
       const snapshot = buildSnapshot();
       snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note: value, tags: ['paris'] } };
       snapshot.handlersDigest = computeHandlersDigest(noteHandlers);
@@ -951,6 +951,41 @@ process.stdin.on('end', () => {
     reseal(capped);
     const cappedResult = compileToolConfiguration({ snapshot: capped, manifest, handlers: cappedHandlers, compatibilityDigest: consumerDigest });
     expect(cappedResult.ok).toBe(true);
+  });
+
+  it('bounds scheme and bearer abcdefgh12345678 to dangerous forms (R3-m1)', () => {
+    const legitValues = ['Mode: fast', 'T09:30', 'urn:example', 'immo:cfg-12', 'role:owner', 'Basic plan', 'Select a city'];
+    for (const note of legitValues) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note, tags: ['paris'] } };
+      snapshot.handlersDigest = computeHandlersDigest(noteHandlers);
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(true);
+    }
+    const dangerousValues = ['javascript:alert(1)', 'data:text/plain;base64,SGVsbG8=', 'vbscript:msgbox(1)', 'file:///etc/passwd', 'node:fs', 'https://example.test/x', 'wss://example.test/x', 's3://bucket/key', 'ssh://host/x', 'mailto:a@example.test'];
+    for (const note of dangerousValues) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note } };
+      snapshot.handlersDigest = computeHandlersDigest(noteHandlers);
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'forbidden_content')).toBe(true);
+      }
+    }
+    for (const value of ['Bearer abcdefgh', 'Bearer ABCDEF1234567890', 'Basic dXNlcjpwYXNz', 'bearer abcdefghijkl', 'BASIC ABCDEFGH1234'] ) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note: value, tags: ['paris'] } };
+      snapshot.handlersDigest = computeHandlersDigest(noteHandlers);
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'forbidden_content')).toBe(true);
+      }
+    }
   });
 
   it('requires qualified provider and platform versions', () => {
