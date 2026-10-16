@@ -2,6 +2,7 @@
 
 ## 0.18.0
 
+- Widen optional peer ranges to the #662 union: llm-mesh `>=0.22.0 <0.27.0`, llm-gateway `>=0.19.0 <0.21.0` (V7-M1). The strict published-tuple install test (`tests/packaging/tuple-strict.spec.ts`) proves a plain `npm install` with no `--legacy-peer-deps` escape.
 - Add the production RFC 8693 exchange binding (`src/trust/token-exchange-http.ts`):
   authenticated form POST with `client_secret_basic` to the configured issuer,
   bounded timeout/body, no redirects, redacted errors, and full validation of the
