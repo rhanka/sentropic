@@ -846,6 +846,14 @@ describe('session adoption workspace binding', () => {
       .where(eq(sessionContentObjects.sessionId, 'sess-adopt-30'));
     await db.delete(sessionContentGrants)
       .where(eq(sessionContentGrants.sessionId, 'sess-adopt-30'));
+    await db.delete(sessionContentOfflineReceipts)
+      .where(eq(sessionContentOfflineReceipts.projectId, 'sess-adopt-project-d2'));
+    await db.delete(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-adopt-project-d2'));
+    await db.delete(sessionContentNamespaces)
+      .where(eq(sessionContentNamespaces.ownerId, user.id));
+    await db.delete(sessionContentTombstones)
+      .where(eq(sessionContentTombstones.tenantId, TENANT_A));
     const now = 1_700_000_000_000;
     const fakeEpoch = createFakeContentAuthorityEpochPort();
     const content = new SessionContentService({ nowMs: () => now, epochs: fakeEpoch });
