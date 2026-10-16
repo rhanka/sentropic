@@ -1627,6 +1627,195 @@ export class SessionContentService {
     return { sessionId, fenced: settled !== null };
   }
 
+  /** Durable human admission record. Admission alone never grants
+   * content reads, capture or control; the Lot 3a finalizer writes here. */
+  async recordAdmission(input: {
+    authSessionId: string;
+    tokenHash: string;
+    credentialId: string;
+    origin: string;
+    userVerified: boolean;
+  }) {
+    if (!input.authSessionId.trim() || !input.tokenHash.trim() || !input.credentialId.trim()) {
+      throw new SessionContentError('invalid_request', 'admission identity is required');
+    }
+    if (input.userVerified !== true) {
+      throw new SessionContentError('invalid_request', 'admission requires user verification');
+    }
+    const admissionId = this.newId();
+    await db.insert(sessionContentAdmissions).values({
+      admissionId,
+      authSessionId: input.authSessionId,
+      tokenHash: input.tokenHash,
+      credentialId: input.credentialId,
+      origin: input.origin,
+      userVerified: true,
+    });
+    return { admissionId };
+  }
+
+  async checkAdmission(authSessionId: string, credentialId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ admissionId: sessionContentAdmissions.admissionId })
+      .from(sessionContentAdmissions)
+      .where(
+        and(
+          eq(sessionContentAdmissions.authSessionId, authSessionId),
+          eq(sessionContentAdmissions.credentialId, credentialId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  }
+
+  /** Local-only deny learned while disconnected: source export stops
+   * locally; server copies fence on reconnect. May stay unknown
+   * indefinitely under no expiry (O2=B). */
+  async recordLocalDeny(sessionId: string, ctx: SessionContentContext) {
+    requireContext(ctx);
+    await db
+      .update(sessionContentGrants)
+      .set({ localDenyPending: true, updatedAt: new Date(this.nowMs()) })
+      .where(eq(sessionContentGrants.sessionId, sessionId));
+    return { sessionId, localDenyPending: true as const };
+  }
+
+  async reconcileLocalDeny(sessionId: string, ctx: SessionContentContext) {
+    requireContext(ctx);
+    return db.transaction(async (tx) => {
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant) throw new SessionContentError('grant_not_found', 'unknown grant');
+      if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
+      }
+      if (!grant.localDenyPending) return { sessionId, reconciled: false as const };
+      await tx
+        .update(sessionContentGrants)
+        .set({ state: 'revoked', localDenyPending: false, updatedAt: new Date(this.nowMs()) })
+        .where(eq(sessionContentGrants.sessionId, sessionId));
+      return { sessionId, reconciled: true as const };
+    });
+  }
+
+  /** Membership-free denial-only retained handles: the still-active origin
+   * owner lists opaque handles/status without membership or source contact.
+   * No handle grants reading or control. */
+  async listRetainedHandles(ownerId: string, tenantId: string) {
+    const namespaces = await db
+      .select()
+      .from(sessionContentNamespaces)
+      .where(
+        and(
+          eq(sessionContentNamespaces.ownerId, ownerId),
+          eq(sessionContentNamespaces.tenantId, tenantId),
+        ),
+      );
+    const handles: Array<{
+      retainedScopeId: string;
+      bindingId: string;
+      status: string;
+      bytes: number;
+    }> = [];
+    for (const namespace of namespaces) {
+      const objects = await db
+        .select()
+        .from(sessionContentObjects)
+        .where(
+          and(
+            eq(sessionContentObjects.namespaceId, namespace.namespaceId),
+            inArray(sessionContentObjects.state, ['committed', 'purge_pending']),
+          ),
+        );
+      const byBinding = new Map<string, number>();
+      for (const object of objects) {
+        byBinding.set(object.bindingId, (byBinding.get(object.bindingId) ?? 0) + object.bytesEncoded);
+      }
+      for (const [bindingId, bytes] of byBinding) {
+        handles.push({
+          retainedScopeId: `retained:${namespace.namespaceId}:${bindingId}`,
+          bindingId,
+          status: namespace.status,
+          bytes,
+        });
+      }
+    }
+    return handles;
+  }
+
+  /** Denial-only purge request over an opaque retained scope: writer-settled
+   * physical deletion with no read/grant/control elevation. */
+  async requestRetainedPurge(retainedScopeId: string, ownerId: string) {
+    const match = /^retained:(.+):([^:]+)$/.exec(retainedScopeId);
+    if (!match) throw new SessionContentError('invalid_request', 'malformed retained scope');
+    const [, namespaceId, bindingId] = match;
+    const [namespace] = await db
+      .select()
+      .from(sessionContentNamespaces)
+      .where(eq(sessionContentNamespaces.namespaceId, namespaceId as string))
+      .limit(1);
+    if (!namespace || namespace.ownerId !== ownerId) {
+      throw new SessionContentError('cross_owner_refused', 'retained scope belongs elsewhere');
+    }
+    const purgeJobId = this.newId();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(sessionContentObjects)
+        .set({ state: 'purge_pending', updatedAt: new Date(this.nowMs()) })
+        .where(
+          and(
+            eq(sessionContentObjects.namespaceId, namespaceId as string),
+            eq(sessionContentObjects.bindingId, bindingId as string),
+            eq(sessionContentObjects.state, 'committed'),
+          ),
+        );
+      await tx.insert(sessionContentPurgeJobs).values({
+        purgeJobId,
+        namespaceId: namespaceId as string,
+        bindingId: bindingId as string,
+        scope: 'binding',
+        state: 'pending',
+      });
+    });
+    return this.runPurge(purgeJobId);
+  }
+
+  /** Storage-recovery fencing (CM2-F3 boundary): disable ingress for the
+   * old epoch, fence writers and expire source leases before restore. Old
+   * object namespaces stay purge-only; reactivation needs fresh
+   * human/source consent. The epoch record itself is operations-managed. */
+  async fenceForRestore(namespaceId: string) {
+    return db.transaction(async (tx) => {
+      await tx
+        .update(sessionContentNamespaces)
+        .set({ status: 'purge_pending', updatedAt: new Date(this.nowMs()) })
+        .where(eq(sessionContentNamespaces.namespaceId, namespaceId));
+      const scoped = await tx
+        .selectDistinct({ sessionId: sessionContentObjects.sessionId })
+        .from(sessionContentObjects)
+        .where(eq(sessionContentObjects.namespaceId, namespaceId));
+      for (const { sessionId } of scoped) {
+        await tx
+          .update(sessionContentGrants)
+          .set({ state: 'revoked', updatedAt: new Date(this.nowMs()) })
+          .where(eq(sessionContentGrants.sessionId, sessionId));
+      }
+      await tx
+        .update(sessionContentAttempts)
+        .set({ outcome: 'cancelled' })
+        .where(
+          and(
+            eq(sessionContentAttempts.namespaceId, namespaceId),
+            eq(sessionContentAttempts.outcome, 'attempted'),
+          ),
+        );
+      return { namespaceId, status: 'purge_pending' as const };
+    });
+  }
+
   async clearExclusion(projectId: string, sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
     return db.transaction(async (tx) => {
