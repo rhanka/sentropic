@@ -127,7 +127,7 @@ describe('token exchange cache', () => {
   });
 
   it('should isolate entries across environments and policy revisions', async () => {
-    let now = 1_700_000_000_000;
+    const now = 1_700_000_000_000;
     const fake = new FakeTokenIssuer({ issuer: ISSUER, nowMs: () => now });
     const firstEnv = createTokenExchangeClient({
       issuer: fake,
@@ -155,7 +155,6 @@ describe('token exchange cache', () => {
 
     expect(first.accessToken).not.toBe(second.accessToken);
     expect(fake.mintCalls).toBe(2);
-    void now;
   });
 
   it('should bound the cache and evict the oldest entry past capacity', async () => {

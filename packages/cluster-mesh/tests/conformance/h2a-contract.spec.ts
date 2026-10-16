@@ -69,14 +69,24 @@ describe('h2a public contract: N/N-1 baseline', () => {
     const unconfigured = api.createDegenerateClusterMesh(bindings());
     expect(unconfigured.capabilities).toMatchObject(f.capabilities);
     const issuer = new FakeTokenIssuer({ issuer: 'https://fake-idp.example.test' });
-    const configured = api.createDegenerateClusterMesh({ ...bindings(), tokenExchangeIssuer: issuer });
+    const configured = api.createDegenerateClusterMesh({
+      ...bindings(),
+      tokenExchange: {
+        issuer,
+        audiences: ['remote'],
+        subjectAudience: 'https://mesh.example.test',
+        workloadClientId: 'workload-1',
+        workloadActorSub: 'workload-1',
+        environment: 'test',
+      },
+    });
     expect(configured.capabilities).toMatchObject(f.capabilitiesConfigured);
     await expect(configured.trust.tokenExchange.exchange({
       grantType: api.RFC8693_GRANT_TYPE,
       subjectToken: 'forged',
       subjectTokenType: api.ACCESS_TOKEN_TYPE,
       audience: 'remote',
-      scope: [],
+      scope: ['openid'],
     })).rejects.toMatchObject({ code: 'token_exchange_refused', reason: 'subject_unverified' });
   });
 });

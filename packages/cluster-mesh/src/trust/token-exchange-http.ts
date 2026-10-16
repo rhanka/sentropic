@@ -1,4 +1,4 @@
-import { createLocalJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTPayload } from 'jose';
 import {
   SubjectVerificationError,
   TokenExchangeRefusedError,
@@ -92,7 +92,7 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
     if (this.jwksPromise === undefined) {
       this.jwksPromise = (async () => {
         if (this.options.jwks !== undefined) {
-          return createLocalJWKSet(this.options.jwks as { keys: Parameters<typeof createLocalJWKSet>[0]['keys'] });
+          return createLocalJWKSet(this.options.jwks as unknown as JSONWebKeySet);
         }
         const timeoutMs = this.options.requestTimeoutMs ?? TOKEN_EXCHANGE_HTTP_TIMEOUT_MS;
         const maxBytes = this.options.maxResponseBytes ?? TOKEN_EXCHANGE_HTTP_MAX_RESPONSE_BYTES;
@@ -114,7 +114,7 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         if (text.length > maxBytes) {
           throw new SubjectVerificationError('invalid_issuer', 'Issuer JWKS response is oversized.');
         }
-        return createLocalJWKSet((JSON.parse(text) as { keys: Parameters<typeof createLocalJWKSet>[0]['keys'] }).keys);
+        return createLocalJWKSet(JSON.parse(text) as unknown as JSONWebKeySet);
       })();
     }
     return this.jwksPromise;
@@ -126,7 +126,7 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
 
   async verify(subjectToken: string): Promise<VerifiedSubjectToken> {
     let payload: JWTPayload;
-
+    try {
       const verified = await jwtVerify(subjectToken, await this.jwks(), {
         issuer: this.expectedIssuer(),
         currentDate: new Date(this.nowMs()),
@@ -307,3 +307,4 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
     };
   }
 
+}

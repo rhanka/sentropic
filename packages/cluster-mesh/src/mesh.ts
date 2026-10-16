@@ -9,7 +9,7 @@ import {
 } from './membership.js';
 import { createH2aNhiLifecycle, type CommandRunnerPort, type NhiLifecyclePort } from './nhi.js';
 import { createLocalProjectionDomain, type LocalProjectionPort, type ProjectionDomain, type ProjectionKind } from './projection.js';
-import { createTokenExchangeClient, type TokenExchangeIssuer } from './token-exchange.js';
+import { createTokenExchangeClient, type TokenExchangeClientInput } from './token-exchange.js';
 import { createGatedTrustDomain, type TrustDomain } from './trust.js';
 import type { ClusterMeshModules, ModuleCapabilityMap } from './modules/contracts.js';
 
@@ -50,8 +50,12 @@ export function createDegenerateClusterMesh(input: {
   readonly nhi?: NhiLifecyclePort;
   readonly devices: LocalDeviceAttachmentPort;
   readonly modules?: ClusterMeshModules;
-  /** Issuer binding for RFC 8693 exchange. Absent until lot 2-IdP: the seam stays gated. */
-  readonly tokenExchangeIssuer?: TokenExchangeIssuer;
+  /**
+   * RFC 8693 exchange binding plus policy. The client is built eagerly: an invalid
+   * policy throws here, so `available` always follows a successful local preflight.
+   * Absent: the seam stays gated. Issuer reachability remains a runtime condition.
+   */
+  readonly tokenExchange?: TokenExchangeClientInput;
 }): ClusterMesh {
   if (input.nhi !== undefined) {
     for (const method of ['attest', 'offboard', 'exportBundle'] as const) {
@@ -62,6 +66,7 @@ export function createDegenerateClusterMesh(input: {
   }
   const nhi = input.nhi ?? (input.nhiRunner ? createH2aNhiLifecycle(input.nhiRunner) : undefined);
   if (!nhi) throw new TypeError('nhi or nhiRunner is required');
+  const tokenExchangeClient = input.tokenExchange ? createTokenExchangeClient(input.tokenExchange) : undefined;
   const boundaries = createBoundaryDomain({
     homeNodeId: input.self.nodeId,
     memberships: input.memberships,
@@ -75,7 +80,7 @@ export function createDegenerateClusterMesh(input: {
       return [...(input.projections.supportedKinds ?? ['human_identity', 'agent_identity', 'memory_snapshot'])];
     },
     interServerDirectory: 'gated',
-    get tokenExchange() { return input.tokenExchangeIssuer ? 'available' : 'gated'; },
+    get tokenExchange() { return tokenExchangeClient ? 'available' : 'gated'; },
     memoryReplication: 'gated',
   };
   const modules = input.modules;
@@ -85,9 +90,7 @@ export function createDegenerateClusterMesh(input: {
   }
   return {
     membership: createSingleNodeMembership({ ...input, boundaries }),
-    trust: input.tokenExchangeIssuer
-      ? { tokenExchange: createTokenExchangeClient({ issuer: input.tokenExchangeIssuer }) }
-      : createGatedTrustDomain(),
+    trust: tokenExchangeClient ? { tokenExchange: tokenExchangeClient } : createGatedTrustDomain(),
     wrap: {
       projections: createLocalProjectionDomain({ homeNodeId: input.self.nodeId, local: input.projections }),
       nhi,
