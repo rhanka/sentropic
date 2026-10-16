@@ -258,6 +258,72 @@ const FORBIDDEN_CONTENT_KEYS = new Set([
 ]);
 const REDACTION_ORDER = ['none', 'low', 'moderate', 'high', 'secret'] as const;
 
+const OVERLAY_KEYS = new Set([
+  'requiredScopes',
+  'requiredClaims',
+  'mutability',
+  'mutatesExternalSystem',
+  'idempotency',
+  'freshness',
+  'redactionClass',
+  'gates',
+]);
+
+const GATE_KEYS = [
+  'requiresElicitation',
+  'requiresHumanConfirmation',
+  'requiresPrincipalGate',
+  'requiresPolicy',
+] as const;
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+/**
+ * Reject malformed policy overlays with a message before any field is read.
+ * A null overlay, an unknown key or a mistyped field yields a typed
+ * `policy_weakening` diagnostic instead of a TypeError (M1).
+ */
+function checkOverlayShape(overlay: unknown): string | null {
+  if (!isRecord(overlay)) return 'policy must be an object';
+  for (const key of Object.keys(overlay)) {
+    if (!OVERLAY_KEYS.has(key)) return `unknown policy key "${key}"`;
+  }
+  if (overlay.requiredScopes !== undefined && !isStringArray(overlay.requiredScopes)) {
+    return 'requiredScopes must be a string array';
+  }
+  if (overlay.requiredClaims !== undefined && !isStringArray(overlay.requiredClaims)) {
+    return 'requiredClaims must be a string array';
+  }
+  if (overlay.mutability !== undefined && typeof overlay.mutability !== 'string') {
+    return 'mutability must be a string';
+  }
+  if (overlay.mutatesExternalSystem !== undefined && typeof overlay.mutatesExternalSystem !== 'boolean') {
+    return 'mutatesExternalSystem must be a boolean';
+  }
+  if (overlay.redactionClass !== undefined && typeof overlay.redactionClass !== 'string') {
+    return 'redactionClass must be a string';
+  }
+  if (overlay.idempotency !== undefined && !isRecord(overlay.idempotency)) {
+    return 'idempotency must be an object';
+  }
+  if (overlay.freshness !== undefined && !isRecord(overlay.freshness)) {
+    return 'freshness must be an object';
+  }
+  if (overlay.gates !== undefined) {
+    if (!isRecord(overlay.gates)) return 'gates must be an object';
+    for (const key of Object.keys(overlay.gates)) {
+      if (!(GATE_KEYS as readonly string[]).includes(key)) return `unknown gates key "${key}"`;
+    }
+    for (const key of GATE_KEYS) {
+      const value = (overlay.gates as Record<string, unknown>)[key];
+      if (value !== undefined && typeof value !== 'boolean') return `gates.${key} must be a boolean`;
+    }
+  }
+  return null;
+}
+
 function diag(
   diagnostics: ToolConfigurationDiagnostic[],
   code: ToolConfigurationDiagnosticCode,
@@ -503,6 +569,7 @@ function isWeakeningOverlay(manifestTool: CapabilityTool, overlay: ToolPolicyOve
       ['requiresElicitation', manifestTool.gates.requiresElicitation],
       ['requiresHumanConfirmation', manifestTool.gates.requiresHumanConfirmation],
       ['requiresPrincipalGate', manifestTool.gates.requiresPrincipalGate],
+      ['requiresPolicy', manifestTool.gates.requiresPolicy ?? false],
     ];
     for (const [key, base] of pairs) {
       if (overlay.gates[key] !== undefined && overlay.gates[key] !== base) {
@@ -659,8 +726,9 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     if (diagnostics.length !== before) return;
 
     if (entry.policy !== undefined) {
-      if (!isRecord(entry.policy)) {
-        diag(diagnostics, 'policy_weakening', `${path}.policy`, 'policy must be an object');
+      const shapeError = checkOverlayShape(entry.policy);
+      if (shapeError) {
+        diag(diagnostics, 'policy_weakening', `${path}.policy`, shapeError);
         return;
       }
       const weakening = isWeakeningOverlay(manifestTool, entry.policy as ToolPolicyOverlay);
@@ -671,10 +739,13 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     }
 
     const policy = (entry.policy ?? {}) as ToolPolicyOverlay;
+    // Field-by-field merge: an absent overlay field inherits the manifest
+    // baseline, so `gates: {}` can never drop a required gate (B1).
+    const mergedGates = { ...manifestTool.gates, ...policy.gates };
     compiled.push({
       capabilityRef: entry.toolName,
       freshness: policy.freshness ?? manifestTool.freshness,
-      gates: policy.gates ?? manifestTool.gates,
+      gates: mergedGates,
       handlerId: entry.handlerId,
       idempotency: policy.idempotency ?? manifestTool.idempotency,
       mutability: policy.mutability ?? manifestTool.mutability,
