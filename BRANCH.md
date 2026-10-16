@@ -56,7 +56,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
 - [x] `attention` Lot 2 UAT-4 closed: `probe-mcp-platform-clean-consumer` (BR1a-EX3) passes — `CLEAN_CONSUMER_OK payloadDigest=81148c5d…4cb9a5c8547 handlersDigest=163e199a…abeeef206b8`, pack sha `bca230787f7dedb43e0e2f35b3fd93b1e158e2b9203596b9bfb605d2469a906d` (supersedes pre-fix2 pack sha `704bf8c7…`).
 - [ ] `attention` R3-m6 history note: Lot 3 commits `73622ad66` (176 lines) and `0ee8d58d9` (156 lines) exceed 150 lines and 5/7 Lot 3 commits omit `BRANCH.md`; pushed history stays as-is (no rewrite without owner decision). Fix3 commits stay ≤150 lines each with `BRANCH.md` updated in the same commit.
 - [ ] `attention` manifests-gate-local: `make check-publishable-manifests` fails locally only (inventory requires validated CI context `MANIFEST_CONTEXT_FILE`/`CI_MANIFEST_CONTEXT`); covered by CI `validate-publishable-manifests` (green on run `38845923219`). Owner judges merge readiness.
-- [ ] `attention` CI green on run `38845923219` (50 pass, 6 pending, 22 skipping, 0 fail): `enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests`, `security-sast-sca` pass; e2e groups + `security-container` pending at review. Merge stays owner-gated per packet stop rule.
+- [ ] `attention` CI on fix3 final head: run ID + per-job status recorded in `.h2a/build/immo_1a_fix3_report.md` (required: e2e groups + `security-container` green). Last reviewed run `38845923219` (50 pass, 6 pending, 22 skipping, 0 fail). Merge stays owner-gated per packet stop rule.
 - [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
 - [ ] `attention`: npm published `@sentropic/mcp-platform` is `0.2.0`, source is `0.2.0`, candidate `0.3.0` is strictly above both (verified 2026-10-16)
 - [ ] `attention` BR1a-EX1: bump `packages/connector-host/package.json` range `^0.2.0` -> `^0.3.0` and refresh root `package-lock.json` via `make lock-root`. Reason: minor bump exits the `^0.2.0` range (`0.x` caret pins minor) and desyncs the lockfile, blocking every Make gate (`npm ci` fails). Impact: two files outside Allowed Paths, consumer-only range bump, no source change. Rollback: revert range and lockfile.
@@ -211,16 +211,16 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] R3-M2: apply spec-v3 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v3)
   - [x] R3-m1: bound scheme/basic guards with both-direction tests
   - [x] R3-m2: discriminating tests for overlay/provenance/schema/identity controls
-  - [ ] R3-m3: full mutation evidence with exact diff and failing output
+  - [x] R3-m3: full mutation evidence with exact diff and failing output (7 executed mutations A-G plus 3 test-first failures, `.h2a/build/immo_1a_fix3_report.md` §3)
   - [x] R3-m4: clean-consumer probe compares frozen digests and traps fetch
   - [x] R3-m5: platform version tied to `package.json` by test with strict-equality decision
-  - [ ] R3-m6: `BRANCH.md` exact incl. BR1a-EX3 and commit sizes ≤150 lines each with `BRANCH.md`
-  - [ ] Lot gate: `make typecheck-mcp-platform`, `make test-mcp-platform`, `make pack-mcp-platform`, `make probe-mcp-platform-clean-consumer` (all `ENV=test-mcp-registry-codec` last)
+  - [x] R3-m6: `BRANCH.md` exact incl. BR1a-EX3 and commit sizes ≤150 lines each with `BRANCH.md` (fix3 commits 55/79/130/62 lines; Lot 3 history documented as-is, no rewrite)
+  - [x] Lot gate (local, `ENV=test-mcp-registry-codec` last): typecheck 0 errors; `test-mcp-platform` 12 files 138 passed (`tool-configuration` 44); `pack-mcp-platform` PASS `0.3.0` sha `a92bb235…`; probe `CLEAN_CONSUMER_OK` payload `81148c5d…` handlers `163e199a…` compiled `121fbcb1…` `fetchCalls=0`; `api-extract-mcp-platform` no drift; `scope-check` PASS C2
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (was [x]; corrected per R2-m5: N/A, no file ever existed)
   - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration. (was [x]; corrected per R2-m5: N/A, no file ever existed)
   - [x] Confirm no `spec/BRANCH_SPEC_EVOL.md` needed (S slice, no spec evolution file created)
-  - [ ] Confirm `README.md` and `docs/ADOPTION_GUIDE.md` updated, no stale publication/Make notes introduced (reopened per R2-M2/R2-m5: docs inexact, fixed in Lot 3)
+  - [x] Confirm `README.md` and `docs/ADOPTION_GUIDE.md` updated, no stale publication/Make notes introduced (fixed in Lot 3, updated for R3-M2 in Lot 4: P5 settled, provenance/registry contract, bounded heuristics)
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint (`make typecheck-mcp-platform`, lint)
   - [ ] Retest UI (library slice: none per Lot 1/Lot 2 gates, not applicable)
