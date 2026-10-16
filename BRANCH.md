@@ -82,24 +82,24 @@ Implement the RFC 8693 token-exchange client in `@sentropic/cluster-mesh`: mesh 
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`); no exception needed for lot 2a.
   - [x] Version survey: npm `@sentropic/cluster-mesh` = 0.15.0, origin/main = 0.15.0, `origin/fix/llm-gateway-muse-vibe-wires` holds 0.16.0, `origin/feat/cluster-mesh-storage-k1/k2b/k3` hold 0.17.0, nothing holds 0.18.0 → this branch takes **0.18.0**.
 
-- [ ] **Lot 2a — RFC 8693 exchange client, mesh ungating, mandatory cache**
-  - [ ] New `packages/cluster-mesh/src/token-exchange.ts`: `TokenExchangeIssuer` port (`verify`/`mint`), `createTokenExchangeClient` (grant-type, Bearer-only, signature via issuer, issuer/audience/subject/actor/scopes/TTL policy, scope intersection, TTL ceiling, refresh-output refusal), 60s mandatory cache (`min(minted.exp, subject.exp, insertedAt+60s)`, 12-field key), zero-fallback refusal errors. No static `jose` reference in `src/` (root-graph isolation).
-  - [ ] Update `packages/cluster-mesh/src/mesh.ts`: optional `tokenExchangeIssuer` input; real client wired when configured, gated domain otherwise; `capabilities.tokenExchange` is `'available' | 'gated'` following the `localDevices` precedent.
-  - [ ] Update `packages/cluster-mesh/src/index.ts`: export the new module.
-  - [ ] Bump `packages/cluster-mesh/package.json` to `0.18.0` (strictly above npm 0.15.0 and main 0.15.0; avoids held 0.16.0/0.17.0).
-  - [ ] Test doubles via new `packages/cluster-mesh/tests/fixtures/fake-token-issuer.ts` (HS256 `jose` fake; test-only until lot 2-IdP wires the real IdP).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh ENV=test-cm-token-exchange` + `make lint-cluster-mesh ENV=test-cm-token-exchange`
+- [x] **Lot 2a — RFC 8693 exchange client, mesh ungating, mandatory cache**
+  - [x] New `packages/cluster-mesh/src/token-exchange.ts`: `TokenExchangeIssuer` port (`verify`/`mint`), `createTokenExchangeClient` (grant-type, Bearer-only, signature via issuer, issuer/audience/subject/actor/scopes/TTL policy, scope intersection, TTL ceiling, refresh-output refusal), 60s mandatory cache (`min(minted.exp, subject.exp, insertedAt+60s)`, 12-field key), zero-fallback refusal errors. No static `jose` reference in `src/` (root-graph isolation).
+  - [x] Update `packages/cluster-mesh/src/mesh.ts`: optional `tokenExchangeIssuer` input; real client wired when configured, gated domain otherwise; `capabilities.tokenExchange` is `'available' | 'gated'` following the `localDevices` precedent.
+  - [x] Update `packages/cluster-mesh/src/index.ts`: export the new module.
+  - [x] Bump `packages/cluster-mesh/package.json` to `0.18.0` (strictly above npm 0.15.0 and main 0.15.0; avoids held 0.16.0/0.17.0).
+  - [x] Test doubles via new `packages/cluster-mesh/tests/fixtures/fake-token-issuer.ts` (HS256 `jose` fake; test-only until lot 2-IdP wires the real IdP).
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh ENV=test-cm-token-exchange` + `make lint-cluster-mesh ENV=test-cm-token-exchange` (both pass; one-line tsc index-signature fix committed separately)
     - [ ] **Package tests**
-      - [ ] New `packages/cluster-mesh/tests/token-exchange.spec.ts` (happy paths: valid exchange, scope intersection, TTL ceiling, `act` claim, cache hit).
-      - [ ] New `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (every refusal path).
-      - [ ] New `packages/cluster-mesh/tests/token-exchange-cache.spec.ts` (60s cap, `min()` semantics, no stale serve, key isolation).
-      - [ ] New `packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts` (failures never return the subject token, no fallback, expired entries never served).
-      - [ ] Updated `packages/cluster-mesh/tests/trust.spec.ts` (gated domain still fail-closes when unconfigured).
-      - [ ] Updated `packages/cluster-mesh/tests/mesh.spec.ts` (unconfigured stays gated; configured is available and exchanges).
-      - [ ] Updated `packages/cluster-mesh/tests/conformance/h2a-contract.spec.ts` + `h2a-contract.json` (configured-mesh available case; unconfigured federal gating preserved).
-      - [ ] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/token-exchange.spec.ts ENV=test-cm-token-exchange` (repeat per file).
-      - [ ] Sub-lot gate: `make test-cluster-mesh ENV=test-cm-token-exchange`
+      - [x] New `packages/cluster-mesh/tests/token-exchange.spec.ts` (happy paths: valid exchange, scope intersection, TTL ceiling, `act` claim, cache hit).
+      - [x] New `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (every refusal path).
+      - [x] New `packages/cluster-mesh/tests/token-exchange-cache.spec.ts` (60s cap, `min()` semantics, no stale serve, key isolation).
+      - [x] New `packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts` (failures never return the subject token, no fallback, expired entries never served).
+      - [x] Updated `packages/cluster-mesh/tests/trust.spec.ts` (gated domain still fail-closes when unconfigured).
+      - [x] Updated `packages/cluster-mesh/tests/mesh.spec.ts` (unconfigured stays gated; configured is available and exchanges).
+      - [x] Updated `packages/cluster-mesh/tests/conformance/h2a-contract.spec.ts` + `h2a-contract.json` (configured-mesh available case; unconfigured federal gating preserved).
+      - [x] Scoped runs while evolving tests: `make test-cluster-mesh SCOPE=tests/token-exchange.spec.ts ENV=test-cm-token-exchange` (repeat per file).
+      - [x] Sub-lot gate: `make test-cluster-mesh ENV=test-cm-token-exchange` (59 files pass, 476 tests pass, 5 files/34 tests skipped — all skips pre-existing in `tests/packaging/*`).
     - [ ] **API tests**
       - [ ] None; no API change in 2a.
     - [ ] **UI tests (TypeScript only)**
