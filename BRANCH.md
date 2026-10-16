@@ -49,6 +49,11 @@ Implement the RFC 8693 token-exchange client in `@sentropic/cluster-mesh`: mesh 
 
 ## Feedback Loop
 - `attention` CMT-GAP1: spec-v2.md and challenge-opus-r2.md bodies are not present in this worktree, the parent checkout, or the sibling `auth-token-exchange` worktree (targeted searches empty). Lot 2a is implemented from Discovery A/B/C evidence (requirements summary), the sibling `feat/auth-token-exchange` BRANCH.md shared vocabulary, and current `packages/cluster-mesh` sources. Interpretation decisions are recorded under Lot 2a and in the implementation notes; any deviation found when the spec bodies resurface must be fixed in a follow-up lot.
+- `acknowledge` CMT-GAP1-CLOSED (2026-10-16): superseded by spec-v3.md (sha256 `d7ffee9e26326c156c6c72eaa6b8eea59b86ea2ed33c446d880ab4f1eb6863b6`, supersedes spec-v2) §6 + §11 read in full; Lot 2a-fix implements it exactly.
+- `attention` BR2A-EX1: new `packages/cluster-mesh/src/trust/token-exchange-http.ts` (RFC 8693 HTTP binding, mandated by spec-v3 §6 + review B1). Reason: no allowed `src/` path hosts the issuer HTTP adapter. Impact: one additive module, no existing export changed. Rollback: delete file + revert `index.ts`/`mesh.ts` imports.
+- `attention` BR2A-EX2: new `packages/cluster-mesh/tests/token-exchange-integration.spec.ts` (mandated by spec-v3 §6 + review M8). Reason: required file absent from Allowed Paths. Impact: test-only addition. Rollback: delete file.
+- `attention` BR2A-EX3: `packages/cluster-mesh/README.md` + `packages/cluster-mesh/CHANGELOG.md` (mandated by spec-v3 §6 + review m10). Reason: docs absent from Allowed Paths. Impact: docs only. Rollback: `git checkout` both files.
+- `attention` BR2A-EX4: `packages/cluster-mesh/src/modules/catalog.ts` (one-line `AUTH_HONO_RANGE` parity with #674) + `packages/cluster-mesh/package.json` peer range (same line, already allowed) + selected-fixture regen if packaging tests require it (review m13, merge-safe in either order). Reason: out-of-scope file for merge-order safety. Impact: range widening only, no behavior. Rollback: `git checkout` the file.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -108,6 +113,46 @@ Implement the RFC 8693 token-exchange client in `@sentropic/cluster-mesh`: mesh 
       - [ ] None; no UI change in 2a.
     - [ ] **E2E tests**
       - [ ] None for 2a; cross-repository receipt lands in 2b.
+
+- [ ] **Lot 2a-fix — Close review immo_2a_opus.md (2 BLOQUANT, 6 MAJEUR, 5 MINEUR)**
+  - [ ] B1: new `src/trust/token-exchange-http.ts` (RFC 8693 form POST, `client_secret_basic` from protected port, approved endpoint, bounded timeout/body, no redirects, redacted errors); raw subject only to trusted issuer; mesh `available` only after policy preflight (BR2A-EX1)
+  - [ ] B2: full minted-token validation (signature/issuer/exact audience/sub/client_id/mandatory act/scope subset/TTL caps/token types, no refresh); scope inclusion enforced before caching
+  - [ ] M3: `act` mandatory from workload config, caller-supplied actor refused (`TokenExchangeRequest.actor` removed)
+  - [ ] M4: empty requested scope refused (`scope_empty`), never widened
+  - [ ] M5: `audiences` allowlist required at construction, subject single-audience equality enforced
+  - [ ] M6: cache key with subject fingerprint/`jti`, origin/workload clients, environment, tenant, policy revision (BR2A-EX2-adjacent unit updates)
+  - [ ] M7: bounded cache + single-flight + invalidation hooks + expiry margin + recomputed `expiresIn` on hit
+  - [ ] M8: new `tests/token-exchange-integration.spec.ts` vs faithful #674 wire double (form/Basic/response/`invalid_*`) (BR2A-EX2)
+  - [ ] m9: `maxTtlSec` hard-capped at 300, `<= 0` refused at construction
+  - [ ] m10: README gated-seam note + `available` semantics + CHANGELOG 0.18.0 entry (BR2A-EX3)
+  - [ ] m11: this lot (truthful claims; UAT negatives corrected: proof-bound subject refused at binding, no caller DPoP toggle)
+  - [ ] m12: every commit `<= 150` lines (`git diff --stat` before each `make commit`)
+  - [ ] m13: keep `0.18.0` (strictly above npm `0.15.0`, main `0.15.0`, avoids held `0.16.0`/`0.17.0`/`0.15.1`); peer/catalog range parity with #674 under BR2A-EX4; no rebase (spec does not require it), never merge main
+  - [ ] **Package tests**
+    - [ ] Updated `packages/cluster-mesh/tests/token-exchange.spec.ts` (empty-scope refusal, caller-actor refusal, workload-act assertion)
+    - [ ] Updated `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (refusal per new reason)
+    - [ ] Updated `packages/cluster-mesh/tests/token-exchange-cache.spec.ts` (key sensitivity, bound, single-flight, invalidation, margin, `expiresIn` recompute)
+    - [ ] Updated `packages/cluster-mesh/tests/token-exchange-no-passthrough.spec.ts` (non-empty scopes, no stale serve)
+    - [ ] New `packages/cluster-mesh/tests/token-exchange-integration.spec.ts` (faithful #674 double + fault injection)
+    - [ ] Updated `packages/cluster-mesh/tests/trust.spec.ts` (actor removed from request contract)
+    - [ ] Updated `packages/cluster-mesh/tests/mesh.spec.ts` (policy-gated availability)
+    - [ ] Updated `packages/cluster-mesh/tests/conformance/h2a-contract.spec.ts` + `h2a-contract.json` (configured case carries policy)
+    - [ ] Updated `packages/cluster-mesh/tests/fixtures/fake-token-issuer.ts` (verified claims: `jti`/`client_id`/`tenant`, workload-act mint, raw subject input)
+    - [ ] Scoped runs per file: `make test-cluster-mesh SCOPE=tests/<file> ENV=test-cm-token-exchange`
+    - [ ] Sub-lot gate: `make test-cluster-mesh ENV=test-cm-token-exchange`
+  - [ ] **API tests**
+    - [ ] None; no API change in 2a-fix.
+  - [ ] **UI tests (TypeScript only)**
+    - [ ] None; no UI change in 2a-fix.
+  - [ ] **E2E tests**
+    - [ ] None for 2a-fix; cross-repository receipt lands in 2b.
+  - [ ] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-token-exchange` + `make lint-cluster-mesh ENV=test-cm-token-exchange` + `make scope-check`
+  - [ ] **UAT corrections (step-level, no UI change)**
+    - [ ] Exchange with configured HTTP binding: valid subject yields verified claims, human sub, workload act, scope intersection, bounded expiry
+    - [ ] Negatives: wrong grant/type, empty scope, caller actor, forged signature, wrong issuer, wrong subject audience, unallowed target audience, excess scope, TTL above ceiling, proof-bound (`cnf`) subject, already-exchanged (`act`) subject, revoked subject/client; every refusal before any downstream call
+    - [ ] Warm cache serves with issuer stopped until effective deadline; cold/restarted/expired fails closed; no original-Bearer [REDACTED]
+    - [ ] Revoke/invalidate cached identity and rotate workload credential: no old entry authorizes the next call
+    - [ ] Unconfigured mesh reports `tokenExchange: 'gated'` and rejects with `capability_gated`
 
 - [ ] **Lot 2-IdP — Real issuer binding (sibling branch, tracked dependency)**
   - [ ] Consume the immutable version/policy receipt from `feat/auth-token-exchange` (subject validation, policy table, rotation procedure).
