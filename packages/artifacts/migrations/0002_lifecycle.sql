@@ -21,10 +21,12 @@ ALTER TABLE artifacts.releases
   ADD CONSTRAINT releases_state_check CHECK (state IN ('ready', 'retired', 'purged'));
 
 -- Sharing grants: exact (artifact, principal) pairs, no wildcards.
+-- (`grant` is reserved in SQL; the column is `permission`, mapped to the
+-- `grant` field by the adapter.)
 CREATE TABLE IF NOT EXISTS artifacts.artifact_access (
   artifact_id UUID NOT NULL REFERENCES artifacts.artifacts (id) ON DELETE CASCADE,
   principal_id TEXT NOT NULL,
-  grant TEXT NOT NULL CHECK (grant IN ('read', 'source')),
+  permission TEXT NOT NULL CHECK (permission IN ('read', 'source')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (artifact_id, principal_id)
 );
