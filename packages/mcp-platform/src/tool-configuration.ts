@@ -27,6 +27,9 @@ import type { AppMcpProviderManifest, CapabilityTool } from './manifest.js';
 export const TOOL_CONFIGURATION_SCHEMA_VERSION = 'v1' as const;
 export type ToolConfigurationSchemaVersion = typeof TOOL_CONFIGURATION_SCHEMA_VERSION;
 
+/** Qualified platform version for `platformVersion` (R2-m3, mirrors package.json). */
+export const TOOL_CONFIGURATION_PLATFORM_VERSION = '0.3.0' as const;
+
 // ---------------------------------------------------------------------------
 // Diagnostics
 // ---------------------------------------------------------------------------
@@ -42,6 +45,7 @@ export type ToolConfigurationDiagnosticCode =
   | 'capability_ref_mismatch'
   | 'unknown_handler'
   | 'handler_capability_mismatch'
+  | 'handlers_digest_mismatch'
   | 'invalid_values'
   | 'unknown_config_key'
   | 'policy_weakening'
@@ -103,9 +107,10 @@ export type ApprovedToolSnapshot = {
   connectorId?: string;
   revision: string;
   manifestDigest: string;
-  providerVersion?: string;
-  platformVersion?: string;
+  providerVersion: string;
+  platformVersion: string;
   compatibilityDigest: string;
+  handlersDigest?: string;
   provenance: ToolConfigurationProvenance;
   bindings: ApprovedToolBinding[];
 };
@@ -141,8 +146,8 @@ export type CompiledToolConfiguration = {
   payloadDigest: string;
   /** Approval reference the payload digest was approved under. */
   approvalRef: string;
-  providerVersion?: string;
-  platformVersion?: string;
+  providerVersion: string;
+  platformVersion: string;
   /** Digest of the local handler table shape (id + capabilityRef + schema). */
   handlersDigest: string;
   tools: CompiledToolEntry[];
@@ -279,7 +284,11 @@ export function computeHandlersDigest(
 // ---------------------------------------------------------------------------
 
 const HANDLER_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
-const EXECUTABLE_VALUE_PATTERN = /^(file|https?|ftp|ws|wss|javascript|data|node):/i;
+// Generic scheme guard (R2-m2): any `scheme:` prefix is forbidden (empty allowlist).
+const GENERIC_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i;
+const BEARER_VALUE_PATTERN = /^bearer\s+/i;
+const BASIC_VALUE_PATTERN = /^basic\s+/i;
+const EMAIL_VALUE_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SQL_LEADER_PATTERN = /^(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC(UTE)?)\b/i;
 const SQL_STRUCTURE_PATTERN = /(;|--|\/\*|\b(FROM|WHERE|INTO|VALUES|TABLE|JOIN|UNION)\b)/i;
 const JWT_VALUE_PATTERN = /^eyJ[A-Za-z0-9_-]*\./;
@@ -325,11 +334,9 @@ const FORBIDDEN_CONTENT_KEYS = new Set([
   'jwt',
   'token',
 ]);
-// Substring families: any normalized key containing one of these fragments is
-// forbidden (catches prefixed/suffixed token, secret, password, credential,
-// apikey and privatekey spellings).
+// Substring families (R2-m2): `token` excluded so `maxTokens` passes (allowlisted).
+// `email` included so `contactEmail` is forbidden.
 const FORBIDDEN_CONTENT_SUBSTRINGS = [
-  'token',
   'secret',
   'password',
   'passwd',
@@ -337,7 +344,10 @@ const FORBIDDEN_CONTENT_SUBSTRINGS = [
   'apikey',
   'privatekey',
   'bearer',
+  'email',
 ];
+// Exact normalized keys that are never forbidden despite matching a family.
+const FORBIDDEN_CONTENT_ALLOWLIST = new Set(['maxtokens']);
 const SNAPSHOT_KEYS = new Set([
   'schemaVersion',
   'providerId',
@@ -347,11 +357,21 @@ const SNAPSHOT_KEYS = new Set([
   'providerVersion',
   'platformVersion',
   'compatibilityDigest',
+  'handlersDigest',
   'provenance',
   'bindings',
 ]);
 
 const BINDING_KEYS = new Set(['toolName', 'capabilityRef', 'handlerId', 'values', 'policy']);
+
+// Closed provenance keys (R2-M1): anything else is `invalid_provenance`.
+const PROVENANCE_KEYS = new Set([
+  'approvalRef',
+  'revision',
+  'manifestDigest',
+  'payloadDigest',
+  'reviewedBy',
+]);
 
 const REDACTION_ORDER = ['none', 'low', 'moderate', 'high', 'secret'] as const;
 
@@ -414,8 +434,10 @@ function checkOverlayShape(overlay: unknown): string | null {
       if (!(GATE_KEYS as readonly string[]).includes(key)) return `unknown gates key "${key}"`;
     }
     for (const key of GATE_KEYS) {
+      if (!Object.hasOwn(overlay.gates as Record<string, unknown>, key)) continue;
       const value = (overlay.gates as Record<string, unknown>)[key];
-      if (value !== undefined && typeof value !== 'boolean') return `gates.${key} must be a boolean`;
+      if (value === undefined) return `gates.${key} must be a boolean (explicit undefined rejected)`;
+      if (typeof value !== 'boolean') return `gates.${key} must be a boolean`;
     }
   }
   return null;
@@ -468,11 +490,13 @@ function checkForbiddenContent(
 ): void {
   for (const [key, entry] of Object.entries(values)) {
     const lowered = key.toLowerCase().replace(/[^a-z]/g, '');
-    if (
-      FORBIDDEN_CONTENT_KEYS.has(lowered) ||
-      FORBIDDEN_CONTENT_SUBSTRINGS.some((fragment) => lowered.includes(fragment))
-    ) {
-      diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `forbidden key "${key}"`);
+    if (!FORBIDDEN_CONTENT_ALLOWLIST.has(lowered)) {
+      if (
+        FORBIDDEN_CONTENT_KEYS.has(lowered) ||
+        FORBIDDEN_CONTENT_SUBSTRINGS.some((fragment) => lowered.includes(fragment))
+      ) {
+        diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `forbidden key "${key}"`);
+      }
     }
     if (FORBIDDEN_VALUE_KEYS.has(lowered)) {
       diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `executable/upstream key "${key}" is not allowed`);
@@ -485,18 +509,24 @@ function checkForbiddenValue(
   diagnostics: ToolConfigurationDiagnostic[],
   path: string,
   entry: unknown,
+  options?: { allowScheme?: boolean },
 ): void {
   if (typeof entry === 'string') {
     const trimmed = entry.trim();
     // A bare SQL leader word is a legitimate label ("Select a city"); only a
     // leader combined with SQL structure (statement terminator, comment or a
     // FROM/WHERE/INTO/VALUES/TABLE/JOIN/UNION clause) is treated as SQL.
+    // Bearer/Basic match case-insensitively (R2-m2); any URI scheme is
+    // forbidden (R2-m2 generic guard); email-address values are user data.
+    // Scope/claim identifiers (`domain:action`) legitimately contain one
+    // colon, so overlay scope checks opt out of the scheme guard.
     if (
-      trimmed.startsWith('Bearer ') ||
-      trimmed.startsWith('Basic ') ||
+      BEARER_VALUE_PATTERN.test(trimmed) ||
+      BASIC_VALUE_PATTERN.test(trimmed) ||
       trimmed.startsWith('//') ||
-      EXECUTABLE_VALUE_PATTERN.test(trimmed) ||
+      (!options?.allowScheme && GENERIC_SCHEME_PATTERN.test(trimmed)) ||
       JWT_VALUE_PATTERN.test(trimmed) ||
+      EMAIL_VALUE_PATTERN.test(trimmed) ||
       (SQL_LEADER_PATTERN.test(trimmed) && SQL_STRUCTURE_PATTERN.test(trimmed))
     ) {
       diag(diagnostics, 'forbidden_content', path, `forbidden string value at "${path}"`);
@@ -607,6 +637,19 @@ function checkValueType(
   const type = schema['type'];
   if (type === 'string') {
     if (!checkSchemaKeys(diagnostics, path, schema, STRING_SCHEMA_KEYS)) return false;
+    // Mistyped supported keywords are rejected, never ignored (R2-m1).
+    if (schema['minLength'] !== undefined && typeof schema['minLength'] !== 'number') {
+      diag(diagnostics, 'invalid_values', path, 'schema minLength must be a number');
+      return false;
+    }
+    if (schema['maxLength'] !== undefined && typeof schema['maxLength'] !== 'number') {
+      diag(diagnostics, 'invalid_values', path, 'schema maxLength must be a number');
+      return false;
+    }
+    if (schema['enum'] !== undefined && !Array.isArray(schema['enum'])) {
+      diag(diagnostics, 'invalid_values', path, 'schema enum must be an array');
+      return false;
+    }
     if (typeof value !== 'string') {
       diag(diagnostics, 'invalid_values', path, 'expected string');
       return false;
@@ -635,6 +678,18 @@ function checkValueType(
   }
   if (type === 'number' || type === 'integer') {
     if (!checkSchemaKeys(diagnostics, path, schema, NUMBER_SCHEMA_KEYS)) return false;
+    if (schema['minimum'] !== undefined && typeof schema['minimum'] !== 'number') {
+      diag(diagnostics, 'invalid_values', path, 'schema minimum must be a number');
+      return false;
+    }
+    if (schema['maximum'] !== undefined && typeof schema['maximum'] !== 'number') {
+      diag(diagnostics, 'invalid_values', path, 'schema maximum must be a number');
+      return false;
+    }
+    if (schema['enum'] !== undefined && !Array.isArray(schema['enum'])) {
+      diag(diagnostics, 'invalid_values', path, 'schema enum must be an array');
+      return false;
+    }
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       diag(diagnostics, 'invalid_values', path, 'expected number');
       return false;
@@ -659,6 +714,18 @@ function checkValueType(
   }
   if (type === 'array') {
     if (!checkSchemaKeys(diagnostics, path, schema, ARRAY_SCHEMA_KEYS)) return false;
+    if (schema['minItems'] !== undefined && typeof schema['minItems'] !== 'number') {
+      diag(diagnostics, 'invalid_values', path, 'schema minItems must be a number');
+      return false;
+    }
+    if (schema['maxItems'] !== undefined && typeof schema['maxItems'] !== 'number') {
+      diag(diagnostics, 'invalid_values', path, 'schema maxItems must be a number');
+      return false;
+    }
+    if (schema['items'] !== undefined && !isRecord(schema['items'])) {
+      diag(diagnostics, 'invalid_values', path, 'schema items must be an object');
+      return false;
+    }
     if (!Array.isArray(value)) {
       diag(diagnostics, 'invalid_values', path, 'expected array');
       return false;
@@ -851,15 +918,15 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
   if (snapshot.connectorId !== undefined && (typeof snapshot.connectorId !== 'string' || snapshot.connectorId.length === 0)) {
     diag(diagnostics, 'invalid_identity', 'snapshot.connectorId', 'connectorId must be a non-empty string');
   }
-  if (snapshot.providerVersion !== undefined) {
-    if (typeof snapshot.providerVersion !== 'string' || snapshot.providerVersion.length === 0) {
-      diag(diagnostics, 'invalid_identity', 'snapshot.providerVersion', 'providerVersion must be a non-empty string');
-    } else if (snapshot.providerVersion !== manifest.version) {
-      diag(diagnostics, 'invalid_identity', 'snapshot.providerVersion', 'providerVersion must equal the manifest version');
-    }
+  if (typeof snapshot.providerVersion !== 'string' || snapshot.providerVersion.length === 0) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.providerVersion', 'providerVersion is mandatory and must be non-empty');
+  } else if (snapshot.providerVersion !== manifest.version) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.providerVersion', 'providerVersion must equal the manifest version');
   }
-  if (snapshot.platformVersion !== undefined && (typeof snapshot.platformVersion !== 'string' || snapshot.platformVersion.length === 0)) {
-    diag(diagnostics, 'invalid_identity', 'snapshot.platformVersion', 'platformVersion must be a non-empty string');
+  if (typeof snapshot.platformVersion !== 'string' || snapshot.platformVersion.length === 0) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.platformVersion', 'platformVersion is mandatory and must be non-empty');
+  } else if (snapshot.platformVersion !== TOOL_CONFIGURATION_PLATFORM_VERSION) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.platformVersion', 'platformVersion must equal the package version');
   }
 
   // Digest inputs may carry non-canonical values (undefined, non-finite
@@ -889,18 +956,28 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     );
   }
 
-  // Provenance.
+  // Provenance (R2-M1): closed keys, inspected strings, role-only `reviewedBy`.
   const provenance = snapshot.provenance as Partial<ToolConfigurationProvenance> | undefined;
   if (!isRecord(provenance)) {
     diag(diagnostics, 'invalid_provenance', 'snapshot.provenance', 'provenance must be an object');
   } else {
+    for (const key of Object.keys(provenance)) {
+      if (!PROVENANCE_KEYS.has(key)) {
+        diag(diagnostics, 'invalid_provenance', `snapshot.provenance.${key}`, `unknown provenance key "${key}"`);
+      }
+    }
     if (typeof provenance.approvalRef !== 'string' || provenance.approvalRef.length === 0) {
       diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.approvalRef', 'approvalRef must be non-empty');
+    } else {
+      checkForbiddenValue(diagnostics, 'snapshot.provenance.approvalRef', provenance.approvalRef);
     }
     if (typeof provenance.revision !== 'string' || provenance.revision.length === 0) {
       diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.revision', 'provenance revision must be non-empty');
-    } else if (typeof snapshot.revision === 'string' && provenance.revision !== snapshot.revision) {
-      diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.revision', 'provenance revision must equal snapshot revision');
+    } else {
+      if (typeof snapshot.revision === 'string' && provenance.revision !== snapshot.revision) {
+        diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.revision', 'provenance revision must equal snapshot revision');
+      }
+      checkForbiddenValue(diagnostics, 'snapshot.provenance.revision', provenance.revision);
     }
     if (provenance.manifestDigest !== manifestDigest) {
       diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.provenance.manifestDigest', 'provenance manifestDigest mismatch');
@@ -911,6 +988,10 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
       !provenance.reviewedBy.every((entry) => typeof entry === 'string' && entry.length > 0)
     ) {
       diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.reviewedBy', 'reviewedBy must list at least one reviewer');
+    } else {
+      provenance.reviewedBy.forEach((entry, index) => {
+        checkForbiddenValue(diagnostics, `snapshot.provenance.reviewedBy[${index}]`, entry);
+      });
     }
     // The payload digest is mandatory: approval applies to it, and it binds
     // the manifest and compatibility digests (M3).
@@ -1013,6 +1094,27 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
         diag(diagnostics, 'policy_weakening', `${path}.policy`, weakening);
         return;
       }
+      // Overlay strings inspected like values (R2-M1).
+      const overlay = entry.policy as ToolPolicyOverlay;
+      for (const [index, scope] of (overlay.requiredScopes ?? []).entries()) {
+        checkForbiddenValue(diagnostics, `${path}.policy.requiredScopes[${index}]`, scope, { allowScheme: true });
+      }
+      for (const [index, claim] of (overlay.requiredClaims ?? []).entries()) {
+        checkForbiddenValue(diagnostics, `${path}.policy.requiredClaims[${index}]`, claim, { allowScheme: true });
+      }
+      if (overlay.mutability !== undefined) checkForbiddenValue(diagnostics, `${path}.policy.mutability`, overlay.mutability);
+      if (typeof overlay.idempotency?.scope === 'string') {
+        checkForbiddenValue(diagnostics, `${path}.policy.idempotency.scope`, overlay.idempotency.scope);
+      }
+      if (typeof overlay.freshness?.stepUp === 'string') {
+        checkForbiddenValue(diagnostics, `${path}.policy.freshness.stepUp`, overlay.freshness.stepUp);
+      }
+      for (const [index, entryValue] of (overlay.freshness?.acr ?? []).entries()) {
+        checkForbiddenValue(diagnostics, `${path}.policy.freshness.acr[${index}]`, entryValue);
+      }
+      for (const [index, entryValue] of (overlay.freshness?.amr ?? []).entries()) {
+        checkForbiddenValue(diagnostics, `${path}.policy.freshness.amr[${index}]`, entryValue);
+      }
     }
 
     const policy = (entry.policy ?? {}) as ToolPolicyOverlay;
@@ -1034,8 +1136,9 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
       mutability: policy.mutability ?? manifestTool.mutability,
       mutatesExternalSystem: policy.mutatesExternalSystem ?? manifestTool.mutatesExternalSystem,
       redactionClass: policy.redactionClass ?? manifestTool.redactionClass,
-      requiredClaims: policy.requiredClaims ?? [...manifestTool.requiredClaims],
-      requiredScopes: policy.requiredScopes ?? [...manifestTool.requiredScopes],
+      // Clone overlay arrays (R2-m4): never share refs with the caller snapshot.
+      requiredClaims: policy.requiredClaims !== undefined ? [...policy.requiredClaims] : [...manifestTool.requiredClaims],
+      requiredScopes: policy.requiredScopes !== undefined ? [...policy.requiredScopes] : [...manifestTool.requiredScopes],
       toolName: entry.toolName,
       values: deepClone(entry.values as Record<string, unknown>),
     });
@@ -1048,12 +1151,19 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     }
   }
 
+  // Code binding (R2-M2): snapshot `handlersDigest` covered by `payloadDigest`,
+  // compared to the local table. An approval for table A rejects table B.
   const approval = snapshot.provenance as ToolConfigurationProvenance;
   let handlersDigest = '';
   try {
     handlersDigest = computeHandlersDigest(input.handlers);
   } catch {
     diag(diagnostics, 'unknown_handler', 'handlers', 'handler table cannot be canonically encoded');
+  }
+  if (typeof snapshot.handlersDigest === 'string' && snapshot.handlersDigest.length > 0) {
+    if (handlersDigest !== '' && snapshot.handlersDigest !== handlersDigest) {
+      diag(diagnostics, 'handlers_digest_mismatch', 'snapshot.handlersDigest', 'handlersDigest does not match the local handler table');
+    }
   }
 
   if (diagnostics.length > 0) return { ok: false, diagnostics };
@@ -1063,8 +1173,8 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     compatibilityDigest: snapshot.compatibilityDigest as string,
     handlersDigest,
     manifestDigest,
-    ...(typeof snapshot.providerVersion === 'string' ? { providerVersion: snapshot.providerVersion } : {}),
-    ...(typeof snapshot.platformVersion === 'string' ? { platformVersion: snapshot.platformVersion } : {}),
+    providerVersion: snapshot.providerVersion as string,
+    platformVersion: snapshot.platformVersion as string,
     payloadDigest: approval.payloadDigest as string,
     providerId: manifest.providerId,
     revision: snapshot.revision as string,
