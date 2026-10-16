@@ -183,7 +183,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - [x] Test-first: new suites RED before impl (`Cannot find module '../src/registry.js'`), GREEN after (11 + 6 + 3).
   - [x] provider-cascade checked: not applicable (MCP provider registry; no `api/src/services/llm-runtime/**` or `providers/**` change, no `test-api-ai` trigger).
   - [x] Disposition of `6d06e5205`/`e566f0313`: kept as uncheckpointed WIP; cannot close before the L-1a checkpoint; no 0.4.0 bump (single 0.3.0 candidate per spec-v7 §11; 0.4.0 bump reverted). Scoped L-1b-core gates rerun after any L-1a change to `packages/mcp-platform/**`.
-  - [ ] Packed-subpath import proof with zero registry I/O (isolated process).
+  - [x] Packed-subpath import proof with zero registry I/O (isolated process): `probe-mcp-platform-clean-consumer` extended (I861-EX1) to import `@sentropic/mcp-platform/registry`, compile and resolve in the fetch-trapped consumer — `CLEAN_CONSUMER_OK`, frozen digests, `fetchCalls=0`.
   - [ ] Lot gate:
     - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
     - [ ] **API tests**
