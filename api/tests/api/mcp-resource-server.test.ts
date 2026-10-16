@@ -213,7 +213,7 @@ describe('MCP connector-host routes', () => {
 
     const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
   });
 
