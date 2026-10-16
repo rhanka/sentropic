@@ -148,15 +148,46 @@ export type CompileToolConfigurationResult =
 // Deterministic JSON + digests
 // ---------------------------------------------------------------------------
 
-/** Canonical JSON: object keys sorted recursively, arrays keep order. */
+/**
+ * Strict canonical JSON aligned with `sentropic-json-v1`
+ * (`packages/cluster-mesh/src/messaging/canonical-json.ts`): object keys
+ * sorted recursively, arrays keep order. Injective: `undefined`, non-finite
+ * numbers, functions, non-plain objects and cycles are rejected instead of
+ * being silently coerced to `null`/`{}` (M5).
+ */
 export function canonicalJson(value: unknown): string {
-  if (value === null || value === undefined) return 'null';
-  if (typeof value === 'string') return JSON.stringify(value);
-  if (typeof value !== 'object') return JSON.stringify(value) ?? 'null';
-  if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
+  return encodeCanonical(value, new Set());
+}
+
+function encodeCanonical(value: unknown, seen: Set<object>): string {
+  if (value === null) return 'null';
+  if (typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('JSON numbers must be finite');
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) throw new TypeError('Circular value is not canonical JSON');
+    seen.add(value);
+    const parts = value.map((entry) => encodeCanonical(entry, seen));
+    seen.delete(value);
+    return `[${parts.join(',')}]`;
+  }
+  if (typeof value !== 'object') throw new TypeError('Value is not canonical JSON');
+  if (seen.has(value)) throw new TypeError('Circular value is not canonical JSON');
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError('JSON objects must be plain records');
+  }
+  seen.add(value);
   const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).sort();
-  const parts = keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
+  const parts = Object.keys(record)
+    .sort()
+    .map((key) => {
+      if (record[key] === undefined) throw new TypeError('Undefined is not canonical JSON');
+      return `${JSON.stringify(key)}:${encodeCanonical(record[key], seen)}`;
+    });
+  seen.delete(value);
   return `{${parts.join(',')}}`;
 }
 
@@ -420,7 +451,30 @@ function checkForbiddenValue(
   }
 }
 
-// Minimal strict JSON-schema subset used for per-tool typed values.
+// Closed strict JSON-schema subset used for per-tool typed values: only the
+// listed keywords are supported and every other keyword is rejected (m1).
+const OBJECT_SCHEMA_KEYS = new Set(['type', 'properties', 'required', 'additionalProperties']);
+const STRING_SCHEMA_KEYS = new Set(['type', 'minLength', 'maxLength', 'enum']);
+const NUMBER_SCHEMA_KEYS = new Set(['type', 'minimum', 'maximum', 'enum']);
+const BOOLEAN_SCHEMA_KEYS = new Set(['type']);
+const ARRAY_SCHEMA_KEYS = new Set(['type', 'minItems', 'maxItems', 'items']);
+
+function checkSchemaKeys(
+  diagnostics: ToolConfigurationDiagnostic[],
+  path: string,
+  schema: Record<string, unknown>,
+  allowed: Set<string>,
+): boolean {
+  let ok = true;
+  for (const key of Object.keys(schema)) {
+    if (!allowed.has(key)) {
+      diag(diagnostics, 'invalid_values', path, `unsupported schema keyword "${key}"`);
+      ok = false;
+    }
+  }
+  return ok;
+}
+
 function validateAgainstSchema(
   diagnostics: ToolConfigurationDiagnostic[],
   basePath: string,
@@ -440,6 +494,22 @@ function validateAgainstSchema(
     return false;
   }
   let valid = true;
+  if (!checkSchemaKeys(diagnostics, basePath, schema, OBJECT_SCHEMA_KEYS)) valid = false;
+  if (schema['properties'] !== undefined && !isRecord(schema['properties'])) {
+    diag(diagnostics, 'invalid_values', basePath, 'schema properties must be an object');
+    valid = false;
+  }
+  if (
+    schema['required'] !== undefined &&
+    !(Array.isArray(schema['required']) && schema['required'].every((entry) => typeof entry === 'string'))
+  ) {
+    diag(diagnostics, 'invalid_values', basePath, 'schema required must be a string array');
+    valid = false;
+  }
+  if (schema['additionalProperties'] !== undefined && typeof schema['additionalProperties'] !== 'boolean') {
+    diag(diagnostics, 'invalid_values', basePath, 'schema additionalProperties must be a boolean');
+    valid = false;
+  }
   const properties = isRecord(schema['properties']) ? schema['properties'] : {};
   const required = Array.isArray(schema['required'])
     ? schema['required'].filter((entry): entry is string => typeof entry === 'string')
@@ -475,6 +545,7 @@ function checkValueType(
 ): boolean {
   const type = schema['type'];
   if (type === 'string') {
+    if (!checkSchemaKeys(diagnostics, path, schema, STRING_SCHEMA_KEYS)) return false;
     if (typeof value !== 'string') {
       diag(diagnostics, 'invalid_values', path, 'expected string');
       return false;
@@ -494,6 +565,7 @@ function checkValueType(
     return true;
   }
   if (type === 'boolean') {
+    if (!checkSchemaKeys(diagnostics, path, schema, BOOLEAN_SCHEMA_KEYS)) return false;
     if (typeof value !== 'boolean') {
       diag(diagnostics, 'invalid_values', path, 'expected boolean');
       return false;
@@ -501,7 +573,8 @@ function checkValueType(
     return true;
   }
   if (type === 'number' || type === 'integer') {
-    if (typeof value !== 'number' || Number.isNaN(value)) {
+    if (!checkSchemaKeys(diagnostics, path, schema, NUMBER_SCHEMA_KEYS)) return false;
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
       diag(diagnostics, 'invalid_values', path, 'expected number');
       return false;
     }
@@ -524,6 +597,7 @@ function checkValueType(
     return true;
   }
   if (type === 'array') {
+    if (!checkSchemaKeys(diagnostics, path, schema, ARRAY_SCHEMA_KEYS)) return false;
     if (!Array.isArray(value)) {
       diag(diagnostics, 'invalid_values', path, 'expected array');
       return false;
@@ -693,11 +767,20 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     diag(diagnostics, 'invalid_identity', 'snapshot.revision', 'revision must be a non-empty string');
   }
 
-  const manifestDigest = computeManifestDigest(manifest);
+  // Digest inputs may carry non-canonical values (undefined, non-finite
+  // numbers); an unencodable manifest fails closed with a diagnostic (M5).
+  let manifestDigest = '';
+  let compatibilityDigest = '';
+  try {
+    manifestDigest = computeManifestDigest(manifest);
+    compatibilityDigest = computeCompatibilityDigest(manifest);
+  } catch {
+    diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.manifestDigest', 'manifest cannot be canonically encoded');
+    return { ok: false, diagnostics };
+  }
   if (snapshot.manifestDigest !== manifestDigest) {
     diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.manifestDigest', 'manifestDigest does not match the manifest');
   }
-  const compatibilityDigest = computeCompatibilityDigest(manifest);
   if (snapshot.compatibilityDigest !== compatibilityDigest) {
     diag(
       diagnostics,
@@ -728,8 +811,13 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     }
     if (provenance.payloadDigest !== undefined && typeof provenance.payloadDigest === 'string') {
       const full = snapshot as ApprovedToolSnapshot;
-      const expected = computePayloadDigest(full);
-      if (provenance.payloadDigest !== expected) {
+      let expected: string | null = null;
+      try {
+        expected = computePayloadDigest(full);
+      } catch {
+        expected = null;
+      }
+      if (expected === null || provenance.payloadDigest !== expected) {
         diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.payloadDigest', 'payloadDigest does not match the payload');
       }
     }
@@ -819,7 +907,7 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     const mergedIdempotency = { ...manifestTool.idempotency, ...policy.idempotency };
     compiled.push({
       capabilityRef: entry.toolName,
-      freshness: mergedFreshness,
+      ...(mergedFreshness !== undefined ? { freshness: mergedFreshness } : {}),
       gates: mergedGates,
       handlerId: entry.handlerId,
       idempotency: mergedIdempotency,
