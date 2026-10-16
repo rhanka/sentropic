@@ -59,7 +59,8 @@ export type ContentConsentErrorCode =
   | 'grant_revoked'
   | 'grant_closed'
   | 'admin_read_refused'
-  | 'membership_required';
+  | 'membership_required'
+  | 'revision_conflict';
 
 export class ContentConsentError extends Error {
   constructor(
@@ -85,6 +86,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const validateRetentionByChannel = (value: unknown): RetentionByChannel => {
   if (!isRecord(value)) {
     throw new ContentConsentError('invalid_retention', 'retentionByChannel must be an object');
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== 'terminal.cache' && key !== 'native.mirror') {
+      throw new ContentConsentError('invalid_request', `unknown retention channel ${key}`);
+    }
   }
   const result = {} as Record<RetainedChannel, RetentionPolicy>;
   for (const channel of RETAINED_CHANNELS) {
@@ -129,3 +135,149 @@ export const computePolicyDigest = (policy: unknown): string =>
 
 export const verifyPolicyDigest = (policy: unknown, digest: string): boolean =>
   computePolicyDigest(policy) === digest;
+
+/** Exact historical lineage/checkpoint/range named in an accepted project revision. */
+export interface NamedHistoryDescriptor {
+  readonly provider: string;
+  readonly conversationId: string;
+  readonly lineage: string;
+  readonly sourceIdentity: string;
+  readonly checkpoint: string;
+  readonly rangeDigest: string;
+  readonly startSeq?: number;
+  readonly endSeq?: number;
+}
+
+/** The signed owner/project scope subset covered by the policy digest. */
+export interface CanonicalProjectPolicy {
+  readonly projectId: string;
+  readonly projectRevision: number;
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly workspaceIncarnation: number;
+  readonly ownerId: string;
+  readonly readers: readonly string[];
+  readonly sourceIdentities: readonly string[];
+  readonly sourceTrustVersions: readonly string[];
+  readonly channels: Record<ContentChannel, boolean>;
+  readonly futureSessions: boolean;
+  readonly selectedSessionIds: readonly string[];
+  readonly namedHistories: readonly NamedHistoryDescriptor[];
+  readonly retentionByChannel: RetentionByChannel;
+  readonly authorityEpoch: string;
+  readonly offlineReadAccepted: true;
+}
+
+export type ProjectConsentState = 'active' | 'revoked' | 'excluded';
+
+/** One owner-confirmed project grant covering future sessions and named histories. */
+export interface ProjectContentConsent extends CanonicalProjectPolicy {
+  readonly state: ProjectConsentState;
+  readonly exclusionRevision: number;
+  readonly retentionDigest: string;
+  readonly acceptedPolicy: CanonicalProjectPolicy;
+  readonly activatedAt: number;
+  readonly updatedAt: number;
+}
+
+export type SessionGrantState = 'active' | 'closed' | 'revoked' | 'excluded' | 'expired';
+
+/** A future child derived from the accepted project proof without a new prompt. */
+export interface SessionContentGrant {
+  readonly grantId: string;
+  readonly projectId: string;
+  readonly projectRevision: number;
+  readonly sessionId: string;
+  readonly bindingId: string;
+  readonly bindingVersion: number;
+  readonly d1Version: number;
+  readonly d1Incarnation: number;
+  readonly d1StartSeq: number;
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly ownerId: string;
+  readonly sourceGeneration: string;
+  readonly sourceTrustVersion: string;
+  readonly nativeBoundarySeq: number;
+  readonly channels: Record<ContentChannel, boolean>;
+  readonly retentionSnapshot: RetentionByChannel;
+  readonly state: SessionGrantState;
+  readonly version: number;
+  readonly lastFreshnessAckAt: number;
+  readonly localDenyPending: boolean;
+  readonly retainedCopies: boolean;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+/** Narrow CAS store; the service never reads without rechecking revisions. */
+export interface ContentConsentStore {
+  readProject(projectId: string): Promise<ProjectContentConsent | null>;
+  writeProject(expectedRevision: number | null, next: ProjectContentConsent): Promise<boolean>;
+  readGrant(sessionId: string): Promise<SessionContentGrant | null>;
+  writeGrant(expectedVersion: number | null, next: SessionContentGrant): Promise<boolean>;
+  listGrants(projectId: string): Promise<SessionContentGrant[]>;
+  projectCount(): number;
+}
+
+export const createMemoryContentConsentStore = (): ContentConsentStore => {
+  const projects = new Map<string, ProjectContentConsent>();
+  const grants = new Map<string, SessionContentGrant>();
+  return {
+    async readProject(projectId: string) { return projects.get(projectId) ?? null; },
+    async writeProject(expectedRevision: number | null, next: ProjectContentConsent) {
+      const existing = projects.get(next.projectId) ?? null;
+      if (expectedRevision === null) {
+        if (existing) return false;
+      } else if (!existing || existing.projectRevision !== expectedRevision) return false;
+      projects.set(next.projectId, next);
+      return true;
+    },
+    async readGrant(sessionId: string) { return grants.get(sessionId) ?? null; },
+    async writeGrant(expectedVersion: number | null, next: SessionContentGrant) {
+      const existing = grants.get(next.sessionId) ?? null;
+      if (expectedVersion === null) {
+        if (existing) return false;
+      } else if (!existing || existing.version !== expectedVersion) return false;
+      grants.set(next.sessionId, next);
+      return true;
+    },
+    async listGrants(projectId: string) {
+      return [...grants.values()].filter((grant) => grant.projectId === projectId);
+    },
+    projectCount() { return projects.size; },
+  };
+};
+
+export interface ConsentChallenge {
+  readonly challengeId: string;
+  readonly expiresAt: number;
+}
+
+/** One-use short-lived WebAuthn challenge port consumed at project activation. */
+export interface ChallengePort {
+  issue(ttlMs: number, nowMs: number): ConsentChallenge;
+  consume(challengeId: string, nowMs: number): 'ok' | 'unknown' | 'expired' | 'replayed';
+}
+
+export const createMemoryChallengePort = (
+  newId: () => string = () => crypto.randomUUID(),
+): ChallengePort => {
+  const issued = new Map<string, number>();
+  const consumed = new Set<string>();
+  return {
+    issue(ttlMs: number, nowMs: number) {
+      const challenge = { challengeId: newId(), expiresAt: nowMs + ttlMs };
+      issued.set(challenge.challengeId, challenge.expiresAt);
+      return challenge;
+    },
+    consume(challengeId: string, nowMs: number) {
+      if (consumed.has(challengeId)) return 'replayed';
+      const expiresAt = issued.get(challengeId);
+      if (expiresAt === undefined) return 'unknown';
+      if (nowMs > expiresAt) return 'expired';
+      consumed.add(challengeId);
+      return 'ok';
+    },
+  };
+};
