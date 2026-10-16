@@ -300,8 +300,9 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
       - [ ] Register/select/configure two providers and list/call both over HTTP and stdio with exact names.
       - [ ] Disabled/missing/duplicate/wrong-version cases refuse startup with optional-dependency isolation.
 
-- [ ] **Lot 8 — L-5a generic pages contracts (future, after L-4b-leaves; isolated early preparation allowed)**
-  - [ ] Settle durable package name/namespace at public-contract review; implement `contracts.ts`, `codecs.ts`, `client.ts`, `server/**`, `parameters.ts`, `provider-definition.ts` + `tests/contracts.test.ts`, `canonical-manifest.test.ts`, `authorization.test.ts`, `bindings.test.ts`, `idempotency.test.ts`, `parameters.test.ts`. No Immo defaults in generic source.
+- [ ] **Lot 8 — L-5a generic pages contracts (in progress, isolated early preparation)**
+  - [x] `contracts.ts` + `tests/contracts.test.ts` (3/3), `codecs.ts` + `canonical-manifest.test.ts` (3/3: set-ordered arrays, sealed-vs-working parse). No Immo defaults in generic source.
+  - [ ] `parameters.ts` + `parameters.test.ts` (in progress), then `provider-definition.ts`, `client.ts`, `server/ports.ts`, `service.ts`, `authorization.ts`, `bindings.ts`, `idempotency.ts` + `authorization.test.ts`, `bindings.test.ts`, `idempotency.test.ts`, `README.md`.
   - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented under a declared exception.
   - [ ] UAT (contract review + two-client binding test per spec-v7).
 
