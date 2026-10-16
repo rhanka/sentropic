@@ -3,9 +3,10 @@
  *
  * Captures/freezes the v1 public wire surface so ANY future change to it is
  * detected by a failing test (the freeze MECHANISM; the SIGN is the gate). The
- * frozen surface = spec §3 / §3b:
- *   - the route inventory (`/v1/messages`, `/v1/chat/completions`, `/v1/models`,
- *     `/healthz`, `/readyz`) + methods,
+ * frozen surface = spec §3 / §3b + spec §16.2:
+ *   - the route inventory (`/v1/messages`, `/v1/chat/completions`, `/responses`,
+ *     `/v1/responses`, `/v1/models`, `/muse-code/models`,
+ *     `/v1/messages/count_tokens`, `/healthz`, `/readyz`) + methods,
  *   - the request/response/SSE FRAMING shapes (Anthropic event/data vs OpenAI
  *     `data:` + `[DONE]`; the `X-Sentropic-Request-Id` response header),
  *   - the §3b ERROR-MAPPING table (status + provider-shaped body type per wire).
@@ -42,7 +43,13 @@ const REQUEST_ID_HEADER = 'x-sentropic-request-id';
 const FROZEN_ROUTES = [
   { method: 'POST', path: '/v1/messages', wire: 'anthropic-messages' },
   { method: 'POST', path: '/v1/chat/completions', wire: 'openai-chat-completions' },
+  // Spec §16.2: one Responses ingress on both aliases (deliberate v1 surface
+  // extension in the same PR as the router change — see the file header).
+  { method: 'POST', path: '/responses', wire: 'openai-responses' },
+  { method: 'POST', path: '/v1/responses', wire: 'openai-responses' },
   { method: 'GET', path: '/v1/models' },
+  { method: 'GET', path: '/muse-code/models' },
+  { method: 'POST', path: '/v1/messages/count_tokens', wire: 'anthropic-messages' },
   { method: 'GET', path: '/healthz' },
   { method: 'GET', path: '/readyz' },
 ] as const;
@@ -66,8 +73,8 @@ const FROZEN_ERROR_MAP: Record<
     openai: { status: 401, type: 'invalid_request_error', message: 'authentication failed', code: 'invalid_api_key' },
   },
   'caller-auth-unavailable': {
-    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
-    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+    anthropic: { status: 503, type: 'overloaded_error', message: 'authentication service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'authentication service temporarily unavailable', code: 'overloaded' },
   },
   'over-budget': {
     anthropic: { status: 429, type: 'rate_limit_error', message: 'rate limit exceeded' },
@@ -78,13 +85,14 @@ const FROZEN_ERROR_MAP: Record<
     openai: { status: 429, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
   },
   'pooled-account-unavailable': {
-    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
-    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+    anthropic: { status: 503, type: 'overloaded_error', message: 'account service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'account service temporarily unavailable', code: 'overloaded' },
   },
-  // B3b internal kind: budget pricing/store failure reuses the sanitized 503 bodies.
+  // B3b internal kind: budget pricing/store failure keeps the frozen 503
+  // status/type/code/headers; Lot 7 names the budget subsystem in the message.
   'budget-unavailable': {
-    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
-    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
+    anthropic: { status: 503, type: 'overloaded_error', message: 'budget service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'budget service temporarily unavailable', code: 'overloaded' },
   },
   'upstream-auth-failed': {
     anthropic: { status: 401, type: 'authentication_error', message: 'authentication failed' },
@@ -102,6 +110,24 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
     openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
+  'native-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires the Anthropic Messages endpoint.' },
+  },
+  'native-max-tokens-required': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards requires a positive integer max_tokens.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires a positive integer max_tokens.' },
+  },
+  'native-unavailable': {
+    anthropic: { status: 400, type: 'invalid_request_error',
+      message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+    openai: { status: 400, type: 'invalid_request_error', code: 'invalid_request',
+      message: 'safeguards requires the Anthropic Messages endpoint.' },
+  },
   'unknown-model': {
     anthropic: { status: 404, type: 'not_found_error', message: 'Unknown model: "no-such-model"' },
     openai: { status: 404, type: 'invalid_request_error', message: 'Unknown model: "no-such-model"', code: 'model_not_found' },
@@ -109,6 +135,18 @@ const FROZEN_ERROR_MAP: Record<
   'no-route': {
     anthropic: { status: 503, type: 'api_error', message: 'No route available for model: "no-such-model"' },
     openai: { status: 503, type: 'server_error', message: 'No route available for model: "no-such-model"', code: 'no_route' },
+  },
+  // N02: terminal 413 without measured evidence reports unavailable size;
+  // measured sizes are asserted in request-too-large.test.ts.
+  'request-too-large': {
+    anthropic: { status: 413, type: 'request_too_large', message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.' },
+    openai: { status: 413, type: 'invalid_request_error', message: 'Request size is unavailable; gateway limit is 32000000 bytes and the upstream rejecting limit is unavailable.', code: 'request_too_large' },
+  },
+  // N03: retryable capacity 503; the golden mapper call carries no Retry-After
+  // so only status/body freeze here (headers asserted in request-body-limit.test.ts).
+  'request-body-capacity': {
+    anthropic: { status: 503, type: 'api_error', message: 'Gateway request body capacity is temporarily exhausted; retry later.' },
+    openai: { status: 503, type: 'api_error', message: 'Gateway request body capacity is temporarily exhausted; retry later.', code: 'request_body_capacity' },
   },
 };
 
@@ -150,11 +188,15 @@ const actualRouterRoutes = (app: { routes: { method: string; path: string }[] })
 describe('BR-46 v1 wire contract snapshot — route inventory', () => {
   it('freezes the exact v1 route inventory + methods (spec §3)', () => {
     // The inventory itself is the snapshot: count + each (method, path) pair.
-    expect(FROZEN_ROUTES).toHaveLength(5);
+    expect(FROZEN_ROUTES).toHaveLength(9);
     expect(FROZEN_ROUTES.map((r) => `${r.method} ${r.path}`)).toEqual([
       'POST /v1/messages',
       'POST /v1/chat/completions',
+      'POST /responses',
+      'POST /v1/responses',
       'GET /v1/models',
+      'GET /muse-code/models',
+      'POST /v1/messages/count_tokens',
       'GET /healthz',
       'GET /readyz',
     ]);

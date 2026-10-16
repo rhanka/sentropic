@@ -1,16 +1,65 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 
 import {
   createGatewayRouter,
+  GatewayBodyBytePool,
   notImplemented,
   stubGatewayConfig,
   type AuthzMode,
   type GatewayConfig,
 } from '../src/index.js';
 import { parseSse } from '../src/wire.js';
+import { nativeHarness, nativeChunks, nativeFrame, nativeStart, sendNative } from './fixtures/native-flow.js';
+import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 
 const buildApp = () => createGatewayRouter({ config: stubGatewayConfig });
+
+describe('native router isolation and bytes', () => {
+  const excluded = ['authorization', 'x-api-key', 'api-key', 'anthropic-api-key',
+    'anthropic-admin-api-key', 'anthropic-oauth-token', 'anthropic-key', 'cookie', 'cookie2',
+    'set-cookie', 'set-cookie2', 'connection', 'keep-alive', 'proxy-connection', 'te', 'trailer',
+    'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization',
+    'x-sentropic-request-id', 'x-sentropic-served', 'x-sentropic-relay', 'x-sentropic-future',
+    'x-account', 'x-forwarded-for', 'content-length', 'content-encoding', 'x-accel-buffering',
+    'anthropic-nominated', 'request-id'];
+  it.each([false, true])('filters response authority before emitting own headers (stream=%s)', async stream => {
+    const bytes = [new TextEncoder().encode(': comment ☃\r\n\r\n'), nativeStart('claude-sonnet-5'),
+      nativeFrame('message_delta', { delta: { safeguard_results: { unknown: ['雪'] } }, usage: { output_tokens: 3 } }),
+      nativeFrame('message_stop')];
+    const headers = { ...Object.fromEntries(excluded.map(name => [name.toUpperCase(), 'UPSTREAM-SECRET'])),
+      Connection: 'Anthropic-Nominated, Request-Id', 'Anthropic-Organization-Id': 'org-shared',
+      'Anthropic-Future': 'kept', 'X-Request-Id': 'safe-upstream' };
+    const h = nativeHarness({ execute: async () => stream
+      ? { kind: 'stream', status: 200, headers, body: nativeChunks(bytes) }
+      : { kind: 'json', status: 200, headers, body: { model: 'claude-sonnet-5', safeguard_results: { unknown: true } } } });
+    const response = await sendNative(h, stream);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('anthropic-organization-id')).toBe('org-shared');
+    expect(response.headers.get('anthropic-future')).toBe('kept');
+    expect(response.headers.get('x-request-id')).toBe('safe-upstream');
+    expect(response.headers.get('x-sentropic-request-id')).toBe('req-native');
+    expect(response.headers.get('x-sentropic-relay')).toBe('native');
+    for (const name of excluded) expect(response.headers.get(name) ?? '').not.toContain('UPSTREAM-SECRET');
+    if (stream) {
+      expect(response.headers.has('x-sentropic-served')).toBe(false);
+      expect(response.headers.get('x-accel-buffering')).toBe('no');
+      expect(response.headers.get('cache-control')).toBe('no-cache');
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array(Buffer.concat(bytes)));
+    } else expect(response.headers.get('x-sentropic-served')).toContain('model=claude-sonnet-5');
+    expect(h.recorder.settlements).toHaveLength(1);
+  });
+  it.each([false, true])('exposes no success headers on native validation refusal (stream=%s)', async stream => {
+    const h = nativeHarness({ execute: async () => { throw new NativeMessagesUpstreamError({ status: 400,
+      type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: 'Invalid tool field.' } }); } });
+    const response = await sendNative(h, stream);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'Invalid tool field.' } });
+    for (const name of ['x-sentropic-relay', 'x-sentropic-served', 'anthropic-organization-id', 'x-accel-buffering']) {
+      expect(response.headers.has(name)).toBe(false);
+    }
+  });
+});
 
 describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
   const createOpenAiRoutePlanner = (
@@ -240,5 +289,59 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     expect(codexServed).toBe('provider=openai; model=gpt-5.6-terra; transport=codex');
     expect(cloudCodeServed).toBe('provider=openai; model=gpt-5.6-terra; transport=cloud-code');
     expect(codexServed).not.toBe(cloudCodeServed);
+  });
+});
+
+describe('router checked-body admission (N06)', () => {
+  const bigBody = JSON.stringify({ model: 'claude-opus-5-high', max_tokens: 8, messages: [{ role: 'user', content: 'x'.repeat(64) }] });
+
+  it.each(['/v1/messages', '/v1/chat/completions'] as const)('refuses an over-limit %s body with 413 before parsing', async (path) => {
+    const pool = new GatewayBodyBytePool(128);
+    const app = createGatewayRouter({ config: stubGatewayConfig, requestBody: { pool, limitBytes: 32 } });
+    const res = await app.request(path, { method: 'POST', body: bigBody });
+    expect(res.status).toBe(413);
+    expect(res.headers.get('x-should-retry')).toBe('false');
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+
+  it('keeps the bodyless scaffold 501 with the checked owner', async () => {
+    const pool = new GatewayBodyBytePool(128);
+    const app = createGatewayRouter({ config: stubGatewayConfig, requestBody: { pool, limitBytes: 32 } });
+    const res = await app.request('/v1/messages', { method: 'POST' });
+    expect(res.status).toBe(501);
+    expect(pool.stats).toMatchObject({ reservedBytes: 0, liveLeases: 0, acquisitions: 1, releases: 1 });
+  });
+
+  it.each(['/responses', '/v1/responses'] as const)('answers an authenticated OpenAI 501 on legacy-only %s without touching legacy dispatch', async (path) => {
+    const dispatch = { dispatch: vi.fn(async () => ({ status: 200, body: {} })),
+      dispatchStream: vi.fn(() => { throw Error('legacy stream must not run'); }) };
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig,
+        callerAuth: { async verify() { return { ok: true as const,
+          cost: { tenantId: 't', principalId: 'u', source: 'test', correlationId: 'c' } }; } },
+        dispatch },
+      resolveTarget: () => ({ providerId: 'openai', transportProviderId: 'openai', model: 'm' }),
+      metering: { settle: async () => {} },
+    });
+    const res = await app.request(path, { method: 'POST', headers: { authorization: 'Bearer test' },
+      body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'hello' }) });
+    expect(res.status).toBe(501);
+    expect(await res.json()).toEqual({ error: expect.objectContaining({ type: 'server_error', code: 'not_implemented' }) });
+    expect(dispatch.dispatch).not.toHaveBeenCalled();
+    expect(dispatch.dispatchStream).not.toHaveBeenCalled();
+  });
+
+  it.each(['/responses', '/v1/responses'] as const)('keeps caller auth ahead of the legacy-only %s 501', async (path) => {
+    const dispatch = { dispatch: vi.fn(), dispatchStream: vi.fn() };
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig, dispatch },
+      resolveTarget: () => ({ providerId: 'openai', transportProviderId: 'openai', model: 'm' }),
+      metering: { settle: async () => {} },
+    });
+    const res = await app.request(path, { method: 'POST',
+      body: JSON.stringify({ model: 'gpt-6.1-sol', input: 'hello' }) });
+    expect(res.status).toBe(401);
+    expect(dispatch.dispatch).not.toHaveBeenCalled();
+    expect(dispatch.dispatchStream).not.toHaveBeenCalled();
   });
 });

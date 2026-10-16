@@ -7,6 +7,7 @@
 import {
   RoutePlanError, type GenerateRequest, type QuotedRouteCandidate, type RoutePlanner,
   type RouteQuote, type RouteQuoteInput, type RouteUsageCeiling,
+  type VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
 import type { CanonicalIngressResult } from './canonical-ingress.js';
 import { estimateAnthropicInputTokens } from './canonical-stream.js';
@@ -19,6 +20,7 @@ import {
 } from './ports/budget.js';
 import type { SettleUsage } from './flow.js';
 import { GatewayError } from './router/errors.js';
+import { validateNativeInputPriceUnits40 } from './native-usage.js';
 
 export interface AdmittedRoute {
   readonly requestId: string;
@@ -120,6 +122,8 @@ export const admitRoute = async (input: {
   readonly routePlanner: RoutePlanner;
   readonly requestId: string;
   readonly cost: CostContext;
+  /** Owner-scoped subject, for per-transport availability on empty quotes (Lot 7). */
+  readonly subject: VerifiedRoutingSubject;
   readonly wire: GatewayWire;
   readonly requestedModel: string;
   readonly canonical: CanonicalIngressResult;
@@ -134,6 +138,8 @@ export const admitRoute = async (input: {
       ...input.route,
       requestedModel: input.requestedModel,
       requiredCapabilities: input.canonical.requiredCapabilities,
+      ...(input.canonical.requiredExecutionFeatures
+        ? { requiredExecutionFeatures: input.canonical.requiredExecutionFeatures } : {}),
       ceiling, now: new Date(clock()),
     });
   } catch (error) {
@@ -144,7 +150,35 @@ export const admitRoute = async (input: {
     throw error;
   }
   // Nothing is quotable: reserve nothing and refuse exactly like an empty route.
-  if (quote.candidates.length === 0) throw new RoutePlanError('Route quote has no candidates', 'no-route');
+  // Lot 7: attach the per-transport availability entries so the 503 can say
+  // WHY instead of going mute. Only the first entry rides as `diagnostic`
+  // (frozen enrollment precedence for the action branch); the full list
+  // rides as `diagnostics` for the joined no-route detail.
+  if (quote.candidates.length === 0) {
+    let availability: Awaited<ReturnType<NonNullable<RoutePlanner['describeAvailability']>>> = [];
+    try {
+      availability = await routePlanner.describeAvailability?.(input.subject, {
+        requestedModel: input.requestedModel,
+        ...(input.route.targetCandidatesOverride
+          ? { targetCandidatesOverride: input.route.targetCandidatesOverride } : {}),
+        ...(input.route.explicit ? { explicit: input.route.explicit } : {}),
+      }) ?? [];
+    } catch (lookupError) {
+      // The explanatory lookup must never replace a determined refusal: keep
+      // the frozen typed no-route error with no detail, and retain the lookup
+      // failure for operators on the standard `cause` chain (never in a body).
+      const refusal = new RoutePlanError('Route quote has no candidates', 'no-route');
+      (refusal as { cause?: unknown }).cause = lookupError;
+      throw refusal;
+    }
+    const diagnostic = availability[0];
+    throw new RoutePlanError(
+      diagnostic?.message ?? 'Route quote has no candidates',
+      'no-route',
+      diagnostic,
+      availability.length > 0 ? availability : undefined,
+    );
+  }
   let decision: Awaited<ReturnType<GatewayBudgetOptions['port']['admit']>> | undefined;
   try {
     decision = await budget.port.admit({
@@ -217,6 +251,39 @@ const isMeasured = (usage: SettleUsage): boolean => !usage.estimated
 
 const countOrZero = (value: number): number => (isCount(value, 0) ? value : 0);
 
+const hasNativeInputProof = (attempt: AttemptView): boolean => {
+  const usage = attempt.usage;
+  return usage.nativeInputUsageValidated === true && isCount(usage.inputTokens, 1)
+    && (usage.nativeInputUsageSource === 'message_start' || usage.nativeInputUsageSource === 'message_delta')
+    && attempt.providerId === 'anthropic' && usage.nativeServedModelId === attempt.modelId
+    && (usage.nativeUsageUncertainty === undefined || usage.nativeUsageUncertainty === 'incomplete_output'
+      || usage.nativeUsageUncertainty === 'invalid_output')
+    && validateNativeInputPriceUnits40(usage.inputTokens, usage.nativeInputPriceUnits40,
+      usage.nativeServedModelId, usage.nativePricingPolicy);
+};
+
+const unmeasuredUsage = (attempt: AttemptView, allowance: RouteUsageCeiling): SettleUsage => {
+  const usage = attempt.usage, preserveInput = hasNativeInputProof(attempt);
+  const inputTokens = preserveInput ? usage.inputTokens : Math.max(countOrZero(usage.inputTokens), allowance.inputTokens);
+  const { nativeInputPriceUnits40: units, ...detail } = usage;
+  let chargedUnits = preserveInput ? units : undefined;
+  if (!preserveInput && usage.nativeUsageUncertainty === 'cache_write_split_unknown'
+    && attempt.providerId === 'anthropic' && usage.nativeServedModelId === attempt.modelId
+    && validateNativeInputPriceUnits40(usage.inputTokens, units, usage.nativeServedModelId, usage.nativePricingPolicy)) {
+    const floor = 40n * BigInt(inputTokens), observed = BigInt(units!);
+    const conservative = floor > observed ? floor : observed;
+    if (conservative <= BigInt(Number.MAX_SAFE_INTEGER)
+      && validateNativeInputPriceUnits40(inputTokens, Number(conservative), usage.nativeServedModelId, usage.nativePricingPolicy)) {
+      chargedUnits = Number(conservative);
+    }
+  }
+  return { ...detail, inputTokens, outputTokens: Math.max(countOrZero(usage.outputTokens), allowance.outputTokens),
+    estimated: true,
+    ...(usage.nativeInputUsageValidated !== undefined ? { nativeInputUsageValidated: preserveInput } : {}),
+    ...(chargedUnits !== undefined ? { nativeInputPriceUnits40: chargedUnits } : {}),
+  };
+};
+
 /**
  * Charged usage per attempt: a dispatched attempt without measured usage is
  * charged at least its quoted allowance, never an estimated zero. Overruns
@@ -232,11 +299,7 @@ export const chargeAdmittedAttempts = <T extends AttemptView>(
     const candidates = coveringCandidates(admission.quote, attempt);
     const allowance = allowanceFor(candidates);
     if (!isMeasured(attempt.usage)) {
-      return { ...attempt, usage: {
-        inputTokens: Math.max(countOrZero(attempt.usage.inputTokens), allowance.inputTokens),
-        outputTokens: Math.max(countOrZero(attempt.usage.outputTokens), allowance.outputTokens),
-        estimated: true,
-      } };
+      return { ...attempt, usage: unmeasuredUsage(attempt, allowance) };
     }
     if (attempt.usage.inputTokens > allowance.inputTokens
       || attempt.usage.outputTokens > allowance.outputTokens) {

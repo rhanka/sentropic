@@ -1,6 +1,11 @@
 import { collectCodexInstructions, prepareCodexResponsesRequest } from '../codex.js';
 import type { GenerateRequest } from '../generation.js';
 import type { LlmMeshMessage } from '../messages.js';
+import type {
+  ResponsesCustomTool,
+  ResponsesReasoningArtifact,
+} from '../responses-wire.js';
+import { responsesCarrierOf } from '../responses-wire.js';
 import type { StreamEvent } from '../streaming.js';
 
 type JsonRecord = Record<string, unknown>;
@@ -59,12 +64,78 @@ const codexToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
     ? { type: 'function', name: choice.name }
     : choice;
 
-export const buildCodexRuntimeRequest = (request: GenerateRequest) =>
-  prepareCodexResponsesRequest({
+/**
+ * Validated Responses carrier on a canonical request (spec §16.3): custom
+ * tools, reasoning context/verbosity, cache hints and completed reasoning
+ * artifacts carried opaquely for native execution only. Absent on
+ * non-Responses wires; translated adapters never read it.
+ */
+const responsesCarrier = (request: GenerateRequest) =>
+  responsesCarrierOf(request.providerOptions);
+
+/**
+ * Custom/freeform tools regrouped by declaring namespace (spec §16.3): the
+ * inverse of the ingress flattening — one `additional_tools` input item
+ * carrying `namespace` groups plus unnamespaced custom tools verbatim.
+ */
+const customToolsInput = (
+  customTools: readonly ResponsesCustomTool[],
+): unknown[] => {
+  if (customTools.length === 0) return [];
+  const grouped = new Map<string | undefined, ResponsesCustomTool[]>();
+  for (const tool of customTools) {
+    const entries = grouped.get(tool.namespace) ?? [];
+    entries.push(tool);
+    grouped.set(tool.namespace, entries);
+  }
+  const tools: unknown[] = [];
+  for (const [namespace, entries] of grouped) {
+    if (namespace === undefined) {
+      for (const tool of entries) {
+        tools.push({
+          type: 'custom', name: tool.name,
+          ...(tool.description !== undefined ? { description: tool.description } : {}),
+          ...(tool.format !== undefined ? { format: tool.format } : {}),
+        });
+      }
+    } else {
+      tools.push({
+        type: 'namespace', name: namespace, description: '',
+        tools: entries.map((tool) => ({
+          type: 'custom', name: tool.name,
+          ...(tool.description !== undefined ? { description: tool.description } : {}),
+          ...(tool.format !== undefined ? { format: tool.format } : {}),
+        })),
+      });
+    }
+  }
+  return [{ type: 'additional_tools', role: 'developer', tools }];
+};
+
+/** Completed reasoning history items re-emitted in carrier order (spec §16.3). */
+const reasoningInput = (
+  artifacts: readonly ResponsesReasoningArtifact[],
+): unknown[] => artifacts.map((artifact) => ({
+  type: 'reasoning',
+  ...(artifact.itemId !== undefined ? { id: artifact.itemId } : {}),
+  ...(artifact.summary !== undefined ? { summary: artifact.summary } : {}),
+  ...(artifact.encryptedContent !== undefined ? { encrypted_content: artifact.encryptedContent } : {}),
+}));
+
+export const buildCodexRuntimeRequest = (request: GenerateRequest) => {
+  const carrier = responsesCarrier(request);
+  const context = carrier?.reasoningContext;
+  const verbosity = carrier?.verbosity;
+  const promptCacheKey = carrier?.promptCacheKey;
+  return prepareCodexResponsesRequest({
     model: request.modelId ?? (typeof request.model === 'string' ? request.model : ''),
     stream: true,
     instructions: collectCodexInstructions(request.messages),
-    input: request.messages.flatMap(messageInput),
+    input: [
+      ...customToolsInput(carrier?.customTools ?? []),
+      ...reasoningInput(carrier?.reasoningArtifacts ?? []),
+      ...request.messages.flatMap(messageInput),
+    ],
     ...(request.tools?.length ? {
       tools: request.tools.map((tool) => ({
         type: 'function', name: tool.name, description: tool.description,
@@ -75,10 +146,13 @@ export const buildCodexRuntimeRequest = (request: GenerateRequest) =>
     ...(request.parallelToolCalls !== undefined
       ? { parallel_tool_calls: request.parallelToolCalls }
       : {}),
-    ...(request.reasoning?.effort || request.reasoning?.summary ? { reasoning: {
-      ...(request.reasoning.effort ? { effort: request.reasoning.effort } : {}),
-      ...(request.reasoning.summary ? { summary: request.reasoning.summary } : {}),
+    ...(request.reasoning?.effort || request.reasoning?.summary || context ? { reasoning: {
+      ...(request.reasoning?.effort ? { effort: request.reasoning.effort } : {}),
+      ...(request.reasoning?.summary ? { summary: request.reasoning.summary } : {}),
+      ...(context ? { context } : {}),
     } } : {}),
+    ...(verbosity ? { text: { verbosity } } : {}),
+    ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
     ...(request.topP !== undefined ? { top_p: request.topP } : {}),
     // maxOutputTokens is intentionally NOT sent: the Codex backend answers
@@ -86,6 +160,7 @@ export const buildCodexRuntimeRequest = (request: GenerateRequest) =>
     // transports keep their own limit mapping; the cap is not applied here.
     include: ['reasoning.encrypted_content'],
   });
+};
 
 export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] => {
   const record = asRecord(event);
@@ -105,8 +180,12 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
   if (type === 'response.reasoning_summary_text.delta' && typeof record?.delta === 'string') {
     return [{ type: 'reasoning_delta', data: { delta: record.delta, kind: 'summary' } }];
   }
-  if (type === 'response.output_item.added') {
+  if (type === 'response.output_item.added' || type === 'response.output_item.done') {
     const item = asRecord(record?.item);
+    // A done function_call item carries the authoritative final arguments
+    // snapshot; the client accumulator lets it win over streamed fragments
+    // instead of appending (no duplication). Non-function done snapshots
+    // (message/reasoning/output_text) duplicate streamed deltas — dropped.
     if (item?.type === 'function_call') return [{
       type: 'tool_call_start', data: {
         toolCallId: String(item.id ?? item.call_id ?? ''),
@@ -114,6 +193,21 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
         name: String(item.name ?? ''), argumentsText: String(item.arguments ?? ''),
       },
     }];
+    // A completed reasoning item is the authoritative summary artifact
+    // (spec §16.4): surface its summary text once as summary_done so JSON
+    // collection and streaming agree. Encrypted content is never rendered
+    // as visible text and has no event slot here.
+    if (item?.type === 'reasoning' && Array.isArray(item.summary)) {
+      const text = item.summary
+        .map((part) => {
+          const entry = asRecord(part);
+          return entry?.type === 'summary_text' && typeof entry.text === 'string'
+            ? entry.text
+            : '';
+        })
+        .join('');
+      if (text) return [{ type: 'reasoning_delta', data: { delta: text, kind: 'summary_done' } }];
+    }
   }
   if (type === 'response.function_call_arguments.delta' && typeof record?.delta === 'string') {
     return [{
@@ -130,6 +224,23 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
       && response.output.some((item) => asRecord(item)?.type === 'function_call');
     return [{ type: 'done', data: {
       finishReason: hasToolCall ? 'tool_calls' : 'stop', providerId: 'openai',
+      ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
+      usage: {
+        inputTokens: Number(usage?.input_tokens ?? 0),
+        outputTokens: Number(usage?.output_tokens ?? 0),
+        totalTokens: Number(usage?.total_tokens ?? 0), providerRawUsage: usage,
+      },
+    } }];
+  }
+  if (type === 'response.incomplete') {
+    // An incomplete terminal is served, never success: map the provider
+    // reason onto the canonical finish vocabulary and keep usage + id.
+    const response = asRecord(record?.response); const usage = asRecord(response?.usage);
+    const reason = asRecord(response?.incomplete_details)?.reason;
+    const finishReason = reason === 'max_output_tokens' ? 'length'
+      : reason === 'content_filter' ? 'content_filter' : 'unknown';
+    return [{ type: 'done', data: {
+      finishReason, providerId: 'openai',
       ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
       usage: {
         inputTokens: Number(usage?.input_tokens ?? 0),

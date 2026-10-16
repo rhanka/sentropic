@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { encodeGatewayResponse } from '../src/canonical-egress.js';
+import {
+  DEFAULT_RESPONSES_LIMITS,
+  ResponsesBoundError,
+} from '../src/responses-egress.js';
 
 const response = {
   id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
@@ -17,6 +21,15 @@ const response = {
 };
 
 describe('canonical gateway egress', () => {
+  it.each(['anthropic-messages', 'openai-chat-completions'] as const)(
+    'keeps generation usage and canonical response shape separate from count/native extensions on %s', wire => {
+      const baseline = encodeGatewayResponse(wire, response);
+      const extended = encodeGatewayResponse(wire, { ...response, providerMetadata: {
+        ...response.providerMetadata, input_tokens: 999, safeguard_results: { providerOnly: true } } });
+      expect(extended).toEqual(baseline);
+      expect(extended.body).not.toHaveProperty('input_tokens');
+      expect(extended.body).not.toHaveProperty('safeguard_results');
+    });
   it('encodes an Anthropic message without flattening tool calls', () => {
     const encoded = encodeGatewayResponse('anthropic-messages', response);
 
@@ -34,6 +47,31 @@ describe('canonical gateway egress', () => {
     expect(encoded.headers).toEqual({
       'retry-after': '4', 'x-request-id': 'provider-request-1',
     });
+  });
+
+  it('delegates the Responses wire to the response envelope without Chat choices', () => {
+    const encoded = encodeGatewayResponse('openai-responses', response);
+
+    expect(encoded.status).toBe(200);
+    expect(encoded.body).toMatchObject({
+      id: 'response-1', object: 'response', model: 'gpt-5.6-terra',
+      status: 'completed', error: null, store: false,
+      output: [
+        { type: 'message', id: 'msg_0' },
+        { type: 'function_call', id: 'fc_0', call_id: 'provider-call-1', arguments: '{"id":1}' },
+      ],
+      usage: { input_tokens: 12, output_tokens: 7, total_tokens: 19 },
+    });
+    expect(encoded.body).not.toHaveProperty('choices');
+    expect(encoded.headers).toEqual({
+      'retry-after': '4', 'x-request-id': 'provider-request-1',
+    });
+  });
+
+  it('fails neutrally when the response breaches host output caps', () => {
+    expect(() => encodeGatewayResponse('openai-responses', response,
+      { ...DEFAULT_RESPONSES_LIMITS, maxAccumulatedBytes: 4 }))
+      .toThrowError(ResponsesBoundError);
   });
 
   it('encodes an OpenAI completion with native usage and finish reason', () => {

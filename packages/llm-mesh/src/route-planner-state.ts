@@ -1,3 +1,4 @@
+import type { ExecutionFeature } from './execution-features.js';
 import type { RankedRouteCandidate } from './route-selection.js';
 import type {
   AffinityDescription,
@@ -35,8 +36,23 @@ export class RoutePlanError extends Error {
   constructor(
     message: string,
     readonly code: 'no-route' | 'unknown-model' | 'capabilities-unmet' | 'invalid-plan' | 'expired-plan' | 'stale-candidate' | 'conflict'
-      | 'quote-mismatch',
+      | 'quote-mismatch' | 'native-unavailable',
     readonly diagnostic?: RouteAvailabilityDiagnostic,
+    /**
+     * Every transport-matching availability entry (Lot 7): by caller
+     * convention `diagnostic` stays the first match for back-compat (not a
+     * constructor invariant — both arguments are independently optional);
+     * this carries the full per-transport list. Transport diagnostics
+     * reflect the matching entries, not necessarily every candidate or
+     * every failure cause.
+     */
+    readonly diagnostics?: readonly RouteAvailabilityDiagnostic[],
+    /**
+     * Requested execution features no resolved target supports (spec §16.7
+     * cause for `capabilities-unmet`; absent for older constructions and
+     * non-execution refusals). The gateway names the first mapped one.
+     */
+    readonly unmetExecutionFeatures?: readonly ExecutionFeature[],
   ) {
     super(message);
     this.name = 'RoutePlanError';

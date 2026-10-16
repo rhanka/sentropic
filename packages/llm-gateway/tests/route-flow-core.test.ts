@@ -1,8 +1,77 @@
+import { RequestTooLargeError, RoutePlanError } from '@sentropic/llm-mesh';
 import type { RoutePlanInput, RoutePlanner, VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
-import { classifyRouteError, prepareRouteFlow, terminalGatewayError } from '../src/route-flow-core.js';
-import { toProviderShapedError } from '../src/index.js';
+import { classifyRouteError, prepareRouteFlow, retainRouteBody, terminalGatewayError } from '../src/route-flow-core.js';
+import { recordingBudget } from './fixtures/budget.js';
+import { ResponsesBoundError } from '../src/responses-egress.js';
+import { CheckedGatewayBody, GatewayBodyBytePool, toProviderShapedError } from '../src/index.js';
 import { stubGatewayConfig } from '../src/stubs.js';
+
+describe('route body retention (N07)', () => {
+  const leased = () => {
+    const pool = new GatewayBodyBytePool(64);
+    const lease = pool.acquire(); lease.extend(9);
+    return { pool, owner: new CheckedGatewayBody({ model: 'm' }, 9, lease) };
+  };
+  const preparedFor = () => ({
+    cost: { tenantId: 't', principalId: 'u', source: 'test', correlationId: 'c' },
+    subject: { principalRef: 'u', ownerScopeRef: 't:u', grants: [] },
+    canonical: { request: { modelId: 'claude-sonnet-5', messages: [{ role: 'user', content: 'hi' }] }, requiredCapabilities: [{ capability: 'reasoning', required: true }] },
+    plan: { planRef: 'p', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: [], policy: {}, councilRevision: 'r', diagnostics: [] },
+  });
+
+  it('scrubs the retry projection when the owner detaches, keeping it dispatchable', () => {
+    const { owner } = leased();
+    const prepared = preparedFor() as unknown as Parameters<typeof retainRouteBody>[0];
+    const request = { bodyLease: owner };
+    retainRouteBody(prepared, request as Parameters<typeof retainRouteBody>[1]);
+    expect(prepared.canonical.request.messages).toHaveLength(1);
+    owner.detach();
+    expect(prepared.canonical.request.messages).toEqual([]);
+    expect(prepared.canonical.requiredCapabilities).toEqual([]);
+    expect(prepared.canonical.requiredExecutionFeatures).toBeUndefined();
+  });
+
+  it('ignores requests without a checked owner', () => {
+    const prepared = preparedFor() as unknown as Parameters<typeof retainRouteBody>[0];
+    retainRouteBody(prepared, {} as Parameters<typeof retainRouteBody>[1]);
+    expect(prepared.canonical.request.messages).toHaveLength(1);
+  });
+});
+
+describe('terminal 413 preservation (N09)', () => {
+  const target = { providerId: 'anthropic', transportProviderId: 'anthropic', model: 'claude-sonnet-5' };
+  const size = { requestBytes: 111, limitBytes: 100, source: 'upstream' as const };
+
+  it('keeps typed size evidence instead of collapsing into bad-request or pooled 503', () => {
+    const error = new RequestTooLargeError(size);
+    for (const classification of [{ reason: 'invalid-request' }, { reason: 'provider-5xx' }] as const) {
+      const terminal = terminalGatewayError(
+        { ...classification, retryable: false, healthScope: 'route' as const }, target, 'all planned routes failed', error,
+      );
+      expect(terminal.kind).toBe('request-too-large');
+      expect(terminal.requestSize).toEqual(size);
+    }
+  });
+
+  it('keeps existing classes when no size evidence is present', () => {
+    expect(terminalGatewayError(
+      { reason: 'invalid-request', retryable: false, healthScope: 'route' }, target, 'fallback',
+    ).kind).toBe('bad-request');
+    expect(terminalGatewayError(
+      { reason: 'provider-5xx', retryable: false, healthScope: 'route' }, target, 'fallback',
+      { status: 500 },
+    ).kind).toBe('pooled-account-unavailable');
+  });
+
+  it('never masks cancellation with a size refusal', () => {
+    const terminal = terminalGatewayError(
+      { reason: 'cancelled', retryable: false, healthScope: 'route' }, target, 'fallback',
+      new RequestTooLargeError(size),
+    );
+    expect(terminal.kind).not.toBe('request-too-large');
+  });
+});
 
 describe('route flow core', () => {
   it('derives routing ownership only from verified caller state', async () => {
@@ -51,6 +120,61 @@ describe('route flow core', () => {
       },
     });
     expect(JSON.stringify(captured)).not.toContain('attacker');
+  });
+
+  it('refuses feature-requiring Chat controls pre-dispatch with zero-usage settlement (R4-MAJ-4)', async () => {
+    // Mirrors the application plane: no served execution feature — a request
+    // carrying refused tool controls must fail at plan time, never reach
+    // dispatch, and settle zero usage (no billed estimate).
+    let plannedInput: RoutePlanInput | undefined;
+    let dispatches = 0;
+    const settlements: unknown[] = [];
+    const routePlanner = {
+      async plan(_subject: VerifiedRoutingSubject, input: RoutePlanInput) {
+        plannedInput = input;
+        const unsupported = (input.requiredExecutionFeatures ?? []).filter(() => true);
+        if (unsupported.length > 0) {
+          throw new RoutePlanError(
+            `application runtime does not support execution features: ${unsupported.join(', ')}`,
+            'capabilities-unmet',
+          );
+        }
+        dispatches += 1;
+        throw new Error('must not reach dispatch planning');
+      },
+    } as unknown as RoutePlanner;
+
+    const failure = await prepareRouteFlow({
+      config: {
+        ...stubGatewayConfig,
+        callerAuth: { async verify() {
+          return {
+            ok: true as const,
+            cost: {
+              tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'user-1',
+              ownerScopeRef: 'cli:stable-owner', source: 'test', correlationId: 'session-1',
+            },
+          };
+        } },
+      },
+      routePlanner,
+      metering: { settleRoute: (settlement: unknown) => { settlements.push(settlement); } },
+    }, {
+      wire: 'openai-chat-completions', headers: {}, authContext: { method: 'POST', url: 'https://gateway.test/v1/chat/completions', requestId: 'req-maj4' }, model: 'gpt-5.6-terra', stream: false,
+      body: {
+        model: 'gpt-5.6-terra',
+        messages: [{ role: 'user', content: 'hi' }],
+        tool_choice: { type: 'tool', name: 'lookup' },
+      },
+    }).then(() => null, (error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(RoutePlanError);
+    expect(plannedInput?.requiredExecutionFeatures).toEqual(['named-tool-choice']);
+    expect(dispatches).toBe(0);
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      outcome: 'failed', usage: { inputTokens: 0, outputTokens: 0 },
+    });
   });
 
   it('falls back to tenant and principal ownership for existing callers', async () => {
@@ -152,5 +276,124 @@ describe('route flow core', () => {
     expect(classifyRouteError({ code: 'invalid_api_key' })).toEqual({
       reason: 'provider-5xx', retryable: false, healthScope: 'route',
     });
+  });
+
+  it('keeps local Responses bound failures neutral: non-retryable, never account-scoped (R4-MIN-2)', () => {
+    // Neutrality proof continues in mesh `route-health.test.ts`: a
+    // non-retryable outcome records no suppression entry, so the same lone
+    // route stays eligible for the next request.
+    for (const code of ['responses_overflow', 'responses_protocol'] as const) {
+      expect(classifyRouteError(new ResponsesBoundError(code, 'local bound'))).toEqual({
+        reason: 'provider-5xx', retryable: false, healthScope: 'route',
+      });
+    }
+  });
+
+  it('forwards Responses execution features from validated input into plan input', async () => {
+    // Spec §16.3: the codec derives features (here an explicit output
+    // ceiling); the canonical entry point forwards them — no gateway table.
+    let captured: RoutePlanInput | undefined;
+    const routePlanner = {
+      async plan(_subject: VerifiedRoutingSubject, input: RoutePlanInput) {
+        captured = input;
+        return {
+          planRef: 'plan-features', expiresAt: '2026-08-08T12:01:00Z', candidateRefs: [],
+          policy: {
+            strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+            negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+            stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+          },
+          councilRevision: 'fixture', diagnostics: [],
+        };
+      },
+    } as unknown as RoutePlanner;
+    const config = {
+      ...stubGatewayConfig,
+      callerAuth: { async verify() {
+        return {
+          ok: true as const,
+          cost: {
+            tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'user-1',
+            ownerScopeRef: 'cli:stable-owner', source: 'test', correlationId: 'session-1',
+          },
+        };
+      } },
+    };
+
+    await prepareRouteFlow({
+      config, routePlanner, metering: { settleRoute() {} },
+    }, {
+      wire: 'openai-responses', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/responses', requestId: 'req-resp' },
+      model: 'gpt-6.1-sol', stream: false,
+      body: { model: 'gpt-6.1-sol', input: 'hello', max_output_tokens: 50 },
+    });
+
+    expect(captured?.requestedModel).toBe('gpt-6.1-sol');
+    expect(captured?.requiredExecutionFeatures).toEqual(['explicit-output-ceiling']);
+  });
+
+  it('threads nativeMessages into plan and quote for required native and guards against host injection', async () => {
+    let capturedPlan: RoutePlanInput | undefined;
+    let capturedQuote: unknown;
+    const routePlanner = {
+      quote(input: unknown) {
+        capturedQuote = input;
+        return { quoteRef: 'q-1', requestedModel: 'claude-sonnet-5',
+          candidates: [{ providerId: 'anthropic', modelId: 'claude-sonnet-5', reason: 'exact',
+            allowance: { inputTokens: 100, outputTokens: 64 }, outputCeilingEnforced: true }],
+          maxAttempts: 1, quotedAt: '2026-08-08T12:00:00Z', policyRevision: 'default', councilRevision: 'fixture' };
+      },
+      async plan(_subject: VerifiedRoutingSubject, input: RoutePlanInput) {
+        capturedPlan = input;
+        return {
+          planRef: 'plan-1', expiresAt: '2026-08-08T12:01:00Z', candidateRefs: [],
+          policy: {
+            strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+            negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+            stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+          },
+          councilRevision: 'fixture', diagnostics: [],
+        };
+      },
+    } as unknown as RoutePlanner;
+    const config = {
+      ...stubGatewayConfig,
+      callerAuth: { async verify() {
+        return {
+          ok: true as const,
+          cost: { tenantId: 't-1', workspaceId: 'w-1', principalId: 'u-1', ownerScopeRef: 'scope', source: 'test', correlationId: 'c-1' },
+        };
+      } },
+    };
+
+    await prepareRouteFlow({ config, routePlanner, metering: { settleRoute() {} } }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-1' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64, safeguards: null },
+    });
+    expect(capturedPlan?.nativeMessages).toBe(true);
+
+    await prepareRouteFlow({
+      config, routePlanner, metering: { settleRoute() {} },
+      routeInput: () => ({ nativeMessages: true } as unknown as Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities' | 'nativeMessages'>),
+    }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-2' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64 },
+    });
+    expect(capturedPlan?.nativeMessages).toBeUndefined();
+
+    const recorder = recordingBudget();
+    await prepareRouteFlow({ config, routePlanner, metering: recorder.metering, budget: recorder.options }, {
+      wire: 'anthropic-messages', headers: {},
+      authContext: { method: 'POST', url: 'https://gateway.test/v1/messages', requestId: 'req-3' },
+      model: 'claude-sonnet-5', stream: false,
+      body: { model: 'claude-sonnet-5', messages: [], max_tokens: 64, safeguards: null },
+    });
+    expect(capturedPlan?.nativeMessages).toBe(true);
+    expect((capturedQuote as { nativeMessages?: boolean })?.nativeMessages).toBe(true);
   });
 });

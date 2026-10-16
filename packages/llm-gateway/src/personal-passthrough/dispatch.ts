@@ -72,8 +72,10 @@ export class PassthroughDispatch implements GatewayDispatchPort {
   ): Promise<GatewayDispatchResponse> {
     const response = await this.transport.send(this.toTransportRequest(request));
     // Faithful: provider status + body + headers verbatim. No mutation (#4).
+    // Trusted size evidence rides along for terminal 413 mapping (N09).
     return {
       status: response.status,
+      ...(response.requestSize ? { requestSize: response.requestSize } : {}),
       body: response.body,
       ...(response.headers ? { headers: response.headers } : {}),
     };

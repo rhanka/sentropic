@@ -25,23 +25,14 @@ const run = (command: string, args: string[], cwd: string) => {
 };
 let tarball: string;
 let servicePublished = false;
-// The mesh floor follows the workspace mesh version. Until that version is on
-// npm (publication train: mesh before gateway), the sibling workspace mesh
-// candidate tarball stands in; network failures still fail.
+// Qualify both current source candidates together before the atomic release train.
+// A registry artifact at the current workspace version can lack unreleased contracts.
 const meshVersion = JSON.parse(readFileSync('../llm-mesh/package.json', 'utf8')).version as string;
-let meshSpec = `@sentropic/llm-mesh@${meshVersion}`;
-let meshSource: 'registry' | 'workspace-candidate' = 'registry';
+let meshSpec: string;
+const meshSource = 'workspace-candidate';
 const resolveMesh = () => {
-  let published = false;
-  try {
-    published = run('npm', ['view', meshSpec, 'version', '--json'], temp).includes(`"${meshVersion}"`);
-  } catch (error) {
-    if (!String((error as { stderr?: string }).stderr).includes('E404')) throw error;
-  }
-  if (published) return;
   const packedMesh = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', temp], join(process.cwd(), '../llm-mesh')));
   meshSpec = join(temp, packedMesh[0].filename);
-  meshSource = 'workspace-candidate';
 };
 
 beforeAll(() => {

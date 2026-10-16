@@ -93,6 +93,30 @@ const providerFor = (target: PlannedRouteTarget) => {
   if (!isProviderId(target.providerId)) throw new Error(`unsupported provider: ${target.providerId}`);
   return target.providerId;
 };
+
+/**
+ * Unsupported-projection refusal (spec §16.4): the Chat runtime options
+ * cannot express this canonical control, so the adapter refuses with a
+ * capability 400 BEFORE any provider dispatch — never a silent drop. The
+ * route planner must exclude such controls via execution-feature
+ * eligibility; this is the defense-in-depth backstop. `status: 400` keeps
+ * the failure route-scoped (invalid-request, non-retryable), never
+ * provider auth/rate evidence.
+ */
+const unsupportedProjection = (detail: string) =>
+  Object.assign(
+    new Error(`gateway-wire-adapter: unsupported projection (${detail})`),
+    { status: 400, code: 'unsupported_projection' },
+  );
+
+const rejectUnsupportedControls = (request: GenerateRequest): void => {
+  if (request.toolChoice !== undefined && typeof request.toolChoice !== 'string') {
+    throw unsupportedProjection('named tool_choice has no Chat runtime slot');
+  }
+  if (request.parallelToolCalls !== undefined) {
+    throw unsupportedProjection('parallel_tool_calls has no Chat runtime slot');
+  }
+};
 const common = (
   subject: VerifiedRoutingSubject,
   workspaceId: string | undefined,
@@ -143,6 +167,12 @@ const mapStreamEvent = (event: { type: string; data: unknown }, providerId: stri
 
 export const applicationGatewayRuntime: GatewayRuntimeDispatchPort = {
   async generate(subject, workspaceId, target, request) {
+    rejectUnsupportedControls(request);
+    // callLLM has no reasoning slot: refusing beats silently generating
+    // without the requested effort/summary.
+    if (request.reasoning?.effort || request.reasoning?.summary) {
+      throw unsupportedProjection('reasoning controls have no generate-path runtime slot');
+    }
     const response = await callLLM(common(subject, workspaceId, target, request));
     const choice = response.choices[0];
     const toolCalls = choice?.message.tool_calls?.flatMap((tool) => {
@@ -161,12 +191,41 @@ export const applicationGatewayRuntime: GatewayRuntimeDispatchPort = {
     };
   },
   async stream(subject, workspaceId, target, request) {
+    rejectUnsupportedControls(request);
+    // The stream runtime honors reasoning effort/summary (Responses branch
+    // maps xhigh down); 'max' has no runtime slot and is refused.
+    const effort = request.reasoning?.effort;
+    if (effort === 'max') {
+      throw unsupportedProjection("reasoning effort 'max' has no stream runtime slot");
+    }
     const source = callLLMStream({
       ...common(subject, workspaceId, target, request),
       ...(request.previousResponseId ? { previousResponseId: request.previousResponseId } : {}),
+      ...(effort && effort !== 'none' ? { reasoningEffort: effort } : {}),
+      ...(request.reasoning?.summary ? { reasoningSummary: request.reasoning.summary } : {}),
     });
-    return (async function* () {
-      for await (const event of source) yield mapStreamEvent(event, target.providerId);
+    // The source done event carries usage but no finish: a turn that emitted
+    // tool events terminated on tool_calls, never stop (spec §16.4). A
+    // source-provided finish is preserved when no tool call was observed.
+    return (async function* (): AsyncGenerator<MeshStreamEvent> {
+      let sawToolCall = false;
+      for await (const event of source) {
+        if (event.type === 'tool_call_start' || event.type === 'tool_call_delta') {
+          sawToolCall = true;
+        }
+        if (event.type === 'done' && (sawToolCall || typeof (event.data as Record<string, unknown> | null)?.finishReason === 'string')) {
+          const data = (event.data ?? {}) as Record<string, unknown>;
+          const kept = data.finishReason === 'length' || data.finishReason === 'content_filter'
+            || data.finishReason === 'stop' ? data.finishReason : undefined;
+          const usage = toMeshTokenUsage(data.usage);
+          yield {
+            type: 'done',
+            data: { finishReason: sawToolCall ? 'tool_calls' : kept ?? 'stop', ...(usage ? { usage } : {}) },
+          };
+          continue;
+        }
+        yield mapStreamEvent(event, target.providerId);
+      }
     })();
   },
 };

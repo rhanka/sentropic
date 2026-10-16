@@ -4,8 +4,8 @@ import {
 } from '@sentropic/llm-mesh';
 import { describe, expect, it } from 'vitest';
 import {
-  BudgetConfigurationError, budgetRetryAfterSeconds, createGatewayRouter, routeUsageCeiling,
-  runRouteJsonFlow, runRouteStreamFlow,
+  admitRoute, BudgetConfigurationError, budgetRetryAfterSeconds, createGatewayRouter,
+  routeUsageCeiling, runRouteJsonFlow, runRouteStreamFlow,
 } from '../src/index.js';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 import {
@@ -145,6 +145,45 @@ describe('budget admission quote and ceiling', () => {
     expect(recorder.events).toEqual([]);
     expect(calls.plan).toEqual([]);
   });
+  it('keeps the frozen no-route refusal when the availability lookup fails', async () => {
+    // A rejecting `describeAvailability` must not replace the determined
+    // refusal with the generic retryable 503, and budget admission is never
+    // reached. The lookup failure stays on the refusal `cause` for operators.
+    const { planner } = quotingPlanner([], { quote: () => fixtureQuote({ candidates: [] }) });
+    const lookupError = new Error('keyring down');
+    const rejecting = {
+      ...planner,
+      describeAvailability: async () => { throw lookupError; },
+    } as never;
+    const recorder = recordingBudget();
+    const response = await send(budgetRouter({ planner: rejecting, recorder }), '/v1/chat/completions', false);
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-should-retry')).toBe('false');
+    expect(await response.json()).toEqual({ error: {
+      message: `No route available for model: "${MODEL}"`, type: 'server_error', code: 'no_route' } });
+    expect(recorder.events).toEqual([]);
+  });
+  it('retains the lookup failure on the refusal cause for operators', async () => {
+    const { planner } = quotingPlanner([], { quote: () => fixtureQuote({ candidates: [] }) });
+    const lookupError = new Error('keyring down');
+    const rejecting = {
+      ...planner,
+      describeAvailability: async () => { throw lookupError; },
+    } as never;
+    const recorder = recordingBudget();
+    const canonical = normalizeGatewayIngress('openai-chat-completions', {
+      model: MODEL, max_tokens: 64, messages: [{ role: 'user', content: 'hello' }],
+    });
+    const failure = await admitRoute({
+      budget: recorder.options, routePlanner: rejecting, requestId: 'req-1',
+      cost: { tenantId: 'tenant-1', principalId: 'user-1', source: 'test', correlationId: 'req-1' },
+      subject: { principalRef: 'user-1', ownerScopeRef: 'user-1' },
+      wire: 'openai-chat-completions', requestedModel: MODEL, canonical, route: {},
+    }).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ name: 'RoutePlanError', code: 'no-route' });
+    expect((failure as { cause?: unknown }).cause).toBe(lookupError);
+    expect(recorder.events).toEqual([]);
+  });
 });
 
 describe('budget admission Retry-After', () => {
@@ -209,5 +248,22 @@ describe('budget admission with the real mesh planner', () => {
       outcome: 'success', requestId: 'req-1', holdRef: 'hold-1', quoteRef: quote.quoteRef,
       usage: { inputTokens: 3, outputTokens: 2, estimated: false },
     });
+  });
+
+  it('forwards Responses execution features into quote and plan input (same-input parity)', async () => {
+    // Spec §16.3/§16.6: quote and plan see identical requirements, so a
+    // quoted Responses request revalidates instead of mismatching.
+    const recorder = recordingBudget();
+    const { planner, calls } = quotingPlanner([jsonAttempt(textResponse())]);
+    const app = budgetRouter({ planner, recorder });
+    const res = await app.request('/v1/responses', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, input: 'hello', max_output_tokens: 64 }),
+    });
+    expect(res.status).toBe(200);
+    expect(calls.quote).toHaveLength(1);
+    expect(calls.quote[0]).toMatchObject({ requiredExecutionFeatures: ['explicit-output-ceiling'] });
+    expect(calls.plan).toHaveLength(1);
+    expect(calls.plan[0]).toMatchObject({ requiredExecutionFeatures: ['explicit-output-ceiling'] });
   });
 });

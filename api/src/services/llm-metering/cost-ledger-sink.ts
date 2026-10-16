@@ -1,5 +1,5 @@
 /**
- * LLM metering — cost-ledger sink (observe-only, NON-gateway API calls).
+ * LLM metering — observe-only cost-ledger sink, including native gateway responses.
  *
  * Records ONE `control.cost_ledger` row per observed LLM call of the product runtime.
  *
@@ -9,9 +9,10 @@
  *   `ON CONFLICT DO NOTHING`, so a double-fire (retry/replay) is a no-op.
  * - Observe-only: `usage` is optional/absent on most provider paths → token counts and
  *   `cost_micro_usd` stay null (never rewritten as zero).
- * - Gateway requests (Lot D B3c) are settled by `route-settlement.ts` with
- *   `idempotency_key = requestId`; the gateway never wires this sink, and an observer redelivery
- *   keyed by that request id hits the same unique key, so it can never add a second row.
+ * - Gateway settlement is the sole financial row (`hold_id IS NOT NULL`), keyed by requestId.
+ *   Native observation has a distinct callId, null cost/hold and response_id=requestId.
+ *   Both consume the gateway's one finalized pre-floor snapshot; readers never sum
+ *   tokens across the two roles. Failed observation never delays financial settlement.
  */
 
 import type { TokenUsage } from '@sentropic/llm-mesh';

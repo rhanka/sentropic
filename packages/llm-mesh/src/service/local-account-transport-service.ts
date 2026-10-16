@@ -65,6 +65,7 @@ const VERIFIED_CLOUD_CODE_MODEL_IDS = [
   'claude-opus-4-6-thinking',
   'gemini-3.7-flash',
   'gemini-3.8-flash',
+  'gemini-4-argon',
   'gemini-3.1-pro',
 ] as const;
 
@@ -765,20 +766,66 @@ export class LocalAccountTransportService {
       diagnostics.push({
         code: 'reenrollment-required',
         transportProviderId: 'codex',
-        message: 'Codex enrollment must be renewed for owner-scoped routing',
+        // Lot 7: the repair action rides in the message so a 503 body can
+        // tell the operator exactly what to do.
+        message: 'Codex enrollment must be renewed for owner-scoped routing;'
+          + ' re-enroll the codex account to restore routing',
       });
     }
     for (const account of this.accountsMap.values()) {
-      if (account.ownerScopeRef !== subject.ownerScopeRef || account.status !== 'reauth_required') {
+      // A credential is reauth-required when its status has already flipped
+      // (a refresh failed) or when it is expired with no refresh token to
+      // mint a fresh access token silently — otherwise expiry dies silently
+      // as no-eligible-account.
+      if (account.ownerScopeRef !== subject.ownerScopeRef
+        || !this.requiresReauth(account)) {
         continue;
       }
+      const transport = account.transportProviderId;
+      // The stored expiry is owner data, never a validated date, and this
+      // message is client-facing. The expired-at wording applies only when
+      // the expiry predicate holds (a past instant) — a revoked-but-
+      // unexpired credential keeps the generic renewal wording. The emitted
+      // timestamp is the canonical ISO instant, never the raw stored string
+      // (which may carry non-canonical annotations).
+      const rawExpiry = account.expiresAt;
+      const parsedExpiry = typeof rawExpiry === 'string' && rawExpiry
+        ? Date.parse(rawExpiry)
+        : Number.NaN;
+      const expiredAt = Number.isFinite(parsedExpiry) && parsedExpiry <= Date.now()
+        ? new Date(parsedExpiry).toISOString()
+        : undefined;
       diagnostics.push({
         code: 'reauth-required',
-        transportProviderId: account.transportProviderId,
-        message: `${account.transportProviderId} authentication must be renewed`,
+        transportProviderId: transport,
+        message: expiredAt
+          ? `${transport} credential expired at ${expiredAt};`
+            + ` reauthenticate the ${transport} account to restore routing`
+          : `${transport} authentication must be renewed;`
+            + ` reauthenticate the ${transport} account to restore routing`,
       });
     }
     return diagnostics;
+  }
+
+  private isCredentialExpired(account: { expiresAt?: string | null }): boolean {
+    if (!account.expiresAt) return false;
+    const expiresAtMs = Date.parse(account.expiresAt);
+    return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
+  }
+
+  /**
+   * True when the account cannot recover on its own: its status already
+   * flipped to reauth_required (a refresh failed), or its ACCESS token is
+   * expired with no refresh token to renew it. A merely expired access
+   * token with a live refresh token stays ready — acquire() refreshes it
+   * before dispatch.
+   */
+  private requiresReauth(account: {
+    status?: string | null; refreshToken?: string | null; expiresAt?: string | null;
+  }): boolean {
+    if (account.status === 'reauth_required') return true;
+    return this.isCredentialExpired(account) && !account.refreshToken;
   }
 
   private async listRouteAccounts(
@@ -799,11 +846,13 @@ export class LocalAccountTransportService {
       transportProviderId: account.transportProviderId,
       supportedModelIds: supportedModelIdsForAccount(account),
       enrollmentCompletedAt: account.enrollmentCompletedAt ?? '1970-01-01T00:00:00.000Z',
-      readiness: account.status === 'active' || account.status === undefined
-        ? 'ready'
-        : account.status === 'reauth_required'
-          ? 'reauth-required'
-          : account.status,
+      readiness: this.requiresReauth(account)
+        ? 'reauth-required'
+        : account.status === 'active' || account.status === undefined
+          ? 'ready'
+          : account.status === 'reauth_required'
+            ? 'reauth-required'
+            : account.status,
       revision: [
         this.credentialVersions.get(account.accountId) ?? 'v1.0.0',
         account.expiresAt ?? '', account.status ?? 'active', account.enrollmentCompletedAt ?? '',

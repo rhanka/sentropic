@@ -97,6 +97,8 @@ export interface HarnessOptions {
   readonly crossUserPoolEnabled?: boolean;
   /** Gateway mode (default personal-passthrough). Set `cross-user-pool` for #7 fail-closed tests. */
   readonly mode?: GatewayConfig['mode'];
+  /** Token verifier override (default accepts `valid-<principal>`). Used to model caller-token rotation. */
+  readonly verifyToken?: VerifyToken;
 }
 
 export interface Harness {
@@ -116,7 +118,9 @@ export const buildHarness = (options: HarnessOptions): Harness => {
   const config: GatewayConfig = {
     mode: options.mode ?? DEFAULT_GATEWAY_MODE,
     crossUserPoolEnabled: options.crossUserPoolEnabled ?? false,
-    callerAuth: new PersonalPassthroughCallerAuth({ verifyToken: fixtureVerifyToken }),
+    callerAuth: new PersonalPassthroughCallerAuth({
+      verifyToken: options.verifyToken ?? fixtureVerifyToken,
+    }),
     pool,
     authResolver: new PassthroughAuthResolver(),
     dispatch: new PassthroughDispatch({ transport: options.transport }),
@@ -140,6 +144,19 @@ export const buildHarness = (options: HarnessOptions): Harness => {
           providerId: 'openai',
           transportProviderId: 'codex',
           model: 'gpt-5.5',
+        },
+        // Branch static routes (mirror of mesh routing-targets): the Vibe
+        // CLI default alias and the cloud-code model, so fixture tests can
+        // drive the exact owner wires past resolveTarget.
+        'mistral-medium-3.5': {
+          providerId: 'mistral',
+          transportProviderId: 'mistral-vibe',
+          model: 'mistral-medium-3.5',
+        },
+        'gemini-3.7-flash': {
+          providerId: 'gemini',
+          transportProviderId: 'cloud-code',
+          model: 'gemini-3.7-flash',
         },
       },
     }),

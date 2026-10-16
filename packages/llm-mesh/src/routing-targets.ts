@@ -29,12 +29,28 @@ export const defineLaunchAliases = (
 
 export const MUSE_CONTRIBUTOR_MODEL = 'muse-spark-1.3-contributor';
 
+/**
+ * Vibe CLI wire API name (spec §16.8, UAT `904e8d8f3`). Vibe `2.26.1` sends
+ * its internal API name, not the display alias. This pinned gateway
+ * compatibility alias serves the existing `mistral-medium-3.5` catalog target
+ * over `mistral-vibe`; it is not a new model profile, pricing row, or
+ * equivalence member. Update the pinned Vibe fixture in the same change when
+ * the wire name or target changes.
+ */
+export const VIBE_CLI_WIRE_MODEL = 'mistral-vibe-cli-latest';
+
 export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
   'muse-spark-1.3': {
     providerId: 'muse', transportProviderId: 'muse', model: 'muse-spark-1.3',
   },
   'muse-spark-1.3-contributor': {
     providerId: 'muse', transportProviderId: 'muse', model: MUSE_CONTRIBUTOR_MODEL,
+  },
+  'muse-wonder-1.0': {
+    providerId: 'muse', transportProviderId: 'muse', model: 'muse-wonder-1.0',
+  },
+  'muse-wonder-full-1.0': {
+    providerId: 'muse', transportProviderId: 'muse', model: 'muse-wonder-full-1.0',
   },
   'claude-sonnet-5': {
     providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-5',
@@ -75,11 +91,26 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gemini-3.8-flash': {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
   },
+  'gemini-4-argon': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-4-argon',
+  },
   'gpt-5.6-terra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
   },
-  // Mistral Vibe faithful routes: both models are served on api.mistral.ai by
-  // the plan-billed `mistral-vibe` account transport.
+  // Mistral Vibe faithful routes: these models are served on api.mistral.ai by
+  // the plan-billed `mistral-vibe` account transport. `mistral-medium-3.5` is
+  // the Vibe CLI default alias — the static mapping pins its faithful
+  // transport (catalog-profile recognition alone would also resolve it, so
+  // this entry preserves the historical combined mapping/catalog gap fix).
+  'mistral-medium-3.5': {
+    providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-medium-3.5',
+  },
+  // Pinned Vibe CLI wire alias (spec §16.8): the single definition of the
+  // `mistral-vibe-cli-latest` compatibility alias, referencing the canonical
+  // target above. All resolver variants consume it from this table.
+  [VIBE_CLI_WIRE_MODEL]: {
+    providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-medium-3.5',
+  },
   'mistral-large-4': {
     providerId: 'mistral', transportProviderId: 'mistral-vibe', model: 'mistral-large-4',
   },
@@ -98,6 +129,38 @@ export interface StandardRouteDefinition {
   /** Cloud-candidate effort override; defaults to the route effort. */
   readonly cloudEffort?: string;
 }
+
+/**
+ * Muse serving model per launch alias (owner request 2026-10-15, Artificial
+ * Analysis Intelligence Index, source artificialanalysis.ai/leaderboards/models,
+ * read 2026-10-15: Claude Opus 5.5 max 58 / xhigh 56 / high 54 / medium 51 /
+ * low 42; Sonnet 5.5 max 56 / xhigh 52 / high 47 / medium 41 / low 36;
+ * Fable 5.1 max 53 / xhigh 53 / high 51 / medium 49 / low 47;
+ * Gemini 4 Argon high 53 (low/medium unpublished); Gemini 3.8 Flash high 41 /
+ * medium 40 / low 33; Muse Wonder Full max 56; Muse Wonder max 52;
+ * Muse Spark 1.3 max 48 / xhigh 45). Wonder Full serves the top Opus 5.5 and
+ * Sonnet 5.5 rows, Wonder serves the mid Opus 5.5 rows, Sonnet 5.5 xhigh and
+ * the Fable 5.1 family, Spark keeps the remaining Sonnet 5.5 and low rows.
+ * No `-contributor` Wonder variants exist in the catalog, so the Wonder slots
+ * use the plain ids while the BR75-Q3 contributor tier default still applies
+ * to Spark via MUSE_CONTRIBUTOR_MODEL. Aliases absent from this map keep the
+ * Spark contributor. Efforts stay in MUSE_ROUTE_EFFORT (unchanged).
+ */
+export const MUSE_ROUTE_MODEL: Readonly<Record<string, string>> = {
+  'claude-opus-5-5': 'muse-wonder-1.0',
+  'claude-opus-5-5-high': 'muse-wonder-1.0',
+  'claude-opus-5-5-xhigh': 'muse-wonder-full-1.0',
+  'claude-opus-5-5-max': 'muse-wonder-full-1.0',
+  'claude-opus-5-5-medium': 'muse-wonder-1.0',
+  'claude-sonnet-5-5-xhigh': 'muse-wonder-1.0',
+  'claude-sonnet-5-5-max': 'muse-wonder-full-1.0',
+  'claude-fable-5-1': 'muse-wonder-1.0',
+  'claude-fable-5-1-high': 'muse-wonder-1.0',
+  'claude-fable-5-1-xhigh': 'muse-wonder-1.0',
+  'claude-fable-5-1-max': 'muse-wonder-1.0',
+  'claude-fable-5-1-medium': 'muse-wonder-1.0',
+  'claude-fable-5-1-low': 'muse-wonder-1.0',
+};
 
 /**
  * Muse insertion effort per launch alias (BR75-D1). Aliases absent from this
@@ -200,6 +263,12 @@ export const GLM_FALLBACK_MODEL = 'zai-glm-5-3';
 // Codex slot policy (BR-C55): GPT-6 Astra serves only claude-opus-5-5-max
 // and the claude-fable-5-1 family; every other row serves GPT-6.1 Sol at
 // +1 effort rung. Fable 5.1 keeps Astra with inherited effort.
+// Cloud slot policy (owner request 2026-10-15, Artificial Analysis
+// Intelligence Index read 2026-10-15, see the MUSE_ROUTE_MODEL note): Gemini 4
+// Argon at high effort serves the Opus 5.5 (base/medium/high/xhigh/max),
+// Sonnet 5.5 (high/xhigh/max) and Fable 5.1 rows; Opus 5.5 low and
+// Sonnet 5.5 medium keep Gemini 3.8 Flash high, Sonnet 5.5 low keeps
+// 3.8 Flash medium; every other row keeps 3.8 Flash high.
 export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   { requestedId: 'claude-opus-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-opus-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
@@ -223,24 +292,24 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   { requestedId: 'claude-fable-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-medium', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-low', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'low', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-medium', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-low', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'low', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-argon', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-argon', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-argon', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-argon', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-opus-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
   { requestedId: 'claude-sonnet-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-argon', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-argon', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-argon', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
   { requestedId: 'claude-sonnet-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'medium' },
 ];
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
@@ -326,8 +395,9 @@ const firstTargetThatResolvesProfile = (
 const museTarget = (requestedId: string): TargetMapping | undefined => {
   const effort = MUSE_ROUTE_EFFORT[requestedId];
   if (!effort) return undefined;
+  const model = MUSE_ROUTE_MODEL[requestedId] ?? MUSE_CONTRIBUTOR_MODEL;
   const candidate: TargetMapping = {
-    providerId: 'muse', transportProviderId: 'muse', model: MUSE_CONTRIBUTOR_MODEL, effort,
+    providerId: 'muse', transportProviderId: 'muse', model, effort,
   };
   return hasModelProfile(candidate) ? candidate : undefined;
 };
@@ -452,13 +522,20 @@ const canonicalTargetMappingsFor = (
   musePosition: MusePosition = DEFAULT_MUSE_POSITION,
 ): Readonly<Record<string, TargetMapping>> => {
   if (musePosition === DEFAULT_MUSE_POSITION) return CANONICAL_TARGET_MAPPINGS;
-  return Object.fromEntries(
-    Object.entries(launchAliasRouteMappingsFor(musePosition))
-      .map(([requestedId, targets]) => [
-        requestedId,
-        firstTargetThatResolvesProfile(targets),
-      ]),
-  );
+  // Static defaults (including the Vibe wire alias) stay eligible under every
+  // muse position; only launch-alias candidate order varies by position.
+  return {
+    ...Object.fromEntries(Object.entries(DEFAULT_TARGET_MAPPINGS).map(
+      ([requestedId, target]) => [requestedId, firstTargetThatResolvesProfile([target])],
+    )),
+    ...Object.fromEntries(
+      Object.entries(launchAliasRouteMappingsFor(musePosition))
+        .map(([requestedId, targets]) => [
+          requestedId,
+          firstTargetThatResolvesProfile(targets),
+        ]),
+    ),
+  };
 };
 
 export const createCanonicalTargetResolver = (

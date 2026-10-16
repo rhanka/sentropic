@@ -1,0 +1,89 @@
+{
+  "schema": "responses-fixtures/1",
+  "provenance": "Captured 2026-10-12 from the pinned CLIs against a local deterministic recorder (loopback 127.0.0.1:32211, /tmp/resp-capture/recorder.mjs, never committed): synthetic text/tool SSE with fixed ids, no provider credentials, no live dispatch. Sanitized only: credentials and machine text replaced with fixed SENTINEL-* tokens (consistent id mapping); JSON types, field presence, tool schemas, argument structure and id relationships preserved. Scrubbed lengths are NOT required to equal original lengths. Raw captures stay outside the repo.",
+  "clients": {
+    "muse": "Muse Code 1.4.6 (1.4.6-R6000.1)",
+    "codex": "codex-cli 0.162.1",
+    "vibe": "vibe 2.26.1"
+  },
+  "notes": [
+    "Muse ran in an untrusted workspace (Agent delegation unavailable); the two initial shapes reproduce the UAT envelopes (94,624 / 64,400 bytes original).",
+    "Muse tools arrive as one namespace item ('muse' with 26 nested function tools); the CLI echoes calls as 'muse.<name>' and joins results by call_id (item id and call_id stay distinct).",
+    "Codex declares tools as an 'additional_tools' input item (custom/exec, clock/sleep, collaboration/* namespaces); flat function_call answers for nested tools are refused client-side ('unsupported call: ...') with a string function_call_output — the tool-result fixture records that real round-trip. A successful native tool execution needs the upstream-native call format and stays a live-qualification item.",
+    "Codex sends reasoning {effort, context}, text {verbosity}, include [reasoning.encrypted_content], prompt_cache_key and client_metadata telemetry on every request; instructions was absent from the probe.",
+    "Muse sends instructions, max_output_tokens 128000, reasoning {effort max, summary auto}, include [reasoning.encrypted_content] and prompt_cache_key on every request.",
+    "Vibe default sends model mistral-vibe-cli-latest (display alias mistral-medium-3.5) with 9 tools, temperature 1, streaming, plus parallel_tool_calls, reasoning_effort and metadata."
+  ],
+  "fixtures": [
+    {
+      "file": "muse-1.4.6-initial-a.json",
+      "scenario": "muse text turn, first request variant",
+      "originalPath": "POST /responses",
+      "originalLength": 94200,
+      "sha256": "106011c9ad97eeb7ce8aba39a2d0de260264abfbec95d36f221742d8acbfc675"
+    },
+    {
+      "file": "muse-1.4.6-initial-b.json",
+      "scenario": "muse text turn, second request variant (skill-reminder observer shape)",
+      "originalPath": "POST /responses",
+      "originalLength": 64244,
+      "sha256": "eae8a5cebea3467cc4126d58900c0733c4eb70bc416fdf42d1c104631c60aead"
+    },
+    {
+      "file": "muse-1.4.6-tool-result.json",
+      "scenario": "muse continuation after a synthetic work_list call (function_call + function_call_output joined by call_id)",
+      "originalPath": "POST /responses",
+      "originalLength": 94449,
+      "sha256": "1ea99ec96970516a25963eea833f2ad6bad3098074428aebc79d990d1460721f"
+    },
+    {
+      "file": "codex-0.162.1-initial.json",
+      "scenario": "codex zero-call probe (tool declarations present, no calls)",
+      "originalPath": "POST /v1/responses",
+      "originalLength": 55710,
+      "sha256": "a214784063a6c33d3abfdce034c4c5e17bd4f1207a650b659fd20b4fffd054ab"
+    },
+    {
+      "file": "codex-0.162.1-tools.json",
+      "scenario": "codex tool-session initial (pre-call request, same shape family as the probe)",
+      "originalPath": "POST /v1/responses",
+      "originalLength": 55710,
+      "sha256": "647037d672c580bd42923ce6910a8533fe83084a8992434f15a9f092869379ea"
+    },
+    {
+      "file": "codex-0.162.1-tool-result.json",
+      "scenario": "codex continuation with call echo and string error output (flat calls for nested tools are refused client-side)",
+      "originalPath": "POST /v1/responses",
+      "originalLength": 55970,
+      "sha256": "e1f13068e16927186d79af09e67e3b4434b00b16eb74ac0d0acb4cf37e0f5dfb"
+    },
+    {
+      "file": "vibe-2.26.1-default.json",
+      "scenario": "vibe unmodified default chat projection (model mistral-vibe-cli-latest, 9 tools, temperature 1, streaming)",
+      "originalPath": "POST /v1/chat/completions",
+      "originalLength": 32006,
+      "sha256": "bad2c52de60f2927a94a699285d698f48cda73bbe11cd896460bc09e7c091ae2"
+    },
+    {
+      "file": "provider-codex.sse",
+      "scenario": "SYNTHETIC provider replay: codex native SSE (text turn, fragmented tool args with done-item snapshot, terminal usage)",
+      "originalPath": "synthetic",
+      "originalLength": 0,
+      "sha256": "synthetic"
+    },
+    {
+      "file": "provider-muse-chat.sse",
+      "scenario": "SYNTHETIC provider replay: meta chat SSE (text delta, two-fragment tool call, tool_calls finish, terminal usage)",
+      "originalPath": "synthetic",
+      "originalLength": 0,
+      "sha256": "synthetic"
+    },
+    {
+      "file": "provider-mistral-chat.sse",
+      "scenario": "SYNTHETIC provider replay: mistral chat SSE (text delta, three-fragment tool call, tool_calls finish, terminal usage)",
+      "originalPath": "synthetic",
+      "originalLength": 0,
+      "sha256": "synthetic"
+    }
+  ]
+}

@@ -382,13 +382,13 @@ describe('route candidate selection', () => {
       {
         accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
+        supportedModelIds: ['gemini-4-argon'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {
         accountRef: 'muse-internal', diagnosticAccountRef: 'muse-redacted',
         targetProviderId: 'muse', transportProviderId: 'muse',
-        supportedModelIds: ['muse-spark-1.3-contributor'],
+        supportedModelIds: ['muse-wonder-1.0'],
         enrollmentCompletedAt: '2026-08-05T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
@@ -418,7 +418,7 @@ describe('route candidate selection', () => {
     expect(candidates).toHaveLength(3);
     expect(candidates[0]?.target).toMatchObject({
       requestedModel: 'claude-opus-5-5',
-      providerId: 'muse', modelId: 'muse-spark-1.3-contributor',
+      providerId: 'muse', modelId: 'muse-wonder-1.0',
       transportProviderId: 'muse', reason: 'alias',
     });
     expect(candidates.map((candidate) => candidate.account.diagnosticAccountRef))
@@ -511,7 +511,7 @@ describe('route candidate selection', () => {
     const cloudReady = {
       ...solReady, accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
       targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-      supportedModelIds: ['gemini-3.8-flash'],
+      supportedModelIds: ['gemini-4-argon'],
     };
     const selectAlias = (
       extra: {
@@ -556,7 +556,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'muse-internal', diagnosticAccountRef: 'muse-redacted',
         targetProviderId: 'muse', transportProviderId: 'muse',
-        supportedModelIds: ['muse-spark-1.3-contributor'],
+        supportedModelIds: ['muse-wonder-1.0'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
@@ -569,7 +569,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-3.8-flash'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
+        supportedModelIds: ['gemini-4-argon'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
     ];
@@ -636,5 +636,96 @@ describe('route candidate selection', () => {
     expect(selectSignal({ requestedModel: 'gemini-3.5-flash' }, [])).toMatchObject({
       kind: 'no-eligible-account',
     });
+  });
+});
+
+describe('execution-feature eligibility (spec §16.3)', () => {
+  const codexAccount = {
+    accountRef: 'codex-internal',
+    diagnosticAccountRef: 'codex-redacted',
+    targetProviderId: 'openai',
+    transportProviderId: 'codex',
+    supportedModelIds: ['gpt-6.1-sol'],
+    enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+    readiness: 'ready' as const,
+    revision: 'r1',
+  };
+  const selectWith = (
+    request: Parameters<typeof selectRouteCandidates>[0]['request'],
+    accountsForSignal: Parameters<typeof selectRouteCandidates>[0]['accounts'],
+  ) => selectRouteCandidates({
+    request,
+    policy: DEFAULT_ROUTE_POLICY,
+    council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+    accounts: accountsForSignal,
+  });
+
+  it('excludes a pinned transport without the required execution features before acquisition', () => {
+    // Codex omits max_output_tokens (spec §16.4): an explicit output ceiling
+    // can never be served there — refused before any lease, like capabilities.
+    expect(selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      requiredExecutionFeatures: ['explicit-output-ceiling'],
+    }, [codexAccount])).toMatchObject({ kind: 'capabilities-unmet', requestedModel: 'gpt-6.1-sol' });
+  });
+
+  it('carries the unmet execution features on the refusal (R6-MAJ-1, spec §16.7)', () => {
+    const selection = selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      requiredExecutionFeatures: ['explicit-output-ceiling'],
+    }, [codexAccount]);
+    if (selection.kind !== 'capabilities-unmet') throw new Error(`Expected capabilities-unmet, got ${selection.kind}`);
+    expect(selection.unmetExecutionFeatures).toEqual(['explicit-output-ceiling']);
+    // A capability-filter refusal carries no execution cause.
+    const capabilityRefusal = selectWith({
+      requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:audio'],
+    }, []);
+    if (capabilityRefusal.kind !== 'capabilities-unmet') {
+      throw new Error(`Expected capabilities-unmet, got ${capabilityRefusal.kind}`);
+    }
+    expect(capabilityRefusal.unmetExecutionFeatures).toEqual([]);
+  });
+
+  it('fails closed when the account declares no execution support', () => {
+    // `native-reasoning-replay` is declared by no transport (D16-C table):
+    // the pinned Codex account stays ineligible before acquisition.
+    expect(selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+      requiredExecutionFeatures: ['native-reasoning-replay'],
+    }, [codexAccount])).toMatchObject({ kind: 'no-eligible-account' });
+  });
+
+  it('keeps an account whose trusted declaration covers the required features', () => {
+    const selection = selectWith({
+      requestedModel: 'gpt-6.1-sol',
+      targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+      requiredExecutionFeatures: ['named-tool-choice'],
+    }, [{ ...codexAccount, supportedExecutionFeatures: ['named-tool-choice'] }]);
+    if (selection.kind !== 'candidates') throw new Error(`Expected candidates, got ${selection.kind}`);
+    expect(selection.candidates.map((candidate) => candidate.account.transportProviderId))
+      .toEqual(['codex']);
+  });
+
+  it('leaves featureless requests eligible everywhere (no behavior change)', () => {
+    const selection = selectWith({ requestedModel: 'gpt-6.1-sol' }, [codexAccount]);
+    if (selection.kind !== 'candidates') throw new Error(`Expected candidates, got ${selection.kind}`);
+    expect(selection.candidates).toHaveLength(1);
+  });
+
+  it('preserves canonical candidate selection baseline with nativeMessages input', () => {
+    const canonical = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash' },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts,
+    });
+    const withNative = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash', nativeMessages: true },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts,
+    });
+    expect(withNative).toEqual(canonical);
   });
 });

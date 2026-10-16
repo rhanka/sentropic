@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { createGwNamespaceModule, GW_AUTHOR } from '../../src/routes/namespaces/gw';
+import { createGwNamespaceModule, GW_AUTHOR, GW_PATHS } from '../../src/routes/namespaces/gw';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import { insertModelPricing, routePartitionHash, type RoutePartitionConfig } from '../../src/services/llm-metering';
@@ -196,5 +196,149 @@ describe('cluster mesh gateway namespace', () => {
     }));
     expect((await app.request('/api/v1/gw/healthz')).status).toBe(404);
     expect(await store.find(key)).toBeNull();
+  });
+
+  it('serves both Responses aliases through the same fence, bridge and admission', async () => {
+    // Spec §16.2: `/api/v1/gw/responses` gets the same caller admission as
+    // `/api/v1/gw/v1/responses` — fence, auth, settlement mode and the
+    // one-shot caller bridge run on both aliases, exactly once per request.
+    expect(GW_PATHS).toContain('/responses');
+    expect(GW_PATHS).toContain('/v1/responses');
+    const cost = { tenantId: TENANT, workspaceId: `${TENANT}-ws`, principalId: 'user-1',
+      ownerScopeRef: `workspace:${TENANT}-ws:principal:user-1`, source: 'test', correlationId: 'request-1' };
+    const resolveCaller = vi.fn(() => cost);
+    const generate = vi.fn().mockResolvedValue({
+      id: 'gateway-response-1', providerId: 'openai', modelId: 'gpt-5.6-terra',
+      message: { role: 'assistant', content: 'candidate' }, text: 'candidate',
+      toolCalls: [], finishReason: 'stop',
+      usage: { inputTokens: 2, outputTokens: 1 },
+    });
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate, stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller,
+      })],
+    }));
+    await activate(R1);
+    const unknown = `uat_unknown_${run}`;
+    const responses = { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: unknown, input: 'hello' }) };
+    for (const path of ['/api/v1/gw/responses', '/api/v1/gw/v1/responses']) {
+      const response = await app.request(path, responses);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: 'model_not_found' } });
+    }
+    expect(generate).not.toHaveBeenCalled();
+    expect(resolveCaller).toHaveBeenCalledTimes(2);
+
+    const active = await store.find(key);
+    await store.rollback(key, active!.previousGenerationId!);
+    for (const path of ['/api/v1/gw/responses', '/api/v1/gw/v1/responses']) {
+      const blocked = await app.request(path, responses);
+      expect(blocked.status).toBe(503);
+      await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+    }
+  });
+
+  it('serves the Muse catalog on the product mount with the same caller admission (R5-MAJ-2)', async () => {
+    // `/api/v1/gw/muse-code/models` runs fence, auth, settlement mode and
+    // the one-shot caller bridge exactly like `/v1/*` and `/responses`.
+    expect(GW_PATHS).toContain('/muse-code/models');
+    const cost = { tenantId: TENANT, workspaceId: `${TENANT}-ws`, principalId: 'user-1',
+      ownerScopeRef: `workspace:${TENANT}-ws:principal:user-1`, source: 'test', correlationId: 'request-1' };
+    const resolveCaller = vi.fn(() => cost);
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate: vi.fn(), stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller,
+      })],
+    }));
+    await activate(R1);
+    const response = await app.request('/api/v1/gw/muse-code/models');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ object: 'list' });
+    expect(resolveCaller).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the Muse catalog without a resolved caller on the product mount (R5-MAJ-2)', async () => {
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate: vi.fn(), stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller: () => undefined,
+      })],
+    }));
+    await activate(R1);
+    const response = await app.request('/api/v1/gw/muse-code/models');
+    expect(response.status).toBe(401);
+  });
+
+  it('excludes execution features the application runtime does not support (spec §16.4)', async () => {
+    // The injected application runtime honors no §16 execution feature
+    // across providers (named choice and parallel control are refused by
+    // the adapter; the rest is partial at most). A plan requiring one is
+    // excluded before resolution or dispatch — a capability refusal, never
+    // a dispatched request that silently drops the control.
+    const generate = vi.fn();
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate, stream: vi.fn() } });
+    await expect(routePlane.planner.plan(
+      { principalRef: 'user-1', ownerScopeRef: 'workspace:t-ws:principal:user-1' },
+      { requestedModel: 'gpt-5.6-terra', requiredExecutionFeatures: ['named-tool-choice'] },
+    )).rejects.toMatchObject({ name: 'RoutePlanError', code: 'capabilities-unmet' });
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  // R7-MAJ-1 (spec §16.7): the product plan refusal carries the cause — the
+  // HTTP body names it (`unsupported_parameter` + `reasoning`) without dispatch.
+  it('names the unmet execution feature on POST /api/v1/gw/responses (R7-MAJ-1)', async () => {
+    const cost = { tenantId: TENANT, workspaceId: `${TENANT}-ws`, principalId: 'user-1',
+      ownerScopeRef: `workspace:${TENANT}-ws:principal:user-1`, source: 'test', correlationId: 'request-1' };
+    const generate = vi.fn();
+    const routePlane = createApplicationGatewayRoutePlane({ dispatch: { generate, stream: vi.fn() } });
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({
+        routePlane,
+        authenticate: async (_context, next) => next(),
+        resolveCaller: () => cost,
+      })],
+    }));
+    await activate(R1);
+    const response = await app.request('/api/v1/gw/responses', { method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-5.6-terra', input: 'hello', reasoning: { effort: 'high' } }) });
+    expect(response.status).toBe(400);
+    const body = await response.json() as { error: { type: string; code: string; param: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('unsupported_parameter');
+    expect(body.error.param).toBe('reasoning');
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('fails the unavailable gateway module closed on both Responses aliases', async () => {
+    const registry = createClusterMeshModules();
+    const broken = {
+      ...registry,
+      load: async () => { throw new Error('module unavailable'); },
+    } as unknown as ClusterMeshModules;
+    const app = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [await createGwNamespaceModule({ modules: broken })],
+    }));
+    for (const path of ['/api/v1/gw/responses', '/api/v1/gw/v1/responses', '/api/v1/gw/v1/chat/completions']) {
+      const response = await app.request(path, { method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-5.6-terra', messages: [] }) });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({ error: 'gateway_module_unavailable' });
+    }
   });
 });

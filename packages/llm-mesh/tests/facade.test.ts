@@ -278,6 +278,19 @@ describe('createLlmMesh', () => {
     expect(getModelProfile('gcp', 'google/gemini-3.8-flash@gcp')).toBeNull();
   });
 
+  it('exposes Gemini 4 Argon as a Cloud Code model copied from 3.7', () => {
+    const profile = getModelProfile('gemini', 'gemini-4-argon');
+
+    expect(profile).toMatchObject({
+      providerId: 'gemini', modelId: 'gemini-4-argon', label: 'Gemini 4 Argon',
+      reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities).toEqual(
+      getModelProfile('gemini', 'gemini-3.7-flash')?.capabilities,
+    );
+    expect(getModelProfile('gcp', 'google/gemini-4-argon@gcp')).toBeNull();
+  });
+
   it('exposes Fable 5.1 and GPT-6 Astra with their family capabilities', () => {
     const fable = getModelProfile('anthropic', 'claude-fable-5-1');
     const astra = getModelProfile('openai', 'gpt-6-astra');

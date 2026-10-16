@@ -5,6 +5,7 @@ import type { ProviderRuntimeContext } from '../registry.js';
 import type { StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
 import { buildCodexRuntimeRequest, decodeCodexRuntimeEvent } from './codex-runtime-wire.js';
+import { requalifyResponseToolName, responsesCarrierOf } from '../responses-wire.js';
 
 export interface CodexRuntimeClientOptions {
   readonly fetch?: typeof fetch;
@@ -75,9 +76,17 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
           : {}),
       });
     }
+    const carrier = responsesCarrierOf(request.providerOptions);
     return (async function* (): AsyncGenerator<StreamEvent> {
       for await (const raw of parseSse(response.body!)) {
-        for (const event of decodeCodexRuntimeEvent(raw)) yield event;
+        for (const event of decodeCodexRuntimeEvent(raw)) {
+          // Providers echo the bare canonical name; the client declared the
+          // qualified `namespace.name` (spec §16.3).
+          if (event.type === 'tool_call_start') {
+            yield { type: event.type, data: {
+              ...event.data, name: requalifyResponseToolName(event.data.name, carrier) } };
+          } else yield event;
+        }
       }
     })();
   }
@@ -89,7 +98,16 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
     const toolCalls = new Map<string, ToolCall>();
     for await (const event of stream) {
       if (event.type === 'content_delta') text += event.data.delta;
-      else if (event.type === 'tool_call_start') toolCalls.set(event.data.toolCallId, event.data);
+      else if (event.type === 'tool_call_start') {
+        // A repeated start carries the done-item argument snapshot: its
+        // arguments win over streamed fragments (never appended). An empty
+        // repeat never wipes accumulated fragments.
+        const current = toolCalls.get(event.data.toolCallId);
+        if (!current) toolCalls.set(event.data.toolCallId, event.data);
+        else if (event.data.argumentsText) {
+          toolCalls.set(event.data.toolCallId, { ...current, ...event.data });
+        }
+      }
       else if (event.type === 'tool_call_delta') {
         const current = toolCalls.get(event.data.toolCallId);
         if (current) toolCalls.set(event.data.toolCallId, {

@@ -1,9 +1,12 @@
 /**
- * Wire helpers (spec §3b). The gateway resolves provider/model from the request
- * BODY `model` (the only body field it reads for routing) and frames responses
- * faithfully per wire:
+ * Wire helpers (spec §3b, §16.2). The gateway resolves provider/model from the
+ * request BODY `model` (the only body field it reads for routing) and frames
+ * responses faithfully per wire:
  *   - Anthropic Messages: `event: <name>\ndata: <json>\n\n` ... `message_stop`.
  *   - OpenAI Chat Completions: `data: <json>\n\n` ... `data: [DONE]\n\n`.
+ *   - OpenAI Responses (`/responses`, `/v1/responses`): `event: <type>\n` +
+ *     `data: <json>\n\n` with a monotonic `sequence_number` in every data
+ *     object; the terminal event closes the stream (never Chat `[DONE]`).
  *
  * The gateway does NOT mutate the provider-native body or the provider-native
  * SSE payloads — it only frames/relays them. These helpers exist so the router
@@ -16,6 +19,8 @@ import type { GatewayWire } from './ports/dispatch.js';
 export const WIRE_BY_PATH: Readonly<Record<string, GatewayWire>> = {
   '/v1/messages': 'anthropic-messages',
   '/v1/chat/completions': 'openai-chat-completions',
+  '/responses': 'openai-responses',
+  '/v1/responses': 'openai-responses',
 };
 
 /**
@@ -49,6 +54,15 @@ export const frameAnthropicEvent = (eventName: string, data: unknown): string =>
 /** Frame one OpenAI Chat Completions SSE chunk: `data: <json>\n\n`. */
 export const frameOpenAiChunk = (data: unknown): string =>
   `data: ${JSON.stringify(data)}\n\n`;
+
+/**
+ * Frame one OpenAI Responses SSE event: `event: <type>\ndata: <json>\n\n`
+ * (spec §16.5). Independent of Chat Completions framing: no `[DONE]`
+ * sentinel — the terminal `response.completed` / `response.incomplete` /
+ * `response.failed` event closes the stream.
+ */
+export const frameResponsesEvent = (eventType: string, data: unknown): string =>
+  `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
 
 /** The OpenAI stream terminator. */
 export const OPENAI_DONE = 'data: [DONE]\n\n';

@@ -7,10 +7,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
+import { NativeMessagesUpstreamError, RoutePlanError, RouteQuoteError } from '@sentropic/llm-mesh';
 import {
   GatewayError,
   mapGatewayError,
+  NATIVE_BILLING_MASKED_MESSAGE,
+  parseNativeErrorDetail,
+  sanitizeNativeErrorMessage,
   toProviderShapedError,
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
@@ -41,12 +44,29 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(a.headers?.['Retry-After']).toBe('5');
   });
 
-  it('maps budget-unavailable to the sanitized pooled 503 on both wires, without Retry-After', () => {
+  it('maps budget-unavailable to its own subsystem 503 on both wires, without Retry-After', () => {
     for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
       const budget = toProviderShapedError(wire, new GatewayError('budget-unavailable', 'pricing row missing'));
-      expect(budget).toEqual(mapGatewayError(wire, 'pooled-account-unavailable'));
+      expect(budget.status).toBe(503);
       expect(budget.headers).toBeUndefined();
+      expect(JSON.stringify(budget.body)).toContain('budget service temporarily unavailable');
       expect(JSON.stringify(budget.body)).not.toContain('pricing');
+      const pooled = toProviderShapedError(wire, new GatewayError('pooled-account-unavailable', 'pool down'));
+      expect(JSON.stringify(pooled.body)).toContain('account service temporarily unavailable');
+      const callerAuth = toProviderShapedError(wire, new GatewayError('caller-auth-unavailable', 'verifier down'));
+      expect(JSON.stringify(callerAuth.body)).toContain('authentication service temporarily unavailable');
+    }
+  });
+
+  it('should freeze headers across the three subsystem 503s', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      for (const kind of ['caller-auth-unavailable', 'pooled-account-unavailable', 'budget-unavailable'] as const) {
+        expect(mapGatewayError(wire, kind).headers).toBeUndefined();
+      }
+      expect(mapGatewayError(wire, 'no-route', undefined, 'known-model').headers)
+        .toEqual({ 'x-should-retry': 'false' });
+      expect(mapGatewayError(wire, 'caller-auth-unavailable', 30).headers)
+        .toEqual({ 'Retry-After': '30' });
     }
   });
 
@@ -237,6 +257,82 @@ describe('provider-shaped error mapper (unit)', () => {
     }
   });
 
+  // R6-MAJ-1 (spec §16.7): an execution-feature refusal carries the cause —
+  // status AND error type AND code AND param on OpenAI wires; the Anthropic
+  // wire keeps its frozen shape (no code/param slot).
+  it.each([
+    ['openai-responses', 'reasoning', 'unsupported_parameter'],
+    ['openai-chat-completions', 'reasoning', 'unsupported_parameter'],
+  ] as const)('names the unmet execution feature on %s (param %s, code %s)', (wire, param, code) => {
+    for (const error of [
+      new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+        undefined, undefined, ['reasoning-controls']),
+      new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet',
+        ['reasoning-controls']),
+    ]) {
+      const mapped = toProviderShapedError(wire, error, 'known-model');
+      expect(mapped.status).toBe(400);
+      expect(mapped.headers).toBeUndefined();
+      const body = mapped.body as { error: { message: string; type: string; code: string; param: string } };
+      expect(body.error.type).toBe('invalid_request_error');
+      expect(body.error.code).toBe(code);
+      expect(body.error.param).toBe(param);
+    }
+  });
+
+  it('keeps the bare 400 for capability-filter refusals, unmapped features and the Anthropic wire', () => {
+    const executionRefusal = new RoutePlanError('Required capabilities are unavailable',
+      'capabilities-unmet', undefined, undefined, ['reasoning-controls']);
+    const anthropic = toProviderShapedError('anthropic-messages', executionRefusal, 'known-model');
+    expect(anthropic.status).toBe(400);
+    const anthropicBody = anthropic.body as {
+      type: string; error: { type: string; message: string };
+    };
+    expect(anthropicBody.type).toBe('error');
+    expect(anthropicBody.error.type).toBe('invalid_request_error');
+    expect(JSON.stringify(anthropic.body)).not.toContain('unsupported_parameter');
+    expect(JSON.stringify(anthropic.body)).not.toContain('reasoning');
+    // A feature with no caller field (derived from continuation artifacts)
+    // and an unknown feature name both fall back to the frozen bare 400.
+    for (const error of [
+      new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+        undefined, undefined, ['native-reasoning-replay']),
+      Object.assign(new Error('forged'), {
+        name: 'RoutePlanError', code: 'capabilities-unmet',
+        unmetExecutionFeatures: ['not-a-feature'],
+      }),
+    ]) {
+      const mapped = toProviderShapedError('openai-responses', error, 'known-model');
+      expect(mapped.status).toBe(400);
+      const body = mapped.body as { error: { type: string; code: string } };
+      expect(body.error.type).toBe('invalid_request_error');
+      expect(body.error.code).toBe('invalid_request');
+      expect(JSON.stringify(mapped.body)).not.toContain('param');
+    }
+  });
+
+  // R7-MIN-3: `strict-schema` has two caller sources (`text.format.strict`
+  // and `tools[i].strict`) but the refusal carries only the feature name, so
+  // the mapper stays on the frozen bare 400 instead of naming one field.
+  it.each([['openai-responses'], ['openai-chat-completions']] as const)(
+    'keeps the bare 400 for strict-schema on %s (dual text/tools source)',
+    (wire) => {
+      for (const error of [
+        new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+          undefined, undefined, ['strict-schema']),
+        new RouteQuoteError('Required capabilities are unavailable', 'capabilities-unmet',
+          ['strict-schema']),
+      ]) {
+        const mapped = toProviderShapedError(wire, error, 'known-model');
+        expect(mapped.status).toBe(400);
+        const body = mapped.body as { error: { type: string; code: string } };
+        expect(body.error.type).toBe('invalid_request_error');
+        expect(body.error.code).toBe('invalid_request');
+        expect(JSON.stringify(mapped.body)).not.toContain('param');
+      }
+    },
+  );
+
   it('keeps the enrollment-action branch ahead of structural recognition', () => {
     const error = {
       name: 'RoutePlanError', code: 'no-route',
@@ -247,6 +343,51 @@ describe('provider-shaped error mapper (unit)', () => {
       status: 503,
       headers: { 'X-Sentropic-Route-Action': 'reauthenticate-cloud-code' },
       body: { error: { type: 'authentication_error', message: 'cloud-code reauthenticate required' } },
+    });
+  });
+
+  it('should surface the mesh diagnostic message in the enrollment-action 503 body', () => {
+    const error = {
+      name: 'RoutePlanError', code: 'no-route',
+      diagnostic: {
+        code: 'reauth-required', transportProviderId: 'codex',
+        message: 'codex credential expired at 2026-10-11T01:25:00.000Z; reauthenticate the codex account to restore routing',
+      },
+    };
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, error, 'known-model');
+      expect(mapped.status).toBe(503);
+      expect(mapped.headers).toEqual({ 'X-Sentropic-Route-Action': 'reauthenticate-codex' });
+      expect(JSON.stringify(mapped.body)).toContain('codex credential expired at 2026-10-11T01:25:00.000Z');
+      expect(JSON.stringify(mapped.body)).toContain('reauthenticate the codex account');
+    }
+  });
+
+  it('should join per-transport diagnostics in the no-route 503 body', () => {
+    const error = {
+      name: 'RoutePlanError', code: 'no-route',
+      diagnostics: [
+        { code: 'reauth-required', transportProviderId: 'codex', message: 'codex credential expired at 2026-10-11T01:25:00.000Z' },
+        { code: 'reenrollment-required', transportProviderId: 'mistral', message: 'mistral-vibe: not enrolled' },
+      ],
+    };
+    const a = toProviderShapedError('anthropic-messages', error, 'claude-opus-5-5');
+    expect(a.status).toBe(503);
+    expect(a.headers).toEqual({ 'x-should-retry': 'false' });
+    expect(a.body).toEqual({
+      type: 'error',
+      error: {
+        type: 'api_error',
+        message: 'No route available for model: "claude-opus-5-5" — codex credential expired at 2026-10-11T01:25:00.000Z; mistral-vibe: not enrolled',
+      },
+    });
+    const o = toProviderShapedError('openai-chat-completions', error, 'mistral-vibe');
+    expect(o.status).toBe(503);
+    expect(o.body).toEqual({
+      error: {
+        message: 'No route available for model: "mistral-vibe" — codex credential expired at 2026-10-11T01:25:00.000Z; mistral-vibe: not enrolled',
+        type: 'server_error', code: 'no_route',
+      },
     });
   });
 
@@ -403,5 +544,213 @@ describe('error mapping through the router (integration)', () => {
     expect(text).not.toContain('no_account');
     expect(text).not.toContain('lease');
     expect(text).not.toContain('reservation');
+  });
+
+  it('restricts public validation relay to trusted native-validation 400 errors and retains fixed mappings', () => {
+    const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
+    const forged = { name: 'NativeMessagesUpstreamError', status: 400, type: 'invalid_request_error', validation: detail };
+    const genericBadRequest = new GatewayError('bad-request', 'secret log',
+      undefined, undefined, undefined, undefined, undefined, detail);
+    const absentType = new NativeMessagesUpstreamError({ status: 400, validation: detail });
+    const longEmoji = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: '😀'.repeat(2048) } });
+    const controlError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: { type: 'invalid_request_error', message: 'invalid\u0000 value' } });
+    const malformedBilling = new NativeMessagesUpstreamError({ status: 400, validation: { type: 'invalid_request_error', message: 'Your credit balance is too low.' } });
+    const upstream500 = new NativeMessagesUpstreamError({ status: 500, type: 'api_error', validation: detail });
+    const authError = new GatewayError('caller-auth-failed', 'internal auth failure',
+      undefined, undefined, undefined, undefined, undefined, detail);
+    const upstream401 = new NativeMessagesUpstreamError({ status: 401, type: 'authentication_error', validation: detail });
+
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const arbMapped = toProviderShapedError(wire, forged);
+      expect(arbMapped.status).toBe(503);
+      expect(JSON.stringify(arbMapped)).not.toContain('provider validation failure');
+
+      const gwMapped = toProviderShapedError(wire, genericBadRequest);
+      expect(gwMapped.status).toBe(400);
+      expect(JSON.stringify(gwMapped)).not.toContain('provider validation failure');
+      expect(JSON.stringify(gwMapped)).toContain('invalid request');
+
+      const absentMapped = toProviderShapedError(wire, absentType);
+      expect(absentMapped.status).toBe(400);
+      expect(JSON.stringify(absentMapped)).not.toContain('provider validation failure');
+      expect(JSON.stringify(absentMapped)).toContain('invalid request');
+
+      const emojiMapped = toProviderShapedError(wire, longEmoji);
+      expect(emojiMapped.status).toBe(400);
+      const emojiMsg = (emojiMapped.body as { error: { message: string } }).error.message;
+      expect(new TextEncoder().encode(emojiMsg).length).toBeLessThanOrEqual(4096);
+
+      const ctrlMapped = toProviderShapedError(wire, controlError);
+      expect(ctrlMapped.status).toBe(400);
+      const ctrlMsg = (ctrlMapped.body as { error: { message: string } }).error.message;
+      expect(ctrlMsg).toBe('invalid value');
+      expect(ctrlMsg).not.toContain('\u0000');
+
+      const billMapped = toProviderShapedError(wire, malformedBilling);
+      expect(billMapped.status).toBe(400);
+      expect(JSON.stringify(billMapped)).toContain(NATIVE_BILLING_MASKED_MESSAGE);
+
+      expect(toProviderShapedError(wire, upstream500).status).toBe(503);
+      expect(toProviderShapedError(wire, authError).status).toBe(401);
+      expect(toProviderShapedError(wire, upstream401).status).toBe(401);
+    }
+  });
+
+  it('should mask billing when a processed marker is forged or parser values are changed on both wires', () => {
+    const billing = 'Your credit balance is too low. Organization account 123.';
+    const parsed = parseNativeErrorDetail(JSON.stringify({ error: {
+      type: 'invalid_request_error', message: 'max_tokens: invalid value',
+    } }), 400);
+    const forged = { type: 'invalid_request_error', message: billing,
+      [Symbol.for('@sentropic/llm-gateway/native-validation-processed')]: true };
+    // Mutation must fail; a changed copy must be processed again.
+    const mutated = Reflect.set(parsed, 'message', billing);
+    const changed = { ...parsed, message: billing };
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      for (const validation of [forged, changed, ...(mutated ? [parsed] : [])]) {
+        const mapped = toProviderShapedError(wire, new NativeMessagesUpstreamError({
+          status: 400, type: 'invalid_request_error', validation,
+        }));
+        expect((mapped.body as { error: { message: string } }).error.message).toBe(NATIVE_BILLING_MASKED_MESSAGE);
+      }
+    }
+    expect(mutated).toBe(false);
+    expect(Reflect.set(parsed, 'type', 'api_error')).toBe(false);
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+
+  it('should apply the bounded policy to unprocessed oversize detail on both wires', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, new NativeMessagesUpstreamError({
+        status: 400, type: 'invalid_request_error', validation: {
+          type: 'invalid_request_error', message: 'x'.repeat(65_537),
+        },
+      }));
+      expect((mapped.body as { error: { message: string } }).error.message).toBe('invalid request');
+    }
+  });
+
+  it('preserves non-billing dated feature error through parser, native error, and wire mappers after truncation', () => {
+    const message = 'billing-' + 'a'.repeat(4200) + '-2026-06-01: invalid value';
+    const validation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message } }), 400);
+    const upstreamError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation });
+    const expected = sanitizeNativeErrorMessage(message);
+
+    const billingMessage = 'billing-' + 'a'.repeat(4200) + '-2026-06-01: invalid value. Your credit balance is too low.';
+    const billingValidation = parseNativeErrorDetail(JSON.stringify({ error: { type: 'invalid_request_error', message: billingMessage } }), 400);
+    const billingError = new NativeMessagesUpstreamError({ status: 400, type: 'invalid_request_error', validation: billingValidation });
+
+    for (const wire of ['anthropic-messages', 'openai-chat-completions'] as const) {
+      const mapped = toProviderShapedError(wire, upstreamError);
+      expect(mapped.status).toBe(400);
+      const publicMsg = (mapped.body as { error: { message: string } }).error.message;
+      expect(publicMsg).toBe(expected);
+      expect(publicMsg).not.toBe(NATIVE_BILLING_MASKED_MESSAGE);
+
+      const billMapped = toProviderShapedError(wire, billingError);
+      expect(billMapped.status).toBe(400);
+      expect((billMapped.body as { error: { message: string } }).error.message).toBe(NATIVE_BILLING_MASKED_MESSAGE);
+    }
+  });
+});
+
+describe('Responses field errors (spec §16.7)', () => {
+  it('renders bad-request with code and a safe field path on the Responses wire', () => {
+    const shaped = mapGatewayError('openai-responses', 'bad-request', undefined, undefined, undefined, {
+      code: 'unsupported_parameter', param: 'tools[0].parameters',
+    });
+    expect(shaped.status).toBe(400);
+    expect(shaped.body).toEqual({ error: {
+      message: 'invalid request',
+      type: 'invalid_request_error',
+      code: 'unsupported_parameter',
+      param: 'tools[0].parameters',
+    } });
+  });
+
+  it('keeps the frozen bad-request shape without code/param on every wire', () => {
+    for (const wire of ['anthropic-messages', 'openai-chat-completions', 'openai-responses'] as const) {
+      expect(mapGatewayError(wire, 'bad-request').body).toEqual(
+        wire === 'anthropic-messages'
+          ? { type: 'error', error: { type: 'invalid_request_error', message: 'invalid request' } }
+          : { error: { message: 'invalid request', type: 'invalid_request_error', code: 'invalid_request' } },
+      );
+    }
+  });
+
+  it('forwards GatewayError code/param for bad-request without leaking the internal detail', () => {
+    const shaped = toProviderShapedError(
+      'openai-responses',
+      new GatewayError('bad-request', 'internal detail never shown', undefined, undefined, 'unsupported_parameter', 'input[2].type'),
+    );
+    expect(shaped.status).toBe(400);
+    expect(shaped.body).toEqual({ error: {
+      message: 'invalid request',
+      type: 'invalid_request_error',
+      code: 'unsupported_parameter',
+      param: 'input[2].type',
+    } });
+  });
+
+  it('sanitizes hostile code/param values back to the frozen shape', () => {
+    const shaped = mapGatewayError('openai-responses', 'bad-request', undefined, undefined, undefined, {
+      code: 'no_such_code', param: 'input[0]; DROP TABLE',
+    });
+    expect(shaped.body).toEqual({ error: {
+      message: 'invalid request', type: 'invalid_request_error', code: 'invalid_request',
+    } });
+  });
+
+  it('maps native-unavailable and structural refusals to safeguards 400 on both wires', () => {
+    for (const error of [
+      new GatewayError('native-unavailable', 'native route unavailable'),
+      new RoutePlanError('native unavailable', 'native-unavailable'),
+      new RouteQuoteError('native unavailable', 'native-unavailable'),
+    ]) {
+      const a = toProviderShapedError('anthropic-messages', error);
+      expect(a.status).toBe(400);
+      expect(a.body).toEqual({
+        type: 'error', error: { type: 'invalid_request_error',
+          message: 'safeguards is not supported by this gateway route; retry without safeguards.' },
+      });
+      const o = toProviderShapedError('openai-chat-completions', error);
+      expect(o.status).toBe(400);
+      expect(o.body).toEqual({
+        error: { type: 'invalid_request_error', code: 'invalid_request',
+          message: 'safeguards requires the Anthropic Messages endpoint.' },
+      });
+    }
+  });
+
+  it('maps typed native validation public detail without leaking internal error message', () => {
+    const detail = { type: 'invalid_request_error', message: 'provider validation failure' };
+    const upstreamError = new NativeMessagesUpstreamError({
+      status: 400,
+      type: 'invalid_request_error',
+      validation: detail,
+    });
+
+    const a = toProviderShapedError('anthropic-messages', upstreamError);
+    expect(a.status).toBe(400);
+    expect(a.body).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'provider validation failure' } });
+
+    const o = toProviderShapedError('openai-chat-completions', upstreamError);
+    expect(o.status).toBe(400);
+    expect(o.body).toEqual({ error: { type: 'invalid_request_error', message: 'provider validation failure', code: 'invalid_request' } });
+  });
+
+  it('never renders code/param on other failure kinds or the Anthropic wire', () => {
+    const route = toProviderShapedError(
+      'openai-responses',
+      new GatewayError('no-route', 'internal', undefined, undefined, 'x', 'y'),
+    );
+    expect(route.status).toBe(503);
+    expect(JSON.stringify(route.body)).not.toContain('"x"');
+    const anthropic = mapGatewayError('anthropic-messages', 'bad-request', undefined, undefined, undefined, {
+      code: 'unsupported_parameter', param: 'input[0]',
+    });
+    expect(anthropic.body).toEqual({
+      type: 'error', error: { type: 'invalid_request_error', message: 'invalid request' },
+    });
   });
 });

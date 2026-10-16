@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.16.0
+
+- Post-#664 version bump strictly greater than npm (0.15.0) and main
+  (0.15.0) for the same native Anthropic relay release train:
+  cluster-mesh 0.16.0, llm-mesh 0.26.0 and llm-gateway 0.20.0. No runtime
+  change from main's 0.15.0 (the live-storage registration export is
+  inherited): keeps the `>=0.22.0 <0.27.0` / `>=0.19.0 <0.21.0` peer
+  ceilings and qualifies the same train.
+- Retain the previously qualified llm-mesh 0.22.x / llm-gateway 0.19.x tuple.
+  Prereleases remain outside the window.
+
+## 0.14.0
+
+- Widen the optional LLM peer ranges to llm-mesh `>=0.22.0 <0.27.0` and
+  llm-gateway `>=0.19.0 <0.21.0` for the native Anthropic relay release train:
+  cluster-mesh 0.14.0, llm-mesh 0.26.0 and llm-gateway 0.20.0. The 0.14.0 /
+  0.26.0 / 0.20.0 tuple is reserved and still unpublished.
+- Retain the previously qualified llm-mesh 0.22.x / llm-gateway 0.19.x tuple.
+  Prereleases remain outside the window; the old 0.21.x / 0.18.x skew is still
+  refused. Existing topology and lazy-load behavior is unchanged beyond the two
+  accepted ranges.
+- Gateway 0.20.0 requires llm-mesh `^0.26.0`; upgrade those providers together
+  and retain one physical llm-mesh shared with the gateway. mcp-auth
+  `>=0.2.1 <0.3.0`, auth-hono `^0.15.0` and jose `^5.10.0` remain unchanged.
+
 ## 0.13.0
 
 - Move the optional peers to the Lot D release tuple: llm-mesh `>=0.22.0 <0.23.0`

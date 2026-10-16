@@ -59,6 +59,19 @@ const collectCompleteArguments = async (
 };
 
 describe('canonical gateway streams', () => {
+  it.each(['anthropic-messages', 'openai-chat-completions'] as const)(
+    'does not turn count/native extension events into canonical generation bytes on %s', async wire => {
+      const extended = async function* (): AsyncGenerator<StreamEvent> {
+        yield { type: 'done', data: { input_tokens: 999, safeguard_results: { future: true },
+          finishReason: 'stop', usage: { inputTokens: 12, outputTokens: 7, totalTokens: 19 } } } as StreamEvent;
+      };
+      let text = '';
+      for await (const frame of encodeGatewayStream(wire, 'requested-model', 'response', extended())) text += frame.raw;
+      expect(text).not.toContain('safeguard_results'); expect(text).not.toContain('999');
+      const frames = parseSse(text);
+      expect(frames.at(-1)?.data === '[DONE]' || frames.at(-1)?.event === 'message_stop').toBe(true);
+      expect(text).toContain(wire === 'anthropic-messages' ? '"output_tokens":7' : '"completion_tokens":7');
+    });
   it('preserves Anthropic block boundaries and terminal ordering', async () => {
     const frames = await collect('anthropic-messages');
 
@@ -121,5 +134,37 @@ describe('canonical gateway streams', () => {
         function: { name: 'Bash', arguments: '{"command":"pwd"}' },
       }] } }],
     });
+  });
+
+  it('delegates the Responses wire to the lifecycle encoder without Chat framing', async () => {
+    let text = '';
+    for await (const frame of encodeGatewayStream(
+      'openai-responses', 'gpt-6.1-sol', 'resp_1', source(), undefined, { createdAt: 1_700_000_000 },
+    )) {
+      text += frame.raw;
+    }
+    const frames = parseSse(text);
+    expect(frames.map((frame) => frame.event)).toEqual([
+      'response.created', 'response.in_progress',
+      'response.output_item.added', 'response.reasoning_summary_part.added',
+      'response.reasoning_summary_text.delta',
+      'response.output_item.added', 'response.content_part.added',
+      'response.output_text.delta',
+      'response.output_item.added', 'response.function_call_arguments.delta',
+      'response.reasoning_summary_text.done', 'response.reasoning_summary_part.done',
+      'response.output_item.done',
+      'response.output_text.done', 'response.content_part.done', 'response.output_item.done',
+      'response.function_call_arguments.done', 'response.output_item.done',
+      'response.completed',
+    ]);
+    const completed = JSON.parse(frames[frames.length - 1]!.data);
+    expect(completed).toMatchObject({
+      type: 'response.completed',
+      response: {
+        id: 'resp_1', status: 'completed', created_at: 1_700_000_000,
+        usage: { input_tokens: 12, output_tokens: 7, total_tokens: 19 },
+      },
+    });
+    expect(text).not.toContain('[DONE]');
   });
 });
