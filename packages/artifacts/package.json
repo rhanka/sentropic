@@ -20,6 +20,30 @@
       "types": "./dist/contracts.d.ts",
       "import": "./dist/contracts.js"
     },
+    "./codecs": {
+      "types": "./dist/codecs.d.ts",
+      "import": "./dist/codecs.js"
+    },
+    "./server/ports": {
+      "types": "./dist/server/ports.d.ts",
+      "import": "./dist/server/ports.js"
+    },
+    "./server/service": {
+      "types": "./dist/server/service.d.ts",
+      "import": "./dist/server/service.js"
+    },
+    "./server/authorization": {
+      "types": "./dist/server/authorization.d.ts",
+      "import": "./dist/server/authorization.js"
+    },
+    "./server/bindings": {
+      "types": "./dist/server/bindings.d.ts",
+      "import": "./dist/server/bindings.js"
+    },
+    "./server/idempotency": {
+      "types": "./dist/server/idempotency.d.ts",
+      "import": "./dist/server/idempotency.js"
+    },
     "./parameters": {
       "types": "./dist/parameters.d.ts",
       "import": "./dist/parameters.js"
