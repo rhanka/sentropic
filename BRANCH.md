@@ -50,6 +50,8 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [ ] `attention` Lot 2 UAT-4 open: no Make target exists for a clean-consumer install of the unpublished `0.3.0` candidate; evidence stands on `pack-mcp-platform` PASS (sha `704bf8c7c5a4c30e6e82cf7d2882f5be3d7c2ea1ba0f4fbf326f06ed45d09b0b`) + `api-extract-mcp-platform` clean + separate-process digest test. Owner judges merge readiness.
+- [ ] `attention` CI: PR #673 checks must show green (`enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests`) before merge; `check-publishable-manifests` is CI-only by design.
 - [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
 - [ ] `attention`: npm published `@sentropic/mcp-platform` is `0.2.0`, source is `0.2.0`, candidate `0.3.0` is strictly above both (verified 2026-10-16)
 - [ ] `attention` BR1a-EX1: bump `packages/connector-host/package.json` range `^0.2.0` -> `^0.3.0` and refresh root `package-lock.json` via `make lock-root`. Reason: minor bump exits the `^0.2.0` range (`0.x` caret pins minor) and desyncs the lockfile, blocking every Make gate (`npm ci` fails). Impact: two files outside Allowed Paths, consumer-only range bump, no source change. Rollback: revert range and lockfile.
@@ -124,7 +126,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
     - [x] UAT (compiler delivered, no Immo claim):
       - [x] Compile two synthetic tools with distinct settings, confirm only intended binding receives each value
       - [x] Reject wrong schema/type, unknown handler, duplicate external name, policy weakening before activation
-      - [x] Run with fetch throwing and assert zero calls, reproduce same compiled result in fresh process
+      - [x] Run with fetch throwing and assert zero calls, reproduce same compiled result in fresh process (same-process holder only; superseded by the Lot 2 separate-process proof)
       - [x] Install packed subpath from clean consumer, report compiler delivered without claiming Immo registry integration
 - [ ] **Lot 2 — Immo 1a review findings fix (`.h2a/reviews/immo_1a_opus.md`: 1 BLOQUANT, 6 MAJEUR, 10 MINEUR)**
   - [x] B1: merge gates field by field (requiresElicitation, requiresHumanConfirmation, requiresPrincipalGate, requiresPolicy); overlay `{}` keeps baseline; requiresPolicy compared
@@ -145,30 +147,30 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] m5: compiled-brand WeakSet on activate (fake configs rejected); generation counter; test
   - [x] m6: scope source of truth documented in `ADOPTION_GUIDE.md` (3-policy consumes effective compiled policy)
   - [x] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform`
-  - [ ] m8: every commit < 150 lines with `BRANCH.md` updated in the same commit
-  - [ ] m9: `BRANCH.md` truthful (this lot; no template rests; no false checks)
-  - [ ] Lot gate:
-    - [ ] `make typecheck-mcp-platform ENV=test-mcp-registry-codec`
-    - [ ] **API tests**
-      - [ ] Existing regression `packages/mcp-platform/tests/manifest.test.ts` (unchanged)
-      - [ ] Existing regression `packages/mcp-platform/tests/authz.test.ts` (unchanged)
-      - [ ] Updated `packages/mcp-platform/tests/tool-configuration.test.ts` (B1, M1-M6, m1-m5, m7 discriminating tests)
-      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec`
-      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/manifest.test.ts ENV=test-mcp-registry-codec`
-      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/authz.test.ts ENV=test-mcp-registry-codec`
-      - [ ] Sub-lot gate: `make test-mcp-platform ENV=test-mcp-registry-codec`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] None (pure library slice, no UI change)
-      - [ ] Sub-lot gate: not applicable, no `ui/tests/**` touched
-    - [ ] **E2E tests**
-      - [ ] None (pure library slice, no app wiring)
-      - [ ] Sub-lot gate: not applicable, no `e2e/tests/**` touched
-    - [ ] Package gates: `make api-extract-mcp-platform ENV=test-mcp-registry-codec`
-    - [ ] Package gates: `make pack-mcp-platform ENV=test-mcp-registry-codec`
+  - [x] m8: every commit < 150 lines with `BRANCH.md` updated in the same commit
+  - [x] m9: `BRANCH.md` truthful (this lot; no template rests; no false checks)
+  - [x] Lot gate:
+    - [x] `make typecheck-mcp-platform ENV=test-mcp-registry-codec`
+    - [x] **API tests**
+      - [x] Existing regression `packages/mcp-platform/tests/manifest.test.ts` (unchanged)
+      - [x] Existing regression `packages/mcp-platform/tests/authz.test.ts` (unchanged)
+      - [x] Updated `packages/mcp-platform/tests/tool-configuration.test.ts` (B1, M1-M6, m1-m5, m7 discriminating tests)
+      - [x] Scoped run: `make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec`
+      - [x] Scoped run: `make test-mcp-platform SCOPE=tests/manifest.test.ts ENV=test-mcp-registry-codec`
+      - [x] Scoped run: `make test-mcp-platform SCOPE=tests/authz.test.ts ENV=test-mcp-registry-codec`
+      - [x] Sub-lot gate: `make test-mcp-platform ENV=test-mcp-registry-codec`
+    - [x] **UI tests (TypeScript only)**
+      - [x] None (pure library slice, no UI change)
+      - [x] Sub-lot gate: not applicable, no `ui/tests/**` touched
+    - [x] **E2E tests**
+      - [x] None (pure library slice, no app wiring)
+      - [x] Sub-lot gate: not applicable, no `e2e/tests/**` touched
+    - [x] Package gates: `make api-extract-mcp-platform ENV=test-mcp-registry-codec`
+    - [x] Package gates: `make pack-mcp-platform ENV=test-mcp-registry-codec`
     - [ ] UAT (compiler delivered, no Immo claim):
-      - [ ] Compile two synthetic tools with distinct settings, confirm only intended binding receives each value
-      - [ ] Reject per-field policy weakening, malformed overlays, forbidden keys (incl. arrays), digest mismatches before activation
-      - [ ] Run with fetch throwing and assert zero calls; reproduce digests in a separate Node process
+      - [x] Compile two synthetic tools with distinct settings, confirm only intended binding receives each value
+      - [x] Reject per-field policy weakening, malformed overlays, forbidden keys (incl. arrays), digest mismatches before activation
+      - [x] Run with fetch throwing and assert zero calls; reproduce digests in a separate Node process
       - [ ] Install packed subpath from clean consumer via Make-driven probe, report compiler delivered without claiming Immo registry integration
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
