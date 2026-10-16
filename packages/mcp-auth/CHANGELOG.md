@@ -3,6 +3,7 @@
 ## 0.2.2
 
 - Stop forwarding `requiredScopes` to the token verifier so a missing scope returns the documented `403 insufficient_scope` instead of `401 invalid_token`. Scope enforcement is now solely the local assertion in `src/core.ts`.
+- Observable contract change (RFC 6750 §3.1): a valid token missing the operation scope now gets `403 insufficient_scope` where `0.2.1` returned `401 invalid_token`. Hosted clients must handle `403` as step-up/insufficient-scope, not as re-authorization; no reconnection is required.
 
 ## 0.2.1
 
