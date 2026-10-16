@@ -132,7 +132,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [ ] B1: regression tests per field (`gates: {}`, requiresPolicy drop, freshness without maxAge, NaN maxAge, acr/amr removal)
   - [ ] M1: typed diagnostics for malformed overlays (`idempotency`/`gates`/`freshness` null, wrong types, non-string arrays); no TypeError
   - [x] M2: normalized-only forbidden-key set (refresh_token, id_token, client_secret, tenant_id, workspace_id, credentials, token); substring families token|secret|password|credential|apikey|privatekey; arrays traversed
-  - [ ] M3: payload digest binds manifestDigest+compatibilityDigest (only `provenance.payloadDigest` excluded); payloadDigest mandatory; handlers digest (id+capabilityRef+configSchema); compiled exposes payloadDigest, approvalRef, providerVersion, platformVersion
+  - [x] M3: payload digest binds manifestDigest+compatibilityDigest (only `provenance.payloadDigest` excluded); payloadDigest mandatory; handlers digest (id+capabilityRef+configSchema); compiled exposes payloadDigest, approvalRef, providerVersion, platformVersion
   - [ ] M4: consumer-supplied `compatibilityDigest` compiler input, compared to snapshot; scope documented (public schemas/result codec for 1b)
   - [ ] M5: strict canonical-json aligned with `sentropic-json-v1` (reject undefined/non-finite/non-plain/cycles); reject Infinity in validator; golden hex digests
   - [ ] M6: one discriminating test per diagnostic code (values otherwise schema-valid, assert `code`+`path`); strengthening-overlay accepted; requiredScopes exposed; nested arrays; null overlays
