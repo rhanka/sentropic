@@ -209,7 +209,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] R3-M1: restore `token` in `FORBIDDEN_CONTENT_SUBSTRINGS` with test rejecting `authToken`/`githubToken`/`sessionToken`/`apiToken` and accepting `maxTokens`
   - [ ] R3-M2: apply spec-v3 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v3)
   - [x] R3-m1: bound scheme/basic guards with both-direction tests
-  - [ ] R3-m2: discriminating tests for overlay/provenance/schema/identity controls
+  - [x] R3-m2: discriminating tests for overlay/provenance/schema/identity controls
   - [ ] R3-m3: full mutation evidence with exact diff and failing output
   - [ ] R3-m4: clean-consumer probe compares frozen digests and traps fetch
   - [ ] R3-m5: platform version tied to `package.json` by test with strict-equality decision
