@@ -254,4 +254,114 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     }
   });
 
+  it('rejects unknown keys and invalid values', () => {
+    const unknownKey = buildSnapshot();
+    unknownKey.bindings[0] = { ...unknownKey.bindings[0], values: { maxResults: 20, extra: true } };
+    const unknownResult = compileToolConfiguration({ snapshot: unknownKey, manifest, handlers });
+    expect(unknownResult.ok).toBe(false);
+    if (!unknownResult.ok) {
+      expect(unknownResult.diagnostics.some((entry) => entry.code === 'unknown_config_key')).toBe(true);
+    }
+    const outOfBounds = buildSnapshot();
+    outOfBounds.bindings[0] = { ...outOfBounds.bindings[0], values: { maxResults: 5000 } };
+    const boundsResult = compileToolConfiguration({ snapshot: outOfBounds, manifest, handlers });
+    expect(boundsResult.ok).toBe(false);
+    if (!boundsResult.ok) {
+      expect(boundsResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
+    }
+    const wrongType = buildSnapshot();
+    wrongType.bindings[1] = { ...wrongType.bindings[1], values: { maxChars: 'many' } };
+    const typeResult = compileToolConfiguration({ snapshot: wrongType, manifest, handlers });
+    expect(typeResult.ok).toBe(false);
+    if (!typeResult.ok) {
+      expect(typeResult.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
+    }
+  });
+
+  it('rejects digest mismatches', () => {
+    const manifestMismatch = { ...buildSnapshot(), manifestDigest: '0'.repeat(64) };
+    const manifestResult = compileToolConfiguration({ snapshot: manifestMismatch, manifest, handlers });
+    expect(manifestResult.ok).toBe(false);
+    if (!manifestResult.ok) {
+      expect(
+        manifestResult.diagnostics.some((entry) => entry.code === 'manifest_digest_mismatch'),
+      ).toBe(true);
+    }
+    const compatMismatch = { ...buildSnapshot(), compatibilityDigest: '1'.repeat(64) };
+    const compatResult = compileToolConfiguration({ snapshot: compatMismatch, manifest, handlers });
+    expect(compatResult.ok).toBe(false);
+    if (!compatResult.ok) {
+      expect(
+        compatResult.diagnostics.some((entry) => entry.code === 'compatibility_digest_mismatch'),
+      ).toBe(true);
+    }
+  });
+
+  it('rejects credentials, bearers, user data and executable values', () => {
+    const credential = buildSnapshot();
+    credential.bindings[0] = { ...credential.bindings[0], values: { maxResults: 20, api_key: 'secret' } };
+    expect(compileToolConfiguration({ snapshot: credential, manifest, handlers }).ok).toBe(false);
+    const bearer = buildSnapshot();
+    bearer.bindings[0] = { ...bearer.bindings[0], values: { maxResults: 20, mode: 'Bearer abc' } };
+    const bearerResult = compileToolConfiguration({ snapshot: bearer, manifest, handlers });
+    expect(bearerResult.ok).toBe(false);
+    const owner = buildSnapshot();
+    owner.bindings[0] = { ...owner.bindings[0], values: { maxResults: 20, ownerSub: 'user-1' } };
+    expect(compileToolConfiguration({ snapshot: owner, manifest, handlers }).ok).toBe(false);
+    const executable = buildSnapshot();
+    executable.bindings[0] = { ...executable.bindings[0], values: { maxResults: 20, mode: 'https://example.test/x' } };
+    expect(compileToolConfiguration({ snapshot: executable, manifest, handlers }).ok).toBe(false);
+  });
+
+  it('retains the active generation when a candidate is rejected', () => {
+    const store = new ToolConfigurationStore();
+    const valid = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers });
+    expect(store.compileAndActivate({ snapshot: buildSnapshot(), manifest, handlers }).ok).toBe(true);
+    expect(valid.ok).toBe(true);
+    const before = store.getActive();
+    expect(before).not.toBeNull();
+    const invalidSnapshot = buildSnapshot();
+    invalidSnapshot.bindings[0] = { ...invalidSnapshot.bindings[0], handlerId: 'missing' };
+    const rejected = store.compileAndActivate({ snapshot: invalidSnapshot, manifest, handlers });
+    expect(rejected.ok).toBe(false);
+    expect(store.getActive()).toBe(before);
+  });
+
+  it('fails a cold start without a valid embedded configuration', () => {
+    const store = new ToolConfigurationStore();
+    const invalidSnapshot = buildSnapshot();
+    invalidSnapshot.bindings = [];
+    expect(() => store.coldStart({ snapshot: invalidSnapshot, manifest, handlers })).toThrow();
+    expect(store.getActive()).toBeNull();
+  });
+
+  it('performs zero configuration I/O and reloads identically in a fresh holder', async () => {
+    const previousFetch = (globalThis as Record<string, unknown>)['fetch'];
+    let calls = 0;
+    (globalThis as Record<string, unknown>)['fetch'] = async () => {
+      calls += 1;
+      throw new Error('network must not be used');
+    };
+    try {
+      const snapshot = buildSnapshot();
+      const first = compileToolConfiguration({ snapshot, manifest, handlers });
+      expect(first.ok).toBe(true);
+      const freshStore = new ToolConfigurationStore();
+      const activated = freshStore.compileAndActivate({
+        snapshot: structuredClone(snapshot),
+        manifest: structuredClone(manifest),
+        handlers,
+      });
+      expect(activated.ok).toBe(true);
+      if (!first.ok || !activated.ok) return;
+      expect(canonicalJson(activated.config)).toBe(canonicalJson(first.config));
+      expect(calls).toBe(0);
+    } finally {
+      if (previousFetch === undefined) {
+        delete (globalThis as Record<string, unknown>)['fetch'];
+      } else {
+        (globalThis as Record<string, unknown>)['fetch'] = previousFetch;
+      }
+    }
+  });
 });
