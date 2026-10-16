@@ -186,8 +186,9 @@ export function readPackedManifest(tgz) {
 // ---------------------------------------------------------------- registry
 const registryPath = (name) => (name.startsWith('@') ? `@${encodeURIComponent(name.slice(1))}` : encodeURIComponent(name));
 
-// Registry visibility budget after a publication (CDN propagation measured at 110-170 s): 18 x 10 s.
-export const REGISTRY_WAIT = { attempts: 18, delaySeconds: 10 };
+// Registry visibility budget after a publication (CDN propagation measured at 110-170 s,
+// run 38933799163 needed > 3.5 min): 36 x 10 s.
+export const REGISTRY_WAIT = { attempts: 36, delaySeconds: 10 };
 export function waitBudget({ attempts, delaySeconds } = {}) {
   const budget = { attempts: Number(attempts ?? REGISTRY_WAIT.attempts), delaySeconds: Number(delaySeconds ?? REGISTRY_WAIT.delaySeconds) };
   if (!Number.isInteger(budget.attempts) || budget.attempts < 1 || !Number.isFinite(budget.delaySeconds) || budget.delaySeconds < 0) {

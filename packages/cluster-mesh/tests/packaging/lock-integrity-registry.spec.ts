@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -88,5 +88,12 @@ describe('train lock integrity against the registry', () => {
     const result = await run('@sentropic/cluster-mesh');
     expect(result.status).toBe(2);
     expect(requests).toHaveLength(0);
+  });
+
+  it('should configure a registry visibility budget of at least six minutes (run 38933799163)', () => {
+    const result = spawnSync(process.execPath, [join(HERE, 'check-lock-integrity.mjs'), 'budget'], { encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    const budget = JSON.parse(String(result.stdout)) as { attempts: number; delayMs: number };
+    expect(budget.attempts * budget.delayMs).toBeGreaterThanOrEqual(360_000);
   });
 });

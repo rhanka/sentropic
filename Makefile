@@ -672,8 +672,8 @@ REPORT_DIR ?= tmp/ci-manifest-guard/qualification
 QUALIFY_MODE ?=
 QUALIFY_HEAD_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 QUALIFY_REGISTRY := https://registry.npmjs.org
-# Post-publication registry visibility budget (cache-bypassing lookups, install retries): 18 x 10 s (BRCIW-EX1).
-QUALIFY_WAIT_ATTEMPTS ?= 18
+# Post-publication registry visibility budget (cache-bypassing lookups, install retries): 36 x 10 s (BRCIW-EX1, BR-MLF-EX1; run 38933799163 needed > 3.5 min).
+QUALIFY_WAIT_ATTEMPTS ?= 36
 QUALIFY_WAIT_SECONDS ?= 10
 # Optional (PKG post-publication only): the SLSA provenance source commit must equal this SHA (CI: $GITHUB_SHA).
 QUALIFY_PROVENANCE_SHA ?=
@@ -898,8 +898,8 @@ package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact 
 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; mkdir -p /artifacts/qualification; cp -R tmp/llm-gateway-qualification/. /artifacts/qualification/; gateway="$$(node -p "require(\"./packages/llm-gateway/package.json\").version")"; cmp "/artifacts/sentropic-llm-gateway-$$gateway.tgz" /artifacts/qualification/candidate.tgz'
 
-# Registry visibility budget (CDN propagation measured at 110-170 s): cache-bypassing reads, 18 x 10 s (BRCIW-EX1).
-LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 18
+# Registry visibility budget (CDN propagation measured at 110-170 s, run 38933799163 needed > 3.5 min): cache-bypassing reads, 36 x 10 s (BRCIW-EX1, BR-MLF-EX1).
+LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 36
 LLM_MESH_REGISTRY_WAIT_SECONDS ?= 10
 
 .PHONY: wait-llm-gateway-mesh-dependency

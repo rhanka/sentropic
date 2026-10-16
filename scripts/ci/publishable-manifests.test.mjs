@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import zlib from 'node:zlib';
-import { checkManifest, classifyDependencyValue, readPackedManifest, FORBIDDEN_SPEC } from './publishable-manifests.mjs';
+import { checkManifest, classifyDependencyValue, readPackedManifest, FORBIDDEN_SPEC, REGISTRY_WAIT, waitBudget } from './publishable-manifests.mjs';
 
 const REJECTED = [
   'file:../oauth-verify', 'FILE:../x', 'link:../x', 'portal:../x', 'workspace:*', 'workspace:^0.1.0',
@@ -121,4 +121,10 @@ test('rejects malformed archives and corrupted headers', () => {
   const raw = zlib.gunzipSync(tarball([{ name: 'package/package.json', body: manifest }]));
   raw[10] ^= 0xff;
   assert.throws(() => readPackedManifest(zlib.gzipSync(raw)), /checksum/);
+});
+
+test('registry visibility wait budget defaults to at least six minutes (run 38933799163)', () => {
+  assert.deepEqual(waitBudget(), REGISTRY_WAIT);
+  assert.ok(REGISTRY_WAIT.attempts * REGISTRY_WAIT.delaySeconds >= 360,
+    `budget ${REGISTRY_WAIT.attempts} x ${REGISTRY_WAIT.delaySeconds}s is below 360 s`);
 });

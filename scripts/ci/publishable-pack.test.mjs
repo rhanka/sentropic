@@ -321,8 +321,8 @@ test('fresh registry reads bypass the CDN: no-cache headers and a unique cache-b
   assert.notEqual(calls[0].url, calls[1].url, 'each fresh read has its own cache key');
 });
 
-test('wait: default budget is 18 x 10 s; polls fresh lookups until visible, fails after the budget', async () => {
-  assert.deepEqual(waitBudget(), { attempts: 18, delaySeconds: 10 });
+test('wait: default budget is 36 x 10 s; polls fresh lookups until visible, fails after the budget', async () => {
+  assert.deepEqual(waitBudget(), { attempts: 36, delaySeconds: 10 });
   assert.throws(() => waitBudget({ attempts: 0 }), /invalid registry wait budget/);
   const { fetchImpl, calls } = sequenceFetch([null, { versions: {} }, { versions: { '0.22.0': {} } }]);
   const out = sink();

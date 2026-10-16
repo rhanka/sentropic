@@ -17,8 +17,9 @@ const REGISTRY = 'https://registry.npmjs.org';
 const TRAIN = ['@sentropic/llm-mesh', '@sentropic/llm-gateway'];
 const CANDIDATE = '@sentropic/cluster-mesh';
 // Lookup base and retry budget; overridable for the unit tests only (lock `resolved` always names REGISTRY).
+// 36 x 10 s (~6 min): npm warned "may take a few minutes" and run 38933799163 needed > 3.5 min.
 const LOOKUP_REGISTRY = process.env.CLUSTER_MESH_REGISTRY_LOOKUP_URL ?? REGISTRY;
-const RETRIES = Number(process.env.CLUSTER_MESH_REGISTRY_RETRIES ?? 18);
+const RETRIES = Number(process.env.CLUSTER_MESH_REGISTRY_RETRIES ?? 36);
 const DELAY_MS = Number(process.env.CLUSTER_MESH_REGISTRY_DELAY_MS ?? 10000);
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -117,14 +118,20 @@ async function registry(committedLock, required) {
   }
 }
 
+// Instant, side-effect-free: the effective retry budget (for the budget-floor test).
+function budget() {
+  console.log(JSON.stringify({ attempts: RETRIES, delayMs: DELAY_MS }));
+}
+
 const [command, ...args] = process.argv.slice(2);
 if (command === 'refresh' && args.length === 4) refresh(...args);
 else if (command === 'siblings' && args.length === 2) siblings(...args);
 else if (command === 'registry' && args.length >= 1 && args.slice(1).every((name) => TRAIN.includes(name))) {
   await registry(args[0], args.slice(1));
-} else {
+} else if (command === 'budget' && args.length === 0) budget();
+else {
   console.error('usage: check-lock-integrity.mjs refresh <working-lock> <committed-lock> <package.json> <siblings-dir>'
-    + ` | siblings <committed-lock> <siblings-dir> | registry <committed-lock> [required: ${TRAIN.join(' ')}]`);
+    + ` | siblings <committed-lock> <siblings-dir> | registry <committed-lock> [required: ${TRAIN.join(' ')}] | budget`);
   process.exit(2);
 }
 process.exit(errors === 0 ? 0 : 1);
