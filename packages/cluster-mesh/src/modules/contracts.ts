@@ -13,6 +13,8 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'gateway/auth-hono',
   'mcp-platform/registry',
   'mcp-platform/entry',
+  'mcp-platform/bridge',
+  'mcp-platform/hono',
 ] as const;
 
 /** Catalogued capabilities not delivered by this release; always gated `source_unavailable`. */
