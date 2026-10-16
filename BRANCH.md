@@ -76,12 +76,12 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] Confirm command style: make ... ENV=<env> with ENV last.
   - [x] Confirm scope and guardrails; record CISEAT-EX3 as reserved only.
 - [ ] **Lot L0a — Five-CLI envelope and source contract, synthetic first**
-  - [ ] Define SeatBundleV1 in packages/llm-mesh/src/enrollment/seat-bundle.ts.
-  - [ ] Export contract through packages/llm-mesh/src/node/index.ts, no browser export.
-  - [ ] Bump packages/llm-mesh/package.json 0.25.0 to 0.25.1 and match package-lock.json.
+  - [x] Define SeatBundleV1 in packages/llm-mesh/src/enrollment/seat-bundle.ts.
+  - [x] Export contract through packages/llm-mesh/src/node/index.ts, no browser export.
+  - [x] Bump packages/llm-mesh/package.json 0.25.0 to 0.25.1 and match package-lock.json.
   - [x] Add packages/llm-mesh/tests/enrollment/seat-bundle.test.ts covering five schemas, size, owner, client, unknown and nested refresh fields, rollback, authority escalation.
-  - [ ] Add spec/SPEC_EVOL_CI_SEATS.md with frozen interfaces and supported/unverified table.
-  - [ ] Document contract in packages/llm-mesh/README.md.
+  - [x] Add spec/SPEC_EVOL_CI_SEATS.md with frozen interfaces and supported/unverified table.
+  - [x] Document contract in packages/llm-mesh/README.md.
   - [ ] UAT credential-free walkthrough:
     - [ ] Select five synthetic profile labels, one per CLI.
     - [ ] Inspect static validation errors for mismatched owner, client and oversize bundle.
