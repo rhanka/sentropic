@@ -45,3 +45,33 @@ export function createCryptoUuid(): UuidPort {
     },
   };
 }
+
+export interface KeyMutex {
+  runSerialized<T>(key: string, fn: () => Promise<T>): Promise<T>;
+}
+
+/**
+ * In-process per-key mutex: concurrent callers for one key serialize so
+ * exactly one creator wins (single-process scope; multi-process fencing
+ * belongs to the L-5b Postgres port).
+ */
+export function createKeyMutex(): KeyMutex {
+  const locks = new Map<string, Promise<void>>();
+  return {
+    async runSerialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
+      const previous = locks.get(key) ?? Promise.resolve();
+      let release!: () => void;
+      const current = new Promise<void>((res) => {
+        release = res;
+      });
+      locks.set(key, current);
+      await previous;
+      try {
+        return await fn();
+      } finally {
+        release();
+        if (locks.get(key) === current) locks.delete(key);
+      }
+    },
+  };
+}

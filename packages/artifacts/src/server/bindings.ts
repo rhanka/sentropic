@@ -10,7 +10,13 @@
  * ensures serialize on a per-key singleflight so exactly one creation wins.
  * Persistence goes through the injected KvPort only (ports.ts).
  */
-import { createCryptoUuid, createMemoryKv, type KvPort, type UuidPort } from './ports.js';
+import {
+  createCryptoUuid,
+  createKeyMutex,
+  createMemoryKv,
+  type KvPort,
+  type UuidPort,
+} from './ports.js';
 
 export interface BindingInput {
   ownerId: string;
@@ -49,29 +55,12 @@ export function createMemoryBindingKv(): KvPort {
 
 /** Create a binding service over an injected KvPort (no driver imports). */
 export function createBindingService(kv: KvPort, uuid: UuidPort = createCryptoUuid()): BindingService {
-  const locks = new Map<string, Promise<void>>();
+  const mutex = createKeyMutex();
 
   async function read(key: string): Promise<StoredBinding | undefined> {
     const raw = await kv.get(key);
     if (raw === undefined) return undefined;
     return JSON.parse(raw) as StoredBinding;
-  }
-
-  /** Serialize creators per key so exactly one ensure reports created=true. */
-  async function withKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const previous = locks.get(key) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((res) => {
-      release = res;
-    });
-    locks.set(key, current);
-    await previous;
-    try {
-      return await fn();
-    } finally {
-      release();
-      if (locks.get(key) === current) locks.delete(key);
-    }
   }
 
   async function ensureOnce(input: BindingInput): Promise<BindingResult> {
@@ -100,7 +89,9 @@ export function createBindingService(kv: KvPort, uuid: UuidPort = createCryptoUu
 
   return {
     ensure(input: BindingInput): Promise<BindingResult> {
-      return withKeyLock(bindingKey(input.ownerId, input.bindingName), () => ensureOnce(input));
+      return mutex.runSerialized(bindingKey(input.ownerId, input.bindingName), () =>
+        ensureOnce(input),
+      );
     },
     async find(lookup: BindingLookup): Promise<string | undefined> {
       const stored = await read(bindingKey(lookup.ownerId, lookup.bindingName));
