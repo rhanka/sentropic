@@ -63,6 +63,7 @@ export type SessionContentErrorCode =
   | 'epoch_unavailable'
   | 'epoch_stale'
   | 'epoch_disabled'
+  | 'epoch_mismatch'
   | 'purge_pending'
   | 'not_found'
   | 'cross_prefix_refused'
@@ -387,6 +388,29 @@ export class SessionContentService {
 
   private async checkEpoch(): Promise<ContentAuthorityEpoch> {
     return this.epochs.readCurrent(this.issuer);
+  }
+
+  /** M1: every reserve, publish and read segment requires current epoch =
+   * pinned epoch with an active namespace. Unavailable or stale authority
+   * denies; old-epoch rows are purge-only and never aliased to new grants. */
+  private async requireEpochScope(
+    client: DbClient,
+    pinnedEpoch: string,
+    namespaceId: string,
+  ): Promise<ContentAuthorityEpoch> {
+    const current = await this.checkEpoch();
+    if (pinnedEpoch !== current.epoch) {
+      throw new SessionContentError('epoch_mismatch', 'pinned epoch does not match the current authority epoch');
+    }
+    const [namespace] = await client
+      .select({ status: sessionContentNamespaces.status })
+      .from(sessionContentNamespaces)
+      .where(eq(sessionContentNamespaces.namespaceId, namespaceId))
+      .limit(1);
+    if (!namespace || namespace.status !== 'active') {
+      throw new SessionContentError('epoch_mismatch', 'object namespace is not active');
+    }
+    return current;
   }
 
   private async checkMembership(
@@ -815,6 +839,7 @@ export class SessionContentService {
         ownerId: ctx.ownerId,
         sourceGeneration: input.sourceGeneration,
         sourceTrustVersion: input.sourceTrustVersion,
+        authorityEpoch: epoch.epoch,
         nativeBoundarySeq: input.nativeStartSeq,
         channels: project.channels,
         retentionSnapshot: project.retentionByChannel,
@@ -1118,6 +1143,7 @@ export class SessionContentService {
       if (grant.state !== 'active') {
         throw new SessionContentError('grant_revoked', 'grant is not active');
       }
+      await this.requireEpochScope(tx, grant.authorityEpoch, namespaceId);
       const [duplicate] = await tx
         .select()
         .from(sessionContentAttempts)
@@ -1158,6 +1184,7 @@ export class SessionContentService {
       await tx.insert(sessionContentReservations).values({
         reservationId,
         namespaceId,
+        authorityEpoch: epoch.epoch,
         sessionId,
         channel,
         bytesRaw: bytes.raw,
@@ -1233,9 +1260,19 @@ export class SessionContentService {
     const expiresAt =
       retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
     await db.transaction(async (tx) => {
+      const [freshGrant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, reservation.reservation.sessionId))
+        .limit(1);
+      if (!freshGrant || freshGrant.state !== 'active') {
+        throw new SessionContentError('grant_revoked', 'grant is not active; late publish refused');
+      }
+      await this.requireEpochScope(tx, freshGrant.authorityEpoch, reservation.reservation.namespaceId);
       await tx.insert(sessionContentObjects).values({
         objectId,
         namespaceId: reservation.reservation.namespaceId,
+        authorityEpoch: freshGrant.authorityEpoch,
         bindingId: reservation.grant.bindingId,
         sessionId: reservation.reservation.sessionId,
         channel: reservation.reservation.channel,
@@ -1309,6 +1346,11 @@ export class SessionContentService {
       if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
       }
+      await this.requireEpochScope(
+        tx,
+        grant.authorityEpoch,
+        namespaceIdFor(ctx.tenantId, ctx.ownerId, grant.authorityEpoch),
+      );
       if (grant.state === 'active') {
         // Live read; no history authorization needed.
       } else if (grant.state === 'closed') {
