@@ -62,6 +62,7 @@ Qualify mcp-auth for Immo application scopes without source changes.
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- Record: `e2e/tests/09-chat-org-update-tool.spec.ts` failed once in CI `38833573638` group-d (line 166, LLM field-value assertion) and passed in rerun `38836550713` with identical e2e-relevant code; `flaky accepted`, sign-off still required before any merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -108,7 +109,7 @@ Qualify mcp-auth for Immo application scopes without source changes.
       - [x] New: `packages/mcp-auth/tests/application-scopes.test.ts`
       - [x] Scoped runs while evolving tests: `make test-mcp-auth SCOPE=tests/application-scopes.test.ts ENV=test-mcp-scope-qualification`
       - [x] Sub-lot gate: `make test-mcp-auth ENV=test-mcp-scope-qualification`
-      - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-mcp-scope-qualification` and document status/signature in `BRANCH.md`
+      - [x] AI flaky tests run (non-blocking only under acceptance rule): see record in `## AI Flaky tests`
     - [x] **UI tests (TypeScript only)**
       - [x] None: pure library slice, no UI change
       - [x] Sub-lot gate: `make test-ui ENV=test` skipped, no UI surface
@@ -133,6 +134,6 @@ Qualify mcp-auth for Immo application scopes without source changes.
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [x] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
