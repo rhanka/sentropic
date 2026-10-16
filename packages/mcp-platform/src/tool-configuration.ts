@@ -217,8 +217,10 @@ export function computePayloadDigest(snapshot: ApprovedToolSnapshot): string {
 // ---------------------------------------------------------------------------
 
 const HANDLER_ID_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
-const EXECUTABLE_VALUE_PATTERN = /^(file|https?|data|ftp|ws):/i;
+const EXECUTABLE_VALUE_PATTERN = /^(file|https?|ftp|ws|wss|javascript|data|node):/i;
 const SQL_LEADER_PATTERN = /^(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC(UTE)?)\b/i;
+const SQL_STRUCTURE_PATTERN = /(;|--|\/\*|\b(FROM|WHERE|INTO|VALUES|TABLE|JOIN|UNION)\b)/i;
+const JWT_VALUE_PATTERN = /^eyJ[A-Za-z0-9_-]*\./;
 const FORBIDDEN_VALUE_KEYS = new Set([
   'sql',
   'query',
@@ -230,32 +232,50 @@ const FORBIDDEN_VALUE_KEYS = new Set([
   'script',
   'command',
 ]);
+// Normalized-only forbidden keys: keys are matched after lowercasing and
+// stripping every non-letter, so underscore spellings (refresh_token,
+// client_secret, ...) can never match and only normalized forms are listed.
 const FORBIDDEN_CONTENT_KEYS = new Set([
   'password',
   'passwd',
   'secret',
   'bearer',
-  'access_token',
   'accesstoken',
-  'refresh_token',
-  'id_token',
-  'private_key',
+  'refreshtoken',
+  'idtoken',
   'privatekey',
-  'client_secret',
-  'api_key',
+  'clientsecret',
   'apikey',
   'authorization',
   'credential',
+  'credentials',
   'ownersub',
   'tenant',
+  'tenantid',
   'tenantref',
   'workspace',
+  'workspaceid',
   'workspaceref',
   'sub',
   'email',
   'userid',
   'serviceidentity',
+  'jwt',
+  'token',
 ]);
+// Substring families: any normalized key containing one of these fragments is
+// forbidden (catches prefixed/suffixed token, secret, password, credential,
+// apikey and privatekey spellings).
+const FORBIDDEN_CONTENT_SUBSTRINGS = [
+  'token',
+  'secret',
+  'password',
+  'passwd',
+  'credential',
+  'apikey',
+  'privatekey',
+  'bearer',
+];
 const REDACTION_ORDER = ['none', 'low', 'moderate', 'high', 'secret'] as const;
 
 const OVERLAY_KEYS = new Set([
@@ -356,25 +376,47 @@ function checkForbiddenContent(
 ): void {
   for (const [key, entry] of Object.entries(values)) {
     const lowered = key.toLowerCase().replace(/[^a-z]/g, '');
-    if (FORBIDDEN_CONTENT_KEYS.has(lowered)) {
+    if (
+      FORBIDDEN_CONTENT_KEYS.has(lowered) ||
+      FORBIDDEN_CONTENT_SUBSTRINGS.some((fragment) => lowered.includes(fragment))
+    ) {
       diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `forbidden key "${key}"`);
     }
     if (FORBIDDEN_VALUE_KEYS.has(lowered)) {
       diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `executable/upstream key "${key}" is not allowed`);
     }
-    if (typeof entry === 'string') {
-      const trimmed = entry.trim();
-      if (
-        trimmed.startsWith('Bearer ') ||
-        trimmed.startsWith('Basic ') ||
-        EXECUTABLE_VALUE_PATTERN.test(trimmed) ||
-        SQL_LEADER_PATTERN.test(trimmed)
-      ) {
-        diag(diagnostics, 'forbidden_content', `${basePath}.${key}`, `forbidden string value for "${key}"`);
-      }
-    } else if (isRecord(entry)) {
-      checkForbiddenContent(diagnostics, `${basePath}.${key}`, entry);
+    checkForbiddenValue(diagnostics, `${basePath}.${key}`, entry);
+  }
+}
+
+function checkForbiddenValue(
+  diagnostics: ToolConfigurationDiagnostic[],
+  path: string,
+  entry: unknown,
+): void {
+  if (typeof entry === 'string') {
+    const trimmed = entry.trim();
+    // A bare SQL leader word is a legitimate label ("Select a city"); only a
+    // leader combined with SQL structure (statement terminator, comment or a
+    // FROM/WHERE/INTO/VALUES/TABLE/JOIN/UNION clause) is treated as SQL.
+    if (
+      trimmed.startsWith('Bearer ') ||
+      trimmed.startsWith('Basic ') ||
+      trimmed.startsWith('//') ||
+      EXECUTABLE_VALUE_PATTERN.test(trimmed) ||
+      JWT_VALUE_PATTERN.test(trimmed) ||
+      (SQL_LEADER_PATTERN.test(trimmed) && SQL_STRUCTURE_PATTERN.test(trimmed))
+    ) {
+      diag(diagnostics, 'forbidden_content', path, `forbidden string value at "${path}"`);
     }
+    return;
+  }
+  if (Array.isArray(entry)) {
+    entry.forEach((item, index) => checkForbiddenValue(diagnostics, `${path}[${index}]`, item));
+    return;
+  }
+  if (isRecord(entry)) {
+    checkForbiddenContent(diagnostics, path, entry);
   }
 }
 
