@@ -40,6 +40,10 @@
     "./registry/entry": {
       "types": "./dist/registry-entry.d.ts",
       "import": "./dist/registry-entry.js"
+    },
+    "./transport/bridge": {
+      "types": "./dist/transport/bridge.d.ts",
+      "import": "./dist/transport/bridge.js"
     }
   },
   "typesVersions": {
