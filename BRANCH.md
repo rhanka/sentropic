@@ -1,7 +1,7 @@
 # Feature: immo-861-mcp-registry (Sentropic consolidation: 1a + 2-IdP + 2a)
 
 ## Objective
-Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-exchange (2-IdP) and origin/feat/cluster-mesh-token-exchange (2a) onto ONE branch with linear history, then execute the open findings and the next Sentropic lots in spec order on this single branch with ONE PR and ONE final CI cycle.
+Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token-exchange (L-2IdP) and origin/feat/cluster-mesh-token-exchange (L-2a) onto ONE branch with linear history, then execute the open findings and the next Sentropic lots in spec order on this single branch with ONE PR and ONE final CI cycle. Governing spec: spec-v7 (`26a59bbd03d4e125dc5e5d9cfee9fa81c484d8e06dfa0d4b5432700895e2b79a`; spec-v8 in progress, v7 applies until it lands). Sentropic scope runs through L-5e; Radar lots are i-cond owned.
 
 ## Scope / Guardrails
 - Scope limited to Sentropic-side immo #861 lots: carried 1a/2-IdP/2a, then 1b-core, 3-policy/4a, 2b-MCP Sentropic support, 4b-leaves (incl. 1b-facade), 5a pages contracts.
@@ -60,6 +60,9 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
 - `attention` I861-F5 (pending, owner: conductor): close #673, #674, #676 with pointer comments after the ONE draft PR opens. Not done yet.
 - `attention` I861-F6 (carried, owner: planning conductor): V4-REV1 independent spec review of spec-v6 remains open; not approval of this branch.
 - `acknowledge` CMT-GAP1-CLOSED: carried from 2a fix (spec-v3 sha recorded).
+- `acknowledge` V7-M1 (applied): llm-gateway 0.19.6 + auth-ui 0.7.5 bumps kept (auth-hono `|| ^0.16.0` widening; removal would break installs). cluster-mesh optional peers widened to the #662 union (llm-mesh `>=0.22.0 <0.27.0`, llm-gateway `>=0.19.0 <0.21.0`; lower bounds unchanged). Strict published-tuple install test added (`tests/packaging/tuple-strict.spec.ts`, real proof in CI lazy-package with sibling receipts). Minimal parser never sees `||` (npm-only range); no parser change.
+- `acknowledge` V7-m5 (applied per spec-v7 §11): L-1b-core commits kept as uncheckpointed WIP, close only after the L-1a checkpoint; no 0.4.0 bump; scope extended through L-5e.
+- `attention` V7-m3 (applied): all runs use `ENV=test-immo-861-mcp-registry` (no other test env on this branch).
 - `blocked` none.
 
 ## AI Flaky tests
@@ -155,7 +158,7 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
   - [ ] Consolidation satisfied the post-#674 rebase structurally (2-IdP commits precede 2a commits); version re-check 0.18.0 above npm/main done in Lot 0.
   - [ ] Re-run package gates on the consolidated head; real auth-hono/Radar acceptance stays in 2b.
   - [ ] Lot gate:
-    - [x] `make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh pack-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> 60 passed / 5 skipped files, 515 passed / 34 skipped tests, pack PASS 0.18.0 (consolidated head)
+    - [x] `make typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh pack-cluster-mesh API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> 60 passed / 6 skipped files, 520 passed / 37 skipped tests, pack PASS 0.18.0 (after V7-M1 union; tuple-strict real proof in CI lazy-package)
     - [ ] **API tests**
       - [x] `packages/cluster-mesh/tests/token-exchange.spec.ts` (existing carried)
       - [x] `packages/cluster-mesh/tests/token-exchange-security.spec.ts` (existing carried)
@@ -175,11 +178,11 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
       - [ ] Revoke/invalidate a cached identity and rotate credentials/scopes mid-session; no old entry authorizes the next call.
       - [ ] Measure cold-call extra latency and warm-call token-endpoint avoidance.
 
-- [ ] **Lot 4 — 1b-core portable registry kernel (in progress, spec-v6 §5; spec-v7 still generating, v6 applies)**
+- [ ] **Lot 4 — L-1b-core portable registry kernel (in progress; uncheckpointed WIP per spec-v7 §11 V7-m5)**
   - [x] New `packages/mcp-platform/src/registry.ts`, registry subpath/export/type declarations, `tests/registry.test.ts`, `tests/registry-configuration.test.ts`, `tests/registry-dispatch.test.ts`; package/API docs and reports. Reuse manifest/runtime/config compiler. No cluster-mesh source in this lot.
   - [x] Test-first: new suites RED before impl (`Cannot find module '../src/registry.js'`), GREEN after (11 + 6 + 3).
   - [x] provider-cascade checked: not applicable (MCP provider registry; no `api/src/services/llm-runtime/**` or `providers/**` change, no `test-api-ai` trigger).
-  - [ ] Version bump 0.3.0 -> 0.4.0 with goldens reseal (TOOL_CONFIGURATION_PLATFORM_VERSION + probe digests).
+  - [x] Disposition of `6d06e5205`/`e566f0313`: kept as uncheckpointed WIP; cannot close before the L-1a checkpoint; no 0.4.0 bump (single 0.3.0 candidate per spec-v7 §11; 0.4.0 bump reverted). Scoped L-1b-core gates rerun after any L-1a change to `packages/mcp-platform/**`.
   - [ ] Packed-subpath import proof with zero registry I/O (isolated process).
   - [ ] Lot gate:
     - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
@@ -245,10 +248,25 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
       - [ ] Register/select/configure two providers and list/call both over HTTP and stdio with exact names.
       - [ ] Disabled/missing/duplicate/wrong-version cases refuse startup with optional-dependency isolation.
 
-- [ ] **Lot 8 — 5a web-pages provider contracts (future, launchable when a lane frees)**
+- [ ] **Lot 8 — L-5a generic pages contracts (future, after L-4b-leaves; isolated early preparation allowed)**
   - [ ] Settle durable package name/namespace at public-contract review; implement `contracts.ts`, `codecs.ts`, `client.ts`, `server/**`, `parameters.ts`, `provider-definition.ts` + `tests/contracts.test.ts`, `canonical-manifest.test.ts`, `authorization.test.ts`, `bindings.test.ts`, `idempotency.test.ts`, `parameters.test.ts`. No Immo defaults in generic source.
   - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented under a declared exception.
-  - [ ] UAT (contract review + two-client binding test per spec-v6 §9).
+  - [ ] UAT (contract review + two-client binding test per spec-v7).
+
+- [ ] **Lot 9 — L-5b to L-5c generic publication lifecycle (future, sequential after L-5a)**
+  - [ ] Generic DB/S3 publication, recovery, sharing, source/fork/lifecycle/purge contracts and tests. All code stays in the consolidated PR; no intermediate publication.
+  - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented.
+  - [ ] UAT per spec-v7 (artifact writer acceptance, Radar-hosted parts stay external).
+
+- [ ] **Lot 10 — L-5d generic content runtime (future, after L-5c)**
+  - [ ] Generic content runtime and reader-profile contracts/tests with injected host ports. Actual Radar domain/TLS/activation remain external acceptance.
+  - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented.
+  - [ ] UAT per spec-v7.
+
+- [ ] **Lot 11 — L-5e pages provider + mesh leaf (future, after L-4b-leaves and L-5a-5d)**
+  - [ ] Complete reusable pages MCP, optional peer/facade and second-host packed consumer proof with branch tarballs.
+  - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented + packed consumer proof.
+  - [ ] UAT per spec-v7.
 
 - [ ] **Lot N-2** UAT
   - [ ] Carried probes (Lot 1 clean-consumer, Lot 3 cache/outage) green on the consolidated head.
