@@ -312,9 +312,8 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented.
   - [ ] UAT per spec-v7 (artifact writer acceptance, Radar-hosted parts stay external).
 
-- [ ] **Lot 10 — L-5d generic content runtime (future, after L-5c)**
-  - [ ] Generic content runtime and reader-profile contracts/tests with injected host ports. Actual Radar domain/TLS/activation remain external acceptance.
-  - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented.
+- [ ] **Lot 10 — L-5d generic content runtime (done, after L-5c)**
+  - [x] `server/runtime.ts` (`createContentRuntime`: owner/granted/approved-public reads, withdrawal suspends readers, terminal reports 410, no digest oracle 404, manifest size check 422) + `server/reader-profile.ts` (pure `evaluateReaderProfile`: exact method/route, artifact/release bindings, owner bypass, listed subjects, approved-only opt-in, deny by default) + `GET /content/:artifactId/:digest` on the HTTP app (shared blob store). Suites: `runtime` 7, `reader-profile` 5, parity content case. Unit gate 77/77; integration gate 22/22; typecheck clean; `lint-artifacts` exit 0; `pack-artifacts` unpublished `sentropic-artifacts-0.1.0.tgz` (`2ddfd9e8…`). Actual Radar domain/TLS/activation remain external acceptance.
   - [ ] UAT per spec-v7.
 
 - [ ] **Lot 11 — L-5e pages provider + mesh leaf (future, after L-4b-leaves and L-5a-5d)**
