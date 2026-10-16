@@ -92,11 +92,11 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - [x] Confirm scope and guardrails.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
 - [ ] **Lot 1 — auth-hono RFC 8693 exchange core**
-  - [ ] Extend `state-store-types.ts` with default-deny exchange policy for confidential clients.
-  - [ ] Add `src/oauth/token-exchange-handler.ts` with fail-closed policy enforcement.
-  - [ ] Update `src/oauth/token-handler.ts` to dispatch token-exchange grant and enforce grant eligibility.
-  - [ ] Update `src/ports.ts`, `src/oauth/router.ts`, `src/index.ts` exports as required.
-  - [ ] Update `src/oauth/wellknown-handler.ts` to advertise exchange grant only when configured.
+  - [x] Extend `state-store-types.ts` with default-deny exchange policy for confidential clients.
+  - [x] Add `src/oauth/token-exchange-handler.ts` with fail-closed policy enforcement.
+  - [x] Update `src/oauth/token-handler.ts` to dispatch token-exchange grant and enforce grant eligibility.
+  - [x] Update `src/ports.ts`, `src/oauth/router.ts`, `src/index.ts` exports as required.
+  - [x] Update `src/oauth/wellknown-handler.ts` to advertise exchange grant only when configured.
   - [ ] Update `tests/__fixtures__/memory-oauth-state-store.ts`, `tests/__fixtures__/oauth-fixtures.ts`.
   - [ ] Lot gate:
     - [ ] `make typecheck-auth-hono API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
