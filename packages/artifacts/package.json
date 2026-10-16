@@ -76,6 +76,18 @@
       "types": "./dist/server/gc.d.ts",
       "import": "./dist/server/gc.js"
     },
+    "./server/runtime": {
+      "types": "./dist/server/runtime.d.ts",
+      "import": "./dist/server/runtime.js"
+    },
+    "./server/reader-profile": {
+      "types": "./dist/server/reader-profile.d.ts",
+      "import": "./dist/server/reader-profile.js"
+    },
+    "./server/pages": {
+      "types": "./dist/server/pages.d.ts",
+      "import": "./dist/server/pages.js"
+    },
     "./http": {
       "types": "./dist/http.d.ts",
       "import": "./dist/http.js"
