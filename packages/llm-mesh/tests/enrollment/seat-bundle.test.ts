@@ -192,6 +192,63 @@ describe('seat-bundle envelope', () => {
     });
   });
 
+  it('covers nativeUse access, unavailable and scanned shapes', () => {
+    const channel = { trustedAuthority: 'consumer' as const };
+    const both = {
+      ...consumer('codex'),
+      nativeUse: { kind: 'access', accessRef: 'access-synth-codex-native-01' },
+    };
+    expect(validateSeatBundle(both, channel).ok).toBe(true);
+    const serializedOnly = {
+      ...consumer('muse'),
+      nativeUse: { kind: 'unavailable', reason: 'serialized-only' },
+    };
+    expect(validateSeatBundle(serializedOnly, channel).ok).toBe(true);
+    const smuggled = {
+      ...consumer('codex'),
+      nativeUse: { kind: 'access', accessRef: 'ok', nativeProfile: { device_code: 'synthetic' } },
+    };
+    expect(validateSeatBundle(smuggled, channel)).toMatchObject({ ok: false, code: 'nested-refresh-field' });
+  });
+
+  it('models per-CLI static-key and mesh-only shapes', () => {
+    const vibe = canonical('vibe');
+    const staticBundle: SeatBundleV1 = {
+      ...vibe,
+      credentialClass: 'static-key',
+      canonical: { kind: 'static-key-material', materialRef: 'material-synth-vibe-static-01' },
+    };
+    delete staticBundle.identity.refreshFamilyRef;
+    expect(validateSeatBundle(staticBundle, { trustedAuthority: 'custodian' }).ok).toBe(true);
+  });
+
+  it('rejects unknown cli, os and expiry values', () => {
+    const unknownCli = canonical('agy');
+    unknownCli.identity.cli = 'gemini';
+    expect(validateSeatBundle(unknownCli)).toMatchObject({ ok: false, code: 'client-mismatch' });
+    const badOs = canonical('codex');
+    badOs.identity.os = 'plan9';
+    expect(validateSeatBundle(badOs, { trustedAuthority: 'custodian' })).toMatchObject({
+      ok: false,
+      code: 'schema-mismatch',
+    });
+    const badExpiry = canonical('muse');
+    badExpiry.lifecycle.providerExpiry = 'not-a-date';
+    expect(validateSeatBundle(badExpiry, { trustedAuthority: 'custodian' })).toMatchObject({
+      ok: false,
+      code: 'invalid-lifecycle',
+    });
+  });
+
+  it('requires a valid refresh authority on the custodian channel', () => {
+    const bundle = canonical('claude');
+    bundle.lifecycle.refreshAuthority = 'bogus';
+    expect(validateSeatBundle(bundle, { trustedAuthority: 'custodian' })).toMatchObject({
+      ok: false,
+      code: 'invalid-lifecycle',
+    });
+  });
+
   it('keeps static keys family-free and requires families otherwise', () => {
     const staticBundle = { ...consumer('vibe'), credentialClass: 'static-key' as const };
     delete staticBundle.identity.refreshFamilyRef;

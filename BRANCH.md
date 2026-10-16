@@ -92,7 +92,7 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] R4 native-store with store-reference accepted.
   - [x] R5 case-insensitive and structural refresh-material rejection.
   - [x] R6 lineage classification for all five transitions.
-  - [ ] R7 five-CLI coverage, nativeUse shapes and enum checks.
+  - [x] R7 five-CLI coverage, nativeUse shapes and enum checks.
   - [ ] R8 UTF-8 byte size, R9 truthful report, R10 branch boxes, R11 changelog.
   - [ ] UAT credential-free walkthrough:
     - [ ] Select five synthetic profile labels, one per CLI.
