@@ -74,6 +74,7 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
 - `acknowledge` ATX-EX2: applied as declared, export and oauth_clients paths untouched.
 - `attention` ATX-EX3: migration 0042 advances the export schema tag, which trips the transfer cutover parity tripwire by design; re-pin the executable history snapshot (`api/tests/fixtures/historical/transfers-0c5aef04/`, route bytes shared with be37d69f6, journal advanced) and the test's fixture/journal pins. Reason: parity must be explicit per migration. Impact: new fixture dir + 3 pin lines, no product change. Rollback: delete the new dir, restore pins.
 - `acknowledge` ATX-EX3: applied as declared, route and bridge pins intact.
+- `attention` e2e group-e 05-usecase-detail lock-acquire 409 vs 201: isolated, non-systematic. Same job passed on run 38833429815 at identical product code and passed on rerun (`gh run rerun --job 116765363067`, conclusion success). No branch change touches locking/initiatives/UI; no test or timeout touched. Command: `test-e2e (group-e, 05 07)`, signature `expect(acquiredByA.status()).toBe(201)` got 409 at spec 05-usecase-detail.spec.ts:690.
 
 ## AI Flaky tests
 - Acceptance rule:
