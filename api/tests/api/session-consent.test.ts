@@ -116,7 +116,12 @@ describe('session consent durable lifecycle', () => {
     overrides: Record<string, unknown> = {},
     context: SessionContentContext = ctx,
   ) => {
-    const policy = basePolicy({ ownerId: context.ownerId, readers: [context.ownerId], ...overrides });
+    const policy = basePolicy({
+      ownerId: context.ownerId,
+      readers: [context.ownerId],
+      workspaceId,
+      ...overrides,
+    });
     const prepared = service.prepareProject(policy);
     return service.acceptProject({ ...prepared, offlineReadAccepted: true }, context);
   };
@@ -1237,6 +1242,104 @@ describe('session consent durable lifecycle', () => {
     const purged = await service.runPurge(jobs[0]!.purgeJobId);
     expect(purged.remainingObjects).toBe(0);
     expect(await fixture.listPhysical('')).toHaveLength(0);
+  });
+
+  it('should enforce O1=D scope on derive: workspace, status, principal, eligibility (M3)', async () => {
+    await acceptProject({}, { tenantId: TENANT_A, principalId: other.id, ownerId: other.id });
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    const otherCtx: SessionContentContext = {
+      tenantId: TENANT_A, principalId: other.id, ownerId: other.id,
+    };
+    const base = {
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    };
+    await expectContentError(() => service.deriveGrant(base, otherCtx), 'cross_owner_refused');
+    await db
+      .update(sessionWorkspaceBindings)
+      .set({ status: 'detached' })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await expectContentError(() => service.deriveGrant(base, ctx), 'ineligible_session');
+    await db
+      .update(sessionWorkspaceBindings)
+      .set({ status: 'ended' })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await expectContentError(() => service.deriveGrant(base, ctx), 'ineligible_session');
+    await db
+      .update(sessionWorkspaceBindings)
+      .set({ status: 'attached' })
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await expectContentError(
+      () => service.deriveGrant({ ...base, workspaceId: 'workspace:foreign' }, ctx),
+      'invalid_request',
+    );
+    await expectContentError(
+      () => service.deriveGrant({ ...base, d1Incarnation: 99 }, ctx),
+      'ineligible_session',
+    );
+  });
+
+  it('should refuse derivation outside future/selected scope (M3)', async () => {
+    await acceptProject({ futureSessions: false, selectedSessionIds: [] });
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await expectContentError(() => service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx), 'ineligible_session');
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({
+        ownerId: owner.id,
+        readers: [owner.id],
+        workspaceId,
+        futureSessions: false,
+        selectedSessionIds: ['sess-content-s1'],
+      }),
+      ctx,
+    );
+    const derived = await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    expect(derived.version).toBe(1);
   });
 
   it('should preserve a non-deleted identity on rollback without false purge', async () => {
