@@ -3475,6 +3475,14 @@ oauth-rotate-service-client: ## Rotate a service client secret (single-secret cu
 	@test -n "$(CLIENT_ID)" || { echo "ERROR: CLIENT_ID is required: make oauth-rotate-service-client CLIENT_ID=<id> ENV=<env>"; exit 1; }
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -e CLIENT_ID="$(CLIENT_ID)" api sh -lc "npm run oauth:rotate-service-client"
 
+# ATX-EX4 — additive target for the 2-IdP workload creation path (M3).
+# Rationale: the repo is Make-only; protected creation needs a runnable target.
+# Additive only — no existing target modified.
+# Rollback: delete the target below.
+.PHONY: oauth-provision-exchange-client
+oauth-provision-exchange-client: ## Create the exchange-only workload client once (idempotent replay). Usage: make oauth-provision-exchange-client ENV=<env>
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -e OAUTH_WORKLOAD_CLIENT_ID="$(OAUTH_WORKLOAD_CLIENT_ID)" -e OAUTH_WORKLOAD_CLIENT_SECRET="$(OAUTH_WORKLOAD_CLIENT_SECRET)" -e OAUTH_WORKLOAD_SUBJECT_AUD="$(OAUTH_WORKLOAD_SUBJECT_AUD)" -e OAUTH_WORKLOAD_TARGET_AUD="$(OAUTH_WORKLOAD_TARGET_AUD)" api sh -lc "npm run oauth:provision-exchange-client"
+
 # BR-CSV-EX1 — additive targets for @sentropic/cited-source-viewer (Lot 2 first cut, feat/cited-source-viewer-lot2).
 # Rationale: the repo is Make-only; the new package needs its quality gates runnable through make.
 #   Mirrors the chat-ui docker ephemeral-install pattern (BR-A0b-EX1 precedent). Additive only —
