@@ -29,12 +29,14 @@ CREATE TABLE IF NOT EXISTS artifacts.artifacts (
   UNIQUE (storage_scope_id, owner_id, binding_name)
 );
 
--- Immutable sealed releases (canonical manifest bytes + digest).
+-- Immutable sealed releases (canonical manifest bytes + digest). The manifest
+-- is TEXT, not JSONB: JSONB key reordering would break byte-identity of the
+-- content-addressed bytes; the digest covers the exact stored bytes.
 CREATE TABLE IF NOT EXISTS artifacts.releases (
   id UUID PRIMARY KEY,
   artifact_id UUID NOT NULL REFERENCES artifacts.artifacts (id) ON DELETE CASCADE,
   manifest_digest TEXT NOT NULL,
-  manifest JSONB NOT NULL,
+  manifest TEXT NOT NULL,
   state TEXT NOT NULL DEFAULT 'ready' CHECK (state IN ('ready')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
