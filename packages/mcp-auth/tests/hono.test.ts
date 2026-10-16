@@ -4,22 +4,11 @@ import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
 vi.mock('@sentropic/oauth-verify', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@sentropic/oauth-verify')>();
-  class TokenVerifyError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = 'TokenVerifyError';
-    }
-  }
-  class DpopVerifyError extends Error {
-    constructor(message: string) {
-      super(message);
-      this.name = 'DpopVerifyError';
-    }
-  }
+  // Keep the real TokenVerifyError/DpopVerifyError classes so the real verifier
+  // used in the Immo-scoped test throws instanceof-compatible errors (R2-5).
+  // Only the verify primitives are mocked; error identity stays real.
   return {
     ...actual,
-    TokenVerifyError,
-    DpopVerifyError,
     fromRemoteJwks: vi.fn(() => ({ resolveKey: vi.fn() })),
     verifyAccessToken: vi.fn(),
     verifyDpopProof: vi.fn(),
