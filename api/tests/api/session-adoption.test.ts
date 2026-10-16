@@ -937,7 +937,12 @@ describe('session adoption workspace binding', () => {
       .where(eq(sessionContentObjects.sessionId, 'sess-adopt-30'));
     expect(objects[0]!.state).toBe('committed');
     expect(objects[0]!.expiresAt).toBe(now + 3_600_000);
-    expect(await db.select().from(sessionContentPurgeJobs)).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(sessionContentPurgeJobs)
+        .where(eq(sessionContentPurgeJobs.namespaceId, namespaceId)),
+    ).toHaveLength(0);
     const detached = await service.get('sess-adopt-30', TENANT_A, user.id);
     expect(detached!.status).toBe('detached');
     expect(detached!.workspaceId).toBe(workspaceId);
@@ -979,6 +984,8 @@ describe('session adoption workspace binding', () => {
       .where(eq(sessionContentProjects.projectId, 'sess-adopt-project-d2'));
     await db.delete(sessionContentNamespaces)
       .where(eq(sessionContentNamespaces.ownerId, user.id));
+    await db.delete(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.namespaceId, namespaceId));
     await db.delete(sessionWorkspaceBindings)
       .where(eq(sessionWorkspaceBindings.sessionId, 'sess-adopt-31'));
   });
