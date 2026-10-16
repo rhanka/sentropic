@@ -1208,9 +1208,12 @@ export class SessionContentService {
     });
   }
 
-  /** Conditionally publish after upload: bytes land in the private bucket
-   * with a capture-bound immutable deadline, then the reservation is
-   * consumed. Stale completions become purge work. */
+  /** Conditionally publish after upload (M2): a durable `staged` row with
+   * its key is written before the PUT, so a crash between PUT and commit
+   * leaves the bytes inside the DB inventory. The commit transaction locks
+   * reservation and grant rows and rechecks reservation=`reserved`,
+   * grant=`active`, pinned epoch and live revisions. A failed final check
+   * queues deletion of the staged bytes and publishes nothing. */
   async publishAfterUpload(
     reservationId: string,
     body: Uint8Array,
@@ -1240,6 +1243,7 @@ export class SessionContentService {
       if (grant.state !== 'active') {
         throw new SessionContentError('grant_revoked', 'grant is not active; late upload refused');
       }
+      await this.requireEpochScope(tx, grant.authorityEpoch, existing.namespaceId);
       return { reservation: existing, grant };
     });
     const objectId = this.newId();
@@ -1250,55 +1254,139 @@ export class SessionContentService {
       reservation.reservation.channel,
       objectId,
     );
+    await db.insert(sessionContentObjects).values({
+      objectId,
+      namespaceId: reservation.reservation.namespaceId,
+      authorityEpoch: reservation.grant.authorityEpoch,
+      bindingId: reservation.grant.bindingId,
+      sessionId: reservation.reservation.sessionId,
+      channel: reservation.reservation.channel,
+      bucket: config.bucket,
+      objectKey: key,
+      bytesRaw: reservation.reservation.bytesRaw,
+      bytesEncoded: reservation.reservation.bytesEncoded,
+      capturedAt: this.nowMs(),
+      expiresAt: null,
+      state: 'staged',
+      version: 1,
+    });
     await client.send(
       new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }),
     );
+    if (this.publishHooks?.afterUpload) {
+      await this.publishHooks.afterUpload(key);
+    }
     const snapshot = reservation.grant.retentionSnapshot as RetentionByChannel;
     const channel = reservation.reservation.channel as 'terminal.cache' | 'native.mirror';
     const capturedAt = this.nowMs();
     const retention = snapshot[channel] ?? { mode: 'none' as const };
     const expiresAt =
       retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
-    await db.transaction(async (tx) => {
-      const [freshGrant] = await tx
-        .select()
-        .from(sessionContentGrants)
-        .where(eq(sessionContentGrants.sessionId, reservation.reservation.sessionId))
-        .limit(1);
-      if (!freshGrant || freshGrant.state !== 'active') {
-        throw new SessionContentError('grant_revoked', 'grant is not active; late publish refused');
-      }
-      await this.requireEpochScope(tx, freshGrant.authorityEpoch, reservation.reservation.namespaceId);
-      await tx.insert(sessionContentObjects).values({
-        objectId,
-        namespaceId: reservation.reservation.namespaceId,
-        authorityEpoch: freshGrant.authorityEpoch,
-        bindingId: reservation.grant.bindingId,
-        sessionId: reservation.reservation.sessionId,
-        channel: reservation.reservation.channel,
-        bucket: config.bucket,
-        objectKey: key,
-        bytesRaw: reservation.reservation.bytesRaw,
-        bytesEncoded: reservation.reservation.bytesEncoded,
-        capturedAt,
-        expiresAt,
-        state: 'committed',
-        version: 1,
+    try {
+      await db.transaction(async (tx) => {
+        const [lockedReservation] = await tx
+          .select()
+          .from(sessionContentReservations)
+          .where(eq(sessionContentReservations.reservationId, reservationId))
+          .for('update')
+          .limit(1);
+        if (!lockedReservation || lockedReservation.state !== 'reserved') {
+          throw new SessionContentError('unknown_outcome', 'reservation changed during upload');
+        }
+        const [freshGrant] = await tx
+          .select()
+          .from(sessionContentGrants)
+          .where(eq(sessionContentGrants.sessionId, reservation.reservation.sessionId))
+          .for('update')
+          .limit(1);
+        if (!freshGrant || freshGrant.state !== 'active') {
+          throw new SessionContentError('grant_revoked', 'grant is not active; late publish refused');
+        }
+        await this.requireEpochScope(tx, freshGrant.authorityEpoch, reservation.reservation.namespaceId);
+        const [project] = await tx
+          .select()
+          .from(sessionContentProjects)
+          .where(eq(sessionContentProjects.projectId, freshGrant.projectId))
+          .limit(1);
+        if (!project || project.state !== 'active' || project.projectRevision !== freshGrant.projectRevision) {
+          throw new SessionContentError('project_not_active', 'project changed during upload');
+        }
+        const [binding] = await tx
+          .select()
+          .from(sessionWorkspaceBindings)
+          .where(eq(sessionWorkspaceBindings.sessionId, reservation.reservation.sessionId))
+          .limit(1);
+        if (!binding || binding.bindingId !== freshGrant.bindingId || binding.version !== freshGrant.bindingVersion) {
+          throw new SessionContentError('ineligible_session', 'binding changed during upload (ABA)');
+        }
+        await tx
+          .update(sessionContentObjects)
+          .set({ state: 'committed', capturedAt, expiresAt, updatedAt: new Date(this.nowMs()) })
+          .where(
+            and(
+              eq(sessionContentObjects.objectId, objectId),
+              eq(sessionContentObjects.state, 'staged'),
+            ),
+          );
+        await tx
+          .update(sessionContentReservations)
+          .set({ state: 'consumed', updatedAt: new Date(this.nowMs()) })
+          .where(eq(sessionContentReservations.reservationId, reservationId));
+        await tx
+          .update(sessionContentAttempts)
+          .set({ outcome: 'published' })
+          .where(eq(sessionContentAttempts.attemptId, reservationId));
+        await tx
+          .update(sessionContentGrants)
+          .set({ retainedCopies: true, updatedAt: new Date(this.nowMs()) })
+          .where(eq(sessionContentGrants.sessionId, reservation.reservation.sessionId));
       });
+    } catch (err) {
+      await this.queueStagedDeletion(
+        objectId,
+        reservation.reservation.namespaceId,
+        reservation.grant.bindingId,
+        reservationId,
+      );
+      throw err;
+    }
+    return { objectId, key, expiresAt };
+  }
+
+  /** A failed final publish check queues deletion of the staged bytes and
+   * publishes nothing; quota stays charged until deletion is verified. */
+  private async queueStagedDeletion(
+    objectId: string,
+    namespaceId: string,
+    bindingId: string,
+    reservationId: string,
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(sessionContentObjects)
+        .set({ state: 'purge_pending', updatedAt: new Date(this.nowMs()) })
+        .where(
+          and(
+            eq(sessionContentObjects.objectId, objectId),
+            eq(sessionContentObjects.state, 'staged'),
+          ),
+        );
       await tx
         .update(sessionContentReservations)
-        .set({ state: 'consumed', updatedAt: new Date(this.nowMs()) })
+        .set({ state: 'stale', updatedAt: new Date(this.nowMs()) })
         .where(eq(sessionContentReservations.reservationId, reservationId));
       await tx
         .update(sessionContentAttempts)
-        .set({ outcome: 'published' })
+        .set({ outcome: 'outcome_unknown' })
         .where(eq(sessionContentAttempts.attemptId, reservationId));
-      await tx
-        .update(sessionContentGrants)
-        .set({ retainedCopies: true, updatedAt: new Date(this.nowMs()) })
-        .where(eq(sessionContentGrants.sessionId, reservation.reservation.sessionId));
+      await tx.insert(sessionContentPurgeJobs).values({
+        purgeJobId: this.newId(),
+        namespaceId,
+        bindingId,
+        scope: 'binding',
+        state: 'pending',
+      });
     });
-    return { objectId, key, expiresAt };
   }
 
   /** An unknown PutObject outcome keeps purge pending and quota charged,
