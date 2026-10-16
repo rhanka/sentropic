@@ -1342,6 +1342,53 @@ describe('session consent durable lifecycle', () => {
     expect(derived.version).toBe(1);
   });
 
+  it('should serialize concurrent amendments: one wins, one conflicts (M4)', async () => {
+    await acceptProject();
+    const policyFor = () => basePolicy({
+      ownerId: owner.id, readers: [owner.id], workspaceId, futureSessions: false,
+    });
+    const outcomes = await Promise.allSettled([
+      service.amendProject('sess-content-project-1', policyFor(), ctx),
+      service.amendProject('sess-content-project-1', policyFor(), ctx),
+    ]);
+    const won = outcomes.filter((o) => o.status === 'fulfilled');
+    const lost = outcomes.filter((o) => o.status === 'rejected');
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    expect((lost[0] as PromiseRejectedResult).reason).toBeInstanceOf(SessionContentError);
+    expect(((lost[0] as PromiseRejectedResult).reason as SessionContentError).code).toBe('revision_conflict');
+    const projects = await db
+      .select()
+      .from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1'));
+    expect(projects[0]!.projectRevision).toBe(1);
+  });
+
+  it('should increment on accept-at-N so a replayed accept conflicts (M4)', async () => {
+    await acceptProject();
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId }),
+      ctx,
+    );
+    const atOne = () => {
+      const prepared = service.prepareProject(
+        basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 1 }),
+      );
+      return service.acceptProject({ ...prepared, offlineReadAccepted: true }, ctx);
+    };
+    const outcomes = await Promise.allSettled([atOne(), atOne()]);
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.filter((o) => o.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect((((rejected[0] as PromiseRejectedResult).reason) as SessionContentError).code).toBe('revision_conflict');
+    const projects = await db
+      .select()
+      .from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1'));
+    expect(projects[0]!.projectRevision).toBe(2);
+  });
+
   it('should preserve a non-deleted identity on rollback without false purge', async () => {
     await acceptProject();
     const jobsBefore = await db.select().from(sessionContentPurgeJobs);
