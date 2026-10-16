@@ -14,7 +14,7 @@ export const ISSUER = 'http://localhost:9197';
 export const workloadPolicy = {
   actorSub: 'immo-mcp-workload',
   allowClientCredentials: false,
-  allowedScopes: ['immo:read', 'immo:search'],
+  allowedScopes: ['immo:search'],
   allowedSubjectAudiences: [MCP_AUDIENCE],
   allowedSubjectClients: ['immo-mcp'],
   allowedTargetAudiences: [RADAR_AUDIENCE],
@@ -35,7 +35,7 @@ export const publicImmoClient = () =>
 
 export const workloadClient = (overrides = {}) =>
   createServiceClient({
-    allowedScopes: ['immo:read', 'immo:search'],
+    allowedScopes: ['immo:search'],
     clientId: 'immo-mcp-workload',
     clientSecretHash: 'hash:workload-secret',
     exchangePolicy: { ...workloadPolicy, ...overrides },
