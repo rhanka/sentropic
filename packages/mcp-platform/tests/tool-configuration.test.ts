@@ -207,6 +207,66 @@ const noteHandlers: Record<string, ToolConfigurationHandlerBinding> = {
   'local-read': handlers['local-read'],
 };
 
+// Strict-policy fixture (R2-M3): every weakening check has a baseline value
+// it can drop, so each removal is caught by a discriminating test.
+const strictTool: CapabilityTool = {
+  kind: 'tool',
+  name: 'synth_write',
+  description: 'Write a synthetic record.',
+  requiredScopes: ['synth:write'],
+  requiredClaims: ['c1'],
+  inputSchema: { type: 'object' },
+  outputSchema: { type: 'object' },
+  redactionClass: 'low',
+  mutability: 'patch',
+  mutatesExternalSystem: true,
+  idempotency: { required: true, scope: 'tenant' },
+  gates: readOnlyGates,
+};
+
+const strictManifest: AppMcpProviderManifest = {
+  ...manifest,
+  tools: [strictTool],
+};
+
+const strictSchema = {
+  type: 'object',
+  properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, ratio: { type: 'number' } },
+  required: ['maxResults'],
+  additionalProperties: false,
+};
+
+const strictHandlers: Record<string, ToolConfigurationHandlerBinding> = {
+  'local-write': { handlerId: 'local-write', capabilityRef: 'synth_write', configSchema: strictSchema },
+};
+
+function strictSnapshot(bindings: ApprovedToolBinding[]): ApprovedToolSnapshot {
+  const snapshot = {
+    schemaVersion: TOOL_CONFIGURATION_SCHEMA_VERSION,
+    providerId: strictManifest.providerId,
+    revision: 'rev-1',
+    manifestDigest: computeManifestDigest(strictManifest),
+    providerVersion: strictManifest.version,
+    platformVersion: TOOL_CONFIGURATION_PLATFORM_VERSION,
+    compatibilityDigest: computeCompatibilityDigest(strictManifest),
+    handlersDigest: computeHandlersDigest(strictHandlers),
+    provenance: {
+      approvalRef: 'approval-synth-1',
+      revision: 'rev-1',
+      manifestDigest: computeManifestDigest(strictManifest),
+      reviewedBy: ['reviewer-1'],
+    },
+    bindings,
+  };
+  return { ...snapshot, provenance: { ...snapshot.provenance, payloadDigest: computePayloadDigest(snapshot) } };
+}
+
+function strictBindings(policy: ApprovedToolBinding['policy']): ApprovedToolBinding[] {
+  return [
+    { toolName: 'synth_write', capabilityRef: 'synth_write', handlerId: 'local-write', values: { maxResults: 20, ratio: 0.5 }, ...(policy === undefined ? {} : { policy }) },
+  ];
+}
+
 describe('tool-configuration compiler — synthetic providers only', () => {
   it('compiles two synthetic tools with distinct settings on the intended binding only', () => {
     const result = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers, compatibilityDigest: consumerDigest });
@@ -617,20 +677,27 @@ process.stdin.on('end', () => {
     }
   });
 
-  it('rejects credentials, bearers, user data and executable values', () => {
-    const credential = buildSnapshot();
-    credential.bindings[0] = { ...credential.bindings[0], values: { maxResults: 20, api_key: 'secret' } };
-    expect(compileToolConfiguration({ snapshot: credential, manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(false);
-    const bearer = buildSnapshot();
-    bearer.bindings[0] = { ...bearer.bindings[0], values: { maxResults: 20, mode: 'Bearer abc' } };
-    const bearerResult = compileToolConfiguration({ snapshot: bearer, manifest, handlers, compatibilityDigest: consumerDigest });
-    expect(bearerResult.ok).toBe(false);
-    const owner = buildSnapshot();
-    owner.bindings[0] = { ...owner.bindings[0], values: { maxResults: 20, ownerSub: 'user-1' } };
-    expect(compileToolConfiguration({ snapshot: owner, manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(false);
-    const executable = buildSnapshot();
-    executable.bindings[0] = { ...executable.bindings[0], values: { maxResults: 20, mode: 'https://example.test/x' } };
-    expect(compileToolConfiguration({ snapshot: executable, manifest, handlers, compatibilityDigest: consumerDigest }).ok).toBe(false);
+  it('rejects user-data and credential keys with code and path', () => {
+    // Discriminating replacement for the former `.ok === false`-only test:
+    // every key below is schema-valid, so only `forbidden_content` rejects it.
+    const userSchema = {
+      type: 'object',
+      properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, ownerSub: { type: 'string' }, email: { type: 'string' }, sub: { type: 'string' }, api_key: { type: 'string' } },
+      required: ['maxResults'],
+      additionalProperties: false,
+    };
+    const userHandlers = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: userSchema } };
+    for (const key of ['ownerSub', 'email', 'sub', 'api_key']) {
+      const userSnapshot = buildSnapshot();
+      userSnapshot.bindings[0] = { ...userSnapshot.bindings[0], values: { maxResults: 20, [key]: 'user-1' } };
+      userSnapshot.handlersDigest = computeHandlersDigest(userHandlers);
+      reseal(userSnapshot);
+      const userResult = compileToolConfiguration({ snapshot: userSnapshot, manifest, handlers: userHandlers, compatibilityDigest: consumerDigest });
+      expect(userResult.ok).toBe(false);
+      if (!userResult.ok) {
+        expect(userResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === `snapshot.bindings[0].values.${key}`)).toBe(true);
+      }
+    }
   });
 
   it('flags forbidden keys with the forbidden_content code', () => {
@@ -911,6 +978,67 @@ process.stdin.on('end', () => {
     expect(undefinedResult.ok).toBe(false);
     if (!undefinedResult.ok) {
       expect(undefinedResult.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
+    }
+  });
+
+  it('rejects every policy weakening on a strict baseline', () => {
+    const digest = computeCompatibilityDigest(strictManifest);
+    const run = (policy: ApprovedToolBinding['policy']) =>
+      compileToolConfiguration({ snapshot: strictSnapshot(strictBindings(policy)), manifest: strictManifest, handlers: strictHandlers, compatibilityDigest: digest });
+    expect(run(undefined).ok).toBe(true);
+    const cases: Array<ToolPolicyOverlay> = [
+      { idempotency: { required: false, scope: 'tenant' } },
+      { idempotency: { required: true, scope: 'global' } },
+      { mutability: 'read-only' },
+      { mutatesExternalSystem: false },
+      { requiredClaims: [] },
+    ];
+    for (const policy of cases) {
+      const result = run(policy);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'policy_weakening' && entry.path === 'snapshot.bindings[0].policy')).toBe(true);
+      }
+    }
+  });
+
+  it('rejects a resealed provenance manifestDigest divergence', () => {
+    const snapshot = buildSnapshot();
+    snapshot.provenance = { ...snapshot.provenance, manifestDigest: '0'.repeat(64) };
+    reseal(snapshot);
+    const result = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics.some((entry) => entry.code === 'manifest_digest_mismatch' && entry.path === 'snapshot.provenance.manifestDigest')).toBe(true);
+    }
+  });
+
+  it('rejects non-finite numbers on unbounded schemas', () => {
+    const snapshot = strictSnapshot(strictBindings(undefined));
+    snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, ratio: Number.POSITIVE_INFINITY } };
+    const digest = computeCompatibilityDigest(strictManifest);
+    const result = compileToolConfiguration({ snapshot, manifest: strictManifest, handlers: strictHandlers, compatibilityDigest: digest });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
+    }
+  });
+
+  it('rejects a handlersDigest that does not match the local table', () => {
+    const snapshot = buildSnapshot();
+    snapshot.provenance = { ...snapshot.provenance, payloadDigest: computePayloadDigest({ ...snapshot, handlersDigest: '1'.repeat(64) }) };
+    const tampered = { ...snapshot, handlersDigest: '1'.repeat(64) };
+    const result = compileToolConfiguration({ snapshot: tampered, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics.some((entry) => entry.code === 'handlers_digest_mismatch' && entry.path === 'snapshot.handlersDigest')).toBe(true);
+    }
+    const widenedSchema = { type: 'object', properties: { maxResults: { type: 'integer', minimum: 1, maximum: 1000 }, mode: { type: 'string', enum: ['fast', 'deep'] } }, required: ['maxResults'], additionalProperties: false };
+    const widened = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: widenedSchema } };
+    const widenedResult = compileToolConfiguration({ snapshot: buildSnapshot(), manifest, handlers: widened, compatibilityDigest: consumerDigest });
+    expect(widenedResult.ok).toBe(false);
+    if (!widenedResult.ok) {
+      expect(widenedResult.diagnostics.some((entry) => entry.code === 'handlers_digest_mismatch')).toBe(true);
     }
   });
 
