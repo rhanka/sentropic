@@ -281,7 +281,7 @@ export function validateSeatBundle(bundle: unknown, ctx?: { ownerScope?: string 
     const bad = unknownKey(canonical, CANONICAL_KEYS);
     if (bad) return fail('unknown-field', `unknown canonical field: ${bad}`);
   }
-  return { ok: true, bundle: bundle as SeatBundleV1 };
+  return { ok: true, bundle: bundle as unknown as SeatBundleV1 };
 }
 
 /** True when the incoming tuple is older than current; same epoch/generation reimports idempotently. */
