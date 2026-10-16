@@ -54,6 +54,13 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - `packages/auth-ui/package.json`
   - `packages/cluster-mesh/package.json`
   - `packages/llm-gateway/package.json` (ATX-EX1: auth-hono range widening only)
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (ATX-EX1 follow-through: runtime gate, pins, lazy fixture)
+  - `api/tests/api/cluster-mesh-transfers-cutover.test.ts`
+  - `api/tests/fixtures/historical/transfers-0c5aef04/**` (ATX-EX3: parity re-pin only)
   - `api/package.json`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
@@ -65,6 +72,8 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
 - `acknowledge` ATX-EX1: applied as declared; follow-through: consumer patch bumps (auth-ui 0.7.5, cluster-mesh 0.15.1, llm-gateway 0.19.6), cluster-mesh runtime gate widened to `>=0.15.0 <0.17.0` (minimal parser has no `||`), gateway-surface pins moved to 0.19.6, parser table extended.
 - `attention` ATX-EX2: R2 firm service_clients extension touches `deploy/k8s/overlays/*/idp-identity-sync/**` (outside Allowed). Reason: the real client import path lives in the k8s overlay SQL, not in deploy/ci. Impact: two new SQL files plus wiring in import-preprod.sql, kustomization.yaml and fixtures; export side untouched; policy-only sync, never secret material. Rollback: delete the two new files and revert wiring lines.
 - `acknowledge` ATX-EX2: applied as declared, export and oauth_clients paths untouched.
+- `attention` ATX-EX3: migration 0042 advances the export schema tag, which trips the transfer cutover parity tripwire by design; re-pin the executable history snapshot (`api/tests/fixtures/historical/transfers-0c5aef04/`, route bytes shared with be37d69f6, journal advanced) and the test's fixture/journal pins. Reason: parity must be explicit per migration. Impact: new fixture dir + 3 pin lines, no product change. Rollback: delete the new dir, restore pins.
+- `acknowledge` ATX-EX3: applied as declared, route and bridge pins intact.
 
 ## AI Flaky tests
 - Acceptance rule:
