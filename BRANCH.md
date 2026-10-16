@@ -300,9 +300,9 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
       - [ ] Register/select/configure two providers and list/call both over HTTP and stdio with exact names.
       - [ ] Disabled/missing/duplicate/wrong-version cases refuse startup with optional-dependency isolation.
 
-- [ ] **Lot 8 — L-5a generic pages contracts (in progress, isolated early preparation)**
-  - [x] `contracts.ts` + `tests/contracts.test.ts` (3/3), `codecs.ts` + `canonical-manifest.test.ts` (3/3: set-ordered arrays, sealed-vs-working parse). No Immo defaults in generic source.
-  - [ ] `parameters.ts` + `parameters.test.ts` (in progress), then `provider-definition.ts`, `client.ts`, `server/ports.ts`, `service.ts`, `authorization.ts`, `bindings.ts`, `idempotency.ts` + `authorization.test.ts`, `bindings.test.ts`, `idempotency.test.ts`, `README.md`.
+- [x] **Lot 8 — L-5a generic pages contracts (done, isolated early preparation)**
+  - [x] All §9 5a files: `contracts.ts`, `codecs.ts`, `parameters.ts`, `provider-definition.ts`, `client.ts`, `server/ports.ts`, `service.ts`, `authorization.ts`, `bindings.ts`, `idempotency.ts`, `README.md`, `LICENSE`, subpath exports. No Immo defaults in generic source.
+  - [x] Lot gate: 7 suites / 27 tests GREEN (`contracts` 3, `canonical-manifest` 3, `parameters` 4, `bindings` 7, `authorization` 4, `idempotency` 3, `service` 3 — the 7th proves auth-first wiring, beyond the 6 spec suites); `typecheck-artifacts` clean, `lint-artifacts` exit 0, `pack-artifacts` → `tmp/artifacts-pack/sentropic-artifacts-0.1.0.tgz` (`53298b64…`, unpublished). Two-client binding UAT covered by `bindings.test.ts`; contract review sign-off stays under I861-F5 (no review convened per conductor order).
   - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented under a declared exception.
   - [ ] UAT (contract review + two-client binding test per spec-v7).
 
