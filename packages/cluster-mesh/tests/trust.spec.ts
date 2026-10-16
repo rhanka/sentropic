@@ -8,7 +8,7 @@ import {
 } from '../src/index.js';
 
 describe('inter-server trust', () => {
-  it('should expose an RFC 8693-shaped request contract', () => {
+  it('should expose an RFC 8693-shaped request contract without caller actor', () => {
     const request: TokenExchangeRequest = {
       grantType: RFC8693_GRANT_TYPE,
       subjectToken: 'opaque-subject-token',
@@ -16,15 +16,10 @@ describe('inter-server trust', () => {
       requestedTokenType: ACCESS_TOKEN_TYPE,
       audience: 'https://remote.example.test',
       scope: ['workspace:read'],
-      actor: {
-        sub: 'agent-1',
-        iss: 'https://auth.example.test',
-        h2aEngagement: 'engagement:opaque',
-      },
     };
 
     expect(request.grantType).toBe('urn:ietf:params:oauth:grant-type:token-exchange');
-    expect(request.actor?.h2aEngagement).toBe('engagement:opaque');
+    expect('actor' in request).toBe(false);
   });
 
   it('should keep refusal errors free of token material', () => {
