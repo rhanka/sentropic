@@ -320,21 +320,22 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - [x] `server/pages.ts` (`definePagesProvider` 0.1.0: exact `pages_ensure_site`/`pages_publish_site`/`pages_read_page`/`pages_serve_content`; `createPagesDispatch` over any conforming app with per-request actor identity) + `probe-artifacts-packed-consumer` (EX7): branch tarball installed on an isolated consumer, `PACKED_CONSUMER_OK digest=sha256:039058c6… fetchCalls=0`, zero I/O. New `./server/runtime`, `./server/reader-profile`, `./server/pages` subpaths. Suites: `pages` 3. Unit gate 80/80; integration gate 22/22; typecheck clean; `lint-artifacts` exit 0; `pack-artifacts` unpublished `sentropic-artifacts-0.1.0.tgz` (`320a1b4b…`).
   - [ ] UAT per spec-v7.
 
-- [ ] **Lot N-2** UAT
-  - [ ] Carried probes (Lot 1 clean-consumer, Lot 3 cache/outage) green on the consolidated head.
+- [ ] **Lot N-2** UAT (probes green; hosted continuity stays owner-executed in 2b per environment)
+  - [x] Carried probes green on the consolidated head: `probe-mcp-platform-clean-consumer` `CLEAN_CONSUMER_OK payloadDigest=81148c5d… handlersDigest=163e199a… compiledDigest=121fbcb1… fetchCalls=0`; `probe-artifacts-packed-consumer` `PACKED_CONSUMER_OK digest=sha256:039058c6… fetchCalls=0`; `test-cluster-mesh` 534 passed / 0 failed (40 skipped); `test-artifacts` 80/80; `test-artifacts-integration` 22/22; `test-api` 111 passed / 0 failed (3 queue jobs orphaned `Session not found`, final queue failed: 0); e2e group-e (05 07) 26 passed, I861-F1 flake NOT reproduced. Root lockfile synced (`lock-root`, +234 additive-only) after `install-internal-packages` EUSAGE on the new artifacts workspace.
   - [ ] Hosted-client continuity (existing connection, discovery, consent/renewal) verified in 2b per environment.
   - [ ] No reconnect, no account recreation, no expanded consent for carried changes.
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Sync `spec/*.md` behavior changes from this branch (none yet beyond DATA_MODEL 0042 entry).
-  - [ ] Record r4 verdict, final CI run, owner sign-offs and PR numbers in this file before merge-prep.
+  - [x] `spec/*.md`: only `spec/DATA_MODEL.md` (+61, 0042 entry); nothing else to sync.
+  - [ ] Record r4 verdict, final CI run, owner sign-offs and PR numbers in this file before merge-prep. Status: r4 deferred per conductor I861-F2 (no r4 review now); I861-F1 sign-off PENDING batched with final merge (retest group-e green 2026-10-16, flake not reproduced); I861-F5 5a sign-off pending; final CI runs queued (newest `38975795246`, none started); PR #679 draft OPEN head `b6a7744ec`.
 
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint (touched packages + api: typecheck-mcp-platform/auth-hono/cluster-mesh/api exit 0; lint-cluster-mesh exit 0; lint-api 0 errors / 217 warnings).
-  - [x] Retest carried suites (Lots 1-3 gates: package gates + scoped API suites green on the consolidated head; full test-api running).
-  - [ ] Retest e2e groups + security-container on the consolidated PR.
-  - [ ] Retest AI flaky set only under the acceptance rule; record signatures + sign-off.
-  - [ ] Bumped versions verified strictly above npm and merged main for every touched package (Post-Rebase Gate, incl. #662 watch I861-F4).
+  - [x] Typecheck & Lint re-run on the consolidated head: `typecheck-artifacts` clean, `lint-artifacts` 0 errors, `test-cluster-mesh` 534/0.
+  - [x] Retest carried suites (Lots 1-3 gates: package gates + scoped API suites green on the consolidated head; `test-api` 111 passed / 0 failed).
+  - [ ] Retest e2e groups + security-container on the consolidated PR. Status: group-e (05 07) 26 passed; full e2e groups NOT re-run; `test-api-security-container` on prod image `sha256:5bc305c0…` FAILED compliance — 60 findings not accepted (58 Go-stdlib v1.20.7 inside esbuild binary via api tsx/drizzle-kit, no register entry; ip-address 10.2.0 + pacote 21.5.0 entries EXPIRED review_due 2026-10-11). Pre-existing (image predates L-5c/5d/5e; lock sync added zero esbuild entries); register/image changes are owner decisions — NOT touched here.
+  - [ ] Retest AI flaky set only under the acceptance rule; record signatures + sign-off. Status: group-e retest 2026-10-16 green, F1 signature (`05-usecase-detail.spec.ts:690` 409 vs 201) not reproduced; owner sign-off still PENDING batched with final merge.
+  - [x] Bumped versions verified strictly above npm and merged main for every touched package (Post-Rebase Gate, incl. #662 watch I861-F4): mcp-platform 0.3.0 > 0.2.0/0.2.0; cluster-mesh 0.18.0 > 0.16.0/0.16.0; llm-gateway 0.20.1 > 0.20.0/0.20.0; auth-ui 0.7.5 > 0.7.4/0.7.4; artifacts 0.1.0 new unpublished candidate; llm-mesh 0.26.0 untouched on this branch (no publication, no bump needed).
   - [x] Final gate step 1: create/update PR using this `BRANCH.md` text as PR body (draft PR #679 opened; #673/#674/#676 closed with pointers).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers. Status: 9 CI runs queued, newest `38975795246`, none started (runner congestion); security-container compliance failure recorded above.
   - [ ] Final gate step 3: once UAT + CI are both `OK` and owner sign-offs recorded, commit removal of `BRANCH.md`, push, and merge (owner-gated; never in this execution).
