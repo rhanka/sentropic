@@ -143,6 +143,15 @@ sources "$work/selected-session"
 (cd "$work/selected-session" && npm install $quiet >/dev/null)
 tuple selected-session
 
+# MCP consumer: the candidate plus the locally-packed mcp-platform sibling (unpublished 0.3.0
+# candidate, packed exactly as published; dist built by the packaging.mk prerequisite) and the
+# registry SDK. Optional peers stay absent; the leaves must resolve without them.
+(cd ../mcp-platform && npm pack --silent --pack-destination "$work/src" >/dev/null)
+platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
+consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz"
+(cd "$work/mcp-consumer" && npm install $quiet >/dev/null)
+tuple mcp-consumer
+
 # Latest within every declared peer range (both auth modes), resolved by npm at run time; a train package
 # with a sibling archive is the candidate of its range.
 fixture latest
