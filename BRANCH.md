@@ -186,22 +186,23 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
 - [ ] **Lot 4 — L-1b-core registry kernel plus contract-v3 extensions (RC-6 blocked)**
   - [x] Preserve existing kernel `788bfe47bc485aba0a5050c9e7fe88cd2fd6d0f2` and tests `f668dc66a6f25d304ae0cabc5e1cba0c262978e4` as uncheckpointed WIP; their earlier RED/GREEN report does not accept this expanded contract.
   - [ ] Accept L-1a and the carried checkpoint chain first; after every relevant L-1a platform edit rerun the affected registry suites, packed-subpath zero-I/O probe and integrated Lot 4 gate.
-  - [ ] RC-M2(a): update `packages/mcp-platform/src/registry.ts` and public declarations to accept `LoadedDefinition | LazyDefinition`; preserve Immo's loaded definition and `register/select/configure/compile` signatures; freeze validated metadata, never load on register/catalog/unselected entries, and load selected entries only after preflight with atomic refusal.
-  - [ ] RC-M2(b): add `packages/mcp-platform/src/registry-entry.ts` and `src/registry-canonical.ts`; validate the closed registry-entry/v1 envelope, required extensions, raw-JSON duplicate keys and package-root asset closure; expose `./registry/entry`, full RFC 8785 SHA-256 and exact-byte asset digest APIs with no SDK/eager optional import.
-  - [ ] RC-M2(c): add `packages/mcp-platform/src/registry-parameters.ts`; implement dependency-free `sentropic.parameters/2020-12-bounded-v1`, the fixed safe pattern, structural const/enum, defaults, budgets and refusal of unsupported keywords; freeze the validator-port seam and retain the separate Lot 1a compiler.
-  - [ ] Remote seam: extend the kernel's public definition/binding types with `remote-bound` and a versioned injected client port; synthetic plan-resolution tests reject unknown/unselected names and schema mismatches before forwarding, with zero resource acquisition on invalid candidates. No h2a import; actual shared transport guards close in Lot 5.
-  - [ ] Update platform package exports/type declarations/API report and docs; pass the scoped suites below and clean packed fixtures for `./registry`, `./registry/entry` and synthetic publishers' `./registry/manifest` before accepting the final candidate.
+  - [x] RC-M2(a): update `packages/mcp-platform/src/registry.ts` and public declarations to accept `LoadedDefinition | LazyDefinition` (`867273c61`, suite `registry-lazy.test.ts` 5/5, kernel `registry.test.ts` 11/11 kept); preserve Immo's loaded definition and `register/select/configure/compile` signatures; freeze validated metadata, never load on register/catalog/unselected entries, and load selected entries only after preflight with atomic refusal.
+  - [x] RC-M2(b): add `packages/mcp-platform/src/registry-entry.ts` and `src/registry-canonical.ts` (`a293af960` + `b2b26ee2f` + `94f469b1f`; suites `registry-entry` 6/6 incl. packaged dist parity, `registry-entry-wiring` 3/3, `registry-canonical` 8/8); expose `./registry/entry`, full RFC 8785 SHA-256 and exact-byte asset digest APIs with no SDK/eager optional import.
+  - [x] RC-M2(c): add `packages/mcp-platform/src/registry-parameters.ts` (`989e477eb`, suite `registry-parameters.test.ts` 5/5); implement dependency-free `sentropic.parameters/2020-12-bounded-v1`, the fixed safe pattern, structural const/enum, defaults, budgets and refusal of unsupported keywords; freeze the validator-port seam and retain the separate Lot 1a compiler.
+  - [x] Remote seam: extend the kernel's public definition/binding types with `remote-bound` (`RemoteBoundDefinition`, `6635f3bb4`, suite `registry-remote-binding.test.ts` 5/5) and a versioned injected client port (`RemoteClientPortV1`); synthetic plan-resolution tests reject unknown/unselected names and schema mismatches before forwarding, with zero resource acquisition on invalid candidates. No h2a import; actual shared transport guards close in Lot 5.
+  - [x] Update platform package exports/type declarations/API report and docs (`94f469b1f` subpath, `94a34cfee` guide; `api-extract-mcp-platform` clean, index untouched); pass the scoped suites below and clean packed fixtures for `./registry`, `./registry/entry` (pack `mcp-platform@0.3.0 sha256=be408078…`, probe `CLEAN_CONSUMER_OK` frozen digests `fetchCalls=0`) and synthetic publishers' `./registry/manifest` (existing `manifest.test.ts` regression green in the full run) before accepting the final candidate.
   - [ ] RC-6 version/final-candidate acceptance: only after RC-6-ACK and all preceding delivery/test/probe evidence pass at the integrated checkpoint, accept the single spec-v8-ledger platform candidate (0.3.0 if compatible/free and above refreshed main/npm, otherwise the audited higher version); no separate 0.4.0 lot release and no intermediate publication.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
-    - [ ] **API tests**
-      - [ ] `packages/mcp-platform/tests/registry.test.ts` (existing, updated for loaded/lazy lifecycle)
-      - [ ] `packages/mcp-platform/tests/registry-configuration.test.ts` (existing, updated for bounded parameters and provider isolation)
-      - [ ] `packages/mcp-platform/tests/registry-dispatch.test.ts` (existing, updated for exact plan resolution and candidate atomicity)
-      - [ ] `packages/mcp-platform/tests/registry-entry.test.ts` (new: closed envelope/extensions/assets and packed publisher JSON export)
-      - [ ] `packages/mcp-platform/tests/registry-canonical.test.ts` (new: RFC 8785 Unicode ordering/escaping/IEEE-754/negative zero; reject duplicate keys, non-finite numbers and lone surrogates)
-      - [ ] `packages/mcp-platform/tests/registry-parameters.test.ts` (new: bounded 2020-12, safe-pattern semantics, budgets, unsupported keywords and independent configurations)
-      - [ ] `packages/mcp-platform/tests/registry-remote-binding.test.ts` (new: pure remote-bound seam, selected exact names/schema and preflight zero-effects)
+  - [x] Lot gate (implementation evidence, RC-6 version/final-candidate acceptance still blocked below):
+    - [x] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` (typecheck OK; 22 files / 195 tests GREEN; api-extract clean; pack `0.3.0 be408078…`; probe `CLEAN_CONSUMER_OK fetchCalls=0`)
+    - [x] **API tests** (all green in the integrated full run; each new suite RED-first)
+      - [x] `packages/mcp-platform/tests/registry.test.ts` (existing, 11/11 — loaded lifecycle preserved, lazy covered by `registry-lazy.test.ts` 5/5)
+      - [x] `packages/mcp-platform/tests/registry-configuration.test.ts` (existing, green in full run)
+      - [x] `packages/mcp-platform/tests/registry-dispatch.test.ts` (existing, green in full run)
+      - [x] `packages/mcp-platform/tests/registry-entry.test.ts` (6/6 incl. `./registry/entry` subpath contract + packaged dist parity)
+      - [x] `packages/mcp-platform/tests/registry-entry-wiring.test.ts` (3/3 one-call `resolveRegistryEntry`)
+      - [x] `packages/mcp-platform/tests/registry-canonical.test.ts` (existing 8/8)
+      - [x] `packages/mcp-platform/tests/registry-parameters.test.ts` (5/5)
+      - [x] `packages/mcp-platform/tests/registry-remote-binding.test.ts` (5/5, zero resource acquisition on invalid candidates)
       - [ ] `packages/mcp-platform/tests/manifest.test.ts` (existing regression)
       - [ ] `packages/mcp-platform/tests/authz.test.ts` (existing regression)
       - [ ] `packages/mcp-platform/tests/tool-configuration.test.ts` (existing regression, including token-family negatives and typed maxTokens positive)
