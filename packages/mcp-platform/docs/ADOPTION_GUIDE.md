@@ -346,8 +346,12 @@ a closed provenance (`approvalRef`, `revision`, `manifestDigest`, `payloadDigest
 only) carrying the mandatory payload digest (which binds the manifest, compatibility and
 handler-table shape digests) plus the snapshot-carried handler-table shape digest (`handlersDigest`,
 compared to the local table). Approval, reviewer and overlay strings are inspected
-(`reviewedBy` carries role/review identifiers only — no addresses, bearers, JWTs or `sub`;
-any URI scheme is forbidden in values, `maxTokens` excepted as an allowlisted key). The compiled
+as bounded heuristics (`reviewedBy` is expected to carry role/review identifiers;
+an opaque `sub`/UUID value cannot be detected by value, so no universal
+secret/PII detection is claimed; known credential/bearer/JWT/email patterns
+and dangerous/`scheme://`/`mailto:`/`ssh:` forms are rejected, `maxTokens`
+excepted as an allowlisted key, `Basic plan`/`Mode: fast`/`immo:cfg-12`
+accepted). The compiled
 configuration is deep-cloned (caller inputs, including overlay arrays, are never frozen) and deeply
 frozen, and exposes `payloadDigest`, `approvalRef`, `providerVersion`/`platformVersion` and
 `handlersDigest` for 1b diagnostics. It performs zero I/O; an invalid candidate retains the active
@@ -363,6 +367,19 @@ The effective compiled policy is authoritative: a configuration may add `require
 `requiredClaims` (strengthening only — the manifest baseline stays covered), so 3-policy MUST
 enforce the compiled `requiredScopes`/`requiredClaims` per tool, not the manifest baseline alone.
 Configuration alone can never rename, remove or add tools, nor change parameters or results.
+
+### Configuration provenance and registry contract (spec-v3 §5/§11)
+
+- `approvalRef`/`reviewedBy` are consumer-local opaque review references.
+  No fixed Sentropic approver and no cross-repository equality is required.
+- The compiler is a subordinate per-tool policy/value validator of the
+  future `@sentropic/mcp-platform/registry` (§3.1), not the product registry.
+- A digest establishes integrity, not authorization or a second approval.
+- `handlersDigest` is a shape digest (handler id + capabilityRef + config
+  schema), not executable-code attestation; code identity is bound
+  separately via package/image receipts. `platformVersion` equals the
+  package version under strict equality (snapshots are resealed on each
+  platform patch).
 
 ## 9. Verifying your connector (mock harness)
 
@@ -394,7 +411,7 @@ MUST NOT be pre-empted by a connector build — they are owner/architect decisio
   on service tokens, refresh-token in token responses — affect pinned prod RPs.
 - **Refresh-token policy for native/MCP clients (P3).** A security-posture reversal.
 - **RS-middleware relocation / auth-hono 1.0 timing (P4).**
-- **`mcp-registry` residence (P5)** and **39h identities-table fusion (P6).**
+- **mcp-registry residence (P5) — settled: consumer-local configuration, Immo embeds the cluster-mesh MCP registry** (no central Sentropic approval/residence requirement; customizations live in Immo per spec-v3 §3/§11) and **39h identities-table fusion (P6).**
 - **Production audit retention + PII policy** and **production secret-store
   selection + rotation policy** (spec §13) — the in-memory `MockSecretStore` /
   `InMemoryAuditSink` are deliberately not production stores.
