@@ -53,9 +53,9 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
   - `I861-EX4` (was BR2A-EX1..EX4): new `packages/cluster-mesh/src/trust/token-exchange-http.ts`, new `tests/token-exchange-integration.spec.ts`, README + CHANGELOG 0.18.0 entries, `catalog.ts` range line + peer range + selected fixtures. Reason: B1/M8/m10/m13 findings. Impact: additive + declared range widening, now inside Allowed Paths. Rollback: not applicable (paths are Allowed on this branch; kept for traceability).
 
 ## Feedback Loop
-- `attention` I861-F1 (open, owner: immo owner): 2-IdP m10 e2e flake `e2e/tests/05-usecase-detail.spec.ts:690` (lock 409 vs expected 201), same-commit rerun green, unrelated to exchange work (no locking/initiative/UI change, no timeout touched). Owner sign-off still required before merge.
+- `attention` I861-F1 (recorded, sign-off batched with the final merge request per conductor decision): 2-IdP m10 e2e flake, non-systematic. Test `e2e/tests/05-usecase-detail.spec.ts:690`, command `test-e2e (group-e, 05 07)`, signature `expect(acquiredByA.status()).toBe(201)` got 409. Same job passed on run `38833429815` at identical product code; rerun `gh run rerun --job 116765363067` concluded success. No branch change touches locking/initiatives/UI; no test or timeout touched.
 - `attention` I861-F2 (open, owner: conductor): r4 review of carried 1a work bound to the consolidated head (was bound to `2829fbaa7` on PR #673). Not dispatched yet.
-- `attention` I861-F3 (open, owner: conductor): final CI must run on the consolidated PR head (source-branch runs `38864812818`, `38867385859` are stale after consolidation). Not run yet.
+- `acknowledge` I861-F3 (fixed 2026-10-16): run `38873705146` on head `84098e350` failed `test-smoke-restore` at `docker compose stop` with daemon `502 Bad Gateway` before any branch code ran (backup step itself succeeded; delta since the green run was 1 BRANCH.md line). Reran failed jobs with `gh run rerun 38873705146 --failed`: `test-smoke-restore` pass (7m15s), `ci-gate` pass. No branch change involved.
 - `attention` I861-F4 (watch, owner: conductor): #662 will publish cluster-mesh 0.16.0 / llm-gateway 0.20.0 / llm-mesh 0.26.0. Current consolidated versions (cluster-mesh 0.18.0, llm-gateway 0.19.6) stay above npm and main today; re-bump above merged main per the Post-Rebase Gate if #662 merges first.
 - `attention` I861-F5 (pending, owner: conductor): close #673, #674, #676 with pointer comments after the ONE draft PR opens. Not done yet.
 - `attention` I861-F6 (carried, owner: planning conductor): V4-REV1 independent spec review of spec-v6 remains open; not approval of this branch.
@@ -118,7 +118,7 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
 - [ ] **Lot 2 — Carried 2-IdP issuer/workload (auth-hono 0.16.0) + remaining gates**
   - [ ] Verify carried source: `packages/auth-hono/src/oauth/token-handler.ts`, `src/oauth/token-exchange-handler.ts`, `src/oauth/state-store-types.ts`, `src/ports.ts`, `src/oauth/router.ts`, `src/oauth/wellknown-handler.ts`, `api/src/routes/auth/oauth.ts`, `api/src/routes/namespaces/oauth-ingress.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/db/schema.ts`, `api/drizzle/0042_immo_token_exchange.sql` (+ journal + `spec/DATA_MODEL.md`), `api/src/scripts/oauth-provision-exchange-client.ts`, `deploy/ci/idp-identity-sync/**` (creation path, fixtures, CRED_CYCLE).
   - [ ] Retain M1 fail-closed eligibility, M2 subject validation, M3 protected creation, M4 search-only policy, M5 refusal codes, m6/m7/m8 handler hardening.
-  - [ ] Obtain owner sign-off for m10 e2e flake (I861-F1).
+  - [x] Record m10 e2e flake precisely (I861-F1: test, command, signature, runs); sign-off batched with the final merge request per conductor decision.
   - [ ] Run full `test-api` serially on the consolidated head plus final CI (I861-F3).
   - [ ] Lot gate:
     - [x] `make typecheck-auth-hono test-auth-hono pack-auth-hono API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry` -> 40 files / 214 passed, pack PASS 0.16.0 (consolidated head)
@@ -175,8 +175,12 @@ Consolidate origin/feat/mcp-registry-config-codec (1a), origin/feat/auth-token-e
       - [ ] Revoke/invalidate a cached identity and rotate credentials/scopes mid-session; no old entry authorizes the next call.
       - [ ] Measure cold-call extra latency and warm-call token-endpoint avoidance.
 
-- [ ] **Lot 4 — 1b-core portable registry kernel (future, after Lots 1-3 gates)**
-  - [ ] New `packages/mcp-platform/src/registry.ts`, registry subpath/export/type declarations, `tests/registry.test.ts`, `tests/registry-configuration.test.ts`, `tests/registry-dispatch.test.ts`; package/API docs and reports. Reuse manifest/runtime/config compiler. No cluster-mesh source in this lot.
+- [ ] **Lot 4 — 1b-core portable registry kernel (in progress, spec-v6 §5; spec-v7 still generating, v6 applies)**
+  - [x] New `packages/mcp-platform/src/registry.ts`, registry subpath/export/type declarations, `tests/registry.test.ts`, `tests/registry-configuration.test.ts`, `tests/registry-dispatch.test.ts`; package/API docs and reports. Reuse manifest/runtime/config compiler. No cluster-mesh source in this lot.
+  - [x] Test-first: new suites RED before impl (`Cannot find module '../src/registry.js'`), GREEN after (11 + 6 + 3).
+  - [x] provider-cascade checked: not applicable (MCP provider registry; no `api/src/services/llm-runtime/**` or `providers/**` change, no `test-api-ai` trigger).
+  - [ ] Version bump 0.3.0 -> 0.4.0 with goldens reseal (TOOL_CONFIGURATION_PLATFORM_VERSION + probe digests).
+  - [ ] Packed-subpath import proof with zero registry I/O (isolated process).
   - [ ] Lot gate:
     - [ ] `make typecheck-mcp-platform test-mcp-platform api-extract-mcp-platform pack-mcp-platform API_PORT=9550 UI_PORT=5750 MAILDEV_UI_PORT=1650 ENV=test-immo-861-mcp-registry`
     - [ ] **API tests**
