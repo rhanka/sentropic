@@ -918,6 +918,41 @@ process.stdin.on('end', () => {
     expect(cappedResult.ok).toBe(true);
   });
 
+  it('rejects composed *Token keys while sparing maxTokens (R3-M1)', () => {
+    const tokenSchema = {
+      type: 'object',
+      properties: {
+        maxResults: { type: 'integer', minimum: 1, maximum: 100 },
+        authToken: { type: 'string' },
+        githubToken: { type: 'string' },
+        sessionToken: { type: 'string' },
+        apiToken: { type: 'string' },
+        maxTokens: { type: 'integer', minimum: 1, maximum: 4096 },
+      },
+      required: ['maxResults'],
+      additionalProperties: false,
+    };
+    const tokenHandlers = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: tokenSchema } };
+    for (const key of ['authToken', 'githubToken', 'sessionToken', 'apiToken']) {
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, [key]: 'x' } };
+      snapshot.handlersDigest = computeHandlersDigest(tokenHandlers);
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: tokenHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === `snapshot.bindings[0].values.${key}`)).toBe(true);
+      }
+    }
+    const capped = buildSnapshot();
+    capped.bindings[0] = { ...capped.bindings[0], values: { maxResults: 20, maxTokens: 512 } };
+    const cappedHandlers = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: { type: 'object', properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, maxTokens: { type: 'integer', minimum: 1, maximum: 4096 } }, required: ['maxResults'], additionalProperties: false } } };
+    capped.handlersDigest = computeHandlersDigest(cappedHandlers);
+    reseal(capped);
+    const cappedResult = compileToolConfiguration({ snapshot: capped, manifest, handlers: cappedHandlers, compatibilityDigest: consumerDigest });
+    expect(cappedResult.ok).toBe(true);
+  });
+
   it('requires qualified provider and platform versions', () => {
     const missing = buildSnapshot();
     delete (missing as Partial<ApprovedToolSnapshot>).providerVersion;
