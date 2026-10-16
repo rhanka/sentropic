@@ -25,6 +25,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - `BRANCH.md`
   - `.h2a/build/immo_1a_report.md`
   - `.h2a/build/immo_1a_fix_report.md`
+  - `.h2a/build/immo_1a_fix2_report.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -50,6 +51,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [ ] `attention` BR1a-EX3: touch `Makefile` (add `probe-mcp-platform-clean-consumer` target, ~25 lines). Reason: R2-M4 requires a Make-driven clean-consumer install probe for the unpublished `0.3.0` candidate; `Makefile` is Forbidden by default. Impact: additive `.PHONY` target only, no existing target modified, runs `pack-mcp-platform` + clean-container install + subpath import. Rollback: delete the target. Approved by the conductor under the owner default authorization per launch packet.
 - [ ] `attention` Lot 2 UAT-4 open: no Make target exists for a clean-consumer install of the unpublished `0.3.0` candidate; evidence stands on `pack-mcp-platform` PASS (sha `704bf8c7c5a4c30e6e82cf7d2882f5be3d7c2ea1ba0f4fbf326f06ed45d09b0b`) + `api-extract-mcp-platform` clean + separate-process digest test. Owner judges merge readiness.
 - [ ] `attention` CI green on run `38836535941` (55 pass, 0 fail): `enforce-package-bump`, `validate-mcp-platform`, `validate-publishable-manifests` pass. Merge stays owner-gated per packet stop rule.
 - [ ] `attention` BR1a-EX2: touch `packages/mcp-platform/src/hono.ts` (one line, `serverInfo.version` `0.2.0` -> `0.3.0`, review m10). Reason: version string left stale by the 0.3.0 bump; out of Allowed Paths. Impact: single string literal, no behavior. Rollback: revert the line.
@@ -96,7 +98,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] Implement per-tool values checks (typed schema validation, unknown keys/handlers rejected, invalid values rejected)
   - [x] Implement policy checks (reuse manifest scopes/claims/mutability/idempotency/freshness/redaction/gates, no weakening)
   - [x] Implement compatibility checks (consumer digest covers public schemas/result codec, no rename/remove/param/result change)
-  - [x] Implement provenance checks (approval ref, revision, payload/manifest/code binding, review provenance, no credentials/bearers/user data)
+  - [ ] Implement provenance checks (approval ref, revision, payload/manifest/code binding, review provenance, no credentials/bearers/user data) (was [x]; corrected per R2-M1: values only in Lot 1, provenance closed in Lot 3)
   - [x] Implement whole-candidate validation before activation plus active-generation retention and cold-start fail-closed
   - [x] Implement deterministic canonical JSON and SHA-256 digests (round-trip stable)
   - [x] Add `packages/mcp-platform/tests/tool-configuration.test.ts` (synthetic providers only)
@@ -127,7 +129,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
       - [x] Compile two synthetic tools with distinct settings, confirm only intended binding receives each value
       - [x] Reject wrong schema/type, unknown handler, duplicate external name, policy weakening before activation
       - [x] Run with fetch throwing and assert zero calls, reproduce same compiled result in fresh process (same-process holder only; superseded by the Lot 2 separate-process proof)
-      - [x] Install packed subpath from clean consumer, report compiler delivered without claiming Immo registry integration
+      - [ ] Install packed subpath from clean consumer, report compiler delivered without claiming Immo registry integration (was [x]; corrected per R2-m5/R2-M4: open, moved to Lot 3 Make target)
 - [ ] **Lot 2 — Immo 1a review findings fix (`.h2a/reviews/immo_1a_opus.md`: 1 BLOQUANT, 6 MAJEUR, 10 MINEUR)**
   - [x] B1: merge gates field by field (requiresElicitation, requiresHumanConfirmation, requiresPrincipalGate, requiresPolicy); overlay `{}` keeps baseline; requiresPolicy compared
   - [x] B1: freshness merged field by field; finite `maxAgeSeconds` with `0 < x <= base`; `stepUp` equality; `acr`/`amr` supersets, never removed
@@ -146,7 +148,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] m4: deep clone before freeze; caller manifest/snapshot never frozen; test
   - [x] m5: compiled-brand WeakSet on activate (fake configs rejected); generation counter; test
   - [x] m6: scope source of truth documented in `ADOPTION_GUIDE.md` (3-policy consumes effective compiled policy)
-  - [x] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform`
+  - [ ] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform` (was [x]; corrected per R2-M4: reimplementation only, packaged-file proof moved to Lot 3)
   - [x] m8: every commit < 150 lines with `BRANCH.md` updated in the same commit
   - [x] m9: `BRANCH.md` truthful (this lot; no template rests; no false checks)
   - [x] Lot gate:
@@ -172,11 +174,40 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
       - [x] Reject per-field policy weakening, malformed overlays, forbidden keys (incl. arrays), digest mismatches before activation
       - [x] Run with fetch throwing and assert zero calls; reproduce digests in a separate Node process
       - [ ] Install packed subpath from clean consumer via Make-driven probe, report compiler delivered without claiming Immo registry integration
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
-  - [x] Delete `spec/BRANCH_SPEC_EVOL.md` after integration.
+- [ ] **Lot 3 — Immo 1a R2 findings fix2 (`.h2a/reviews/immo_1a_opus_r2.md`: 4 MAJEUR R2-M1..M4, 5 MINEUR)**
+  - [ ] R2-M1: provenance closed keys + `checkForbiddenValue` on `approvalRef`/`revision`/`reviewedBy`/overlay strings, `reviewedBy` role-only rule; tests `forbidden_content`/`invalid_provenance` code+path
+  - [ ] R2-M2: `handlersDigest` in snapshot, covered by `payloadDigest`, compared to computed (`handlers_digest_mismatch`); falsification test; docs truthful
+  - [ ] R2-M3: 6 discriminating tests (`idempotency`, `mutability`, `mutatesExternalSystem`, `requiredClaims`, `provenance.manifestDigest`, unbounded `Infinity`); delete non-discriminating test
+  - [ ] R2-M4: separate-process test loads `dist/tool-configuration.js` and compares compiled `canonicalJson`; `probe-mcp-platform-clean-consumer` Make target under BR1a-EX3
+  - [ ] R2-m1: reject mistyped schema-keyword values (`invalid_values`); test
+  - [ ] R2-m2: case-insensitive `bearer`/`basic`, generic scheme `^[a-z][a-z0-9+.-]*:`, `maxTokens` allowlist, `email` substring + email-value detection; both-direction tests
+  - [ ] R2-m3: mandatory `providerVersion`/`platformVersion`, `platformVersion` equals package constant; tests
+  - [ ] R2-m4: clone overlay `requiredClaims`/`requiredScopes` arrays; overlay freeze test
+  - [ ] R2-m5 + docs: `BRANCH.md`/`README.md`/`ADOPTION_GUIDE.md` truthful; explicit `undefined` in `gates` rejected
+  - [ ] Lot gate:
+    - [ ] `make typecheck-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] **API tests**
+      - [ ] Existing regression `packages/mcp-platform/tests/manifest.test.ts` (unchanged)
+      - [ ] Existing regression `packages/mcp-platform/tests/authz.test.ts` (unchanged)
+      - [ ] Updated `packages/mcp-platform/tests/tool-configuration.test.ts` (R2-M1..M4, R2-m1..m4 discriminating tests)
+      - [ ] Scoped run: `make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec`
+      - [ ] Sub-lot gate: `make test-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None (pure library slice, no UI change)
+      - [ ] Sub-lot gate: not applicable, no `ui/tests/**` touched
+    - [ ] **E2E tests**
+      - [ ] None (pure library slice, no app wiring)
+      - [ ] Sub-lot gate: not applicable, no `e2e/tests/**` touched
+    - [ ] Package gates: `make api-extract-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] Package gates: `make pack-mcp-platform ENV=test-mcp-registry-codec`
+    - [ ] Package gates: `make check-publishable-manifests ENV=test-mcp-registry-codec`
+    - [ ] UAT via Make: `make probe-mcp-platform-clean-consumer ENV=test-mcp-registry-codec`
+    - [ ] Report `.h2a/build/immo_1a_fix2_report.md` with per-mutation command + failing output
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (was [x]; corrected per R2-m5: N/A, no file ever existed)
+  - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration. (was [x]; corrected per R2-m5: N/A, no file ever existed)
   - [x] Confirm no `spec/BRANCH_SPEC_EVOL.md` needed (S slice, no spec evolution file created)
-  - [x] Confirm `README.md` and `docs/ADOPTION_GUIDE.md` updated, no stale publication/Make notes introduced
+  - [ ] Confirm `README.md` and `docs/ADOPTION_GUIDE.md` updated, no stale publication/Make notes introduced (reopened per R2-M2/R2-m5: docs inexact, fixed in Lot 3)
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint (`make typecheck-mcp-platform`, lint)
   - [ ] Retest UI (library slice: none per Lot 1/Lot 2 gates, not applicable)
@@ -184,7 +215,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [ ] Retest e2e (library slice: none per Lot 1/Lot 2 gates, not applicable)
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [x] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (`0.2.0` -> `0.3.0`, corrected per R2-m5)
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
