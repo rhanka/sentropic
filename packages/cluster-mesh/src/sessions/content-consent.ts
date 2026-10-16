@@ -752,11 +752,95 @@ export const createContentConsentService = (
   const readGrant = (sessionId: string): Promise<SessionContentGrant | null> =>
     store.readGrant(sessionId);
 
+  const revokeProject = async (projectId: string): Promise<ProjectContentConsent> => {
+    const project = await store.readProject(requireId(projectId, 'projectId'));
+    if (!project) throw new ContentConsentError('project_not_found', 'no project to revoke');
+    const next: ProjectContentConsent = { ...project, state: 'revoked', updatedAt: nowMs() };
+    if (!await store.writeProject(project.projectRevision, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent project change; retry revocation');
+    }
+    for (const grant of await store.listGrants(projectId)) {
+      if (grant.state === 'active') {
+        await store.writeGrant(grant.version, { ...grant, state: 'revoked', updatedAt: nowMs() });
+      }
+    }
+    return next;
+  };
+
+  const excludeSession = async (projectId: string, sessionId: string): Promise<ProjectContentConsent> => {
+    const project = await readActiveProject(requireId(projectId, 'projectId'));
+    const target = requireId(sessionId, 'sessionId');
+    const excludedSessionIds = project.excludedSessionIds.includes(target)
+      ? [...project.excludedSessionIds]
+      : [...project.excludedSessionIds, target];
+    const next: ProjectContentConsent = {
+      ...project,
+      excludedSessionIds,
+      exclusionRevision: project.exclusionRevision + 1,
+      updatedAt: nowMs(),
+    };
+    if (!await store.writeProject(project.projectRevision, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent project change; retry exclusion');
+    }
+    const grant = await store.readGrant(target);
+    if (grant && grant.state === 'active') {
+      await store.writeGrant(grant.version, { ...grant, state: 'excluded', updatedAt: nowMs() });
+    }
+    return next;
+  };
+
+  /**
+   * Clearing an exclusion cannot silently re-enable the session: derivation
+   * stays suppressed until a fresh explicit scope amendment is accepted.
+   */
+  const clearExclusion = async (projectId: string, sessionId: string): Promise<ProjectContentConsent> => {
+    const project = await readActiveProject(requireId(projectId, 'projectId'));
+    const target = requireId(sessionId, 'sessionId');
+    const next: ProjectContentConsent = {
+      ...project,
+      excludedSessionIds: project.excludedSessionIds.filter((id) => id !== target),
+      exclusionRevision: project.exclusionRevision + 1,
+      requiresFreshAmendment: true,
+      updatedAt: nowMs(),
+    };
+    if (!await store.writeProject(project.projectRevision, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent project change; retry clearing');
+    }
+    return next;
+  };
+
+  const revokeGrant = async (sessionId: string): Promise<SessionContentGrant> => {
+    const grant = await store.readGrant(requireId(sessionId, 'sessionId'));
+    if (!grant) throw new ContentConsentError('invalid_request', 'no child grant to revoke');
+    const next: SessionContentGrant = { ...grant, state: 'revoked', updatedAt: nowMs() };
+    if (!await store.writeGrant(grant.version, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry revocation');
+    }
+    return next;
+  };
+
+  /** End/detach transition: live/controller fenced, committed copies retained. */
+  const closeGrant = async (sessionId: string): Promise<SessionContentGrant> => {
+    const grant = await store.readGrant(requireId(sessionId, 'sessionId'));
+    if (!grant) throw new ContentConsentError('invalid_request', 'no child grant to close');
+    if (grant.state !== 'active') throw new ContentConsentError('grant_closed', 'child grant is not active');
+    const next: SessionContentGrant = { ...grant, state: 'closed', retainedCopies: true, updatedAt: nowMs() };
+    if (!await store.writeGrant(grant.version, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent grant change; retry closing');
+    }
+    return next;
+  };
+
   return {
     prepareProject,
     acceptProject,
     readProject,
     deriveChild,
     readGrant,
+    revokeProject,
+    excludeSession,
+    clearExclusion,
+    revokeGrant,
+    closeGrant,
   };
 };
