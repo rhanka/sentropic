@@ -256,16 +256,27 @@ qualification and is rejected in production.
 
 ## Gated seams
 
-The public surface already defines the future federal ports, but the v1 runtime fails
-closed for all of them:
+The public surface already defines the future federal ports. The v1 runtime fails
+closed for all of them except RFC 8693 token exchange, which is available when a
+binding plus policy is configured (see below):
 
 - inter-server discovery and member revocation;
-- RFC 8693 token exchange;
 - remote signed-projection resolution;
 - memory snapshot replication and purge.
 
 Invoking one of these seams throws `CapabilityGatedError`. The package exposes no broker
 HTTP route, trusted-issuer store, inter-server directory, or replication runtime.
+
+## RFC 8693 token exchange (configured)
+
+`createDegenerateClusterMesh({ tokenExchange })` wires the exchange client when the
+binding plus policy passes its local preflight; otherwise `capabilities.tokenExchange`
+stays `'gated'`. The production binding (`trust/token-exchange-http.ts`) performs an
+authenticated RFC 8693 form POST with `client_secret_basic`, validates the returned
+token (signature, issuer, exact audience, subject, workload `client_id`, mandatory
+`act`, scope subset, TTL ceilings), and caches it for at most 60 seconds with an
+early-use safety margin. `tokenExchange: 'available'` proves only this trust/egress
+port: it neither delivers the MCP provider registry nor qualifies any module leaf.
 
 ## Construction
 
