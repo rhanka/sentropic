@@ -35,7 +35,7 @@ export const BOOTSTRAP_TARGETS = [
 export const PACK_TARGETS = [
   'cluster-mesh', 'llm-mesh', 'llm-gateway', 'chat-ui', 'cited-source-viewer', 'auth-hono', 'auth-client',
   'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-ui', 'cowork-bridge', 'cowork-desktop',
-  'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow',
+  'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'artifacts',
 ];
 export const publishFilter = (slug) => `${slug.replace(/-/g, '_')}_publish`;
 
