@@ -126,4 +126,57 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
 
   async verify(subjectToken: string): Promise<VerifiedSubjectToken> {
     let payload: JWTPayload;
+
+      const verified = await jwtVerify(subjectToken, await this.jwks(), {
+        issuer: this.expectedIssuer(),
+        currentDate: new Date(this.nowMs()),
+      });
+      payload = verified.payload;
+    } catch (error) {
+      if (error instanceof SubjectVerificationError) throw error;
+      if (error instanceof Error && 'code' in error) {
+        const code = (error as { code?: string }).code;
+        if (code === 'ERR_JWT_EXPIRED') throw new SubjectVerificationError('expired');
+        if (code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED') {
+          throw new SubjectVerificationError('invalid_signature');
+        }
+        if (code === 'ERR_JWT_CLAIM_VALIDATION_FAILED') {
+          const claim = (error as { claim?: string }).claim;
+          if (claim === 'iss') throw new SubjectVerificationError('invalid_issuer');
+          if (claim === 'aud') throw new SubjectVerificationError('invalid_audience');
+        }
+      }
+      throw new SubjectVerificationError('malformed');
+    }
+    if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+      throw new SubjectVerificationError('missing_subject');
+    }
+    if (payload.act != null) throw new SubjectVerificationError('actor_chained');
+    if (payload.cnf != null) throw new SubjectVerificationError('proof_bound');
+    if (typeof payload.exp !== 'number' || typeof payload.iat !== 'number') {
+      throw new SubjectVerificationError('malformed');
+    }
+    const audience = Array.isArray(payload.aud)
+      ? payload.aud.filter((entry): entry is string => typeof entry === 'string')
+      : typeof payload.aud === 'string'
+        ? [payload.aud]
+        : [];
+    const scope =
+      typeof payload.scope === 'string'
+        ? payload.scope.split(' ').filter(Boolean)
+        : Array.isArray(payload.scope)
+          ? payload.scope.filter((entry): entry is string => typeof entry === 'string')
+          : [];
+    return {
+      issuer: typeof payload.iss === 'string' ? payload.iss : '',
+      subject: payload.sub,
+      audience,
+      issuedAtSec: payload.iat,
+      expiresAtSec: payload.exp,
+      scope,
+      ...(typeof payload.client_id === 'string' ? { clientId: payload.client_id } : {}),
+      ...(typeof payload.tid === 'string' ? { tenantId: payload.tid } : {}),
+      ...(typeof payload.jti === 'string' ? { jti: payload.jti } : {}),
+    };
+  }
 }
