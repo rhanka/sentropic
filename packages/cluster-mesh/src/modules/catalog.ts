@@ -81,6 +81,7 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   'mcp-platform/entry': mcpPlatform('mcp-platform/entry', './registry/entry', ['buildRegistryEntry', 'resolveRegistryEntry']),
   'mcp-platform/bridge': mcpPlatform('mcp-platform/bridge', './transport/bridge', ['registerBridgeTools', 'identityFromExtra']),
   'mcp-platform/hono': mcpPlatform('mcp-platform/hono', './hono', ['createMcpPlatformHono']),
+  'mcp-platform/stdio': mcpPlatform('mcp-platform/stdio', './transport/stdio', ['createStdioTransport', 'extractStdioRequestIdentity']),
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {
