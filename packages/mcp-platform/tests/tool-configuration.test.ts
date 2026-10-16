@@ -988,6 +988,120 @@ process.stdin.on('end', () => {
     }
   });
 
+  it('covers surviving R3-m2 controls with code and path', () => {
+    const longBearer = 'Bearer abcdefgh12345678';
+    const longJwt = 'eyJhbGciOiJIUzI1NiJ9.e30.signature12345678';
+    const overlayScope = buildSnapshot();
+    overlayScope.bindings[0] = { ...overlayScope.bindings[0], policy: { requiredScopes: ['synth:search', longBearer] } };
+    reseal(overlayScope);
+    const scopeResult = compileToolConfiguration({ snapshot: overlayScope, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(scopeResult.ok).toBe(false);
+    if (!scopeResult.ok) {
+      expect(scopeResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].policy.requiredScopes[1]')).toBe(true);
+    }
+    const overlayClaim = buildSnapshot();
+    overlayClaim.bindings[1] = { ...overlayClaim.bindings[1], policy: { requiredClaims: [longBearer] } };
+    reseal(overlayClaim);
+    const claimResult = compileToolConfiguration({ snapshot: overlayClaim, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(claimResult.ok).toBe(false);
+    if (!claimResult.ok) {
+      expect(claimResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[1].policy.requiredClaims[0]')).toBe(true);
+    }
+    const overlayAcr = snapshotFor(gatedManifest, gatedBindings({ freshness: { maxAgeSeconds: 100, stepUp: 'auth', acr: ['a1', longBearer], amr: ['m1'] } }));
+    const acrResult = compileToolConfiguration({ snapshot: overlayAcr, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(acrResult.ok).toBe(false);
+    if (!acrResult.ok) {
+      expect(acrResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].policy.freshness.acr[1]')).toBe(true);
+    }
+    const overlayAmr = snapshotFor(gatedManifest, gatedBindings({ freshness: { maxAgeSeconds: 100, stepUp: 'auth', acr: ['a1'], amr: ['m1', longBearer] } }));
+    const amrResult = compileToolConfiguration({ snapshot: overlayAmr, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(amrResult.ok).toBe(false);
+    if (!amrResult.ok) {
+      expect(amrResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].policy.freshness.amr[1]')).toBe(true);
+    }
+    const overlayMut = snapshotFor(gatedManifest, gatedBindings({ mutability: longBearer as unknown as ToolPolicyOverlay['mutability'] }));
+    const mutResult = compileToolConfiguration({ snapshot: overlayMut, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(mutResult.ok).toBe(false);
+    if (!mutResult.ok) {
+      expect(mutResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].policy.mutability')).toBe(true);
+    }
+    const overlayIdem = snapshotFor(gatedManifest, gatedBindings({ idempotency: { required: false, scope: longBearer } as unknown as ToolPolicyOverlay['idempotency'] }));
+    const idemResult = compileToolConfiguration({ snapshot: overlayIdem, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(idemResult.ok).toBe(false);
+    if (!idemResult.ok) {
+      expect(idemResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].policy.idempotency.scope')).toBe(true);
+    }
+    const overlayStep = snapshotFor(gatedManifest, gatedBindings({ freshness: { maxAgeSeconds: 100, stepUp: longBearer } as unknown as ToolPolicyOverlay['freshness'] }));
+    const stepResult = compileToolConfiguration({ snapshot: overlayStep, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(stepResult.ok).toBe(false);
+    if (!stepResult.ok) {
+      expect(stepResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.bindings[0].policy.freshness.stepUp')).toBe(true);
+    }
+    const approvalJwt = buildSnapshot();
+    approvalJwt.provenance = { ...approvalJwt.provenance, approvalRef: longJwt };
+    reseal(approvalJwt);
+    const approvalResult = compileToolConfiguration({ snapshot: approvalJwt, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(approvalResult.ok).toBe(false);
+    if (!approvalResult.ok) {
+      expect(approvalResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.provenance.approvalRef')).toBe(true);
+    }
+    const revisionBearer = buildSnapshot();
+    revisionBearer.revision = longBearer;
+    revisionBearer.provenance = { ...revisionBearer.provenance, revision: longBearer };
+    reseal(revisionBearer);
+    const revisionResult = compileToolConfiguration({ snapshot: revisionBearer, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(revisionResult.ok).toBe(false);
+    if (!revisionResult.ok) {
+      expect(revisionResult.diagnostics.some((entry) => entry.code === 'forbidden_content' && entry.path === 'snapshot.provenance.revision')).toBe(true);
+    }
+    const minLengthCases: Array<{ properties: Record<string, unknown>; values: Record<string, unknown> }> = [
+      { properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, mode: { type: 'string', minLength: '10' } }, values: { maxResults: 20, mode: 'fast' } },
+      { properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, tags: { type: 'array', minItems: '1', items: { type: 'string' } } }, values: { maxResults: 20, tags: ['a'] } },
+      { properties: { maxResults: { type: 'integer', minimum: 1, maximum: 100 }, tags: { type: 'array', maxItems: '5', items: { type: 'string' } } }, values: { maxResults: 20, tags: ['a'] } },
+    ];
+    for (const { properties, values } of minLengthCases) {
+      const keywordHandlers = { ...handlers, 'local-search': { handlerId: 'local-search', capabilityRef: 'synth_search', configSchema: { type: 'object', properties, required: ['maxResults'], additionalProperties: false } } };
+      const snapshot = buildSnapshot();
+      snapshot.bindings[0] = { ...snapshot.bindings[0], values };
+      snapshot.handlersDigest = computeHandlersDigest(keywordHandlers);
+      reseal(snapshot);
+      const result = compileToolConfiguration({ snapshot, manifest, handlers: keywordHandlers, compatibilityDigest: consumerDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'invalid_values')).toBe(true);
+      }
+    }
+    const emptyConnector = buildSnapshot();
+    emptyConnector.connectorId = '';
+    const connectorResult = compileToolConfiguration({ snapshot: emptyConnector, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(connectorResult.ok).toBe(false);
+    if (!connectorResult.ok) {
+      expect(connectorResult.diagnostics.some((entry) => entry.code === 'invalid_identity' && entry.path === 'snapshot.connectorId')).toBe(true);
+    }
+    const emptyApproval = buildSnapshot();
+    emptyApproval.provenance = { ...emptyApproval.provenance, approvalRef: '' };
+    reseal(emptyApproval);
+    const emptyApprovalResult = compileToolConfiguration({ snapshot: emptyApproval, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(emptyApprovalResult.ok).toBe(false);
+    if (!emptyApprovalResult.ok) {
+      expect(emptyApprovalResult.diagnostics.some((entry) => entry.code === 'invalid_provenance' && entry.path === 'snapshot.provenance.approvalRef')).toBe(true);
+    }
+    const unknownBinding = buildSnapshot();
+    (unknownBinding.bindings[0] as Record<string, unknown>)['extra'] = 1;
+    reseal(unknownBinding);
+    const unknownBindingResult = compileToolConfiguration({ snapshot: unknownBinding, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(unknownBindingResult.ok).toBe(false);
+    if (!unknownBindingResult.ok) {
+      expect(unknownBindingResult.diagnostics.some((entry) => entry.code === 'malformed_snapshot' && entry.path === 'snapshot.bindings[0].extra')).toBe(true);
+    }
+    const unknownGates = snapshotFor(gatedManifest, gatedBindings({ gates: { requiresElicitation: true, unknownGate: true } as unknown as ToolPolicyOverlay['gates'] }));
+    const unknownGatesResult = compileToolConfiguration({ snapshot: unknownGates, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(unknownGatesResult.ok).toBe(false);
+    if (!unknownGatesResult.ok) {
+      expect(unknownGatesResult.diagnostics.some((entry) => entry.code === 'policy_weakening' && entry.path === 'snapshot.bindings[0].policy')).toBe(true);
+    }
+  });
+
   it('requires qualified provider and platform versions', () => {
     const missing = buildSnapshot();
     delete (missing as Partial<ApprovedToolSnapshot>).providerVersion;

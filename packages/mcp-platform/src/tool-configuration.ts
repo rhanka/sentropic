@@ -1106,12 +1106,9 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
         diag(diagnostics, 'policy_weakening', `${path}.policy`, shapeError);
         return;
       }
-      const weakening = isWeakeningOverlay(manifestTool, entry.policy as ToolPolicyOverlay);
-      if (weakening) {
-        diag(diagnostics, 'policy_weakening', `${path}.policy`, weakening);
-        return;
-      }
-      // Overlay strings inspected like values (R2-M1).
+      // Overlay strings inspected like values (R2-M1, R3-m2): inspected
+      // before the weakening check so a forbidden string is reported even
+      // when the overlay also weakens the baseline.
       const overlay = entry.policy as ToolPolicyOverlay;
       for (const [index, scope] of (overlay.requiredScopes ?? []).entries()) {
         checkForbiddenValue(diagnostics, `${path}.policy.requiredScopes[${index}]`, scope, { allowScheme: true });
@@ -1131,6 +1128,11 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
       }
       for (const [index, entryValue] of (overlay.freshness?.amr ?? []).entries()) {
         checkForbiddenValue(diagnostics, `${path}.policy.freshness.amr[${index}]`, entryValue);
+      }
+      const weakening = isWeakeningOverlay(manifestTool, entry.policy as ToolPolicyOverlay);
+      if (weakening) {
+        diag(diagnostics, 'policy_weakening', `${path}.policy`, weakening);
+        return;
       }
     }
 
