@@ -56,13 +56,27 @@ function consumer(cli: SeatCli): SeatBundleV1 {
 
 describe('seat-bundle envelope', () => {
   it.each(CLIS)('accepts a synthetic canonical bundle for %s', (cli) => {
-    const result = validateSeatBundle(canonical(cli), { ownerScope: 'owner-synth-01' });
+    const result = validateSeatBundle(canonical(cli), { ownerScope: 'owner-synth-01', trustedAuthority: 'custodian' });
     expect(result.ok).toBe(true);
   });
 
   it.each(CLIS)('accepts a refresh-less consumer projection for %s', (cli) => {
-    const result = validateSeatBundle(consumer(cli), { ownerScope: 'owner-synth-01' });
+    const result = validateSeatBundle(consumer(cli), { ownerScope: 'owner-synth-01', trustedAuthority: 'consumer' });
     expect(result.ok).toBe(true);
+  });
+
+  it('refuses a custodian claim on a consumer channel', () => {
+    const result = validateSeatBundle(canonical('claude'), { trustedAuthority: 'consumer' });
+    expect(result).toMatchObject({ ok: false, code: 'authority-escalation' });
+  });
+
+  it('accepts store-reference on native-store and refuses it on consumer', () => {
+    const store: SeatBundleV1 = { ...consumer('agy'), authority: 'native-store', credentialClass: 'store-reference' };
+    expect(validateSeatBundle(store, { trustedAuthority: 'native-store' }).ok).toBe(true);
+    expect(validateSeatBundle(store, { trustedAuthority: 'consumer' })).toMatchObject({
+      ok: false,
+      code: 'authority-escalation',
+    });
   });
 
   it('rejects an oversize bundle', () => {
@@ -135,7 +149,10 @@ describe('seat-bundle envelope', () => {
     expect(validateSeatBundle(staticBundle).ok).toBe(true);
     const familyFree = canonical('vibe');
     delete familyFree.identity.refreshFamilyRef;
-    expect(validateSeatBundle(familyFree)).toMatchObject({ ok: false, code: 'schema-mismatch' });
+    expect(validateSeatBundle(familyFree, { trustedAuthority: 'custodian' })).toMatchObject({
+      ok: false,
+      code: 'schema-mismatch',
+    });
   });
 
   it('emits credential-free receipts and freezes the agy mapping', () => {
