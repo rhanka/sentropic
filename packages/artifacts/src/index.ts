@@ -17,6 +17,7 @@ export * from './server/sources.js';
 export * from './server/fork.js';
 export * from './server/lifecycle.js';
 export * from './server/gc.js';
+export * from './server/pages.js';
 export * from './server/runtime.js';
 export * from './server/reader-profile.js';
 export * from './http.js';
