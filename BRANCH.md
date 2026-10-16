@@ -134,9 +134,9 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] M2: normalized-only forbidden-key set (refresh_token, id_token, client_secret, tenant_id, workspace_id, credentials, token); substring families token|secret|password|credential|apikey|privatekey; arrays traversed
   - [x] M3: payload digest binds manifestDigest+compatibilityDigest (only `provenance.payloadDigest` excluded); payloadDigest mandatory; handlers digest (id+capabilityRef+configSchema); compiled exposes payloadDigest, approvalRef, providerVersion, platformVersion
   - [x] M4: consumer-supplied `compatibilityDigest` compiler input, compared to snapshot; scope documented (public schemas/result codec for 1b)
-  - [ ] M5: strict canonical-json aligned with `sentropic-json-v1` (reject undefined/non-finite/non-plain/cycles); reject Infinity in validator; golden hex digests
-  - [ ] M6: one discriminating test per diagnostic code (values otherwise schema-valid, assert `code`+`path`); strengthening-overlay accepted; requiredScopes exposed; nested arrays; null overlays
-  - [ ] M6: determinism test permuting snapshot key order, binding order, manifest tool order plus JSON round trip, with frozen reference digest
+  - [x] M5: strict canonical-json aligned with `sentropic-json-v1` (reject undefined/non-finite/non-plain/cycles); reject Infinity in validator; golden hex digests
+  - [x] M6: one discriminating test per diagnostic code (values otherwise schema-valid, assert `code`+`path`); strengthening-overlay accepted; requiredScopes exposed; nested arrays; null overlays
+  - [x] M6: determinism test permuting snapshot key order, binding order, manifest tool order plus JSON round trip, with frozen reference digest
   - [x] m1: unsupported schema keywords rejected (pattern, const, exclusiveMinimum/Maximum, multipleOf, format, oneOf, uniqueItems); test
   - [x] m2: SQL heuristic tightened (leader + structure, `Select a city` passes); executable values cover wss/javascript/protocol-relative/node/JWT; both-direction tests
   - [x] m3: unknown keys rejected (snapshot, binding, overlay, gates); providerVersion/platformVersion/connectorId validated (providerVersion equals manifest.version); duplicate manifest tool names rejected; handler table key/handlerId mismatch rejected
@@ -144,7 +144,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - [x] m4: deep clone before freeze; caller manifest/snapshot never frozen; test
   - [x] m5: compiled-brand WeakSet on activate (fake configs rejected); generation counter; test
   - [ ] m6: scope source of truth documented in `ADOPTION_GUIDE.md` (3-policy consumes effective compiled policy)
-  - [ ] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform`
+  - [x] m7: fresh-process proof in a separate Node process (child_process, no repo mount), run via `make test-mcp-platform`
   - [ ] m8: every commit < 150 lines with `BRANCH.md` updated in the same commit
   - [ ] m9: `BRANCH.md` truthful (this lot; no template rests; no false checks)
   - [ ] Lot gate:
