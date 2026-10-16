@@ -707,3 +707,43 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
   return { ok: true, config: deepFreeze(config) };
 }
 
+// ---------------------------------------------------------------------------
+// Active generation fencing
+// ---------------------------------------------------------------------------
+
+export type ActivateToolConfigurationResult =
+  | { ok: true; config: CompiledToolConfiguration }
+  | { ok: false; diagnostics: ToolConfigurationDiagnostic[] };
+
+/**
+ * Active-generation holder. An invalid candidate retains the active
+ * generation; a cold start without a valid embedded configuration fails
+ * before replacing any working instance.
+ */
+export class ToolConfigurationStore {
+  private active: CompiledToolConfiguration | null = null;
+
+  getActive(): CompiledToolConfiguration | null {
+    return this.active;
+  }
+
+  activate(result: CompileToolConfigurationResult): ActivateToolConfigurationResult {
+    if (!result.ok) return result;
+    this.active = result.config;
+    return { ok: true, config: result.config };
+  }
+
+  compileAndActivate(input: CompileToolConfigurationInput): ActivateToolConfigurationResult {
+    return this.activate(compileToolConfiguration(input));
+  }
+
+  coldStart(input: CompileToolConfigurationInput): CompiledToolConfiguration {
+    const result = compileToolConfiguration(input);
+    if (!result.ok) {
+      const first = result.diagnostics[0];
+      throw new Error(`invalid embedded tool configuration: ${first?.code ?? 'unknown'} at ${first?.path ?? 'snapshot'}`);
+    }
+    this.active = result.config;
+    return result.config;
+  }
+}
