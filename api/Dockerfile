@@ -113,10 +113,10 @@ RUN npm --workspace @sentropic/contracts run build
 RUN npm --workspace @sentropic/events run build
 RUN npm --workspace @sentropic/chat-core run build
 RUN npm --workspace @sentropic/chat-server run build
+RUN npm --workspace @sentropic/mcp-platform run build
 RUN npm --workspace @sentropic/cluster-mesh run build
 RUN npm --workspace @sentropic/flow run build
 RUN npm --workspace @sentropic/comments run build
-RUN npm --workspace @sentropic/mcp-platform run build
 RUN npm --workspace @sentropic/connector-host run build
 RUN npm --workspace @sentropic/mcp-connector-google run build
 RUN npm --workspace @sentropic/ubo-contracts run build
