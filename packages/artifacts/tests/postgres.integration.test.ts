@@ -121,6 +121,93 @@ describe('postgres artifact store', () => {
     expect(await store.getCurrentReleaseId(ensured.artifactId)).toBe(release.releaseId);
   });
 
+  it('stores and reads access grants with the owner', async () => {
+    const ensured = await store.ensureArtifact({
+      storageScopeId: 'scope-1',
+      ownerId: 'owner-acl',
+      bindingName: 'acl',
+      profile: {},
+    });
+    expect(await store.getArtifactAcl('00000000-0000-4000-8000-000000000000')).toBeUndefined();
+    await store.putArtifactAcl(ensured.artifactId, {
+      ownerId: 'owner-acl',
+      isPublic: true,
+      withdrawn: false,
+      grants: [{ principalId: 'reader-1', grant: 'read' }],
+    });
+    const acl = await store.getArtifactAcl(ensured.artifactId);
+    expect(acl).toMatchObject({
+      ownerId: 'owner-acl',
+      storageScopeId: 'scope-1',
+      isPublic: true,
+      grants: [{ principalId: 'reader-1', grant: 'read' }],
+    });
+  });
+
+  it('stores and replaces sources', async () => {
+    const ensured = await store.ensureArtifact({
+      storageScopeId: 'scope-1',
+      ownerId: 'owner-src',
+      bindingName: 'src',
+      profile: {},
+    });
+    expect(await store.getSource(ensured.artifactId)).toBeUndefined();
+    await store.putSource(ensured.artifactId, { kind: 'base-commit', commit: 'abc' });
+    await store.putSource(ensured.artifactId, { kind: 'inline-original' });
+    expect(await store.getSource(ensured.artifactId)).toEqual({ kind: 'inline-original' });
+  });
+
+  it('tracks lifecycle states on real rows', async () => {
+    const ensured = await store.ensureArtifact({
+      storageScopeId: 'scope-1',
+      ownerId: 'owner-life',
+      bindingName: 'life',
+      profile: {},
+    });
+    await expect(store.register('00000000-0000-4000-8000-000000000000', 'owner-life')).rejects.toThrow(
+      /unknown artifact/,
+    );
+    await store.register(ensured.artifactId, 'owner-life');
+    expect(await store.getOwner(ensured.artifactId)).toBe('owner-life');
+    expect(await store.getArtifactState(ensured.artifactId)).toBe('active');
+    await store.setArtifactState(ensured.artifactId, 'withdrawn');
+    expect(await store.getArtifactState(ensured.artifactId)).toBe('withdrawn');
+    await store.setRenewedAt(ensured.artifactId, '2026-01-01T00:00:00.000Z');
+    expect(await store.getRenewedAt(ensured.artifactId)).toBe('2026-01-01T00:00:00.000Z');
+    await store.putRelease({
+      releaseId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      artifactId: ensured.artifactId,
+      manifestDigest: 'dd'.repeat(32),
+      manifest: '{"schemaVersion":"artifacts/v1","files":[]}',
+      state: 'ready',
+      createdAt: new Date().toISOString(),
+    });
+    await store.addRelease(ensured.artifactId, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    expect(await store.listArtifactReleases(ensured.artifactId)).toEqual([
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    ]);
+    expect(await store.getReleaseState('dddddddd-dddd-4ddd-8ddd-dddddddddddd')).toBe('ready');
+    await store.setReleaseState('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'retired');
+    expect(await store.getReleaseState('dddddddd-dddd-4ddd-8ddd-dddddddddddd')).toBe('retired');
+  });
+
+  it('counts holders and pins exactly', async () => {
+    expect(await store.count('sha256:aa')).toBe(0);
+    expect(await store.isPinned('sha256:aa')).toBe(false);
+    await store.addRef('sha256:aa', 'release-r1');
+    await store.addRef('sha256:aa', 'release-r1');
+    expect(await store.count('sha256:aa')).toBe(1);
+    await store.pin('sha256:aa', 'legal-hold');
+    expect(await store.isPinned('sha256:aa')).toBe(true);
+    await expect(store.pin('sha256:aa', 'legal-hold')).rejects.toThrow(/duplicate/);
+    await store.releaseRef('sha256:aa', 'release-r1');
+    expect(await store.count('sha256:aa')).toBe(0);
+    await expect(store.releaseRef('sha256:aa', 'release-r1')).rejects.toThrow(/not held/);
+    await store.unpin('sha256:aa', 'legal-hold');
+    expect(await store.isPinned('sha256:aa')).toBe(false);
+    await expect(store.unpin('sha256:aa', 'legal-hold')).rejects.toThrow(/not pinned/);
+  });
+
   it('registers blob rows with the release', async () => {
     const ensured = await store.ensureArtifact({
       storageScopeId: 'scope-1',
