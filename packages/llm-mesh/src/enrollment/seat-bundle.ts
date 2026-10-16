@@ -34,6 +34,9 @@ export const SEAT_AGY_APPLICATION_TUPLE = {
   productAccountSource: 'antigravity',
 } as const;
 
+/** Channel rank: a bundle claim above the granted channel is an escalation. */
+const AUTHORITY_RANK: Record<SeatAuthority, number> = { consumer: 0, 'native-store': 1, custodian: 2 };
+
 /** Refresh-capable key names that must never appear in a consumer payload. */
 const FORBIDDEN_REFRESH_KEYS = new Set([
   'refreshToken',
@@ -267,6 +270,10 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   if (authority !== 'custodian' && authority !== 'consumer' && authority !== 'native-store') {
     return fail('schema-mismatch', 'authority must be custodian, consumer or native-store');
   }
+  const effective = resolveEffectiveAuthority(authority, ctx?.trustedAuthority ?? 'consumer');
+  if (AUTHORITY_RANK[authority] > AUTHORITY_RANK[effective]) {
+    return fail('authority-escalation', 'bundle claims more authority than the channel grants');
+  }
   const credClass = credentialClass;
   if (credClass !== 'renewable' && credClass !== 'static-key' && credClass !== 'access-only' && credClass !== 'store-reference') {
     return fail('schema-mismatch', 'credentialClass must be a known class');
@@ -277,12 +284,15 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   if (credClass !== 'static-key' && !nonEmpty(identity['refreshFamilyRef'])) {
     return fail('schema-mismatch', 'a non-static seat requires refreshFamilyRef');
   }
-  if (authority !== 'custodian') {
+  if (effective !== 'custodian') {
     if (lifecycle['refreshAuthority'] !== 'none') {
       return fail('authority-escalation', 'only the custodian holds refresh authority');
     }
-    if (credClass === 'renewable' || credClass === 'store-reference') {
-      return fail('authority-escalation', 'a non-custodian payload cannot carry a renewable class');
+    if (credClass === 'renewable') {
+      return fail('authority-escalation', 'only the custodian carries renewable credentials');
+    }
+    if (credClass === 'store-reference' && effective !== 'native-store') {
+      return fail('authority-escalation', 'store references are accepted on the native-store channel only');
     }
     if (canonical !== undefined) {
       return fail('authority-escalation', 'a non-custodian payload cannot carry canonical material');
