@@ -1312,6 +1312,21 @@ test-artifacts: build-artifacts ## Run @sentropic/artifacts tests
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/artifacts/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+.PHONY: lint-artifacts
+lint-artifacts: ## Lint @sentropic/artifacts sources and tests (same generated config as lint-cluster-mesh)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" \
+			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
+		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
+			"export default tseslint.config(...tseslint.configs.recommended, { rules: { '\''@typescript-eslint/no-empty-object-type'\'': '\''off'\'', '\''@typescript-eslint/no-explicit-any'\'': '\''off'\'', '\''@typescript-eslint/no-unused-vars'\'': '\''off'\'' } });" \
+			> "$$tool_dir/eslint.config.mjs"; \
+		"$$tool_dir/node_modules/.bin/eslint" --config "$$tool_dir/eslint.config.mjs" src tests'
+
+.PHONY: pack-artifacts
+pack-artifacts: build-artifacts ## Pack @sentropic/artifacts tarball without publishing (L-5a proof)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/artifacts $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; dest="$${PACK_DESTINATION:-/workspace/tmp/artifacts-pack}"; mkdir -p "$$dest"; rm -f "$$dest"/*.tgz; npm pack --pack-destination "$$dest" >/dev/null; sha256sum "$$dest"/*.tgz'
+
 .PHONY: test-mcp-platform
 test-mcp-platform: build-mcp-platform ## Run @sentropic/mcp-platform tests (builds dist first for the packaged test, BR1a-EX3)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
