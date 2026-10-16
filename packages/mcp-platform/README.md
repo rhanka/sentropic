@@ -63,7 +63,7 @@ Strict, pure, zero-I/O compiler for an approved per-tool configuration snapshot:
   fail closed. See `tests/tool-configuration.test.ts` (discriminating tests per control;
   the separate-process test loads `dist/` and the clean-consumer probe installs the packed
   tarball via `make probe-mcp-platform-clean-consumer`, comparing frozen digests with zero fetch).
-- Provenance and registry contract (spec-v3 §5/§11): `approvalRef`/`reviewedBy` are
+- Provenance and registry contract (spec-v5 §5/§11): `approvalRef`/`reviewedBy` are
   consumer-local opaque review references (no Sentropic approver, no cross-repo equality);
   the compiler is a subordinate validator of the future `@sentropic/mcp-platform/registry`
   (§3.1), not the product registry; a digest proves integrity, not authorization;
