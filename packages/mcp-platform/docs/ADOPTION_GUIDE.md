@@ -319,6 +319,23 @@ checks.
 
 ---
 
+## 8b. Approved tool configuration (generic compiler, Lot 1a)
+
+Import the additive subpath (preserves the root contract):
+
+```ts
+import { compileToolConfiguration } from '@sentropic/mcp-platform/tool-configuration';
+```
+
+Supply the versioned approved snapshot, the provider manifest and the local handler table.
+The compiler validates the whole candidate before activation: schema `v1`, provider/connector refs,
+revision, manifest and compatibility digests, exact tool coverage (configuration alone cannot rename,
+remove, add or change parameters/results), known local handlers only, typed per-tool values (unknown
+keys/handlers and invalid values rejected), reused manifest policy with no weakening, and provenance
+without credentials, bearers or user data. It performs zero I/O; an invalid candidate retains the
+active generation and a cold start without valid embedded configuration fails closed. Tests use
+synthetic providers only (`tests/tool-configuration.test.ts`).
+
 ## 9. Verifying your connector (mock harness)
 
 This package has no Makefile target by design (it is private and unactivated). Run
