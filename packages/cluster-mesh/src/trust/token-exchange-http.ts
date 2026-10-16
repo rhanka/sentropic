@@ -264,7 +264,19 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         currentDate: new Date(this.nowMs()),
       });
       payload = verified.payload;
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && 'code' in error) {
+        const code = (error as { code?: string }).code;
+        if (code === 'ERR_JWT_CLAIM_VALIDATION_FAILED') {
+          const claim = (error as { claim?: string }).claim;
+          if (claim === 'aud') throw new TokenExchangeRefusedError('minted_audience_invalid');
+          if (claim === 'sub') throw new TokenExchangeRefusedError('minted_subject_invalid');
+          if (claim === 'iss') throw new TokenExchangeRefusedError('minted_issuer_invalid');
+          if (claim === 'exp' || claim === 'nbf' || claim === 'iat') {
+            throw new TokenExchangeRefusedError('minted_ttl_invalid');
+          }
+        }
+      }
       throw new TokenExchangeRefusedError('minted_signature_invalid');
     }
     if (payload.act == null || typeof (payload.act as { sub?: unknown }).sub !== 'string') {
