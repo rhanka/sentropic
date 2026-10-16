@@ -128,7 +128,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
       - [x] Install packed subpath from clean consumer, report compiler delivered without claiming Immo registry integration
 - [ ] **Lot 2 — Immo 1a review findings fix (`.h2a/reviews/immo_1a_opus.md`: 1 BLOQUANT, 6 MAJEUR, 10 MINEUR)**
   - [x] B1: merge gates field by field (requiresElicitation, requiresHumanConfirmation, requiresPrincipalGate, requiresPolicy); overlay `{}` keeps baseline; requiresPolicy compared
-  - [ ] B1: freshness merged field by field; finite `maxAgeSeconds` with `0 < x <= base`; `stepUp` equality; `acr`/`amr` supersets, never removed
+  - [x] B1: freshness merged field by field; finite `maxAgeSeconds` with `0 < x <= base`; `stepUp` equality; `acr`/`amr` supersets, never removed
   - [ ] B1: regression tests per field (`gates: {}`, requiresPolicy drop, freshness without maxAge, NaN maxAge, acr/amr removal)
   - [ ] M1: typed diagnostics for malformed overlays (`idempotency`/`gates`/`freshness` null, wrong types, non-string arrays); no TypeError
   - [ ] M2: normalized-only forbidden-key set (refresh_token, id_token, client_secret, tenant_id, workspace_id, credentials, token); substring families token|secret|password|credential|apikey|privatekey; arrays traversed
