@@ -53,6 +53,11 @@ export interface TokenExchangeHttpIssuerOptions {
   readonly nowMs?: () => number;
   /** Injectable fetch; defaults to the global fetch. */
   readonly fetchFn?: TokenExchangeFetch;
+  /**
+   * Test-only escape hatch allowing `http://127.0.0.1`/`localhost` endpoints for
+   * hermetic doubles. Never enabled outside tests: production endpoints are https.
+   */
+  readonly allowLoopbackHttp?: boolean;
 }
 
 /**
@@ -71,7 +76,8 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
   private jwksPromise: Promise<ReturnType<typeof createLocalJWKSet>> | undefined;
 
   constructor(options: TokenExchangeHttpIssuerOptions) {
-    if (!options.tokenEndpoint.startsWith('https://')) {
+    const loopback = options.allowLoopbackHttp === true && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//u.test(options.tokenEndpoint);
+    if (!options.tokenEndpoint.startsWith('https://') && !loopback) {
       throw new TypeError('token exchange tokenEndpoint must be an https URL');
     }
     if (options.issuer.trim().length === 0) throw new TypeError('token exchange issuer must be non-empty');
