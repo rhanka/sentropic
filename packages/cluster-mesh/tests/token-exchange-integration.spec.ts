@@ -6,8 +6,18 @@ import {
   createTokenExchangeClient,
   RFC8693_GRANT_TYPE,
   TokenExchangeHttpIssuer,
+  type TokenExchangeCryptoPort,
   type TokenExchangeRefusalReason,
 } from '../src/index.js';
+
+/** Test-only crypto port: real JWT library injected, keeping `src/` reference-free. */
+function createTestCryptoPort(): TokenExchangeCryptoPort {
+  return {
+    createKeySet: (jwks) => createLocalJWKSet(jwks as Parameters<typeof createLocalJWKSet>[0]),
+    verifyJwt: async (token, key, options) =>
+      (await jwtVerify(token, key as Parameters<typeof jwtVerify>[1], options)).payload as Record<string, unknown>,
+  };
+}
 
 const SUBJECT_AUDIENCE = 'https://immo-test.example/mcp';
 const TARGET_AUDIENCE = 'https://radar-test.example';
@@ -215,6 +225,7 @@ function clientFor(double: FaithfulIssuerDouble, secret: string, endpoint?: stri
     workloadClientId: WORKLOAD_CLIENT,
     clientSecret: secret,
     actorSub: WORKLOAD_ACTOR,
+    crypto: createTestCryptoPort(),
     allowLoopbackHttp: true,
   });
   return createTokenExchangeClient({
@@ -312,6 +323,7 @@ describe('token exchange integration against the #674 wire contract', () => {
       workloadClientId: WORKLOAD_CLIENT,
       clientSecret: WORKLOAD_SECRET,
       actorSub: WORKLOAD_ACTOR,
+      crypto: createTestCryptoPort(),
       allowLoopbackHttp: true,
     });
     const client = createTokenExchangeClient({
