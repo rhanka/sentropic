@@ -260,6 +260,87 @@ export interface ChallengePort {
   consume(challengeId: string, nowMs: number): 'ok' | 'unknown' | 'expired' | 'replayed';
 }
 
+export interface ProjectPrepareInput {
+  readonly projectId: string;
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly workspaceIncarnation: number;
+  readonly ownerId: string;
+  readonly readers?: readonly string[];
+  readonly sourceIdentities: readonly string[];
+  readonly sourceTrustVersions: readonly string[];
+  readonly channels: Record<ContentChannel, boolean>;
+  readonly futureSessions: boolean;
+  readonly selectedSessionIds: readonly string[];
+  readonly namedHistories: readonly NamedHistoryDescriptor[];
+  readonly retentionByChannel: unknown;
+  readonly authorityEpoch: string;
+  readonly offlineReadAccepted: boolean;
+  readonly expectedProjectRevision?: number;
+}
+
+export interface PreparedProject {
+  readonly policy: CanonicalProjectPolicy;
+  readonly digest: string;
+  readonly challengeId: string;
+  readonly challengeExpiresAt: number;
+  readonly expectedRevision: number | null;
+}
+
+export interface DeriveChildInput {
+  readonly projectId: string;
+  readonly sessionId: string;
+  readonly bindingId: string;
+  readonly bindingVersion: number;
+  readonly d1Version: number;
+  readonly d1Incarnation: number;
+  readonly d1StartSeq: number;
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly ownerId: string;
+  readonly sessionCreatedAt: number;
+  readonly sourceGeneration: string;
+  readonly sourceTrustVersion: string;
+  readonly nativeStartSeq: number;
+}
+
+const requireId = (value: unknown, field: string): string => {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new ContentConsentError('invalid_request', `${field} is required`);
+  }
+  return value;
+};
+
+const requireIdList = (value: unknown, field: string): readonly string[] => {
+  if (!Array.isArray(value) || value.length === 0 || value.some((id) => typeof id !== 'string' || !id.trim())) {
+    throw new ContentConsentError('invalid_request', `${field} must be a non-empty id list`);
+  }
+  return value;
+};
+
+const validateHistoryDescriptor = (value: unknown): NamedHistoryDescriptor => {
+  if (!isRecord(value)) throw new ContentConsentError('invalid_request', 'named history must be an object');
+  const descriptor = {
+    provider: requireId(value['provider'], 'history.provider'),
+    conversationId: requireId(value['conversationId'], 'history.conversationId'),
+    lineage: requireId(value['lineage'], 'history.lineage'),
+    sourceIdentity: requireId(value['sourceIdentity'], 'history.sourceIdentity'),
+    checkpoint: requireId(value['checkpoint'], 'history.checkpoint'),
+    rangeDigest: requireId(value['rangeDigest'], 'history.rangeDigest'),
+  };
+  const startSeq = value['startSeq'];
+  const endSeq = value['endSeq'];
+  if (startSeq !== undefined || endSeq !== undefined) {
+    if (typeof startSeq !== 'number' || typeof endSeq !== 'number'
+      || !Number.isSafeInteger(startSeq) || !Number.isSafeInteger(endSeq)
+      || startSeq < 0 || endSeq < startSeq) {
+      throw new ContentConsentError('invalid_request', 'named history range must be a valid seq interval');
+    }
+    return { ...descriptor, startSeq, endSeq };
+  }
+  return descriptor;
+};
+
 export const createMemoryChallengePort = (
   newId: () => string = () => crypto.randomUUID(),
 ): ChallengePort => {
