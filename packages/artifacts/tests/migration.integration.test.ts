@@ -1,11 +1,13 @@
 /**
- * L-5b — migration proof on disposable postgres (spec-v8 §9 5b).
+ * L-5b/5c — migration proof on disposable postgres (spec-v8 §9).
  *
- * Applies `migrations/0001_artifacts.sql` to a fresh `artifacts` schema and
- * proves the domain constraints: stable-binding uniqueness, intent
- * kind/state guards, release FK integrity, idempotency-key uniqueness.
- * Runs only under `make test-artifacts-integration` (needs DATABASE_URL on
- * the compose network); excluded from the unit run.
+ * Applies `migrations/0001_artifacts.sql` then `0002_lifecycle.sql` to a
+ * fresh `artifacts` schema — the upgrade path — and proves the domain
+ * constraints: stable-binding uniqueness, intent kind/state guards, release
+ * FK integrity, idempotency-key uniqueness, release states, access grants,
+ * sources, ref holders and pins. Runs only under
+ * `make test-artifacts-integration` (needs DATABASE_URL on the compose
+ * network); excluded from the unit run.
  */
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -18,17 +20,20 @@ if (DATABASE_URL === undefined || DATABASE_URL.length === 0) {
   throw new Error('migration proof needs DATABASE_URL (make test-artifacts-integration)');
 }
 
-const SQL = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0001_artifacts.sql'),
-  'utf8',
-);
+function migration(name: string): string {
+  return readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', name),
+    'utf8',
+  );
+}
 
 const client = new Client({ connectionString: DATABASE_URL });
 
 beforeAll(async () => {
   await client.connect();
   await client.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
-  await client.query(SQL);
+  await client.query(migration('0001_artifacts.sql'));
+  await client.query(migration('0002_lifecycle.sql'));
 });
 
 afterAll(async () => {
@@ -104,5 +109,84 @@ describe('0001_artifacts migration', () => {
          VALUES ('k-1', 'h-2', '{"releaseId": "r-2"}')`,
       ),
     ).rejects.toThrow(/duplicate key|23505/);
+  });
+});
+
+describe('0002_lifecycle migration', () => {
+  it('creates the lifecycle tables', async () => {
+    const { rows } = await client.query(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'artifacts' AND tablename IN
+       ('artifact_access', 'artifact_sources', 'blob_ref_holders', 'blob_pins') ORDER BY tablename`,
+    );
+    expect(rows.map((r: { tablename: string }) => r.tablename)).toEqual([
+      'artifact_access',
+      'artifact_sources',
+      'blob_pins',
+      'blob_ref_holders',
+    ]);
+  });
+
+  it('guards release and artifact states', async () => {
+    await client.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-9', 'org-9')`);
+    await client.query(
+      `INSERT INTO artifacts.artifacts (id, storage_scope_id, owner_id, binding_name)
+       VALUES ('99999999-9999-4999-8999-999999999999', 'scope-9', 'owner-9', 'site')`,
+    );
+    const { rows } = await client.query(
+      `SELECT lifecycle_state FROM artifacts.artifacts WHERE id = '99999999-9999-4999-8999-999999999999'`,
+    );
+    expect(rows[0]?.lifecycle_state).toBe('active');
+    await expect(
+      client.query(`UPDATE artifacts.artifacts SET lifecycle_state = 'bogus' WHERE id = '99999999-9999-4999-8999-999999999999'`),
+    ).rejects.toThrow(/check constraint|23514/);
+    await client.query(
+      `INSERT INTO artifacts.releases (id, artifact_id, manifest_digest, manifest, state)
+       VALUES ('88888888-8888-4888-8888-888888888888', '99999999-9999-4999-8999-999999999999', 'ab', '{}', 'retired')`,
+    );
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.releases (id, artifact_id, manifest_digest, manifest, state)
+         VALUES ('77777777-7777-4777-8777-777777777777', '99999999-9999-4999-8999-999999999999', 'ab', '{}', 'bogus')`,
+      ),
+    ).rejects.toThrow(/check constraint|23514/);
+  });
+
+  it('guards grants, sources, holders and pins', async () => {
+    const artifact = '99999999-9999-4999-8999-999999999999';
+    await client.query(
+      `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, grant)
+       VALUES ('${artifact}', 'reader-1', 'read')`,
+    );
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, grant)
+         VALUES ('${artifact}', 'reader-1', 'source')`,
+      ),
+    ).rejects.toThrow(/duplicate key|23505/);
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, grant)
+         VALUES ('${artifact}', 'reader-2', 'admin')`,
+      ),
+    ).rejects.toThrow(/check constraint|23514/);
+    await client.query(
+      `INSERT INTO artifacts.artifact_sources (artifact_id, kind, commit_tx)
+       VALUES ('${artifact}', 'base-commit', 'abc123')`,
+    );
+    await expect(
+      client.query(
+        `INSERT INTO artifacts.artifact_sources (artifact_id, kind) VALUES ('${artifact}', 'tarball')`,
+      ),
+    ).rejects.toThrow(/check constraint|23514/);
+    await client.query(
+      `INSERT INTO artifacts.blob_ref_holders (digest, holder) VALUES ('sha256:aa', 'release-r1')`,
+    );
+    await client.query(
+      `INSERT INTO artifacts.blob_pins (digest, reason) VALUES ('sha256:aa', 'legal-hold')`,
+    );
+    const { rows } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM artifacts.blob_ref_holders WHERE digest = 'sha256:aa'`,
+    );
+    expect(rows[0]?.n).toBe(1);
   });
 });
