@@ -101,3 +101,15 @@ their own rotation process; confirm that process also updates the live DB role.
 Retirement requires disabling schedule/CD, removing delegations and tenant Secrets,
 then revoking relay credentials under k8s governance. Do not delete the shared
 preprod backup identity as part of retiring this sync feature.
+
+## Workload client rotation (2-IdP)
+
+The `immo-mcp-workload` secret is environment-specific, server-side, and never
+committed or returned to the MCP client. Rotate with
+`make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload ENV=<env>`
+(single-secret cutover) and prove the effect: the rotated credential exchanges
+successfully while the previous hash no longer authenticates, with no rotation
+of user credentials or of the public `immo-mcp` client identity. Revocation sets
+`service_clients.revoked_at`; the exchange handler rejects revoked clients
+before any policy check. Fixture hashes (`synthetic-*-workload-hash`) are
+test-only markers and never valid operational secrets.

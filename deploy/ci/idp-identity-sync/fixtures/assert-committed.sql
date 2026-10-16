@@ -34,3 +34,9 @@ SELECT test_assert((SELECT client_secret_hash IS NULL AND token_endpoint_auth_me
   AND resource_indicators = ARRAY['https://preprod.immo.sent-tech.ca/mcp']::text[]
   AND tenant_id = 'sentropic' AND owner_user_id = 'prod-user-8'
   FROM oauth_clients WHERE client_id = 'immo-mcp'), 'immo-mcp public PKCE, external callback, preprod resource and synced owner');
+SELECT test_assert((SELECT id = 'preprod-workload' AND client_secret_hash = 'synthetic-preprod-workload-hash'
+  AND exchange_policy = '{"enabled": true, "allowedSubjectClients": ["immo-mcp"], "allowedSubjectAudiences": ["https://preprod.immo.sent-tech.ca/mcp"], "allowedTargetAudiences": ["https://preprod.immo.sent-tech.ca"], "actorSub": "immo-mcp-workload", "allowedScopes": ["immo:read", "immo:search"], "maxTtlSeconds": 300, "environment": null, "allowClientCredentials": false}'::jsonb
+  FROM service_clients WHERE client_id = 'immo-mcp-workload'), 'workload policy converged to preprod audiences without secret rotation');
+SELECT test_assert((SELECT client_secret_hash = 'synthetic-decoy-hash' AND exchange_policy IS NULL
+  FROM service_clients WHERE client_id = 'other-svc'), 'unrelated service client untouched');
+SELECT test_assert((SELECT count(*) FROM service_clients) = 2, 'no service row created or removed');
