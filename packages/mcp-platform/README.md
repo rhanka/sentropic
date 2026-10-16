@@ -43,12 +43,18 @@ Wave / immo are consumers/examples only; nothing domain-specific is baked in.
 
 Strict, pure, zero-I/O compiler for an approved per-tool configuration snapshot:
 
-- Inputs: versioned snapshot (`schemaVersion: "v1"`), provider manifest, local handler table.
-- Checks: identity/version, manifest and compatibility digests, exact tool coverage (no rename,
-  remove or add), handler allowlist, typed per-tool values, no policy weakening, no credentials,
+- Inputs: versioned snapshot (`schemaVersion: "v1"`), provider manifest, local handler table and the
+  consumer-supplied compatibility digest (generic helper `computeCompatibilityDigest` covers the
+  public schemas/result codec; the compiler compares it, never derives it).
+- Checks: identity/version, manifest digest, consumer compatibility digest, mandatory payload digest
+  (binds manifest + compatibility) and handler-table shape digest, exact tool coverage (no rename,
+  remove, add or param/result change), handler allowlist (table keys equal `handlerId`), closed-schema
+  typed per-tool values, manifest policy merged field by field with no weakening, no credentials,
   bearers, user data or executable/upstream values.
-- Output: deeply frozen `CompiledToolConfiguration` or typed diagnostics; invalid candidates retain
-  the active generation and cold starts fail closed. See `tests/tool-configuration.test.ts`.
+- Output: deep-cloned then deeply frozen `CompiledToolConfiguration` (exposes `payloadDigest`,
+  `approvalRef`, versions and `handlersDigest`) or typed diagnostics; invalid candidates retain
+  the active generation, `activate` accepts compiler-branded configurations only, and cold starts
+  fail closed. See `tests/tool-configuration.test.ts`.
 
 ### Slice 1 — manifest & adapter schemas (`src/manifest.ts`, `src/runtime.ts`)
 
