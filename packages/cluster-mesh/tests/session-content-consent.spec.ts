@@ -271,7 +271,7 @@ describe('content consent project activation', () => {
     const amended = await service.acceptProject(rePrepared, { challengeId: rePrepared.challengeId });
     expect(amended.projectRevision).toBe(2);
     expect(amended.retentionByChannel['terminal.cache']).toEqual({ mode: 'duration', durationSeconds: 3600 });
-    const current = service.readProject('project-1');
+    const current = await service.readProject('project-1');
     expect(current?.projectRevision).toBe(2);
     expect(verifyPolicyDigest(amended.acceptedPolicy, amended.retentionDigest)).toBe(true);
   });

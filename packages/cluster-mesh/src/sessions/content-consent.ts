@@ -362,3 +362,139 @@ export const createMemoryChallengePort = (
     },
   };
 };
+
+export interface ContentConsentServiceOptions {
+  readonly nowMs?: () => number;
+  readonly newId?: () => string;
+  readonly challengeTtlMs?: number;
+  readonly challenges?: ChallengePort;
+}
+
+const DEFAULT_CHALLENGE_TTL_MS = 5 * 60_000;
+
+export const createContentConsentService = (
+  store: ContentConsentStore,
+  options: ContentConsentServiceOptions = {},
+) => {
+  const nowMs = options.nowMs ?? (() => Date.now());
+  const newId = options.newId ?? (() => crypto.randomUUID());
+  const challenges = options.challenges ?? createMemoryChallengePort(newId);
+  const challengeTtlMs = options.challengeTtlMs ?? DEFAULT_CHALLENGE_TTL_MS;
+
+  const prepareProject = (input: ProjectPrepareInput): PreparedProject => {
+    const projectId = requireId(input.projectId, 'projectId');
+    const tenantId = requireId(input.tenantId, 'tenantId');
+    const workspaceId = requireId(input.workspaceId, 'workspaceId');
+    const ownerId = requireId(input.ownerId, 'ownerId');
+    const readers = input.readers ?? [ownerId];
+    if (readers.length !== 1 || readers[0] !== ownerId) {
+      throw new ContentConsentError('cross_owner_refused', 'project readers are owner-only');
+    }
+    if (typeof input.workspaceIncarnation !== 'number' || !Number.isSafeInteger(input.workspaceIncarnation)) {
+      throw new ContentConsentError('invalid_request', 'workspaceIncarnation must be a safe integer');
+    }
+    const channels = { ...input.channels } as Record<ContentChannel, boolean>;
+    for (const channel of CONTENT_CHANNELS) {
+      if (typeof channels[channel] !== 'boolean') {
+        throw new ContentConsentError('invalid_request', `channel ${channel} must be a boolean`);
+      }
+    }
+    if (typeof input.futureSessions !== 'boolean') {
+      throw new ContentConsentError('invalid_request', 'futureSessions must be a boolean');
+    }
+    if (!Array.isArray(input.selectedSessionIds)
+      || input.selectedSessionIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      throw new ContentConsentError('invalid_request', 'selectedSessionIds must be an id list');
+    }
+    if (!Array.isArray(input.namedHistories)) {
+      throw new ContentConsentError('invalid_request', 'namedHistories must be a list');
+    }
+    if (input.offlineReadAccepted !== true) {
+      throw new ContentConsentError('invalid_request', 'offlineReadAccepted must be explicitly accepted');
+    }
+    const policy: CanonicalProjectPolicy = {
+      projectId,
+      projectRevision: input.expectedProjectRevision ?? 0,
+      tenantId,
+      workspaceId,
+      workspaceIncarnation: input.workspaceIncarnation,
+      ownerId,
+      readers: [...readers],
+      sourceIdentities: [...requireIdList(input.sourceIdentities, 'sourceIdentities')],
+      sourceTrustVersions: [...requireIdList(input.sourceTrustVersions, 'sourceTrustVersions')],
+      channels,
+      futureSessions: input.futureSessions,
+      selectedSessionIds: [...input.selectedSessionIds],
+      namedHistories: input.namedHistories.map(validateHistoryDescriptor),
+      retentionByChannel: validateRetentionByChannel(input.retentionByChannel),
+      authorityEpoch: requireId(input.authorityEpoch, 'authorityEpoch'),
+      offlineReadAccepted: true,
+    };
+    const challenge = challenges.issue(challengeTtlMs, nowMs());
+    return {
+      policy,
+      digest: computePolicyDigest(policy),
+      challengeId: challenge.challengeId,
+      challengeExpiresAt: challenge.expiresAt,
+      expectedRevision: input.expectedProjectRevision ?? null,
+    };
+  };
+
+  const acceptProject = async (
+    prepared: PreparedProject,
+    proof: { readonly challengeId: string },
+  ): Promise<ProjectContentConsent> => {
+    if (computePolicyDigest(prepared.policy) !== prepared.digest) {
+      throw new ContentConsentError('policy_digest_mismatch', 'prepared policy was altered after preparation');
+    }
+    if (proof.challengeId !== prepared.challengeId) {
+      throw new ContentConsentError('challenge_unknown', 'proof does not match this preparation');
+    }
+    const consumed = challenges.consume(prepared.challengeId, nowMs());
+    if (consumed === 'replayed') throw new ContentConsentError('challenge_replayed', 'challenge already used');
+    if (consumed === 'expired') throw new ContentConsentError('challenge_expired', 'challenge expired');
+    if (consumed === 'unknown') throw new ContentConsentError('challenge_unknown', 'unknown challenge');
+    const timestamp = nowMs();
+    if (prepared.expectedRevision === null) {
+      const next: ProjectContentConsent = {
+        ...prepared.policy,
+        projectRevision: 1,
+        state: 'active',
+        exclusionRevision: 0,
+        retentionDigest: prepared.digest,
+        acceptedPolicy: prepared.policy,
+        activatedAt: timestamp,
+        updatedAt: timestamp,
+      };
+      if (!await store.writeProject(null, next)) {
+        throw new ContentConsentError('revision_conflict', 'project already exists');
+      }
+      return next;
+    }
+    const existing = await store.readProject(prepared.policy.projectId);
+    if (!existing) throw new ContentConsentError('project_not_found', 'no project to amend');
+    if (existing.state !== 'active') throw new ContentConsentError('project_not_active', 'project is not active');
+    if (existing.projectRevision !== prepared.expectedRevision) {
+      throw new ContentConsentError('revision_conflict', 'project revision changed; re-prepare the amendment');
+    }
+    const next: ProjectContentConsent = {
+      ...prepared.policy,
+      projectRevision: existing.projectRevision + 1,
+      state: 'active',
+      exclusionRevision: existing.exclusionRevision,
+      retentionDigest: prepared.digest,
+      acceptedPolicy: prepared.policy,
+      activatedAt: existing.activatedAt,
+      updatedAt: timestamp,
+    };
+    if (!await store.writeProject(existing.projectRevision, next)) {
+      throw new ContentConsentError('revision_conflict', 'concurrent amendment; re-prepare the amendment');
+    }
+    return next;
+  };
+
+  const readProject = (projectId: string): Promise<ProjectContentConsent | null> =>
+    store.readProject(projectId);
+
+  return { prepareProject, acceptProject, readProject };
+};
