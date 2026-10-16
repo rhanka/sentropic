@@ -337,4 +337,75 @@ describe('token exchange integration against the #674 wire contract', () => {
     ).resolves.toBe('subject_unverified');
     expect(double.tokenHits).toBe(before);
 });
+  it('should answer a conflicting target with invalid_target like #674', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+    const form = new URLSearchParams({
+      grant_type: RFC8693_GRANT_TYPE,
+      subject_token: subjectToken,
+      subject_token_type: ACCESS_TOKEN_TYPE,
+      resource: TARGET_AUDIENCE,
+      audience: 'https://other.example',
+      scope: 'immo:search',
+    });
+    const response = await fetch(`${double.url}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        authorization: `Basic ${Buffer.from(`${WORKLOAD_CLIENT}:${WORKLOAD_SECRET}`, 'utf8').toString('base64')}`,
+      },
+      body: form.toString(),
+      redirect: 'manual',
+    });
+    const body = (await response.json()) as { error: string };
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_target');
+  });
+
+
+});
+
+describe('token exchange integration fault injection', () => {
+  let double: FaithfulIssuerDouble;
+
+  beforeAll(async () => {
+    double = new FaithfulIssuerDouble();
+    await double.start();
+  });
+
+  afterAll(async () => {
+    double.tamper = null;
+    await double.stop();
+  });
+
+  it.each([
+    ['widened scope', 'scope', 'minted_scope_invalid'],
+    ['wrong audience', 'audience', 'minted_audience_invalid'],
+    ['missing actor', 'actor', 'minted_actor_invalid'],
+    ['600-second lifetime', 'ttl', 'minted_ttl_invalid'],
+    ['DPoP token type', 'token_type', 'minted_token_type_unsupported'],
+  ] as const)('should refuse a tampered issuer response (%s)', async (_name, tamper, reason) => {
+    double.tamper = tamper;
+    try {
+      const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+      const client = clientFor(double, WORKLOAD_SECRET);
+
+      await expect(refusalReason(client.exchange(baseRequest(subjectToken)))).resolves.toBe(reason);
+    } finally {
+      double.tamper = null;
+    }
+  });
+
+  it('should refuse an issuer redirect instead of following it', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+    const client = clientFor(double, WORKLOAD_SECRET, `${double.url}/oauth/redirect`);
+
+    await expect(refusalReason(client.exchange(baseRequest(subjectToken)))).resolves.toBe('mint_failed');
+  });
+
+  it('should refuse an oversized issuer response', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+    const client = clientFor(double, WORKLOAD_SECRET, `${double.url}/oauth/oversized`);
+
+    await expect(refusalReason(client.exchange(baseRequest(subjectToken)))).resolves.toBe('mint_failed');
+  });
 });
