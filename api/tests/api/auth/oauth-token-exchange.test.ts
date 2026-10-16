@@ -215,7 +215,7 @@ const seedWorkloadClient = async (): Promise<void> => {
   await db
     .insert(serviceClients)
     .values({
-      allowedScopes: ['immo:read', 'immo:search'],
+      allowedScopes: ['immo:search'],
       clientId: WORKLOAD_CLIENT_ID,
       clientSecretHash: createHash('sha256').update(WORKLOAD_SECRET).digest('hex'),
       createdAt: now,

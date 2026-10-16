@@ -29,5 +29,5 @@ VALUES ('prod-confidential', 'synthetic-client', 'Prod confidential config', ARR
 -- provisioned through the established protected channel and never appears here.
 INSERT INTO service_clients (id, client_id, client_secret_hash, display_name, allowed_scopes, resource_indicators, tenant_id, exchange_policy, created_at)
 VALUES ('prod-workload', 'immo-mcp-workload', 'synthetic-prod-workload-hash', 'Immo MCP workload',
-        ARRAY['immo:read','immo:search'], ARRAY['https://immo.sent-tech.ca'], 'sentropic',
-        '{"enabled": true, "allowedSubjectClients": ["immo-mcp"], "allowedSubjectAudiences": ["https://immo.sent-tech.ca/mcp"], "allowedTargetAudiences": ["https://immo.sent-tech.ca"], "actorSub": "immo-mcp-workload", "allowedScopes": ["immo:read", "immo:search"], "maxTtlSeconds": 300, "environment": null, "allowClientCredentials": false}', '2026-01-01');
+        ARRAY['immo:search'], ARRAY['https://immo.sent-tech.ca'], 'sentropic',
+        '{"enabled": true, "allowedSubjectClients": ["immo-mcp"], "allowedSubjectAudiences": ["https://immo.sent-tech.ca/mcp"], "allowedTargetAudiences": ["https://immo.sent-tech.ca"], "actorSub": "immo-mcp-workload", "allowedScopes": ["immo:search"], "maxTtlSeconds": 300, "environment": null, "allowClientCredentials": false}', '2026-01-01');
