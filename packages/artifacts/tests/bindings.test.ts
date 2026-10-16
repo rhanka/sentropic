@@ -68,26 +68,35 @@ describe('provider definitions', () => {
 });
 
 describe('stable bindings', () => {
-  it('resolves the same server UUID from two fresh clients', () => {
+  it('resolves the same server UUID from two fresh clients', async () => {
     const kv = createMemoryBindingKv();
     const first = createBindingService(kv);
     const second = createBindingService(kv);
-    const a = first.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-1', bindingName: 'site' });
-    const b = second.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-1', bindingName: 'site' });
+    const a = await first.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-1', bindingName: 'site' });
+    const b = await second.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-1', bindingName: 'site' });
     expect(a.created).toBe(true);
     expect(b.created).toBe(false);
     expect(b.artifactId).toBe(a.artifactId);
-    expect(first.find({ ownerId: 'owner-1', bindingName: 'site' })).toBe(a.artifactId);
+    expect(await first.find({ ownerId: 'owner-1', bindingName: 'site' })).toBe(a.artifactId);
   });
 
-  it('isolates bindings by owner: guessing resolves nothing', () => {
+  it('isolates bindings by owner: guessing resolves nothing', async () => {
     const kv = createMemoryBindingKv();
     const service = createBindingService(kv);
-    const mine = service.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-1', bindingName: 'site' });
-    const theirs = service.ensure({ ownerId: 'owner-2', storageScopeId: 'scope-1', bindingName: 'site' });
+    const mine = await service.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-1', bindingName: 'site' });
+    const theirs = await service.ensure({ ownerId: 'owner-2', storageScopeId: 'scope-1', bindingName: 'site' });
     expect(theirs.artifactId).not.toBe(mine.artifactId);
-    expect(service.find({ ownerId: 'owner-2', bindingName: 'site' })).toBe(theirs.artifactId);
-    expect(service.find({ ownerId: 'owner-3', bindingName: 'site' })).toBeUndefined();
+    expect(await service.find({ ownerId: 'owner-2', bindingName: 'site' })).toBe(theirs.artifactId);
+    expect(await service.find({ ownerId: 'owner-3', bindingName: 'site' })).toBeUndefined();
+  });
+
+  it('fails closed on a conflicting storage scope', async () => {
+    const kv = createMemoryBindingKv();
+    const service = createBindingService(kv);
+    await service.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-1', bindingName: 'site' });
+    await expect(
+      service.ensure({ ownerId: 'owner-1', storageScopeId: 'scope-2', bindingName: 'site' }),
+    ).rejects.toThrow(/scope mismatch/);
   });
 
   it('converges concurrent ensures on a single identity', async () => {
