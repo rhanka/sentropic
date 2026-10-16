@@ -198,7 +198,6 @@ class FaithfulIssuerDouble {
     );
   }
 }
-}
 
 async function refusalReason(promise: Promise<unknown>): Promise<TokenExchangeRefusalReason> {
   const error = await promise.then(
@@ -208,3 +207,134 @@ async function refusalReason(promise: Promise<unknown>): Promise<TokenExchangeRe
   expect(error).toMatchObject({ code: 'token_exchange_refused' });
   return (error as { reason: TokenExchangeRefusalReason }).reason;
 }
+function clientFor(double: FaithfulIssuerDouble, secret: string, endpoint?: string) {
+  const issuer = new TokenExchangeHttpIssuer({
+    tokenEndpoint: endpoint ?? `${double.url}/oauth/token`,
+    issuer: double.issuer(),
+    jwksUri: `${double.url}/jwks.json`,
+    workloadClientId: WORKLOAD_CLIENT,
+    clientSecret: secret,
+    actorSub: WORKLOAD_ACTOR,
+    allowLoopbackHttp: true,
+  });
+  return createTokenExchangeClient({
+    issuer,
+    audiences: [TARGET_AUDIENCE],
+    subjectAudience: SUBJECT_AUDIENCE,
+    workloadClientId: WORKLOAD_CLIENT,
+    workloadActorSub: WORKLOAD_ACTOR,
+    environment: 'test',
+  });
+}
+
+function baseRequest(subjectToken: string) {
+  return {
+    grantType: RFC8693_GRANT_TYPE,
+    subjectToken,
+    subjectTokenType: ACCESS_TOKEN_TYPE,
+    audience: TARGET_AUDIENCE,
+    scope: ['immo:search'] as readonly string[],
+  };
+}
+
+describe('token exchange integration against the #674 wire contract', () => {
+  let double: FaithfulIssuerDouble;
+
+  beforeAll(async () => {
+    double = new FaithfulIssuerDouble();
+    await double.start();
+  });
+
+  afterAll(async () => {
+    await double.stop();
+  });
+
+  it('should exchange over real HTTP with form, Basic, and a verified workload-bound token', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search immo:read' });
+    const client = clientFor(double, WORKLOAD_SECRET);
+
+    const response = await client.exchange(baseRequest(subjectToken));
+
+    expect(response.tokenType).toBe('Bearer');
+    expect(response.issuedTokenType).toBe(ACCESS_TOKEN_TYPE);
+    expect(response.scope).toEqual(['immo:search']);
+    expect(response.expiresIn).toBeGreaterThan(0);
+    expect(response.accessToken).not.toBe(subjectToken);
+    expect(double.lastForm?.grant_type).toBe(RFC8693_GRANT_TYPE);
+    expect(double.lastForm?.subject_token).toBe(subjectToken);
+    expect(double.lastForm?.subject_token_type).toBe(ACCESS_TOKEN_TYPE);
+    expect(double.lastForm?.scope).toBe('immo:search');
+    expect(double.lastForm?.resource).toBe(TARGET_AUDIENCE);
+    expect(double.lastAuth).toBe(
+      `Basic ${Buffer.from(`${WORKLOAD_CLIENT}:${WORKLOAD_SECRET}`, 'utf8').toString('base64')}`,
+    );
+  });
+
+  it('should serve a warm repeat without hitting the token endpoint', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+    const client = clientFor(double, WORKLOAD_SECRET);
+    const before = double.tokenHits;
+
+    const first = await client.exchange(baseRequest(subjectToken));
+    const second = await client.exchange(baseRequest(subjectToken));
+
+    expect(second.accessToken).toBe(first.accessToken);
+    expect(double.tokenHits - before).toBe(1);
+  });
+  it('should refuse a wrong workload secret without leaking it', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+    const client = clientFor(double, 'wrong-secret');
+
+    const error = await client.exchange(baseRequest(subjectToken)).then(
+      () => { throw new Error('exchange unexpectedly succeeded'); },
+      (rejection: unknown) => rejection,
+    );
+
+    expect(error).toMatchObject({ code: 'token_exchange_refused', reason: 'mint_failed' });
+    expect(JSON.stringify(error)).not.toContain('wrong-secret');
+  });
+
+  it('should map an issuer scope denial to scope_not_granted', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+    const client = clientFor(double, WORKLOAD_SECRET);
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest(subjectToken), scope: ['immo:documents:read'] })),
+    ).resolves.toBe('scope_not_granted');
+  });
+
+  it('should map an issuer target denial to audience_not_allowed', async () => {
+    const subjectToken = await double.issueSubject({ subject: 'user-1', scope: 'immo:search' });
+    const issuer = new TokenExchangeHttpIssuer({
+      tokenEndpoint: `${double.url}/oauth/token`,
+      issuer: double.issuer(),
+      jwksUri: `${double.url}/jwks.json`,
+      workloadClientId: WORKLOAD_CLIENT,
+      clientSecret: WORKLOAD_SECRET,
+      actorSub: WORKLOAD_ACTOR,
+      allowLoopbackHttp: true,
+    });
+    const client = createTokenExchangeClient({
+      issuer,
+      audiences: [TARGET_AUDIENCE, 'https://other.example'],
+      subjectAudience: SUBJECT_AUDIENCE,
+      workloadClientId: WORKLOAD_CLIENT,
+      workloadActorSub: WORKLOAD_ACTOR,
+      environment: 'test',
+    });
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest(subjectToken), audience: 'https://other.example' })),
+    ).resolves.toBe('audience_not_allowed');
+  });
+
+  it('should refuse a forged subject without calling the token endpoint', async () => {
+    const client = clientFor(double, WORKLOAD_SECRET);
+    const before = double.tokenHits;
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('forged-token'), scope: ['immo:search'] })),
+    ).resolves.toBe('subject_unverified');
+    expect(double.tokenHits).toBe(before);
+});
+});
