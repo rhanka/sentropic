@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import {
   SubjectVerificationError,
@@ -8,9 +9,11 @@ import {
 } from '../../src/index.js';
 
 /**
- * Test-only issuer double for the RFC 8693 exchange client (lot 2a). Signs and
- * verifies HS256 JWTs with throwaway key material. The real IdP binding replaces
- * this double in lot 2-IdP; this file must never move into `src/`.
+ * Test-only issuer double for the RFC 8693 exchange client (lot 2a-fix). Signs and
+ * verifies HS256 JWTs with throwaway key material. The `act` claim always carries
+ * the workload identity from the mint input (never a caller value), mirroring the
+ * #674 issuer contract. The real IdP binding replaces this double in lot 2-IdP;
+ * this file must never move into `src/`.
  */
 export interface FakeIssuerOptions {
   readonly issuer: string;
@@ -24,6 +27,9 @@ export interface FakeSubjectInput {
   readonly scope?: readonly string[];
   readonly expiresInSec?: number;
   readonly issuer?: string;
+  readonly clientId?: string;
+  readonly tenantId?: string;
+  readonly jti?: string;
 }
 
 export class FakeTokenIssuer implements TokenExchangeIssuer {
@@ -40,13 +46,18 @@ export class FakeTokenIssuer implements TokenExchangeIssuer {
 
   async issueSubject(input: FakeSubjectInput): Promise<string> {
     const nowSec = Math.floor(this.nowMs() / 1000);
-    return new SignJWT({ scope: [...(input.scope ?? [])] })
+    return new SignJWT({
+      scope: [...(input.scope ?? [])].join(' '),
+      ...(input.clientId ? { client_id: input.clientId } : {}),
+      ...(input.tenantId ? { tid: input.tenantId } : {}),
+    })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(input.issuer ?? this.issuer)
       .setSubject(input.subject)
       .setAudience(input.audience ?? ['https://mesh.example.test'])
       .setIssuedAt(nowSec)
       .setExpirationTime(nowSec + (input.expiresInSec ?? 3600))
+      .setJti(input.jti ?? randomUUID())
       .sign(this.key);
   }
 
@@ -76,6 +87,8 @@ export class FakeTokenIssuer implements TokenExchangeIssuer {
     if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
       throw new SubjectVerificationError('missing_subject');
     }
+    if (payload.act != null) throw new SubjectVerificationError('actor_chained');
+    if (payload.cnf != null) throw new SubjectVerificationError('proof_bound');
     if (typeof payload.exp !== 'number' || typeof payload.iat !== 'number') {
       throw new SubjectVerificationError('malformed');
     }
@@ -84,11 +97,12 @@ export class FakeTokenIssuer implements TokenExchangeIssuer {
       : typeof payload.aud === 'string'
         ? [payload.aud]
         : [];
-    const scope = Array.isArray(payload.scope)
-      ? payload.scope.filter((entry): entry is string => typeof entry === 'string')
-      : typeof payload.scope === 'string'
+    const scope =
+      typeof payload.scope === 'string'
         ? payload.scope.split(' ').filter(Boolean)
-        : [];
+        : Array.isArray(payload.scope)
+          ? payload.scope.filter((entry): entry is string => typeof entry === 'string')
+          : [];
     return {
       issuer: payload.iss ?? '',
       subject: payload.sub,
@@ -96,6 +110,9 @@ export class FakeTokenIssuer implements TokenExchangeIssuer {
       issuedAtSec: payload.iat,
       expiresAtSec: payload.exp,
       scope,
+      ...(typeof payload.client_id === 'string' ? { clientId: payload.client_id } : {}),
+      ...(typeof payload.tid === 'string' ? { tenantId: payload.tid } : {}),
+      ...(typeof payload.jti === 'string' ? { jti: payload.jti } : {}),
     };
   }
 
@@ -103,8 +120,9 @@ export class FakeTokenIssuer implements TokenExchangeIssuer {
     this.mintCalls += 1;
     const expiresAtSec = input.nowSec + input.ttlSec;
     const accessToken = await new SignJWT({
-      scope: [...input.scope],
-      ...(input.actor ? { act: { sub: input.actor.sub, iss: input.actor.iss } } : {}),
+      scope: [...input.scope].join(' '),
+      act: { sub: input.actorSub },
+      client_id: input.workloadClientId,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(this.issuer)
@@ -112,7 +130,24 @@ export class FakeTokenIssuer implements TokenExchangeIssuer {
       .setAudience(input.audience)
       .setIssuedAt(input.nowSec)
       .setExpirationTime(expiresAtSec)
+      .setJti(randomUUID())
       .sign(this.key);
-    return { accessToken, expiresAtSec, scope: [...input.scope] };
+    return {
+      accessToken,
+      tokenType: 'Bearer',
+      issuedTokenType: 'urn:ietf:params:oauth:token-type:access_token',
+      expiresAtSec,
+      scope: [...input.scope],
+      verified: {
+        issuer: this.issuer,
+        subject: input.subject.subject,
+        audience: input.audience,
+        clientId: input.workloadClientId,
+        actorSub: input.actorSub,
+        scope: [...input.scope],
+        issuedAtSec: input.nowSec,
+        expiresAtSec,
+      },
+    };
   }
 }
