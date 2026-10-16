@@ -65,6 +65,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Derive request identity from the SDK handler extra (per-request headers).
+ * Supports web-standard `Headers` and plain header records; returns
+ * `undefined` when the transport carries no headers (e.g. in-memory,
+ * stdio). The raw bearer is never exposed.
+ */
+export function identityFromExtra(extra: unknown): RequestIdentity | undefined {
+  if (!isRecord(extra)) return undefined;
+  const headers = (extra as { requestInfo?: { headers?: unknown } }).requestInfo?.headers;
+  if (headers instanceof Headers) {
+    return extractHttpRequestIdentity(Object.fromEntries(headers.entries()));
+  }
+  if (isRecord(headers)) {
+    const flat: Record<string, string | string[] | undefined> = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (typeof value === 'string' || Array.isArray(value)) flat[key] = value as string | string[];
+    }
+    return extractHttpRequestIdentity(flat);
+  }
+  return undefined;
+}
+
 /** Register plan tools on a low-level SDK server; kernel-validated, wire-encoded. */
 export function registerBridgeTools(
   server: Server,
@@ -83,7 +105,7 @@ export function registerBridgeTools(
       },
     })),
   }));
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const name = request.params.name;
     const tool = tools.find((candidate) => candidate.name === name);
     if (tool === undefined) {
@@ -105,7 +127,8 @@ export function registerBridgeTools(
       );
     }
     try {
-      return encodeToolResult(await runner.run(tool.name, args, identity));
+      // Per-request headers win over the mount-time identity when present.
+      return encodeToolResult(await runner.run(tool.name, args, identityFromExtra(extra) ?? identity));
     } catch (error) {
       return encodeToolResult(
         errorResult(
