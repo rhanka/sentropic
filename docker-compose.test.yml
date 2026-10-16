@@ -18,6 +18,13 @@ services:
       # IMPORTANT: avoid leaking real Scaleway creds from host env into test MinIO.
       - DOC_STORAGE_ACCESS_KEY=${DOC_STORAGE_ACCESS_KEY:-minioadmin}
       - DOC_STORAGE_SECRET_KEY=${DOC_STORAGE_SECRET_KEY:-minioadmin}
+      # D2 session content (BRCM2-EX5, Lot 2): dedicated disposable MinIO
+      # config for physical assertions. No bucket here: tests allocate a
+      # randomized private scc-test-* bucket per fixture.
+      - SESSION_CONTENT_STORAGE_ENDPOINT=${SESSION_CONTENT_STORAGE_ENDPOINT:-http://minio:9000}
+      - SESSION_CONTENT_STORAGE_REGION=${SESSION_CONTENT_STORAGE_REGION:-fr-par-1}
+      - SESSION_CONTENT_STORAGE_ACCESS_KEY=${SESSION_CONTENT_STORAGE_ACCESS_KEY:-minioadmin}
+      - SESSION_CONTENT_STORAGE_SECRET_KEY=${SESSION_CONTENT_STORAGE_SECRET_KEY:-minioadmin}
       - H2A_NATIVE_SOCKET=${H2A_NATIVE_SOCKET:-}
       - H2A_ROOT=${H2A_ROOT:-}
       - CLUSTER_MESH_A1_QUALIFICATION=1
