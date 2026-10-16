@@ -131,7 +131,7 @@ responsibilities in mesh. Reasoning, images, tools/results, usage, finish
 status, allowed provider headers, and provider-shaped errors are preserved
 through the canonical form.
 
-## Native Anthropic relay (unreleased 0.20.0)
+## Native Anthropic relay (unreleased 0.20.1)
 
 The package implements native selection, relay, counting and usage contracts.
 API transport/pricing wiring and the inert qualification harness are built;
