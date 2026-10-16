@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { Hono } from 'hono';
 
+import { McpAuthError } from '../src/challenge.js';
+import { createMcpAuth } from '../src/core.js';
+import { mcpAuthRoutes } from '../src/hono.js';
 import {
   buildProtectedResourceMetadata,
   protectedResourceMetadataUrl,
@@ -90,6 +94,41 @@ describe('RFC 9728 Protected Resource Metadata', () => {
   it('makes canonical and legacy paths identical for a path-less resource', () => {
     expect(protectedResourceMetadataPath('https://mcp.example.com')).toBe(
       legacyProtectedResourceMetadataPath('https://mcp.example.com'),
+    );
+  });
+
+  it('serves canonical and historical docs when one instance mounts at /mcp then /', async () => {
+    const mcp = createMcpAuth({
+      resource: 'https://immo.sent-tech.ca/mcp',
+      authorizationServers: ['https://auth.sent-tech.ca'],
+      scopesSupported: ['immo:read', 'immo:search', 'immo:documents:read'],
+    });
+    const app = new Hono();
+    app.route('/mcp', mcpAuthRoutes(mcp));
+    app.route('/', mcpAuthRoutes(mcp));
+
+    const canonical = await app.request(
+      'https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp',
+    );
+    expect(canonical.status).toBe(200);
+    expect(await canonical.json()).toMatchObject({
+      resource: 'https://immo.sent-tech.ca/mcp',
+      scopes_supported: expect.arrayContaining(['immo:read', 'immo:search', 'immo:documents:read']),
+    });
+
+    const historical = await app.request(
+      'https://immo.sent-tech.ca/mcp/.well-known/oauth-protected-resource',
+    );
+    expect(historical.status).toBe(200);
+    expect(await historical.json()).toMatchObject({
+      resource: 'https://immo.sent-tech.ca/mcp',
+    });
+
+    const challenge = mcp.challenge(
+      new McpAuthError(401, 'invalid_token', 'Authorization header is required.'),
+    );
+    expect(challenge.headers.get('WWW-Authenticate')).toContain(
+      'resource_metadata="https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp"',
     );
   });
 });
