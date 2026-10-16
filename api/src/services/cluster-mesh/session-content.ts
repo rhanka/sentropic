@@ -1805,6 +1805,12 @@ export class SessionContentService {
           .set({ state: 'revoked', updatedAt: new Date(this.nowMs()) })
           .where(eq(sessionContentGrants.sessionId, sessionId));
       }
+      await tx.insert(sessionContentPurgeJobs).values({
+        purgeJobId: this.newId(),
+        namespaceId,
+        scope: 'namespace',
+        state: 'pending',
+      });
       await tx
         .update(sessionContentAttempts)
         .set({ outcome: 'cancelled' })
