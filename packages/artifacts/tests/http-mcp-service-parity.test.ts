@@ -227,4 +227,25 @@ describe('http service parity', () => {
     const forkGone = await app.handle(req('POST', '/fork', { artifactId: id }, OWNER));
     expect(forkGone.status).toBe(410);
   });
+
+  it('serves content bytes with status mapping', async () => {
+    const { app } = makeApp();
+    const id = await ensureSite(app);
+    await app.handle(req('POST', '/access/grant', { artifactId: id, principalId: READER, grant: 'read' }, OWNER));
+    await app.handle(req('POST', '/publish', { artifactId: id, profile: {}, files: FILES, idempotencyKey: 'c-1', paramsHash: 'h-1' }, OWNER));
+    const current = await app.handle(req('GET', `/current/${id}`, undefined, OWNER));
+    const manifest = JSON.parse((current.body as { manifest: string }).manifest) as {
+      files: { digest: string }[];
+    };
+    const digest = manifest.files[0]?.digest ?? '';
+    const served = await app.handle(req('GET', `/content/${id}/${digest}`, undefined, READER));
+    expect(served.status).toBe(200);
+    expect(served.body).toMatchObject({ digest, mimeType: 'text/html', size: 3, bytes: [1, 2, 3] });
+    const stranger = await app.handle(req('GET', `/content/${id}/${digest}`, undefined, STRANGER));
+    expect(stranger.status).toBe(403);
+    const noBlob = await app.handle(
+      req('GET', `/content/${id}/sha256:${'0'.repeat(64)}`, undefined, OWNER),
+    );
+    expect(noBlob.status).toBe(404);
+  });
 });
