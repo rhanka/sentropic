@@ -87,8 +87,17 @@ describe('session consent durable lifecycle', () => {
   let service: SessionContentService;
   let ctx: SessionContentContext;
 
-  const makeService = (quotas?: Record<string, number>): SessionContentService =>
-    new SessionContentService({
+  const makeService = (
+    quotasOrOptions?: Record<string, number> | {
+      quotas?: Record<string, number>;
+      publishHooks?: { afterUpload?: (key: string) => Promise<void> };
+    },
+  ): SessionContentService => {
+    const options =
+      quotasOrOptions && ('quotas' in quotasOrOptions || 'publishHooks' in quotasOrOptions)
+        ? (quotasOrOptions as { quotas?: Record<string, number>; publishHooks?: { afterUpload?: (key: string) => Promise<void> } })
+        : { quotas: quotasOrOptions as Record<string, number> | undefined };
+    return new SessionContentService({
       nowMs: () => now,
       storage: {
         endpoint: fixture.config.endpoint,
@@ -98,8 +107,10 @@ describe('session consent durable lifecycle', () => {
         secretAccessKey: fixture.config.secretAccessKey,
       },
       epochs: fakeEpoch,
-      quotas,
+      quotas: options.quotas,
+      publishHooks: options.publishHooks,
     });
+  };
 
   const acceptProject = async (
     overrides: Record<string, unknown> = {},
@@ -1159,6 +1170,73 @@ describe('session consent durable lifecycle', () => {
       .from(sessionContentGrants)
       .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
     expect(grants[0]!.authorityEpoch).toBe('epoch-test-1');
+  });
+
+  it('should publish nothing when revoked between upload and commit (M2)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('in-flight-revoked');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-m2b', ctx,
+    );
+    const publishing = makeService({
+      publishHooks: {
+        afterUpload: async () => {
+          await service.revokeGrant('sess-content-s1', ctx);
+        },
+      },
+    });
+    await expectContentError(() => publishing.publishAfterUpload(
+      reserved.reservationId, body, ctx,
+    ), 'grant_revoked');
+    const committed = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(
+        and(
+          eq(sessionContentObjects.sessionId, 'sess-content-s1'),
+          eq(sessionContentObjects.state, 'committed'),
+        ),
+      );
+    expect(committed).toHaveLength(0);
+    const staged = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(
+        and(
+          eq(sessionContentObjects.sessionId, 'sess-content-s1'),
+          eq(sessionContentObjects.state, 'purge_pending'),
+        ),
+      );
+    expect(staged).toHaveLength(1);
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.pendingDeletionBytes).toBe(body.length);
+    const jobs = await db
+      .select()
+      .from(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.bindingId, bindingId));
+    expect(jobs.length).toBeGreaterThan(0);
+    const purged = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(purged.remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
   });
 
   it('should preserve a non-deleted identity on rollback without false purge', async () => {
