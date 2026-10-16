@@ -17,8 +17,10 @@ import {
   computeManifestDigest,
   computePayloadDigest,
   sha256Hex,
+  type ApprovedToolBinding,
   type ApprovedToolSnapshot,
   type ToolConfigurationHandlerBinding,
+  type ToolPolicyOverlay,
 } from '../src/tool-configuration.js';
 
 const readOnlyGates = {
@@ -135,6 +137,50 @@ function buildSnapshot(): ApprovedToolSnapshot {
   };
   const payloadDigest = computePayloadDigest(base);
   return { ...base, provenance: { ...base.provenance, payloadDigest } };
+}
+
+const strictGates = {
+  requiresElicitation: true,
+  requiresHumanConfirmation: true,
+  requiresPrincipalGate: true,
+  requiresPolicy: true,
+};
+
+const gatedManifest: AppMcpProviderManifest = {
+  ...manifest,
+  tools: [
+    { ...searchTool, gates: strictGates, freshness: { maxAgeSeconds: 300, acr: ['a1'], amr: ['m1'], stepUp: 'auth' as const } },
+    { ...readTool, gates: strictGates },
+  ],
+};
+
+const gatedDigest = computeCompatibilityDigest(gatedManifest);
+
+function snapshotFor(targetManifest: AppMcpProviderManifest, bindings: ApprovedToolBinding[]): ApprovedToolSnapshot {
+  const snapshot = {
+    schemaVersion: TOOL_CONFIGURATION_SCHEMA_VERSION,
+    providerId: targetManifest.providerId,
+    revision: 'rev-1',
+    manifestDigest: computeManifestDigest(targetManifest),
+    providerVersion: targetManifest.version,
+    platformVersion: '0.3.0',
+    compatibilityDigest: computeCompatibilityDigest(targetManifest),
+    provenance: {
+      approvalRef: 'approval-synth-1',
+      revision: 'rev-1',
+      manifestDigest: computeManifestDigest(targetManifest),
+      reviewedBy: ['reviewer-1'],
+    },
+    bindings,
+  };
+  return { ...snapshot, provenance: { ...snapshot.provenance, payloadDigest: computePayloadDigest(snapshot) } };
+}
+
+function gatedBindings(policy: ApprovedToolBinding['policy']): ApprovedToolBinding[] {
+  return [
+    { toolName: 'synth_search', capabilityRef: 'synth_search', handlerId: 'local-search', values: { maxResults: 20, mode: 'fast' }, ...(policy === undefined ? {} : { policy }) },
+    { toolName: 'synth_read', capabilityRef: 'synth_read', handlerId: 'local-read', values: { maxChars: 1200, redact: true } },
+  ];
 }
 
 describe('tool-configuration compiler — synthetic providers only', () => {
@@ -254,6 +300,84 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     if (!stale.ok) {
       expect(stale.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
     }
+  });
+
+  it('merges gates field by field and rejects per-field weakening', () => {
+    const empty = snapshotFor(gatedManifest, gatedBindings({}));
+    const emptyResult = compileToolConfiguration({ snapshot: empty, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(emptyResult.ok).toBe(true);
+    if (!emptyResult.ok) return;
+    expect(emptyResult.config.tools.find((tool) => tool.toolName === 'synth_search')?.gates).toEqual(strictGates);
+    for (const key of ['requiresElicitation', 'requiresHumanConfirmation', 'requiresPrincipalGate', 'requiresPolicy'] as const) {
+      const dropped = snapshotFor(gatedManifest, gatedBindings({ gates: { [key]: false } as ToolPolicyOverlay['gates'] }));
+      const droppedResult = compileToolConfiguration({ snapshot: dropped, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+      expect(droppedResult.ok).toBe(false);
+      if (!droppedResult.ok) {
+        expect(droppedResult.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
+      }
+    }
+  });
+
+  it('requires a finite bounded maxAge and keeps acr/amr', () => {
+    const partial = snapshotFor(gatedManifest, gatedBindings({ freshness: { stepUp: 'auth' } }));
+    const partialResult = compileToolConfiguration({ snapshot: partial, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(partialResult.ok).toBe(true);
+    if (partialResult.ok) {
+      expect(partialResult.config.tools.find((tool) => tool.toolName === 'synth_search')?.freshness).toEqual({ maxAgeSeconds: 300, acr: ['a1'], amr: ['m1'], stepUp: 'auth' });
+    }
+    const tighter = snapshotFor(gatedManifest, gatedBindings({ freshness: { maxAgeSeconds: 100, stepUp: 'auth' } }));
+    const tighterResult = compileToolConfiguration({ snapshot: tighter, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(tighterResult.ok).toBe(true);
+    const badOverlays = [
+      { maxAgeSeconds: 0, stepUp: 'auth' },
+      { maxAgeSeconds: 3600, stepUp: 'auth' },
+      { maxAgeSeconds: 100, stepUp: 'auth', acr: [] as string[] },
+      { maxAgeSeconds: 100, stepUp: 'auth', amr: [] as string[] },
+      { maxAgeSeconds: 100, stepUp: 'scope' },
+    ];
+    for (const freshness of badOverlays) {
+      const rejected = snapshotFor(gatedManifest, gatedBindings({ freshness: freshness as ToolPolicyOverlay['freshness'] }));
+      const rejectedResult = compileToolConfiguration({ snapshot: rejected, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+      expect(rejectedResult.ok).toBe(false);
+      if (!rejectedResult.ok) {
+        expect(rejectedResult.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
+      }
+    }
+    const nanSnapshot = snapshotFor(gatedManifest, gatedBindings({ freshness: { maxAgeSeconds: 100, stepUp: 'auth' } }));
+    nanSnapshot.bindings[0] = { ...nanSnapshot.bindings[0], policy: { freshness: { maxAgeSeconds: Number.NaN, stepUp: 'auth' } } };
+    const nanResult = compileToolConfiguration({ snapshot: nanSnapshot, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(nanResult.ok).toBe(false);
+    if (!nanResult.ok) {
+      expect(nanResult.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
+    }
+  });
+
+  it('returns typed diagnostics for malformed overlays', () => {
+    const cases: Array<{ policy: unknown }> = [
+      { policy: null },
+      { policy: { idempotency: null } },
+      { policy: { gates: null } },
+      { policy: { freshness: null } },
+      { policy: { requiredScopes: ['synth:search', 123] } },
+      { policy: { requiredScope: ['synth:search'] } },
+    ];
+    for (const { policy } of cases) {
+      const snapshot = snapshotFor(gatedManifest, gatedBindings(policy as ToolPolicyOverlay));
+      const result = compileToolConfiguration({ snapshot, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.diagnostics.some((entry) => entry.code === 'policy_weakening')).toBe(true);
+      }
+    }
+  });
+
+  it('accepts strengthening overlays and exposes effective scopes', () => {
+    const snapshot = snapshotFor(gatedManifest, gatedBindings({ requiredScopes: ['synth:search', 'synth:extra'], redactionClass: 'secret' }));
+    const result = compileToolConfiguration({ snapshot, manifest: gatedManifest, handlers, compatibilityDigest: gatedDigest });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.tools.find((tool) => tool.toolName === 'synth_search')?.requiredScopes).toEqual(['synth:search', 'synth:extra']);
+    expect(result.config.tools.find((tool) => tool.toolName === 'synth_search')?.redactionClass).toBe('secret');
   });
 
   it('rejects unknown keys and invalid values', () => {
