@@ -29,6 +29,7 @@ export * from './runtime/receipts.js';
 export * from './runtime/registration.js';
 export * from './runtime/session-cutover.js';
 export * from './sessions/workspace-binding.js';
+export * from './sessions/content-consent.js';
 export * from './messaging/index.js';
 export * from './modules/errors.js';
 export * from './modules/contracts.js';

@@ -694,7 +694,10 @@ export const createContentConsentService = (
       return existing;
     }
     if (existing && existing.state !== 'active' && existing.state !== 'closed') {
-      throw new ContentConsentError('grant_revoked', 'previous child grant is not derivable');
+      const amendedSinceFencing = project.projectRevision > existing.projectRevision;
+      if (!(amendedSinceFencing && existing.bindingId !== bindingId)) {
+        throw new ContentConsentError('grant_revoked', 'previous child grant is not derivable');
+      }
     }
     const selected = project.selectedSessionIds.includes(sessionId);
     const resumed = input.resumedConversation;
