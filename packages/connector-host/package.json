@@ -29,7 +29,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/mcp-platform": "^0.2.0",
+    "@sentropic/mcp-platform": "^0.3.0",
     "hono": "^4.12.18"
   },
   "devDependencies": {
