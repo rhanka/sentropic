@@ -26,3 +26,22 @@ export function attachSource(source: SourceRef): SourceRef {
       throw new Error(`invalid source: unknown kind ${(source as { kind: string }).kind}`);
   }
 }
+
+export interface SourceStore {
+  getSource(artifactId: string): Promise<SourceRef | undefined>;
+  putSource(artifactId: string, source: SourceRef): Promise<void>;
+}
+
+/** In-memory SourceStore double for unit tests. */
+export function createMemorySourceStore(): SourceStore {
+  const sources = new Map<string, SourceRef>();
+  return {
+    getSource(artifactId: string): Promise<SourceRef | undefined> {
+      return Promise.resolve(sources.get(artifactId));
+    },
+    putSource(artifactId: string, source: SourceRef): Promise<void> {
+      sources.set(artifactId, source);
+      return Promise.resolve();
+    },
+  };
+}

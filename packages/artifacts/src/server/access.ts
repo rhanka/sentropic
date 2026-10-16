@@ -19,9 +19,35 @@ export interface GrantRecord {
 
 export interface ArtifactAcl {
   ownerId: string;
+  /** Physical scope of the artifact (set at creation; read by publish). */
+  storageScopeId?: string;
   isPublic: boolean;
   withdrawn: boolean;
   grants: GrantRecord[];
+}
+
+export interface AclStore {
+  getArtifactAcl(artifactId: string): Promise<ArtifactAcl | undefined>;
+  putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void>;
+}
+
+/** In-memory AclStore double for unit tests. */
+export function createMemoryAclStore(): AclStore {
+  const acls = new Map<string, ArtifactAcl>();
+  return {
+    getArtifactAcl(artifactId: string): Promise<ArtifactAcl | undefined> {
+      const acl = acls.get(artifactId);
+      return Promise.resolve(
+        acl === undefined
+          ? undefined
+          : { ...acl, grants: acl.grants.map((g) => ({ ...g })) },
+      );
+    },
+    putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void> {
+      acls.set(artifactId, { ...acl, grants: acl.grants.map((g) => ({ ...g })) });
+      return Promise.resolve();
+    },
+  };
 }
 
 /** True when the actor may perform the action (deny by default). */
