@@ -1,8 +1,6 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
-  HeadObjectCommand,
-  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -537,7 +535,7 @@ export class SessionContentService {
         { kind: 'workspace', id: String(policy['workspaceId']) },
       ]);
       await tx.execute(
-        sql`SELECT id FROM tenants WHERE id = ${ctx.tenantId} FOR UPDATE`,
+        sql`SELECT id FROM "public"."tenants" WHERE id = ${ctx.tenantId} FOR UPDATE`,
       );
       const [existing] = await tx
         .select()
