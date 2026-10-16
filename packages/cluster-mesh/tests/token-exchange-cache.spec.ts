@@ -125,4 +125,78 @@ describe('token exchange cache', () => {
     expect(new Set([plainResponse.accessToken, tenantResponse.accessToken, clientResponse.accessToken]).size).toBe(3);
     expect(fake.mintCalls).toBe(3);
   });
+
+  it('should isolate entries across environments and policy revisions', async () => {
+    let now = 1_700_000_000_000;
+    const fake = new FakeTokenIssuer({ issuer: ISSUER, nowMs: () => now });
+    const firstEnv = createTokenExchangeClient({
+      issuer: fake,
+      audiences: [TARGET_AUDIENCE],
+      subjectAudience: SUBJECT_AUDIENCE,
+      workloadClientId: WORKLOAD_CLIENT_ID,
+      workloadActorSub: WORKLOAD_ACTOR_SUB,
+      environment: 'preprod',
+      nowMs: () => now,
+    });
+    const secondEnv = createTokenExchangeClient({
+      issuer: fake,
+      audiences: [TARGET_AUDIENCE],
+      subjectAudience: SUBJECT_AUDIENCE,
+      workloadClientId: WORKLOAD_CLIENT_ID,
+      workloadActorSub: WORKLOAD_ACTOR_SUB,
+      environment: 'prod',
+      policyRevision: 'rev-2',
+      nowMs: () => now,
+    });
+    const subjectToken = await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+
+    const first = await firstEnv.exchange(baseRequest(subjectToken));
+    const second = await secondEnv.exchange(baseRequest(subjectToken));
+
+    expect(first.accessToken).not.toBe(second.accessToken);
+    expect(fake.mintCalls).toBe(2);
+    void now;
+  });
+
+  it('should bound the cache and evict the oldest entry past capacity', async () => {
+    const { fake, client } = setup(undefined, { maxEntries: 2 });
+    const tokens = await Promise.all(
+      ['user-1', 'user-2', 'user-3'].map((subject) =>
+        fake.issueSubject({ subject, scope: ['workspace:read'] }),
+      ),
+    );
+
+    await client.exchange(baseRequest(tokens[0]));
+    await client.exchange(baseRequest(tokens[1]));
+    expect(client.readTokenExchangeCacheStats().entries).toBe(2);
+    await client.exchange(baseRequest(tokens[2]));
+    expect(client.readTokenExchangeCacheStats().entries).toBe(2);
+    await client.exchange(baseRequest(tokens[0]));
+
+    expect(fake.mintCalls).toBe(4);
+  });
+
+  it('should single-flight identical concurrent exchanges', async () => {
+    const { fake, client } = setup();
+    const subjectToken = await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+    const request = baseRequest(subjectToken);
+
+    const [first, second] = await Promise.all([client.exchange(request), client.exchange(request)]);
+
+    expect(second.accessToken).toBe(first.accessToken);
+    expect(fake.mintCalls).toBe(1);
+  });
+
+  it('should evict every matching entry on subject invalidation', async () => {
+    const { fake, client } = setup();
+    const subjectToken = await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+    const request = baseRequest(subjectToken);
+
+    const first = await client.exchange(request);
+    expect(client.invalidateTokenExchangeCache({ subject: 'user-1' })).toBe(1);
+    const second = await client.exchange(request);
+
+    expect(second.accessToken).not.toBe(first.accessToken);
+    expect(fake.mintCalls).toBe(2);
+  });
 });
