@@ -50,6 +50,10 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `package-lock.json`
+  - `deploy/k8s/overlays/*/idp-identity-sync/**` (ATX-EX2: R2 service policy sync only)
+  - `packages/auth-ui/package.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/llm-gateway/package.json` (ATX-EX1: auth-hono range widening only)
   - `api/package.json`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
@@ -59,6 +63,8 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
 ## Feedback Loop
 - `attention` ATX-EX1: minor bump auth-hono 0.15.2 to 0.16.0 breaks `^0.15.0` ranges in auth-ui, cluster-mesh, llm-gateway (npm ERESOLVE on typecheck-api). Reason: new RFC 8693 grant is a feature, spec fixes 0.16.0. Impact: range-only widening in three consumer package.json plus root lockfile refresh, no source change. Rollback: revert range lines and lockfile.
 - `acknowledge` ATX-EX1: applied as declared, no source change in consumers.
+- `attention` ATX-EX2: R2 firm service_clients extension touches `deploy/k8s/overlays/*/idp-identity-sync/**` (outside Allowed). Reason: the real client import path lives in the k8s overlay SQL, not in deploy/ci. Impact: two new SQL files plus wiring in import-preprod.sql, kustomization.yaml and fixtures; export side untouched; policy-only sync, never secret material. Rollback: delete the two new files and revert wiring lines.
+- `acknowledge` ATX-EX2: applied as declared, export and oauth_clients paths untouched.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -149,10 +155,10 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
     - [ ] **E2E tests**
       - [ ] None for 2-IdP host slice.
 - [ ] **Lot 3 — idp-identity-sync service_clients extension (R2 firm) and rotation**
-  - [ ] Extend `deploy/ci/idp-identity-sync/run-core.mjs` and `bundle-checks.mjs` field allowlists for service_clients.
-  - [ ] Update `fixtures/prod.sql`, `fixtures/preprod.sql`, `fixtures/assertions.sql`, `fixtures/assert-committed.sql` with workload record and public-client non-interference.
-  - [ ] Update `idp-sync.selftest.mjs` and `run.selftest.mjs` for replay and non-interference.
-  - [ ] Update `README.md` and `CRED_CYCLE.md` with workload rotation procedure and test-only hashes.
+  - [x] Extend sync with policy-only service pass (`service-policy.sql`, `sync-services.sql` in k8s overlay import; export side untouched by design).
+  - [x] Update `fixtures/prod.sql`, `fixtures/preprod.sql` and `fixtures/assert-committed.sql` with workload record and public-client non-interference.
+  - [x] Replay and non-interference via new `services-test.sh` sourced from `sql-test.sh` (selftests need no change: 47 pass).
+  - [x] Update `README.md` and `CRED_CYCLE.md` with workload rotation procedure and test-only hashes.
   - [ ] Prove rotation via `make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`.
   - [ ] Lot gate:
     - [ ] `make test-idp-sync-selftest API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
