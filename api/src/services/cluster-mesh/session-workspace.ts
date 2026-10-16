@@ -10,6 +10,7 @@ import { sessionWorkspaceBindings } from '../../db/control-schema';
 import { tenantMemberships, users, workspaces } from '../../db/schema';
 import { hasRole } from '../../middleware/rbac';
 import { hasWorkspaceRole, type WorkspaceType } from '../workspace-access';
+import { SessionContentService } from './session-content';
 import { notifyWorkspaceCreated, provisionWorkspace, seedWorkspaceTypeResources } from '../workspace-provisioning';
 
 export type AdoptedSessionWorkspaceStatus = 'attached' | 'detached' | 'ended';
@@ -115,15 +116,35 @@ export const createDrizzleBindingStore = (
   },
 });
 
+export interface SessionWorkspaceContentHooks {
+  fenceSessionOnDetachEnd(sessionId: string, tenantId: string): Promise<unknown>;
+}
+
 export class SessionWorkspaceService {
   private readonly storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore;
   private readonly mesh: ReturnType<typeof createSessionWorkspaceBindingService>;
+  private readonly contentHooks: SessionWorkspaceContentHooks | null;
 
   constructor(
     storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore = createDrizzleBindingStore,
+    contentHooks?: SessionWorkspaceContentHooks | null,
   ) {
     this.storeFactory = storeFactory;
     this.mesh = createSessionWorkspaceBindingService(storeFactory(db));
+    if (contentHooks === undefined) {
+      this.contentHooks = new SessionContentService();
+    } else {
+      this.contentHooks = contentHooks;
+    }
+  }
+
+  private async fenceContent(sessionId: string, tenantId: string): Promise<void> {
+    if (!this.contentHooks) return;
+    try {
+      await this.contentHooks.fenceSessionOnDetachEnd(sessionId, tenantId);
+    } catch (err) {
+      console.error('Failed to fence session content on detach/end', sessionId, err);
+    }
   }
 
   private async checkTenantMember(tenantId: string, principalId: string): Promise<void> {
@@ -244,7 +265,7 @@ export class SessionWorkspaceService {
     requireId(principalId, 'principalId');
     // Membership first: a non-member learns nothing about binding existence.
     await this.checkTenantMember(tenantId, principalId);
-    return await db.transaction(async (tx) => {
+    const binding = await db.transaction(async (tx) => {
       const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       const existing = await store.findBySession(sessionId);
@@ -265,6 +286,11 @@ export class SessionWorkspaceService {
         throw err;
       }
     });
+    // Retained-closed transition: live D2 grants close, committed copies
+    // stay under immutable origin scope; never fail the D1 detach when the
+    // content service is unavailable.
+    await this.fenceContent(sessionId, tenantId);
+    return binding;
   }
 
   async end(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace> {
@@ -273,7 +299,7 @@ export class SessionWorkspaceService {
     requireId(principalId, 'principalId');
     // Membership first: a non-member learns nothing about binding existence.
     await this.checkTenantMember(tenantId, principalId);
-    return await db.transaction(async (tx) => {
+    const binding = await db.transaction(async (tx) => {
       const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       const existing = await store.findBySession(sessionId);
@@ -298,6 +324,8 @@ export class SessionWorkspaceService {
         throw err;
       }
     });
+    await this.fenceContent(sessionId, tenantId);
+    return binding;
   }
 
   async get(sessionId: string, tenantId: string, principalId: string): Promise<AdoptedSessionWorkspace | null> {
