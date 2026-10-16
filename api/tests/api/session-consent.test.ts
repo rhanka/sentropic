@@ -717,3 +717,124 @@ describe('session consent durable lifecycle', () => {
     expect(purged.remainingObjects).toBe(0);
     expect(await fixture.listPhysical('')).toHaveLength(0);
   });
+
+  it('should fence and purge on tenant DELETE with surviving tombstones', async () => {
+    await acceptProject();
+    await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: bindings[0]!.bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('tenant-scoped-bytes');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-t1', ctx,
+    );
+    await service.publishAfterUpload(reserved.reservationId, body, ctx);
+    await db.delete(tenants).where(eq(tenants.id, TENANT_A));
+    const grants = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(grants[0]!.state).toBe('revoked');
+    const tombs = await db
+      .select()
+      .from(sessionContentTombstones)
+      .where(
+        and(eq(sessionContentTombstones.kind, 'tenant'), eq(sessionContentTombstones.publicId, TENANT_A)),
+    );
+    expect(tombs).toHaveLength(1);
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-t2', ctx,
+    ), 'membership_required');
+    const jobs = await db.select().from(sessionContentPurgeJobs);
+    expect(jobs.length).toBeGreaterThan(0);
+    const purged = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(purged.deletedObjects).toBe(1);
+    expect(purged.remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    await db.insert(tenants).values({ id: TENANT_A, name: TENANT_A, status: 'active' });
+    await db.insert(tenantMemberships).values({
+      tenantId: TENANT_A, userId: owner.id, status: 'approved', role: 'admin',
+    });
+    await expectContentError(() => service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId: bindings[0]!.bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx), 'tombstoned_scope');
+  });
+
+  it('should fence on tenant offboard status and leave empty scopes untouched', async () => {
+    const emptyBefore = await service.probeEmptyState(TENANT_B);
+    expect(emptyBefore.empty).toBe(true);
+    await db.delete(tenants).where(eq(tenants.id, TENANT_B));
+    const emptyAfter = await service.probeEmptyState(TENANT_B);
+    expect(emptyAfter.empty).toBe(true);
+    expect(emptyAfter.namespaces).toBe(0);
+    expect(emptyAfter.purgeJobs).toBe(0);
+    const tombs = await db.select().from(sessionContentTombstones);
+    expect(tombs).toHaveLength(0);
+    await db.insert(tenants).values({ id: TENANT_B, name: TENANT_B, status: 'active' });
+    await acceptProject();
+    await db
+      .update(tenants)
+      .set({ status: 'offboarded' })
+      .where(eq(tenants.id, TENANT_A));
+    const projects = await db
+      .select()
+      .from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1'));
+    expect(projects).toHaveLength(1);
+    const offboardTombs = await db
+      .select()
+      .from(sessionContentTombstones)
+      .where(eq(sessionContentTombstones.kind, 'tenant'));
+    expect(offboardTombs).toHaveLength(1);
+    await expectContentError(() => service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id] }),
+      ctx,
+    ), 'membership_required');
+    const triggers = await db.execute(sql`
+      SELECT tgname FROM pg_trigger
+      WHERE tgname IN (
+        'session_content_fence_tenant_delete_trigger',
+        'session_content_fence_user_delete_trigger',
+        'session_content_fence_workspace_delete_trigger',
+        'session_content_fence_tenant_offboard_trigger'
+      )
+    `);
+    expect(triggers.rows).toHaveLength(4);
+    const functions = await db.execute(sql`
+      SELECT proname FROM pg_proc
+      WHERE proname IN (
+        'session_content_fence_tenant_delete',
+        'session_content_fence_user_delete',
+        'session_content_fence_workspace_delete',
+        'session_content_fence_tenant_offboard'
+      )
+    `);
+    expect(functions.rows).toHaveLength(4);
+  });
