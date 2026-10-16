@@ -33,7 +33,16 @@ export interface BridgeTool {
 }
 
 export interface BridgeRunner {
-  run(tool: string, args: Record<string, JSONValue>): Promise<AppToolResult>;
+  run(
+    tool: string,
+    args: Record<string, JSONValue>,
+    identity: RequestIdentity | undefined,
+  ): Promise<AppToolResult>;
+}
+
+export interface BridgeOptions {
+  /** Boundary identity forwarded to the runner on every call (else `undefined`). */
+  readonly identity?: RequestIdentity;
 }
 
 export interface RequestIdentity {
@@ -61,7 +70,9 @@ export function registerBridgeTools(
   server: Server,
   tools: readonly BridgeTool[],
   runner: BridgeRunner,
+  options?: BridgeOptions,
 ): void {
+  const identity = options?.identity;
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: tools.map((tool) => ({
       name: tool.name,
@@ -94,7 +105,7 @@ export function registerBridgeTools(
       );
     }
     try {
-      return encodeToolResult(await runner.run(tool.name, args));
+      return encodeToolResult(await runner.run(tool.name, args, identity));
     } catch (error) {
       return encodeToolResult(
         errorResult(
