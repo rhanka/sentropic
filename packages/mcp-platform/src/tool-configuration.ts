@@ -519,3 +519,191 @@ function isWeakeningOverlay(manifestTool: CapabilityTool, overlay: ToolPolicyOve
 // Compiler
 // ---------------------------------------------------------------------------
 
+export type CompileToolConfigurationInput = {
+  snapshot: unknown;
+  manifest: AppMcpProviderManifest;
+  handlers: Record<string, ToolConfigurationHandlerBinding> | Map<string, ToolConfigurationHandlerBinding>;
+};
+
+/**
+ * Strictly compile an approved snapshot against a manifest and a local handler
+ * table. Pure and synchronous: performs zero I/O and never touches fetch,
+ * the filesystem, the network or the clock.
+ */
+export function compileToolConfiguration(input: CompileToolConfigurationInput): CompileToolConfigurationResult {
+  const diagnostics: ToolConfigurationDiagnostic[] = [];
+  const snapshot = input.snapshot as Partial<ApprovedToolSnapshot> | null | undefined;
+  const manifest = input.manifest;
+  const handlerTable: Map<string, ToolConfigurationHandlerBinding> =
+    input.handlers instanceof Map
+      ? input.handlers
+      : new Map(Object.entries(input.handlers ?? {}));
+
+  if (!isRecord(snapshot)) {
+    diag(diagnostics, 'malformed_snapshot', 'snapshot', 'snapshot must be an object');
+    return { ok: false, diagnostics };
+  }
+
+  // Identity / version.
+  if (snapshot.schemaVersion !== TOOL_CONFIGURATION_SCHEMA_VERSION) {
+    diag(diagnostics, 'invalid_schema_version', 'snapshot.schemaVersion', 'schemaVersion must be "v1"');
+  }
+  if (typeof snapshot.providerId !== 'string' || snapshot.providerId.length === 0) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.providerId', 'providerId must be a non-empty string');
+  } else if (snapshot.providerId !== manifest.providerId) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.providerId', 'providerId must equal the manifest providerId');
+  }
+  if (typeof snapshot.revision !== 'string' || snapshot.revision.length === 0) {
+    diag(diagnostics, 'invalid_identity', 'snapshot.revision', 'revision must be a non-empty string');
+  }
+
+  const manifestDigest = computeManifestDigest(manifest);
+  if (snapshot.manifestDigest !== manifestDigest) {
+    diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.manifestDigest', 'manifestDigest does not match the manifest');
+  }
+  const compatibilityDigest = computeCompatibilityDigest(manifest);
+  if (snapshot.compatibilityDigest !== compatibilityDigest) {
+    diag(
+      diagnostics,
+      'compatibility_digest_mismatch',
+      'snapshot.compatibilityDigest',
+      'compatibilityDigest does not cover the manifest public schemas',
+    );
+  }
+
+  // Provenance.
+  const provenance = snapshot.provenance as Partial<ToolConfigurationProvenance> | undefined;
+  if (!isRecord(provenance)) {
+    diag(diagnostics, 'invalid_provenance', 'snapshot.provenance', 'provenance must be an object');
+  } else {
+    if (typeof provenance.approvalRef !== 'string' || provenance.approvalRef.length === 0) {
+      diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.approvalRef', 'approvalRef must be non-empty');
+    }
+    if (typeof provenance.revision !== 'string' || provenance.revision.length === 0) {
+      diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.revision', 'provenance revision must be non-empty');
+    } else if (typeof snapshot.revision === 'string' && provenance.revision !== snapshot.revision) {
+      diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.revision', 'provenance revision must equal snapshot revision');
+    }
+    if (provenance.manifestDigest !== manifestDigest) {
+      diag(diagnostics, 'manifest_digest_mismatch', 'snapshot.provenance.manifestDigest', 'provenance manifestDigest mismatch');
+    }
+    if (!Array.isArray(provenance.reviewedBy) || provenance.reviewedBy.length === 0) {
+      diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.reviewedBy', 'reviewedBy must list at least one reviewer');
+    }
+    if (provenance.payloadDigest !== undefined && typeof provenance.payloadDigest === 'string') {
+      const full = snapshot as ApprovedToolSnapshot;
+      const expected = computePayloadDigest(full);
+      if (provenance.payloadDigest !== expected) {
+        diag(diagnostics, 'invalid_provenance', 'snapshot.provenance.payloadDigest', 'payloadDigest does not match the payload');
+      }
+    }
+  }
+
+  // Bindings shape.
+  const bindings = snapshot.bindings;
+  if (!Array.isArray(bindings)) {
+    diag(diagnostics, 'malformed_snapshot', 'snapshot.bindings', 'bindings must be an array');
+    return { ok: false, diagnostics };
+  }
+
+  const manifestTools = new Map<string, CapabilityTool>(manifest.tools.map((tool) => [tool.name, tool]));
+  const seen = new Set<string>();
+  const compiled: CompiledToolEntry[] = [];
+
+  bindings.forEach((binding, index) => {
+    const path = `snapshot.bindings[${index}]`;
+    if (!isRecord(binding)) {
+      diag(diagnostics, 'malformed_snapshot', path, 'binding must be an object');
+      return;
+    }
+    const entry = binding as Partial<ApprovedToolBinding>;
+    if (typeof entry.toolName !== 'string' || entry.toolName.length === 0) {
+      diag(diagnostics, 'malformed_snapshot', `${path}.toolName`, 'toolName must be non-empty');
+      return;
+    }
+    if (seen.has(entry.toolName)) {
+      diag(diagnostics, 'duplicate_tool_name', `${path}.toolName`, `duplicate tool "${entry.toolName}"`);
+      return;
+    }
+    seen.add(entry.toolName);
+
+    const manifestTool = manifestTools.get(entry.toolName);
+    if (!manifestTool) {
+      diag(diagnostics, 'unknown_tool', `${path}.toolName`, `unknown tool "${entry.toolName}"`);
+      return;
+    }
+    if (entry.capabilityRef !== entry.toolName) {
+      diag(diagnostics, 'capability_ref_mismatch', `${path}.capabilityRef`, 'capabilityRef must equal toolName');
+      return;
+    }
+    if (typeof entry.handlerId !== 'string' || !HANDLER_ID_PATTERN.test(entry.handlerId)) {
+      diag(diagnostics, 'unknown_handler', `${path}.handlerId`, 'handlerId must reference local compiled code');
+      return;
+    }
+    const handler = handlerTable.get(entry.handlerId);
+    if (!handler) {
+      diag(diagnostics, 'unknown_handler', `${path}.handlerId`, `unknown handler "${entry.handlerId}"`);
+      return;
+    }
+    if (handler.capabilityRef !== entry.toolName) {
+      diag(diagnostics, 'handler_capability_mismatch', `${path}.handlerId`, 'handler capabilityRef mismatch');
+      return;
+    }
+    if (!isRecord(entry.values)) {
+      diag(diagnostics, 'invalid_values', `${path}.values`, 'values must be an object');
+      return;
+    }
+    checkForbiddenContent(diagnostics, `${path}.values`, entry.values);
+    const before = diagnostics.length;
+    validateAgainstSchema(diagnostics, `${path}.values`, handler.configSchema, entry.values);
+    if (diagnostics.length !== before) return;
+
+    if (entry.policy !== undefined) {
+      if (!isRecord(entry.policy)) {
+        diag(diagnostics, 'policy_weakening', `${path}.policy`, 'policy must be an object');
+        return;
+      }
+      const weakening = isWeakeningOverlay(manifestTool, entry.policy as ToolPolicyOverlay);
+      if (weakening) {
+        diag(diagnostics, 'policy_weakening', `${path}.policy`, weakening);
+        return;
+      }
+    }
+
+    const policy = (entry.policy ?? {}) as ToolPolicyOverlay;
+    compiled.push({
+      capabilityRef: entry.toolName,
+      freshness: policy.freshness ?? manifestTool.freshness,
+      gates: policy.gates ?? manifestTool.gates,
+      handlerId: entry.handlerId,
+      idempotency: policy.idempotency ?? manifestTool.idempotency,
+      mutability: policy.mutability ?? manifestTool.mutability,
+      mutatesExternalSystem: policy.mutatesExternalSystem ?? manifestTool.mutatesExternalSystem,
+      redactionClass: policy.redactionClass ?? manifestTool.redactionClass,
+      requiredClaims: policy.requiredClaims ?? [...manifestTool.requiredClaims],
+      requiredScopes: policy.requiredScopes ?? [...manifestTool.requiredScopes],
+      toolName: entry.toolName,
+      values: { ...entry.values },
+    });
+  });
+
+  // Exact coverage: configuration alone cannot rename, remove or add a tool.
+  for (const name of manifestTools.keys()) {
+    if (!seen.has(name)) {
+      diag(diagnostics, 'missing_binding', `snapshot.bindings.${name}`, `missing binding for "${name}"`);
+    }
+  }
+
+  if (diagnostics.length > 0) return { ok: false, diagnostics };
+
+  const config: CompiledToolConfiguration = {
+    compatibilityDigest,
+    manifestDigest,
+    providerId: manifest.providerId,
+    revision: snapshot.revision as string,
+    schemaVersion: TOOL_CONFIGURATION_SCHEMA_VERSION,
+    tools: [...compiled].sort((a, b) => (a.toolName < b.toolName ? -1 : a.toolName > b.toolName ? 1 : 0)),
+  };
+  return { ok: true, config: deepFreeze(config) };
+}
+
