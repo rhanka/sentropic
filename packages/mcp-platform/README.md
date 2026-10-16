@@ -46,15 +46,21 @@ Strict, pure, zero-I/O compiler for an approved per-tool configuration snapshot:
 - Inputs: versioned snapshot (`schemaVersion: "v1"`), provider manifest, local handler table and the
   consumer-supplied compatibility digest (generic helper `computeCompatibilityDigest` covers the
   public schemas/result codec; the compiler compares it, never derives it).
-- Checks: identity/version, manifest digest, consumer compatibility digest, mandatory payload digest
-  (binds manifest + compatibility) and handler-table shape digest, exact tool coverage (no rename,
-  remove, add or param/result change), handler allowlist (table keys equal `handlerId`), closed-schema
-  typed per-tool values, manifest policy merged field by field with no weakening, no credentials,
-  bearers, user data or executable/upstream values.
+- Checks: mandatory qualified versions (`providerVersion` equals the manifest version,
+  `platformVersion` equals the package version), manifest digest, consumer compatibility digest,
+  snapshot-carried handler-table shape digest (`handlersDigest`, compared to the local table with
+  `handlers_digest_mismatch`), mandatory payload digest (binds manifest + compatibility + handler
+  digests), exact tool coverage (no rename, remove, add or param/result change), handler allowlist
+  (table keys equal `handlerId`), closed-schema typed per-tool values (mistyped keywords rejected),
+  manifest policy merged field by field with no weakening, closed provenance keys (`approvalRef`,
+  `revision`, `manifestDigest`, `payloadDigest`, `reviewedBy`) with inspected strings (role-only
+  reviewers, no credentials, bearers, user data or executable/upstream values, including overlays).
 - Output: deep-cloned then deeply frozen `CompiledToolConfiguration` (exposes `payloadDigest`,
   `approvalRef`, versions and `handlersDigest`) or typed diagnostics; invalid candidates retain
   the active generation, `activate` accepts compiler-branded configurations only, and cold starts
-  fail closed. See `tests/tool-configuration.test.ts`.
+  fail closed. See `tests/tool-configuration.test.ts` (40 tests, one discriminating test per
+  control; the separate-process test loads `dist/` and the clean-consumer probe installs the packed
+  tarball via `make probe-mcp-platform-clean-consumer`).
 
 ### Slice 1 — manifest & adapter schemas (`src/manifest.ts`, `src/runtime.ts`)
 
@@ -193,21 +199,15 @@ the frozen surface before publish.
 
 ## Running the gates (mock, in-memory)
 
-There is no Makefile target for this private package by design. Run the package's
-own tooling inside the repo's Docker node image, mirroring the other packages:
+Run the package gates through the repo Makefile (Docker node image, `ENV` last):
 
 ```sh
-# typecheck
-docker run --rm -v "$PWD:/workspace" -w /workspace/packages/mcp-platform \
-  node:24-bookworm-slim sh -lc 'tool_dir="$(mktemp -d)"; \
-  npm install --prefix "$tool_dir" --no-save typescript@5.4.5 @types/node >/dev/null; \
-  "$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
-
-# tests
-docker run --rm -v "$PWD:/workspace" -w /workspace/packages/mcp-platform \
-  node:24-bookworm-slim sh -lc 'tool_dir="$(mktemp -d)"; \
-  npm install --prefix "$tool_dir" --no-save vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
-  NODE_PATH="$tool_dir/node_modules" "$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+make typecheck-mcp-platform ENV=test-mcp-registry-codec
+make test-mcp-platform SCOPE=tests/tool-configuration.test.ts ENV=test-mcp-registry-codec
+make test-mcp-platform ENV=test-mcp-registry-codec # builds dist first: the separate-process test loads dist/
+make pack-mcp-platform ENV=test-mcp-registry-codec
+make probe-mcp-platform-clean-consumer ENV=test-mcp-registry-codec # clean-container install + subpath import (BR1a-EX3)
+make api-extract-mcp-platform ENV=test-mcp-registry-codec
 ```
 
 Real validation against Claude.ai or another external MCP client is UAT, not a CI
