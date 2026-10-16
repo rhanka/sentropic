@@ -6,6 +6,7 @@
  * strict schema/version/handler checks, duplicates, missing bindings, weakened
  * policy, rejection preserving active state, and the zero-I/O sentinel.
  */
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import type { AppMcpProviderManifest, CapabilityTool } from '../src/manifest.js';
 import {
@@ -103,6 +104,12 @@ const handlers: Record<string, ToolConfigurationHandlerBinding> = {
 };
 
 const consumerDigest = computeCompatibilityDigest(manifest);
+
+// Frozen reference digests for the synthetic fixture above (M5/M6): any
+// algorithm or fixture change fails these before it can drift silently.
+const GOLDEN_MANIFEST_DIGEST = '1b3514cd8e7d0991f9dadc4061da7950a04f2bcf655c4be0f04b4bee28a8ea4d';
+const GOLDEN_PAYLOAD_DIGEST = '9f470ff92332fd0abd6bc3ba70c3ce3483309abe84580169917453e29f44d596';
+const GOLDEN_COMPILED_DIGEST = '5ce41abb9d71133e3b366a3db1636678fa53170cdc266388a813d73162836aa9';
 
 function buildSnapshot(): ApprovedToolSnapshot {
   const revision = 'rev-1';
@@ -223,6 +230,93 @@ describe('tool-configuration compiler — synthetic providers only', () => {
     expect(computeManifestDigest(manifest)).toBe(computeManifestDigest(manifest));
     expect(computeCompatibilityDigest(manifest)).toBe(computeCompatibilityDigest(manifest));
     expect(canonicalJson({ b: 1, a: 2 })).toBe(canonicalJson({ a: 2, b: 1 }));
+  });
+
+  it('is stable across key, binding and tool order permutations', () => {
+    expect(computeManifestDigest(manifest)).toBe(GOLDEN_MANIFEST_DIGEST);
+    const snapshot = buildSnapshot();
+    expect(computePayloadDigest(snapshot)).toBe(GOLDEN_PAYLOAD_DIGEST);
+    const baseResult = compileToolConfiguration({ snapshot, manifest, handlers, compatibilityDigest: consumerDigest });
+    expect(baseResult.ok).toBe(true);
+    if (!baseResult.ok) return;
+    expect(sha256Hex(canonicalJson(baseResult.config))).toBe(GOLDEN_COMPILED_DIGEST);
+    // Key order alone never changes the digest; binding order does (arrays
+    // keep order), so the reordered payload is resealed before compiling.
+    const keyShuffled = {
+      schemaVersion: snapshot.schemaVersion,
+      revision: snapshot.revision,
+      providerId: snapshot.providerId,
+      bindings: snapshot.bindings.map((binding) => ({ handlerId: binding.handlerId, values: { ...binding.values }, toolName: binding.toolName, capabilityRef: binding.capabilityRef })),
+      provenance: { payloadDigest: snapshot.provenance.payloadDigest, manifestDigest: snapshot.provenance.manifestDigest, approvalRef: snapshot.provenance.approvalRef, revision: snapshot.provenance.revision, reviewedBy: [...snapshot.provenance.reviewedBy] },
+      manifestDigest: snapshot.manifestDigest,
+      providerVersion: snapshot.providerVersion,
+      platformVersion: snapshot.platformVersion,
+      compatibilityDigest: snapshot.compatibilityDigest,
+    };
+    expect(computePayloadDigest(keyShuffled)).toBe(GOLDEN_PAYLOAD_DIGEST);
+    const reordered = { ...keyShuffled, bindings: [...keyShuffled.bindings].reverse() };
+    const resealed = { ...reordered, provenance: { ...reordered.provenance, payloadDigest: computePayloadDigest(reordered) } };
+    const roundTripped = JSON.parse(JSON.stringify(resealed)) as ApprovedToolSnapshot;
+    const reorderedManifest = { ...manifest, tools: [...manifest.tools].reverse() };
+    const permutedResult = compileToolConfiguration({ snapshot: roundTripped, manifest: reorderedManifest, handlers, compatibilityDigest: consumerDigest });
+    expect(permutedResult.ok).toBe(true);
+    if (!permutedResult.ok || !baseResult.ok) return;
+    // The compiler normalizes order into identical tools; only the
+    // order-binding payloadDigest differs between the two approvals.
+    expect(canonicalJson(permutedResult.config.tools)).toBe(canonicalJson(baseResult.config.tools));
+    expect(permutedResult.config.payloadDigest).not.toBe(GOLDEN_PAYLOAD_DIGEST);
+  });
+
+  it('reproduces digests in a separate Node process', () => {
+    const snapshot = buildSnapshot();
+    const payload = JSON.stringify({ manifest, snapshot });
+    const script = `
+import { createHash } from 'node:crypto';
+const encode = (value, seen) => {
+  if (value === null) return 'null';
+  if (typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('non-finite');
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) throw new TypeError('circular');
+    seen.add(value);
+    const out = '[' + value.map((entry) => encode(entry, seen)).join(',') + ']';
+    seen.delete(value);
+    return out;
+  }
+  if (typeof value !== 'object') throw new TypeError('non-json');
+  if (seen.has(value)) throw new TypeError('circular');
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) throw new TypeError('non-plain');
+  seen.add(value);
+  const out = '{' + Object.keys(value).sort().map((key) => {
+    if (value[key] === undefined) throw new TypeError('undefined');
+    return JSON.stringify(key) + ':' + encode(value[key], seen);
+  }).join(',') + '}';
+  seen.delete(value);
+  return out;
+};
+const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
+let input = '';
+process.stdin.on('data', (chunk) => { input += chunk; });
+process.stdin.on('end', () => {
+  const parsed = JSON.parse(input);
+  const tools = [...parsed.manifest.tools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const manifestDigest = sha(encode({ appId: parsed.manifest.appId, providerId: parsed.manifest.providerId, version: parsed.manifest.version, audit: parsed.manifest.audit, authz: parsed.manifest.authz, durability: parsed.manifest.durability, prompts: parsed.manifest.prompts, resources: parsed.manifest.resources, tools }, new Set()));
+  const rest = { ...parsed.snapshot };
+  delete rest.provenance;
+  const prov = { ...parsed.snapshot.provenance };
+  delete prov.payloadDigest;
+  const payloadDigest = sha(encode({ ...rest, provenance: prov }, new Set()));
+  process.stdout.write(JSON.stringify({ manifestDigest, payloadDigest }));
+});
+`;
+    const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], { input: payload, encoding: 'utf8' }) as string;
+    const parsed = JSON.parse(output) as { manifestDigest: string; payloadDigest: string };
+    expect(parsed.manifestDigest).toBe(computeManifestDigest(manifest));
+    expect(parsed.payloadDigest).toBe(computePayloadDigest(snapshot));
   });
 
   it('rejects a wrong schema version before activation', () => {
