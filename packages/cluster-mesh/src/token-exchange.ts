@@ -355,3 +355,130 @@ export function createTokenExchangeClient(input: TokenExchangeClientInput): Toke
   }
 
   async function perform(request: TokenExchangeRequest, subject: VerifiedSubjectToken, key: string): Promise<CachedExchange> {
+    const nowSec = Math.floor(nowMs() / 1000);
+    if (subject.expiresAtSec <= nowSec) {
+      evict(key);
+      refuse('subject_expired');
+    }
+    const ttlSec = Math.min(subject.expiresAtSec - nowSec, maxTtlSec);
+    if (ttlSec <= 0) refuse('ttl_non_positive');
+    let minted: MintedToken;
+    try {
+      minted = await input.issuer.mint({
+        subject,
+        subjectToken: request.subjectToken,
+        audience: request.audience,
+        scope: [...request.scope],
+        actorSub: input.workloadActorSub,
+        workloadClientId: input.workloadClientId,
+        ttlSec,
+        nowSec,
+      });
+    } catch (error) {
+      if (error instanceof TokenExchangeRefusedError) throw error;
+      refuse('mint_failed');
+    }
+    const completedSec = Math.floor(nowMs() / 1000);
+    checkMinted(minted, request, subject, completedSec);
+    const insertedAtMs = nowMs();
+    const expiresAtMs = resolveTokenExchangeCacheTtlMs({
+      mintedExpiresAtSec: minted.expiresAtSec,
+      subjectExpiresAtSec: subject.expiresAtSec,
+      insertedAtMs,
+      marginMs,
+    });
+    if (!(expiresAtMs > insertedAtMs)) {
+      evict(key);
+      refuse('ttl_non_positive');
+    }
+    const entry: CachedExchange = {
+      accessToken: minted.accessToken,
+      scope: [...minted.scope],
+      expiresAtMs,
+      subject: subject.subject,
+      tenantId: subject.tenantId ?? '',
+    };
+    admit(key, entry);
+    return entry;
+  }
+
+  function toResponse(entry: CachedExchange): TokenExchangeResponse {
+    return {
+      accessToken: entry.accessToken,
+      issuedTokenType: ACCESS_TOKEN_TYPE,
+      tokenType: 'Bearer',
+      expiresIn: Math.max(0, Math.floor((entry.expiresAtMs - nowMs()) / 1000)),
+      scope: [...entry.scope],
+    };
+  }
+
+  return {
+    async exchange(request: TokenExchangeRequest): Promise<TokenExchangeResponse> {
+      if (request.grantType !== RFC8693_GRANT_TYPE) refuse('grant_type_unsupported');
+      if (request.subjectTokenType !== ACCESS_TOKEN_TYPE) refuse('subject_token_type_unsupported');
+      if (request.requestedTokenType !== undefined && request.requestedTokenType !== ACCESS_TOKEN_TYPE) {
+        refuse('requested_token_type_unsupported');
+      }
+      if (request.subjectToken.length === 0) refuse('subject_token_missing');
+      if (request.audience.length === 0) refuse('audience_missing');
+      if (!input.audiences.includes(request.audience)) refuse('audience_not_allowed');
+      if ('actor' in (request as Record<string, unknown>)) refuse('actor_invalid');
+      if (request.scope.length === 0) refuse('scope_empty');
+
+      let subject: VerifiedSubjectToken;
+      try {
+        subject = await input.issuer.verify(request.subjectToken);
+      } catch (error) {
+        if (error instanceof SubjectVerificationError && error.verification === 'expired') {
+          refuse('subject_expired');
+        }
+        refuse('subject_unverified');
+      }
+      const nowSec = Math.floor(nowMs() / 1000);
+      if (subject.expiresAtSec <= nowSec) refuse('subject_expired');
+      if (subject.subject.length === 0) refuse('subject_unverified', 'Token exchange refused: verified subject is empty');
+      if (subject.audience.length !== 1 || subject.audience[0] !== input.subjectAudience) {
+        refuse('subject_audience_invalid');
+      }
+      for (const scope of request.scope) {
+        if (!subject.scope.includes(scope)) refuse('scope_not_granted');
+      }
+
+      const key = buildTokenExchangeCacheKey(request, subject, identityFor(request, subject));
+      const hit = cache.get(key);
+      if (hit !== undefined) {
+        if (hit.expiresAtMs > nowMs()) return toResponse(hit);
+        cache.delete(key);
+      }
+
+      const flight = inflight.get(key);
+      if (flight !== undefined) return toResponse(await flight);
+      const pending = perform(request, subject, key);
+      inflight.set(key, pending);
+      try {
+        return toResponse(await pending);
+      } finally {
+        if (inflight.get(key) === pending) inflight.delete(key);
+      }
+    },
+
+    invalidateTokenExchangeCache(filter: TokenExchangeCacheInvalidation | 'all' = 'all'): number {
+      let evicted = 0;
+      for (const [key, entry] of cache) {
+        if (matches(entry, filter)) {
+          cache.delete(key);
+          evicted += 1;
+        }
+      }
+      if (filter === 'all') {
+        evicted += inflight.size;
+        inflight.clear();
+      }
+      return evicted;
+    },
+
+    readTokenExchangeCacheStats(): { readonly entries: number; readonly inflight: number } {
+      return { entries: cache.size, inflight: inflight.size };
+    },
+  };
+}
