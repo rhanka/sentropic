@@ -1179,13 +1179,23 @@ export class SessionContentService {
     client: DbClient,
     scope: { namespaceId?: string; sessionId?: string; tenantId?: string },
   ): Promise<number> {
-    const conditions = [inArray(sessionContentObjects.state, ['staged', 'committed', 'purge_pending'])];
-    if (scope.namespaceId) conditions.push(eq(sessionContentObjects.namespaceId, scope.namespaceId));
-    if (scope.sessionId) conditions.push(eq(sessionContentObjects.sessionId, scope.sessionId));
+    let objectNamespaces: string[] | null = null;
+    if (scope.tenantId && !scope.namespaceId && !scope.sessionId) {
+      const namespaces = await client
+        .select({ namespaceId: sessionContentNamespaces.namespaceId })
+        .from(sessionContentNamespaces)
+        .where(eq(sessionContentNamespaces.tenantId, scope.tenantId));
+      objectNamespaces = namespaces.map((n) => n.namespaceId);
+      if (objectNamespaces.length === 0) return 0;
+    }
+    const objectConditions = [inArray(sessionContentObjects.state, ['staged', 'committed', 'purge_pending'])];
+    if (scope.namespaceId) objectConditions.push(eq(sessionContentObjects.namespaceId, scope.namespaceId));
+    if (scope.sessionId) objectConditions.push(eq(sessionContentObjects.sessionId, scope.sessionId));
+    if (objectNamespaces !== null) objectConditions.push(inArray(sessionContentObjects.namespaceId, objectNamespaces));
     const [objects] = await client
       .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
       .from(sessionContentObjects)
-      .where(and(...conditions));
+      .where(and(...objectConditions));
     const reservedConditions = [
       inArray(sessionContentReservations.state, ['reserved', 'stale']),
     ];
@@ -1195,40 +1205,14 @@ export class SessionContentService {
     if (scope.sessionId) {
       reservedConditions.push(eq(sessionContentReservations.sessionId, scope.sessionId));
     }
+    if (objectNamespaces !== null) {
+      reservedConditions.push(inArray(sessionContentReservations.namespaceId, objectNamespaces));
+    }
     const [reserved] = await client
       .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
       .from(sessionContentReservations)
       .where(and(...reservedConditions));
-    let tenantBytes = 0;
-    if (scope.tenantId && !scope.namespaceId && !scope.sessionId) {
-      const namespaces = await client
-        .select({ namespaceId: sessionContentNamespaces.namespaceId })
-        .from(sessionContentNamespaces)
-        .where(eq(sessionContentNamespaces.tenantId, scope.tenantId));
-      const ids = namespaces.map((n) => n.namespaceId);
-      if (ids.length > 0) {
-        const [o] = await client
-          .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
-          .from(sessionContentObjects)
-          .where(
-            and(
-              inArray(sessionContentObjects.namespaceId, ids),
-              inArray(sessionContentObjects.state, ['staged', 'committed', 'purge_pending']),
-            ),
-          );
-        const [r] = await client
-          .select({ bytes: sql<number>`coalesce(sum(bytes_encoded), 0)::int` })
-          .from(sessionContentReservations)
-          .where(
-            and(
-              inArray(sessionContentReservations.namespaceId, ids),
-              inArray(sessionContentReservations.state, ['reserved', 'stale']),
-            ),
-          );
-        tenantBytes = (o?.bytes ?? 0) + (r?.bytes ?? 0);
-      }
-    }
-    return (objects?.bytes ?? 0) + (reserved?.bytes ?? 0) + tenantBytes;
+    return (objects?.bytes ?? 0) + (reserved?.bytes ?? 0);
   }
 
   /** Persist quota reservation before upload. Duplicate same-key
@@ -1407,15 +1391,6 @@ export class SessionContentService {
       retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
     try {
       await db.transaction(async (tx) => {
-        const [lockedReservation] = await tx
-          .select()
-          .from(sessionContentReservations)
-          .where(eq(sessionContentReservations.reservationId, reservationId))
-          .for('update')
-          .limit(1);
-        if (!lockedReservation || lockedReservation.state !== 'reserved') {
-          throw new SessionContentError('unknown_outcome', 'reservation changed during upload');
-        }
         const [freshGrant] = await tx
           .select()
           .from(sessionContentGrants)
@@ -1424,6 +1399,15 @@ export class SessionContentService {
           .limit(1);
         if (!freshGrant || freshGrant.state !== 'active') {
           throw new SessionContentError('grant_revoked', 'grant is not active; late publish refused');
+        }
+        const [lockedReservation] = await tx
+          .select()
+          .from(sessionContentReservations)
+          .where(eq(sessionContentReservations.reservationId, reservationId))
+          .for('update')
+          .limit(1);
+        if (!lockedReservation || lockedReservation.state !== 'reserved') {
+          throw new SessionContentError('unknown_outcome', 'reservation changed during upload');
         }
         await this.requireEpochScope(tx, freshGrant.authorityEpoch, reservation.reservation.namespaceId);
         const [project] = await tx
@@ -1722,6 +1706,7 @@ export class SessionContentService {
         and(
           eq(sessionContentObjects.state, 'committed'),
           eq(sessionContentGrants.state, 'closed'),
+          inTenantScope,
           scope.sessionId ? eq(sessionContentObjects.sessionId, scope.sessionId) : sql`TRUE`,
         ),
       );
