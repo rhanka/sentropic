@@ -1,7 +1,7 @@
 # Feature: Generic codec/compiler (Lot 1a)
 
 ## Objective
-Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platform as specified in spec-v2.md §1a with challenge-opus-r2 corrections touching 1a.
+Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platform as specified in spec-v3.md §5/§11 (supersedes spec-v2.md §1a) with challenge-opus-r2/r3 corrections touching 1a.
 
 ## Scope / Guardrails
 - Scope limited to generic codec/compiler, synthetic fixtures only, no Immo-specific fixture inside generic package.
@@ -26,6 +26,7 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
   - `.h2a/build/immo_1a_report.md`
   - `.h2a/build/immo_1a_fix_report.md`
   - `.h2a/build/immo_1a_fix2_report.md`
+  - `.h2a/build/immo_1a_fix3_report.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -204,6 +205,16 @@ Implement Lot 1a generic tool-configuration codec/compiler in packages/mcp-platf
     - [ ] Package gates: `make check-publishable-manifests ENV=test-mcp-registry-codec` (fails locally: no CI manifest context; CI covers)
     - [x] UAT via Make: `make probe-mcp-platform-clean-consumer ENV=test-mcp-registry-codec` (`CLEAN_CONSUMER_OK`)
     - [x] Report `.h2a/build/immo_1a_fix2_report.md` with per-mutation command + failing output
+- [ ] **Lot 4 — Immo 1a R3 findings fix3 (`.h2a/reviews/immo_1a_opus_r3.md`: 2 MAJEUR R3-M1..M2, 6 MINEUR R3-m1..m6)**
+  - [x] R3-M1: restore `token` in `FORBIDDEN_CONTENT_SUBSTRINGS` with test rejecting `authToken`/`githubToken`/`sessionToken`/`apiToken` and accepting `maxTokens`
+  - [ ] R3-M2: apply spec-v3 §5 Adapt and §11 for #673 (P5 settled, provenance/registry contract, bounded heuristics, `BRANCH.md` to spec-v3)
+  - [ ] R3-m1: bound scheme/basic guards with both-direction tests
+  - [ ] R3-m2: discriminating tests for overlay/provenance/schema/identity controls
+  - [ ] R3-m3: full mutation evidence with exact diff and failing output
+  - [ ] R3-m4: clean-consumer probe compares frozen digests and traps fetch
+  - [ ] R3-m5: platform version tied to `package.json` by test with strict-equality decision
+  - [ ] R3-m6: `BRANCH.md` exact incl. BR1a-EX3 and commit sizes ≤150 lines each with `BRANCH.md`
+  - [ ] Lot gate: `make typecheck-mcp-platform`, `make test-mcp-platform`, `make pack-mcp-platform`, `make probe-mcp-platform-clean-consumer` (all `ENV=test-mcp-registry-codec` last)
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (was [x]; corrected per R2-m5: N/A, no file ever existed)
   - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration. (was [x]; corrected per R2-m5: N/A, no file ever existed)
