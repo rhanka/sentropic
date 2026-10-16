@@ -82,6 +82,21 @@ describe('registry entry abstraction (RC-M2a)', () => {
     expect(fromDist.canonicalText).toBe(fromSrc.canonicalText);
   });
 
+  it('exposes the transport bridge subpath with types (packed proof)', async () => {
+    const pkgUrl = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgUrl, 'utf8')) as {
+      exports?: Record<string, { types?: string; import?: string }>;
+    };
+    expect(pkg.exports?.['./transport/bridge']).toEqual({
+      types: './dist/transport/bridge.d.ts',
+      import: './dist/transport/bridge.js',
+    });
+    const distUrl = new URL('../dist/transport/bridge.js', import.meta.url).href;
+    const packaged = (await import(distUrl)) as typeof import('../src/transport/bridge.js');
+    expect(typeof packaged.registerBridgeTools).toBe('function');
+    expect(typeof packaged.identityFromExtra).toBe('function');
+  });
+
   it('rejects unknown slots, missing slots and out-of-bounds values', () => {
     const canonical = canonicalizeRegistryRequest({ tool: COMPILED.toolName, args: ARGS });
     const entry = buildRegistryEntry(COMPILED, SCHEMA, canonical);
