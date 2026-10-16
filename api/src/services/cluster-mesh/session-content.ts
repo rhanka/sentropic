@@ -909,8 +909,9 @@ export class SessionContentService {
       if (binding.principalId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'binding principal is not the project owner');
       }
-      if (input.d1Incarnation !== binding.incarnation || input.d1StartSeq !== binding.startSeq) {
-        throw new SessionContentError('ineligible_session', 'D1 incarnation/start mismatch (ABA)');
+      if (!Number.isSafeInteger(input.d1Incarnation) || input.d1Incarnation < 0
+        || !Number.isSafeInteger(input.d1StartSeq) || input.d1StartSeq < 0) {
+        throw new SessionContentError('invalid_request', 'D1 incarnation/start must be safe integers');
       }
       const accepted = project.acceptedPolicy as Record<string, unknown> & {
         futureSessions?: boolean;
@@ -957,7 +958,9 @@ export class SessionContentService {
         sourceGeneration: input.sourceGeneration,
         sourceTrustVersion: input.sourceTrustVersion,
         authorityEpoch: epoch.epoch,
-        nativeBoundarySeq: input.nativeStartSeq,
+        // D1 rows carry no incarnation/start columns (binding version is the
+        // ABA fence); freeze the native boundary per the Lot 1 domain rule.
+        nativeBoundarySeq: Math.max(input.d1StartSeq, input.nativeStartSeq),
         channels: project.channels,
         retentionSnapshot: project.retentionByChannel,
         state: 'active',
