@@ -74,6 +74,7 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] Read rules MASTER, workflow, subagents, testing, security and plan/BRANCH_TEMPLATE.md.
   - [x] Read spec v9 section 8 lot L0a and challenge-opus-r5 L0a verdict.
   - [x] Verify branch feat/ci-seat-contract on origin/main 09b1c601d and clean tree.
+  - [x] Rebase onto origin/main 6138a8d55, post-rebase gate holds llm-mesh 0.25.1 above npm and main.
   - [x] Verify L0a Make targets at Makefile:760, :764, :2007 and empty make ps-all.
   - [x] Define environment mapping: ENV=test-ci-seat-contract; reserved ports API_PORT=9570 UI_PORT=5770 MAILDEV_UI_PORT=1670; L0a package gates expose no ports and need no slot.
   - [x] Confirm command style: make ... ENV=<env> with ENV last.
