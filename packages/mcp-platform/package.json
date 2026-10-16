@@ -76,6 +76,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests"
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0"
+  },
   "peerDependencies": {
     "hono": "^4.10.7"
   },
