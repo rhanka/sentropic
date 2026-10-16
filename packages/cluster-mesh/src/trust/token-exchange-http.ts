@@ -20,7 +20,7 @@ export interface TokenExchangeFetch {
   (url: string, init: {
     readonly method: string;
     readonly headers: Record<string, string>;
-    readonly body: string;
+    readonly body?: string;
     readonly signal: AbortSignal;
     readonly redirect: 'manual';
   }): Promise<{
@@ -105,7 +105,6 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         const response = await this.fetchFn(this.options.jwksUri as string, {
           method: 'GET',
           headers: { accept: 'application/json' },
-          body: '',
           signal: AbortSignal.timeout(timeoutMs),
           redirect: 'manual',
         });
