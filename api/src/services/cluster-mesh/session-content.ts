@@ -1165,6 +1165,112 @@ export class SessionContentService {
     });
   }
 
+  /** Conditionally publish after upload: bytes land in the private bucket
+   * with a capture-bound immutable deadline, then the reservation is
+   * consumed. Stale completions become purge work. */
+  async publishAfterUpload(
+    reservationId: string,
+    body: Uint8Array,
+    ctx: SessionContentContext,
+  ) {
+    requireContext(ctx);
+    const { client, config } = this.storage();
+    const reservation = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(sessionContentReservations)
+        .where(eq(sessionContentReservations.reservationId, reservationId))
+        .limit(1);
+      if (!existing) throw new SessionContentError('not_found', 'unknown reservation');
+      if (existing.state !== 'reserved') {
+        throw new SessionContentError('unknown_outcome', 'reservation is not reserved');
+      }
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, existing.sessionId))
+        .limit(1);
+      if (!grant || grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'reservation belongs elsewhere');
+      }
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      if (grant.state !== 'active') {
+        throw new SessionContentError('grant_revoked', 'grant is not active; late upload refused');
+      }
+      return { reservation: existing, grant };
+    });
+    const objectId = this.newId();
+    const key = objectKeyFor(
+      reservation.reservation.namespaceId,
+      reservation.grant.bindingId,
+      reservation.reservation.sessionId,
+      reservation.reservation.channel,
+      objectId,
+    );
+    await client.send(
+      new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body }),
+    );
+    const snapshot = reservation.grant.retentionSnapshot as RetentionByChannel;
+    const channel = reservation.reservation.channel as 'terminal.cache' | 'native.mirror';
+    const capturedAt = this.nowMs();
+    const retention = snapshot[channel] ?? { mode: 'none' as const };
+    const expiresAt =
+      retention.mode === 'none' ? null : capturedAt + retention.durationSeconds * 1000;
+    await db.transaction(async (tx) => {
+      await tx.insert(sessionContentObjects).values({
+        objectId,
+        namespaceId: reservation.reservation.namespaceId,
+        bindingId: reservation.grant.bindingId,
+        sessionId: reservation.reservation.sessionId,
+        channel: reservation.reservation.channel,
+        bucket: config.bucket,
+        objectKey: key,
+        bytesRaw: reservation.reservation.bytesRaw,
+        bytesEncoded: reservation.reservation.bytesEncoded,
+        capturedAt,
+        expiresAt,
+        state: 'committed',
+        version: 1,
+      });
+      await tx
+        .update(sessionContentReservations)
+        .set({ state: 'consumed', updatedAt: new Date(this.nowMs()) })
+        .where(eq(sessionContentReservations.reservationId, reservationId));
+      await tx
+        .update(sessionContentAttempts)
+        .set({ outcome: 'published' })
+        .where(eq(sessionContentAttempts.attemptId, reservationId));
+      await tx
+        .update(sessionContentGrants)
+        .set({ retainedCopies: true, updatedAt: new Date(this.nowMs()) })
+        .where(eq(sessionContentGrants.sessionId, reservation.reservation.sessionId));
+    });
+    return { objectId, key, expiresAt };
+  }
+
+  /** An unknown PutObject outcome keeps purge pending and quota charged,
+   * even if a preliminary HEAD reports no object. */
+  async markAttemptUnknown(reservationId: string, ctx: SessionContentContext) {
+    requireContext(ctx);
+    return db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(sessionContentReservations)
+        .where(eq(sessionContentReservations.reservationId, reservationId))
+        .limit(1);
+      if (!existing) throw new SessionContentError('not_found', 'unknown reservation');
+      await tx
+        .update(sessionContentReservations)
+        .set({ state: 'stale', updatedAt: new Date(this.nowMs()) })
+        .where(eq(sessionContentReservations.reservationId, reservationId));
+      await tx
+        .update(sessionContentAttempts)
+        .set({ outcome: 'outcome_unknown' })
+        .where(eq(sessionContentAttempts.attemptId, reservationId));
+      return { reservationId, outcome: 'outcome_unknown' as const };
+    });
+  }
+
   async clearExclusion(projectId: string, sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
     return db.transaction(async (tx) => {
