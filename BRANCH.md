@@ -55,6 +55,7 @@ Qualify mcp-auth for Immo application scopes with a minimal guarded source fix (
 - `BR01-EX2` impact: one assertion in a forbidden-path test file, no source change.
 - `BR01-EX2` rollback: revert the line, rerun the scoped API suite.
 - `decided` (review `.h2a/reviews/immo_3q_opus.md`): F1 closed by `df80b5a93` (explicit `McpAuthError`/`invalid_token` assertions); F2 closed by `6faaec040` (single-scope grants + cross-scope `403`s, table sourced from spec-v2 §2 / Radar fixture `4dc37c8`); F3 closed by `43d94d769` (four Radar-baseline refusal cases); F9 closed by `f1287ff3f` (same-kid foreign-key signature check); F6 closed by `f1c3855e4` (Hono guard with real signed token) + `99c470841` (double-mounted PRM); F4 closed herein (CHANGELOG observable-change note, `BR01-EX1` impact, UAT 2b, baseline handoff to i-cond); F5 closed herein; F7 recorded as partial above (Radar half `not covered`, i-cond owned); F8 held (all fix commits ≤68 lines).
+- `attention` (R2-2): the per-tool grant test passes `requiredScopes` manually to mcp-auth; compiled per-capability policy belongs to 3-policy/4a and is not delivered here.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -63,7 +64,7 @@ Qualify mcp-auth for Immo application scopes with a minimal guarded source fix (
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-- Record: `e2e/tests/09-chat-org-update-tool.spec.ts` failed once in CI run `38833573638` group-d (line 166, LLM-driven field-value assertion; signature: deterministic MCP-auth code paths not involved, same-group `08-documents-summary` passed) and passed in rerun `38836550713` (55 pass, 0 fail) with identical e2e-relevant code; `flaky accepted` per non-systematic rule. Explicit user sign-off still required before any merge: pending.
+- Record: `e2e/tests/09-chat-org-update-tool.spec.ts:49` (`Chat organization_update tool › updates the organization technologies field on request (default model)`, AI-flaky allowlist) failed once in CI job `test-e2e (group-d, 08 09)`, run `38833573638` attempt 1 (job `116759969101`), commit `90831b41a`. Command: `make test-e2e ENV=e2e-ci`. Signature: `expect(after).not.toBe(before)` at line 167 → `Expected: not "Legacy mainframe"` after 2.1 min polling; trace `technologies before="Legacy mainframe" after="Legacy mainframe" toolCallObserved=false`; model did not call `organization_update` in the 120 s window; no mcp-auth code path involved. Non-systematic: same commit and same command green at run `38833573638` attempt 2 (job `116766881777`); also green on `1db814905` (run `38836550713`) and on head `cba46c559` (run `38844992840`, job `116795604719`). `flaky accepted` per non-systematic rule. Explicit user sign-off still required before any merge: pending.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -93,9 +94,9 @@ Qualify mcp-auth for Immo application scopes with a minimal guarded source fix (
 
 - [ ] **Lot 1 — 3-qualification mcp-auth scope tests**
   - [x] Add `packages/mcp-auth/tests/application-scopes.test.ts` with real signed Immo-only tokens (acceptance half green)
-  - [x] Evaluate `packages/mcp-auth/tests/core.test.ts` as regression gate (update only on defect)
-  - [x] Evaluate `packages/mcp-auth/tests/hono.test.ts` as regression gate (update only on defect)
-  - [x] Evaluate `packages/mcp-auth/tests/prm.test.ts` as regression gate (update only on defect)
+  - [x] Update `packages/mcp-auth/tests/core.test.ts` with unit pin (R2-1: `verifyAccessToken` never receives `requiredScopes`)
+  - [x] Updated `packages/mcp-auth/tests/hono.test.ts` with real-token guard (F6, R2-5 error-class fix)
+  - [x] Updated `packages/mcp-auth/tests/prm.test.ts` with double-mount proof (F6)
   - [x] Fix `packages/mcp-auth/src/core.ts` under `BR01-EX1` (test proved the defect) + bump to `0.2.2` + relock
   - [x] Lot gate:
     - [x] `make typecheck-mcp-auth ENV=test-mcp-scope-qualification`
@@ -117,12 +118,12 @@ Qualify mcp-auth for Immo application scopes with a minimal guarded source fix (
     - [x] **E2E tests**
       - [x] None: pure library slice, no browser surface
       - [x] Sub-lot gate: skipped, no E2E surface
-    - [ ] UAT hosted-client continuity owned by i-cond after 2b
+    - [ ] UAT hosted-client continuity owned by i-cond post-merge (after `0.2.2` publication and 2b, not a merge gate)
       - [ ] Immo-only grants pass existing ingress and tool requirements without generic `mcp:*` scopes
-      - [ ] Three scopes appear in PRM metadata surface when configured
+      - [ ] Three scopes appear in PRM metadata surface when configured (AS surface owned by 2-IdP; both verified with real client in global UAT)
       - [ ] Wrong issuer/audience and missing actual scope fail
       - [ ] Claimed scope in tool arguments has no authority
-      - [ ] UAT 2b (F4): hosted client presenting a valid token without `immo:read` receives `403 insufficient_scope` and handles it as step-up/insufficient-scope without reconnection (no re-authorization loop)
+      - [ ] UAT 2b (F4): hosted client presenting a valid token without `immo:read` receives `403 insufficient_scope` and handles it as step-up/insufficient-scope without reconnection (no re-authorization loop; reaction expected, unverified until i-cond runs 2b)
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
@@ -138,4 +139,4 @@ Qualify mcp-auth for Immo application scopes with a minimal guarded source fix (
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
   - [x] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [ ] Final gate step 3: once CI is `OK` + AI-flaky sign-off recorded, commit removal of `BRANCH.md`, push, and merge (hosted-client UAT incl. 2b is post-merge i-cond, not a merge gate).
