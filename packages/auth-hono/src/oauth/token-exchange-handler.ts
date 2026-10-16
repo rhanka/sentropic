@@ -93,22 +93,10 @@ export const handleTokenExchange = async (
       type: 'JWT',
     }
   );
-  await options.ports.oauthStateStore.saveTokenMeta(
-    jti,
-    {
-      audience: target,
-      clientId: auth.clientId,
-      createdAt: now,
-      dpopJkt: null,
-      expiresAt,
-      jti,
-      scope: issued.join(' '),
-      tenantId: verified.tenantId,
-      tokenType: 'access_token',
-      userId: verified.subject,
-    },
-    ttl
-  );
+  // Exchanged tokens are stateless (like client_credentials service tokens): no
+  // saveTokenMeta, no oauth_tokens row. oauth_tokens.client_id references oauth_clients,
+  // which cannot hold the confidential workload id; revocation rides on the short
+  // TTL (<=300 s), subject/client revocation, and the receiver's live account check.
   return c.json({
     access_token: accessToken,
     expires_in: ttl,
