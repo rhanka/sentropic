@@ -82,12 +82,13 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     const asPublic = await app.request('http://localhost:9197/api/v1/oauth/token', {
       body: exchangeBody(subject),
       headers: {
-        Authorization: basicAuth(PUBLIC_CLIENT_ID, ''),
+        Authorization: basicAuth(PUBLIC_CLIENT_ID, 'not-a-secret'),
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       method: 'POST',
     });
-    expect([400, 401]).toContain(asPublic.status);
+    expect(asPublic.status).toBe(401);
+    await expect(asPublic.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
 
     const wrongSecret = await app.request('http://localhost:9197/api/v1/oauth/token', {
       body: exchangeBody(subject),
@@ -98,6 +99,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       method: 'POST',
     });
     expect(wrongSecret.status).toBe(401);
+    await expect(wrongSecret.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
   });
 
   it('rejects a scope outside the workload policy', async () => {
@@ -118,6 +120,37 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       method: 'POST',
     });
     expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
+  });
+
+  it('refuses both grants on a corrupt workload policy (fail-closed)', async () => {
+    const subject = await issueSubjectToken();
+    await db
+      .update(serviceClients)
+      .set({ exchangePolicy: { enabled: true, actorSub: 'x' } })
+      .where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
+
+    const exchange = await app.request('http://localhost:9197/api/v1/oauth/token', {
+      body: exchangeBody(subject),
+      headers: {
+        Authorization: basicAuth(WORKLOAD_CLIENT_ID, WORKLOAD_SECRET),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      method: 'POST',
+    });
+    expect(exchange.status).toBe(400);
+    await expect(exchange.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+
+    const credentials = await app.request('http://localhost:9197/api/v1/oauth/token', {
+      body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'immo:search' }).toString(),
+      headers: {
+        Authorization: basicAuth(WORKLOAD_CLIENT_ID, WORKLOAD_SECRET),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      method: 'POST',
+    });
+    expect(credentials.status).toBe(400);
+    await expect(credentials.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
   });
 });
 
