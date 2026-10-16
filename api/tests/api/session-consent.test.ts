@@ -1464,6 +1464,30 @@ describe('session consent durable lifecycle', () => {
     void bindingId;
   });
 
+  it('should validate the file authority record and require an explicit issuer (R10)', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { createFileContentAuthorityEpochPort } = await import(
+      '../../src/services/cluster-mesh/session-content'
+    );
+    const dir = mkdtempSync(join(tmpdir(), 'scc-authority-'));
+    const recordPath = join(dir, 'authority.json');
+    writeFileSync(recordPath, JSON.stringify({
+      issuer: 'sentropic-product', epoch: 'epoch-file-1', revision: 1.5, enabled: true, validUntil: 9_999_999_999_999,
+    }));
+    const nanPort = createFileContentAuthorityEpochPort(recordPath, () => now, 'sentropic-product');
+    await expectContentError(() => nanPort.readCurrent('sentropic-product'), 'epoch_unavailable');
+    writeFileSync(recordPath, JSON.stringify({
+      issuer: 'sentropic-product', epoch: 'epoch-file-1', revision: 3, enabled: true, validUntil: 9_999_999_999_999,
+    }));
+    const validPort = createFileContentAuthorityEpochPort(recordPath, () => now, 'sentropic-product');
+    const current = await validPort.readCurrent('sentropic-product');
+    expect(current.revision).toBe(3);
+    expect(() => createFileContentAuthorityEpochPort(recordPath, () => now, ''))
+      .toThrowError();
+  });
+
   it('should preserve a non-deleted identity on rollback without false purge', async () => {
     await acceptProject();
     const jobsBefore = await db.select().from(sessionContentPurgeJobs);
