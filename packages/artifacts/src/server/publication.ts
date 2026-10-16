@@ -124,6 +124,7 @@ function shaHex(bytes: Uint8Array): string {
 export interface PublicationService {
   publish(input: PublishInput): Promise<PublishResult>;
   getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
+  getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
 }
 
 /** Create a publication service over injected stores (no driver imports). */
@@ -204,6 +205,11 @@ export function createPublicationService(deps: {
     async getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined> {
       const releaseId = await deps.state.getCurrentReleaseId(artifactId);
       if (releaseId === undefined) return undefined;
+      const release = await deps.state.getRelease(releaseId);
+      if (release === undefined) return undefined;
+      return { releaseId: release.releaseId, manifest: release.manifest };
+    },
+    async getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string } | undefined> {
       const release = await deps.state.getRelease(releaseId);
       if (release === undefined) return undefined;
       return { releaseId: release.releaseId, manifest: release.manifest };

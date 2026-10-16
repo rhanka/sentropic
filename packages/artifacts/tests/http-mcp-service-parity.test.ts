@@ -33,8 +33,11 @@ const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true 
 function makeApp() {
   const kv = createMemoryKv();
   const artifacts = createArtifactService({ kv, uuid: createCryptoUuid() });
+  // One shared current pointer for publication and lifecycle (production
+  // wires both services to the same adapter on `artifact_current`).
+  const state = createMemoryStateStore();
   const publication = createPublicationService({
-    state: createMemoryStateStore(),
+    state,
     blobs: createMemoryBlobStore(),
     intents: createMemoryIntentStore(),
     idempotency: createIdempotencyStore(createMemoryIdempotencyKv()),
@@ -43,7 +46,7 @@ function makeApp() {
     parameterSchema: SCHEMA,
     artifacts,
     publication,
-    lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z'),
+    lifecycle: createLifecycleService(createMemoryLifecycleStore(), () => '2026-01-01T00:00:00.000Z', state),
     forks: createForkService(createMemoryForkStore()),
     acls: createMemoryAclStore(),
     sources: createMemorySourceStore(),
