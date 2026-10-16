@@ -90,26 +90,26 @@ Qualify mcp-auth for Immo application scopes without source changes.
   - [x] Evaluate `packages/mcp-auth/tests/hono.test.ts` as regression gate (update only on defect)
   - [x] Evaluate `packages/mcp-auth/tests/prm.test.ts` as regression gate (update only on defect)
   - [x] Fix `packages/mcp-auth/src/core.ts` under `BR01-EX1` (test proved the defect) + bump to `0.2.2` + relock
-  - [ ] Lot gate:
-    - [ ] `make typecheck-mcp-auth ENV=test-mcp-scope-qualification`
-    - [ ] **API tests**
-      - [ ] Existing: `packages/mcp-auth/tests/core.test.ts`
-      - [ ] Existing: `packages/mcp-auth/tests/hono.test.ts`
-      - [ ] Existing: `packages/mcp-auth/tests/prm.test.ts`
-      - [ ] Existing: `packages/mcp-auth/tests/scopes.test.ts`
-      - [ ] Existing: `packages/mcp-auth/tests/challenge.test.ts`
-      - [ ] Existing: `packages/mcp-auth/tests/service-auth.test.ts`
-      - [ ] Existing: `packages/mcp-auth/tests/package-manifest.test.ts`
-      - [ ] New: `packages/mcp-auth/tests/application-scopes.test.ts`
-      - [ ] Scoped runs while evolving tests: `make test-mcp-auth SCOPE=tests/application-scopes.test.ts ENV=test-mcp-scope-qualification`
-      - [ ] Sub-lot gate: `make test-mcp-auth ENV=test-mcp-scope-qualification`
+  - [x] Lot gate:
+    - [x] `make typecheck-mcp-auth ENV=test-mcp-scope-qualification`
+    - [x] **API tests**
+      - [x] Existing: `packages/mcp-auth/tests/core.test.ts`
+      - [x] Existing: `packages/mcp-auth/tests/hono.test.ts`
+      - [x] Existing: `packages/mcp-auth/tests/prm.test.ts`
+      - [x] Existing: `packages/mcp-auth/tests/scopes.test.ts`
+      - [x] Existing: `packages/mcp-auth/tests/challenge.test.ts`
+      - [x] Existing: `packages/mcp-auth/tests/service-auth.test.ts`
+      - [x] Existing: `packages/mcp-auth/tests/package-manifest.test.ts`
+      - [x] New: `packages/mcp-auth/tests/application-scopes.test.ts`
+      - [x] Scoped runs while evolving tests: `make test-mcp-auth SCOPE=tests/application-scopes.test.ts ENV=test-mcp-scope-qualification`
+      - [x] Sub-lot gate: `make test-mcp-auth ENV=test-mcp-scope-qualification`
       - [ ] AI flaky tests run (non-blocking only under acceptance rule): `make test-api-ai ENV=test-mcp-scope-qualification` and document status/signature in `BRANCH.md`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] None: pure library slice, no UI change
-      - [ ] Sub-lot gate: `make test-ui ENV=test` skipped, no UI surface
-    - [ ] **E2E tests**
-      - [ ] None: pure library slice, no browser surface
-      - [ ] Sub-lot gate: skipped, no E2E surface
+    - [x] **UI tests (TypeScript only)**
+      - [x] None: pure library slice, no UI change
+      - [x] Sub-lot gate: `make test-ui ENV=test` skipped, no UI surface
+    - [x] **E2E tests**
+      - [x] None: pure library slice, no browser surface
+      - [x] Sub-lot gate: skipped, no E2E surface
     - [ ] UAT hosted-client continuity owned by i-cond after 2b
       - [ ] Immo-only grants pass existing ingress and tool requirements without generic `mcp:*` scopes
       - [ ] Three scopes appear in PRM metadata surface when configured

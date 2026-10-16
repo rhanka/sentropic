@@ -140,4 +140,116 @@ describe('3-qualification — Immo-only grants are accepted without generic mcp:
   });
 });
 
+describe('3-qualification — negatives fail closed', () => {
+  it('returns 403 insufficient_scope when the Immo scope is missing', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { scope: IMMO_READ });
+    const error = await mcp
+      .verify(immoRequest(token), { requiredScopes: [IMMO_SEARCH] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(error).not.toBeNull();
+    const res = mcp.challenge(error);
+    expect(res.status).toBe(403);
+    expect(res.headers.get('WWW-Authenticate')).toContain('error="insufficient_scope"');
+    expect(res.headers.get('WWW-Authenticate')).toContain(IMMO_SEARCH);
+  });
 
+  it('does not let a generic mcp:* scope satisfy an Immo requirement', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { scope: 'mcp:tools:invoke' });
+    const error = await mcp
+      .verify(immoRequest(token), { requiredScopes: [IMMO_SEARCH] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(mcp.challenge(error).status).toBe(403);
+  });
+
+  it('rejects a wrong audience with 401', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, {
+      audience: 'https://evil.example.test/mcp',
+      scope: IMMO_SEARCH,
+    });
+    const error = await mcp.verify(immoRequest(token)).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(mcp.challenge(error).status).toBe(401);
+  });
+
+  it('rejects a wrong issuer with 401', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, {
+      issuer: 'https://evil.example.test',
+      scope: IMMO_SEARCH,
+    });
+    const error = await mcp.verify(immoRequest(token)).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(mcp.challenge(error).status).toBe(401);
+  });
+
+  it('rejects an expired token with 401', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { expiresInSec: -60, scope: IMMO_SEARCH });
+    const error = await mcp.verify(immoRequest(token)).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(mcp.challenge(error).status).toBe(401);
+  });
+
+  it('gives tool-argument scopes no authority', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { scope: 'mcp:discover' });
+    const req = immoRequest(token, {
+      body: JSON.stringify({ scope: IMMO_SEARCH, tool: 'search_lots' }),
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+    });
+    const error = await mcp.verify(req, { requiredScopes: [IMMO_SEARCH] }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(mcp.challenge(error).status).toBe(403);
+  });
+});
+
+describe('3-qualification — vocabulary neutrality and generic regression', () => {
+  it('does not treat Immo scopes as generic MCP scopes', () => {
+    expect(isMcpScope(IMMO_READ)).toBe(false);
+    expect(isMcpScope(IMMO_SEARCH)).toBe(false);
+    expect(isMcpScope(IMMO_DOCUMENTS_READ)).toBe(false);
+    expect(isMcpScope('mcp:tools:invoke')).toBe(true);
+  });
+
+  it('still accepts generic mcp:tools:invoke grants for generic consumers', async () => {
+    const { key, mcp } = await makeImmoMcp();
+    const token = await signImmoToken(key, { scope: 'mcp:tools:invoke mcp:discover' });
+    const ctx = await mcp.verify(immoRequest(token), { requiredScopes: ['mcp:tools:invoke'] });
+    expect(ctx.scopes).toContain('mcp:tools:invoke');
+  });
+
+  it('verifies public keys through the injected JWKS port only', async () => {
+    const key = await createSigningKey();
+    const foreign = await createSigningKey('foreign-1');
+    const mcp = createMcpAuth({
+      authorizationServers: [AS],
+      keySource: keySourceFor([key]),
+      resource: RESOURCE,
+    });
+    const token = await signImmoToken(foreign, { scope: IMMO_READ });
+    await expect(
+      mcp.verify(immoRequest(token), { requiredScopes: [IMMO_READ] }),
+    ).rejects.toThrow();
+    expect(await importJWK(foreign.publicJwk, foreign.alg)).toBeDefined();
+  });
+});
