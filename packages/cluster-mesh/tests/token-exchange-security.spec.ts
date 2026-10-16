@@ -123,4 +123,114 @@ describe('token exchange refusals', () => {
     expect(() => createTokenExchangeClient(policy(fake, { audiences: [] }))).toThrow(TypeError);
     expect(() => createTokenExchangeClient(policy(fake, { audiences: undefined }))).toThrow(TypeError);
   });
+
+  it.each([
+    ['forged signature', async (fake: FakeTokenIssuer) => `${await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'] })}x`],
+    ['wrong issuer', async (fake: FakeTokenIssuer) => fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'], issuer: 'https://evil.example.test' })],
+    ['malformed token', async () => 'not-a-jwt'],
+  ])('should refuse an unverifiable subject token (%s)', async (_name, makeToken) => {
+    const { fake, client } = setup();
+
+    await expect(refusalReason(client.exchange(baseRequest(await makeToken(fake))))).resolves.toBe('subject_unverified');
+  });
+
+  it('should refuse a subject whose audience is not the configured one', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ verify: async () => ({ ...SUBJECT, audience: ['https://other.example.test'] }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('subject_audience_invalid');
+  });
+
+  it('should refuse a subject carrying several audiences', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ verify: async () => ({ ...SUBJECT, audience: [SUBJECT_AUDIENCE, 'https://other.example.test'] }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('subject_audience_invalid');
+  });
+
+  it('should refuse an expired subject token without calling mint', async () => {
+    const { fake, client } = setup();
+    const subjectToken = await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'], expiresInSec: -10 });
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest(subjectToken), scope: ['workspace:read'] })),
+    ).resolves.toBe('subject_expired');
+    expect(fake.mintCalls).toBe(0);
+  });
+
+  it('should refuse when the binding reports an unexpected verification failure', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ verify: async () => { throw new Error('idp unreachable'); } })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('subject_unverified');
+  });
+
+  it('should refuse when verification reports expiry directly', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ verify: async () => { throw new SubjectVerificationError('expired'); } })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('subject_expired');
+  });
+
+  it('should refuse an empty requested scope without calling mint', async () => {
+    const fake = new FakeTokenIssuer({ issuer: ISSUER, nowMs: () => NOW_MS });
+    const client = createTokenExchangeClient(policy(fake));
+    const subjectToken = await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+
+    await expect(refusalReason(client.exchange(baseRequest(subjectToken)))).resolves.toBe('scope_empty');
+    expect(fake.mintCalls).toBe(0);
+  });
+
+  it('should refuse any caller-supplied actor without calling mint', async () => {
+    const fake = new FakeTokenIssuer({ issuer: ISSUER, nowMs: () => NOW_MS });
+    const client = createTokenExchangeClient(policy(fake));
+    const subjectToken = await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+
+    await expect(
+      refusalReason(
+        client.exchange({
+          ...baseRequest(subjectToken),
+          scope: ['workspace:read'],
+          actor: { sub: 'agent-1', iss: ISSUER, h2aEngagement: 'engagement:1' },
+        }),
+      ),
+    ).resolves.toBe('actor_invalid');
+    expect(fake.mintCalls).toBe(0);
+  });
+
+  it('should refuse a scope outside the subject grant', async () => {
+    const { fake, client } = setup();
+    const subjectToken = await fake.issueSubject({ subject: 'user-1', scope: ['workspace:read'] });
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest(subjectToken), scope: ['workspace:admin'] })),
+    ).resolves.toBe('scope_not_granted');
+    expect(fake.mintCalls).toBe(0);
+  });
+
+  it('should refuse a minted scope wider than the granted scope', async () => {
+    const client = createTokenExchangeClient(
+      policy(
+        stubIssuer({
+          mint: async (input) => verifiedMint(input, { scope: [...input.scope, 'workspace:admin'] }),
+        }),
+      ),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_scope_invalid');
+  });
 });
