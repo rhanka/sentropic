@@ -586,17 +586,24 @@ export class SessionContentService {
         .from(sessionContentProjects)
         .where(eq(sessionContentProjects.projectId, String(policy['projectId'])))
         .limit(1);
-      const revision = input.expectedRevision ?? 0;
       const expectedRevision: number | undefined =
         input.expectedRevision === null ? undefined : input.expectedRevision;
-      if (expectedRevision === undefined) {
-        if (existing) throw new SessionContentError('revision_conflict', 'project already exists');
-      } else {
-        if (!existing || existing.projectRevision !== expectedRevision) {
+      if (expectedRevision === undefined && existing) {
+        throw new SessionContentError('revision_conflict', 'project already exists');
+      }
+      if (expectedRevision !== undefined) {
+        const [locked] = await tx
+          .select()
+          .from(sessionContentProjects)
+          .where(eq(sessionContentProjects.projectId, String(policy['projectId'])))
+          .for('update')
+          .limit(1);
+        if (!locked || locked.projectRevision !== expectedRevision) {
           throw new SessionContentError('revision_conflict', 'project revision mismatch');
         }
       }
       const now = new Date(this.nowMs());
+      const revision = expectedRevision === undefined ? 0 : expectedRevision + 1;
       const row = {
         projectId: String(policy['projectId']),
         projectRevision: revision,
@@ -624,7 +631,7 @@ export class SessionContentService {
         if (expectedRevision === undefined) {
           throw new SessionContentError('revision_conflict', 'project already exists');
         }
-        await tx
+        const updated = await tx
           .update(sessionContentProjects)
           .set({ ...row, createdAt: existing.createdAt })
           .where(
@@ -632,9 +639,20 @@ export class SessionContentService {
               eq(sessionContentProjects.projectId, row.projectId),
               eq(sessionContentProjects.projectRevision, expectedRevision),
             ),
-          );
+          )
+          .returning({ projectId: sessionContentProjects.projectId });
+        if (updated.length !== 1) {
+          throw new SessionContentError('revision_conflict', 'concurrent accept; re-prepare the scope');
+        }
       } else {
-        await tx.insert(sessionContentProjects).values(row);
+        const inserted = await tx
+          .insert(sessionContentProjects)
+          .values(row)
+          .onConflictDoNothing()
+          .returning({ projectId: sessionContentProjects.projectId });
+        if (inserted.length === 0) {
+          throw new SessionContentError('revision_conflict', 'project already exists');
+        }
       }
       await tx.insert(sessionContentOfflineReceipts).values({
         receiptId: this.newId(),
@@ -666,22 +684,39 @@ export class SessionContentService {
   ) {
     requireContext(ctx);
     const prepared = this.prepareProject(policy);
+    if (computePolicyDigest(policy) !== prepared.digest) {
+      throw new SessionContentError('policy_digest_mismatch', 'prepared policy was altered');
+    }
+    const readers = (policy as Record<string, unknown>)['readers'];
+    if (!Array.isArray(readers) || readers.length !== 1 || readers[0] !== ctx.ownerId) {
+      throw new SessionContentError('cross_owner_refused', 'project readers are owner-only');
+    }
+    if ((policy as Record<string, unknown>)['tenantId'] !== ctx.tenantId
+      || (policy as Record<string, unknown>)['ownerId'] !== ctx.ownerId) {
+      throw new SessionContentError('cross_owner_refused', 'policy scope must match the caller');
+    }
+    await this.checkEpoch();
     return db.transaction(async (tx) => {
       await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
-      const [existing] = await tx
+      await this.checkTombstones(tx, [
+        { kind: 'tenant', id: ctx.tenantId },
+        { kind: 'user', id: ctx.ownerId },
+      ]);
+      const [locked] = await tx
         .select()
         .from(sessionContentProjects)
         .where(eq(sessionContentProjects.projectId, projectId))
+        .for('update')
         .limit(1);
-      if (!existing) throw new SessionContentError('project_not_found', 'unknown project');
-      if (existing.tenantId !== ctx.tenantId || existing.ownerId !== ctx.ownerId) {
+      if (!locked) throw new SessionContentError('project_not_found', 'unknown project');
+      if (locked.tenantId !== ctx.tenantId || locked.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'project belongs to another owner');
       }
-      if (existing.state !== 'active') {
+      if (locked.state !== 'active') {
         throw new SessionContentError('project_not_active', 'project is not active');
       }
-      const nextRevision = existing.projectRevision + 1;
-      await tx
+      const nextRevision = locked.projectRevision + 1;
+      const updated = await tx
         .update(sessionContentProjects)
         .set({
           projectRevision: nextRevision,
@@ -699,9 +734,13 @@ export class SessionContentService {
         .where(
           and(
             eq(sessionContentProjects.projectId, projectId),
-            eq(sessionContentProjects.projectRevision, existing.projectRevision),
+            eq(sessionContentProjects.projectRevision, locked.projectRevision),
           ),
-        );
+        )
+        .returning({ projectId: sessionContentProjects.projectId });
+      if (updated.length !== 1) {
+        throw new SessionContentError('revision_conflict', 'concurrent amendment; re-prepare the amendment');
+      }
       return { projectId, revision: nextRevision, digest: prepared.digest };
     });
   }
