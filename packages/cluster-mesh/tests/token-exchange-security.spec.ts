@@ -233,4 +233,130 @@ describe('token exchange refusals', () => {
       refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
     ).resolves.toBe('minted_scope_invalid');
   });
+
+  it('should refuse a minted token with the wrong audience', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => verifiedMint(input, { audience: 'https://evil.example.test' }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_audience_invalid');
+  });
+
+  it('should refuse a minted token with the wrong subject', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => verifiedMint(input, { subject: 'user-2' }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_subject_invalid');
+  });
+
+  it('should refuse a minted token without the workload actor', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => verifiedMint(input, { actorSub: 'agent-1' }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_actor_invalid');
+  });
+
+  it('should refuse a minted token with the wrong workload client', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => verifiedMint(input, { clientId: 'other-client' }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_actor_invalid');
+  });
+
+  it('should refuse a minted token from the wrong issuer', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => verifiedMint(input, { issuer: 'https://evil.example.test' }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_issuer_invalid');
+  });
+
+  it('should refuse a minted token living past the subject expiry', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => verifiedMint(input, { expiresAtSec: SUBJECT.expiresAtSec + 60 }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_ttl_invalid');
+  });
+
+  it('should refuse a minted token living past the 300-second ceiling', async () => {
+    const client = createTokenExchangeClient(
+      policy(
+        stubIssuer({
+          verify: async () => ({ ...SUBJECT, expiresAtSec: NOW_SEC + 3600 }),
+          mint: async (input) => verifiedMint(input, { expiresAtSec: input.nowSec + 301 }),
+        }),
+      ),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_ttl_invalid');
+  });
+
+  it('should refuse a non-Bearer minted token type', async () => {
+    const client = createTokenExchangeClient(
+      policy(
+        stubIssuer({
+          mint: async (input) => ({ ...verifiedMint(input), tokenType: 'DPoP' }) as unknown as MintedToken,
+        }),
+      ),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('minted_token_type_unsupported');
+  });
+
+  it('should refuse when mint echoes the subject token back', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => ({ ...verifiedMint(input), accessToken: 'echoed-subject' }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('echoed-subject'), scope: ['workspace:read'] })),
+    ).resolves.toBe('mint_passthrough');
+  });
+
+  it('should refuse when mint smuggles refresh material', async () => {
+    const client = createTokenExchangeClient(
+      policy(
+        stubIssuer({
+          mint: async (input: MintExchangedTokenInput) => ({
+            ...verifiedMint(input),
+            refreshToken: 'refresh-smuggle',
+          }) as never,
+        }),
+      ),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('mint_refresh_present');
+  });
+
+  it('should refuse when mint produces an already-expired token', async () => {
+    const client = createTokenExchangeClient(
+      policy(stubIssuer({ mint: async (input) => verifiedMint(input, { expiresAtSec: input.nowSec }) })),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('ttl_non_positive');
+  });
 });
