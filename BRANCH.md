@@ -306,8 +306,9 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented under a declared exception.
   - [ ] UAT (contract review + two-client binding test per spec-v7).
 
-- [ ] **Lot 9 — L-5b to L-5c generic publication lifecycle (future, sequential after L-5a)**
-  - [ ] Generic DB/S3 publication, recovery, sharing, source/fork/lifecycle/purge contracts and tests. All code stays in the consolidated PR; no intermediate publication.
+- [ ] **Lot 9 — L-5b generic DB/S3 publication (done) → L-5c sharing/lifecycle (in progress, sequential after L-5b)**
+  - [x] L-5b: `server/uploads.ts`, `server/object-intents.ts`, `server/publication.ts`, `adapters/postgres.ts`, `adapters/s3.ts`, `migrations/0001_artifacts.sql` (+ `manifest` TEXT for byte-identity; ACL/sharing/lifecycle/GC/hostname tables deferred to L-5c). Suites: `uploads` 5, `publication` 5, `crash-recovery` 2, `migration.integration` 4, `postgres.integration` 6, `s3.integration` 3, `publication.e2e` 2. Unit gate 39/39; integration gate 15/15 sequential (suites share the disposable schema — vitest file-parallelism caused cross-DROP interference, fixed by sequential per-file runs in `test-artifacts-integration`). `migration.test.ts` named `migration.integration.test.ts` so the unit run stays stack-free. E2E proves service→DB/S3; the HTTP leg waits for 5c `http.ts` (`http-mcp-service-parity`). All code stays in the consolidated PR; no intermediate publication.
+  - [ ] L-5c: `server/access.ts`, `sources.ts`, `fork.ts`, `lifecycle.ts`, `gc.ts`, `src/http.ts` + `access.test.ts`, `sources-fork.test.ts`, `lifecycle.test.ts`, `gc-races.test.ts`, `http-mcp-service-parity.test.ts`, lifecycle migration; extend `publication.e2e.test.ts`.
   - [ ] Lot gate: package `typecheck`/`lint`/`test`/`pack` targets once implemented.
   - [ ] UAT per spec-v7 (artifact writer acceptance, Radar-hosted parts stay external).
 
