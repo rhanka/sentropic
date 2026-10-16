@@ -38,6 +38,7 @@ describe('OAuth token exchange security', () => {
       subjectType: 'urn:ietf:params:oauth:token-type:id_token',
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
   });
 
   it('rejects an unsupported requested_token_type', async () => {
@@ -49,6 +50,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
   });
 
   it('rejects actor_token delegation forms', async () => {
@@ -56,7 +58,9 @@ describe('OAuth token exchange security', () => {
     const form = baseForm(subject);
     form.set('actor_token', 'forged');
     form.set('actor_token_type', TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE);
-    expect((await postForm(router, form)).status).toBe(400);
+    const response = await postForm(router, form);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
   });
 
   it('rejects DPoP-bound exchange attempts', async () => {
@@ -71,20 +75,25 @@ describe('OAuth token exchange security', () => {
       method: 'POST',
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
   });
 
   it('rejects conflicting target audiences', async () => {
     const { router, subject } = await setup();
     const form = baseForm(subject);
     form.append('audience', 'https://other.example/audience');
-    expect((await postForm(router, form)).status).toBe(400);
+    const response = await postForm(router, form);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
   });
 
   it('rejects a missing target audience', async () => {
     const { router, subject } = await setup();
     const form = baseForm(subject);
     form.delete('audience');
-    expect((await postForm(router, form)).status).toBe(400);
+    const response = await postForm(router, form);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
   });
 
   it('rejects a target audience outside the policy', async () => {
@@ -95,13 +104,16 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
   });
 
   it('rejects an empty scope', async () => {
     const { router, subject } = await setup();
     const form = baseForm(subject);
     form.delete('scope');
-    expect((await postForm(router, form)).status).toBe(400);
+    const response = await postForm(router, form);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
   });
 
   it('rejects a scope outside the workload policy', async () => {
@@ -112,6 +124,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
   });
 
   it('rejects a scope the subject was never granted', async () => {
@@ -126,18 +139,23 @@ describe('OAuth token exchange security', () => {
     const narrow = await mintSubject(ports, store, { scope: 'immo:read' });
     const form = baseForm(narrow);
     form.set('scope', 'immo:search');
-    expect((await postForm(router, form)).status).toBe(400);
+    const response = await postForm(router, form);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
   });
 
   it('rejects the public client as the requesting client', async () => {
     const { router, subject } = await setup();
+    // M5: a non-empty secret reaches the public-client branch instead of
+    // stopping at generic authentication-required.
     const response = await postExchange(router, {
       audience: RADAR_AUDIENCE,
-      authorization: basicAuth('immo-mcp', ''),
+      authorization: basicAuth('immo-mcp', 'not-a-secret'),
       scope: 'immo:search',
       subject,
     });
-    expect([400, 401]).toContain(response.status);
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
   });
 
   it('rejects a wrong workload secret', async () => {
@@ -149,6 +167,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
   });
 
   it('rejects an unrelated service client without exchange policy', async () => {
@@ -161,6 +180,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
   });
 
   it('rejects a disabled exchange policy', async () => {
@@ -171,6 +191,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
   });
 
   it('rejects a subject with the wrong audience', async () => {
@@ -186,6 +207,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
 
   it('rejects a subject from a non-allowed originating client', async () => {
@@ -201,6 +223,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
 
   it('rejects an already-exchanged subject carrying act', async () => {
@@ -216,6 +239,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
 
   it('rejects a proof-bound subject carrying cnf', async () => {
@@ -231,6 +255,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
 
   it('rejects a revoked subject token', async () => {
@@ -244,6 +269,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
 
   it('rejects an unknown subject with no stored metadata', async () => {
