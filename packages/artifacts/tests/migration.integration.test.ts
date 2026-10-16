@@ -137,9 +137,10 @@ describe('0002_lifecycle migration', () => {
        VALUES ('99999999-9999-4999-8999-999999999999', 'scope-9', 'owner-9', 'site')`,
     );
     const { rows } = await client.query(
-      `SELECT lifecycle_state FROM artifacts.artifacts WHERE id = '99999999-9999-4999-8999-999999999999'`,
+      `SELECT lifecycle_state, is_public FROM artifacts.artifacts WHERE id = '99999999-9999-4999-8999-999999999999'`,
     );
     expect(rows[0]?.lifecycle_state).toBe('active');
+    expect(rows[0]?.is_public).toBe(false);
     await expect(
       client.query(`UPDATE artifacts.artifacts SET lifecycle_state = 'bogus' WHERE id = '99999999-9999-4999-8999-999999999999'`),
     ).rejects.toThrow(/check constraint|23514/);

@@ -9,11 +9,12 @@
 -- refcounts stay consistent through the Postgres adapter (no api/src
 -- imports); the host applies this file through its existing journal.
 
--- Artifact lifecycle state + renewal marker.
+-- Artifact lifecycle state + renewal marker + public flag (approved accounts only, never anonymous).
 ALTER TABLE artifacts.artifacts
   ADD COLUMN IF NOT EXISTS lifecycle_state TEXT NOT NULL DEFAULT 'active'
     CHECK (lifecycle_state IN ('active', 'withdrawn', 'deleted', 'purged')),
-  ADD COLUMN IF NOT EXISTS renewed_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS renewed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false;
 
 -- Widen release states: ready (committed/current) → retired (supplanted) → purged (cascade).
 ALTER TABLE artifacts.releases DROP CONSTRAINT IF EXISTS releases_state_check;
