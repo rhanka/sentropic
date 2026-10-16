@@ -1,9 +1,9 @@
-import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTPayload } from 'jose';
 import {
   SubjectVerificationError,
   TokenExchangeRefusedError,
   type MintedToken,
   type MintExchangedTokenInput,
+  type TokenExchangeCryptoPort,
   type TokenExchangeIssuer,
   type VerifiedSubjectToken,
 } from '../token-exchange.js';
@@ -36,7 +36,7 @@ export interface TokenExchangeHttpIssuerOptions {
   /** Expected token issuer (`iss`), matched exactly after trailing-slash trim. */
   readonly issuer: string;
   /** Static JWKS document of the issuer (preferred in tests and pinned deploys). */
-  readonly jwks?: { readonly keys: readonly Record<string, unknown>[] };
+  readonly jwks?: unknown;
   /** Issuer JWKS URL, fetched once then cached (bounded, no redirects). */
   readonly jwksUri?: string;
   /** Workload client id authenticated via `client_secret_basic`. */
@@ -45,6 +45,8 @@ export interface TokenExchangeHttpIssuerOptions {
   readonly clientSecret: string;
   /** Expected `act.sub` asserted by the issuer on every exchanged token. */
   readonly actorSub: string;
+  /** Cryptographic port: JWT verification without a static library reference. */
+  readonly crypto: TokenExchangeCryptoPort;
   /** Bounded network timeout per issuer call. */
   readonly requestTimeoutMs?: number;
   /** Bound on the issuer response body. */
@@ -60,6 +62,25 @@ export interface TokenExchangeHttpIssuerOptions {
   readonly allowLoopbackHttp?: boolean;
 }
 
+function claimString(payload: Record<string, unknown>, name: string): string | undefined {
+  const value = payload[name];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function claimStringList(payload: Record<string, unknown>, name: string): string[] {
+  const value = payload[name];
+  if (typeof value === 'string') return value.split(' ').filter(Boolean);
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string');
+  return [];
+}
+
+function claimAudience(payload: Record<string, unknown>): string[] {
+  const value = payload.aud;
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string');
+  return [];
+}
+
 /**
  * Production RFC 8693 binding to the #674 issuer. Authenticates the confidential
  * workload with `client_secret_basic`, sends the raw subject token only to the
@@ -73,7 +94,7 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
   private readonly options: TokenExchangeHttpIssuerOptions;
   private readonly nowMs: () => number;
   private readonly fetchFn: TokenExchangeFetch;
-  private jwksPromise: Promise<ReturnType<typeof createLocalJWKSet>> | undefined;
+  private jwksPromise: Promise<unknown> | undefined;
 
   constructor(options: TokenExchangeHttpIssuerOptions) {
     const loopback = options.allowLoopbackHttp === true && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//u.test(options.tokenEndpoint);
@@ -94,11 +115,11 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
     this.fetchFn = options.fetchFn ?? (fetch as unknown as TokenExchangeFetch);
   }
 
-  private async jwks(): Promise<ReturnType<typeof createLocalJWKSet>> {
+  private async jwks(): Promise<unknown> {
     if (this.jwksPromise === undefined) {
       this.jwksPromise = (async () => {
         if (this.options.jwks !== undefined) {
-          return createLocalJWKSet(this.options.jwks as unknown as JSONWebKeySet);
+          return this.options.crypto.createKeySet(this.options.jwks);
         }
         const timeoutMs = this.options.requestTimeoutMs ?? TOKEN_EXCHANGE_HTTP_TIMEOUT_MS;
         const maxBytes = this.options.maxResponseBytes ?? TOKEN_EXCHANGE_HTTP_MAX_RESPONSE_BYTES;
@@ -119,7 +140,7 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         if (text.length > maxBytes) {
           throw new SubjectVerificationError('invalid_issuer', 'Issuer JWKS response is oversized.');
         }
-        return createLocalJWKSet(JSON.parse(text) as unknown as JSONWebKeySet);
+        return this.options.crypto.createKeySet(JSON.parse(text) as unknown);
       })();
     }
     return this.jwksPromise;
@@ -130,13 +151,12 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
   }
 
   async verify(subjectToken: string): Promise<VerifiedSubjectToken> {
-    let payload: JWTPayload;
+    let payload: Record<string, unknown>;
     try {
-      const verified = await jwtVerify(subjectToken, await this.jwks(), {
+      payload = await this.options.crypto.verifyJwt(subjectToken, await this.jwks(), {
         issuer: this.expectedIssuer(),
         currentDate: new Date(this.nowMs()),
       });
-      payload = verified.payload;
     } catch (error) {
       if (error instanceof SubjectVerificationError) throw error;
       if (error instanceof Error && 'code' in error) {
@@ -153,35 +173,27 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
       }
       throw new SubjectVerificationError('malformed');
     }
-    if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+    const subject = claimString(payload, 'sub');
+    if (subject === undefined || subject.length === 0) {
       throw new SubjectVerificationError('missing_subject');
     }
     if (payload.act != null) throw new SubjectVerificationError('actor_chained');
     if (payload.cnf != null) throw new SubjectVerificationError('proof_bound');
-    if (typeof payload.exp !== 'number' || typeof payload.iat !== 'number') {
+    const expiresAtSec = payload.exp;
+    const issuedAtSec = payload.iat;
+    if (typeof expiresAtSec !== 'number' || typeof issuedAtSec !== 'number') {
       throw new SubjectVerificationError('malformed');
     }
-    const audience = Array.isArray(payload.aud)
-      ? payload.aud.filter((entry): entry is string => typeof entry === 'string')
-      : typeof payload.aud === 'string'
-        ? [payload.aud]
-        : [];
-    const scope =
-      typeof payload.scope === 'string'
-        ? payload.scope.split(' ').filter(Boolean)
-        : Array.isArray(payload.scope)
-          ? payload.scope.filter((entry): entry is string => typeof entry === 'string')
-          : [];
     return {
-      issuer: typeof payload.iss === 'string' ? payload.iss : '',
-      subject: payload.sub,
-      audience,
-      issuedAtSec: payload.iat,
-      expiresAtSec: payload.exp,
-      scope,
-      ...(typeof payload.client_id === 'string' ? { clientId: payload.client_id } : {}),
-      ...(typeof payload.tid === 'string' ? { tenantId: payload.tid } : {}),
-      ...(typeof payload.jti === 'string' ? { jti: payload.jti } : {}),
+      issuer: claimString(payload, 'iss') ?? '',
+      subject,
+      audience: claimAudience(payload),
+      issuedAtSec,
+      expiresAtSec,
+      scope: claimStringList(payload, 'scope'),
+      ...(claimString(payload, 'client_id') !== undefined ? { clientId: claimString(payload, 'client_id') } : {}),
+      ...(claimString(payload, 'tid') !== undefined ? { tenantId: claimString(payload, 'tid') } : {}),
+      ...(claimString(payload, 'jti') !== undefined ? { jti: claimString(payload, 'jti') } : {}),
     };
   }
 
@@ -255,15 +267,14 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
       throw new TokenExchangeRefusedError('minted_token_type_unsupported');
     }
     const nowSec = Math.floor(this.nowMs() / 1000);
-    let payload: JWTPayload;
+    let payload: Record<string, unknown>;
     try {
-      const verified = await jwtVerify(body.access_token, await this.jwks(), {
+      payload = await this.options.crypto.verifyJwt(body.access_token, await this.jwks(), {
         issuer: this.expectedIssuer(),
         audience: input.audience,
         subject: input.subject.subject,
         currentDate: new Date(this.nowMs()),
       });
-      payload = verified.payload;
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
         const code = (error as { code?: string }).code;
@@ -279,27 +290,23 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
       }
       throw new TokenExchangeRefusedError('minted_signature_invalid');
     }
-    if (payload.act == null || typeof (payload.act as { sub?: unknown }).sub !== 'string') {
+    const act = payload.act as { sub?: unknown } | undefined;
+    if (act == null || typeof act.sub !== 'string') throw new TokenExchangeRefusedError('minted_actor_invalid');
+    if (act.sub !== this.options.actorSub) throw new TokenExchangeRefusedError('minted_actor_invalid');
+    if (payload.client_id !== this.options.workloadClientId) {
       throw new TokenExchangeRefusedError('minted_actor_invalid');
     }
-    if ((payload.act as { sub: string }).sub !== this.options.actorSub) {
-      throw new TokenExchangeRefusedError('minted_actor_invalid');
-    }
-    if (payload.client_id !== this.options.workloadClientId) throw new TokenExchangeRefusedError('minted_actor_invalid');
-    const issuedScope =
-      typeof payload.scope === 'string'
-        ? payload.scope.split(' ').filter(Boolean)
-        : Array.isArray(payload.scope)
-          ? payload.scope.filter((entry): entry is string => typeof entry === 'string')
-          : [];
+    const issuedScope = claimStringList(payload, 'scope');
     for (const scope of issuedScope) {
       if (!input.scope.includes(scope)) throw new TokenExchangeRefusedError('minted_scope_invalid');
     }
-    if (typeof payload.exp !== 'number' || typeof payload.iat !== 'number' || !(payload.exp > nowSec)) {
+    const expiresAtSec = payload.exp;
+    const issuedAtSec = payload.iat;
+    if (typeof expiresAtSec !== 'number' || typeof issuedAtSec !== 'number' || !(expiresAtSec > nowSec)) {
       throw new TokenExchangeRefusedError('minted_ttl_invalid');
     }
-    if (payload.exp > input.subject.expiresAtSec) throw new TokenExchangeRefusedError('minted_ttl_invalid');
-    if (payload.exp - payload.iat > 300) throw new TokenExchangeRefusedError('minted_ttl_invalid');
+    if (expiresAtSec > input.subject.expiresAtSec) throw new TokenExchangeRefusedError('minted_ttl_invalid');
+    if (expiresAtSec - issuedAtSec > 300) throw new TokenExchangeRefusedError('minted_ttl_invalid');
     const responseScope = typeof body.scope === 'string' ? body.scope.split(' ').filter(Boolean) : [];
     if ([...responseScope].sort().join(' ') !== [...issuedScope].sort().join(' ')) {
       throw new TokenExchangeRefusedError('minted_scope_invalid');
@@ -308,7 +315,7 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
       accessToken: body.access_token,
       tokenType: 'Bearer',
       issuedTokenType: ACCESS_TOKEN_TYPE,
-      expiresAtSec: payload.exp,
+      expiresAtSec,
       scope: issuedScope,
       verified: {
         issuer: this.expectedIssuer(),
@@ -317,11 +324,10 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         clientId: this.options.workloadClientId,
         actorSub: this.options.actorSub,
         scope: issuedScope,
-        issuedAtSec: payload.iat,
-        expiresAtSec: payload.exp,
-        ...(typeof payload.jti === 'string' ? { jti: payload.jti } : {}),
+        issuedAtSec,
+        expiresAtSec,
+        ...(claimString(payload, 'jti') !== undefined ? { jti: claimString(payload, 'jti') } : {}),
       },
     };
   }
-
 }
