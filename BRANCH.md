@@ -90,8 +90,8 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] R2 issuing client and endpoint family in the frozen envelope.
   - [x] R3 channel-granted authority wired into validation.
   - [x] R4 native-store with store-reference accepted.
-  - [ ] R5 case-insensitive and structural refresh-material rejection.
-  - [ ] R6 lineage classification for all five transitions.
+  - [x] R5 case-insensitive and structural refresh-material rejection.
+  - [x] R6 lineage classification for all five transitions.
   - [ ] R7 five-CLI coverage, nativeUse shapes and enum checks.
   - [ ] R8 UTF-8 byte size, R9 truthful report, R10 branch boxes, R11 changelog.
   - [ ] UAT credential-free walkthrough:

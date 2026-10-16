@@ -3,6 +3,7 @@ import {
   SEAT_AGY_APPLICATION_TUPLE,
   SEAT_BUNDLE_MAX_BYTES,
   SEAT_PACKAGE_PROVIDER_ID,
+  classifyTransition,
   createReceipt,
   isIdempotentReimport,
   isStaleGeneration,
@@ -141,6 +142,54 @@ describe('seat-bundle envelope', () => {
     expect(isStaleGeneration(current, { epoch: 1, generation: 2 })).toBe(false);
     expect(isIdempotentReimport(current, { epoch: 1, generation: 2, operationId: 'op-synth-02' })).toBe(true);
     expect(isIdempotentReimport(current, { epoch: 1, generation: 2, operationId: 'op-synth-03' })).toBe(false);
+  });
+
+  it('classifies all five lineage transitions', () => {
+    const base = { epoch: 1, generation: 2, operationId: 'op-a' };
+    expect(classifyTransition(base, { ...base })).toBe('idempotent');
+    expect(classifyTransition(base, { epoch: 1, generation: 3, operationId: 'op-b' })).toBe('forward');
+    expect(classifyTransition(base, { epoch: 1, generation: 1, operationId: 'op-a' })).toBe('stale');
+    expect(classifyTransition(base, { epoch: 2, generation: 1, operationId: 'op-c' })).toBe(
+      'epoch-replacement-required',
+    );
+    expect(classifyTransition(base, { epoch: 1, generation: 2, operationId: 'op-d' })).toBe('conflict');
+  });
+
+  it('applies predecessor lineage in validation', () => {
+    const bundle = canonical('codex');
+    const tuple = { epoch: 1, generation: 1, operationId: 'op-synth-codex-01' };
+    const ctx = { trustedAuthority: 'custodian' as const };
+    expect(validateSeatBundle(bundle, { ...ctx, predecessor: tuple })).toMatchObject({
+      ok: true,
+      idempotentReimport: true,
+    });
+    expect(
+      validateSeatBundle(bundle, { ...ctx, predecessor: { epoch: 1, generation: 2, operationId: 'op-x' } }),
+    ).toMatchObject({ ok: false, code: 'stale-generation' });
+  });
+
+  it('rejects case-variant refresh keys', () => {
+    const bundle = { ...consumer('vibe'), meshUse: { kind: 'access', RefreshToken: 'synthetic' } };
+    expect(validateSeatBundle(bundle, { trustedAuthority: 'consumer' })).toMatchObject({
+      ok: false,
+      code: 'refresh-material-present',
+    });
+  });
+
+  it('rejects structural smuggling through accessRef', () => {
+    const bundle = { ...consumer('codex'), meshUse: { kind: 'access', accessRef: { nested: 'synthetic' } } };
+    expect(validateSeatBundle(bundle, { trustedAuthority: 'consumer' })).toMatchObject({
+      ok: false,
+      code: 'schema-mismatch',
+    });
+  });
+
+  it('rejects an unknown projection kind', () => {
+    const bundle = { ...consumer('muse'), meshUse: { kind: 'vault' } };
+    expect(validateSeatBundle(bundle, { trustedAuthority: 'consumer' })).toMatchObject({
+      ok: false,
+      code: 'schema-mismatch',
+    });
   });
 
   it('keeps static keys family-free and requires families otherwise', () => {

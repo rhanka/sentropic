@@ -37,17 +37,8 @@ export const SEAT_AGY_APPLICATION_TUPLE = {
 /** Channel rank: a bundle claim above the granted channel is an escalation. */
 const AUTHORITY_RANK: Record<SeatAuthority, number> = { consumer: 0, 'native-store': 1, custodian: 2 };
 
-/** Refresh-capable key names that must never appear in a consumer payload. */
-const FORBIDDEN_REFRESH_KEYS = new Set([
-  'refreshToken',
-  'refresh_token',
-  'sessionToken',
-  'session_token',
-  'deviceToken',
-  'device_token',
-  'deviceCode',
-  'device_code',
-]);
+/** Refresh-capable key pattern, matched case-insensitively against every key. */
+const REFRESH_KEY_PATTERN = /refresh|session.?token|device.?(code|token)/i;
 
 const TOP_LEVEL_KEYS = [
   'identity', 'provenance', 'authority', 'credentialClass',
@@ -129,11 +120,15 @@ export type SeatValidationCode =
   | 'owner-mismatch'
   | 'client-mismatch'
   | 'stale-generation'
+  | 'generation-conflict'
+  | 'epoch-replacement-required'
   | 'unknown-field'
   | 'refresh-material-present'
   | 'nested-refresh-field'
   | 'authority-escalation'
   | 'invalid-lifecycle';
+
+export type SeatTransition = 'idempotent' | 'forward' | 'stale' | 'epoch-replacement-required' | 'conflict';
 
 export type SeatValidationResult =
   | { ok: true; bundle: SeatBundleV1; idempotentReimport?: boolean }
@@ -181,7 +176,7 @@ function findRefreshKey(value: unknown, depth: number): { key: string; depth: nu
   }
   if (!isRecord(value)) return null;
   for (const key of Object.keys(value)) {
-    if (FORBIDDEN_REFRESH_KEYS.has(key)) return { key, depth };
+    if (REFRESH_KEY_PATTERN.test(key)) return { key, depth };
     const hit = findRefreshKey(value[key], depth + 1);
     if (hit) return hit;
   }
@@ -301,6 +296,15 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   for (const [name, projection] of [['nativeUse', nativeUse], ['meshUse', meshUse]] as const) {
     if (projection === undefined) continue;
     if (!isRecord(projection)) return fail('schema-mismatch', `${name} must be an object`);
+    if (projection['kind'] !== 'access' && projection['kind'] !== 'static-key' && projection['kind'] !== 'unavailable') {
+      return fail('schema-mismatch', `${name}.kind must be access, static-key or unavailable`);
+    }
+    if (projection['accessRef'] !== undefined && typeof projection['accessRef'] !== 'string') {
+      return fail('schema-mismatch', `${name}.accessRef must be a string`);
+    }
+    if (projection['reason'] !== undefined && typeof projection['reason'] !== 'string') {
+      return fail('schema-mismatch', `${name}.reason must be a string`);
+    }
     const hit = findRefreshKey(projection, 0);
     if (hit) {
       return hit.depth === 0
@@ -312,10 +316,42 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   }
   if (canonical !== undefined) {
     if (!isRecord(canonical)) return fail('schema-mismatch', 'canonical must be an object');
+    if (canonical['kind'] !== 'renewable-material' && canonical['kind'] !== 'static-key-material') {
+      return fail('schema-mismatch', 'canonical.kind must be a known material kind');
+    }
+    if (!nonEmpty(canonical['materialRef'])) {
+      return fail('schema-mismatch', 'canonical.materialRef must be a non-empty string');
+    }
     const bad = unknownKey(canonical, CANONICAL_KEYS);
     if (bad) return fail('unknown-field', `unknown canonical field: ${bad}`);
   }
+  if (ctx?.predecessor !== undefined) {
+    const transition = classifyTransition(ctx.predecessor, {
+      epoch: lifecycle['epoch'] as number,
+      generation: lifecycle['generation'] as number,
+      operationId: lifecycle['operationId'] as string,
+    });
+    if (transition === 'stale') return fail('stale-generation', 'incoming tuple is older than current');
+    if (transition === 'conflict') return fail('generation-conflict', 'same generation with a different operation');
+    if (transition === 'epoch-replacement-required') {
+      return fail('epoch-replacement-required', 'a new epoch requires the controlled replacement operation');
+    }
+    if (transition === 'idempotent') return { ok: true, bundle: bundle as unknown as SeatBundleV1, idempotentReimport: true };
+  }
   return { ok: true, bundle: bundle as unknown as SeatBundleV1 };
+}
+
+export type SeatLineageTuple = Pick<SeatBundleLifecycle, 'epoch' | 'generation' | 'operationId'>;
+
+/** Five-way lineage classification against the current tuple. */
+export function classifyTransition(current: SeatLineageTuple, incoming: SeatLineageTuple): SeatTransition {
+  if (incoming.epoch !== current.epoch) {
+    return incoming.epoch < current.epoch ? 'stale' : 'epoch-replacement-required';
+  }
+  if (incoming.generation !== current.generation) {
+    return incoming.generation < current.generation ? 'stale' : 'forward';
+  }
+  return incoming.operationId === current.operationId ? 'idempotent' : 'conflict';
 }
 
 /** True when the incoming tuple is older than current; same epoch/generation reimports idempotently. */
@@ -323,8 +359,7 @@ export function isStaleGeneration(
   current: Pick<SeatBundleLifecycle, 'epoch' | 'generation'>,
   incoming: Pick<SeatBundleLifecycle, 'epoch' | 'generation'>,
 ): boolean {
-  if (incoming.epoch !== current.epoch) return incoming.epoch < current.epoch;
-  return incoming.generation < current.generation;
+  return classifyTransition({ ...current, operationId: '' }, { ...incoming, operationId: '' }) === 'stale';
 }
 
 /** True for a same-tuple reimport that must not mutate the receiving account. */
@@ -332,11 +367,7 @@ export function isIdempotentReimport(
   current: Pick<SeatBundleLifecycle, 'epoch' | 'generation' | 'operationId'>,
   incoming: Pick<SeatBundleLifecycle, 'epoch' | 'generation' | 'operationId'>,
 ): boolean {
-  return (
-    incoming.epoch === current.epoch &&
-    incoming.generation === current.generation &&
-    incoming.operationId === current.operationId
-  );
+  return classifyTransition(current, incoming) === 'idempotent';
 }
 
 /** The trusted path authority wins; a JSON field claiming an owner is not authorization. */
