@@ -95,6 +95,7 @@ Deliver lot L0a on branch feat/ci-seat-contract: the frozen five-CLI seat envelo
   - [x] Document contract in packages/llm-mesh/README.md.
   - [x] R1 version 0.26.1 with EX4/EX5 resync and regenerated fixture digest.
   - [x] R8 UTF-8 byte size, R9 truthful report, R10 branch boxes, R11 changelog.
+  - [x] N1 gateway blocker cleared, N2 changelog order, N3 discriminating tests, N4 L1 call recorded.
   - [x] R2 issuing client and endpoint family in the frozen envelope.
   - [x] R3 channel-granted authority wired into validation.
   - [x] R4 native-store with store-reference accepted.
