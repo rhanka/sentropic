@@ -26,7 +26,7 @@ import {
   sessionContentTombstones,
   sessionWorkspaceBindings,
 } from '../../db/control-schema';
-import { tenantMemberships, tenants } from '../../db/schema';
+import { tenantMemberships, tenants, workspaceMemberships } from '../../db/schema';
 
 export type SessionContentErrorCode =
   | 'storage_unavailable'
@@ -447,6 +447,29 @@ export class SessionContentService {
       .limit(1);
     if (membership?.status !== 'approved') {
       throw new SessionContentError('membership_required', 'principal is not an approved member');
+    }
+  }
+
+  /** R6: bounded reads additionally require origin-workspace membership.
+   * Provisioning creates the membership row (see workspace-provisioning),
+   * so the row — not bare ownership — is the authority. */
+  private async checkWorkspaceMembership(
+    client: DbClient,
+    workspaceId: string,
+    principalId: string,
+  ): Promise<void> {
+    const [membership] = await client
+      .select({ workspaceId: workspaceMemberships.workspaceId })
+      .from(workspaceMemberships)
+      .where(
+        and(
+          eq(workspaceMemberships.workspaceId, workspaceId),
+          eq(workspaceMemberships.userId, principalId),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      throw new SessionContentError('membership_required', 'principal is not an origin-workspace member');
     }
   }
 
@@ -1215,6 +1238,9 @@ export class SessionContentService {
         throw new SessionContentError('grant_revoked', 'grant is not active');
       }
       await this.requireEpochScope(tx, grant.authorityEpoch, namespaceId);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext('scc-reserve'), hashtext(${sessionId}))`,
+      );
       const [duplicate] = await tx
         .select()
         .from(sessionContentAttempts)
@@ -1505,6 +1531,7 @@ export class SessionContentService {
       if (grant.tenantId !== ctx.tenantId || grant.ownerId !== ctx.ownerId) {
         throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
       }
+      await this.checkWorkspaceMembership(tx, grant.workspaceId, ctx.principalId);
       await this.requireEpochScope(
         tx,
         grant.authorityEpoch,
