@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exportJWK, generateKeyPair, importJWK, SignJWT, type JWK, type KeyLike } from 'jose';
+import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
 
 import { fromJwksPort } from '@sentropic/oauth-verify';
 
@@ -342,9 +342,34 @@ describe('3-qualification — vocabulary neutrality and generic regression', () 
       resource: RESOURCE,
     });
     const token = await signImmoToken(foreign, { scope: IMMO_READ });
-    await expect(
-      mcp.verify(immoRequest(token), { requiredScopes: [IMMO_READ] }),
-    ).rejects.toThrow();
-    expect(await importJWK(foreign.publicJwk, foreign.alg)).toBeDefined();
+    const error = await mcp
+      .verify(immoRequest(token), { requiredScopes: [IMMO_READ] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 401, code: 'invalid_token' });
+    expect(mcp.challenge(error).status).toBe(401);
+  });
+
+  it('rejects a foreign key reusing a known kid (signature check, not kid lookup)', async () => {
+    const key = await createSigningKey('immo-qual-1');
+    const impostor = await createSigningKey('immo-qual-1');
+    const mcp = createMcpAuth({
+      authorizationServers: [AS],
+      keySource: keySourceFor([impostor]),
+      resource: RESOURCE,
+    });
+    const token = await signImmoToken(key, { scope: IMMO_READ });
+    const error = await mcp
+      .verify(immoRequest(token), { requiredScopes: [IMMO_READ] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(error).toBeInstanceOf(McpAuthError);
+    expect(error).toMatchObject({ status: 401, code: 'invalid_token' });
+    expect(mcp.challenge(error).status).toBe(401);
   });
 });
