@@ -69,6 +69,45 @@ export type LocalProviderDefinition = {
   toolValues: Record<string, LocalToolValues>;
 };
 
+/** Loaded definition: everything is already in memory (Immo's existing shape). */
+export type LoadedDefinition = LocalProviderDefinition;
+
+/** Heavy per-tool payload a lazy loader returns after preflight. */
+export type LazyToolPayload = {
+  adapter: AppConnectorProviderAdapter;
+  handlers:
+    | Record<string, ToolConfigurationHandlerBinding>
+    | Map<string, ToolConfigurationHandlerBinding>;
+  toolValues: Record<string, LocalToolValues>;
+};
+
+/**
+ * Lazy provider definition (RC-M2a): metadata only plus a loader for the
+ * heavy payload. The loader is never called on register, catalog or
+ * unselected entries — only for selected entries after preflight, with
+ * atomic refusal when it throws.
+ */
+export type LazyDefinition = {
+  kind: 'lazy';
+  manifest: AppMcpProviderManifest;
+  parameterSchema: ProviderParameterSchema;
+  requiredPorts: string[];
+  provenance: ToolConfigurationProvenance;
+  load: () => LazyToolPayload;
+};
+
+/** A registrable definition: loaded or lazy. */
+export type RegistryDefinition = LoadedDefinition | LazyDefinition;
+
+/** True for lazy definitions (discriminated by `kind`, never by loading). */
+export function isLazyDefinition(definition: RegistryDefinition): definition is LazyDefinition {
+  return (
+    typeof definition === 'object' &&
+    definition !== null &&
+    (definition as { kind?: unknown }).kind === 'lazy'
+  );
+}
+
 /** Runtime bindings supplied at compile time (ports to implementations). */
 export type RegistryBindings = Record<string, unknown>;
 
@@ -128,7 +167,7 @@ export type CompiledMcpRegistry = {
 
 /** Registry builder: registration, selection, parameterization, compilation. */
 export type ProviderRegistry = {
-  register(definition: LocalProviderDefinition): void;
+  register(definition: RegistryDefinition): void;
   select(providerIds: string[]): void;
   configure(providerId: string, values: Record<string, unknown>): void;
   compile(input: CompileRegistryInput): CompileRegistryResult;
@@ -256,7 +295,7 @@ function deepFreeze(value: unknown): void {
   }
 }
 
-function checkDefinitionShape(definition: LocalProviderDefinition): void {
+function checkDefinitionShape(definition: RegistryDefinition): void {
   if (!isRecord(definition) || !isRecord(definition.manifest)) {
     throw new Error('register requires a definition with a manifest object');
   }
@@ -267,20 +306,31 @@ function checkDefinitionShape(definition: LocalProviderDefinition): void {
   if (typeof manifest.version !== 'string' || !VERSION_PATTERN.test(manifest.version)) {
     throw new Error(`register requires a semver manifest version (got ${String(manifest.version)})`);
   }
-  if (definition.adapter === null || definition.adapter === undefined) {
-    throw new Error('register requires a compiled local adapter');
-  }
   if (!isRecord(definition.parameterSchema) || !isRecord(definition.parameterSchema.properties)) {
     throw new Error('register requires a parameter schema with properties');
-  }
-  if (!isRecord(definition.handlers)) {
-    throw new Error('register requires a handler table');
   }
   if (!Array.isArray(definition.requiredPorts)) {
     throw new Error('register requires a requiredPorts array');
   }
-  if (!isRecord(definition.provenance) || !isRecord(definition.toolValues)) {
-    throw new Error('register requires provenance and per-tool values');
+  if (!isRecord(definition.provenance)) {
+    throw new Error('register requires provenance');
+  }
+  if (isLazyDefinition(definition)) {
+    // Lazy: metadata only. The loader is validated as a function but never
+    // called here — no load on register, catalog or unselected entries.
+    if (typeof definition.load !== 'function') {
+      throw new Error('register requires a lazy loader function');
+    }
+    return;
+  }
+  if (definition.adapter === null || definition.adapter === undefined) {
+    throw new Error('register requires a compiled local adapter');
+  }
+  if (!isRecord(definition.handlers)) {
+    throw new Error('register requires a handler table');
+  }
+  if (!isRecord(definition.toolValues)) {
+    throw new Error('register requires per-tool values');
   }
 }
 
@@ -290,7 +340,7 @@ function checkDefinitionShape(definition: LocalProviderDefinition): void {
 
 /** Create an empty provider-registry builder (no modules, no I/O). */
 export function createProviderRegistry(): ProviderRegistry {
-  const definitions = new Map<string, LocalProviderDefinition>();
+  const definitions = new Map<string, RegistryDefinition>();
   const configurations = new Map<string, Record<string, unknown>>();
   let selection: string[] = [];
   let current: CompiledMcpRegistry | undefined;
@@ -318,10 +368,33 @@ export function createProviderRegistry(): ProviderRegistry {
         return { diagnostics: [{ code: 'missing_binding' as never, path: `${prefix}.bindings.${port}`, message: 'missing required port binding' }] };
       }
     }
+    // Lazy definitions load their heavy payload only here: after preflight,
+    // only for a selected entry. A throwing loader is an atomic refusal —
+    // nothing is published, `current` is untouched.
+    let toolValues: Record<string, LocalToolValues>;
+    let handlers: Record<string, ToolConfigurationHandlerBinding> | Map<string, ToolConfigurationHandlerBinding>;
+    if (isLazyDefinition(definition)) {
+      let payload: LazyToolPayload;
+      try {
+        payload = definition.load();
+      } catch (error) {
+        return { diagnostics: [{ code: 'load_failure' as never, path: prefix, message: `lazy loader failed: ${error instanceof Error ? error.message : String(error)}` }] };
+      }
+      if (!isRecord(payload) || !isRecord(payload.toolValues)) {
+        return { diagnostics: [{ code: 'load_failure' as never, path: prefix, message: 'lazy loader returned a malformed payload' }] };
+      }
+      toolValues = payload.toolValues as Record<string, LocalToolValues>;
+      handlers = payload.handlers;
+    } else {
+      toolValues = definition.toolValues;
+      handlers = definition.handlers;
+    }
+    const handlerTable: Record<string, ToolConfigurationHandlerBinding> =
+      handlers instanceof Map ? Object.fromEntries(handlers) : handlers;
     const bindings: ApprovedToolBinding[] = [];
     for (const tool of manifest.tools) {
-      const local = definition.toolValues[tool.name];
-      if (local === undefined || definition.handlers[local.handlerId] === undefined) {
+      const local = toolValues[tool.name];
+      if (local === undefined || handlerTable[local.handlerId] === undefined) {
         return { diagnostics: [{ code: 'missing_handler' as never, path: `${prefix}.tools.${tool.name}`, message: 'tool has no handler binding' }] };
       }
       const binding: ApprovedToolBinding = {
@@ -333,7 +406,7 @@ export function createProviderRegistry(): ProviderRegistry {
       if (local.policy !== undefined) binding.policy = deepCloneJson(local.policy);
       bindings.push(binding);
     }
-    const handlersDigest = computeHandlersDigest(definition.handlers);
+    const handlersDigest = computeHandlersDigest(handlers);
     const compatibilityDigest = computeCompatibilityDigest(manifest);
     const snapshot: ApprovedToolSnapshot = {
       schemaVersion: TOOL_CONFIGURATION_SCHEMA_VERSION,
@@ -352,7 +425,7 @@ export function createProviderRegistry(): ProviderRegistry {
     const compiled = compileToolConfiguration({
       snapshot,
       manifest,
-      handlers: definition.handlers,
+      handlers,
       compatibilityDigest,
     });
     if (!compiled.ok) {
@@ -382,13 +455,18 @@ export function createProviderRegistry(): ProviderRegistry {
   }
 
   return {
-    register(definition: LocalProviderDefinition): void {
+    register(definition: RegistryDefinition): void {
       checkDefinitionShape(definition);
       const providerId = definition.manifest.providerId;
       if (definitions.has(providerId)) {
         throw new Error(`duplicate provider registration: ${providerId}`);
       }
-      definitions.set(providerId, definition);
+      // Freeze validated metadata: clone the manifest and freeze it so later
+      // caller mutation cannot alter the registered definition. The lazy
+      // loader itself is stored by reference but never called here.
+      const manifest = deepCloneJson(definition.manifest) as AppMcpProviderManifest;
+      deepFreeze(manifest);
+      definitions.set(providerId, { ...definition, manifest });
     },
     select(providerIds: string[]): void {
       const seen = new Set<string>();
