@@ -415,6 +415,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Deep clone JSON-like values so the compiled configuration shares no
+ * reference with the caller manifest or snapshot; the later deepFreeze then
+ * cannot freeze caller inputs (m4).
+ */
+function deepClone<T>(value: T): T {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((entry) => deepClone(entry)) as T;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = deepClone(entry);
+  }
+  return out as T;
+}
+
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) {
@@ -942,7 +957,7 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     const mergedIdempotency = { ...manifestTool.idempotency, ...policy.idempotency };
     compiled.push({
       capabilityRef: entry.toolName,
-      ...(mergedFreshness !== undefined ? { freshness: mergedFreshness } : {}),
+      ...(mergedFreshness !== undefined ? { freshness: deepClone(mergedFreshness) } : {}),
       gates: mergedGates,
       handlerId: entry.handlerId,
       idempotency: mergedIdempotency,
@@ -952,7 +967,7 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
       requiredClaims: policy.requiredClaims ?? [...manifestTool.requiredClaims],
       requiredScopes: policy.requiredScopes ?? [...manifestTool.requiredScopes],
       toolName: entry.toolName,
-      values: { ...entry.values },
+      values: deepClone(entry.values as Record<string, unknown>),
     });
   });
 
@@ -986,6 +1001,7 @@ export function compileToolConfiguration(input: CompileToolConfigurationInput): 
     schemaVersion: TOOL_CONFIGURATION_SCHEMA_VERSION,
     tools: [...compiled].sort((a, b) => (a.toolName < b.toolName ? -1 : a.toolName > b.toolName ? 1 : 0)),
   };
+  compiledBrands.add(config);
   return { ok: true, config: deepFreeze(config) };
 }
 
@@ -998,20 +1014,42 @@ export type ActivateToolConfigurationResult =
   | { ok: false; diagnostics: ToolConfigurationDiagnostic[] };
 
 /**
+ * Brand of configurations produced by `compileToolConfiguration`. `activate`
+ * only accepts branded configurations, so a hand-built `{ ok: true, config }`
+ * can never bypass compilation (m5).
+ */
+const compiledBrands = new WeakSet<object>();
+
+/**
  * Active-generation holder. An invalid candidate retains the active
  * generation; a cold start without a valid embedded configuration fails
  * before replacing any working instance.
  */
 export class ToolConfigurationStore {
   private active: CompiledToolConfiguration | null = null;
+  private generation = 0;
 
   getActive(): CompiledToolConfiguration | null {
     return this.active;
   }
 
+  /** Monotonic count of successful activations (fencing token). */
+  getGeneration(): number {
+    return this.generation;
+  }
+
   activate(result: CompileToolConfigurationResult): ActivateToolConfigurationResult {
     if (!result.ok) return result;
+    if (!compiledBrands.has(result.config)) {
+      return {
+        ok: false,
+        diagnostics: [
+          { code: 'malformed_snapshot', path: 'config', message: 'configuration was not produced by compileToolConfiguration' },
+        ],
+      };
+    }
     this.active = result.config;
+    this.generation += 1;
     return { ok: true, config: result.config };
   }
 
@@ -1026,6 +1064,7 @@ export class ToolConfigurationStore {
       throw new Error(`invalid embedded tool configuration: ${first?.code ?? 'unknown'} at ${first?.path ?? 'snapshot'}`);
     }
     this.active = result.config;
+    this.generation += 1;
     return result.config;
   }
 }
