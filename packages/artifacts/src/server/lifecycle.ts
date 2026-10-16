@@ -11,9 +11,22 @@
  */
 import { assertArtifactAccess } from './authorization.js';
 import { evaluateAccess, type AccessAction, type ArtifactAcl } from './access.js';
+import type { PublicationStateStore } from './publication.js';
+
+/**
+ * The current-release pointer the service promotes through. A subset of the
+ * publication state store on purpose: there is exactly one current pointer,
+ * owned by publication state (DB: `artifact_current`). Hosts must wire both
+ * services to the same backing.
+ */
+export type CurrentPointer = Pick<
+  PublicationStateStore,
+  'getCurrentReleaseId' | 'compareAndSwapCurrent'
+>;
 
 export type ArtifactState = 'active' | 'withdrawn' | 'deleted' | 'purged';
-export type ReleaseState = 'active' | 'retired' | 'purged';
+/** Release states use `ready` (not `active`) to match the releases table. */
+export type ReleaseState = 'ready' | 'retired' | 'purged';
 
 export interface LifecycleStore {
   register(artifactId: string, ownerId: string): Promise<void>;
@@ -26,8 +39,6 @@ export interface LifecycleStore {
   listArtifactReleases(artifactId: string): Promise<string[]>;
   getReleaseState(releaseId: string): Promise<ReleaseState>;
   setReleaseState(releaseId: string, state: ReleaseState): Promise<void>;
-  getCurrent(artifactId: string): Promise<string | undefined>;
-  setCurrent(artifactId: string, releaseId: string): Promise<void>;
 }
 
 interface ArtifactEntry {
@@ -35,7 +46,6 @@ interface ArtifactEntry {
   state: ArtifactState;
   renewedAt?: string;
   releases: string[];
-  current?: string;
 }
 
 /** In-memory LifecycleStore double for unit tests (plus a test setup alias). */
@@ -78,24 +88,16 @@ export function createMemoryLifecycleStore(): LifecycleStore & {
       const entry = artifacts.get(artifactId);
       if (entry === undefined) throw new Error(`unknown artifact: ${artifactId}`);
       if (!entry.releases.includes(releaseId)) entry.releases.push(releaseId);
-      if (!releaseStates.has(releaseId)) releaseStates.set(releaseId, 'active');
+      if (!releaseStates.has(releaseId)) releaseStates.set(releaseId, 'ready');
     },
     async listArtifactReleases(artifactId: string): Promise<string[]> {
       return [...(artifacts.get(artifactId)?.releases ?? [])];
     },
     async getReleaseState(releaseId: string): Promise<ReleaseState> {
-      return releaseStates.get(releaseId) ?? 'active';
+      return releaseStates.get(releaseId) ?? 'ready';
     },
     async setReleaseState(releaseId: string, state: ReleaseState): Promise<void> {
       releaseStates.set(releaseId, state);
-    },
-    async getCurrent(artifactId: string): Promise<string | undefined> {
-      return artifacts.get(artifactId)?.current;
-    },
-    async setCurrent(artifactId: string, releaseId: string): Promise<void> {
-      const entry = artifacts.get(artifactId);
-      if (entry === undefined) throw new Error(`unknown artifact: ${artifactId}`);
-      entry.current = releaseId;
     },
     async setRelease(artifactId: string, releaseId: string): Promise<void> {
       await store.addRelease(artifactId, releaseId);
@@ -105,6 +107,8 @@ export function createMemoryLifecycleStore(): LifecycleStore & {
 }
 
 export interface LifecycleService {
+  /** Register an artifact owner (idempotent; production binds the DB row). */
+  register(artifactId: string, ownerId: string): Promise<void>;
   stateOf(artifactId: string): Promise<ArtifactState>;
   canRead(
     artifact: { artifactId: string; state: ArtifactState },
@@ -130,12 +134,15 @@ export interface LifecycleService {
   renew(artifactId: string, actorId: string): Promise<{ renewedAt: string }>;
   /** List release IDs for purge derivation (delegates to the store). */
   listReleases(artifactId: string): Promise<string[]>;
+  /** Track a published release so promotion sees it (idempotent). */
+  trackRelease(artifactId: string, releaseId: string): Promise<void>;
 }
 
 /** Create a lifecycle service over an injected store (mutations owner-only). */
 export function createLifecycleService(
   store: LifecycleStore,
   clock: () => string = () => new Date().toISOString(),
+  current?: CurrentPointer,
 ): LifecycleService {
   async function ownerOf(artifactId: string): Promise<string> {
     const owner = await store.getOwner(artifactId);
@@ -148,6 +155,9 @@ export function createLifecycleService(
   }
 
   return {
+    async register(artifactId: string, ownerId: string): Promise<void> {
+      await store.register(artifactId, ownerId);
+    },
     async stateOf(artifactId: string): Promise<ArtifactState> {
       return store.getArtifactState(artifactId);
     },
@@ -199,6 +209,7 @@ export function createLifecycleService(
     },
     async promote(artifactId: string, actorId: string, releaseId: string, expectedCurrent: string) {
       await assertOwner(artifactId, actorId);
+      if (current === undefined) throw new Error(`promotion needs a current pointer for ${artifactId}`);
       const state = await store.getArtifactState(artifactId);
       if (state !== 'active') throw new Error(`cannot promote on ${state} artifact: ${artifactId}`);
       const releases = await store.listArtifactReleases(artifactId);
@@ -206,15 +217,16 @@ export function createLifecycleService(
       if ((await store.getReleaseState(releaseId)) === 'purged') {
         throw new Error(`cannot promote purged release: ${releaseId}`);
       }
-      const current = await store.getCurrent(artifactId);
-      if (current !== expectedCurrent) {
+      const actual = (await current.getCurrentReleaseId(artifactId)) ?? null;
+      if (actual !== expectedCurrent) {
         throw new Error(`promotion conflict for ${artifactId}: expected ${expectedCurrent}`);
       }
-      await store.setCurrent(artifactId, releaseId);
-      if (current !== undefined && current !== releaseId) {
-        await store.setReleaseState(current, 'retired');
+      const won = await current.compareAndSwapCurrent(artifactId, expectedCurrent, releaseId);
+      if (!won) throw new Error(`promotion conflict for ${artifactId}: concurrent move won`);
+      if (actual !== null && actual !== releaseId) {
+        await store.setReleaseState(actual, 'retired');
       }
-      await store.setReleaseState(releaseId, 'active');
+      await store.setReleaseState(releaseId, 'ready');
       return { releaseId };
     },
     async renew(artifactId: string, actorId: string) {
@@ -228,6 +240,9 @@ export function createLifecycleService(
     },
     async listReleases(artifactId: string): Promise<string[]> {
       return store.listArtifactReleases(artifactId);
+    },
+    async trackRelease(artifactId: string, releaseId: string): Promise<void> {
+      await store.addRelease(artifactId, releaseId);
     },
   };
 }
