@@ -10,6 +10,7 @@
  * host and injected — this module never reads env or creates connections.
  */
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -78,6 +79,10 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
         token = out.IsTruncated === true ? out.NextContinuationToken : undefined;
       } while (token !== undefined);
       return keys.sort();
+    },
+    async deleteBlob(key: string): Promise<void> {
+      assertBlobKey(key);
+      await options.client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: key }));
     },
   };
 }
