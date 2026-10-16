@@ -203,7 +203,9 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   } catch {
     return fail('schema-mismatch', 'bundle is not JSON-serializable');
   }
-  if (serialized.length > SEAT_BUNDLE_MAX_BYTES) return fail('size-exceeded', 'bundle exceeds 48 KiB');
+  if (new TextEncoder().encode(serialized).length > SEAT_BUNDLE_MAX_BYTES) {
+    return fail('size-exceeded', 'bundle exceeds 48 KiB');
+  }
   if (!isRecord(bundle)) return fail('schema-mismatch', 'bundle must be an object');
   const badTop = unknownKey(bundle, TOP_LEVEL_KEYS);
   if (badTop) return fail('unknown-field', `unknown top-level field: ${badTop}`);
@@ -245,6 +247,14 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   if (!nonEmpty(identity['credentialFormatVersion'])) {
     return fail('schema-mismatch', 'identity.credentialFormatVersion must be non-empty');
   }
+  if (
+    identity['os'] !== undefined &&
+    identity['os'] !== 'linux' &&
+    identity['os'] !== 'macos' &&
+    identity['os'] !== 'windows'
+  ) {
+    return fail('schema-mismatch', 'identity.os must be linux, macos or windows');
+  }
   if (ctx?.ownerScope !== undefined && identity['ownerScope'] !== ctx.ownerScope) {
     return fail('owner-mismatch', 'identity.ownerScope does not match the verified owner');
   }
@@ -262,6 +272,12 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   if (!nonEmpty(lifecycle['localExpiryPolicy'])) {
     return fail('invalid-lifecycle', 'lifecycle.localExpiryPolicy must be non-empty');
   }
+  if (lifecycle['refreshAuthority'] !== 'custody' && lifecycle['refreshAuthority'] !== 'none') {
+    return fail('invalid-lifecycle', 'lifecycle.refreshAuthority must be custody or none');
+  }
+  if (lifecycle['providerExpiry'] !== undefined && !validDate(lifecycle['providerExpiry'])) {
+    return fail('invalid-lifecycle', 'lifecycle.providerExpiry must be a valid date');
+  }
   if (authority !== 'custodian' && authority !== 'consumer' && authority !== 'native-store') {
     return fail('schema-mismatch', 'authority must be custodian, consumer or native-store');
   }
@@ -278,6 +294,9 @@ export function validateSeatBundle(bundle: unknown, ctx?: SeatValidationContext)
   }
   if (credClass !== 'static-key' && !nonEmpty(identity['refreshFamilyRef'])) {
     return fail('schema-mismatch', 'a non-static seat requires refreshFamilyRef');
+  }
+  if (effective === 'custodian' && credClass === 'renewable' && lifecycle['refreshAuthority'] !== 'custody') {
+    return fail('invalid-lifecycle', 'a custodian renewable bundle holds custody refresh authority');
   }
   if (effective !== 'custodian') {
     if (lifecycle['refreshAuthority'] !== 'none') {
