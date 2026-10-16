@@ -352,6 +352,22 @@ describe('token exchange refusals', () => {
     ).resolves.toBe('mint_refresh_present');
   });
 
+  it('should refuse with mint_failed when the issuer call fails', async () => {
+    const client = createTokenExchangeClient(
+      policy(
+        stubIssuer({
+          mint: async () => {
+            throw new Error('network down');
+          },
+        }),
+      ),
+    );
+
+    await expect(
+      refusalReason(client.exchange({ ...baseRequest('opaque'), scope: ['workspace:read'] })),
+    ).resolves.toBe('mint_failed');
+  });
+
   it('should refuse when mint produces an already-expired token', async () => {
     const client = createTokenExchangeClient(
       policy(stubIssuer({ mint: async (input) => verifiedMint(input, { expiresAtSec: input.nowSec }) })),
