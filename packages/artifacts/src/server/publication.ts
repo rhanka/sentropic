@@ -38,6 +38,15 @@ export interface PublicationBlobStore {
   getBlob(key: string): Promise<Uint8Array | undefined>;
   /** List keys under a prefix (orphan enumeration for crash recovery/GC). */
   listKeys(prefix: string): Promise<string[]>;
+  /** Delete a key (strict: unknown keys fail so callers notice). */
+  deleteBlob(key: string): Promise<void>;
+}
+
+/** Derive the `sha256:<hex>` digest from a digest-addressed blob key. */
+export function blobDigestOfKey(key: string): string {
+  const hex = key.split('/').pop() ?? '';
+  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error(`invalid blob key: ${key}`);
+  return `sha256:${hex}`;
 }
 
 /** In-memory state-store double for unit tests (synchronous CAS). */
@@ -77,6 +86,11 @@ export function createMemoryBlobStore(): PublicationBlobStore {
     },
     listKeys(prefix: string): Promise<string[]> {
       return Promise.resolve([...blobs.keys()].filter((key) => key.startsWith(prefix)).sort());
+    },
+    deleteBlob(key: string): Promise<void> {
+      if (!blobs.has(key)) throw new Error(`unknown blob: ${key}`);
+      blobs.delete(key);
+      return Promise.resolve();
     },
   };
   return store;
