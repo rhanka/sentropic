@@ -48,6 +48,18 @@ const JSON_TYPES = new Set(['object', 'array', 'string', 'integer', 'number', 'b
 
 export type BoundedDiagnostic = ToolConfigurationDiagnostic;
 
+/** Plain JSON value accepted as a runtime tool argument. */
+export interface JSONValueRecord {
+  readonly [key: string]: JSONValue;
+}
+export type JSONValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly JSONValue[]
+  | JSONValueRecord;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
