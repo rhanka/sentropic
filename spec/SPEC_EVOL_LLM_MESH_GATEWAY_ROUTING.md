@@ -733,11 +733,117 @@ buffer the provider response, make an extra provider call or alter route
 selection. If an adapter can provide exact input usage before commitment, exact
 usage takes precedence.
 
-The terminal Anthropic `message_delta.usage` carries output usage only.
+The terminal canonical Anthropic `message_delta.usage` carries output usage only.
 Provider-reported input/output usage remains authoritative for aggregate
 financial settlement and diagnostics; the first-frame estimate is a
 caller-compatibility signal, not a billing record. OpenAI stream usage is
 unchanged.
+
+### 5.6 Native relay, count and usage
+
+This section describes built mesh/gateway contracts. Native pricing/ledger
+wiring is built and inert-tested; live provider gates remain pending and no
+production enablement is claimed. Canonical compaction/egress in §5.5 is
+unchanged; native usage bytes may contain cumulative input extensions and are
+never reconstructed canonically.
+
+Native Messages preserves nested body identity/unknown fields with a shallow
+copy, overriding only selected model, boolean stream and validated/admitted
+max_tokens. Native JSON success requires kind=json/status=200 and relays the
+parsed object semantically, including safeguard_results. SSE relays original
+bytes/comments/unknown events/line endings with pull backpressure and a 1 MiB
+pending-frame bound. The first complete non-error frame commits once; no retry
+after commitment or rejected commit callback. Late errors are sanitized native
+error frames, close upstream and never manufacture message_stop. Bounded native
+validation messages and terminal request_too_large follow §§5.3–5.4. After
+commitment and 15 s of upstream silence the relay emits only `: keepalive`
+comments between complete frames; keepalives carry no usage and never
+interleave into a frame, and abort shutdown settles promptly with no surviving
+timer.
+
+Request forwarding starts empty and permits only anthropic-*, x-app and
+x-stainless-* after credential/session/hop-by-hop/Connection/internal exclusions;
+caller user-agent/IP/encoding/authority headers are dropped. Hosts derive transport
+headers/Content-Length from the trusted URL/serialized bytes and set server auth
+last. Native success adds anthropic-* to canonical safe response names, including
+owner-accepted organization disclosure; errors forward no upstream headers.
+Validation 400s are bounded to a 64 KiB UTF-8 error body and a control-stripped
+4096-byte public message. Billing masking precedes truncation/safeguards detection;
+only an owned safeguards request rejecting the exact sent classifier beta gets
+the narrow rewrite. Canonical 400s and other errors keep fixed sanitization.
+
+X-Sentropic-Relay:native is success-only. Native Messages JSON X-Sentropic-Served
+comes only from a safe response ID for one model without fallback/substantive
+iterations; selected identity is never a substitute. A safe mismatch can be
+reported while pricing remains uncertain. Native SSE omits the header because
+late evidence can invalidate identity; no delayed bytes or invented trailers.
+Count omits it. Gateway diagnostics are emitted last and cannot be spoofed.
+
+POST /v1/messages/count_tokens is authenticated, partition-checked and JSON-only.
+A trusted count port/exact model/version is required; the count port stays
+available with native OFF, while ON is native even without beta/safeguards.
+OFF/known denial returns 400, unknown catalog models 404. Forward a shallow copy
+unchanged, insert no ceiling/stream and make one call without retry. Validate
+input_tokens as a nonnegative safe integer. One process limiter keys verified
+tenant/principal: burst 10, refill 1/second, two concurrent calls; 429 has
+integer Retry-After, cancellation never refunds a dispatch token. Evict idle keys
+after ten minutes excluding live calls; at 10,000 keys a new key fails closed
+with 503. Count has no generation plan/admission, hold, dispatch marker,
+financial settlement, usage observation or debit.
+
+All three POST paths share one checked bounded read and one process-owned pool,
+native ON or OFF: L=B=32,000,000 actual bytes by default. Start at zero; check
+N+q <= L, grant q atomically, then retain/copy exact q backing capacity. No
+Content-Length allocation/reservation, geometric slack, oversized backing views,
+raw consolidation, clone or waiting queue. EOF decodes/parses once under exact N.
+Unavailable extension cancels reading, discards partial storage and returns
+retryable pre-parse request-body-capacity 503 with Retry-After:1 and
+x-should-retry:true, without quote/hold/dispatch/financial or observation event.
+Actual oversize has 413 precedence. Concurrent small requests reserve actual
+bytes rather than one full cap each. Transport chunks are the explicit transient
+exception; pool accounting/8x sizing assumptions are not measured memory proof.
+
+N1 retention follows references: native hosts finish/cancel upload and detach
+body/serialized/view holders before exposing commit-ready SSE or completed
+JSON/count. Response iterators/abort/finalize closures retain response state and
+bounded metadata only. Gateway clears cache/body/retry holders before shrinking;
+fetch headers alone cannot prove upload completion. Canonical SDK operations and
+streams keep measured N through retries and terminal cleanup. N2 cleanup detaches
+before once-only release on every post-acquisition refusal, abort/error/timeout,
+completion and never-consumed stream, preserving original refusal/hold rules and
+adding no financial event. Cleanup never waits for observation hooks. N3 storage
+never exceeds granted backing bytes, including forged Content-Length uploads.
+
+The gateway owns one usage fold and freezes one pre-floor terminal snapshot for
+settlement and once-only finalize. Physical P=U+R+aggregate writes; TTL splits are
+not added twice. Policy anthropic-cache-2026-10-02 prices units40 as
+40U+50W5+80W1+4R (Sonnet 5/Opus 5), or 40U+50W5+80W1+R (Fable 5.1). A safe
+matching served model, complete JSON/start proof and bounded integers are required.
+Missing/null/[] iterations are absent; fallback, mismatch or substantive/malformed
+iterations permanently latch served_model_mismatch, disable discounts and use the
+pinned selected model's full physical rate with allowance floors. Iterations are
+never summed or latest-wins; opaque wire data is not persisted usage.
+
+Start-anchored deltas inherit absent/null U/R/aggregate/split. Equal aggregates
+reuse accepted TTL allocation; growth alone uses eligible five-minute weight,
+otherwise 2x with separate cache_write_split_inferred evidence, which alone does
+not prevent measured clean completion. Reported TTL counts remain distinct from
+inference; a later consistent split may resolve allocation. Decrease/conflict or
+fractional/nonfinite/unsafe input atomically rejects the update and permanently
+revokes proof (N5); safe counts remain physical lower-bound evidence, never a
+restored discount. Partial deltas cannot bootstrap a missing start or combine
+conflicting starts/models. Cumulative output is not summed; start output is
+provisional, final delta plus clean message_stop (or successful JSON) is final.
+
+Clean positive measured input/output has no allowance floor. Interrupted SSE
+with usable same-model start-derived input proof preserves latest accepted input
+and floors output only. No-proof cases floor both sides; initial unknown write
+split uses the sourced 2x bound conservatively. Observation counts stay physical
+and pre-floor even if financial output rises from 500 to 32,000. Host pricing must
+validate exact pinned provider/model/served identity, policy and units40 bounds;
+failed validation uses full physical rate. API persistence/audit joins are built
+and inert-tested; live memory/pricing qualification remains a later gate, not
+inferred from package tests.
 
 ## 6. Compatibility and migration
 
@@ -1089,6 +1195,43 @@ thin data plane).
   `packages/llm-gateway/tests/target.test.ts` + `router.test.ts` (same
   order/efforts on the gateway side).
 
+### 14.4b Muse Wonder + Wonder Full (owner request 2026-10-13)
+
+- Catalog (`packages/llm-mesh/src/catalog.ts`): `muse-wonder-1.0` (label
+  `Muse Wonder`) and `muse-wonder-full-1.0` (label `Muse Wonder Full`),
+  both `advanced` reasoning with vision, same task hints as Spark.
+  `muse-wonder-1.0` is the exact model id from the local Muse CLI config
+  (`~/.config/muse/settings.json` `model`; model ids only — no secret was
+  read or copied). The Full id is verified against the local Muse
+  provider catalog as `muse-wonder-full-1.0` (owner correction 2026-10-14).
+- Provider routing: both ids in `knownModelIds` /
+  `knownModelIdsByProvider.muse` (`providers.ts`), both mapped to the
+  `muse`/`muse` target (`routing-targets.ts`), both listed in
+  `GENERATED_MODEL_COUNCIL_SOURCE.excludedModelKeys`
+  (`generated-model-council.ts`) like Spark (no pinned benchmark evidence).
+  The gateway default stays the Spark contributor (`MUSE_CONTRIBUTOR_MODEL`
+  unchanged); no api change (account transport acquisition is
+  model-agnostic).
+- Responses-wire compatibility: execution features are transport-keyed, so
+  both Wonder ids inherit the proven `muse` set (`named-tool-choice`,
+  `parallel-tool-control`, `explicit-output-ceiling`, `strict-schema`) and
+  serve through the translated Muse adapter. R5-MAJ-1: `reasoning-controls`
+  is NOT declared (no proven Meta Chat reasoning slot) — a request carrying
+  reasoning effort/summary is refused before dispatch with a named
+  capability 400, never served with the effort silently dropped.
+- Effort mapping: no per-model effort table exists in mesh. The canonical
+  `reasoning.effort` is validated at the Responses ingress (CLI tiers
+  none/minimal/low/medium/high/xhigh/max/ultra per `muse model-profile
+  --help`) but is NOT forwarded on the Muse Chat egress: the Meta
+  `/v1/chat/completions` shim has no proven reasoning slot (R5-MAJ-1).
+- Count/accounting: model-agnostic — `responsesUsage` mapping and
+  route settlement/quote allowance apply identically (no per-model pricing
+  table in mesh or gateway).
+- Covered by `packages/llm-mesh/tests/muse.test.ts` (4-model surface),
+  `routing-targets.test.ts` (Wonder resolution), and the real-planner
+  replay (`packages/llm-gateway/tests/responses-real-planner.test.ts`:
+  a Responses body on each Wonder id serves 200 with usage preserved).
+
 ### 14.5 Runtime status and enrollment proofs
 
 - As of this writing the api runtime still lists no muse models
@@ -1189,3 +1332,980 @@ concerns: enroll produces a keyring credential; serve consumes it over the
 Meta wire (`https://api.meta.ai/v1`, api-key auth, `x-api-version: 1.0.0`).
 The serving leg does not depend on this provider's code — it depends on the
 same measured wire facts. Both must exist for §14.5 Proof 2 to go green.
+
+## 15. Muse/vibe wires, `count_tokens`, gaps and operational diagnostics (branch `fix/llm-gateway-muse-vibe-wires`)
+
+This section records the branch-scoped evolution on top of v2. Normative
+unless marked otherwise. The auto-mode free-classifier billing change is
+explicitly OUT of this branch (later PR; the gateway keeps managing
+metering/leases/auth with opt-out).
+
+### 15.1 Muse and vibe ingress
+
+- Muse chat needs no new ingress: `POST /v1/chat/completions` already parses.
+  The missing piece was catalog route `GET /muse-code/models`, served by the
+  shared `/v1/models` handler (Lot 1).
+- Vibe needs no new ingress (OpenAI-compatible). Root cause was the missing
+  `mistral-medium-3.5` static mapping + catalog profile (256K context per the
+  Vibe CLI model card), added via the `llm-mesh-add-model` scaffold (Lot 2).
+- Cloud-code rides the same wires: the CLI-default lock test covers the
+  muse/vibe/cloud-code triple so no repeat request is needed (Lot 4).
+
+### 15.2 `count_tokens` on the Anthropic wire
+
+`POST /v1/messages/count_tokens` relays the authenticated caller body to the
+Anthropic count endpoint and returns the provider count verbatim. No token
+estimator is built: an estimate would corrupt Anthropic cache accounting.
+
+- Gateway route (Lot 3, evolved to a real relay): a malformed body or a
+  missing model maps to a provider-shaped 400 before authentication;
+  authenticated callers get the frozen unknown-model 404 only for
+  unrecognized IDs. A `safeguards` field in the body is refused fail-closed
+  with 400 (never silently dropped — deliberate deviation from the #633
+  native relay draft, which forwards it when native Messages is enabled).
+  Without an injected `NativeCountTokensPort` the route keeps an explicit
+  provider-shaped refusal (400 `count_tokens is not supported`) so the
+  client falls back to its own local counting.
+- Host port (api, `gateway-count-tokens.ts`, injected through
+  `gateway-route-plane.ts` and the `gw.ts` `nativeCountTokens` option): the
+  trusted host resolves the credential — the caller's provider credential
+  when present (user BYOK, else workspace key, else the server environment
+  key), else the owner's claude-code account transport (only under
+  `claude-code` transport mode with an `active` or `cooldown` primary
+  account). Caller fields never select a credential, account or URL, and
+  the model allowlist is the exact `anthropic` catalog, never an alias
+  catalog.
+- Transport headers follow the #633 native Messages contract
+  (`nativeTransportHeaders`): the gateway-validated forwarded headers
+  (`anthropic-beta` and friends) and the negotiated `anthropic-version` ride
+  the provider request, so a body that relies on beta fields or tools is
+  counted exactly as it will be served. Deviation from #633: the count
+  transport uses the Anthropic SDK instead of the native HTTP framer, and
+  `safeguards` is refused instead of forwarded.
+- Per-principal engineering limits apply before dispatch (`nativeCountRate`,
+  429 `rate_limit_error` on exhaustion without a provider call).
+- The account lease taken by the host port is advisory-only: any counting
+  failure completes the reservation with a neutral `failed` outcome — a
+  401/403 from counting never flips the account to `reauth_required`, and a
+  429 from counting never starts a cooldown; the inference account keeps
+  serving. Nothing is metered and no budget is admitted on any count path
+  (the gateway itself takes no lease).
+- Upstream failures are re-exposed provider-shaped and sanitized: 401/403 →
+  generic 401 `authentication_error`; 429 → 429 with the provider
+  `Retry-After` (1-second floor when absent); other 4xx keep their type with
+  a byte-capped public message; network/5xx → sanitized 503
+  `api_error`. No credential, account or host detail rides out.
+
+### 15.3 Mesh operational gaps 1–4
+
+- Gap 1: a credential that cannot self-recover (no refresh token, or a
+  refresh already failed so the status flipped to `reauth_required`) surfaces
+  `reauth-required` readiness + `listDiagnostics` even before its status
+  flips; the planner excludes it and the gateway answers 503 +
+  `X-Sentropic-Route-Action` instead of a silent no-route. A merely expired
+  ACCESS token with a live refresh token stays `ready`: `acquire()` refreshes
+  it silently before dispatch.
+- Gap 2: a lone route suppressed only by UNCOMMITTED failures degrades
+  instead of starving for the 300s negative-cache TTL (`committed` stamp on
+  `RouteFailureClassification`, `suppressedDegradable` health, single-
+  candidate planner fallback). Committed failures stay strict (duplicate-
+  dispatch risk); provider rate limits keep their Retry-After window (no
+  degrade, no redispatch storm); multi-route suppression is unchanged.
+- Gap 3: affinity whose account is gone auto-drops at resolve (deleted from
+  the map) and resolves normally; not-ready accounts keep fail-closed.
+- Gap 4: cross-process enroll hot-restore verified pre-existing
+  (`restorePersistedAccounts` on every serving read path); per-account model
+  inventory fixed via catalog profile so `supportedModelIds` + `/v1/models`
+  include the scaffolded model.
+
+### 15.4 No-route diagnostics (Lot 7)
+
+- `RoutePlanError` carries optional `diagnostics: readonly
+  RouteAvailabilityDiagnostic[]` (absent when no transport matches);
+  `diagnostic` stays the first entry for back-compat by caller convention.
+- `describeAvailability(subject, ...)` shares
+  `matchingAvailabilityDiagnostics` with the planner no-route branch and has
+  no planning side effects (it still runs account restoration, which may
+  persist owner claims — "read-only" means no plan/affinity writes): an
+  explicit transport restriction wins, otherwise model-derived transports
+  filter `listDiagnostics` (unfiltered `[0]` once prescribed the wrong repair
+  action across transports).
+- `admitRoute` takes `subject` and attaches availability to an empty quote by
+  throwing `no-route` with the same per-transport entries.
+- The no-route 503 body joins per-transport messages (`; `-separated); the
+  enrollment-action branch prefers the mesh-authored message, rebuilt template
+  as fallback for messageless errors.
+- Status, error type/code and headers frozen: 503 `api_error` /
+  `server_error` + `no_route`, `x-should-retry: false`, no `Retry-After`;
+  the enrollment-action branch (`authentication_error` +
+  `X-Sentropic-Route-Action`) is unchanged.
+
+### 15.5 Subsystem 503 messages
+
+- `caller-auth-unavailable` -> `authentication service temporarily
+  unavailable`; `pooled-account-unavailable` -> `account service temporarily
+  unavailable`; `budget-unavailable` -> `budget service temporarily
+  unavailable` (both wires; Anthropic `overloaded_error`, OpenAI
+  `rate_limit_error` / `overloaded` unchanged).
+- Status, error type/code and headers frozen; bodies carry zero account,
+  lease, credential or pricing/store detail.
+- Deliberate deviation from `spec/SPEC_EVOL_LLM_GATEWAY_LOT2.md:196` and the
+  B3b pin on main, which froze a single generic wording: per-subsystem
+  wording is operator-distinguishable by design.
+
+### 15.6 Codex enroll retry
+
+- `CODEX_POLL_NETWORK_RETRIES = 3` on device poll and OAuth token exchange:
+  a transient fetch throw follows the same sleep-then-continue path as a 403
+  pending poll, never an instant abort.
+- Linear backoff scaled on `pollIntervalMs` (`pollIntervalMs * consecutive
+  failures`); 403 pending waits one uncapped `pollIntervalMs`.
+- Exhausted error names the site, the retry count and the URL, and carries
+  `e.cause.code` alone when present (`ETIMEDOUT`, `ECONNRESET`, ...), else
+  the raw message. Raw system messages can carry hostnames/paths, so they
+  never ride out alongside a code. Non-transient HTTP/incomplete-payload
+  failures still fail fast.
+
+### 15.7 Enroll-replace finding (observation, non-normative)
+
+- No mesh defect on the enroll-replace path: all layers in this branch are
+  additive (availability surfacing, message wording, retry), none replaces
+  enrollment, lease or refresh state handling.
+- Disk forensics (read-only, no decryption): a single successful codex
+  persistence; remaining evening writes are orphan claim-sized files from
+  incomplete attempts, no live-account replacement. Handoff stays on the h2a
+  lane: one scope per shell (`H2A_LLM_MESH_OWNER_SCOPE` / hostname).
+
+### 15.8 Test-matrix deltas
+
+- `packages/llm-mesh/tests/route-planner.test.ts`: multi-diagnostic
+  no-route (`diagnostic` = first, `diagnostics` = per-transport list) +
+  `describeAvailability` sharing the same transport-resolution helper (no
+  immutability/parity claim beyond that).
+- `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`:
+  expired-credential messages + enroll A+B regression.
+- `packages/llm-gateway/tests/errors.test.ts`: mesh-message preference +
+  joined no-route detail.
+- `packages/llm-gateway/tests/route-json-flow.test.ts`: expired-credential
+  planner→mapper integration with a realistic entry (real planner, stubbed
+  directory, direct mapper call — no HTTP, no live expiry detection).
+- `packages/llm-gateway/tests/contract-snapshot.test.ts` +
+  `errors.test.ts`: subsystem 503 freeze (status/type/code/headers,
+  including per-kind header assertions).
+- `packages/llm-mesh/tests/enrollment/codex.test.ts`: retry tests (poll
+  recovery, exchange recovery, exhausted error with cause code + URL +
+  secret canary, raw-message fallback without code).
+
+## 16. PR #662 completion: Responses ingress and the Vibe wire alias
+
+Design dated 2026-10-12, based on candidate
+`904e8d8f3759b270a65d96c45b77f755e84eacd1`. This is an implementation contract,
+not a claim that the routes or tests already exist. Complete this work in
+PR #662; do not split its blocking defects into another PR. The build handoff
+is `.h2a/design/responses-route.md`.
+
+### 16.1 Evidence, corrections and scope
+
+This section supersedes the ingress conclusions in §15.1. The real clients,
+not a manually constructed Chat Completions request, determine compatibility:
+
+| Client measured in the UAT | Actual inference request | Required correction |
+|---|---|---|
+| Muse Code `1.4.6-R6000.1` | `POST /responses`, model `muse-spark-1.3-contributor`, streaming, one tool | Add Responses ingress; retain authenticated `/muse-code/models`. |
+| Codex `0.162.1` | `POST /v1/responses`, model `gpt-6.1-sol`, streaming, zero tools in this probe | Add the same ingress under `/v1`; retain `wire_api = "responses"`. |
+| Vibe `2.26.1`, unmodified default | `POST /v1/chat/completions`, model `mistral-vibe-cli-latest`, streaming, nine tools, temperature `1` | Resolve its wire alias inside mesh. |
+| Antigravity `1.3.3` | Gemini `:streamGenerateContent?alt=sse` | Gemini HTTP ingress is out of scope for this Muse/Vibe PR. |
+
+Evidence: `.h2a/uat/uat-results-904e8d8f3.md` and the campaign's
+`evidence/{gateway,parameters}.ndjson` under
+`.tmp/llm-gateway-uat/pr662-904e8d8f3-01/`. Muse bodies measured 94,624 and
+64,400 bytes; the Codex probe measured 58,150 bytes. The runner retained only
+parameter projections, not full `input`, `instructions`, or tool schemas.
+These are measured envelopes, not complete captured-body fixtures. The raw
+Vibe log records a P0 interception; the UAT report separately records the
+native alias rejection. Do not relabel either as a successful provider run.
+
+The remaining fixture acquisition is a build prerequisite (§16.9). Do not
+invent full request bodies and describe them as UAT captures. Gemini egress
+through `cloud-code` remains available to compatible routed requests; this
+does not make the Antigravity HTTP ingress compatible.
+
+### 16.2 D16-A — One routed ingress, two paths, identical admission
+
+Add `openai-responses` to `GatewayWire` and `WIRE_BY_PATH`. Mount both
+`POST /responses` and `POST /v1/responses` on one handler, without redirects.
+Use `prepareRouteFlow`, `runRouteJsonFlow` and `runRouteStreamFlow`; no second
+pool, HTTP self-proxy, gateway-owned credential path, or default Codex target.
+The requested model, mesh policy and executable capabilities select the
+provider independently of the caller's wire.
+
+Both aliases use the same `CallerAuthPort`, verified cost/owner context,
+cross-user kill switch, quota, budget admission and cancellation as Messages.
+Malformed JSON/missing model may fail before authentication, matching the
+existing router. Semantic validation follows caller verification and precedes
+quoting, leasing or dispatch. A missing/invalid caller token returns 401;
+verifier failure returns the existing sanitized authentication-subsystem 503.
+Never reinterpret a caller bearer as a provider credential. Untrusted owner,
+account, transport, provider URL or `providerOptions` body fields are refused;
+response ids and client session headers grant no identity or account access.
+Trusted host affinity projection remains the only source of routing affinity.
+
+The product mount needs explicit coverage too: add `/responses` and
+`/v1/responses` to `GW_PATHS` in `api/src/routes/namespaces/gw.ts`, and run the
+same product caller-token bridge for `/responses` that currently runs for
+`/v1/*`. Apply `requireAuth` and `settlementModeMiddleware` to that path too;
+preserve the author fence, unavailable-module behavior and per-request
+bridge-token cleanup. `/api/v1/gw/responses` must receive the
+same caller admission as `/api/v1/gw/v1/responses`; a package-only test misses
+this boundary. Never execute the bridge twice on the `/v1` alias.
+
+Responses requires routed dependencies. A legacy/scaffold-only router returns
+an authenticated, OpenAI-shaped 501 for this wire, without calling its legacy
+Chat Completions dispatch. Existing Messages/Chat scaffold behavior is unchanged.
+
+### 16.3 D16-B — Supported request contract and lossless normalization
+
+Create a strict Responses-specific normalizer, selected by
+`normalizeGatewayIngress`. Do not feed `input` through the current permissive
+`raw.messages` parser or silently discard unknown item types. Preserve order,
+string contents, explicit false values and the distinction between an output
+item `id` and a tool `call_id`.
+
+| Responses field/item | Canonical mapping and validation |
+|---|---|
+| `model`; `stream` | Nonempty model; boolean stream, default false. Retain the requested id for diagnostics; mesh chooses the actual model. |
+| `instructions` | Optional string, prepended as an instruction message. Preserve ordered system/developer input and the existing transport-specific instruction projection. |
+| `input` string | One user message, including an empty string when deliberately supplied. |
+| `input` array of messages | Ordered `system`, `developer`, `user`, `assistant` messages; accept the documented shorthand and `type: "message"`. Map `input_text`/assistant `output_text` to text. |
+| `input_image` | Preserve URL/data URL and detail; derive `input:image`. A transport unable to preserve requested image semantics is ineligible. Do not fetch URLs in the gateway. |
+| `function_call` history | Assistant `ToolCall`; `call_id` becomes `providerCallId` and the round-trip correlation key; preserve name and the exact arguments string. Preserve item id separately. |
+| `function_call_output` | Tool result joined to its preceding call by `call_id`; preserve the output string or supported text/image parts. Reject ambiguous duplicates, orphan results and unsupported result parts. Never stringify an unsupported part into prompt text. |
+| Flat `tools: [{type:"function", name, description, parameters, strict}]` | `ToolDefinition`, including `strict`; validate unique names and schemas. Map back to nested function tools only in Chat egress adapters. |
+| `tool_choice`; `parallel_tool_calls` | Preserve `auto`, `none`, `required`, named `{type:"function",name}` and explicit parallel true/false. Reject a named choice absent from tools. |
+| `max_output_tokens`; `temperature`; `top_p` | Finite validated values to `maxOutputTokens`, `temperature`, `topP`; integer positive output ceiling. No coercion, silent clamping or omission of an explicit limit. |
+| `reasoning.effort`, `reasoning.summary` | Existing canonical reasoning options and mesh alias-effort policy; reject unsupported values. Preserve summary intent; never expose hidden reasoning as text. |
+| `reasoning.context` | Validated string into the native carrier; honored only by native Codex execution (`reasoning-context`). Translated routes never declare it. Reject non-string values. |
+| `text.format` | Text, JSON object or JSON schema to `ResponseFormat`, retaining name/schema/description/strict. Eligibility requires the actual transport implementation, not just a catalog model claim. |
+| `text.verbosity` | Preserve on a qualified native Responses route; otherwise unsupported unless an equivalent implemented control is demonstrated. |
+| `include: ["reasoning.encrypted_content"]` | Request the optional native reasoning artifact. A translated provider may have none; never fabricate encrypted content. Other includes are unsupported in this version. |
+| Completed `reasoning` history item | Preserve its summary and opaque encrypted content in a validated native carrier. Encrypted replay requires compatible Codex egress and existing owner-scoped stickiness; it cannot cross to Muse/Mistral/Gemini. |
+| `metadata`, `prompt_cache_key`, `safety_identifier` | Validate and bound. Metadata may be echoed locally; cache/safety hints are forwarded only to an adapter declaring support. They never select owner, lease, account or upstream URL; no cache-reuse claim follows from acceptance. |
+
+Functions are the mandatory CLI tool baseline. Namespace-wrapped function
+tools flatten to qualified names (`namespace.name`, with the bare name kept
+for correlation). Hosted tools, item references, audio/video, provider file
+ids, server-side execution, and unsupported content/annotation types return
+400 `unsupported_parameter` with a field path. Custom/freeform tools are the
+bounded extension the pinned Codex capture requires: validated into the
+native carrier and served only on a native Responses route (execution
+feature `custom-tools`); translated routes refuse the round trip.
+Changing the CLI's tool configuration is not acceptance.
+
+The route is stateless: absent/false `store` becomes false; absent/false
+`background` is accepted; absent/`disabled` truncation is accepted. Refuse
+`store:true`, `background:true`, `truncation:auto`, a non-null
+`previous_response_id` or `conversation`, and retrieval/cancel/compact or
+WebSocket behavior. Clients send complete supported history on each POST.
+Unknown behavior-affecting fields fail explicitly; known harmless telemetry
+fields need an enumerated, tested allowlist rather than a catch-all spread.
+
+Use existing canonical messages/tools/reasoning for common features. Add typed
+allowlisted Responses carrier definitions in mesh `responses-wire.ts`, held
+in `providerOptions`/event metadata/`providerMetadata`, for native input order,
+item identity, completed reasoning artifacts and terminal output snapshots.
+Construct this carrier from validated fields; never copy caller routing/auth
+controls. Only the matching adapter consumes it. Public responses filter it
+again; credentials, raw provider errors and internal headers never enter it.
+Encrypted replay requires a trusted stable affinity and a compatible sticky
+route; absent that context, refuse it before acquisition. Neither an input
+item id nor opaque content may establish that affinity or loosen account scope.
+
+Add optional mesh-owned `requiredExecutionFeatures` to route plan/quote input
+for requirements finer than existing `requiredCapabilities`: named/parallel
+tool control, strict schema, structured output, reasoning controls, reasoning
+context, custom tools, native reasoning replay, verbosity and an explicit
+output ceiling. Derive these from validated input, never a caller-supplied
+feature list. `reasoning.context` is the second bounded extension the pinned
+Codex capture requires: a server-side retention semantic carried in the
+native carrier and honored only by native Codex execution (feature
+`reasoning-context`); translated adapters never declare it. One pure mesh
+predicate filters the actual model/transport pair in both planning and
+quoting, including quote identity/revalidation. Capability rejection occurs
+before acquisition; unknown support is not support. Gateway consumes this
+result, without a provider table. Trusted API runtime adapters must declare
+only controls they actually forward. Conflicting requirements and host
+restrictions fail closed.
+
+### 16.4 D16-C — Native and translated provider execution
+
+“Native” here describes the provider egress wire; every route still uses the
+same opaque mesh attempt and gateway Responses encoder.
+
+| Provider / account transport | Egress already present | Responses execution in this extension |
+|---|---|---|
+| OpenAI / `codex` | `https://chatgpt.com/backend-api/codex/responses` | Native Responses via `CodexRuntimeClient`; validate/project the native carrier, preserve call ids, terminal items and available reasoning artifacts. Upstream remains streaming with `store:false`; collect for downstream JSON requests. |
+| Muse / `muse` | Meta `/v1/chat/completions` | Translate Responses to canonical to Chat and back. The CLI's `/responses` path does not establish a native Meta serving endpoint; do not repoint `MUSE_SERVING_PATH` on that inference. No reasoning slot is proven on this Chat egress (R5-MAJ-1): `muse` declares no `reasoning-controls`; reasoning requests fail closed. |
+| Mistral / `mistral-vibe` | Mistral `/v1/chat/completions` | Translate text, images and qualified function/tool-result controls. Preserve the plan-billed account transport. |
+| Gemini / `cloud-code` | Cloud Code generation transport | Translate supported canonical content/tools/summaries; retain required provider continuation signatures or refuse the affected round trip. No Gemini ingress is added. |
+| Anthropic / `claude-code` | Qualified CLI runtime seam | Translation is conditional on that runtime's proven capabilities. Its current strict request projector rejects several canonical fields; do not label it universally compatible or substitute an unapproved HTTP transport. |
+| Other injected API-key/runtime adapters | Host-selected implementation | Translation only for advertised, tested controls. Being an OpenAI model or having a Responses URL elsewhere does not prove this configured adapter serves it natively. |
+
+Two existing defects directly block CLI tools: both Muse and Mistral runtime
+clients currently return `toolCalls: []` and stream text only. Fix their
+Chat request projection (including tool history, named choice and parallel
+control) and JSON/SSE tool decoding in this PR. Accumulate call fragments by
+upstream choice/tool index, retain the provider call id, and honor
+`finish_reason` including tool calls, length and content filter. A usage-only
+chunk is accounting, not an unconditional early `stop`. Reject malformed
+streams; never turn premature EOF into successful text completion.
+
+Codex decoding must also retain item/content indices, final tool arguments,
+reasoning-item completion, incomplete status and error codes. Use the completed
+reasoning artifact, never an in-progress encrypted fragment. Deduplicate final
+snapshots against deltas; some Codex completions omit tool items, so already
+observed complete calls remain authoritative. JSON collection and streaming
+must agree on the resulting ordered items. Do not use hidden/signature deltas
+as visible summary text.
+
+The Codex adapter currently omits `max_output_tokens` because its backend
+rejects it. It cannot satisfy an explicit hard output limit in this extension:
+exclude it for that requirement and return a capability 400 if no permitted
+candidate remains. Do not claim that the existing budget accounting ceiling
+enforces provider generation length. Preserve existing budget decisions for
+quotes marked `outputCeilingEnforced:false`; default accounting allowances
+alone do not create a new output-limit guarantee.
+
+### 16.5 D16-D — JSON and streaming Responses contract
+
+Use a shared bounded output accumulator for JSON and SSE. The JSON response is
+an `object:"response"` envelope with a stable unique id, `created_at`, actual
+served `model`, `status`, ordered `output`, `error`, `incomplete_details`,
+`usage`, `store:false` and the supported effective request fields. Emit
+assistant message items containing `output_text` parts with annotations, and
+separate `function_call` items with `id`, `call_id`, name and arguments string.
+Tool output supplied on the next request is input, not an invented assistant
+result. Do not emit Chat `choices`, `chat.completion` objects or SDK-only
+`output_text` convenience properties in place of the Responses envelope.
+
+`stop` and a completed `tool_calls` turn map to `status:"completed"`.
+`length` maps to `incomplete` / `max_output_tokens`; `content_filter` maps to
+`incomplete` / `content_filter`, retaining an actual refusal if provided.
+Unknown termination, provider errors and premature EOF are failures, not
+completed empty responses. A legitimate provider terminal response may have
+empty output. Client cancellation closes the connection and releases the
+attempt; it does not manufacture a completed response.
+
+Map provider usage to `input_tokens`, `output_tokens`, `total_tokens`, and
+available `input_tokens_details.cached_tokens` /
+`output_tokens_details.reasoning_tokens`. Preserve native usage detail through
+the carrier/`providerRawUsage`. Total is provider-reported or computed from
+known components. Unknown usage is null, never a fabricated exact zero or the
+Messages count estimate. Financial settlement may still use the existing
+separately marked estimate. Do not add reasoning/cache subcounts to totals a
+second time.
+
+SSE uses `event: <type>` plus a JSON `data` object with the same `type` and a
+monotonically increasing `sequence_number`, starting at zero. The accumulator
+allocates stable item ids and output/content indices once and reuses them:
+
+| Canonical observation | Ordered Responses events |
+|---|---|
+| First validated content/tool event or legitimate terminal result | `response.created`, then `response.in_progress`. Both remain buffered until the existing pre-commit checks succeed. |
+| First text for an item | `response.output_item.added` (assistant message), `response.content_part.added` (empty output text), then `response.output_text.delta`. |
+| Later text | Further text deltas with matching `item_id`, `output_index`, `content_index`. |
+| Function call start/fragments | `response.output_item.added` (function call with distinct item id and `call_id`), then `response.function_call_arguments.delta`; keep separate buffers for interleaved calls. |
+| Qualified visible reasoning summary | Reasoning item plus `response.reasoning_summary_part.added`, `response.reasoning_summary_text.delta`, matching text/part done events, then item done. Opaque artifacts accompany only the validated completed item. |
+| Text/item closure | `response.output_text.done`, `response.content_part.done`, `response.output_item.done`, with accumulated final content. |
+| Function call closure | `response.function_call_arguments.done`, then `response.output_item.done`, retaining exact final arguments and call id. |
+| Terminal `done` | Close open supported parts/items once, then exactly one `response.completed` or `response.incomplete` with the final response snapshot and usage. |
+| Failure after commitment | Exactly one sanitized `response.failed` with partial output and `response.error`; no successful terminal follows. |
+
+Interleaved tool items may close independently; final output retains allocation
+order. Actual refusal parts use the corresponding refusal delta/done events.
+Missing required ids, an inconsistent snapshot or an unsupported provider item
+is a protocol failure, not permission to drop data. The encoder must never
+consume the whole stream before the first content delta merely to discover ids
+or usage. Responses ends on its terminal event and connection close; it does
+not use Chat's `[DONE]` sentinel.
+
+Provider `response.created`/status-only events do not commit downstream headers.
+Retain `runRouteStreamFlow` priming and mark the attempt committed before
+exposing any synthesized start frame. Eligible failures may advance only
+through the existing bounded mesh plan before commitment. After any header or
+body is exposed there is no replay, account rotation or fallback. Propagate
+abort/backpressure, return the upstream iterator, and settle once even when
+the caller disconnects before its first read.
+
+### 16.6 D16-E — Lease outcomes, accounting and token counting
+
+Each dispatched attempt takes its existing mesh reservation and finishes once
+through `complete`, `recordOutcome` or `releaseCancelled`. Do not acquire a
+second lease for wire translation, JSON collection, usage extraction or an
+SSE item. An ordinary provider length limit, refusal or completed tool turn is
+a successfully served attempt for account health, despite its client-facing
+incomplete/tool status. A terminal canonical error/cancellation must not fall
+through the current stream flow's generic successful `done` handling.
+
+| Failure source | Lease/account effect |
+|---|---|
+| Caller auth, malformed/unsupported request, unknown model, capability mismatch, body limit, budget refusal before dispatch | No provider call; no account auth/cooldown outcome. Release any admitted hold under the existing rules. |
+| Local codec/size/protocol failure after acquisition | Neutral failed outcome, or cancelled release when aborted. Never infer provider authentication failure from a local error string/status. |
+| Provider-confirmed inference 401/403 or provider-confirmed refresh rejection | Existing mesh auth classification and refresh/reauth rules; no new route-specific degradation rule. |
+| Provider-confirmed inference 429 | Existing rate-limit outcome and bounded Retry-After handling. |
+| Provider 400/model rejection, network/5xx | Existing request/route/transport health scopes and retry eligibility; no invented account auth failure. |
+| Caller disconnect | Cancel and release; no retry or availability poisoning. |
+
+Keep source/provenance on failures until classification. In particular, the
+generic classifier's auth/rate code matching must not see gateway validation
+errors as provider evidence. Provider model 404 and invalid input do not make
+the account unusable. Account state, route negative caching and caller billing
+are separate effects and each must be asserted in tests.
+
+One aggregate settlement includes all dispatched attempts, including partial
+usage from failed attempts, exactly once. Terminal usage is a cumulative
+snapshot, not another increment on top of preceding snapshots. Preserve the
+existing admitted-request idempotency key, dispatch marker, hold release and
+never-zero fallback estimation for genuinely dispatched work. Pre-admission
+refusals have zero attempts and no durable debit; operational zero-dispatch
+notifications keep the existing behavior. Settlement callback failure must
+not replace the original typed error or trigger a retry.
+
+`POST /v1/messages/count_tokens` is unchanged: real Anthropic count or explicit
+unsupported refusal, no inference dispatch, no budget/debit, and only the
+host's advisory lease. Every count failure, including 401/403/429, completes
+that reservation neutrally; it never changes account authentication or
+cooldown. Responses adds no count endpoint, no hidden count request and no
+model-backed estimator. Existing local client counting remains local.
+
+### 16.7 D16-F — Errors and bounded operation
+
+Before commitment, return the OpenAI error envelope
+`{error:{message,type,code,param}}`, with null/omitted `param` except for
+validated field errors. Reuse the existing mapper's statuses and sanitized
+headers rather than routing errors through Chat output serialization:
+
+| Condition | Public result |
+|---|---|
+| Bad input / unsupported feature | 400 `invalid_request_error`; `bad_request` or `unsupported_parameter`, with a safe field path. |
+| Missing/invalid caller credential | 401, existing OpenAI authentication mapping. |
+| Unknown model | 404 `invalid_request_error` / `model_not_found`; requested model only. |
+| Known model, no eligible account | Existing 503 `server_error` / `no_route`, `x-should-retry:false`, no Retry-After; preserve enrollment-action diagnostics when applicable. |
+| Caller-auth/account/budget subsystem unavailable | Existing distinct sanitized 503 messages from §15.5. |
+| Provider auth/rate refusal | Existing terminal 401/429 mappings; forward only allowlisted retry/request headers. |
+| Body too large | 413 OpenAI-shaped `request_too_large`, before dispatch. |
+| Invalid upstream stream / local encoding failure | Sanitized gateway failure (503 before commitment); `response.failed` after commitment. No fabricated provider-auth signal. |
+
+Carry `X-Sentropic-Request-Id`; add `X-Sentropic-Served` only for an actual
+selected target under existing rules. Strip tokens, cookies, upstream URLs,
+account ids and arbitrary upstream error text. Once committed, HTTP status
+stays 200 and the stream carries the failure; do not append another HTTP body.
+
+Add validated `responsesLimits` router options shared by both aliases:
+16 MiB decoded request body, 4,096 input items, 256 tools, 1,024 output items,
+1 MiB individual decoded upstream SSE event, and 8 MiB accumulated output
+(including arguments and opaque artifacts), as initial defaults. Enforce the
+body cap while reading, including missing/false Content-Length; enforce stream
+caps incrementally in the codecs/adapters. Pass decoder bounds through the
+trusted typed carrier, never from caller body fields. A stricter host limit wins. Any
+override must remain finite and positive. These are engineering defaults, not
+provider context limits. Reuse host request/abort deadlines and mesh attempt
+bounds; do not reset budgets or deadlines between candidates. Output overflow
+aborts upstream and fails neutrally; no silent truncation or unbounded final
+snapshot. Fragmented UTF-8, CRLF, multi-line data and terminal frames split
+across network chunks must parse correctly within the same caps.
+
+### 16.8 D16-G — Vibe alias and catalog consistency
+
+Mesh resolves `mistral-vibe-cli-latest` to:
+
+```ts
+{ providerId: 'mistral', transportProviderId: 'mistral-vibe',
+  model: 'mistral-medium-3.5' }
+```
+
+This is a pinned gateway compatibility alias to the existing catalog model,
+not a claim that upstream `latest` can never change. Preserve the requested
+alias in audit/cost context and report `mistral-medium-3.5` as actually served.
+With no enrolled account it is recognized and returns no-route 503, not
+model-not-found 404. It does not gain Muse/Codex/Cloud fallback candidates.
+
+Define the CLI alias once in mesh `routing-targets.ts`, referencing the
+canonical target; consume it through all resolver variants, including
+nondefault Muse-position options. Do not add a duplicate model profile,
+pricing row, equivalence member, account inventory id or gateway alias table.
+Capability/context/cost lookup dereferences the target catalog profile
+(currently 262,144 context tokens). Discovery may remain the existing filtered
+canonical catalog; if it exposes aliases, derive and filter them from this
+same mapping rather than maintaining another list.
+
+A pinned Vibe fixture records CLI version, active display alias and actual
+API name. Resolver tests assert target profile existence, provider/transport
+consistency, unchanged capabilities and identical canonical/alias eligibility.
+The CLI/catalog update recipe must update that fixture and its mapping in the
+same change when the wire name or target changes. Removing/renaming the target
+without updating aliases fails the existing mesh test gate. Never fetch an
+unreviewed upstream `latest` during CI to mutate the mapping.
+
+### 16.9 Tests and acceptance
+
+The exact source/test manifest and build order are in
+`.h2a/design/responses-route.md`. Required evidence is additive to §15 tests:
+
+1. Unit fixtures cover every supported input/output mapping, tool id versus
+   call id, interleaved calls, empty valid responses, reasoning/refusal,
+   incomplete/error terminals, UTF-8/chunk boundaries and all limits. Native
+   Codex and translated Muse/Mistral fixtures exercise real adapter codecs.
+2. Route contracts run both aliases through the same Hono/router/mesh flow,
+   with JSON and SSE. Assert caller ownership, zero dispatch on refusal,
+   identical lease/meter/budget effects, pre-byte fallback and no post-byte
+   fallback, cancellation and cleanup. Verify product `/api/v1/gw` mounting,
+   caller bridge and author fence, not just the standalone package.
+3. Acquire sanitized full initial and tool-continuation bodies from the pinned
+   Muse and Codex clients using an isolated recording endpoint with provider
+   dispatch disabled. Preserve types, field presence, tool schemas, ids and
+   argument/result structure; replace secret/personal content, not semantics.
+   Capture both observed Muse request shapes. Replay committed fixtures in CI
+   without installing clients, using synthetic upstream responses. Record
+   fixture provenance and SHA-256, and distinguish reconstructed unit cases
+   from real captures. Also pin the Vibe default model projection.
+4. The UAT P0 interceptor must recognize both new Responses paths before the
+   fixed gateway is probed; its current Messages/Chat-only condition is no
+   longer sufficient to prevent live inference. No OAuth/enrollment is needed
+   for capture. If a required shape is unsupported, resolve it in #662 before
+   declaring client compatibility.
+5. Re-run existing Messages, Chat, count-token, budget, ownership and health
+   regressions. In particular, counting 401/403/429 leaves accounts active,
+   local Responses failures never mark reauth/cooldown, and only an actual
+   provider inference signal can invoke the existing degradation rules.
+6. Real Muse and Codex smoke tests must complete a streamed text turn and a
+   tool/result/continuation round trip; Vibe must run with its unmodified
+   default model. Record client versions, requested/actual route, candidate
+   package provenance, settlement count and lease cleanup. Empty-pool 503
+   proves recognition/admission only, not successful inference. Provider
+   enrollment remains a separate prerequisite for live qualification; a
+   blocked enrollment must not be reported as PASS.
+
+Acceptance requires both Responses paths to leave the router-404 state,
+all mandatory full CLI fixtures to pass without parameter loss, the Vibe
+default alias to resolve to the pinned Mistral target, and the above accounting
+and existing-wire regressions to pass. Gemini native ingress remains explicitly
+unqualified and does not block this scoped acceptance. Builds and qualification
+belong to the implementation run, not this documentation-only design task.
+
+Wire event names and completed-item semantics follow the
+[official OpenAI Responses streaming reference](https://developers.openai.com/api/reference/resources/responses/streaming-events).
+Transport availability and limitations above are grounded in this checkout's
+runtime clients and UAT, not inferred from that API reference.
+
+## 17. PR #662 native Anthropic fold (option C)
+
+Owner decision, 2026-10-12: integrate the uncovered native Anthropic relay from
+[PR #633](https://github.com/rhanka/sentropic/pull/633) into
+[PR #662](https://github.com/rhanka/sentropic/pull/662), with one release at
+**llm-mesh 0.26.0 / llm-gateway 0.20.0 / cluster-mesh 0.14.0**. This section
+defines the combined implementation contract; it does not report a completed
+build, qualification, release or activation.
+
+The executable plan, source-commit/file manifest, scope exceptions and ordered
+test-first lots are in [native-fold.md](../.h2a/design/native-fold.md). Source
+is `feat/llm-gateway-native-relay` at
+`9055406f060084ea4212df05cd0432ba4fcbea3b`; destination was inspected at
+`95a0219f49cb3a6b15e73307eacf663144d40347`. The owner's coverage input has
+SHA-256 `81ecae2e3bfc7dbb27a9d91386dabf259376100d608f7cf21ec984750ed288bb`.
+Its earlier destination cutoff predates the Responses egress, fixture replay
+and limits now present in #662; those newer changes remain the baseline.
+
+Final observed destination head `c06589b758604db0a5c6d5d4b5d4e52278d54895`
+adds only a selected-fixture sibling-integrity refresh. It does not change
+these runtime/spec contracts or supply final artifacts for the future fold.
+
+Port C1–C8 and C10–C14 semantically, retaining the already shared C3 header
+helpers and C9 ordinary counting instead of duplicating them. C15's native
+documentation is consolidated here and in later release documentation; its
+old manifests, locks, versions and archive receipts are not source artifacts
+to reuse. Where contracts overlap, this section supersedes §15.2's SDK count
+transport and unconditional safeguards refusal, and §16.7's separate body
+reader. Other §15/§16 behavior and acceptance remain binding.
+
+### 17.1 D17-A — Separate release and native activation
+
+Resolve `LLM_GATEWAY_NATIVE_MESSAGES` once when constructing the API/router:
+only the exact string `enabled` enables native Messages. Unset, `true`, `1`,
+case changes and surrounding whitespace remain OFF. Reconfiguration requires
+reconstruction; no request header/body may alter the switch or qualified list.
+The shared router also defaults to native disabled unless explicitly enabled
+by its trusted host.
+
+`NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS` remains empty until model-specific live
+qualification and owner disposition. A trusted code/test override must contain
+exact catalogued Anthropic model IDs, never exclusive launch aliases or a
+caller/environment-supplied model list. Switch ON with an empty list enables
+no native inference or safeguards count. Do not populate it from the full
+catalog, a beta name or an account's mere availability.
+
+Record the switch and the version of the actually loaded gateway module at
+startup. Module identity/manifest validation failure yields
+`version_unverified`, not a workspace/package-lock version presented as
+running proof. Production activation requires separate evidence and owner GO.
+Turning native OFF preserves ordinary #662 counting, canonical Messages/Chat,
+Responses, Muse/Vibe aliases and diagnostics. It is not rollback of the shared
+body-reader or ordinary count transport changes.
+
+### 17.2 D17-B — One count path with explicit safeguards gating
+
+There is one gateway count handler and one host count factory:
+`packages/llm-gateway/src/native-count-tokens.ts` and
+`api/src/services/llm-runtime/gateway-count-tokens.ts`. Keep the latter's trusted
+credential precedence, catalog-based exact-model preparation and advisory
+account lease. Replace its SDK invocation with the shared single-attempt raw
+Anthropic HTTP count operation; remove the superseded SDK implementation.
+Do not introduce a second count factory through `AnthropicNativePort`.
+
+The count port's model list is the exact Anthropic catalog. Native inference
+uses the separately qualified subset. Both consumers receive the same resolved
+native switch/qualified-list configuration; count does not call inference
+preparation or construct an inference observation as an eligibility probe.
+
+| Count condition, after existing parse/model/caller-auth checks | Required behavior |
+|---|---|
+| Ordinary count, including beta/version headers | Available independently of native switch/qualified list when the existing catalog, trusted auth and prepared API-version checks pass. |
+| Own top-level `safeguards`, including null/empty | Relay unchanged only when native is enabled, the exact model is qualified, and count preparation/provider/model/version checks pass. Otherwise safeguards-specific 400; no send. |
+| Unknown model | Existing account-independent model-not-found 404; an empty/unready pool must not invent it. |
+| Known model without usable count capability | Existing explicit unsupported-count refusal; no estimate or inference fallback. |
+
+Count preserves unknown/nested request fields, inserts no output ceiling or
+stream control, and executes JSON-only. Return the entire provider JSON object
+after validating nonnegative safe-integer `input_tokens`. Preserve version/beta
+and safe success headers through the common filters; omit served-model
+diagnostics. Count never creates a generation plan, hold, budget debit,
+dispatch marker, financial settlement or usage observation. One host advisory
+reservation completes once; every counting failure, including 401/403/429,
+is neutral to account authentication/cooldown.
+
+Retain the process-wide verified tenant/principal limiter: burst 10, refill
+1/second, two in flight, ten-minute idle eviction excluding active calls,
+10,000-key bound. Capacity and rate refusal happen before transport send;
+cancellation does not refund a dispatch token. The raw operation has no hidden
+retry, shares readiness/body-detachment safeguards, and returns one result.
+Existing count public error behavior remains: 401/403→generic 401, bounded
+429/Retry-After, sanitized network/5xx. Apply the native trusted validation
+policy and typed 413 mapping where relevant; internal shared error types do
+not bypass this count-specific neutral outcome/public boundary.
+
+### 17.3 D17-C — Native feasibility composes with execution features
+
+`RoutePlanInput.nativeMessages?: true` and its quote input mean required
+native execution. Keep #662's `requiredExecutionFeatures` and existing
+capabilities, caller constraints, diagnostics, admission subject, affinity
+repair and committed-failure suppression. Both mesh planning/quoting and the
+API catalog-quote/route-plane wrappers must enforce this conjunction:
+
+```text
+existing target/account/policy eligibility
+AND every required execution feature is actually supported
+AND (native not required OR exact qualified Anthropic target + native contract)
+```
+
+Bind the native flag and sorted execution requirements into quote identity
+and revalidate at plan/preparation; absence of both preserves the canonical
+identity. Apply native feasibility before sticky selection, health suppression
+and candidate truncation. Do not mutate an ineligible stored affinity merely
+to find native support. An unknown model is still 404; known native denial is
+an explicit native refusal; genuine lack of an available route retains #662's
+no-route/enrollment diagnostics. Capability/required-native refusals occur
+before provider dispatch, releasing any already admitted hold under existing
+rules without inventing a charged attempt.
+
+The product application runtime currently advertises no §16 execution
+features. Adding native Messages must not bypass that refusal or claim
+Responses reasoning/tool controls it cannot preserve. Its `withCatalogQuote`
+path must gain the same requirement checks and identity binding as planning;
+a native-only quote wrapper cannot replace the feature wrapper.
+
+Messages classification runs once after checked parsing/caller authentication
+and before quote/admission. Plain/version-only requests stay canonical. Beta
+presence, even an empty value, makes native optional. An own top-level
+`safeguards` property makes native required. OFF, wrong model/version,
+missing prepared capability or invalid effective output ceiling causes the
+explicit required-mode refusal. Optional mode may choose canonical only
+before native invocation; an upstream native failure never reconstructs a
+canonical attempt. Recheck fresh account advertisement, prepared protocol and
+contract version, exact model, supported API version and admitted ceiling
+before marking dispatch.
+
+Native body construction shallow-copies the object and changes only selected
+model, boolean stream and the validated/admitted `max_tokens` minimum.
+Unknown fields, safeguards, nested values and tool IDs survive. Chat and both
+Responses aliases remain their own wires; Anthropic headers cannot activate
+this relay on them. Safeguards on those wires is an explicit wire-shaped
+refusal. Preserve the strict Responses normalization and its native Codex
+carrier; that carrier is not `PreparedNativeMessages`.
+
+### 17.4 D17-D — Shared actual-byte admission and parser order
+
+Use one checked-body predicate and wire/limit resolver for POST to exactly:
+
+| Path, relative to a trusted mount prefix | Wire | Default actual-byte ceiling |
+|---|---|---:|
+| `/v1/messages` | Anthropic Messages | 32,000,000 |
+| `/v1/chat/completions` | OpenAI Chat | 32,000,000 |
+| `/responses` | OpenAI Responses | 16,777,216 |
+| `/v1/responses` | OpenAI Responses | 16,777,216 |
+| `/v1/messages/count_tokens` | Anthropic count | 32,000,000 |
+
+Normalize only the host-configured mount prefix, including product
+`/api/v1/gw` and configured `/gw`; reject arbitrary suffix matches, lookalike
+paths, non-POST methods and `/responses/count_tokens`. The smaller validated
+host/Responses limit wins. Keep §16's other input/tool/output/event limits and
+their host overrides. All paths share one process-default 32,000,000-byte
+reservation pool even with native OFF; do not allocate separate pools per
+router, alias or count endpoint.
+
+Before any gateway parser reads, resolve the common pool and effective path
+limits and supply the same immutable policy to middleware and router. A
+cached parse under a looser policy must not bypass a stricter Responses or
+host bound. Replace the standalone Responses bounded reader and the gateway
+settlement parser's `Request.clone().json()` with the checked owner's single
+parsed object. No clone, second JSON read or consolidated raw byte buffer.
+
+Read actual bytes: check N+chunk against the effective ceiling, extend the
+shared lease atomically, then copy into exactly granted backing storage.
+Content-Length supplies neither authority nor proof, including false high or
+low values. Decode/parse once at EOF. Overflow precedes capacity refusal;
+capacity exhaustion cancels the reader, drops partial storage and returns
+retryable 503 with `Retry-After: 1` and `x-should-retry: true`. No waiting queue,
+quote, hold, dispatch or financial/observation event follows these refusals.
+The reservation/amplification model is not measured RSS qualification.
+
+Product ordering is author fence → product session authentication → checked
+body admission → settlement-mode extraction → one-shot verified caller bridge
+→ gateway caller/partition authentication → classification/normalization →
+quote/admission → plan/dispatch. Preserve the separate `/responses` middleware
+registrations and the single `/v1/*` registration covering `/v1/responses`.
+Count skips settlement-mode extraction and all financial effects. Standalone
+settlement middleware obtains the same checked owner before inspecting a
+gateway body; the router reuses it. Preserve package parse/model-before-auth
+behavior and scaffold refusal without consuming a body.
+
+### 17.5 D17-E — Transport, stream and terminal ownership
+
+Trusted host code chooses credentials, account, URL and auth headers. Reuse
+the existing native request/response filters: open `anthropic-*`, permitted
+`x-app`/`x-stainless-*`, with credential/session/hop-by-hop/Connection-nominated
+and internal exclusions. Host authentication wins last; no caller endpoint
+override or redirect. Native execution makes one raw HTTP attempt with a
+55-second response-readiness bound and continuing caller cancellation.
+
+Complete or cancel upload and detach request, serialized-byte and view holders
+before exposing JSON/count or a commit-ready stream. Fetch response headers
+alone do not prove upload completion. Response/abort/finalize closures retain
+only response state and bounded metadata. Canonical SDK/Responses operations
+retain checked-body bytes through retries, JSON collection and terminal SDK
+or iterator cleanup; native Codex Responses does not inherit Anthropic's early
+detach proof. Clear every registered holder before shrinking/releasing.
+
+Transfer stream ownership before middleware exits. Once-only cleanup covers
+never-consumed streams, cancellation before first read, malformed returned
+envelopes, commit failure, EOF without stop, reader errors and callback
+failures. Close/abort the upstream reader and finish the attempt once;
+cleanup and the one aggregate financial settlement never wait for observation.
+
+Native JSON preserves the provider object semantically. Native SSE relays
+upstream bytes, comments, unknown events and line endings with backpressure
+and a 1 MiB pending-frame bound. Observe usage separately. Prime a complete
+non-error frame before commitment; after commitment or failed commit callback,
+there is no replay/fallback. Missing `message_stop` is failure, not fabricated
+completion. Responses keeps §16's accumulator, JSON envelope and SSE encoder,
+including its pre-commit buffering and post-commit `response.failed` contract.
+
+Success-only `X-Sentropic-Relay: native` identifies native relay. Native JSON
+`X-Sentropic-Served` requires a safe response-served model with no invalidating
+fallback/substantive iterations; selected identity is not proof. A safe
+mismatch may be reported but cannot qualify discount pricing. Native SSE and
+count omit served identity. Emit gateway diagnostics last, after filtering.
+
+Carry forward the pending owner keepalive requirement as new implementation:
+after commitment, add `: keepalive\n\n` only between complete frames after
+15 seconds of upstream silence. Upstream frames remain byte-identical; added
+comments are the sole intended fidelity change. No pre-commit keepalive,
+mid-frame insertion, competing reads, extra usage or surviving timer after
+terminal cleanup. This was not implemented in #633 and is required before
+production activation, with frame-boundary/backpressure tests.
+
+### 17.6 D17-F — Bounded errors and terminal numeric 413
+
+Native validation relay requires a trusted typed parser-result channel,
+bounded to 64 KiB input and 4,096 public UTF-8 bytes after control filtering.
+Mask billing-state detail before truncation or feature detection; preserve
+non-control whitespace and linear identifier handling. Only an own safeguards
+request rejecting the exact classifier beta actually sent qualifies for the
+narrow rewrite. Arbitrary provider strings/400s do not gain this authority.
+Canonical errors and #662's subsystem/no-route diagnostics keep their policy.
+
+Carry validated numeric request-size evidence through mesh errors, provider
+wrappers, runtime adapters and every JSON/stream/callback path. Exact size and
+observed lower bound are distinct. Report the effective known gateway limit
+(including Responses/host limits); when an upstream rejecting limit is unknown,
+say it is unavailable rather than inventing it. Never use Content-Length or
+caller fields as measured evidence.
+
+Before commitment, terminal 413 is Anthropic-shaped on Messages/count and
+OpenAI-shaped on Chat/both Responses aliases. Preserve the original typed 413
+if commit/settlement/cleanup also fails; no retry, account rotation or later
+successful result. After commitment HTTP remains 200: emit a sanitized native
+or Chat error frame, or exactly one Responses `response.failed` carrying
+`request_too_large` and safe size detail. Abort/close and settle once with
+already observed usage; never append a success terminal. Local body/codec
+failures remain neutral account outcomes, not provider auth/rate evidence.
+
+### 17.7 D17-G — Physical usage, proof and exact financial settlement
+
+The gateway owns one cumulative native usage fold and freezes one immutable
+pre-financial-floor terminal snapshot for both settlement and observation.
+Physical input P=U+R+aggregate W; TTL subcounts are not added again. Missing or
+null evidence is unknown, not invented zero. Output is cumulative, not the sum
+of frames. Start output is provisional; successful JSON or final output with
+clean `message_stop` establishes finality.
+
+Valid start-anchored deltas inherit absent/null fields. Equal aggregate writes
+retain accepted TTL allocation; growth alone receives five-minute weight when
+outbound cache controls establish that eligibility, otherwise a conservative
+2x bound. Inferred growth is marked separately from provider-reported TTL.
+A consistent later split reconciles reported evidence, not an invented raw
+split. Decreasing/conflicting/fractional/nonfinite/unsafe input rejects the
+update atomically and permanently revokes proof; later valid frames or repeated
+starts never restore it. Safe physical lower bounds survive. Valid input and
+invalid output are handled independently.
+
+Port policy `anthropic-cache-2026-10-02` with safe integer units40:
+`40U + 50W5m + 80W1h + rR`, where the sourced policy has r=4 for Sonnet 5/Opus 5
+and r=1 for Fable 5.1. Validate safe arithmetic, policy/model identity and
+physical bounds. Served-model mismatch/unverified identity, fallback or
+substantive/malformed iterations permanently disables discount proof;
+missing/null/empty-array iterations are absent. Never sum iterations or use
+latest-wins identity to repair an earlier mismatch.
+
+Clean positive measured completion has no allowance floor. Interrupted SSE
+with usable same-model input proof retains latest accepted input and floors
+output only; missing/revoked proof floors both and uses selected-model full
+physical pricing. Unknown initial TTL may retain a conservative premium, never
+a discount below charged physical input. Output uncertainty alone does not
+revoke valid input proof. Observations retain physical pre-floor counts even
+when the financial output rises from 500 to the 32,000 allowance.
+
+Host price eligibility requires an exact pinned provider/model/pricing row,
+matching served identity, recognized policy and valid units/proof. A costliest
+fallback lookup does not qualify even with matching-looking IDs/rates. Round
+integer rational input after multiplying by the pinned input rate, using
+`ceil(units40 * input_micro_usd_per_mtok / 40,000,000)`; retain existing output,
+minimum-charge and allowance rules. Failed validation uses conservative full
+selected-model pricing and closed uncertainty/mismatch audit under the existing
+settlement fence. No free classifier/subsidy policy is introduced.
+
+Exactly one aggregate financial row settles all dispatched attempts, protected
+by existing request/hold/tenant idempotency, reserve/spend and outbox rules.
+Each started native inference attempt may emit one body-free physical
+observation, with a separate call ID, null hold/cost and the gateway request ID
+as response ID. Readers distinguish roles and never sum both token sets.
+Count emits neither role. Finalize runs once from the same frozen snapshot,
+with a one-second hook deadline; rejection, timeout or late completion cannot
+block cleanup/settlement, retry the observation or replace the wire failure.
+
+Required regressions include M1–M7/N5 revocation, cache growth/equal one-hour
+split, missing physical anchor, interrupted output, pinned exact amounts and
+rounding, selected-versus-served price mismatch, exact-versus-costliest lookup,
+observation/financial replay fencing, and request retention/never-read streams.
+The detailed file/commit and numeric fixture matrix is in the build plan.
+
+### 17.8 Ordered build, release scope and acceptance
+
+Every implementation slice is test-first: behavioral RED, smallest GREEN,
+then an atomic commit with **fewer than 150 added plus deleted lines**, including
+tests/exports/`BRANCH.md` (target ≤140). The numbered work lots below contain
+explicit smaller slice boundaries in the build plan; split again as needed,
+never import a large source file in one commit or drop regressions to fit.
+
+| Ordered lots | Work and required evidence |
+|---|---|
+| N00–N02 | Scope/baseline, native public contracts, typed numeric size errors; pure contract and envelope assertions first. |
+| N03–N09 | Shared pool/owner/reader, five-path middleware, flow/SDK retention and terminal 413 across all wires. |
+| N10–N13 | Feature/body classifier, trusted validation, conjunctive quote/planner feasibility and fresh prepared dispatch guards. |
+| N14–N17 | Physical/output fold, irreversible proof, cache growth/pricing and separate financial floors. |
+| N18–N24 | Raw HTTP, upload/readiness, auth/lease, native JSON/SSE, headers and the single reconciled count path. |
+| N25–N29 | Observation role, exact host prices, OFF product composition/version proof, API ledger and #662 compatibility matrices. |
+| N30–N31 | Pending keepalive implementation and inert bounded qualification harness; deterministic fake transport/clock tests only. |
+| N32 | Consolidated release documentation, unchanged selected version tuple, regenerated exact artifacts and final gates. |
+
+Before build edits, declare `BR662-EX8` for native runtime/provider/composition
+files, `BR662-EX9` for metering/body-parser contracts, `BR662-EX10` for
+qualification/API tests and `BR662-EX11` for package release documentation,
+with the exact paths/rationale/impact/rollback in the build plan. Extend the
+existing count/adapter/namespace and packaging exceptions; supersede the old
+native-classifier exclusion. `BRANCH.md` is not changed by this design task.
+No schema, Makefile, Compose, workflow, deployment/edge, judge or unused API
+lock change is included.
+
+Retain gateway mesh dependency `^0.26.0`, cluster mesh peers
+`>=0.22.0 <0.27.0` and gateway peers `>=0.19.0 <0.21.0`, API gateway dependency
+`^0.20.0`, and matching catalog/matrix/fixtures. Regenerate root lock and
+guarded exact sibling/selected packed fixtures from the final combined source;
+old #633 manifests, mesh 0.23.0 literals and interim archive integrities cannot
+be copied. Recheck registry availability before release; already published
+different contents requires conductor renumbering, never overwrite. A later
+source edit invalidates final artifact receipts and requires regeneration.
+
+Combined deterministic acceptance requires current-SHA mesh/gateway/API
+typecheck, lint and applicable full unit/endpoint suites, cluster compatibility
+and guarded exact-artifact tests, equivalence checks, both Responses-alias
+fixture replay, and the native ON/OFF × five-path matrix. Preserve ordinary
+count neutrality, caller ownership, no pre-dispatch debit, exactly-once
+settlement, affinity/health/expiry behavior, existing aliases and enrollment
+retry. All automated tests use isolated `test-*`/`e2e-*` environments and
+existing Make targets in the build run; historical branch results are not
+new acceptance evidence.
+
+The owner/operator still controls live qualification and activation:
+
+1. Obtain sourced sanitized safeguards/classifier/server-tool fixtures and two
+   distinct real-login principals in one isolated tenant, with distinct owner
+   scopes, grants, valid sessions, budget/pricing/reaper readiness and exact
+   feature/UAT/edge source records. Never invent missing fixture semantics.
+2. Authorize a fresh native campaign capped at 13 actual upstream sends:
+   SSE/JSON/canonical/count for each of the three source qualification models,
+   plus one sourced native server-tool/WebSearch growth call. Preserve the
+   durable cap, origin/body/auth binding, zero retries, first-failure seal,
+   bounded receipts and SELECT-only ledger joins. Additional cases require a
+   new owner disposition, not a hidden extra send. The harness stays inert
+   without deliberate arming; no provider calls occur in this design task.
+3. Require positive physical/cache/cumulative, exact-price, observation/one
+   settlement and measured retention/resource evidence. A real server-tool
+   result with native cumulative growth is necessary for N7; absence/equality,
+   decrease, local/canonical or mismatched evidence is not PASS. Unresolved
+   substantive iterations or source evidence stays explicitly unresolved.
+4. Complete #662's real Muse/Codex text and tool-continuation, Vibe default,
+   Cloud Code no-repeat and Claude Code counting gates. Keep native OFF
+   baseline and authorized ON qualification distinct. The no-dispatch UAT
+   interceptor covers both Responses aliases. Empty-pool 503 and fixture tests
+   do not prove successful live CLI execution.
+5. Qualify keepalives and actual production memory/body/proxy/timeouts. Source
+   evidence records L4 idle 50 s, Traefik read 60 s, nginx body 1 MiB and proxy
+   60 s. Post-commit keepalives cannot repair pre-commit silence longer than
+   the edge idle limit; the 55 s readiness bound therefore needs explicit
+   edge-owner reconciliation. Deployment changes remain separate scope.
+6. Record separate release and native activation dispositions. A release with
+   native disabled may describe its remaining activation gates only with the
+   owner's acceptance; it may not claim native production qualification.
+   Nonempty qualified defaults and activation require evidence and owner GO.
+   Repack after any pre-release list change; post-publication source changes
+   require a properly versioned later release.
+
+The release conductor replaces the judge's literal “#633 merged” prerequisite
+with the landed combined #662 baseline and coordinates its subsequent tuple
+and #664's later release. Judge 2.12, migration generation, 1.26a/b and
+TUPLE/packed qualification remain independent gates, not completed by this fold.
+
+**Closing note:** Once the fold lands, close draft #633 with a link to
+[#662](https://github.com/rhanka/sentropic/pull/662), its landed commit and this
+design/spec, retaining source provenance and the recorded native activation
+disposition. Closure alone proves neither native qualification nor judge
+readiness.

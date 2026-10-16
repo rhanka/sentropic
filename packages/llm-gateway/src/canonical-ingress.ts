@@ -1,12 +1,23 @@
 import type {
-  CapabilityRequirement, GenerateRequest, LlmMeshMessage, MessageContent, ToolDefinition,
+  CapabilityRequirement, ExecutionFeature, GenerateRequest, LlmMeshMessage, MessageContent, ToolDefinition,
   ToolCall, ToolChoice, ToolResultContent,
 } from '@sentropic/llm-mesh';
 import type { GatewayWire } from './ports/dispatch.js';
+import { GatewayError } from './router/errors.js';
+import { normalizeResponsesIngress, ResponsesIngressError } from './responses-ingress.js';
+import { DEFAULT_RESPONSES_LIMITS, type ResponsesLimits } from './responses-egress.js';
 
 export interface CanonicalIngressResult {
   readonly request: GenerateRequest;
   readonly requiredCapabilities: readonly CapabilityRequirement[];
+  /**
+   * Finer-than-capability execution requirements (spec §16.3), set by the
+   * Responses codec from validated input and, for the Messages/Chat wires,
+   * derived from the normalized tool controls (named choice, explicit
+   * parallel control). The canonical entry points forward them into
+   * plan/quote input.
+   */
+  readonly requiredExecutionFeatures?: readonly ExecutionFeature[];
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -257,7 +268,31 @@ const normalizeReasoning = (raw: JsonRecord): GenerateRequest['reasoning'] | und
 export const normalizeGatewayIngress = (
   wire: GatewayWire,
   body: unknown,
+  responsesLimits?: ResponsesLimits,
 ): CanonicalIngressResult => {
+  // Responses has its own strict codec (spec §16.3) — never feed `input`
+  // through the permissive Chat `raw.messages` parser.
+  if (wire === 'openai-responses') {
+    try {
+      const result = normalizeResponsesIngress(
+        body, responsesLimits ?? DEFAULT_RESPONSES_LIMITS,
+      );
+      return {
+        request: result.request,
+        requiredCapabilities: result.requiredCapabilities,
+        requiredExecutionFeatures: result.requiredExecutionFeatures,
+      };
+    } catch (error) {
+      if (error instanceof ResponsesIngressError) {
+        throw new GatewayError(
+          'bad-request',
+          `responses ingress: ${error.fieldPath}`,
+          undefined, undefined, error.errorCode, error.fieldPath,
+        );
+      }
+      throw error;
+    }
+  }
   const raw = asRecord(body);
   if (!raw || typeof raw.model !== 'string') throw new Error('invalid gateway request');
   const messages = normalizeMessages(raw.messages);
@@ -266,6 +301,19 @@ export const normalizeGatewayIngress = (
   }
   const tools = normalizeTools(raw.tools);
   const toolControl = normalizeToolChoice(raw.tool_choice);
+  // Spec §16.3/§16.6 (R4-MAJ-4): the Messages/Chat wires derive the same
+  // tool-control execution features the application dispatch adapter refuses
+  // (named choice, explicit parallel control), so a feature-enforcing plane
+  // refuses at plan time — pre-dispatch, hold released, zero usage — instead
+  // of failing post-dispatch-marker with a billed estimate. Planes without
+  // feature enforcement ignore them (no behavior change there).
+  const requiredFeatures: ExecutionFeature[] = [];
+  if (toolControl.choice && typeof toolControl.choice === 'object') {
+    requiredFeatures.push('named-tool-choice');
+  }
+  if (toolControl.parallelToolCalls !== undefined) {
+    requiredFeatures.push('parallel-tool-control');
+  }
   const reasoning = normalizeReasoning(raw);
   const serialized = JSON.stringify(body);
   const required = new Set<CapabilityRequirement>();
@@ -287,12 +335,15 @@ export const normalizeGatewayIngress = (
       : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(typeof raw.max_tokens === 'number' ? { maxOutputTokens: raw.max_tokens } : {}),
-    ...(typeof raw.max_completion_tokens === 'number'
+    ...(wire === 'openai-chat-completions' && typeof raw.max_completion_tokens === 'number'
       ? { maxOutputTokens: raw.max_completion_tokens }
       : {}),
     ...(typeof raw.temperature === 'number' ? { temperature: raw.temperature } : {}),
     ...(typeof raw.top_p === 'number' ? { topP: raw.top_p } : {}),
     providerOptions: { ingressWire: wire, ingressBody: body },
   };
-  return { request, requiredCapabilities: [...required] };
+  return {
+    request, requiredCapabilities: [...required],
+    ...(requiredFeatures.length > 0 ? { requiredExecutionFeatures: requiredFeatures } : {}),
+  };
 };

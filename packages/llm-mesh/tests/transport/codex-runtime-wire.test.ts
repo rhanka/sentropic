@@ -29,7 +29,7 @@ describe('Codex runtime wire', () => {
           },
         },
       ],
-      tools: [{ type: 'function', name: 'lookup', inputSchema: { type: 'object' } }],
+      tools: [{ type: 'function', name: 'lookup', inputSchema: { type: 'object' }, strict: true }],
       toolChoice: { type: 'tool', name: 'lookup' },
       parallelToolCalls: false,
       reasoning: { effort: 'xhigh' },
@@ -39,7 +39,7 @@ describe('Codex runtime wire', () => {
       model: 'gpt-5.6-terra', stream: true, store: false,
       instructions: 'System instruction', reasoning: { effort: 'xhigh' },
       tool_choice: { type: 'function', name: 'lookup' }, parallel_tool_calls: false,
-      tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object' } }],
+      tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object' }, strict: true }],
       input: [
         { type: 'message', role: 'user', content: [
           { type: 'input_text', text: 'Inspect' },
@@ -57,6 +57,36 @@ describe('Codex runtime wire', () => {
     });
   });
 
+  it('projects the Responses carrier: custom tools, context, verbosity, cache key, reasoning', () => {
+    const prepared = buildCodexRuntimeRequest({
+      providerId: 'openai', modelId: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoning: { effort: 'low' },
+      providerOptions: { responses: {
+        customTools: [{ type: 'custom', name: 'exec', description: 'run js', namespace: 'functions' }],
+        functionToolRefs: [],
+        reasoningArtifacts: [{ itemId: 'rs-1', summary: 'considered', encryptedContent: 'e30=' }],
+        reasoningContext: 'all_turns',
+        verbosity: 'low',
+        promptCacheKey: 'pc-1',
+        itemIds: ['at-1', 'rs-1'],
+      } },
+    });
+
+    expect(prepared.body).toMatchObject({
+      reasoning: { effort: 'low', context: 'all_turns' },
+      text: { verbosity: 'low' },
+      prompt_cache_key: 'pc-1',
+    });
+    const input = prepared.body.input as Record<string, unknown>[];
+    expect(input[0]).toMatchObject({ type: 'additional_tools',
+      tools: [{ type: 'namespace', name: 'functions',
+        tools: [{ type: 'custom', name: 'exec' }] }] });
+    expect(input[1]).toMatchObject({ type: 'reasoning', id: 'rs-1',
+      summary: 'considered', encrypted_content: 'e30=' });
+    expect(input[input.length - 1]).toMatchObject({ type: 'message', role: 'user' });
+  });
+
   it('omits the maximum output token cap (rejected by the Codex backend)', () => {
     const request = {
       providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
@@ -70,6 +100,86 @@ describe('Codex runtime wire', () => {
     expect(buildCodexRuntimeRequest({ ...request, maxOutputTokens: 321 }).body)
       .not.toHaveProperty('max_output_tokens');
     expect(buildCodexRuntimeRequest(request).body).not.toHaveProperty('max_output_tokens');
+  });
+
+  it('treats output_item.done function calls as authoritative argument snapshots', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: {
+        type: 'function_call', id: 'item-1', call_id: 'call-1',
+        name: 'lookup', arguments: '{"id":1,"full":true}',
+      },
+    })).toEqual([{ type: 'tool_call_start', data: {
+      toolCallId: 'item-1', providerCallId: 'call-1', name: 'lookup',
+      argumentsText: '{"id":1,"full":true}',
+    } }]);
+  });
+
+  it('deduplicates completed text snapshots (deltas already carried the text)', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_text.done', item_id: 'msg-1', output_index: 0, text: 'hello',
+    })).toEqual([]);
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: {
+        type: 'message', id: 'msg-1',
+        content: [{ type: 'output_text', text: 'hello' }],
+      },
+    })).toEqual([]);
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: { type: 'reasoning', id: 'rs-1', encrypted_content: 'e30=' },
+    })).toEqual([]);
+  });
+
+  it('decodes incomplete terminals with usage instead of reporting success', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'response-2', incomplete_details: { reason: 'max_output_tokens' },
+        usage: { input_tokens: 9, output_tokens: 12, total_tokens: 21 },
+      },
+    })).toEqual([{ type: 'done', data: {
+      finishReason: 'length', providerId: 'openai', providerResponseId: 'response-2',
+      usage: {
+        inputTokens: 9, outputTokens: 12, totalTokens: 21,
+        providerRawUsage: { input_tokens: 9, output_tokens: 12, total_tokens: 21 },
+      },
+    } }]);
+    const [filtered] = decodeCodexRuntimeEvent({
+      type: 'response.incomplete',
+      response: {
+        id: 'response-3', incomplete_details: { reason: 'content_filter' },
+        usage: { input_tokens: 9, output_tokens: 1, total_tokens: 10 },
+      },
+    });
+    expect(filtered).toMatchObject({ type: 'done', data: { finishReason: 'content_filter' } });
+  });
+
+  it('surfaces completed reasoning summaries without rendering encrypted content', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: {
+        type: 'reasoning', id: 'rs-9',
+        summary: [{ type: 'summary_text', text: 'considered the options' }],
+        encrypted_content: 'e30=',
+      },
+    })).toEqual([{ type: 'reasoning_delta', data: {
+      delta: 'considered the options', kind: 'summary_done',
+    } }]);
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.output_item.done',
+      item: { type: 'reasoning', id: 'rs-10', encrypted_content: 'e30=' },
+    })).toEqual([]);
+  });
+
+  it('decodes failure terminals as errors with the provider message', () => {
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.failed',
+      response: { id: 'response-4', error: { message: 'boom', code: 'server_error' } },
+    })).toEqual([{ type: 'error', data: {
+      providerId: 'openai', message: 'boom', code: 'server_error', retryable: false,
+    } }]);
   });
 
   it('maps Codex SSE events to ordered canonical events', () => {

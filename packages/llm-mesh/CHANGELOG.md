@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased
+
+- Responses execution features: per-transport support table
+  (`reasoning-context`, `custom-tools`, `verbosity` on Codex;
+  `named-tool-choice`, `parallel-tool-control`, `explicit-output-ceiling`,
+  `strict-schema` on Muse — no `reasoning-controls` (R5-MAJ-1: no proven
+  Meta Chat reasoning slot, reasoning requests fail closed);
+  `strict-schema` on Mistral Vibe) with fail-closed planning/quoting
+  eligibility, plus the native Responses carrier (`customTools`,
+  `functionToolRefs`, reasoning artifacts, context, verbosity, cache hints)
+  projected by the Codex adapter and bare→qualified tool-name requalification
+  on all three Responses adapters.
+- `mistral-vibe-cli-latest` alias resolving to the pinned
+  `mistral:mistral-medium-3.5`/`mistral-vibe` target (no duplicate profile).
+- Muse Wonder (`muse-wonder-1.0`) + Wonder Full (`muse-wonder-full-1.0`)
+  catalog entries, `muse`/`muse` routing targets and council listing
+  (owner request 2026-10-13, Full id corrected 2026-10-14); same
+  transport-keyed Responses execution set as Spark (minus
+  `reasoning-controls`, R5-MAJ-1), gateway default unchanged.
+- Gemini 4 Argon (`gemini-4-argon`) catalog entry, `gemini`/`cloud-code`
+  routing target and council listing (owner request 2026-10-14); same
+  `gemini-3.8-flash` pattern (`gemini-4-argon-low|medium|high` resolve per
+  effort through the generic Cloud Code wire suffix, no transport change).
+- Argon/Wonder serving table (owner request 2026-10-15, Artificial Analysis
+  Intelligence Index read 2026-10-15): the cloud slot serves `gemini-4-argon`
+  at high effort for Opus 5.5 (base/medium/high/xhigh/max), Sonnet 5.5
+  (high/xhigh/max) and every Fable 5.1 row (Opus 5.5 low + Sonnet 5.5 medium
+  keep 3.8 Flash high, Sonnet 5.5 low moves to 3.8 Flash medium); the muse
+  slot serves `muse-wonder-full-1.0` on Opus 5-5 max/xhigh + Sonnet 5-5 max,
+  `muse-wonder-1.0` on Opus 5-5 base/medium/high + Sonnet 5-5 xhigh + every
+  Fable 5.1 row, Spark kept elsewhere. Muse efforts and the named-400
+  capability rule unchanged.
+- **Rupture:** `admitRoute` requires `subject` (budget admission). This
+  required field justifies the minor bump.
+- Codex device-flow network tolerance: poll + token-exchange retry (3
+  retries, linear backoff); exhaustion carries cause + URL, never bare
+  `fetch failed`.
+- 503 diagnostics in body: per-transport causes on no-route, subsystem
+  naming (`authentication` / `account` / `budget service temporarily
+  unavailable`), expiry timestamp + repair action on reauth-required.
+
 ## 0.24.1
 
 - Replace the exclusive `claude-opus-5-5` alias with standard multi-candidate

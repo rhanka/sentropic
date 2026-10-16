@@ -267,7 +267,7 @@ describe('pure route quote', () => {
     expect(quote.requestedModel).toBe('claude-opus-5-5');
     expect(quote.candidates).toEqual([
       {
-        providerId: 'muse', modelId: 'muse-spark-1.3-contributor',
+        providerId: 'muse', modelId: 'muse-wonder-1.0',
         transportProviderId: 'muse', reason: 'alias',
         allowance: { inputTokens: 1_000, outputTokens: 100_000 },
         outputCeilingEnforced: true,
@@ -280,7 +280,7 @@ describe('pure route quote', () => {
         outputCeilingEnforced: false,
       },
       {
-        providerId: 'gemini', modelId: 'gemini-3.8-flash',
+        providerId: 'gemini', modelId: 'gemini-4-argon',
         transportProviderId: 'cloud-code', reason: 'alias',
         allowance: { inputTokens: 1_000, outputTokens: 65_536 },
         outputCeilingEnforced: true,
@@ -326,9 +326,9 @@ describe('pure route quote', () => {
     const expanded = quoteRoute(quoteInput('claude-opus-5-5'), { council });
     expect(expanded.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
       .toEqual([
-        'muse/muse-spark-1.3-contributor',
+        'muse/muse-wonder-1.0',
         'openai/gpt-6.1-sol',
-        'gemini/gemini-3.8-flash',
+        'gemini/gemini-4-argon',
         'mistral/zai-glm-5-3',
         'openai/gpt-6-luna',
       ]);
@@ -372,7 +372,7 @@ describe('pure route quote', () => {
     expect(modelProfiles
       .filter((profile) => profile.capabilities.maxOutputTokens !== undefined)
       .map((profile) => `${profile.providerId}/${profile.modelId}=${profile.capabilities.maxOutputTokens}`))
-      .toEqual(['gemini/gemini-3.7-flash=65536', 'gemini/gemini-3.8-flash=65536', 'mistral/zai-glm-5-3=131072']);
+      .toEqual(['gemini/gemini-3.7-flash=65536', 'gemini/gemini-3.8-flash=65536', 'gemini/gemini-4-argon=65536', 'mistral/zai-glm-5-3=131072']);
     const capped = quoteRoute(quoteInput('gemini-3.8-flash'));
     expect(capped.candidates[0]!.allowance.outputTokens).toBe(65_536);
     const below = quoteRoute(quoteInput('gemini-3.8-flash', {
@@ -628,6 +628,97 @@ describe('pure route quote', () => {
       requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:image', 'tools'], quote,
     });
     expect(plan.candidateRefs.length).toBeGreaterThan(0);
+  });
+
+  it('filters candidates for required native Messages requests', () => {
+    const quote = quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: true }), {
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    expect(quote.candidates.length).toBe(1);
+    expect(quote.candidates[0]).toMatchObject({
+      providerId: 'anthropic',
+      modelId: 'claude-sonnet-5',
+    });
+  });
+
+  it('rejects unqualified, non-Anthropic, and exclusive alias models with native-unavailable', () => {
+    const opts = { nativeMessagesModelIds: ['claude-sonnet-5'] };
+    expect(() => quoteRoute(quoteInput('gpt-6-astra', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'native-unavailable' }));
+    expect(() => quoteRoute(quoteInput('claude-opus-5-5', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'native-unavailable' }));
+    expect(() => quoteRoute(quoteInput('claude-opus-5', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'native-unavailable' }));
+    expect(() => quoteRoute(quoteInput('unknown-model-xyz', { nativeMessages: true }), opts))
+      .toThrowError(expect.objectContaining({ code: 'unknown-model' }));
+  });
+
+  it('binds nativeMessages to quoteRef and preserves stable canonical references', () => {
+    const canonicalQuote = quoteRoute(quoteInput('claude-sonnet-5'));
+    const nativeQuote = quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: true }), {
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    expect(nativeQuote.quoteRef).not.toBe(canonicalQuote.quoteRef);
+    expect(canonicalQuote.quoteRef)
+      .toBe(quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: undefined })).quoteRef);
+  });
+
+  it('validates quote-plan agreement with nativeMessages flag', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory(broadAccounts()), clock: fixedClock });
+    const quote = quoteRoute(quoteInput('claude-sonnet-5', { nativeMessages: true }), {
+      nativeMessagesModelIds: ['claude-sonnet-5'],
+    });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-sonnet-5', quote }))
+      .rejects.toMatchObject({ code: 'quote-mismatch' });
+  });
+});
+
+describe('execution-feature-bound quotes (spec §16.3)', () => {
+  const codexOverride = (extra: Partial<RouteQuoteInput> = {}) => quoteInput('gpt-6.1-sol', {
+    targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol', transportProviderId: 'codex' }],
+    ...extra,
+  });
+  const openOverride = (extra: Partial<RouteQuoteInput> = {}) => quoteInput('gpt-6.1-sol', {
+    targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+    ...extra,
+  });
+
+  it('refuses pinned transports without the required execution features, like planning', () => {
+    expectQuoteError(() => quoteRoute(codexOverride({
+      requiredExecutionFeatures: ['explicit-output-ceiling'],
+    })), 'capabilities-unmet');
+  });
+
+  it('carries the unmet execution features on the quote refusal (R6-MAJ-1, spec §16.7)', () => {
+    let caught: unknown;
+    try {
+      quoteRoute(codexOverride({ requiredExecutionFeatures: ['explicit-output-ceiling'] }));
+    } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(RouteQuoteError);
+    expect(caught).toMatchObject({
+      code: 'capabilities-unmet', unmetExecutionFeatures: ['explicit-output-ceiling'],
+    });
+  });
+
+  it('binds the requirements into the deterministic quote identity', () => {
+    const plain = quoteRoute(openOverride());
+    const featured = quoteRoute(openOverride({ requiredExecutionFeatures: ['named-tool-choice'] }));
+    expect(featured.candidates.length).toBeGreaterThan(0);
+    expect(featured.quoteRef).not.toBe(plain.quoteRef);
+    expect(quoteRoute(openOverride({
+      requiredExecutionFeatures: ['named-tool-choice'],
+    }))).toEqual(featured);
+  });
+
+  it('rejects a plan whose execution requirements differ from its quote', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory() });
+    const quote = quoteRoute(openOverride());
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'gpt-6.1-sol',
+      targetCandidatesOverride: [{ providerId: 'openai', model: 'gpt-6.1-sol' }],
+      requiredExecutionFeatures: ['named-tool-choice'],
+      quote,
+    })).rejects.toMatchObject({ code: 'quote-mismatch' });
   });
 });
 

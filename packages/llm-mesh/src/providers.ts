@@ -23,6 +23,7 @@ export const knownModelIds = [
   'gpt-4.1-nano',
   'gemini-3.7-flash',
   'gemini-3.8-flash',
+  'gemini-4-argon',
   'gemini-3.5-flash',
   'gemini-3.1-flash-lite',
   'claude-sonnet-5',
@@ -36,6 +37,7 @@ export const knownModelIds = [
   // active, natively multimodal, 1M context. Served on api.mistral.ai via the
   // `mistral-vibe` account transport (plan-billed key) or MISTRAL_API_KEY.
   'mistral-large-4',
+  'mistral-medium-3.5',
   // Z.ai GLM 5.3: third-party open-weight model hosted by Mistral (EU,
   // served without Mistral modifications), long-horizon coding/agentic.
   // Mistral wire id is `zai-glm-5-3` — NOT the bare Z.ai `glm-5.3`, keeping
@@ -64,10 +66,15 @@ export const knownModelIds = [
   // transport-free). Multiple local models can be exposed under this provider.
   'laneformer-2b-it',
   // Meta Muse (Muse Code): `muse-spark-1.3` base + `-contributor` discounted
-  // tier option (content may train product). invoked via the `muse` account
-  // transport (CLI login) or MUSE_API_KEY; wire/transport lives in api/gateway.
+  // tier option (content may train product), plus `muse-wonder-1.0` /
+  // `muse-wonder-full-1.0` (owner request 2026-10-13, id corrected
+  // 2026-10-14 against the local Muse provider catalog). invoked via the
+  // `muse` account transport (CLI login) or MUSE_API_KEY; wire/transport
+  // lives in api/gateway.
   'muse-spark-1.3',
   'muse-spark-1.3-contributor',
+  'muse-wonder-1.0',
+  'muse-wonder-full-1.0',
 ] as const;
 
 export type KnownModelId = (typeof knownModelIds)[number];
@@ -89,13 +96,13 @@ export const knownModelIdsByProvider = {
     'gpt-5.4-nano',
     'gpt-4.1-nano',
   ],
-  gemini: ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+  gemini: ['gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-4-argon', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
   anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-fable-5', 'claude-fable-5-1'],
-  mistral: ['mistral-small-2603', 'magistral-medium-2509', 'mistral-large-4', 'zai-glm-5-3'],
+  mistral: ['mistral-small-2603', 'magistral-medium-2509', 'mistral-large-4', 'mistral-medium-3.5', 'zai-glm-5-3'],
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],
   local: ['laneformer-2b-it'],
-  muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor'],
+  muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor', 'muse-wonder-1.0', 'muse-wonder-full-1.0'],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 
 export interface ModelReference {

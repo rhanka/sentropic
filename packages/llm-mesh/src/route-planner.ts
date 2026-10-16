@@ -5,10 +5,15 @@ import {
   affinityRef, RoutePlanError, SequentialIdFactory,
   routingOwnerRef, subjectRef, type StoredAffinity, type StoredPlan,
 } from './route-planner-state.js';
+import {
+  isNativeMessagesTarget, NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS,
+  validateNativeModelAllowlist,
+} from './native-messages.js';
 import { resolveRequestedTargets, selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
 import type {
   AccountDirectoryPort, AffinityDescription, Clock, IdFactory, PreparedRouteAttempt,
-  AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
+  AffinityMutationEvent, RouteAvailabilityDiagnostic, RoutePlan, RoutePlanInput, RoutePlanner,
+  VerifiedRoutingSubject,
   RouteModelInventoryEntry, RouteQuote, RouteQuoteInput,
 } from './routing-contracts.js';
 import { computeRouteQuoteRef, isQuotedRouteTarget, quoteRoute, resolveQuotePolicy } from './route-quote.js';
@@ -18,6 +23,7 @@ export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
   readonly council?: ModelEquivalenceCouncil;
   readonly profiles?: InMemoryRoutePolicyProfiles;
+  readonly nativeMessagesModelIds?: readonly string[];
   readonly clock?: Clock;
   readonly idFactory?: IdFactory;
   readonly planTtlMs?: number;
@@ -38,6 +44,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
   private readonly council: ModelEquivalenceCouncil;
   private readonly profiles: InMemoryRoutePolicyProfiles;
   private readonly health: InMemoryRouteHealth;
+  private readonly nativeMessagesModelIds: readonly string[];
   private readonly planTtlMs: number;
   private readonly maximumPlanEntries: number;
   private readonly maximumAffinityEntries: number;
@@ -49,6 +56,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     this.council = options.council ?? DEFAULT_MODEL_EQUIVALENCE_COUNCIL;
     this.profiles = options.profiles ?? new InMemoryRoutePolicyProfiles();
     this.health = new InMemoryRouteHealth(this.clock);
+    this.nativeMessagesModelIds = options.nativeMessagesModelIds !== undefined
+      ? validateNativeModelAllowlist(options.nativeMessagesModelIds)
+      : NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS;
     this.planTtlMs = options.planTtlMs ?? 30_000;
     this.maximumPlanEntries = Math.max(1, options.maximumPlanEntries ?? 1_000);
     this.maximumAffinityEntries = Math.max(1, options.maximumAffinityEntries ?? 10_000);
@@ -73,6 +83,40 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       left.modelId.localeCompare(right.modelId)
       || left.providerId.localeCompare(right.providerId));
   }
+  /**
+   * Read-only per-transport availability for a requested model (Lot 7).
+   * Same transport resolution as the plan no-route branch, without planning
+   * side effects — the budget admission path uses it to explain empty quotes.
+   */
+  async describeAvailability(
+    subject: VerifiedRoutingSubject,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+  ): Promise<readonly RouteAvailabilityDiagnostic[]> {
+    return this.matchingAvailabilityDiagnostics(subject, input);
+  }
+  private async matchingAvailabilityDiagnostics(
+    subject: VerifiedRoutingSubject,
+    input: Pick<RoutePlanInput, 'requestedModel' | 'targetCandidatesOverride' | 'explicit'>,
+  ): Promise<readonly RouteAvailabilityDiagnostic[]> {
+    // A diagnostic is only pertinent when it belongs to the requested
+    // route's transports. Surfacing listDiagnostics[0] unfiltered once
+    // prescribed a `muse reauthenticate` for an explicit codex request.
+    // The model-derived resolution ignores `explicit`, so an explicit
+    // transport restriction wins over it here.
+    const explicitTransport = input.explicit?.transportProviderId;
+    const resolution = resolveRequestedTargets(input);
+    const transports = new Set<string>(
+      explicitTransport
+        ? [explicitTransport]
+        : resolution.kind === 'known'
+          ? resolution.targets
+            .map((target) => target.transportProviderId)
+            .filter((transport): transport is string => typeof transport === 'string')
+          : [],
+    );
+    const diagnostics = await this.options.directory.listDiagnostics?.(subject) ?? [];
+    return diagnostics.filter((entry) => transports.has(entry.transportProviderId));
+  }
   async plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan> {
     this.evictPlans();
     const { profile, policy: resolvedPolicy } = resolveQuotePolicy(input, this.profiles);
@@ -88,6 +132,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const affinity = input.affinityKey
       ? this.affinities.get(affinityRef(subject, input.affinityKey, input.workspaceId))
       : undefined;
+    let affinityDropped = false;
     const accounts = await this.options.directory.listEligible(subject);
     const roundRobinKey = `${routingOwnerRef(subject)}\u001f${input.requestedModel}`;
     const roundRobinState = strategy.kind === 'round-robin'
@@ -107,17 +152,63 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       throw new RoutePlanError('Unknown requested model', 'unknown-model');
     }
     if (selection.kind === 'capabilities-unmet') {
-      throw new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet');
+      throw new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet',
+        undefined, undefined, selection.unmetExecutionFeatures);
+    }
+    if (input.nativeMessages === true) {
+      // Adapted from R: R also rejected exclusive launch aliases here, but W
+      // folds every launch alias into LAUNCH_ALIAS_ROUTE_MAPPINGS with no
+      // exclusive codex pin, so the native-target check alone decides.
+      if (!isNativeMessagesTarget({ providerId: 'anthropic', modelId: input.requestedModel }, this.nativeMessagesModelIds)) {
+        throw new RoutePlanError(
+          'Native Anthropic Messages execution is unavailable for this request',
+          'native-unavailable',
+        );
+      }
     }
     let candidates = selection.kind === 'candidates' ? [...selection.candidates] : [];
+    if (input.nativeMessages === true) {
+      const hadCandidates = candidates.length > 0;
+      candidates = candidates.filter((candidate) =>
+        candidate.account.nativeMessages?.contractVersion === 1
+        && candidate.account.nativeMessages.protocol === 'anthropic-messages'
+        && isNativeMessagesTarget(candidate.target, this.nativeMessagesModelIds)
+        && candidate.target.modelId === input.requestedModel);
+      if (hadCandidates && candidates.length === 0) {
+        throw new RoutePlanError(
+          'Native Anthropic Messages execution is unavailable for this request',
+          'native-unavailable',
+        );
+      }
+    }
     // With a quote, an affinity to an unquoted target is ignored for selection
     // (for example a sticky model the request no longer asks for).
+    const stickyAccount = affinity
+      ? accounts.find((entry) => entry.accountRef === affinity.accountRef)
+      : undefined;
     if (
       affinity && policy.stickyAccount
       && inQuoteTarget(affinity.target)
+      && (!input.nativeMessages || (
+        stickyAccount?.nativeMessages?.contractVersion === 1
+        && stickyAccount.nativeMessages.protocol === 'anthropic-messages'
+        && isNativeMessagesTarget(affinity.target, this.nativeMessagesModelIds)
+        && affinity.target.modelId === input.requestedModel
+      ))
     ) {
-      const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
-      if (!account || account.readiness !== 'ready') {
+      const account = stickyAccount;
+      if (!account) {
+        // Auto-drop: the affinity account is gone (deleted) — resolve without
+        // the dead pin instead of failing closed on it. The dropped pin is
+        // cleared for the rest of planning so the stored plan carries no
+        // affinity revision and round-robin reservation applies to the
+        // replacement candidates.
+        if (input.affinityKey) {
+          this.affinities.delete(affinityRef(subject, input.affinityKey, input.workspaceId));
+        }
+        affinityDropped = true;
+        candidates = this.visibleCandidates(candidates, inQuote, policy);
+      } else if (account.readiness !== 'ready') {
         candidates = [];
       } else {
         const sameAccount = candidates.filter((candidate) =>
@@ -130,44 +221,28 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           account,
           target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
         };
-        candidates = this.keepQuoted([sticky, ...sameAccount, ...rotated], inQuote)
-          .filter((candidate) => !this.health.isSuppressed(candidate))
-          .slice(0, policy.maxAttempts);
+        candidates = this.visibleCandidates([sticky, ...sameAccount, ...rotated], inQuote, policy);
       }
     } else {
-      candidates = this.keepQuoted(candidates, inQuote)
-        .filter((candidate) => !this.health.isSuppressed(candidate))
-        .slice(0, policy.maxAttempts);
+      candidates = this.visibleCandidates(candidates, inQuote, policy);
     }
     if (candidates.length === 0) {
-      // A diagnostic is only pertinent when it belongs to the requested
-      // route's transports. Surfacing listDiagnostics[0] unfiltered once
-      // prescribed a `muse reauthenticate` for an explicit codex request.
-      // The model-derived resolution ignores `explicit`, so an explicit
-      // transport restriction wins over it here.
-      const explicitTransport = input.explicit?.transportProviderId;
-      const resolution = resolveRequestedTargets(input);
-      const transports = new Set<string>(
-        explicitTransport
-          ? [explicitTransport]
-          : resolution.kind === 'known'
-            ? resolution.targets
-              .map((target) => target.transportProviderId)
-              .filter((transport): transport is string => typeof transport === 'string')
-            : [],
-      );
-      const diagnostics = await this.options.directory.listDiagnostics?.(subject) ?? [];
-      const diagnostic = diagnostics.find((entry) => transports.has(entry.transportProviderId));
+      const matching = await this.matchingAvailabilityDiagnostics(subject, input);
+      const diagnostic = matching[0];
       throw new RoutePlanError(
         diagnostic?.message ?? 'No eligible route',
         'no-route',
         diagnostic,
+        matching.length > 0 ? matching : undefined,
       );
     }
     const planRef = this.ids.next('plan');
     const storedCandidates = candidates.map((candidate) => ({
       ...candidate, candidateRef: this.ids.next('candidate'),
     }));
+    // An auto-dropped pin counts as no affinity from here on: the stored
+    // plan carries no revision and round-robin treats this as a fresh plan.
+    const effectiveAffinity = affinityDropped ? undefined : affinity;
     const plan: RoutePlan = {
       planRef,
       expiresAt: new Date(this.clock.now().getTime() + this.planTtlMs).toISOString(),
@@ -182,13 +257,13 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         actualModelId: candidate.target.modelId,
         actualTransportProviderId: candidate.target.transportProviderId,
         reason: candidate.target.reason,
-        cacheContinuityRisk: Boolean(affinity && affinity.accountRef !== candidate.account.accountRef),
+        cacheContinuityRisk: Boolean(effectiveAffinity && effectiveAffinity.accountRef !== candidate.account.accountRef),
       })),
     };
     this.plans.set(planRef, {
       plan, subjectRef: subjectRef(subject), candidates: storedCandidates, policy,
-      hadAffinity: Boolean(affinity),
-      ...(affinity ? { affinityRevision: affinity.revision } : {}),
+      hadAffinity: Boolean(effectiveAffinity),
+      ...(effectiveAffinity ? { affinityRevision: effectiveAffinity.revision } : {}),
       ...(profile ? {
         policyProfileName: profile.name,
         policyProfileRevision: profile.revision,
@@ -197,9 +272,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         ? { affinityRef: affinityRef(subject, input.affinityKey, input.workspaceId) }
         : {}),
       claimedAttempts: new Set(),
-      ...(strategy.kind === 'round-robin' && !affinity ? { roundRobinKey } : {}),
+      ...(strategy.kind === 'round-robin' && !effectiveAffinity ? { roundRobinKey } : {}),
     });
-    if (strategy.kind === 'round-robin' && !affinity) {
+    if (strategy.kind === 'round-robin' && !effectiveAffinity) {
       const state = this.roundRobin.get(roundRobinKey) ?? {
         committedOffset: 0,
         reservations: new Set<string>(),
@@ -211,7 +286,11 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     return plan;
   }
   quote(input: RouteQuoteInput): RouteQuote {
-    return quoteRoute(input, { council: this.council, profiles: this.profiles });
+    return quoteRoute(input, {
+      council: this.council,
+      profiles: this.profiles,
+      nativeMessagesModelIds: this.nativeMessagesModelIds,
+    });
   }
   private assertQuoteMatches(input: RoutePlanInput, quote: RouteQuote,
     profileName: string | undefined, profileRevision: string | undefined): void {
@@ -232,6 +311,26 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     }
     return quoted;
   }
+  /**
+   * Health-filter candidates. Suppression-based failover stands, except for a
+   * lone quoted candidate suppressed only by locally uncommitted failures
+   * (no upstream output observed before failing): as an availability policy
+   * it degrades instead of starving the only route. This records local
+   * observation only — the provider may still have accepted the request
+   * before the connection failed. Committed failures stay strict, as does
+   * multi-route suppression, and provider rate limits keep their
+   * Retry-After window even on a lone route.
+   */
+  private visibleCandidates(candidates: RankedRouteCandidate[],
+    inQuote: (candidate: RankedRouteCandidate) => boolean,
+    policy: { readonly maxAttempts: number }): RankedRouteCandidate[] {
+    const quoted = this.keepQuoted(candidates, inQuote);
+    const visible = quoted.filter((candidate) => !this.health.isSuppressed(candidate));
+    if (visible.length > 0) return visible.slice(0, policy.maxAttempts);
+    const [only] = quoted;
+    if (quoted.length === 1 && only && this.health.suppressedDegradable(only)) return quoted;
+    return [];
+  }
   async prepareAttempt(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
     requestId: string, attemptIndex: number): Promise<PreparedRouteAttempt> {
     const stored = this.plans.get(planRef);
@@ -251,6 +350,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       return await prepareStoredRouteAttempt({
         stored, subject, planRef, candidateRef, requestId, attemptIndex,
         directory: this.options.directory, clock: this.clock,
+        isNativeTarget: (target) => isNativeMessagesTarget(target, this.nativeMessagesModelIds),
         onOutcome: (activePlan, candidate, failure) => {
           this.health.record(candidate, failure, activePlan.policy);
           const terminalCandidate = activePlan.candidates.at(-1) === candidate;

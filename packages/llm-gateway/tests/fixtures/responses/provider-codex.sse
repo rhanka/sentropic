@@ -1,0 +1,19 @@
+data: {"type":"synthetic-label","fixture":"provider-codex.sse","note":"PR #662 replay fixture, not a live capture"}
+
+data: {"type":"response.created","response":{"id":"resp_synth_1"}}
+
+data: {"type":"response.output_text.delta","item_id":"msg_synth_0","output_index":0,"content_index":0,"delta":"Synthetic "}
+
+data: {"type":"response.output_text.delta","item_id":"msg_synth_0","output_index":0,"content_index":0,"delta":"ok"}
+
+data: {"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","id":"fc_synth_1","call_id":"call_synth_1","name":"get_time","arguments":""}}
+
+data: {"type":"response.function_call_arguments.delta","item_id":"fc_synth_1","output_index":1,"delta":"{\"x\":"}
+
+data: {"type":"response.function_call_arguments.delta","item_id":"fc_synth_1","output_index":1,"delta":"1}"}
+
+data: {"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","id":"fc_synth_1","call_id":"call_synth_1","name":"get_time","arguments":"{\"x\":1}"}}
+
+data: {"type":"response.completed","response":{"id":"resp_synth_1","status":"completed","output":[{"type":"function_call","id":"fc_synth_1","call_id":"call_synth_1","name":"get_time","arguments":"{\"x\":1}"}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15,"input_tokens_details":{"cached_tokens":2},"output_tokens_details":{"reasoning_tokens":1}}}}
+
+data: [DONE]

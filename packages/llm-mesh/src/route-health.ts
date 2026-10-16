@@ -6,6 +6,7 @@ interface HealthEntry {
   readonly key: string;
   readonly expiresAt: number;
   readonly reason: RouteFailureClassification['reason'];
+  readonly committed: boolean;
 }
 
 const availabilityReasons = new Set<RouteFailureClassification['reason']>([
@@ -53,9 +54,19 @@ export class InMemoryRouteHealth {
     const requestedTtl = classification.retryAfterMs ?? policy.negativeCacheTtlMs;
     const ttl = Math.min(Math.max(requestedTtl, 1_000), 3_600_000);
     const key = keyFor(candidate, classification.healthScope);
+    const now = this.clock.now().getTime();
+    const existing = this.entries.get(key);
+    if (existing && existing.expiresAt > now && existing.committed
+      && !(classification.committed ?? false)) {
+      // A later uncommitted outcome must not erase an unexpired committed
+      // suppression on the same key: the committed entry stands through its
+      // own remaining TTL.
+      return;
+    }
     this.entries.set(key, {
       key,
       reason: classification.reason,
+      committed: classification.committed ?? false,
       expiresAt: this.clock.now().getTime() + ttl,
     });
     this.evict();
@@ -68,6 +79,28 @@ export class InMemoryRouteHealth {
       const entry = this.entries.get(key);
       return Boolean(entry && entry.expiresAt > now);
     });
+  }
+
+  /**
+   * True when the candidate is suppressed only by locally uncommitted
+   * failures (no upstream output observed before failing): as an
+   * availability policy a lone suppressed route may degrade instead of
+   * starving. This records local observation only — it cannot prove the
+   * provider did not execute the request. Provider rate limits are exempt:
+   * they carry a provider-asked Retry-After window, and redispatching a
+   * lone seat inside that window is a retry storm, not an availability
+   * gap — the suppression stands through its own TTL.
+   */
+  suppressedDegradable(candidate: RankedRouteCandidate): boolean {
+    this.evict();
+    const now = this.clock.now().getTime();
+    const suppressing: HealthEntry[] = [];
+    for (const key of applicableKeys(candidate)) {
+      const entry = this.entries.get(key);
+      if (entry && entry.expiresAt > now) suppressing.push(entry);
+    }
+    return suppressing.length > 0
+      && suppressing.every((entry) => !entry.committed && entry.reason !== 'rate-limited');
   }
 
   clear(candidate: RankedRouteCandidate): void {

@@ -398,6 +398,18 @@ export const modelProfiles = [
   },
   {
     providerId: 'gemini',
+    modelId: 'gemini-4-argon',
+    label: 'Gemini 4 Argon',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 65_536,
+    },
+  },
+  {
+    providerId: 'gemini',
     modelId: 'gemini-3.5-flash',
     label: 'Gemini 3.5 Flash',
     reasoningTier: 'advanced',
@@ -485,6 +497,21 @@ export const modelProfiles = [
     capabilities: {
       ...modelCapabilities('mistral', 'advanced', { vision: true }),
       contextWindowTokens: 1_000_000,
+    },
+  },
+  // Mistral Medium 3.5: Vibe CLI default model (alias `mistral-medium-3.5`,
+  // display "Mistral Medium 3.5"). Model card per the installed Vibe CLI:
+  // 256K context, image input, high thinking. Served on api.mistral.ai via
+  // the `mistral-vibe` account transport like the native fleet.
+  {
+    providerId: 'mistral',
+    modelId: 'mistral-medium-3.5',
+    label: 'Mistral Medium 3.5',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('mistral', 'advanced', { vision: true }),
+      contextWindowTokens: 262_144,
     },
   },
   // Z.ai GLM 5.3 hosted by Mistral: third-party open-weight coding model
@@ -577,6 +604,26 @@ export const modelProfiles = [
     providerId: 'muse',
     modelId: 'muse-spark-1.3-contributor',
     label: 'Muse Spark 1.3 Contributor',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+  },
+  {
+    // Owner request 2026-10-13: `muse-wonder-1.0` is the exact model id from
+    // the local Muse CLI config (`~/.config/muse/settings.json` model).
+    providerId: 'muse',
+    modelId: 'muse-wonder-1.0',
+    label: 'Muse Wonder',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+  },
+  {
+    // Owner request 2026-10-13, id corrected 2026-10-14 against the local
+    // Muse provider catalog: Full tier id is `muse-wonder-full-1.0`.
+    providerId: 'muse',
+    modelId: 'muse-wonder-full-1.0',
+    label: 'Muse Wonder Full',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
