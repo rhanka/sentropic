@@ -126,6 +126,8 @@
     "@sentropic/llm-gateway": ">=0.19.0 <0.21.0",
     "@sentropic/mcp-auth": ">=0.2.1 <0.3.0",
     "@sentropic/auth-hono": "^0.15.0 || ^0.16.0",
+    "@sentropic/mcp-platform": ">=0.3.0 <0.4.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
@@ -133,6 +135,8 @@
     "@sentropic/llm-gateway": { "optional": true },
     "@sentropic/mcp-auth": { "optional": true },
     "@sentropic/auth-hono": { "optional": true },
+    "@sentropic/mcp-platform": { "optional": true },
+    "@modelcontextprotocol/sdk": { "optional": true },
     "jose": { "optional": true }
   },
   "devDependencies": {

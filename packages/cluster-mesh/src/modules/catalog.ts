@@ -8,6 +8,9 @@ import {
 
 export const LLM_MESH_PACKAGE = '@sentropic/llm-mesh';
 export const LLM_GATEWAY_PACKAGE = '@sentropic/llm-gateway';
+export const MCP_PLATFORM_PACKAGE = '@sentropic/mcp-platform';
+/** Tight bound on the qualified platform candidate (single 0.3.0, no intermediate publication). */
+export const MCP_PLATFORM_RANGE = '>=0.3.0 <0.4.0';
 export const LLM_MESH_RANGE = '>=0.22.0 <0.27.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.21.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
@@ -60,6 +63,10 @@ const gateway = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembe
   id, owner: 'llm-gateway', packageName: LLM_GATEWAY_PACKAGE, subpath, range: LLM_GATEWAY_RANGE, requiredMembers,
   meshCoherence: true, authPeers, ...(namespace ? { namespace } : {}),
 });
+const mcpPlatform = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembers: readonly string[]): ProviderDescriptor => ({
+  id, owner: 'mcp-platform', packageName: MCP_PLATFORM_PACKAGE, subpath, range: MCP_PLATFORM_RANGE, requiredMembers,
+  meshCoherence: false, authPeers: [],
+});
 
 export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, ProviderDescriptor>> = {
   'llm-mesh': mesh('llm-mesh', '.', ['createLlmMesh', 'createProviderRegistry'], '/llm-mesh'),
@@ -70,6 +77,8 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   gateway: gateway('gateway', '.', ['createGatewayRouter'], [], '/gw'),
   'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS),
   'gateway/auth-hono': gateway('gateway/auth-hono', './auth-hono', ['AuthHonoVerifyToken'], SESSION_AUTH_PEERS),
+  'mcp-platform/registry': mcpPlatform('mcp-platform/registry', './registry', ['createProviderRegistry']),
+  'mcp-platform/entry': mcpPlatform('mcp-platform/entry', './registry/entry', ['buildRegistryEntry', 'resolveRegistryEntry']),
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {
