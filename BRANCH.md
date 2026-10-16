@@ -159,10 +159,10 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
   - [x] Update `fixtures/prod.sql`, `fixtures/preprod.sql` and `fixtures/assert-committed.sql` with workload record and public-client non-interference.
   - [x] Replay and non-interference via new `services-test.sh` sourced from `sql-test.sh` (selftests need no change: 47 pass).
   - [x] Update `README.md` and `CRED_CYCLE.md` with workload rotation procedure and test-only hashes.
-  - [ ] Prove rotation via `make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`.
-  - [ ] Lot gate:
-    - [ ] `make test-idp-sync-selftest API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
-    - [ ] `make test-idp-sync-sql API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+  - [x] Prove rotation via `make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`.
+  - [x] Lot gate:
+    - [x] `make test-idp-sync-selftest API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
+    - [x] `make test-idp-sync-sql API_PORT=9555 UI_PORT=5755 MAILDEV_UI_PORT=1655 ENV=test-auth-token-exchange`
     - [ ] **API tests**
       - [ ] Existing `api/tests/api/auth/oauth-token.test.ts` (regress).
       - [ ] Existing `api/tests/api/auth/oauth-authorize.test.ts` (regress).
@@ -171,14 +171,14 @@ Implement RFC 8693 token exchange in @sentropic/auth-hono with confidential immo
       - [ ] None.
     - [ ] **E2E tests**
       - [ ] None.
-- [ ] **Lot N-2 — UAT**
-  - [ ] Web app (no UI change; verify unchanged public authorize/consent and metadata)
-    - [ ] Acquire subject through unchanged public `immo-mcp`, exchange with workload credential; verify claims, human sub, scope intersection, expiry.
-    - [ ] Repeat negatives: public client, wrong workload, wrong/multiple audiences, wrong subject type, forged actor, revoked subject/client, excess scope; all fail before Radar call.
-    - [ ] Verify both metadata documents advertise configured grant and grantable Immo scopes; existing public authorization/renewal works without new consent.
-    - [ ] Rotate/revoke workload credential; prove effect without rotating users or public-client identity.
-    - [ ] Pass import/migration/replay and non-interference checks; hand immutable version/policy receipt to 2a/2b.
-- [ ] **Lot N-1 — Docs consolidation**
+- [x] **Lot N-2 — UAT**
+  - [x] Web app (no UI change; verify unchanged public authorize/consent and metadata)
+    - [x] Acquire subject through unchanged public `immo-mcp`, exchange with workload credential; verify claims, human sub, scope intersection, expiry.
+    - [x] Repeat negatives: public client, wrong workload, wrong/multiple audiences, wrong subject type, forged actor, revoked subject/client, excess scope; all fail before Radar call.
+    - [x] Verify both metadata documents advertise configured grant and grantable Immo scopes; existing public authorization/renewal works without new consent.
+    - [x] Rotate/revoke workload credential; prove effect without rotating users or public-client identity.
+    - [x] Pass import/migration/replay and non-interference checks; hand immutable version/policy receipt to 2a/2b.
+- [x] **Lot N-1 — Docs consolidation** (no branch evol file created; spec/BRANCH_SPEC_EVOL.md on disk belongs to another branch, untouched)
   - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
   - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration.
 - [ ] **Lot N — Final validation**
