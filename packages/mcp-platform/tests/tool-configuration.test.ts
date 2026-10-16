@@ -10,11 +10,13 @@ import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import type { AppMcpProviderManifest, CapabilityTool } from '../src/manifest.js';
 import {
+  TOOL_CONFIGURATION_PLATFORM_VERSION,
   TOOL_CONFIGURATION_SCHEMA_VERSION,
   ToolConfigurationStore,
   canonicalJson,
   compileToolConfiguration,
   computeCompatibilityDigest,
+  computeHandlersDigest,
   computeManifestDigest,
   computePayloadDigest,
   sha256Hex,
@@ -108,8 +110,8 @@ const consumerDigest = computeCompatibilityDigest(manifest);
 // Frozen reference digests for the synthetic fixture above (M5/M6): any
 // algorithm or fixture change fails these before it can drift silently.
 const GOLDEN_MANIFEST_DIGEST = '1b3514cd8e7d0991f9dadc4061da7950a04f2bcf655c4be0f04b4bee28a8ea4d';
-const GOLDEN_PAYLOAD_DIGEST = '9f470ff92332fd0abd6bc3ba70c3ce3483309abe84580169917453e29f44d596';
-const GOLDEN_COMPILED_DIGEST = '5ce41abb9d71133e3b366a3db1636678fa53170cdc266388a813d73162836aa9';
+const GOLDEN_PAYLOAD_DIGEST = 'b3da6d59aa52fcd86acdb8e5d2adf93c31727803392b73c8a1525dc69eef86c1';
+const GOLDEN_COMPILED_DIGEST = '4d2f74f29865fe78787cd9b85d7d2b80c65968da740760c7b478d97ae853cb37';
 
 function buildSnapshot(): ApprovedToolSnapshot {
   const revision = 'rev-1';
@@ -119,8 +121,9 @@ function buildSnapshot(): ApprovedToolSnapshot {
     revision,
     manifestDigest: computeManifestDigest(manifest),
     providerVersion: '0.0.0',
-    platformVersion: '0.3.0',
+    platformVersion: TOOL_CONFIGURATION_PLATFORM_VERSION,
     compatibilityDigest: computeCompatibilityDigest(manifest),
+    handlersDigest: computeHandlersDigest(handlers),
     provenance: {
       approvalRef: 'approval-synth-1',
       revision,
@@ -170,8 +173,9 @@ function snapshotFor(targetManifest: AppMcpProviderManifest, bindings: ApprovedT
     revision: 'rev-1',
     manifestDigest: computeManifestDigest(targetManifest),
     providerVersion: targetManifest.version,
-    platformVersion: '0.3.0',
+    platformVersion: TOOL_CONFIGURATION_PLATFORM_VERSION,
     compatibilityDigest: computeCompatibilityDigest(targetManifest),
+    handlersDigest: computeHandlersDigest(handlers),
     provenance: {
       approvalRef: 'approval-synth-1',
       revision: 'rev-1',
@@ -252,6 +256,7 @@ describe('tool-configuration compiler — synthetic providers only', () => {
       providerVersion: snapshot.providerVersion,
       platformVersion: snapshot.platformVersion,
       compatibilityDigest: snapshot.compatibilityDigest,
+      handlersDigest: snapshot.handlersDigest,
     };
     expect(computePayloadDigest(keyShuffled)).toBe(GOLDEN_PAYLOAD_DIGEST);
     const reordered = { ...keyShuffled, bindings: [...keyShuffled.bindings].reverse() };
@@ -662,6 +667,8 @@ process.stdin.on('end', () => {
     for (const note of ['Select a city', 'Update profile', 'Create report', 'Delete my account', 'node list']) {
       const snapshot = buildSnapshot();
       snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note, tags: ['paris', 'lyon'] } };
+      // The approval below covers the note-handler table shape (R2-M2).
+      snapshot.handlersDigest = computeHandlersDigest(noteHandlers);
       reseal(snapshot);
       const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
       expect(result.ok).toBe(true);
@@ -670,6 +677,8 @@ process.stdin.on('end', () => {
     for (const note of attacks) {
       const snapshot = buildSnapshot();
       snapshot.bindings[0] = { ...snapshot.bindings[0], values: { maxResults: 20, note } };
+      snapshot.handlersDigest = computeHandlersDigest(noteHandlers);
+      reseal(snapshot);
       const result = compileToolConfiguration({ snapshot, manifest, handlers: noteHandlers, compatibilityDigest: consumerDigest });
       expect(result.ok).toBe(false);
       if (!result.ok) {
