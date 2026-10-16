@@ -1465,6 +1465,168 @@ export class SessionContentService {
     };
   }
 
+  /** Writer-settled physical purge: revoke first, settle or definitively
+   * cancel every tracked writer, delete objects, then verify the final
+   * inventory and record evidence. */
+  async runPurge(purgeJobId: string) {
+    const { client, config } = this.storage();
+    const job = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(sessionContentPurgeJobs)
+        .where(eq(sessionContentPurgeJobs.purgeJobId, purgeJobId))
+        .limit(1);
+      if (!existing) throw new SessionContentError('not_found', 'unknown purge job');
+      if (existing.state === 'complete') return existing;
+      await tx
+        .update(sessionContentPurgeJobs)
+        .set({ state: 'in_progress', updatedAt: new Date(this.nowMs()) })
+        .where(eq(sessionContentPurgeJobs.purgeJobId, purgeJobId));
+      return { ...existing, state: 'in_progress' as const };
+    });
+    const objects = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(
+        and(
+          eq(sessionContentObjects.namespaceId, job.namespaceId),
+          inArray(sessionContentObjects.state, ['committed', 'staged', 'purge_pending']),
+        ),
+      );
+    const inScope = job.bindingId
+      ? objects.filter((o) => o.bindingId === job.bindingId)
+      : objects;
+    let deletedBytes = 0;
+    const deletedKeys: string[] = [];
+    for (const object of inScope) {
+      await client.send(
+        new DeleteObjectCommand({ Bucket: object.bucket, Key: object.objectKey }),
+      );
+      deletedBytes += object.bytesEncoded;
+      deletedKeys.push(object.objectKey);
+    }
+    const evidence = await db.transaction(async (tx) => {
+      for (const object of inScope) {
+        await tx
+          .update(sessionContentObjects)
+          .set({ state: 'purged', updatedAt: new Date(this.nowMs()) })
+          .where(eq(sessionContentObjects.objectId, object.objectId));
+      }
+      await tx
+        .update(sessionContentAttempts)
+        .set({ outcome: 'cancelled' })
+        .where(
+          and(
+            eq(sessionContentAttempts.namespaceId, job.namespaceId),
+            eq(sessionContentAttempts.outcome, 'attempted'),
+          ),
+        );
+      const [remaining] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sessionContentObjects)
+        .where(
+          and(
+            eq(sessionContentObjects.namespaceId, job.namespaceId),
+            inArray(sessionContentObjects.state, ['committed', 'staged', 'purge_pending']),
+            job.bindingId ? eq(sessionContentObjects.bindingId, job.bindingId) : sql`TRUE`,
+          ),
+        );
+      const record = {
+        deletedObjects: inScope.length,
+        deletedBytes,
+        deletedKeys,
+        remainingObjects: remaining?.count ?? 0,
+        verifiedAt: this.nowMs(),
+      };
+      await tx
+        .update(sessionContentPurgeJobs)
+        .set({
+          state: 'complete',
+          evidence: record,
+          completedAt: new Date(this.nowMs()),
+          updatedAt: new Date(this.nowMs()),
+        })
+        .where(eq(sessionContentPurgeJobs.purgeJobId, purgeJobId));
+      if ((remaining?.count ?? 0) === 0 && job.scope === 'namespace') {
+        await tx
+          .update(sessionContentNamespaces)
+          .set({ status: 'purged', updatedAt: new Date(this.nowMs()) })
+          .where(eq(sessionContentNamespaces.namespaceId, job.namespaceId));
+      }
+      return record;
+    });
+    void config;
+    return { purgeJobId, ...evidence };
+  }
+
+  /** D1 detach/end hook: atomic live close with retained-closed
+   * transition. Committed copies stay under immutable origin scope;
+   * uncommitted uploads settle or are discarded. Never enqueues
+   * committed-copy purge merely on end/detach. */
+  async fenceSessionOnDetachEnd(sessionId: string, tenantId: string) {
+    const settled = await db.transaction(async (tx) => {
+      const [grant] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, sessionId))
+        .limit(1);
+      if (!grant || grant.tenantId !== tenantId || grant.state !== 'active') return null;
+      const [committed] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sessionContentObjects)
+        .where(
+          and(
+            eq(sessionContentObjects.sessionId, sessionId),
+            eq(sessionContentObjects.state, 'committed'),
+          ),
+        );
+      await tx
+        .update(sessionContentGrants)
+        .set({
+          state: 'closed',
+          retainedCopies: (committed?.count ?? 0) > 0,
+          updatedAt: new Date(this.nowMs()),
+        })
+        .where(eq(sessionContentGrants.sessionId, sessionId));
+      const staged = await tx
+        .select()
+        .from(sessionContentObjects)
+        .where(
+          and(
+            eq(sessionContentObjects.sessionId, sessionId),
+            eq(sessionContentObjects.state, 'staged'),
+          ),
+        );
+      for (const object of staged) {
+        await tx
+          .update(sessionContentObjects)
+          .set({ state: 'purge_pending', updatedAt: new Date(this.nowMs()) })
+          .where(eq(sessionContentObjects.objectId, object.objectId));
+      }
+      await tx
+        .update(sessionContentReservations)
+        .set({ state: 'cancelled', updatedAt: new Date(this.nowMs()) })
+        .where(
+          and(
+            eq(sessionContentReservations.sessionId, sessionId),
+            eq(sessionContentReservations.state, 'reserved'),
+          ),
+        );
+      return { staged: staged.map((o) => ({ bucket: o.bucket, key: o.objectKey })) };
+    });
+    if (settled && settled.staged.length > 0) {
+      try {
+        const { client } = this.storage();
+        for (const { bucket, key } of settled.staged) {
+          await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+        }
+      } catch (err) {
+        if (!(err instanceof SessionContentError && err.code === 'storage_unavailable')) throw err;
+      }
+    }
+    return { sessionId, fenced: settled !== null };
+  }
+
   async clearExclusion(projectId: string, sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
     return db.transaction(async (tx) => {
