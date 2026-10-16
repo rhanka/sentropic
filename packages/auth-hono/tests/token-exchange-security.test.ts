@@ -297,7 +297,111 @@ describe('OAuth token exchange security', () => {
       subject: orphan,
     });
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
   });
+
+  it('rejects a subject without a token id', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient()],
+    });
+    const { router } = createOauthRouterForTest({ ports });
+    const jwks = createJwksService({ clock: ports.clock, jwksPort: ports.jwks });
+    const noJti = await jwks.signJwt(
+      { client_id: 'immo-mcp', scope: 'immo:search' },
+      {
+        audience: MCP_AUDIENCE,
+        expiresAt: new Date(oauthNow.getTime() + 3600 * 1000),
+        issuer: 'http://localhost:9197',
+        subject: oauthUser.id,
+        type: 'JWT',
+      }
+    );
+    void store;
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject: noJti,
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+  });
+
+  it('rejects duplicate identical target parameters', async () => {
+    const { router, subject } = await setup();
+    const form = baseForm(subject);
+    form.append('audience', RADAR_AUDIENCE);
+    const response = await postForm(router, form);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+  });
+
+  it('rejects form-only client authentication', async () => {
+    const { router, subject } = await setup();
+    const form = baseForm(subject);
+    form.set('client_id', 'immo-mcp-workload');
+    form.set('client_secret', 'workload-secret');
+    const response = await router.request('/oauth/token', {
+      body: form.toString(),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+    });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+  });
+
+  it('rejects dual Basic plus form credentials', async () => {
+    const { router, subject } = await setup();
+    const form = baseForm(subject);
+    form.set('client_id', 'immo-mcp-workload');
+    form.set('client_secret', 'workload-secret');
+    const response = await postForm(router, form);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
+  });
+
+  it('rejects a malformed Basic header without a 500', async () => {
+    const { router, subject } = await setup();
+    const response = await router.request('/oauth/token', {
+      body: baseForm(subject).toString(),
+      headers: {
+        authorization: 'Basic !!!not-base64!!!',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      method: 'POST',
+    });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+  });
+
+  it('rejects a policy actor that does not match the client', async () => {
+    const mismatched = workloadClient({ actorSub: 'someone-else' });
+    const { router, subject } = await setup([mismatched]);
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject,
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+  });
+
+  it('rejects an environment the host does not supply', async () => {
+    const { ports, store } = await createOauthPorts({
+      clients: [publicImmoClient()],
+      serviceClients: [workloadClient({ environment: 'prod' })],
+    });
+    const { router } = createOauthRouterForTest({ ports });
+    const subject = await mintSubject(ports, store, {});
+    const response = await postExchange(router, {
+      audience: RADAR_AUDIENCE,
+      scope: 'immo:search',
+      subject,
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+  });
+
 });
 
 const baseForm = (subject: string): URLSearchParams =>
