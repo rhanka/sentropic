@@ -108,7 +108,9 @@ describe('3-qualification — Immo-only grants are accepted without generic mcp:
     expect(ctx.scopes).toEqual([IMMO_DOCUMENTS_READ]);
   });
 
-  it('accepts every deployed tool scope mapping with a least-privilege grant', async () => {
+  it('grants each deployed tool its own single scope and refuses the other two', async () => {
+    // Source of truth: spec-v2 §2 twelve-tool inventory (Radar fixture ref 4dc37c8):
+    // search tools require immo:search, read tools immo:read, document tools immo:documents:read.
     const toolScopes: Array<[string, string]> = [
       ['search_lots', IMMO_SEARCH],
       ['get_lot_card', IMMO_READ],
@@ -123,13 +125,26 @@ describe('3-qualification — Immo-only grants are accepted without generic mcp:
       ['get_grille_pdf', IMMO_DOCUMENTS_READ],
       ['get_pv_pdf', IMMO_DOCUMENTS_READ],
     ];
+    const allScopes = [IMMO_READ, IMMO_SEARCH, IMMO_DOCUMENTS_READ];
     const { key, mcp } = await makeImmoMcp();
-    const token = await signImmoToken(key, {
-      scope: `${IMMO_READ} ${IMMO_SEARCH} ${IMMO_DOCUMENTS_READ}`,
-    });
     for (const [tool, scope] of toolScopes) {
-      const ctx = await mcp.verify(immoRequest(token), { requiredScopes: [scope] });
-      expect(ctx.scopes, tool).toContain(scope);
+      const grant = await signImmoToken(key, { scope });
+      const ctx = await mcp.verify(immoRequest(grant), { requiredScopes: [scope] });
+      expect(ctx.scopes, tool).toEqual([scope]);
+      for (const other of allScopes.filter((s) => s !== scope)) {
+        const refused = await signImmoToken(key, { scope: other });
+        const error = await mcp
+          .verify(immoRequest(refused), { requiredScopes: [scope] })
+          .then(
+            () => null,
+            (e: unknown) => e,
+          );
+        expect(error, `${tool} with ${other}`).toBeInstanceOf(McpAuthError);
+        expect(error, `${tool} with ${other}`).toMatchObject({
+          status: 403,
+          code: 'insufficient_scope',
+        });
+      }
     }
   });
 
