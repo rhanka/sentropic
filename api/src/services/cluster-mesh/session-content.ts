@@ -715,6 +715,108 @@ export class SessionContentService {
     });
   }
 
+  /** Derive one eligible future/selected child with no new prompt, bound
+   * to its new D1 version/incarnation/start sequence. Reattachment never
+   * reuses an old grant; source replacement requires reauthorization. */
+  async deriveGrant(input: DeriveSessionGrantInput, ctx: SessionContentContext) {
+    requireContext(ctx);
+    const epoch = await this.checkEpoch();
+    return db.transaction(async (tx) => {
+      await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
+      await this.checkTombstones(tx, [
+        { kind: 'tenant', id: ctx.tenantId },
+        { kind: 'user', id: ctx.ownerId },
+        { kind: 'workspace', id: input.workspaceId },
+      ]);
+      const [project] = await tx
+        .select()
+        .from(sessionContentProjects)
+        .where(eq(sessionContentProjects.projectId, input.projectId))
+        .limit(1);
+      if (!project) throw new SessionContentError('project_not_found', 'unknown project');
+      if (project.tenantId !== ctx.tenantId || project.ownerId !== ctx.ownerId) {
+        throw new SessionContentError('cross_owner_refused', 'project belongs to another owner');
+      }
+      if (project.state !== 'active') {
+        throw new SessionContentError('project_not_active', 'project is not active');
+      }
+      if ((project.excludedSessionIds as string[]).map(String).includes(input.sessionId)) {
+        throw new SessionContentError('session_excluded', 'session is excluded');
+      }
+      if (project.requiresFreshAmendment) {
+        throw new SessionContentError('suppressed_scope', 'a fresh amendment is required');
+      }
+      const policy = project.acceptedPolicy as Record<string, unknown> & {
+        sourceTrustVersions: string[];
+        selectedSessionIds: string[];
+      };
+      const trustVersions = (policy['sourceTrustVersions'] as string[]).map(String);
+      if (!trustVersions.includes(input.sourceTrustVersion)) {
+        throw new SessionContentError(
+          'source_reauthorization_required',
+          'source trust version is not covered',
+        );
+      }
+      const [binding] = await tx
+        .select()
+        .from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, input.sessionId))
+        .limit(1);
+      if (!binding || binding.tenantId !== ctx.tenantId) {
+        throw new SessionContentError('ineligible_session', 'no eligible D1 binding');
+      }
+      if (binding.bindingId !== input.bindingId || binding.version !== input.bindingVersion) {
+        throw new SessionContentError('ineligible_session', 'binding version mismatch (ABA)');
+      }
+      const [existing] = await tx
+        .select()
+        .from(sessionContentGrants)
+        .where(eq(sessionContentGrants.sessionId, input.sessionId))
+        .limit(1);
+      if (existing) throw new SessionContentError('revision_conflict', 'grant already derived');
+      const now = new Date(this.nowMs());
+      const namespaceId = namespaceIdFor(ctx.tenantId, ctx.ownerId, epoch.epoch);
+      await tx
+        .insert(sessionContentNamespaces)
+        .values({
+          namespaceId,
+          tenantId: ctx.tenantId,
+          ownerId: ctx.ownerId,
+          epoch: epoch.epoch,
+          status: 'active',
+        })
+        .onConflictDoNothing();
+      const row = {
+        grantId: this.newId(),
+        sessionId: input.sessionId,
+        projectId: input.projectId,
+        projectRevision: project.projectRevision,
+        bindingId: input.bindingId,
+        bindingVersion: input.bindingVersion,
+        d1Version: input.d1Version,
+        d1Incarnation: input.d1Incarnation,
+        d1StartSeq: input.d1StartSeq,
+        tenantId: ctx.tenantId,
+        workspaceId: input.workspaceId,
+        ownerId: ctx.ownerId,
+        sourceGeneration: input.sourceGeneration,
+        sourceTrustVersion: input.sourceTrustVersion,
+        nativeBoundarySeq: input.nativeStartSeq,
+        channels: project.channels,
+        retentionSnapshot: project.retentionByChannel,
+        state: 'active',
+        version: 1,
+        lastFreshnessAckAt: input.sessionCreatedAt,
+        localDenyPending: false,
+        retainedCopies: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await tx.insert(sessionContentGrants).values(row);
+      return { grantId: row.grantId, sessionId: row.sessionId, version: 1 };
+    });
+  }
+
   async clearExclusion(projectId: string, sessionId: string, ctx: SessionContentContext) {
     requireContext(ctx);
     return db.transaction(async (tx) => {
