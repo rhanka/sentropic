@@ -1467,7 +1467,7 @@ export class SessionContentService {
         throw new SessionContentError('cross_owner_refused', 'grant belongs to another owner');
       }
       if (grant.state !== 'active') {
-        throw new SessionContentError('grant_revoked', 'grant is not active');
+        throw new SessionContentError(grant.state === 'excluded' ? 'session_excluded' : 'grant_revoked', 'grant is not active');
       }
       // m1: an unreconciled local deny pauses capture — reconcile first.
       if (grant.localDenyPending) {
