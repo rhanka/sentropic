@@ -132,6 +132,7 @@
   - [x] Engram U2/U3/U5: all four representation/composition/argument probes observed RED then PASS, including malformed cursors; memory contracts/spec and restored-state checks align. Existing K3 suites unchanged.
   - [x] Engram MAJ-1/2: effective-record and cursor regressions observed RED; postgres-effective-records.spec.ts 2/2 and comments-cursor.spec.ts restart/replica/key-mismatch 1/1 PASS.
   - [x] MAJ-1: owned-object fingerprints and typed PgSchemaDriftError; host-DDL regression and operator re-attestation PASS. postgres-reattest.spec.ts simulates PostgreSQL catalog-rendering changes, rejects stale approvals/actual drift and reopens after audited host approval.
+  - [ ] MAJ-1 installed upgrade: installed-major-upgrade.mjs qualifies a real PostgreSQL 17→18 dump/restore against an independent clean same-layout reference, host receipt CAS/audit and saved cursor; Make/CI wiring and execution follow.
   - [x] MAJ-2: generic PG cursorSecret is required and rejects empty/missing keys; stable host key, replica continuity and rotation implications documented and qualified.
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
   - [x] m2/m3: independent migration chains and core-007 upgrade PASS, original comments receipts unchanged; 0.19.0 changelog covers leaves/assets/digest/peer and required merge order.
