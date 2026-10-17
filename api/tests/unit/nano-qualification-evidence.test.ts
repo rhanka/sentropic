@@ -21,10 +21,10 @@ describe('nano qualification durable evidence', () => {
   it('should capture raw Chat Completions and Responses reasoning counters', async () => {
     const { decodeNanoUsage } = await import('../utils/nano-qualification-evidence');
     for (const usage of [
-      { prompt_tokens: 1000, completion_tokens: 100, prompt_tokens_details: { cached_tokens: 10 }, completion_tokens_details: { reasoning_tokens: 20 } },
-      { input_tokens: 1000, output_tokens: 100, input_tokens_details: { cached_tokens: 10 }, output_tokens_details: { reasoning_tokens: 20 } },
+      { prompt_tokens: 1000, completion_tokens: 100, prompt_tokens_details: { cached_tokens: 10, cache_write_tokens: 800 }, completion_tokens_details: { reasoning_tokens: 20 } },
+      { input_tokens: 1000, output_tokens: 100, input_tokens_details: { cached_tokens: 10, cache_write_tokens: 800 }, output_tokens_details: { reasoning_tokens: 20 } },
     ]) {
-      expect(decodeNanoUsage({ usage })).toEqual({ usage: { input: 1000, output: 100, cached: 10, reasoning: 20 }, reasoningReported: true });
+      expect(decodeNanoUsage({ usage })).toEqual({ usage: { input: 1000, output: 100, cached: 10, cacheWrite: 800, reasoning: 20 }, reasoningReported: true });
     }
     expect(decodeNanoUsage({ usage: null })).toBeNull();
     expect(decodeNanoUsage({ usage: { input_tokens: 5, output_tokens: 1 } })?.reasoningReported).toBe(false);
