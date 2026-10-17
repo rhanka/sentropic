@@ -1,6 +1,6 @@
 import { decodePgText } from './codec.js';
 import { classifyPgFailure, PostgresStorageError } from './errors.js';
-import type { InjectedPgDriver, PgBudgets, PgSession } from './protocol.js';
+import type { InjectedPgDriver, PgBudgets, PgSession, SqlStatement } from './protocol.js';
 import { StorageInvalidCommandError } from '../errors.js';
 
 // Frozen specification candidate values. These are finite defaults, not a
@@ -23,7 +23,7 @@ export class PgTransactions {
         return await this.driver.transaction({ isolation: 'serializable', readOnly, deadlineMs: remaining }, async (raw) => {
           if (!raw || typeof raw.execute !== 'function') throw new PostgresStorageError('configuration');
           let closed = false;
-          const session: PgSession = Object.freeze({ execute: async (statement) => {
+          const session: PgSession = Object.freeze({ execute: async (statement: SqlStatement) => {
             if (closed || Date.now() >= deadline) throw new PostgresStorageError('timeout');
             const result = await raw.execute(statement);
             if (Date.now() >= deadline) throw new PostgresStorageError('timeout');

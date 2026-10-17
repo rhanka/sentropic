@@ -268,6 +268,7 @@
 
 - [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
   - [ ] Driver protocol/codec: one injected session, parameterized statements, SERIALIZABLE finite transactions, strict lossless decoding and typed operational/uncertain outcomes.
+    - [x] The transaction session wrapper explicitly types SQL statements; the first typecheck detected and corrected the missing contextual annotation before database qualification.
     - [ ] RED `postgres-transactions.spec.ts` requires one injected session, transaction-local finite settings, preservation of `remote_apply`, bounded retries for explicit immutable flushes and no retry of an arbitrary callback.
     - [ ] Transaction policy sets finite local settings through the same injected session, closes leaked session handles and bounds explicit immutable-plan retries by attempts and total deadline. Arbitrary callbacks are never automatically rerun.
     - [ ] RED `postgres-protocol.spec.ts` covers layout ownership/injection refusal, exact large counters, owned UTF-8 including BOM/multibyte bytes, malformed encoding refusal and structural SQLSTATE/uncertain-commit classification.
