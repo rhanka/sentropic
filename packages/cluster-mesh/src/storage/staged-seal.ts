@@ -8,6 +8,7 @@ import { assertOperationFence, operationHandle, resolveOperation, stagedLimits }
 import { EFFECT_SECTIONS, finishRootPreparation, hashNextFragment, prepareNextEffect, startRootPreparation, type SealStepWork } from './staged-preparation.js';
 import type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from './staged-state.js';
 import type { StagedCommitRoot, StagedUnitStatus } from './staged-units.js';
+import { encodeStagedCommitRoot } from './staged-codec.js';
 
 export interface RootSealStepInput {
   readonly unit: AuthenticatedStagedHandle; readonly root: StagedCommitRoot; readonly fence: WriterFence; readonly limits?: WorkLimits;
@@ -23,12 +24,12 @@ export const sealOperationStep = (core: StagedCore, bound: ScopedRuntime, input:
   if (Buffer.byteLength(JSON.stringify(input.root), 'utf8') > stagedLimits(core).maxEncodedBytes) throw new StorageInvalidCommandError('seal metadata exceeds configured limits');
   const work: SealStepWork = { items: 0, appends: 0, bytes: 0 };
   if (operation.seal && (operation.state === 'sealed' || operation.state === 'committed')) {
-    if (JSON.stringify(input.root) !== JSON.stringify(operation.seal.commitRoot)) throw new StorageInvalidCommandError('sealed root cannot change');
+    if (encodeStagedCommitRoot(input.root) !== encodeStagedCommitRoot(operation.seal.commitRoot)) throw new StorageInvalidCommandError('sealed root cannot change');
     return { state: 'sealed', seal: ownedCopy(operation.seal), work };
   }
   if (operation.state !== 'staging' && operation.state !== 'sealing') throw new StorageInvalidCommandError('operation cannot seal');
   const progress = operation.progress ?? startRootPreparation(core, bound, operation, input.root);
-  if (progress.failed || JSON.stringify(input.root) !== JSON.stringify(progress.root)) throw new StorageInvalidCommandError('sealing input is frozen');
+  if (progress.failed || encodeStagedCommitRoot(input.root) !== encodeStagedCommitRoot(progress.root)) throw new StorageInvalidCommandError('sealing input is frozen');
   try {
     while (progress.fragment < operation.fragments.length && work.items < limits.maxRecords && work.bytes < limits.maxEncodedBytes) {
       if (prepareNextEffect(core, bound, progress, operation, work, limits.maxEncodedBytes, limits.maxAppends)) continue;
@@ -56,7 +57,7 @@ export const commitSealedOperation = async (core: StagedCore, bound: ScopedRunti
   if (!operation) throw new StorageInvalidCommandError('unknown sealed operation');
   resolveOperation(core, bound, operationHandle(core, operation));
   assertOperationFence(core, bound, operation, input.fence);
-  if (!operation.seal || input.seal.capability !== operation.seal.capability || JSON.stringify(input.seal.commitRoot) !== JSON.stringify(operation.seal.commitRoot)) {
+  if (!operation.seal || input.seal.capability !== operation.seal.capability || encodeStagedCommitRoot(input.seal.commitRoot) !== encodeStagedCommitRoot(operation.seal.commitRoot)) {
     throw new StorageInvalidCommandError('seal capability or root mismatch');
   }
   if (operation.purgeCount > 0) core.requireMaintain(bound.grant);

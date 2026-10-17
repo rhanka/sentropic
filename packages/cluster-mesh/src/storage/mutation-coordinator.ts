@@ -21,6 +21,11 @@ export interface RootMutationHooks {
   fence?(grant: ScopeGrant<unknown>, fence: WriterFence): void;
 }
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const freeze = (value: unknown): void => {
+  if (typeof value !== 'object' || value === null) return;
+  for (const child of Object.values(value)) freeze(child);
+  Object.freeze(value);
+};
 const receiptFor = (ctx: CommitContext, records = 0, appends = 0): CommitReceipt => ({
   commitId: ctx.commitId, moduleId: ctx.moduleId, scope: { ...ctx.scope }, committedAt: ctx.clock(),
   effectiveRecords: records, effectiveAppends: appends, journalCursor: `cursor-${ctx.commitId}`,
@@ -39,6 +44,13 @@ export class RootMutationCoordinator {
   prepare(base: BackendScopeState): BackendScopeState { return forkBackendScope(base); }
   accessible(grant: ScopeGrant<unknown>, kind: RootReadKind, key: string): boolean {
     return this.hooks.accessible?.(this.capture(grant.scope), kind, key, grant) ?? true;
+  }
+  private prepareEffects(base: BackendScopeState, prepared: BackendScopeState, grant: ScopeGrant<unknown>, notice: RootMutationNotice): void {
+    const result = this.hooks.prepare?.(base, prepared, grant, notice) as unknown;
+    if (result !== null && typeof result === 'object' && typeof (result as { then?: unknown }).then === 'function') {
+      void Promise.resolve(result as PromiseLike<unknown>).catch(() => undefined);
+      throw new StorageInvalidCommandError('final preparation hooks must be synchronous');
+    }
   }
   publish(scope: StorageScope, base: BackendScopeState, prepared: BackendScopeState, revalidate: () => void): void {
     revalidate();
@@ -60,13 +72,15 @@ export class RootMutationCoordinator {
     if (typeof result === 'object' && result !== null && 'replayed' in result && result.replayed === true) return unchanged();
     if (kind === 'index' && JSON.stringify(base.index.get(keys[0])) === JSON.stringify(prepared.index.get(keys[0]))) return unchanged();
     if (kind === 'dispose' && base.chains.get(keys[0])?.disposed === prepared.chains.get(keys[0])?.disposed) return unchanged();
-    this.hooks.prepare?.(base, prepared, grant, { kind, keys, receipt: receiptFor(ctx), units: [], options: {} });
+    this.prepareEffects(base, prepared, grant, { kind, keys, receipt: receiptFor(ctx), units: [], options: {} });
     this.publish(grant.scope, base, prepared, revalidate);
     return result;
   }
 
-  commit(grant: ScopeGrant<unknown>, units: readonly AtomicUnit[], options: CommitOptions, ctx: CommitContext,
+  commit(grant: ScopeGrant<unknown>, units: readonly AtomicUnit[], requestedOptions: CommitOptions, ctx: CommitContext,
     revalidate: () => void): CommitReceipt {
+    const options = copy(requestedOptions);
+    freeze(options);
     const limits = { ...(options.limits ?? this.maximum) };
     if (!validateWorkLimits(limits).ok || Object.keys(this.maximum).some((key) => limits[key as keyof WorkLimits] > this.maximum[key as keyof WorkLimits])) {
       throw new StorageInvalidCommandError('requested work limits exceed the configured ceiling');
@@ -83,6 +97,7 @@ export class RootMutationCoordinator {
     if (!validity.ok || !validateCommitOptions(options).ok || Buffer.byteLength(JSON.stringify(merged), 'utf8') > limits.maxEncodedBytes) {
       throw new StorageInvalidCommandError('invalid unit or exceeded atomic work limits');
     }
+    freeze(owned);
     if (!this.hooks.prepare && (merged.relationships.length + merged.barriers.length + merged.purgeIntents.length > 0)) {
       throw new UnsupportedProfileError('registered-module-effects');
     }
@@ -107,7 +122,7 @@ export class RootMutationCoordinator {
     const receipt = receiptFor(ctx, merged.records.length + merged.appends.length + merged.updates.length, merged.appends.length);
     if (merged.moduleResult !== undefined) Object.assign(receipt, { moduleResult: copy(merged.moduleResult) });
     if (options.idempotencyKey) prepared.commits.set(options.idempotencyKey, { receipt: copy(receipt), unitHash });
-    this.hooks.prepare?.(base, prepared, grant, { kind: 'commit', keys: [], units: owned, options: copy(options), receipt });
+    this.prepareEffects(base, prepared, grant, { kind: 'commit', keys: [], units: owned, options, receipt });
     this.publish(grant.scope, base, prepared, () => { revalidate(); verifyFence(); });
     return copy(receipt);
   }
