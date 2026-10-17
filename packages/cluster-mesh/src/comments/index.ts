@@ -17,3 +17,6 @@ export const createCommentsModule = (options: CommentsModuleOptions) => {
 export type { CommentsModuleOptions, CommentsStorageBinding, CommentsStorage } from './storage-contracts.js';
 export { createCommentsPostgresRegistration, createCommentsPostgresStorage, COMMENTS_DESCRIPTOR, COMMENTS_CONTRACT_DIGEST } from './postgres.js';
 export type { CommentsServiceOptions, CommentsLifecycleResult } from './lifecycle-contracts.js';
+export * from './transport-contracts.js';
+export { createCommentsFragment, commentsFragmentDigest, commentsUnitPayloadDigest } from './fragment-codec.js';
+export { commentsImportBindingDigest, commentsAdmissibleManifestDigest } from './binding-codec.js';
