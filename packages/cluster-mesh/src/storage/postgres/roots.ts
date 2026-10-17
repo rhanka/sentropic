@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { StorageScope } from '../contracts.js';
 import type { CommitReceipt } from '../atomic.js';
 import { StorageCasConflictError, StorageInvalidCommandError } from '../errors.js';
@@ -11,6 +12,7 @@ export const pgMapKey = (kind: string, id: string): string => JSON.stringify([ki
 export const pgScopeKey = (module: string, scope: StorageScope): string => JSON.stringify([module, scope.tenantId, scope.workspaceId]);
 export const pgJsonBytes = (value: unknown): Buffer => Buffer.from(JSON.stringify(value), 'utf8');
 export class PgRoots {
+  readonly #preparation = new AsyncLocalStorage<string>();
   readonly schema: string;
   readonly options: PostgresStorageOptions;
   constructor(options: PostgresStorageOptions, readonly incarnation: string) {
@@ -18,6 +20,7 @@ export class PgRoots {
     this.schema = quotePgIdentifier(this.options.layout.dataSchema);
   }
   key(scope: StorageScope): string { return pgScopeKey(this.options.moduleId, scope); }
+  preparing<T>(unitId: string, operation: () => Promise<T>): Promise<T> { return this.#preparation.run(unitId, operation); }
   async capture(session: PgSession, scope: StorageScope, lock = false): Promise<PgRoot> {
     const key = this.key(scope);
     if (lock) await session.execute({ text: `INSERT INTO ${this.schema}.scopes(key,module,tenant,workspace,incarnation) VALUES($1,$2,$3,$4,$5) ON CONFLICT(key) DO NOTHING`, values: [key, this.options.moduleId, scope.tenantId, scope.workspaceId, this.incarnation] });
@@ -44,7 +47,7 @@ export class PgRoots {
   }
   async payload(session: PgSession, scope: StorageScope, target: string, bytes: Uint8Array, hash: string): Promise<string> {
     const id = randomUUID();
-    await session.execute({ text: `INSERT INTO ${this.schema}.payloads(id,scope_key,target,bytes,hash) VALUES($1,$2,$3,$4,$5)`, values: [id, this.key(scope), target, Buffer.from(bytes), hash] });
+    await session.execute({ text: `INSERT INTO ${this.schema}.payloads(id,scope_key,target,bytes,hash,prepared_unit) VALUES($1,$2,$3,$4,$5,$6)`, values: [id, this.key(scope), target, Buffer.from(bytes), hash, this.#preparation.getStore() ?? null] });
     return id;
   }
   async readPayload(session: PgSession, scope: StorageScope, id: string): Promise<Buffer> {

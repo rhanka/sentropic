@@ -39,7 +39,7 @@ export const sealPgStep = async (core: PgCore, grant: ScopeGrant<unknown>, suppl
       const unit = await resolvePgUnit(core, session, grant, input.unit, input.fence); const m = unit.metadata;
       if (m.state === 'sealed' || m.state === 'committed') return { state: m.state, checked: m.progress?.checked ?? 0, work: { items: 0, appends: 0, bytes: 0 }, seal: m.seal! };
       if (m.state !== 'sealing' || m.reason) throw new StorageInvalidCommandError('preparation requires abort and a fresh operation');
-      const work = await preparePgStep(core, session, grant, unit, limits);
+      const work = await core.roots.preparing(unit.id, () => preparePgStep(core, session, grant, unit, limits));
       await core.check(session, grant, 'write', true); await core.fence(session, grant, input.fence);
       await savePgUnit(core, session, grant, unit);
       return { state: m.state, checked: m.progress!.checked, work, ...(m.seal ? { seal: m.seal } : {}) };
