@@ -553,6 +553,13 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Prepare and audit Cluster Mesh storage dependencies
         run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit ENV=test-ci-cluster-mesh
+      - name: Qualify Cluster Mesh Postgres storage and server recovery
+        run: |
+          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=test-ci-cluster-mesh-pg
+          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash-test ENV=test-ci-cluster-mesh-pg
+      - name: Remove isolated Cluster Mesh Postgres service and volume
+        if: always()
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
       - name: Lint Cluster Mesh
         run: make lint-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Typecheck Cluster Mesh
