@@ -225,51 +225,22 @@
   - [x] Files: `tests/comments-{fragment-vectors,import,import-fence,import-review,import-lifecycle,receipts,import-crashes,export,read-audience,transfer,long-history,admission}.spec.ts`; `docs/comments-annotations/contract/transport-v1.json`.
   - [x] Lot gate: same comments PG command as Lot 7; final combined comments gate 25 files / 104 tests PASS, including frozen C0/M1 and operational HTTP/namespace probes.
 
-- [ ] **Lot 9 — M2-W registration and canonical Hono API**
-  - [x] Imported post-tombstone history and independently authorized subsequent physical purge pass both real-PG probes; no historical purge claim creates a kernel job.
-  - [ ] RED `comments-module.spec.ts` requires metadata-only local discovery, optional-peer range refusal before evaluation and disabled-leaf isolation before namespace startup.
-  - [ ] Added delivered local comments metadata and optional-peer preflight through the existing registry, with separate static integration, typed lazy loader and `/comments` composition leaves. Root import still has no runtime comments/driver edge.
-  - [x] All three local-module discovery/preflight/isolation probes pass.
-  - [ ] RED `comments-router.spec.ts` requires the frozen factory signature, an issued context, service-owned registration, idempotent original results, CAS/scope/size refusal and no raw lifecycle or forged physical-completion bypass.
-  - [ ] Added reusable native revision commands for annotation/thread/comment content using frozen constructors, actual root-member references, current old/new target authorization, server-owned registration, CAS and original-result idempotency.
-  - [ ] BRCM2-PORT-16: installed services reuse the kernel's bounded same-session page reader. Authorized read/revision services and an internal store-identity router binding preserve the exact M1 persistence port and canonical factory argument shape.
-  - [ ] Added the exact canonical Hono factory with issued-context fencing, strict operational request shapes, reserved collection identities, streaming actual UTF-8 request bounds and measured response envelopes; no raw append or physical-completion route exists.
-  - [ ] The first router probe found a strict trailing-slash mismatch on collection creation. Corrected the concrete route and added pinned decision-resolution checks for revision commands, including final expiry/revocation/base/proposal revalidation.
-  - [ ] Canonical HTTP composition also checks its injected capability/resolver ports against actual indexed resource tuples. Write handlers place both HTTP checks and the installed service inside one M1 transaction, so late denial rolls back pending effects before root publication.
-  - [ ] HTTP decision references resolve through their injected port before and after pending writes; actor/action/scope/base/proposal must match. Installed services independently resolve the pinned authority and check actual domain-clock expiry/revocation immediately before publication.
-  - [ ] The router integration probe exposed a transaction-handle invocation mistake: M1 uses `store.transaction().run(callback)`. Both handlers now use that exact signature; the frozen port remains unchanged.
-  - [ ] Added canonical namespace composition that verifies every invocation and derives issued scope exclusively through the host's verified-context resolver; principal/workspace mismatches refuse before the module context. The selected comments leaf exports the exact factory.
-  - [ ] Added full-runtime namespace probes for disabled startup, verified principal/workspace/generation/invocation binding and forged body-scope refusal with no canonical event.
-  - [ ] C4 terminal effects now include an actual M1 import operation audit in the same hidden root as data/bindings/receipts/journal. A bounded list authenticates exactly module-generated terminal hashes; imported historical receipt/audit payloads receive normal capability checks.
-  - [x] Source full-runtime namespace probes pass 2/2; the operational router probe passes 1/1 after using the exact M1 transaction-handle call.
-  - [ ] BRCM2-EX4 delivery exports now include storage, injected Postgres, comments/Hono and lazy loader/composition leaves, with packaged storage assets and the digest-pinned M1 oracle. Installed qualification remains required before acceptance.
-  - [x] Combined source gate at `0cba21c59`: typecheck/lint pass, 93 files / 804 tests pass and 43 files / 97 explicit DB/crash/packaging tests skip (RTK `8196c1489674`); K3 remains 56/56.
-  - [ ] Added review-import invariants for a forged validation without submission and actual older open contests across withdrawal/resubmission; the fixture explicitly grants every declared synthetic capability, never a production default.
-  - [ ] Added indexed actual-root-member review evidence and frozen-constructor validation during bounded hidden preparation. At most six actual records capture current revision state, unresolved-contest existence and exact referenced resolution; no whole review history is replayed at publication.
-  - [x] The forged imported validation was observed RED and both review-history probes now pass on real PG. The exact comments peer joins the CI candidate/install qualification tuple for every newly exported Node leaf (BRCM2-EX5).
-  - [ ] Added shipped literal transport-v1 vectors with an independently generated native SHA-256 oracle for escaped/multibyte identities, typed payload inventory and the exact terminal predecessor/count; documentation and package-asset bytes must match.
-  - [x] Literal vectors pass 3/3; the updated generic PG gate passes 26 files / 47 tests, with the two server-crash phases delegated to their separate target.
-  - [ ] Added neutral-host transfer qualification: foreign-scope bytes cannot publish; an explicitly mapped derivative preserves attribution with new IDs/hashes and a separate scoped derivation audit; destination recovery/readback precedes independently authorized source retirement, whose denial leaves source intact.
-  - [ ] Strengthened the review-evidence probe with a self-consistent final validation after a different contest was resolved: an older unresolved contest must still refuse the complete unit with zero canonical publication.
-  - [ ] Added operational readback/export probes for another principal's personal lifecycle preference and a restricted audit audience; ordinary content remains available and personal preference grants no global visibility change.
-  - [ ] Both audience probes were RED. Operational reads/exports now enforce personal actor and explicit audit audience after current resource authorization. C4 domain validation errors retain their explicit neutral/transport classification through bounded PG sealing, rather than becoming generic storage unavailability.
-  - [ ] RED `comments-single-session.spec.ts` refuses any nested external driver transaction during an active M1 transaction, requiring binding revalidation to reuse its existing canonical session before installed single-client qualification.
-  - [ ] The single-session probe was RED on nested binding. Binding now uses the active same-scope session and final grant checks; no extra connection is acquired while the canonical transaction is active.
-  - [ ] Added a fragment-acknowledgement retry probe after a superseding database fence: identical bytes cannot retain writer authority merely because their acknowledgement was persisted earlier.
-  - [ ] The retry probe was RED. Every intake now re-enters the kernel's bound staged operation before returning an acknowledgement, revalidating the current database fence; oversized ordinal gaps refuse before a bigint SQL parameter is issued.
-  - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
-  - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
-  - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
+- [x] **Lot 9 — M2-W registration and canonical Hono API**
+  - [x] Existing registry/catalog handles metadata-only local discovery, optional compatible peer preflight, typed lazy loading and disabled isolation. Root JS/declarations retain no comments/driver edge.
+  - [x] Static local integration, `./comments/hono`, lazy loader and namespace composition are exported with packaged assets; exact frozen router-factory/store signatures are preserved.
+  - [x] Operational annotation/thread/comment revisions use frozen constructors, actual root-member references, server registration, stable command replay and exact CAS.
+  - [x] Native authorized reads/pages resolve actual indexed resource tuples, personal preferences and audit audiences. The private installed SPI enforces configured kernel page limits.
+  - [x] HTTP checks injected authority/decision ports before and after pending writes inside `store.transaction().run`; installed services separately check final revocation/expiry/base/proposal bindings before publication.
+  - [x] Strict streamed actual UTF-8 request and measured response limits, reserved collection paths and closed wire errors; no raw append or physical-completion route.
+  - [x] Full-runtime namespace derives issued scope only from the verified invocation; principal/workspace/generation/lifetime mismatches and forged body scope refuse before effects.
+  - [x] Files: `tests/comments-{module,router,namespace,single-session}.spec.ts`; existing `tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts`.
+  - [x] Lot 1 source gate and Lot 7 real-PG gate PASS; actual installed registry/full-runtime HTTP is qualified again in Lot N.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [x] Refreshed the evidence index to current SPEC/compatibility/host-guide byte identities and the installed candidate report; historical review provenance remains unchanged.
-  - [x] Updated both evolution specifications with the consolidated shared root, host-owned PG installation, bounded trusted module SPI, delivered comments/transport/HTTP candidate and explicit remaining service/SQLite/application boundaries.
-  - [x] Recorded actual installed archive SHA-256/SRI, production lock/audit, unchanged corpus, full-runtime HTTP, independent long-history/receipt/revocation and measured hidden-preparation command evidence in `evidence/installed-module.md`.
-  - [ ] The full source gate passed typecheck/lint and all runtime checks but found a stale C0 documentation assertion requiring oracle packaging to stay unverified. Updated it to the now-executable installed qualification boundary, preserving the absent M1 conformance-export assertion.
-  - [ ] Added the concrete Immo host guide: injected session/migration ownership, issued grants, full-runtime namespace, frozen store transactions, chained bounded import/terminal receipts, recovery and current-authority export/readback.
-  - [ ] Updated compatibility documentation to the delivered candidate exports, injected PG/host-history ownership, seven module transport methods, packaged frozen oracle and exact remaining service/SQLite/application boundaries.
-  - [ ] Update `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md` with K4 rebuild, Postgres module and port changes (BRCM2-PORT).
-  - [ ] Update `docs/comments-annotations/contract/storage-compatibility.md` and evidence index with M2 delivery and Immo import/receipt/readback API.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Both storage/comments evolution specifications describe the shared root, host-owned PG installation, trusted bounded module SPI, candidate APIs and remaining separate scopes.
+  - [x] `docs/comments-annotations/contract/storage-compatibility.md`, literal `transport-v1.json`, `evidence/index.md`, `evidence/installed-module.md` and `immo-host-guide.md` identify exact calls, archive/lock/audit and source/installed boundaries.
+  - [x] BRCM2-EX6 shipped package README documents selected exports/peer/context/migration/transport composition; packed inventory now explicitly includes the ninth local comments leaf.
+  - [x] Documentary C0 assertions follow the executable packaged-oracle proof while preserving absent M1 public conformance export. Historical review provenance is unchanged.
 
 - [ ] **Lot N — Final validation**
   - [ ] BRCM2-EX6 updates the packed integration inventory for its ninth local comments leaf and extends root-declaration isolation to the optional comments peer; the shipped README now documents candidate setup and delivery boundaries.
