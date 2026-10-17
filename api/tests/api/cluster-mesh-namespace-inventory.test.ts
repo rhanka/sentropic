@@ -46,6 +46,10 @@ describe('Cluster Mesh namespace inventory', () => {
     expect(idp).toContain('GET:/api/v1/auth/oauth/end_session');
     expect(idp).toContain('GET:/api/v1/auth/session');
     expect(idp).not.toContain('GET:/api/v1/oauth/end_session');
+    expect(product).toContain('GET:/api/v1/auth/session/content/retained-content');
+    expect(product).toContain('GET:/api/v1/auth/session/content/workspaces/:workspaceId/sessions');
+    expect(idp).not.toContain('GET:/api/v1/auth/session/content/retained-content');
+    expect(idp).not.toContain('GET:/api/v1/auth/session/content/workspaces/:workspaceId/sessions');
   });
 
   it('keeps the replaced legacy API index inert', () => {
