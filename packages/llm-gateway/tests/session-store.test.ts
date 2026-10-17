@@ -34,6 +34,15 @@ const freshDir = (): string =>
   mkdtempSync(join(tmpdir(), 'gw-state-test-'));
 
 describe('FileGatewayStateStore', () => {
+  it('refuses unavailable keys on an empty store and never steals a live writer by age', async () => {
+    const dir = freshDir();
+    const locked = new FileGatewayStateStore({ stateDir: dir, keyring: { getSecret: async () => null } });
+    await expect(locked.load()).rejects.toMatchObject({ code: 'KEY-UNAVAILABLE' });
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(dir, '.lock'), JSON.stringify({ pid: process.pid, token: 'live', startedAt: 0 }));
+    const store = new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('a')) });
+    await expect(store.compareAndSet(0, { ...emptyState(), revision: 1 })).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
   it('creates the private layout and round-trips state across instances', async () => {
     const dir = freshDir();
     const first = new FileGatewayStateStore({ stateDir: dir, keyring: keyringFor(dekFor('a')) });
