@@ -85,6 +85,7 @@ export const assertNoDuplicateKeys = (text) => {
       stack.pop();
       i += 1;
     } else if (ch === '"') {
+      const start = i;
       let j = i + 1;
       let out = '';
       while (j < text.length && text[j] !== '"') {
@@ -100,7 +101,7 @@ export const assertNoDuplicateKeys = (text) => {
       let k = i;
       while (k < text.length && /\s/.test(text[k])) k += 1;
       if (text[k] === ':' && stack.length > 0) {
-        pushKey(out);
+        pushKey(JSON.parse(text.slice(start, i)));
         i = k + 1;
       }
     } else {
@@ -157,17 +158,26 @@ const assertCoverage = (coverage, program, phase, contractSha256, profiles) => {
   }
   const union = new Set();
   let activeFound = false;
+  let previousProgram = '';
   for (const row of coverage) {
     if (!isRecord(row)) throw new GatewayInputError('coverage row must be an object', 'bad-coverage');
     const keys = Object.keys(row).sort().join(',');
     if (keys !== 'contractSha256,phase,profiles,program') {
       throw new GatewayInputError('coverage row has unknown or missing fields', 'bad-coverage');
     }
-    phasesFor(row.program);
+    if (!phasesFor(row.program).has(row.phase) || row.program <= previousProgram
+      || (row.program !== program && !row.phase.endsWith('-published'))) {
+      throw new GatewayInputError('coverage must be sorted unique programs with retained published phases', 'bad-coverage');
+    }
+    previousProgram = row.program;
     if (!Array.isArray(row.profiles) || row.profiles.length === 0) {
       throw new GatewayInputError('coverage row profiles must be nonempty', 'bad-coverage');
     }
     assertHex64(row.contractSha256, 'coverage contractSha256');
+    assertProfiles(row.profiles);
+    if (row.program === 'gateway' && !['gateway-messaging', 'gateway-runtime'].every((p) => row.profiles.includes(p))) {
+      throw new GatewayInputError('gateway coverage requires both runtime and messaging', 'bad-profiles');
+    }
     for (const profile of row.profiles) {
       if (!PROFILE_MAP.has(profile)) {
         throw new GatewayInputError(`unknown coverage profile: ${profile}`, 'unknown-profile');
@@ -213,14 +223,15 @@ const sha256Text = (text) => createHash('sha256').update(text, 'utf8').digest('h
 const assertPackageRow = (row) => {
   if (!isRecord(row)) throw new GatewayInputError('package row must be an object', 'bad-packages');
   const keys = Object.keys(row).sort().join(',');
-  const want = 'integrity,lockLocation,name,resolved,source,version';
+  const want = 'integrity,lockLocation,name,resolved,sourceIdentity,tarballSha256,version';
   if (keys !== want) {
     throw new GatewayInputError('package row has unknown or missing fields', 'bad-packages');
   }
   if (typeof row.name !== 'string' || !row.name.startsWith('@sentropic/')) {
     throw new GatewayInputError(`package row name must be external @sentropic/*: ${row.name}`, 'bad-packages');
   }
-  for (const field of ['lockLocation', 'version', 'source']) {
+  assertHex64(row.tarballSha256, 'package tarballSha256');
+  for (const field of ['lockLocation', 'version', 'sourceIdentity']) {
     if (typeof row[field] !== 'string' || !row[field]) {
       throw new GatewayInputError(`package row ${field} must be nonempty`, 'bad-packages');
     }
@@ -264,6 +275,9 @@ export const validateConsumerInput = (input) => {
   if (!isRecord(input.artifactManifest)) {
     throw new GatewayInputError('artifactManifest must be an object', 'bad-manifest');
   }
+  if (Object.keys(input.artifactManifest).some((key) => !['sha256', 'path'].includes(key))) {
+    throw new GatewayInputError('unknown artifactManifest field', 'bad-manifest');
+  }
   assertHex64(input.artifactManifest.sha256, 'artifactManifest.sha256');
   if (isCandidate) {
     if (input.artifactManifestText !== undefined) {
@@ -274,6 +288,9 @@ export const validateConsumerInput = (input) => {
     }
     if (!isRecord(input.candidateBundle)) {
       throw new GatewayInputError('candidate requires candidateBundle', 'bad-bundle');
+    }
+    if (Object.keys(input.candidateBundle).sort().join(',') !== 'bundleSha256,indexPath,root') {
+      throw new GatewayInputError('unknown or missing candidateBundle field', 'bad-bundle');
     }
     const { root, indexPath, bundleSha256 } = input.candidateBundle;
     assertHex64(bundleSha256, 'candidateBundle.bundleSha256');
@@ -288,6 +305,9 @@ export const validateConsumerInput = (input) => {
       throw new GatewayInputError('candidate manifest path must resolve under the bundle root', 'bad-manifest');
     }
   } else {
+    if (input.artifactManifest.path !== undefined) {
+      throw new GatewayInputError('published forbids artifactManifest.path', 'bad-manifest');
+    }
     if (input.candidateBundle !== undefined) {
       throw new GatewayInputError('published forbids candidateBundle', 'bad-bundle');
     }

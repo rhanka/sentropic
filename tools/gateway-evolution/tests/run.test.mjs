@@ -31,7 +31,8 @@ const packageRow = (overrides = {}) => ({
   version: '0.27.0',
   resolved: 'https://registry.npmjs.org/@sentropic/llm-mesh/-/llm-mesh-0.27.0.tgz',
   integrity: 'sha512-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  source: 'registry:sha512-aa',
+  tarballSha256: hex('tarball'),
+  sourceIdentity: 'registry:sha512-aa',
   ...overrides,
 });
 
@@ -94,6 +95,19 @@ const failsWith = (fn, code) => {
 };
 
 describe('closed v1 input validation', () => {
+  it('rejects escaped duplicate members and open nested objects', () => {
+    failsWith(() => parseConsumerInput('{"schemaVersion":1,"program":"gateway","phase":"none","\\u0070hase":"none"}'), 'duplicate-member');
+    const input = withIndex(candidateInput());
+    failsWith(() => validateConsumerInput({ ...input, candidateBundle: { ...input.candidateBundle, extra: true } }), 'bad-bundle');
+    failsWith(() => validateConsumerInput({ ...input, artifactManifest: { ...input.artifactManifest, extra: true } }), 'bad-manifest');
+  });
+
+  it('requires tarball/source identity and one sorted coverage row per program', () => {
+    const input = withIndex(candidateInput());
+    failsWith(() => validateConsumerInput({ ...input, packages: [packageRow({ tarballSha256: '' })] }), 'bad-digest');
+    failsWith(() => validateConsumerInput({ ...input, programCoverage: [...input.programCoverage, ...input.programCoverage] }), 'bad-coverage');
+    failsWith(() => validateConsumerInput({ ...input, profiles: ['gateway-runtime'], programCoverage: [{ ...input.programCoverage[0], profiles: ['gateway-runtime'] }] }), 'bad-profiles');
+  });
   it('accepts none as exactly three fields', () => {
     assert.deepEqual(
       validateConsumerInput({ schemaVersion: 1, program: 'gateway', phase: 'none' }),
