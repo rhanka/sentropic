@@ -453,7 +453,7 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore, profiles: Atomic
       updates: [],
       relationships: [],
       barriers: [],
-      purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'auth-1' }],
+      purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'user-1' }],
       indexWrites: [],
     });
     assert.equal(intended.effectiveAppends, 1);
@@ -474,7 +474,7 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore, profiles: Atomic
           updates: [],
           relationships: [],
           barriers: [],
-          purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'auth-1' }],
+          purgeIntents: [{ target: 't1', intentId: 'i1', authorizedBy: 'user-1' }],
           indexWrites: [],
         }),
       'unsupported-profile',

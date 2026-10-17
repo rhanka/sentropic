@@ -63,6 +63,10 @@ const lifecycleAppend = (chainId: string, id: string, hash: string) => ({
 
 export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: LifecycleCorpusHooks): Promise<void> => {
   await bound.configureLifecycle('optional');
+  await expectCode(() => bound.commitAtomic({ ...emptyUnit(), appends: [lifecycleAppend('life-forged', 'forged', 'forged-hash')],
+    purgeIntents: [{ target: 'life-thread-1', intentId: 'forged-intent', authorizedBy: 'another-principal' }],
+  }), 'denied', 'C14: a purge intent cannot forge its verified authorizer');
+  assert.equal(await bound.readHead('life-forged'), null, 'C14: a forged purge authorizer publishes no carrier');
   await bound.commitAtomic({
     ...emptyUnit(),
     appends: [lifecycleAppend('life-optional', 'tomb-1', 'hash-tomb-1')],
@@ -91,7 +95,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
     ...emptyUnit(),
     appends: [lifecycleAppend('life-required', 'tomb-2', 'hash-tomb-2')],
     barriers: [{ boundary: 'life-thread-2', reason: 'tombstone-2' }],
-    purgeIntents: [{ target: 'life-thread-2', intentId: 'intent-required-1', authorizedBy: 'owner-1' }],
+    purgeIntents: [{ target: 'life-thread-2', intentId: 'intent-required-1', authorizedBy: 'user-1' }],
   });
   assert.equal((await bound.purgeProgress('intent-required-1')).state, 'pending');
   await expectCode(
@@ -99,7 +103,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
       bound.commitAtomic({
         ...emptyUnit(),
         appends: [lifecycleAppend('life-divergent', 'tomb-div', 'hash-tomb-div')],
-        purgeIntents: [{ target: 'other-target', intentId: 'intent-required-1', authorizedBy: 'owner-1' }],
+        purgeIntents: [{ target: 'other-target', intentId: 'intent-required-1', authorizedBy: 'user-1' }],
       }),
     'idempotency-conflict',
     'K2b-RED lifecycle: a reused purge intent with a divergent target conflicts atomically',
@@ -112,7 +116,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
       bound.commitAtomic({
         ...emptyUnit(),
         appends: [lifecycleAppend('life-unconfigured', 'tomb-3', 'hash-tomb-3')],
-        purgeIntents: [{ target: 'life-thread-3', intentId: 'intent-unconfigured-1', authorizedBy: 'owner-1' }],
+        purgeIntents: [{ target: 'life-thread-3', intentId: 'intent-unconfigured-1', authorizedBy: 'user-1' }],
       }),
     'denied',
     'K2b-RED lifecycle: an unconfigured purge denies intents',
@@ -125,7 +129,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
       weak.commitAtomic({
         ...emptyUnit(),
         appends: [lifecycleAppend('life-noauth', 'tomb-noauth', 'hash-tomb-noauth')],
-        purgeIntents: [{ target: 'held-target', intentId: 'intent-noauth-1', authorizedBy: 'owner-1' }],
+        purgeIntents: [{ target: 'held-target', intentId: 'intent-noauth-1', authorizedBy: 'user-1' }],
       }),
     'denied',
     'K2b-RED lifecycle: a purge intent without purge authority is denied',
@@ -135,7 +139,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   await bound.commitAtomic({
     ...emptyUnit(),
     appends: [lifecycleAppend('life-held', 'tomb-4', 'hash-tomb-4')],
-    purgeIntents: [{ target: 'held-target', intentId: 'intent-held-1', authorizedBy: 'owner-1' }],
+    purgeIntents: [{ target: 'held-target', intentId: 'intent-held-1', authorizedBy: 'user-1' }],
   });
   await bound.holdTarget('held-target', 'legal-hold-1');
   const held = await bound.completePurge('intent-held-1');
@@ -174,7 +178,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   await bound.commitAtomic({
     ...emptyUnit(),
     appends: [lifecycleAppend('life-ghost', 'tomb-5', 'hash-tomb-5')],
-    purgeIntents: [{ target: 'ghost-9', intentId: 'intent-ghost-1', authorizedBy: 'owner-1' }],
+    purgeIntents: [{ target: 'ghost-9', intentId: 'intent-ghost-1', authorizedBy: 'user-1' }],
   });
   const ghost = await bound.completePurge('intent-ghost-1');
   assert.equal(ghost.state, 'failed');
@@ -210,7 +214,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   await bound.commitAtomic({
     ...emptyUnit(),
     appends: [lifecycleAppend('life-crash', 'tomb-6', 'hash-tomb-6')],
-    purgeIntents: [{ target: 'crash-target', intentId: 'intent-crash-1', authorizedBy: 'owner-1' }],
+    purgeIntents: [{ target: 'crash-target', intentId: 'intent-crash-1', authorizedBy: 'user-1' }],
   });
   const crashed = await bound.completePurge('intent-crash-1');
   assert.equal(crashed.state, 'complete');
@@ -239,8 +243,8 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
     ...emptyUnit(),
     appends: [lifecycleAppend('life-rec', 'tomb-rec', 'hash-tomb-rec')],
     purgeIntents: [
-      { target: 'rec-purge-1', intentId: 'intent-rec-1', authorizedBy: 'owner-1' },
-      { target: 'agg-purge-1', intentId: 'intent-agg-1', authorizedBy: 'owner-1' },
+      { target: 'rec-purge-1', intentId: 'intent-rec-1', authorizedBy: 'user-1' },
+      { target: 'agg-purge-1', intentId: 'intent-agg-1', authorizedBy: 'user-1' },
     ],
   });
   const recJobsBefore = (await bound.purgeJobIds()).length;
@@ -256,7 +260,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   await bound.commitAtomic({
     ...emptyUnit(),
     appends: [lifecycleAppend('life-int', 'tomb-int', 'hash-tomb-int')],
-    purgeIntents: [{ target: 'interrupt-target', intentId: 'intent-int-1', authorizedBy: 'owner-1' }],
+    purgeIntents: [{ target: 'interrupt-target', intentId: 'intent-int-1', authorizedBy: 'user-1' }],
   });
   await bound.armPurgeFailure();
   await expectCode(
@@ -272,7 +276,7 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   await expectCode(async () => bound.readHead('interrupt-target'), 'denied', 'K2b-RED lifecycle: resumed completion disposes exactly once');
 
   await bound.appendChain('response-target', { id: 'response', bytes: '{}', hash: 'response-hash' }, { kind: 'absent', allocation: '0' });
-  await bound.commitAtomic({ ...emptyUnit(), appends: [lifecycleAppend('life-response', 'response-tomb', 'response-tomb-hash')], purgeIntents: [{ target: 'response-target', intentId: 'intent-response', authorizedBy: 'owner-1' }] });
+  await bound.commitAtomic({ ...emptyUnit(), appends: [lifecycleAppend('life-response', 'response-tomb', 'response-tomb-hash')], purgeIntents: [{ target: 'response-target', intentId: 'intent-response', authorizedBy: 'user-1' }] });
   await bound.armPurgeResponseFailure();
   await expectCode(() => bound.completePurge('intent-response'), 'invalid-command', 'C14: completion can commit before its response is interrupted');
   const responseRebound = await hooks.rebind();
