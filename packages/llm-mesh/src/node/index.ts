@@ -29,6 +29,12 @@ export {
   resolveEffectiveAuthority,
   validateSeatBundle,
 } from '../enrollment/seat-bundle.js';
+export type {
+  SeatRecordSelector,
+  SeatStoreBackend,
+  SeatStoreRecordDescriptor,
+} from './cli-seat-store-reader.js';
+export { inspectSeatStoreRecord, SeatStoreReadError } from './cli-seat-store-reader.js';
 export { EncryptedFileKeyring } from './keyring/encrypted-file-keyring.js';
 export { EnvKeyring } from './keyring/env-keyring.js';
 export { InMemoryKeyring } from './keyring/in-memory-keyring.js';
