@@ -13,7 +13,8 @@ export function ensure(value: unknown, code: string): asserts value {
 }
 export const heldUnits = (r: Reservation) => r.settled ? r.spent! : r.units;
 export const seatCaps = (state: SeatState, day: string): Record<SeatClass, number> => {
-  const entry = state.modes[day];
+  const effectiveDay = Object.keys(state.modes).filter(d => d <= day).sort().at(-1);
+  const entry = effectiveDay ? state.modes[effectiveDay] : undefined;
   if (entry?.mode === 'native-campaign') {
     ensure(entry.campaign && entry.validUntil && entry.validUntil >= day, 'native-campaign-expired');
     return { ci: 0, enrollment: 2, native: 8 };
@@ -23,6 +24,7 @@ export const seatCaps = (state: SeatState, day: string): Record<SeatClass, numbe
 export const reserveSeatClass = (state: SeatState, kind: SeatClass, units: number,
   context: SeatAdmission, caseId = context.campaign): Reservation => {
   ensure(state.version === 1 && /^\d{4}-\d{2}-\d{2}$/.test(context.day), 'seat-state');
+  ensure(!state.reservations.some(r => !r.settled && r.day < context.day), 'reservation-unsettled');
   ensure(Number.isSafeInteger(units) && units > 0 && Number.isSafeInteger(context.generation)
     && context.generation > 0, 'case-bound');
   ensure(context.quotaReadable && context.remaining.length > 0 && context.remaining.every(
