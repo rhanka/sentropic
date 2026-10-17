@@ -353,7 +353,7 @@ authority escalation and lineage conflicts. Package enrollment keeps existing id
 ## CI seat import (L1, synthetic)
 
 `src/enrollment/cli-seat-import.ts` (re-exported from
-`@sentropic/llm-mesh`) parses `--from cli` provider-shaped profiles and
+`@sentropic/llm-mesh/enrollment`) parses `--from cli` provider-shaped profiles and
 `--from token` envelopes: parse and validate only, no exchange, mint,
 hidden store reread, or refresh. CLI profiles require a
 custodian-observed `issuedAt`; unknown expiry is never infinite
