@@ -69,6 +69,8 @@
 - [ ] `attention` BRCM2-PORT — storage port changes for gr-conductor (engram) co-review:
   - [ ] PORT-1 additive: `src/storage/staged-codec.ts` shared canonical staged codec (effects, derived dependencies, fragment digest, dependency/effect roots, v1); K3 validated behaviour unchanged.
   - [ ] PORT-2 root composition: opt-in indexed backend state and a trusted mutation coordinator will cover ordinary writes, transactions and current-coverage reads; adapter handles keep binding only. Existing default K3 behavior is qualified by its 56-test suite; co-review required for the additive root options and backend record-history type.
+  - [ ] PORT-3 backend identity: an injected backend must retain one module/incarnation identity and hold hidden progress by scope/namespace; cross-module reuse and a conflicting incarnation are rejected before binding.
+    - [x] RED identity probes observed; backend pins identity and exposes trusted scoped control storage for resumable hidden preparation. All eight coordinator/identity probes pass.
 - [ ] `attention` BRCM2-VER — version ordering: npm `@sentropic/cluster-mesh` 0.16.0 = main 0.16.0; PR #679 holds 0.18.0; this branch takes 0.19.0 so either merge order keeps both strictly above main. `@sentropic/comments` stays 0.3.0 unless `packages/comments/src/**` changes (forbidden here).
 - [ ] `attention` BRCM2-PG — real Postgres qualification needs a Postgres service reachable from `make test-cluster-mesh`; Makefile/docker-compose are forbidden here. Until a decision, Postgres lots are qualified against the injected structural driver port with an in-process executor; real-PG qualification stays an open gate.
 

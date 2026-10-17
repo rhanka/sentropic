@@ -6,6 +6,8 @@
 import type { CommitReceipt } from './atomic.js';
 import { IndexedMap, forkIndexedMap } from './indexed-map.js';
 import type { IndexedHistory } from './indexed-history.js';
+import { StorageInvalidCommandError } from './errors.js';
+import type { StorageScope } from './contracts.js';
 
 export interface BackendChainRecord {
   readonly id: string;
@@ -93,8 +95,25 @@ export const lockBackendScope = (state: BackendScopeState): BackendScopeState =>
 /** Neutral per-kernel store: one map of scopes, no durability claim. */
 export class MemoryBackend {
   readonly scopes = new Map<string, BackendScopeState>();
+  private identity: { readonly moduleId: string; readonly incarnation: string } | null = null;
+  private readonly controls = new Map<string, unknown>();
 
   constructor(private readonly createScope: () => BackendScopeState = createBackendScopeState) {}
+
+  bindIdentity(moduleId: string, incarnation: string | undefined, create: () => string): string {
+    if (this.identity && (this.identity.moduleId !== moduleId || (incarnation !== undefined && incarnation !== this.identity.incarnation))) {
+      throw new StorageInvalidCommandError('backend already belongs to another module or incarnation');
+    }
+    if (!this.identity) this.identity = { moduleId, incarnation: incarnation ?? create() };
+    return this.identity.incarnation;
+  }
+
+  controlState<T>(scope: StorageScope, namespace: string, create: () => T): T {
+    if (!this.identity) throw new StorageInvalidCommandError('backend identity is not bound');
+    const key = JSON.stringify([this.identity.moduleId, this.identity.incarnation, namespace, scope.tenantId, scope.workspaceId]);
+    if (!this.controls.has(key)) this.controls.set(key, create());
+    return this.controls.get(key) as T;
+  }
 
   scopeState(scope: { readonly tenantId: string; readonly workspaceId: string }): BackendScopeState {
     const key = backendScopeKey(scope);
