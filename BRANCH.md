@@ -19,6 +19,8 @@ Render the official multicolor Google "G" logo in AuthProviderGlyph for the goog
   - `packages/auth-ui/src/components/AuthProviderGlyph.svelte`
   - `packages/auth-ui/tests/**`
   - `packages/auth-ui/package.json`
+  - `package-lock.json` (version-sync fallout of the mandatory package bump only)
+  - `BRANCH.md` (plan tracker, updated within each commit)
   - `.h2a/build/google_logo_report.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
