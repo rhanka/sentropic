@@ -6,6 +6,7 @@ import type { PgCore, PgTx } from './core.js';
 import { applyPgEffects } from './effects.js';
 import { validatePgPurgePolicy } from './module-effects.js';
 import { classifyPgFailure } from './errors.js';
+import { REGISTERED_PG_EFFECTS } from './registered-effects.js';
 
 export const ownPgValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 export const pgUnitDigest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
@@ -20,7 +21,9 @@ export const applyPgTransaction = async (core: PgCore, grant: ScopeGrant<unknown
     await core.check(tx.session, grant, 'write');
     const result = await applyPgEffects(core, tx.session, grant, tx.root, unit, tx.base.root, installed);
     tx.root = result.root; tx.records += result.records; tx.appends += result.appends; tx.count += 1; tx.encodedBytes += bytes;
-    tx.barriers += unit.barriers.length; tx.purges += unit.purgeIntents.length;
+    // Installed operational services enforce their domain policy/authority
+    // coherence; generic callers retain the unconditional barrier rule.
+    tx.barriers += installed === REGISTERED_PG_EFFECTS ? 0 : unit.barriers.length; tx.purges += unit.purgeIntents.length;
     if (unit.moduleResult !== undefined) tx.moduleResult = unit.moduleResult;
     tx.digests.push(pgUnitDigest(unit)); tx.contributors.set(grant.token, grant);
   } catch (error) {
