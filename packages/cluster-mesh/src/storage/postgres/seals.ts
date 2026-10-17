@@ -127,33 +127,76 @@ const fullReceipt = async (
   );
   return { ...ownPgValue(receipt), moduleResult };
 };
-export const commitPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: AuthenticatedStagedSeal, fence: WriterFence): Promise<CommitReceipt> => {
+export const commitPgStaged = async (
+  core: PgCore,
+  grant: ScopeGrant<unknown>,
+  supplied: AuthenticatedStagedSeal,
+  fence: WriterFence,
+): Promise<CommitReceipt> => {
   const seal = ownPgValue(supplied);
-  return core.tx.run(false, async (session) => {
-    await core.check(session, grant, 'write', true); await core.fence(session, grant, fence);
-    const base = await core.roots.capture(session, grant.scope, true);
-    const unit = await readPgUnit(core, session, grant, seal.unitId); const m = unit.metadata;
-    if (!m.seal || seal.capability !== m.seal.capability || encodeStagedCommitRoot(seal.commitRoot) !== encodeStagedCommitRoot(m.seal.commitRoot) || m.fence.fenceId !== fence.fenceId || m.fence.epoch !== fence.epoch) throw new StorageInvalidCommandError('seal ownership mismatch');
-    await checkPgStagedModule(core, session, grant, unit, 'commit', seal.commitRoot);
-    if (m.state === 'committed') return fullReceipt(core, session, grant, unit, m.receipt!);
-    if (m.state !== 'sealed' || !m.progress) throw new StorageInvalidCommandError('unit is not sealed');
-    const p = m.progress;
-    if (base.version !== p.base.version || base.root !== p.base.root || base.sequence !== p.base.sequence) throw new StorageCasConflictError('scope changed after sealing');
-    await checkPgStagedModule(core, session, grant, unit, 'commit', seal.commitRoot, undefined, true);
-    const receipt: CommitReceipt = { commitId: m.commitId, moduleId: core.options.moduleId, scope: { ...grant.scope }, committedAt: core.now(), effectiveRecords: p.records, effectiveAppends: p.appends, journalCursor: (BigInt(base.sequence) + 1n).toString() };
-    await core.check(session, grant, 'write', true); await core.fence(session, grant, fence);
-    await core.roots.publish(session, grant.scope, base, p.prepared, receipt, m.begin.operationKey, true);
-    m.state = 'committed'; m.receipt = receipt; m.progress = null;
-    await savePgUnit(core, session, grant, unit);
-    return fullReceipt(core, session, grant, unit, receipt);
-  }, true);
+  return core.tx.run(
+    false,
+    async (session) => {
+      await core.check(session, grant, 'write', true);
+      await core.fence(session, grant, fence);
+      const base = await core.roots.capture(session, grant.scope, true);
+      const unit = await readPgUnit(core, session, grant, seal.unitId);
+      const m = unit.metadata;
+      if (
+        !m.seal ||
+        seal.capability !== m.seal.capability ||
+        encodeStagedCommitRoot(seal.commitRoot) !== encodeStagedCommitRoot(m.seal.commitRoot) ||
+        m.fence.fenceId !== fence.fenceId ||
+        m.fence.epoch !== fence.epoch
+      )
+        throw new StorageInvalidCommandError('seal ownership mismatch');
+      await checkPgStagedModule(core, session, grant, unit, 'commit', seal.commitRoot);
+      if (m.state === 'committed') return fullReceipt(core, session, grant, unit, m.receipt!);
+      if (m.state !== 'sealed' || !m.progress) throw new StorageInvalidCommandError('unit is not sealed');
+      const p = m.progress;
+      if (base.version !== p.base.version || base.root !== p.base.root || base.sequence !== p.base.sequence)
+        throw new StorageCasConflictError('scope changed after sealing');
+      await checkPgStagedModule(core, session, grant, unit, 'commit', seal.commitRoot, undefined, true);
+      const receipt: CommitReceipt = {
+        commitId: m.commitId,
+        moduleId: core.options.moduleId,
+        scope: { ...grant.scope },
+        committedAt: core.now(),
+        effectiveRecords: p.records,
+        effectiveAppends: p.appends,
+        journalCursor: (BigInt(base.sequence) + 1n).toString(),
+      };
+      await core.check(session, grant, 'write', true);
+      await core.fence(session, grant, fence);
+      await core.roots.publish(session, grant.scope, base, p.prepared, receipt, m.begin.operationKey, true);
+      m.state = 'committed';
+      m.receipt = receipt;
+      m.progress = null;
+      await savePgUnit(core, session, grant, unit);
+      return fullReceipt(core, session, grant, unit, receipt);
+    },
+    true,
+  );
 };
-export const abortPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, handle: AuthenticatedStagedHandle, fence: WriterFence, reason: string): Promise<void> => {
-  if (typeof reason !== 'string' || !reason || reason.length > 4096) throw new StorageInvalidCommandError('abort requires a bounded reason');
-  await core.tx.run(false, async (session) => {
-    const unit = await resolvePgUnit(core, session, grant, handle, fence);
-    if (unit.metadata.state === 'committed') throw new StorageInvalidCommandError('unit is already committed');
-    unit.metadata.state = 'aborted'; unit.metadata.reason = reason; unit.metadata.progress = null;
-    await savePgUnit(core, session, grant, unit);
-  }, true);
+export const abortPgStaged = async (
+  core: PgCore,
+  grant: ScopeGrant<unknown>,
+  handle: AuthenticatedStagedHandle,
+  fence: WriterFence,
+  reason: string,
+): Promise<void> => {
+  if (typeof reason !== 'string' || !reason || reason.length > 4096)
+    throw new StorageInvalidCommandError('abort requires a bounded reason');
+  await core.tx.run(
+    false,
+    async (session) => {
+      const unit = await resolvePgUnit(core, session, grant, handle, fence);
+      if (unit.metadata.state === 'committed') throw new StorageInvalidCommandError('unit is already committed');
+      unit.metadata.state = 'aborted';
+      unit.metadata.reason = reason;
+      unit.metadata.progress = null;
+      await savePgUnit(core, session, grant, unit);
+    },
+    true,
+  );
 };
