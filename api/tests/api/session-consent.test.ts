@@ -1426,6 +1426,131 @@ describe('session consent durable lifecycle', () => {
     void s2binding;
   });
 
+  it('should retain committed copies when staged purge jobs drain (N1)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const bindings = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    const deriveS1 = () => service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: bindings[0]!.version,
+      d1Version: bindings[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    await deriveS1();
+    const committedBody = new TextEncoder().encode('committed-n1');
+    const first = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: committedBody.length, encoded: committedBody.length }, 'k-n1-1', ctx,
+    );
+    await service.publishAfterUpload(first.reservationId, committedBody, ctx);
+    const stagedBody = new TextEncoder().encode('staged-n1');
+    const second = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: stagedBody.length, encoded: stagedBody.length }, 'k-n1-2', ctx,
+    );
+    const closing = makeService({
+      publishHooks: {
+        afterUpload: async () => {
+          await service.closeGrant('sess-content-s1', ctx);
+        },
+      },
+    });
+    await expectContentError(() => closing.publishAfterUpload(
+      second.reservationId, stagedBody, ctx,
+    ), 'grant_revoked');
+    await adoptSession('sess-content-s2');
+    const s2rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s2'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s2',
+      bindingId: s2rows[0]!.bindingId,
+      bindingVersion: s2rows[0]!.version,
+      d1Version: s2rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const stagedS2 = new TextEncoder().encode('staged-s2');
+    await service.reserveBeforeUpload(
+      'sess-content-s2', 'terminal.cache',
+      { raw: stagedS2.length, encoded: stagedS2.length }, 'k-n1-3', ctx,
+    );
+    await service.fenceSessionOnDetachEnd('sess-content-s2', TENANT_A);
+    const jobs = await db.select().from(sessionContentPurgeJobs);
+    expect(jobs.length).toBeGreaterThan(0);
+    for (const job of jobs) {
+      expect(job.scope).toBe('object');
+    }
+    for (const job of jobs) {
+      await service.runPurge(job.purgeJobId);
+    }
+    const history = await service.grantHistoryAuthorization('sess-content-s1', ctx);
+    const bytes = await service.readCommitted('sess-content-s1', 'terminal.cache', ctx, history.authorizationId);
+    expect(new TextDecoder().decode(bytes)).toBe('committed-n1');
+    expect(await fixture.listPhysical('')).toHaveLength(1);
+    void bindingId;
+  });
+
+  it('should not oversubscribe tenant quota across sessions (N4)', async () => {
+    service = makeService({ maxBytesPerSession: 64, maxBytesPerTenant: 24, maxObjectsPerSession: 16 });
+    await acceptProject();
+    for (const sessionId of ['sess-content-s1', 'sess-content-s2']) {
+      const bindingId = await adoptSession(sessionId);
+      const bindings = await db
+        .select()
+        .from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, sessionId));
+      await service.deriveGrant({
+        projectId: 'sess-content-project-1',
+        sessionId,
+        bindingId,
+        bindingVersion: bindings[0]!.version,
+        d1Version: bindings[0]!.version,
+        d1Incarnation: 1,
+        d1StartSeq: 0,
+        workspaceId,
+        sessionCreatedAt: now,
+        sourceGeneration: 'gen-1',
+        sourceTrustVersion: 'tv-1',
+        nativeStartSeq: 0,
+      }, ctx);
+      void bindingId;
+    }
+    const outcomes = await Promise.allSettled([
+      service.reserveBeforeUpload(
+        'sess-content-s1', 'terminal.cache', { raw: 16, encoded: 16 }, 'k-n4-1', ctx,
+      ),
+      service.reserveBeforeUpload(
+        'sess-content-s2', 'terminal.cache', { raw: 16, encoded: 16 }, 'k-n4-2', ctx,
+      ),
+    ]);
+    const won = outcomes.filter((o) => o.status === 'fulfilled');
+    expect(won).toHaveLength(1);
+    const lost = outcomes.filter((o) => o.status === 'rejected');
+    expect(lost).toHaveLength(1);
+    expect((((lost[0] as PromiseRejectedResult).reason) as SessionContentError).code).toBe('quota_exceeded');
+    const usage = await service.accountUsage({ tenantId: TENANT_A });
+    expect(usage.reservedBytes).toBeLessThanOrEqual(24);
+  });
+
   it('should increment on accept-at-N so a replayed accept conflicts (M4)', async () => {
     await acceptProject();
     await service.amendProject(
