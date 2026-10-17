@@ -624,11 +624,13 @@ describe('content consent native boundary (CM2-R4-4)', () => {
 });
 
 describe('content consent amendment refresh (N3)', () => {
+  let currentDigest = '';
   const refreshInput = (overrides = {}) => ({
     projectId: 'project-1',
     sessionId: 'session-1',
     bindingId: 'binding-1',
     bindingVersion: 1,
+    d1Version: 1,
     tenantId: 'tenant-a',
     workspaceId: 'workspace-1',
     ownerId: 'user-1',
@@ -637,34 +639,37 @@ describe('content consent amendment refresh (N3)', () => {
     sourceTrustVersion: 'h2a-1.0+d2-1',
     nativeBoundarySeq: 41,
     expectedProjectRevision: 2,
+    policyDigest: currentDigest,
     ...overrides,
   });
 
   const amendToTwo = async (service, overrides = {}) => {
     const rePrepared = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1, ...overrides }));
     await service.acceptProject(rePrepared, { challengeId: rePrepared.challengeId });
+    currentDigest = rePrepared.digest;
+    return rePrepared.digest;
   };
 
   it('should refresh two live children to the amended revision without per-child confirmation', async () => {
     const { service } = await readyConsent();
     const first = await service.deriveChild(sharedChildInput());
     const second = await service.deriveChild(sharedChildInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
-    await amendToTwo(service, {
+    const digest = await amendToTwo(service, {
       retentionByChannel: { 'terminal.cache': { mode: 'duration', durationSeconds: 3600 }, 'native.mirror': { mode: 'none' } },
     });
     await expectConsentCodeAsync(() => service.deriveChild(sharedChildInput()), 'project_revision_changed');
-    const r1 = await service.refreshChild(refreshInput());
+    const r1 = await service.refreshChild(refreshInput({ policyDigest: digest }));
     expect(r1.grantId).toBe(first.grantId);
     expect(r1.projectRevision).toBe(2);
     expect(r1.version).toBe(2);
     expect(r1.retentionSnapshot['terminal.cache']).toEqual({ mode: 'duration', durationSeconds: 3600 });
     expect(r1.nativeBoundarySeq).toBe(41);
-    const r2 = await service.refreshChild(refreshInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
+    const r2 = await service.refreshChild(refreshInput({ sessionId: 'session-2', bindingId: 'binding-2', policyDigest: digest }));
     expect(r2.grantId).toBe(second.grantId);
     expect(r2.projectRevision).toBe(2);
     const project = await service.readProject('project-1');
     expect(project?.activatedAt).toBe(1_000_000);
-    const dup = await service.refreshChild(refreshInput());
+    const dup = await service.refreshChild(refreshInput({ policyDigest: digest }));
     expect(dup.version).toBe(2);
     expect(dup.projectRevision).toBe(2);
   });
@@ -698,6 +703,74 @@ describe('content consent amendment refresh (N3)', () => {
         sessionId: 'session-3', bindingId: 'binding-3', sourceTrustVersion: 'h2a-9.9+d2-9',
       })),
       'source_reauthorization_required',
+    );
+  });
+});
+
+describe('content consent refresh binds (P3/m1)', () => {
+  const refreshInput = (overrides = {}) => ({
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    bindingId: 'binding-1',
+    bindingVersion: 1,
+    d1Version: 1,
+    tenantId: 'tenant-a',
+    workspaceId: 'workspace-1',
+    ownerId: 'user-1',
+    sessionCreatedAt: 1_000_001,
+    sourceGeneration: 'gen-1',
+    sourceTrustVersion: 'h2a-1.0+d2-1',
+    nativeBoundarySeq: 41,
+    expectedProjectRevision: 2,
+    policyDigest: '',
+    ...overrides,
+  });
+
+  const amendToTwo = async (service, overrides = {}) => {
+    const rePrepared = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1, ...overrides }));
+    await service.acceptProject(rePrepared, { challengeId: rePrepared.challengeId });
+    return rePrepared.digest;
+  };
+
+  it('should refuse refresh on replaced generation or changed D1 version without overwriting', async () => {
+    const { service } = await readyConsent();
+    const first = await service.deriveChild(sharedChildInput());
+    const digest = await amendToTwo(service);
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ policyDigest: digest, sourceGeneration: 'gen-2' })),
+      'source_reauthorization_required',
+    );
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ policyDigest: digest, d1Version: 2 })),
+      'ineligible_session',
+    );
+    const grant = await service.readGrant('session-1');
+    expect(grant?.sourceGeneration).toBe('gen-1');
+    expect(grant?.d1Version).toBe(first.d1Version);
+    expect(grant?.projectRevision).toBe(1);
+  });
+
+  it('should bind refresh to the digest with a forward boundary, fresh ack and reconciled deny', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    const digest = await amendToTwo(service);
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ policyDigest: '0'.repeat(64), nativeBoundarySeq: 41 })),
+      'revision_conflict',
+    );
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ policyDigest: digest, nativeBoundarySeq: 4 })),
+      'invalid_request',
+    );
+    await service.recordLocalDeny('session-1');
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ policyDigest: digest })),
+      'invalid_request',
+    );
+    await service.reconcileLocalDeny('session-1');
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ policyDigest: digest })),
+      'grant_revoked',
     );
   });
 });
