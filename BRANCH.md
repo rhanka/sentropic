@@ -350,6 +350,7 @@
 - [ ] **Lot 7 — Comments module C1a/C1b/C2 (`src/comments/`)**
   - [x] Public registry inspection resolves the frozen peer to `@sentropic/comments@0.3.0`, with root and Hono exports only. Its immutable source corpus/vectors will be compiled into a separate digest-pinned module artifact without adding a comments-package export.
   - [x] Packaged the unchanged corpus with all domain imports externalized to the installed peer; the source SHA matches the frozen manifest and the hash-vector source SHA matches C0. Added the optional `^0.3.0` peer and exact selected-consumer identity.
+  - [ ] RED `comments-store.spec.ts`: execute the unchanged packaged M1 corpus on real PG, then independently require request scope/authority isolation, pending reads, rollback-only failures and full stored-value genesis replay.
   - [ ] Prepare the frozen optional peer and digest-pinned conformance/vector artifact through branch-local Docker/Make tooling; inspect the published peer before selecting its compatible range. Root/disabled imports must evaluate neither comments nor a database client.
   - [ ] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
   - [ ] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).
