@@ -50,6 +50,19 @@
         "cluster-mesh-pg/003-staged@1"
       ],
       "checksum": "17a5c4a78e20efa1c9a21f0112b5cbf70b9f9acaf8d577f2e16efc6759e4b295"
+    },
+    {
+      "id": "cluster-mesh-pg/005-cleanup@1",
+      "file": "005-cleanup.sql",
+      "order": 5,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 4,
+      "toVersion": 5,
+      "requires": [
+        "cluster-mesh-pg/004-queries@1"
+      ],
+      "checksum": "f8fda33a8f9c167f53be412977418da063c1e14c0ed7f3d8a96a9feeba01fa5f"
     }
   ]
 }
