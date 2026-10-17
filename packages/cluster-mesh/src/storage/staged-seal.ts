@@ -59,6 +59,7 @@ export const commitSealedOperation = async (core: StagedCore, bound: ScopedRunti
   if (!operation.seal || input.seal.capability !== operation.seal.capability || JSON.stringify(input.seal.commitRoot) !== JSON.stringify(operation.seal.commitRoot)) {
     throw new StorageInvalidCommandError('seal capability or root mismatch');
   }
+  if (operation.purgeCount > 0) core.requireMaintain(bound.grant);
   if (operation.state === 'committed' && operation.receipt) return ownedCopy(operation.receipt);
   if (operation.state !== 'sealed' || !operation.progress?.receipt) throw new StorageInvalidCommandError('operation has no prepared seal');
   await core.options.beforePublish?.(bound.scope, operation.unitId);
@@ -73,10 +74,12 @@ export const commitSealedOperation = async (core: StagedCore, bound: ScopedRunti
     bound.requireOperation('write');
     resolveOperation(core, bound, operationHandle(core, operation));
     assertOperationFence(core, bound, operation, input.fence);
+    if (operation.purgeCount > 0) core.requireMaintain(bound.grant);
     if (operation.state !== 'sealed') throw new StorageInvalidCommandError('operation changed before publication');
   });
   operation.receipt = progress.receipt!; operation.state = 'committed';
   operation.progress = null; operation.fragments = new IndexedHistory();
+  core.consumeFailure(bound.scope, 'commit-response');
   return ownedCopy(operation.receipt);
 };
 
