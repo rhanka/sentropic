@@ -15,6 +15,7 @@ import { COMMENTS_IMPORT_CONTRACT_DIGEST } from './import-state.js';
 import { prepareCommentsImport } from './import-prepare.js';
 import { inspectCommentsImport, recoverCommentsReceipts } from './import-recovery.js';
 import { commentsImportPolicy } from './import-policy.js';
+import { validateCommentsImportProjection } from './import-projection.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -33,7 +34,11 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
     'comments.import.recover': { operation: 'write', execute: (input, context) => recoverCommentsReceipts(services, context, input) },
   } : {});
   return Object.freeze({
-  assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR, projection: prepareCommentsProjection,
+  assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR,
+  projection: async (effects: Parameters<typeof prepareCommentsProjection>[0], context: Parameters<typeof prepareCommentsProjection>[1]) => {
+    if (services) await validateCommentsImportProjection(services, effects, context);
+    await prepareCommentsProjection(effects, context);
+  },
   queries: Object.freeze({ 'by-resource': commentsPgQuery('by-resource'), 'scope-chain-index': commentsPgQuery('scope-chain-index'), 'retained-headers': commentsPgQuery('retained-headers') }),
   operations,
   stagedModules: services ? Object.freeze({ [COMMENTS_IMPORT_CONTRACT_DIGEST]: commentsImportPolicy(services) }) : undefined,
