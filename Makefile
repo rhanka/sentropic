@@ -1007,13 +1007,14 @@ verify-llm-mesh-cloud-code-oauth: build-llm-mesh ## Verify source and dist again
 OAUTH_REGISTER_JOB_NAMESPACE ?= sentropic
 .PHONY: oauth-register-client-job
 oauth-register-client-job: ## Register one oauth_clients row via the versioned Job (SECRET_FILE required)
-	@test -s "$(SECRET_FILE)" || { echo "ERROR: SECRET_FILE is missing or empty (0600 file with OAUTH_CLIENT_* vars)"; exit 1; }
-	@kubectl -n "$(OAUTH_REGISTER_JOB_NAMESPACE)" create secret generic oauth-client-registration --from-env-file="$(SECRET_FILE)" --dry-run=client -o yaml | kubectl -n "$(OAUTH_REGISTER_JOB_NAMESPACE)" apply -f -
-	@kubectl -n "$(OAUTH_REGISTER_JOB_NAMESPACE)" apply -f deploy/k8s/base/36-oauth-register-client-job.yaml
-	@kubectl -n "$(OAUTH_REGISTER_JOB_NAMESPACE)" wait --for=condition=complete job/oauth-register-client --timeout=120s
-	@kubectl -n "$(OAUTH_REGISTER_JOB_NAMESPACE)" logs job/oauth-register-client
-	@kubectl -n "$(OAUTH_REGISTER_JOB_NAMESPACE)" delete job/oauth-register-client
-	@kubectl -n "$(OAUTH_REGISTER_JOB_NAMESPACE)" delete secret/oauth-client-registration
+	@set -eu; NS="$(OAUTH_REGISTER_JOB_NAMESPACE)"; \
+	trap 'kubectl -n "$$NS" delete job/oauth-register-client >/dev/null 2>&1 || true; kubectl -n "$$NS" delete secret/oauth-client-registration >/dev/null 2>&1 || true' EXIT; \
+	test -s "$(SECRET_FILE)" || { echo "ERROR: SECRET_FILE is missing or empty (0600 file with OAUTH_CLIENT_* vars)"; exit 1; }; \
+	kubectl -n "$$NS" delete job/oauth-register-client >/dev/null 2>&1 || true; \
+	kubectl -n "$$NS" create secret generic oauth-client-registration --from-env-file="$(SECRET_FILE)" --dry-run=client -o yaml | kubectl -n "$$NS" apply -f -; \
+	kubectl -n "$$NS" apply -f deploy/k8s/base/36-oauth-register-client-job.yaml; \
+	kubectl -n "$$NS" wait --for=condition=complete job/oauth-register-client --timeout=120s; \
+	kubectl -n "$$NS" logs job/oauth-register-client
 
 .PHONY: publish-llm-mesh
 publish-llm-mesh: check-llm-model-equivalences verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
