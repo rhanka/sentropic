@@ -622,3 +622,82 @@ describe('content consent native boundary (CM2-R4-4)', () => {
     );
   });
 });
+
+describe('content consent amendment refresh (N3)', () => {
+  const refreshInput = (overrides = {}) => ({
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    bindingId: 'binding-1',
+    bindingVersion: 1,
+    tenantId: 'tenant-a',
+    workspaceId: 'workspace-1',
+    ownerId: 'user-1',
+    sessionCreatedAt: 1_000_001,
+    sourceGeneration: 'gen-1',
+    sourceTrustVersion: 'h2a-1.0+d2-1',
+    nativeBoundarySeq: 41,
+    expectedProjectRevision: 2,
+    ...overrides,
+  });
+
+  const amendToTwo = async (service, overrides = {}) => {
+    const rePrepared = service.prepareProject(sharedBaseInput({ expectedProjectRevision: 1, ...overrides }));
+    await service.acceptProject(rePrepared, { challengeId: rePrepared.challengeId });
+  };
+
+  it('should refresh two live children to the amended revision without per-child confirmation', async () => {
+    const { service } = await readyConsent();
+    const first = await service.deriveChild(sharedChildInput());
+    const second = await service.deriveChild(sharedChildInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
+    await amendToTwo(service, {
+      retentionByChannel: { 'terminal.cache': { mode: 'duration', durationSeconds: 3600 }, 'native.mirror': { mode: 'none' } },
+    });
+    await expectConsentCodeAsync(() => service.deriveChild(sharedChildInput()), 'project_revision_changed');
+    const r1 = await service.refreshChild(refreshInput());
+    expect(r1.grantId).toBe(first.grantId);
+    expect(r1.projectRevision).toBe(2);
+    expect(r1.version).toBe(2);
+    expect(r1.retentionSnapshot['terminal.cache']).toEqual({ mode: 'duration', durationSeconds: 3600 });
+    expect(r1.nativeBoundarySeq).toBe(41);
+    const r2 = await service.refreshChild(refreshInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
+    expect(r2.grantId).toBe(second.grantId);
+    expect(r2.projectRevision).toBe(2);
+    const project = await service.readProject('project-1');
+    expect(project?.activatedAt).toBe(1_000_000);
+    const dup = await service.refreshChild(refreshInput());
+    expect(dup.version).toBe(2);
+    expect(dup.projectRevision).toBe(2);
+  });
+
+  it('should refuse refresh outside the amended scope and on stale acknowledgments', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    await amendToTwo(service, { futureSessions: false, selectedSessionIds: [] });
+    await expectConsentCodeAsync(() => service.refreshChild(refreshInput()), 'ineligible_session');
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ expectedProjectRevision: 1 })),
+      'revision_conflict',
+    );
+  });
+
+  it('should refuse refresh for excluded, closed and replaced-source children', async () => {
+    const { service } = await readyConsent();
+    await service.deriveChild(sharedChildInput());
+    await service.deriveChild(sharedChildInput({ sessionId: 'session-2', bindingId: 'binding-2' }));
+    await service.deriveChild(sharedChildInput({ sessionId: 'session-3', bindingId: 'binding-3' }));
+    await service.excludeSession('project-1', 'session-1');
+    await amendToTwo(service);
+    await expectConsentCodeAsync(() => service.refreshChild(refreshInput()), 'session_excluded');
+    await service.closeGrant('session-2');
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({ sessionId: 'session-2', bindingId: 'binding-2' })),
+      'grant_closed',
+    );
+    await expectConsentCodeAsync(
+      () => service.refreshChild(refreshInput({
+        sessionId: 'session-3', bindingId: 'binding-3', sourceTrustVersion: 'h2a-9.9+d2-9',
+      })),
+      'source_reauthorization_required',
+    );
+  });
+});
