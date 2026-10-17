@@ -126,10 +126,21 @@ lineage, and policy for the next projection. Muse device-flow grants
 never refresh by re-reading the CLI login store. The delivery receiver
 (`POST /import`, `GET /ack`, `POST /drain|/reopen`, conditional
 CISEAT-EX2) imports monotonically with billing clearance, wrong-owner and
-stale-generation refusal, and trusted-hop bearer auth; k8s mTLS
-termination stays with L3 P-DEPLOY. L1-local owner inspection uses
+stale-generation refusal. Identity (owner, scope, billing) is derived
+from the authenticated server registry, never the request body; the
+presented credential is verified with a constant-time comparison; the
+trusted-hop marker is per-request, never process-wide; k8s mTLS
+termination stays with L3 P-DEPLOY. Mesh `importSeatBundle` is the
+single canonical registry (`seat-<cli>-<seatRef>`): it validates
+consumer authority, owner, and expiry, classifies idempotent/stale/
+conflict/epoch transitions, and persists through the canonical
+register/persist path so restart keeps the external marker. CLI seat
+profiles require a custodian-observed `issuedAt` (never invented);
+missing, empty, or unparseable expiry is unavailable, never infinite
+validity. L1-local owner inspection uses
 `src/node/cli-seat-store-reader.ts` through `seat-tools/seat-inspect`
-(CISEAT-EX3, synthetic-gated, categories only).
+(CISEAT-EX3, synthetic-gated, categories only), with an explicit
+sidecar file backend or an `unverified` verdict.
 
 Mesh stays at 0.26.x inside gateway 0.20.0's declared `^0.26.0` range
 (R6-1); the workspace lock holds exactly one linked `llm-mesh` copy.
