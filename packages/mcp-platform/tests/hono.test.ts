@@ -172,7 +172,7 @@ describe('createMcpPlatformHono /mcp SDK mount', () => {
     app.request('/mcp', {
       method: 'POST',
       headers: {
-        authorization: 'Bearer [REDACTED]',
+        authorization: 'Bearer valid',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
         ...(sessionId === null ? {} : { 'mcp-session-id': sessionId }),
