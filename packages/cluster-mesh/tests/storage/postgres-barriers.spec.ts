@@ -5,6 +5,25 @@ import { grantFor } from './authority-corpus.js';
 import { emptyEffects } from '../../src/storage/staged-preparation.js';
 import { stagedFragmentDigest } from '../../src/storage/staged-codec.js';
 describe.skipIf(!pgEnabled)('Postgres dependent barriers and actual purge', () => {
+  it('erases every staged item when numeric ids exceed one digit', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const root = await fixture.open(); const grant = grantFor({ operations: ['read', 'write', 'maintain'] }); const bound = await root.bindNew(grant);
+      await bound.configureLifecycle('optional'); await bound.appendChain('staged-target', { id: 'r', hash: 'r', bytes: 'canonical' }, { kind: 'absent', allocation: '0' });
+      const fence = { fenceId: 'staged-purge', epoch: '1' }; await root.provisionFence(grant, fence);
+      const begin = { operationKey: 'staged-purge', inputDigest: 'input', contractDigest: 'contract', sourceBoundary: 'source', fence }; const unit = await bound.beginStaged(begin);
+      let predecessorHash: string | null = null;
+      for (let n = 0; n < 12; n += 1) {
+        const ordinal = String(n); const effects = { ...emptyEffects(), records: [{ key: 'staged-target', contentHash: `h${n}`, bytes: { format: 'utf8' as const, data: `hidden${n}` } }] };
+        const fragmentDigest = stagedFragmentDigest({ ...begin, moduleId: 'comments', scope: grant.scope, operationId: begin.operationKey, ordinal, predecessorHash }, effects);
+        await bound.stageFragment({ unit, ordinal, predecessorHash, fragmentDigest, effects, fence }); predecessorHash = fragmentDigest;
+      }
+      await bound.commitAtomic({ ...emptyEffects(), barriers: [{ boundary: 'staged-target', reason: 'removed' }], purgeIntents: [{ target: 'staged-target', intentId: 'all-items', authorizedBy: grant.principalId }] });
+      expect(await bound.completePurge('all-items')).toMatchObject({ state: 'complete', payloadDisposition: 'erased' });
+      const rows = await fixture.tx.run(true, (session) => session.execute({ text: `SELECT count(*)::text AS remaining FROM "${fixture.name}".staged_items WHERE unit_id=$1 AND bytes IS NOT NULL`, values: [unit.unitId] }));
+      expect(rows.rows[0]?.remaining).toBe('0');
+    } finally { await fixture.close(); }
+  });
   it('denies full and paged reads while physical erasure is still pending', async () => {
     const fixture = await createPgFixture({ limits: { maxRecords: 1, maxAppends: 1, maxEncodedBytes: 524288 } });
     try {
