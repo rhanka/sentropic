@@ -17,7 +17,7 @@ export const createPgFixture = async (extra: Partial<PostgresStorageOptions> = {
     await session.execute({ text: `CREATE SCHEMA "${name}"; CREATE TABLE "${name}".host_history(ordinal integer PRIMARY KEY,receipt jsonb NOT NULL)`, values: [] });
     await applyPgMigrations(session, layout, extra.assets ?? await loadPgAssets(), history, { id: 'neutral-host/001', checksum: 'a'.repeat(64) });
   });
-  const options = { moduleId: 'comments' as const, driver: connection.driver, layout, history, ...extra };
+  const options = { moduleId: 'comments' as const, driver: connection.driver, layout, history, cursorSecret: 'qualification-host-secret', ...extra };
   return {
     options, tx, name, open: () => createPostgresKernel(options), disconnect: connection.close,
     close: async () => {
