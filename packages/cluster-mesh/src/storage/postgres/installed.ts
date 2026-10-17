@@ -9,6 +9,7 @@ import { decodePgJson, decodePgUtf8 } from './codec.js';
 import { applyPgTransaction, ownPgValue, runPgTransaction } from './ordinary-transactions.js';
 import type { PgInstalledContext } from './installed-contracts.js';
 import { REGISTERED_PG_EFFECTS } from './registered-effects.js';
+import { beginPgStaged, stagePgFragment, inspectPgStaged } from './staged.js';
 export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<unknown>, tx: PgTx) => {
   const checks: (() => Promise<void>)[] = []; let closed = false;
   const live = () => { if (closed || tx.closed) throw new StorageInvalidCommandError('installed operation context is closed'); };
@@ -33,6 +34,9 @@ export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<u
     apply: async (unit) => { live(); await applyPgTransaction(core, grant, tx, unit, {}, REGISTERED_PG_EFFECTS); },
     revalidate: (check) => { live(); checks.push(check); tx.revalidators.add(check); },
     replayed: () => { live(); tx.noop = true; },
+    beginStaged: (input) => { live(); return beginPgStaged(core, grant, input); },
+    stageFragment: (input) => { live(); return stagePgFragment(core, grant, input); },
+    inspectStaged: (operationKey) => { live(); return inspectPgStaged(core, grant, operationKey); },
   });
   return { context, finish: async () => { try { live(); for (const check of checks) await check(); } finally { closed = true; } } };
 };
