@@ -91,6 +91,7 @@
 - `L0-transfer-progress` (2026-10-17): producer validates source HEAD, archive name/version/SHA-256/SHA-512, namespaced sibling receipts and confined files, then copies immutable bytes and writes input last; host wrapper refuses wrong/dirty companion branches, performs no Git write. Synthetic transfer passes; actual companion CI proof remains FL-18. h-cond has no live advertised session, so no acknowledgement/message delivery is claimed.
 - `L1-key-recovery` (2026-10-17): reproduced three session failures, then fixed encrypted key recovery, same-key concurrent acquisition and durable revocation tombstones; scoped session service 8/8. No key appears in public session/receipt reads.
 - `L1-store-fencing` (2026-10-17): empty stores require the protected key; CAS operations serialize within one adapter and preserve other live writers regardless of age. Lifetime host-writer claim is available; scoped store 5/5 after reproducing missing-key and conflicting-write failures.
+- `L1-node-http` (2026-10-17): gateway-owned Node bridge preserves request/response bytes and propagates HTTP cancellation with stream backpressure; targeted tests pass. Owner-state resolver validates scope segments and absolute platform state roots.
 
 ## AI Flaky tests
 - Acceptance rule:
