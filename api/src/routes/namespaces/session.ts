@@ -85,7 +85,14 @@ const createModule = (
       author: createAuthorPort({ compositionRoot, namespace: '/session' }),
     },
   });
-  if (compositionRoot !== 'product') return module;
+  if (compositionRoot !== 'product') return { ...module, createRouter(ports) {
+    const router = module.createRouter(ports);
+    // Refuse before the IdP screen fallback; no content handler or capability is installed.
+    for (const path of ['/session/content', '/session/content/*']) {
+      router.all(path, (c) => c.json({ error: 'not_found' }, 404));
+    }
+    return router;
+  } };
   return { ...module, createRouter(ports) {
     const router = module.createRouter(ports);
     const author = createAuthorPort({ compositionRoot, namespace: '/session' });
