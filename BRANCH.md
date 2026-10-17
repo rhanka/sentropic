@@ -388,6 +388,7 @@
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{store,transactions,authority,queries,hashes,lifecycle,purge,coverage}.spec.ts`; frozen M1 corpus and hash vectors on the module.
 
 - [ ] **Lot 8 — Import, typed complete receipts and authorized readback for the Immo host (C4a/C4b/C4c)**
+  - [ ] RED `comments-fragment-vectors.spec.ts`: independent framed UTF-8 digests, owned payloads, exact ordinals/predecessors and separate manifest/payload/envelope byte limits before import implementation.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
