@@ -110,7 +110,9 @@ export function createContentHandler(deps: ContentHandlerDeps) {
       if (request.ticket !== undefined) {
         if (request.actorId === undefined || request.actorId.length === 0) return fail(401);
         try {
-          await deps.tickets.redeem(request.ticket, { subjectId: request.actorId, artifactId });
+          await deps.tickets.redeem(request.ticket, {
+            subjectId: request.actorId, artifactId, releaseId: release.releaseId, channel: origin.kind,
+          });
         } catch {
           return fail(401);
         }
