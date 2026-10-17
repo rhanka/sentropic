@@ -199,6 +199,7 @@
     - [ ] `src/storage/staged-effects.ts` prepares module effects, verified purge authorizers, projections, audit and one scoped journal event on the owned root before publication; shared purge fixtures will be aligned with verified principals.
   - [ ] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
   - [ ] G5: imported content and its covering barrier publish in one unit (reference aligned).
+    - [ ] Visibility conflict/success fixtures now derive canonical fragment and root commitments; captured-base CAS remains exercised after an actual rival publication.
   - [ ] Lot gate: copy of Lot 1 gate; tests `visibility.spec.ts`, `staged-units.spec.ts` with interleaved readers.
 
 - [ ] **Lot 5 — K4 journal, manifests and ports (N7-N9, N11; MAJ-7..8, m1, m4-m6, S4:7-9, S4:11-12; C10-C18)**
