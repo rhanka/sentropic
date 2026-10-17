@@ -114,6 +114,34 @@ describe('external-seat-authority acquisition guard', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it('refuses an explicit refresh of an external seat before any provider call', async () => {
+    const refresh = vi.fn();
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(),
+      new Map<string, EnrollmentProvider>([['muse', { refresh } as unknown as EnrollmentProvider]]),
+      { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'acct-external-04',
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      accessToken: 'stale-access',
+      expiresAt: '2000-01-01T00:00:00Z',
+      status: 'active',
+      ownerScopeRef: 'owner-synth-01',
+      metadata: markExternalSeatAuthority(undefined, authority),
+    });
+    // refreshToken is intentionally private: the explicit path is exercised
+    // through the typed boundary, never through a back door.
+    const explicit = service as unknown as {
+      refreshToken: (input: { accountId: string }) => Promise<unknown>;
+    };
+    await expect(explicit.refreshToken({ accountId: 'acct-external-04' })).rejects.toMatchObject({
+      code: 'access-unavailable',
+    });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it('returns valid unexpired external access directly with the policy retained', async () => {
     const { service, refresh } = setup();
     const metadata = markExternalSeatAuthority({ productAccountSource: 'antigravity' }, authority);
