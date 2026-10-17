@@ -99,6 +99,7 @@ export async function generateCommentResolutionProposal(opts: {
   for await (const event of callLLMStream({
     messages: [{ role: 'system', content: prompt }],
     responseFormat: 'json_object',
+    reasoningEffort: 'none',
     maxOutputTokens: 800
   })) {
     if (event.type === 'content_delta') {

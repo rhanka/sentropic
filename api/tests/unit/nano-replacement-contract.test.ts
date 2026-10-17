@@ -100,6 +100,18 @@ describe('nano replacement through the product mesh boundary', () => {
     expect((generate.mock.calls[1]?.[0] as any).requestOptions).toMatchObject({ max_completion_tokens: 128_000, reasoning_effort: 'high' });
   });
 
+  it('should preserve omitted effort for explicitly selected Luna at both API boundaries', async () => {
+    const generate = vi.spyOn(runtime, 'generate').mockResolvedValue({ choices: [{ message: { content: 'Offline' } }] });
+    const stream = vi.spyOn(runtime, 'streamGenerate').mockResolvedValue((async function* () {
+      yield { type: 'response.output_text.delta', delta: 'Offline' };
+      yield { type: 'response.completed', response: { id: 'offline', model: 'gpt-6-luna' } };
+    })());
+    await callLLM({ model: 'gpt-6-luna', messages, maxOutputTokens: 32 });
+    expect((generate.mock.calls[0]?.[0] as any).requestOptions).not.toHaveProperty('reasoning_effort');
+    for await (const _event of callLLMStream({ model: 'gpt-6-luna', messages, maxOutputTokens: 32 })) { /* consume */ }
+    expect((stream.mock.calls[0]?.[0] as any).requestOptions).not.toHaveProperty('reasoning');
+  });
+
   it.each([0, -1, NaN, Infinity, 128_001])('should refuse an invalid output ceiling %s before dispatch', async (maxOutputTokens) => {
     const generate = vi.spyOn(runtime, 'generate').mockRejectedValue(new Error('Unexpected provider dispatch'));
     await expect(callLLM({ model: 'gpt-6-luna', messages, maxOutputTokens })).rejects.toThrow(/output.*budget/i);
