@@ -83,6 +83,7 @@
 - [x] Full API endpoints exposed seven changed fixture assumptions: user defaults still expected nano, and comment-tool streams consumed the newly active classifier. Update the defaults expectation and isolate classification while retaining all comment authorization/continuation assertions.
 - [x] Opus correction review reproduced an unintended non-OpenAI effort fallback change; restrict the explicit medium handoff to the configured OpenAI default and preserve other provider defaults. Pin official numeric financial ceilings independently in tests; document unmeasured main-chat corrections in the runbook.
 - [x] Scoped API fixture repair gate: `chat-tools.test.ts` and `me.test.ts`, all 12 passed with comment authorization, proposal and continuation assertions intact.
+- [x] CI AI evidence exposed inherited hardcoded high-effort generation defaults in executive summary / initiative / matrix callers. Two offline A/B failures reproduced; preserve former nano none in their shared `getReasoningParamsForModel` helper while leaving explicit per-message runtime reasoning and unrelated models intact. Deterministic document AI fixture repair passes all seven tests, including real chunk/merge caps.
 
 ## AI Flaky tests
 - [x] No provider failure in the paired campaign; 30/30 cases and all 38 requests completed without retry, repair, fallback or timeout inflation. Raw outputs/usage retained externally with no credentials.
