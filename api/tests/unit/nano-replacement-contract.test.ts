@@ -13,14 +13,29 @@ vi.mock('../../src/services/provider-credentials', () => ({
 
 import { callLLM, callLLMStream, resolveRuntimeSelection } from '../../src/services/llm-runtime';
 import { providerRegistry } from '../../src/services/provider-registry';
+import { getDefaultOpenAIModel } from '../../src/config/models';
+import { normalizeLegacyModelSelection } from '../../src/services/model-selection-legacy';
 
 const candidates = ['gpt-6-luna', 'gpt-5.6-luna'];
 const messages = [{ role: 'user' as const, content: 'Return a short title.' }];
 const runtime = providerRegistry.requireProvider('openai');
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('nano replacement through the product mesh boundary', () => {
+  it.each(['', ' gpt-4.1-nano ', 'GPT-4.1-NANO-2025-04-14'])(
+    'should repair stale configuration %s', (configured) => {
+      expect(getDefaultOpenAIModel(configured)).toBe('gpt-6-luna');
+    },
+  );
+
+  it('should select candidate B for helpers and legacy cutovers from the same configuration', () => {
+    vi.stubEnv('OPENAI_MODEL', 'gpt-5.6-luna');
+    expect(getDefaultOpenAIModel()).toBe('gpt-5.6-luna');
+    expect(normalizeLegacyModelSelection({ modelId: 'gpt-4.1-nano' }).modelId).toBe('gpt-5.6-luna');
+    expect(normalizeLegacyModelSelection({ modelId: 'gpt-5.5' }).modelId).toBe('gpt-5.6-luna');
+  });
+
   it('should resolve a saved retired default to candidate A', async () => {
     expect(await resolveRuntimeSelection({})).toEqual({ providerId: 'openai', model: 'gpt-6-luna' });
   });

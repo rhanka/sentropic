@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { env } from '../config/env';
+import { getDefaultOpenAIModel } from '../config/models';
 import { db } from '../db/client';
 import { settings } from '../db/schema';
 import { normalizeLegacyModelSelection } from './model-selection-legacy';
@@ -23,7 +24,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   ai_concurrency: '10',
   publishing_concurrency: '5',
   default_provider_id: 'openai',
-  default_model: 'gpt-4.1-nano',
+  default_model: getDefaultOpenAIModel(),
   queue_processing_interval: '1000',
   [CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING]: String(env.CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER),
 };
@@ -238,7 +239,7 @@ export class SettingsService {
       this.get('default_model', {
         userId,
         fallbackToGlobal: true,
-      }).then((value) => value || 'gpt-4.1-nano'),
+      }).then((value) => value || getDefaultOpenAIModel()),
       this.getNumber('queue_processing_interval', 1000, {
         fallbackToGlobal: true,
       }),
@@ -253,7 +254,7 @@ export class SettingsService {
       concurrency,
       publishingConcurrency,
       defaultProviderId: normalizedSelection.providerId || 'openai',
-      defaultModel: normalizedSelection.modelId || 'gpt-4.1-nano',
+      defaultModel: normalizedSelection.modelId || getDefaultOpenAIModel(),
       processingInterval,
     };
   }
