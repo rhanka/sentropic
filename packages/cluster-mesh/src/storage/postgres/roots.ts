@@ -53,12 +53,12 @@ export class PgRoots {
     if (!row || row.erased === true || row.bytes === null) throw new PostgresStorageError('unavailable');
     return decodePgBytes(row.bytes);
   }
-  async publish(session: PgSession, scope: StorageScope, base: PgRoot, root: string | null, receipt: CommitReceipt, operationKey?: string): Promise<void> {
+  async publish(session: PgSession, scope: StorageScope, base: PgRoot, root: string | null, receipt: CommitReceipt, operationKey?: string, sealedSegment = false): Promise<void> {
     const next = (BigInt(base.version) + 1n).toString();
     const sequence = (BigInt(base.sequence) + 1n).toString();
     const changed = await session.execute({ text: `UPDATE ${this.schema}.scopes SET root=$1::bigint,version=version+1,sequence=sequence+1 WHERE key=$2 AND version=$3::bigint AND incarnation=$4 RETURNING version::text`, values: [root, this.key(scope), base.version, this.incarnation] });
     if (changed.rows.length !== 1) throw new StorageCasConflictError('scope root changed during preparation');
-    const event = { eventId: `event:${receipt.commitId}`, seq: sequence, commitId: receipt.commitId, rootVersion: next, ...(operationKey === undefined ? {} : { operationKey }) };
+    const event = { eventId: `event:${receipt.commitId}`, seq: sequence, commitId: receipt.commitId, rootVersion: next, ...(operationKey === undefined ? {} : { operationKey }), ...(sealedSegment && operationKey ? { segment: { operationKey, from: sequence, to: sequence } } : {}) };
     if (this.options.outbox) {
       await this.options.outbox.append(session, { moduleId: this.options.moduleId, scope, incarnation: this.incarnation, stream: this.incarnation }, event);
     } else {

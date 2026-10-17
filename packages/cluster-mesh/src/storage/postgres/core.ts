@@ -34,6 +34,7 @@ export class PgCore {
     const descriptor = options.descriptor ? JSON.parse(JSON.stringify(options.descriptor)) as typeof options.descriptor : undefined;
     if (descriptor) { if (!validateModuleDescriptor(descriptor).ok || descriptor.queryNames.some((name) => typeof options.queries?.[name] !== 'function')) throw new StorageInvalidCommandError('invalid registered Postgres descriptor'); freezeRegistration(descriptor); }
     this.options = Object.freeze({ ...options, descriptor, queries: Object.freeze({ ...options.queries }), pgPredicates: Object.freeze({ ...options.pgPredicates }) });
+    if (options.outbox && ['append', 'read', 'find'].some((name) => typeof options.outbox?.[name as keyof typeof options.outbox] !== 'function')) throw new StorageInvalidCommandError('alternate journal requires append and replay on the same log');
     this.tx = new PgTransactions(options.driver, options.budgets);
     this.roots = new PgRoots(options, incarnation);
     this.provider = options.boundaryProvider ?? new HmacExactHeadBoundaryProvider(options.cursorSecret);
