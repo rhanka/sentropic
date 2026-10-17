@@ -730,7 +730,7 @@ describe('session consent durable lifecycle', () => {
     );
   });
 
-  it('should purge product content through its origin handle without membership or source contact', async () => {
+  it.each(['purge', 'revoke', 'exclude'] as const)('should apply product content %s without source contact and preserve D1', async (action) => {
     await acceptProject();
     const bindingId = await adoptSession('product-content-purge');
     const [binding] = await db.select().from(sessionWorkspaceBindings)
@@ -743,18 +743,24 @@ describe('session consent durable lifecycle', () => {
     const reserved = await service.reserveBeforeUpload('product-content-purge', 'terminal.cache',
       { raw: bytes.length, encoded: bytes.length }, 'product-content-purge', ctx);
     await service.publishAfterUpload(reserved.reservationId, bytes, ctx);
-    await db.delete(workspaceMemberships).where(and(
+    if (action === 'purge') await db.delete(workspaceMemberships).where(and(
       eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, owner.id)));
     const router = productContent();
     const inventory = await router.request('/api/v1/auth/session/content/retained-content', { headers: browserHeaders() });
     const { items } = await inventory.json();
-    const response = await router.request(`/api/v1/auth/session/content/${bindingId}/consent?retainedScopeId=${encodeURIComponent(items[0].retainedScopeId)}`,
-      { method: 'DELETE', headers: browserHeaders() });
+    const suffix = action === 'purge' ? `consent?retainedScopeId=${encodeURIComponent(items[0].retainedScopeId)}`
+      : action === 'revoke' ? 'consent' : 'exclusion';
+    const response = await router.request(`/api/v1/auth/session/content/${bindingId}/${suffix}`,
+      { method: action === 'exclude' ? 'PUT' : 'DELETE',
+        headers: { ...browserHeaders(), 'content-type': 'application/json' },
+        ...(action === 'exclude' ? { body: JSON.stringify({ excluded: true }) } : {}) });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ complete: true });
     expect(await fixture.listPhysical('')).toHaveLength(0);
     expect((await db.select().from(sessionContentGrants)
-      .where(eq(sessionContentGrants.sessionId, 'product-content-purge')))[0]?.state).toBe('revoked');
+      .where(eq(sessionContentGrants.sessionId, 'product-content-purge')))[0]?.state).toBe(action === 'exclude' ? 'excluded' : 'revoked');
+    if (action === 'exclude') expect((await db.select().from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1')))[0]?.excludedSessionIds).toContain('product-content-purge');
     expect((await db.select().from(sessionWorkspaceBindings)
       .where(eq(sessionWorkspaceBindings.bindingId, bindingId)))[0]?.status).toBe('attached');
   });
