@@ -8,7 +8,6 @@ import { grantFor } from './authority-corpus.js';
 export const FENCE = { fenceId: 'root-test-lane', epoch: '1' };
 export const stagedRootFixture = (options: Partial<StagedCoreOptions> = {}) => {
   const backend = options.backend ?? new MemoryBackend(createIndexedBackendScopeState);
-  let core: StagedCore;
   const coordinator = new RootMutationCoordinator(backend, {
     prepare: (...args) => prepareStagedRootNotice(core, ...args),
     accessible: (root, _kind, key) => core.accessible(root, key),
@@ -16,7 +15,7 @@ export const stagedRootFixture = (options: Partial<StagedCoreOptions> = {}) => {
   });
   const config = { moduleId: 'comments', ...options, backend, coordinator };
   const kernel = createKernel(config);
-  core = new StagedCore(kernel, backend, coordinator, config);
+  const core: StagedCore = new StagedCore(kernel, backend, coordinator, config);
   const bound = kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
   core.provisionFence(bound.scope, bound.grant.principalId, FENCE);
   return { core, kernel, bound, backend, coordinator };

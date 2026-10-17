@@ -13,6 +13,7 @@ const prepare = (fixture: ReturnType<typeof stagedRootFixture>, count = 1) => {
   let predecessorHash: string | null = null;
   for (let index = 0; index < count; index += 1) {
     const effects: AtomicUnit = { guards: [], records: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [],
+      ...(index === count - 1 ? { moduleResult: { format: 'utf8' as const, data: 'complete-result' } } : {}),
       appends: [{ chainId: 'chain', record: { id: `r-${index}`, bytes: '{}', hash: `h-${index}` },
         expectation: index === 0 ? { kind: 'absent', allocation: '0' } : { kind: 'head', hash: `h-${index - 1}` } }],
     };
@@ -44,6 +45,7 @@ describe('bounded root sealing', () => {
     expect(await bound.readHead('chain')).toBeNull();
     if (result.state !== 'sealed') throw new Error('expected seal');
     const receipt = await commitSealedOperation(core, bound, { seal: result.seal, fence: FENCE });
+    expect(receipt.moduleResult).toEqual({ format: 'utf8', data: 'complete-result' });
     expect(await bound.readHead('chain')).toBe('h-5');
     expect(core.data(core.current(bound.scope)).journal.length).toBe(1);
     expect(await commitSealedOperation(core, bound, { seal: result.seal, fence: FENCE })).toEqual(receipt);
