@@ -251,6 +251,77 @@ describe('token exchange HTTP issuer units', () => {
     expect(rejection.message).toContain('not JSON');
   });
 
+  it('M7 re-fetches the JWKS after a transient fetch failure', async () => {
+    let calls = 0;
+    const fetchFn = async () => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          status: 500,
+          headers: { get: (_name: string) => null },
+          text: async () => 'boom',
+        };
+      }
+      return {
+        status: 200,
+        headers: { get: (_name: string) => null },
+        text: async () => JSON.stringify({ keys: [] }),
+      };
+    };
+    const issuer = new TokenExchangeHttpIssuer(
+      baseOptions({ jwks: undefined, jwksUri: `${ISSUER}/jwks.json`, fetchFn: fetchFn as never }),
+    );
+    await expect(issuer.verify('header.payload.sig')).rejects.toMatchObject({
+      name: 'SubjectVerificationError',
+    });
+    expect(calls).toBe(1);
+    await expect(issuer.verify('header.payload.sig')).rejects.toMatchObject({
+      name: 'SubjectVerificationError',
+    });
+    expect(calls).toBe(2);
+  });
+
+  it('M7 refreshes stale JWKS keys once on signature failure', async () => {
+    let jwksCalls = 0;
+    const fetchFn = async () => {
+      jwksCalls += 1;
+      return {
+        status: 200,
+        headers: { get: (_name: string) => null },
+        text: async () => JSON.stringify({ keys: [{ kid: `k${jwksCalls}` }] }),
+      };
+    };
+    const nowSec = Math.floor(Date.now() / 1000);
+    const rotatingCrypto: TokenExchangeCryptoPort = {
+      createKeySet: (doc: unknown) => doc,
+      verifyJwt: async (_token: string, key: unknown) => {
+        const doc = key as { keys?: Array<{ kid?: string }> };
+        if (doc?.keys?.[0]?.kid === 'k1') {
+          throw Object.assign(new Error('signature mismatch'), {
+            code: 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED',
+          });
+        }
+        return {
+          sub: 'user-1',
+          iss: ISSUER,
+          iat: nowSec - 5,
+          exp: nowSec + 300,
+        };
+      },
+    };
+    const issuer = new TokenExchangeHttpIssuer(
+      baseOptions({
+        jwks: undefined,
+        jwksUri: `${ISSUER}/jwks.json`,
+        fetchFn: fetchFn as never,
+        crypto: rotatingCrypto,
+      }),
+    );
+    const verified = await issuer.verify(`${b64u({ alg: 'EdDSA' })}.payload.sig`);
+    expect(verified.subject).toBe('user-1');
+    expect(jwksCalls).toBe(2);
+  });
+
   it('m3 refuses an oversized JWKS document without text()', async () => {
     const textCalls = { count: 0 };
     const big = JSON.stringify({ keys: [{ k: 'x'.repeat(300) }] });

@@ -154,7 +154,7 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
 
   private async jwks(): Promise<unknown> {
     if (this.jwksPromise === undefined) {
-      this.jwksPromise = (async () => {
+      const pending = (async () => {
         if (this.options.jwks !== undefined) {
           return this.options.crypto.createKeySet(this.options.jwks);
         }
@@ -182,6 +182,13 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
         }
         return this.options.crypto.createKeySet(JSON.parse(text) as unknown);
       })();
+      this.jwksPromise = pending;
+      // A rejected fetch must not poison the cache: drop it so the next call
+      // re-fetches (transient-failure recovery). The rotation retry below
+      // resets explicitly before its single re-fetch.
+      void pending.catch(() => {
+        if (this.jwksPromise === pending) this.jwksPromise = undefined;
+      });
     }
     return this.jwksPromise;
   }
@@ -191,6 +198,28 @@ export class TokenExchangeHttpIssuer implements TokenExchangeIssuer {
   }
 
   async verify(subjectToken: string): Promise<VerifiedSubjectToken> {
+    try {
+      return await this.verifyOnce(subjectToken);
+    } catch (error) {
+      if (!this.shouldRefreshKeys(error)) throw error;
+      // Stale cached keys (IdP rotation): drop the key set and retry once
+      // against a fresh fetch. The retry error propagates unchanged.
+      this.jwksPromise = undefined;
+      return this.verifyOnce(subjectToken);
+    }
+  }
+
+  /**
+   * Rotation retry gate: only a cryptographic signature failure against a
+   * remotely fetched key set justifies one re-fetch. Static `jwks` pins and
+   * every other refusal (expiry, audience, malformed) fail closed with no retry.
+   */
+  private shouldRefreshKeys(error: unknown): boolean {
+    if (this.options.jwksUri === undefined) return false;
+    return error instanceof SubjectVerificationError && error.verification === 'invalid_signature';
+  }
+
+  private async verifyOnce(subjectToken: string): Promise<VerifiedSubjectToken> {
     let payload: Record<string, unknown>;
     try {
       payload = await this.options.crypto.verifyJwt(subjectToken, await this.jwks(), {
