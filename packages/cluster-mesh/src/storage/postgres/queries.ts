@@ -141,11 +141,30 @@ export const queryPgRoot = async (
       contract: core.options.descriptor?.contractDigest,
     };
     if (
-      metadata.kind !== 'query' || metadata.name !== name || metadata.hash !== hash || metadata.contract !== core.options.descriptor?.contractDigest) throw new StorageInvalidCommandError('query continuation binding differs');
-    const result = await executePgQuery(core, session, grant, captured, name, input, metadata.position, request.limit, budget);
-    const nextCursor = result.nextCursor === null ? null : await retainPgBoundary(core, session, grant, captured, { ...metadata, position: result.nextCursor });
+      metadata.kind !== 'query' ||
+      metadata.name !== name ||
+      metadata.hash !== hash ||
+      metadata.contract !== core.options.descriptor?.contractDigest
+    )
+      throw new StorageInvalidCommandError('query continuation binding differs');
+    const result = await executePgQuery(
+      core,
+      session,
+      grant,
+      captured,
+      name,
+      input,
+      metadata.position,
+      request.limit,
+      budget,
+    );
+    const nextCursor =
+      result.nextCursor === null
+        ? null
+        : await retainPgBoundary(core, session, grant, captured, { ...metadata, position: result.nextCursor });
     const page = { records: result.records, nextCursor, rootVersion: captured.version };
-    if (Buffer.byteLength(JSON.stringify(page), 'utf8') > budget) throw new StorageCapacityExceededError('query envelope exceeds its byte budget');
+    if (Buffer.byteLength(JSON.stringify(page), 'utf8') > budget)
+      throw new StorageCapacityExceededError('query envelope exceeds its byte budget');
     return page;
   });
 };
