@@ -6,12 +6,15 @@
 import assert from 'node:assert/strict';
 import { expectCode, type Awaitable } from './atomic-corpus.js';
 import type { AtomicUnit, CommitOptions } from '../../src/storage/atomic.js';
-import type { WorkLimits, WriterFence } from '../../src/storage/contracts.js';
+import type { StorageModuleId, StorageScope, WorkLimits, WriterFence } from '../../src/storage/contracts.js';
+import { stagedCommitRoots, stagedFragmentDigest } from '../../src/storage/staged-codec.js';
 import type { StagedCommitRoot, StagedUnitStatus } from '../../src/storage/staged-units.js';
 
 export interface StagedCorpusHandle {
   readonly unitId: string;
   readonly operationKey: string;
+  readonly moduleId: StorageModuleId;
+  readonly scope: StorageScope;
 }
 
 export interface StagedCorpusSeal {
@@ -72,15 +75,43 @@ const appendUnit = (chainId: string, id: string, hash: string, head: string | nu
   ],
 });
 
-const sealRoot = (operationId: string, finalFragmentHash: string, fragmentCount: string): StagedCommitRoot => ({
-  operationId,
-  contractDigest: 'contract-k2b',
-  sourceBoundary: 'boundary-k2b',
-  finalFragmentHash,
-  fragmentCount,
-  dependencyRoot: 'dep-root-k2b',
-  effectRoot: 'eff-root-k2b',
-});
+const CONTRACT = 'contract-k2b';
+const BOUNDARY = 'boundary-k2b';
+
+/** Fragment digest recomputed from the shared codec (MAJEUR-N1, N1). */
+export const stagedDigestOf = (
+  unit: StagedCorpusHandle,
+  ordinal: string,
+  predecessorHash: string | null,
+  effects: AtomicUnit,
+  contractDigest: string = CONTRACT,
+  sourceBoundary: string = BOUNDARY,
+): string =>
+  stagedFragmentDigest(
+    { moduleId: unit.moduleId, scope: unit.scope, operationId: unit.operationKey, contractDigest, sourceBoundary, ordinal, predecessorHash },
+    effects,
+  );
+
+/** Seal root over the ordered fragment effects, every field recomputed. */
+export const stagedSealRoot = (
+  unit: StagedCorpusHandle,
+  fragments: readonly AtomicUnit[],
+  contractDigest: string = CONTRACT,
+  sourceBoundary: string = BOUNDARY,
+): StagedCommitRoot => {
+  let predecessor: string | null = null;
+  for (const [index, effects] of fragments.entries()) {
+    predecessor = stagedDigestOf(unit, String(index), predecessor, effects, contractDigest, sourceBoundary);
+  }
+  return {
+    operationId: unit.operationKey,
+    contractDigest,
+    sourceBoundary,
+    finalFragmentHash: predecessor ?? '',
+    fragmentCount: String(fragments.length),
+    ...stagedCommitRoots(fragments.map((effects, index) => ({ ordinal: String(index), effects }))),
+  };
+};
 
 export const runStagedCorpus = async (
   bound: StagedCorpusStore,
@@ -100,36 +131,25 @@ export const runStagedCorpus = async (
     acceptedFragments: '0',
   });
 
-  const first = await bound.stageFragment({
-    unit,
-    ordinal: '0',
-    predecessorHash: null,
-    fragmentDigest: 'digest-0',
-    effects: appendUnit('chain-s1', 's1', 'hash-s1', null),
-    fence: FENCE,
-  });
-  assert.equal(first.fragmentDigest, 'digest-0');
+  const e0 = appendUnit('chain-s1', 's1', 'hash-s1', null);
+  const d0 = stagedDigestOf(unit, '0', null, e0);
+  const first = await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: d0, effects: e0, fence: FENCE });
+  assert.equal(first.fragmentDigest, d0);
 
   const retry = await bound.stageFragment({
     unit,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-0',
+    fragmentDigest: d0,
     effects: appendUnit('chain-s1', 's1', 'hash-s1', null),
     fence: FENCE,
   });
   assert.deepEqual(retry, first, 'K2b-RED staged: an identical retry returns the same fragment receipt');
 
+  const gap = appendUnit('chain-s1', 's1b', 'hash-s1b', null);
   await expectCode(
     async () =>
-      bound.stageFragment({
-        unit,
-        ordinal: '2',
-        predecessorHash: 'digest-0',
-        fragmentDigest: 'digest-2',
-        effects: appendUnit('chain-s1', 's1b', 'hash-s1b', null),
-        fence: FENCE,
-      }),
+      bound.stageFragment({ unit, ordinal: '2', predecessorHash: d0, fragmentDigest: stagedDigestOf(unit, '2', d0, gap), effects: gap, fence: FENCE }),
     'invalid-command',
     'K2b-RED staged: gaps cannot advance the frontier',
   );
@@ -154,7 +174,7 @@ export const runStagedCorpus = async (
         unit,
         ordinal: '0',
         predecessorHash: null,
-        fragmentDigest: 'digest-0',
+        fragmentDigest: d0,
         effects: appendUnit('chain-s1', 's1-divergent', 'hash-s1-divergent', null),
         fence: FENCE,
       }),
@@ -164,12 +184,32 @@ export const runStagedCorpus = async (
 
   await expectCode(
     async () =>
+      bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: d0, effects: appendUnit('chain-s1', 's1', 'hash-s1', 'hash-elsewhere'), fence: FENCE }),
+    'idempotency-conflict',
+    'K2b-RED staged: a changed dependency under a repeated digest conflicts',
+  );
+
+  const e1: AtomicUnit = {
+    ...appendUnit('chain-s2', 's2', 'hash-s2', null),
+    records: [{ key: 'rec-hidden-1', bytes: { format: 'utf8', data: 'hidden' }, contentHash: 'h-hidden-1' }],
+    indexWrites: [{ key: 'staged-idx-1', digest: 'd1', resultIds: ['r1'], resultHash: null }],
+  };
+  const other = appendUnit('chain-s2', 's2-other', 'hash-s2-other', null);
+  await expectCode(
+    async () =>
+      bound.stageFragment({ unit, ordinal: '1', predecessorHash: d0, fragmentDigest: stagedDigestOf(unit, '1', d0, other), effects: e1, fence: FENCE }),
+    'invalid-command',
+    'K2b-RED staged: a declared digest of other effects cannot stage a new ordinal',
+  );
+
+  await expectCode(
+    async () =>
       bound.stageFragment({
         unit,
         ordinal: '1',
         predecessorHash: 'digest-wrong',
-        fragmentDigest: 'digest-1',
-        effects: appendUnit('chain-s2', 's2', 'hash-s2', null),
+        fragmentDigest: stagedDigestOf(unit, '1', 'digest-wrong', e1),
+        effects: e1,
         fence: FENCE,
       }),
     'invalid-command',
@@ -178,30 +218,13 @@ export const runStagedCorpus = async (
 
   await expectCode(
     async () =>
-      bound.stageFragment({
-        unit,
-        ordinal: 'x',
-        predecessorHash: 'digest-0',
-        fragmentDigest: 'digest-x',
-        effects: appendUnit('chain-s2', 's2', 'hash-s2', null),
-        fence: FENCE,
-      }),
+      bound.stageFragment({ unit, ordinal: 'x', predecessorHash: d0, fragmentDigest: 'digest-x', effects: e1, fence: FENCE }),
     'invalid-command',
     'K2b-RED staged: a corrupt ordinal cannot advance',
   );
 
-  await bound.stageFragment({
-    unit,
-    ordinal: '1',
-    predecessorHash: 'digest-0',
-    fragmentDigest: 'digest-1',
-    effects: {
-      ...appendUnit('chain-s2', 's2', 'hash-s2', null),
-      records: [{ key: 'rec-hidden-1', bytes: { format: 'utf8', data: 'hidden' }, contentHash: 'h-hidden-1' }],
-      indexWrites: [{ key: 'staged-idx-1', digest: 'd1', resultIds: ['r1'], resultHash: null }],
-    },
-    fence: FENCE,
-  });
+  const d1 = stagedDigestOf(unit, '1', d0, e1);
+  await bound.stageFragment({ unit, ordinal: '1', predecessorHash: d0, fragmentDigest: d1, effects: e1, fence: FENCE });
 
   assert.equal(
     await bound.readHead('chain-s1'),
@@ -243,18 +266,9 @@ export const runStagedCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
-  await bound.stageFragment({
-    unit: staleWriter,
-    ordinal: '0',
-    predecessorHash: null,
-    fragmentDigest: 'digest-stale-0',
-    effects: appendUnit('chain-stale', 'st1', 'hash-st1', null),
-    fence: FENCE,
-  });
-  const staleSeal = await bound.sealStaged({
-    unit: staleWriter,
-    root: sealRoot('op-staged-stale', 'digest-stale-0', '1'),
-  });
+  const stale = appendUnit('chain-stale', 'st1', 'hash-st1', null);
+  await bound.stageFragment({ unit: staleWriter, ordinal: '0', predecessorHash: null, fragmentDigest: stagedDigestOf(staleWriter, '0', null, stale), effects: stale, fence: FENCE });
+  const staleSeal = await bound.sealStaged({ unit: staleWriter, root: stagedSealRoot(staleWriter, [stale]) });
   await expectCode(
     async () => bound.commitStaged({ seal: staleSeal, fence: { fenceId: 'fence-k2b', epoch: '0' } }),
     'invalid-command',
@@ -273,21 +287,19 @@ export const runStagedCorpus = async (
     fence: FENCE,
   });
   const mutableEffects = appendUnit('chain-immutable', 'im1', 'hash-im1', null);
+  const pristine = appendUnit('chain-immutable', 'im1', 'hash-im1', null);
   await bound.stageFragment({
     unit: immutableUnit,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-immutable-0',
+    fragmentDigest: stagedDigestOf(immutableUnit, '0', null, pristine),
     effects: mutableEffects,
     fence: FENCE,
   });
+  const immutableSeal = await bound.sealStaged({ unit: immutableUnit, root: stagedSealRoot(immutableUnit, [pristine]) });
   mutableEffects.appends.push(
     ...appendUnit('chain-mutated', 'mu1', 'hash-mu1', null).appends,
   );
-  const immutableSeal = await bound.sealStaged({
-    unit: immutableUnit,
-    root: sealRoot('op-staged-immutable', 'digest-immutable-0', '1'),
-  });
   await bound.commitStaged({ seal: immutableSeal, fence: FENCE });
   assert.equal(await bound.readHead('chain-immutable'), 'hash-im1');
   assert.equal(
@@ -322,22 +334,26 @@ export const runStagedCorpus = async (
       'K2b-RED staged: a divergent begin conflicts',
     );
   }
+  const unitRoot = stagedSealRoot(unit, [e0, e1]);
   await expectCode(
-    async () => bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-1', '5') }),
+    async () => bound.sealStaged({ unit, root: { ...unitRoot, fragmentCount: '5' } }),
     'invalid-command',
     'K2b-RED staged: wrong counts cannot seal',
   );
   await expectCode(
-    async () => bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-wrong', '2') }),
+    async () => bound.sealStaged({ unit, root: { ...unitRoot, finalFragmentHash: 'digest-wrong' } }),
     'invalid-command',
     'K2b-RED staged: truncated chains cannot seal',
   );
+  const foreignRoots = stagedSealRoot(unit, [e0, other]);
   for (const [label, root] of [
-    ['operation', { ...sealRoot('op-staged-1', 'digest-1', '2'), operationId: 'op-other' }],
-    ['contract', { ...sealRoot('op-staged-1', 'digest-1', '2'), contractDigest: 'contract-other' }],
-    ['boundary', { ...sealRoot('op-staged-1', 'digest-1', '2'), sourceBoundary: 'boundary-other' }],
-    ['dependencies', { ...sealRoot('op-staged-1', 'digest-1', '2'), dependencyRoot: 'dep-other' }],
-    ['effects', { ...sealRoot('op-staged-1', 'digest-1', '2'), effectRoot: 'eff-other' }],
+    ['operation', { ...unitRoot, operationId: 'op-other' }],
+    ['contract', { ...unitRoot, contractDigest: 'contract-other' }],
+    ['boundary', { ...unitRoot, sourceBoundary: 'boundary-other' }],
+    ['dependencies', { ...unitRoot, dependencyRoot: 'dep-other' }],
+    ['effects', { ...unitRoot, effectRoot: 'eff-other' }],
+    ['self-consistent dependencies', { ...unitRoot, dependencyRoot: foreignRoots.dependencyRoot }],
+    ['self-consistent effects', { ...unitRoot, effectRoot: foreignRoots.effectRoot }],
   ] as const) {
     await expectCode(
       async () => bound.sealStaged({ unit, root }),
@@ -345,7 +361,7 @@ export const runStagedCorpus = async (
       `K2b-RED staged: a divergent seal ${label} cannot seal`,
     );
   }
-  const seal = await bound.sealStaged({ unit, root: sealRoot('op-staged-1', 'digest-1', '2') });
+  const seal = await bound.sealStaged({ unit, root: unitRoot });
   const tamperedRoot = { ...seal.commitRoot, dependencyRoot: 'tampered-root' };
   await expectCode(
     async () => bound.commitStaged({ seal: { unitId: seal.unitId, commitRoot: tamperedRoot }, fence: FENCE }),
@@ -353,19 +369,13 @@ export const runStagedCorpus = async (
     'K2b-RED staged: a mutated seal cannot publish',
   );
   (seal.commitRoot as { dependencyRoot: string }).dependencyRoot = 'tampered-root';
-  const freshSeal = { unitId: seal.unitId, commitRoot: sealRoot('op-staged-1', 'digest-1', '2') };
+  const freshSeal = { unitId: seal.unitId, commitRoot: stagedSealRoot(unit, [e0, e1]) };
   assert.deepEqual(await bound.inspectStaged('op-staged-1'), { state: 'sealed', seal: freshSeal });
 
+  const e3 = appendUnit('chain-s3', 's3', 'hash-s3', null);
   await expectCode(
     async () =>
-      bound.stageFragment({
-        unit,
-        ordinal: '2',
-        predecessorHash: 'digest-1',
-        fragmentDigest: 'digest-2',
-        effects: appendUnit('chain-s3', 's3', 'hash-s3', null),
-        fence: FENCE,
-      }),
+      bound.stageFragment({ unit, ordinal: '2', predecessorHash: d1, fragmentDigest: stagedDigestOf(unit, '2', d1, e3), effects: e3, fence: FENCE }),
     'invalid-command',
     'K2b-RED staged: sealing freezes fragment input',
   );
@@ -411,22 +421,20 @@ export const runStagedCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const guardedEffects: AtomicUnit = {
+    ...emptyUnit(),
+    guards: [{ kind: 'head', chainId: 'chain-s1', hash: 'hash-s1' }],
+    appends: appendUnit('chain-base', 'b1', 'hash-b1', null).appends,
+  };
   await bound.stageFragment({
     unit: guarded,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-base-0',
-    effects: {
-      ...emptyUnit(),
-      guards: [{ kind: 'head', chainId: 'chain-s1', hash: 'hash-s1' }],
-      appends: appendUnit('chain-base', 'b1', 'hash-b1', null).appends,
-    },
+    fragmentDigest: stagedDigestOf(guarded, '0', null, guardedEffects),
+    effects: guardedEffects,
     fence: FENCE,
   });
-  const guardedSeal = await bound.sealStaged({
-    unit: guarded,
-    root: sealRoot('op-staged-base', 'digest-base-0', '1'),
-  });
+  const guardedSeal = await bound.sealStaged({ unit: guarded, root: stagedSealRoot(guarded, [guardedEffects]) });
   await expectCode(
     async () =>
       bound.commitStaged({
@@ -451,29 +459,21 @@ export const runStagedCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const indexedEffects: AtomicUnit = {
+    ...emptyUnit(),
+    indexWrites: [{ key: 'idx-race', digest: 'd-race', resultIds: ['r1'], resultHash: null }],
+  };
   await bound.stageFragment({
     unit: indexed,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-index-race-0',
-    effects: {
-      ...emptyUnit(),
-      indexWrites: [{ key: 'idx-race', digest: 'd-race', resultIds: ['r1'], resultHash: null }],
-    },
+    fragmentDigest: stagedDigestOf(indexed, '0', null, indexedEffects),
+    effects: indexedEffects,
     fence: FENCE,
   });
-  const indexedSeal = await bound.sealStaged({
-    unit: indexed,
-    root: sealRoot('op-staged-index-race', 'digest-index-race-0', '1'),
-  });
+  const indexedSeal = await bound.sealStaged({ unit: indexed, root: stagedSealRoot(indexed, [indexedEffects]) });
   await bound.commitAtomic({
-    guards: [],
-    records: [],
-    appends: [],
-    updates: [],
-    relationships: [],
-    barriers: [],
-    purgeIntents: [],
+    ...emptyUnit(),
     indexWrites: [{ key: 'idx-race', digest: 'd-race', resultIds: ['r2'], resultHash: null }],
   });
   await expectCode(
@@ -489,12 +489,13 @@ export const runStagedCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const abortedEffects = appendUnit('chain-abandoned', 'x1', 'hash-x1', null);
   await bound.stageFragment({
     unit: aborted,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-abort-0',
-    effects: appendUnit('chain-abandoned', 'x1', 'hash-x1', null),
+    fragmentDigest: stagedDigestOf(aborted, '0', null, abortedEffects),
+    effects: abortedEffects,
     fence: FENCE,
   });
   await bound.abortStaged({ unit: aborted });
@@ -505,7 +506,7 @@ export const runStagedCorpus = async (
   );
   assert.equal(await bound.readHead('chain-abandoned'), null);
   await expectCode(
-    async () => bound.sealStaged({ unit: aborted, root: sealRoot('op-staged-abort', 'digest-abort-0', '1') }),
+    async () => bound.sealStaged({ unit: aborted, root: stagedSealRoot(aborted, [abortedEffects]) }),
     'invalid-command',
     'K2b-RED staged: abandoned units cannot seal',
   );
@@ -518,45 +519,46 @@ export const runStagedCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const oversized: AtomicUnit = {
+    ...emptyUnit(),
+    appends: [
+      ...appendUnit('chain-lg-0', 'lg0', 'hash-lg-0', null).appends,
+      ...appendUnit('chain-lg-1', 'lg1', 'hash-lg-1', null).appends,
+      ...appendUnit('chain-lg-2', 'lg2', 'hash-lg-2', null).appends,
+    ],
+  };
   await expectCode(
     async () =>
       bound.stageFragment({
         unit: grouped,
         ordinal: '0',
         predecessorHash: null,
-        fragmentDigest: 'digest-group-oversized',
-        effects: {
-          ...emptyUnit(),
-          appends: [
-            ...appendUnit('chain-lg-0', 'lg0', 'hash-lg-0', null).appends,
-            ...appendUnit('chain-lg-1', 'lg1', 'hash-lg-1', null).appends,
-            ...appendUnit('chain-lg-2', 'lg2', 'hash-lg-2', null).appends,
-          ],
-        },
+        fragmentDigest: stagedDigestOf(grouped, '0', null, oversized),
+        effects: oversized,
         fence: FENCE,
         limits,
       }),
     'invalid-command',
     'K2b-RED staged: a fragment over atomic limits cannot stage',
   );
+  const groupEffects: AtomicUnit[] = [];
   let predecessor: string | null = null;
   for (let n = 0; n < 12; n += 1) {
-    const digest = `digest-group-${n}`;
+    const effects = appendUnit(`chain-lg-${n}`, `lg${n}`, `hash-lg-${n}`, null);
+    const digest = stagedDigestOf(grouped, String(n), predecessor, effects);
     await bound.stageFragment({
       unit: grouped,
       ordinal: String(n),
       predecessorHash: predecessor,
       fragmentDigest: digest,
-      effects: appendUnit(`chain-lg-${n}`, `lg${n}`, `hash-lg-${n}`, null),
+      effects,
       fence: FENCE,
       limits,
     });
+    groupEffects.push(effects);
     predecessor = digest;
   }
-  const groupedSeal = await bound.sealStaged({
-    unit: grouped,
-    root: sealRoot('op-staged-group', 'digest-group-11', '12'),
-  });
+  const groupedSeal = await bound.sealStaged({ unit: grouped, root: stagedSealRoot(grouped, groupEffects) });
   await bound.commitStaged({ seal: groupedSeal, fence: FENCE });
   for (let n = 0; n < 12; n += 1) {
     assert.equal(await bound.readHead(`chain-lg-${n}`), `hash-lg-${n}`);
@@ -569,34 +571,18 @@ export const runStagedCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
-  await bound.stageFragment({
-    unit: dependent,
-    ordinal: '0',
-    predecessorHash: null,
-    fragmentDigest: 'digest-dep-0',
-    effects: appendUnit('chain-dep', 'd0', 'hash-dep-0', null),
-    fence: FENCE,
-  });
-  await bound.stageFragment({
-    unit: dependent,
-    ordinal: '1',
-    predecessorHash: 'digest-dep-0',
-    fragmentDigest: 'digest-dep-1',
-    effects: appendUnit('chain-dep', 'd1', 'hash-dep-1', 'hash-dep-0'),
-    fence: FENCE,
-  });
-  await bound.stageFragment({
-    unit: dependent,
-    ordinal: '2',
-    predecessorHash: 'digest-dep-1',
-    fragmentDigest: 'digest-dep-2',
-    effects: appendUnit('chain-dep', 'd2', 'hash-dep-2', 'hash-dep-1'),
-    fence: FENCE,
-  });
-  const depSeal = await bound.sealStaged({
-    unit: dependent,
-    root: sealRoot('op-staged-dependent', 'digest-dep-2', '3'),
-  });
+  const depEffects = [
+    appendUnit('chain-dep', 'd0', 'hash-dep-0', null),
+    appendUnit('chain-dep', 'd1', 'hash-dep-1', 'hash-dep-0'),
+    appendUnit('chain-dep', 'd2', 'hash-dep-2', 'hash-dep-1'),
+  ];
+  let depPredecessor: string | null = null;
+  for (const [index, effects] of depEffects.entries()) {
+    const digest = stagedDigestOf(dependent, String(index), depPredecessor, effects);
+    await bound.stageFragment({ unit: dependent, ordinal: String(index), predecessorHash: depPredecessor, fragmentDigest: digest, effects, fence: FENCE });
+    depPredecessor = digest;
+  }
+  const depSeal = await bound.sealStaged({ unit: dependent, root: stagedSealRoot(dependent, depEffects) });
   await bound.commitStaged({ seal: depSeal, fence: FENCE });
   assert.equal(await bound.readHead('chain-dep'), 'hash-dep-2');
   assert.deepEqual(
@@ -604,6 +590,29 @@ export const runStagedCorpus = async (
     ['hash-dep-0', 'hash-dep-1', 'hash-dep-2'],
     'K2b-RED staged: successive fragments publish the full ordered history',
   );
+
+  const unresolved = await bound.beginStaged({
+    operationKey: 'op-staged-unresolved',
+    inputDigest: 'input-unresolved',
+    contractDigest: 'contract-k2b',
+    sourceBoundary: 'boundary-k2b',
+    fence: FENCE,
+  });
+  const unresolvedEffects = appendUnit('chain-unresolved', 'u1', 'hash-u1', 'hash-missing');
+  await bound.stageFragment({
+    unit: unresolved,
+    ordinal: '0',
+    predecessorHash: null,
+    fragmentDigest: stagedDigestOf(unresolved, '0', null, unresolvedEffects),
+    effects: unresolvedEffects,
+    fence: FENCE,
+  });
+  await expectCode(
+    async () => bound.sealStaged({ unit: unresolved, root: stagedSealRoot(unresolved, [unresolvedEffects]) }),
+    'invalid-command',
+    'K2b-RED staged: a self-consistent fragment with an unresolved dependency cannot seal',
+  );
+  assert.equal(await bound.readHead('chain-unresolved'), null);
 
   if (foreign) {
     const local = await bound.beginStaged({
@@ -620,44 +629,21 @@ export const runStagedCorpus = async (
       sourceBoundary: 'boundary-k2b',
       fence: FENCE,
     });
+    const collide = appendUnit('chain-collide', 'c1', 'hash-c1', null);
     await expectCode(
       async () =>
-        foreign.stageFragment({
-          unit: local,
-          ordinal: '0',
-          predecessorHash: null,
-          fragmentDigest: 'digest-collide-0',
-          effects: appendUnit('chain-collide', 'c1', 'hash-c1', null),
-          fence: FENCE,
-        }),
+        foreign.stageFragment({ unit: local, ordinal: '0', predecessorHash: null, fragmentDigest: stagedDigestOf(local, '0', null, collide), effects: collide, fence: FENCE }),
       'invalid-command',
       'K2b-RED staged: a foreign handle cannot stage',
     );
     await expectCode(
       async () =>
-        bound.stageFragment({
-          unit: remote,
-          ordinal: '0',
-          predecessorHash: null,
-          fragmentDigest: 'digest-collide-0',
-          effects: appendUnit('chain-collide', 'c1', 'hash-c1', null),
-          fence: FENCE,
-        }),
+        bound.stageFragment({ unit: remote, ordinal: '0', predecessorHash: null, fragmentDigest: stagedDigestOf(remote, '0', null, collide), effects: collide, fence: FENCE }),
       'invalid-command',
       'K2b-RED staged: a foreign handle cannot stage',
     );
-    await foreign.stageFragment({
-      unit: remote,
-      ordinal: '0',
-      predecessorHash: null,
-      fragmentDigest: 'digest-collide-0',
-      effects: appendUnit('chain-collide', 'c1', 'hash-c1', null),
-      fence: FENCE,
-    });
-    const remoteSeal = await foreign.sealStaged({
-      unit: remote,
-      root: sealRoot('op-collide', 'digest-collide-0', '1'),
-    });
+    await foreign.stageFragment({ unit: remote, ordinal: '0', predecessorHash: null, fragmentDigest: stagedDigestOf(remote, '0', null, collide), effects: collide, fence: FENCE });
+    const remoteSeal = await foreign.sealStaged({ unit: remote, root: stagedSealRoot(remote, [collide]) });
     await expectCode(
       async () => bound.commitStaged({ seal: remoteSeal, fence: FENCE }),
       'invalid-command',
@@ -678,18 +664,16 @@ export const runStagedCorpus = async (
     sourceBoundary: 'boundary-k2b',
     fence: FENCE,
   });
+  const doomedEffects = appendUnit('chain-auth', 'a1', 'hash-a1', null);
   await bound.stageFragment({
     unit: doomed,
     ordinal: '0',
     predecessorHash: null,
-    fragmentDigest: 'digest-auth-0',
-    effects: appendUnit('chain-auth', 'a1', 'hash-a1', null),
+    fragmentDigest: stagedDigestOf(doomed, '0', null, doomedEffects),
+    effects: doomedEffects,
     fence: FENCE,
   });
-  const doomedSeal = await bound.sealStaged({
-    unit: doomed,
-    root: sealRoot('op-staged-auth', 'digest-auth-0', '1'),
-  });
+  const doomedSeal = await bound.sealStaged({ unit: doomed, root: stagedSealRoot(doomed, [doomedEffects]) });
   await hooks.breakAuthority();
   await expectCode(
     async () => bound.commitStaged({ seal: doomedSeal, fence: FENCE }),
