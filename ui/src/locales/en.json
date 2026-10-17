@@ -46,6 +46,7 @@
     "historyGrant": "Request separate history-read authorization",
     "exclude": "Exclude this session and purge its copies",
     "revoke": "Revoke sharing and purge its copies",
+    "revokeProject": "Revoke this project and purge its copies",
     "keyboardTitle": "Remote keyboard",
     "noKey": "No enrolled passkey is usable in this browser.",
     "keyboardDisclosure": "The key confirms your gesture, not the text: the confirmed action is the one displayed by the Sentropic page.",
