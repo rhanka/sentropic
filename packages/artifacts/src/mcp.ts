@@ -9,7 +9,14 @@
  * executor over the same HTTP app direct calls use; part 3 adds the
  * platform adapter and the kernel registry definition (§3).
  */
-import type { AppMcpProviderManifest, CapabilityTool } from '@sentropic/mcp-platform';
+import type {
+  AppConnectorProviderAdapter,
+  AppMcpProviderManifest,
+  AppToolResult,
+  CapabilityTool,
+} from '@sentropic/mcp-platform';
+import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
+import type { ProviderParameterSchema, RegistryDefinition } from '@sentropic/mcp-platform/registry';
 import type { HttpRequest, HttpResponse } from './http.js';
 
 export const WEB_PAGES_PROVIDER_ID = 'sentropic.web-pages';
@@ -79,7 +86,7 @@ export const ARTIFACTS_TOOL_SPECS: readonly ToolSpec[] = [
 ];
 
 /** Kernel provider parameter schema (typed non-secret host settings). */
-export const WEB_PAGES_PARAMETER_SCHEMA = {
+export const WEB_PAGES_PARAMETER_SCHEMA: ProviderParameterSchema = {
   properties: {
     defaultStorageScopeId: { type: 'string', minLength: 1, description: 'Fallback storage scope for artifacts_ensure.' },
     uploadBudgetBytes: { type: 'integer', minimum: 1, description: 'Declared bounded-upload budget.' },
@@ -272,5 +279,121 @@ export function createWebPagesToolExecutor(deps: {
           throw new Error(`unknown artifacts tool: ${input.tool}`);
       }
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Part 3 — platform adapter + kernel registry definition (§3). Identity
+// comes from the verified connector context (principal.sub), never from
+// tool arguments. Errors surface as stable codes only; executor throws
+// (unknown tool, malformed arguments) become invalid_request with no raw
+// message leakage. Registration goes through the one mcp-platform kernel;
+// no connector-host registry is added.
+// ---------------------------------------------------------------------------
+
+export interface WebPagesAdapterOptions extends WebPagesManifestOptions {
+  app: WebPagesApp;
+  defaultStorageScopeId?: string;
+}
+
+function errorCodeOf(body: unknown): string {
+  if (typeof body === 'object' && body !== null) {
+    const code = (body as Record<string, unknown>)['error'];
+    if (typeof code === 'string' && code.length !== 0) return code;
+  }
+  return 'internal_error';
+}
+
+/** Create the platform adapter driving the 15 tools over the shared app. */
+export function createWebPagesAdapter(
+  options: WebPagesAdapterOptions,
+): AppConnectorProviderAdapter {
+  const manifest = createWebPagesManifest(options);
+  const executor = createWebPagesToolExecutor({
+    app: options.app,
+    defaultStorageScopeId: options.defaultStorageScopeId,
+  });
+  return {
+    appId: WEB_PAGES_APP_ID,
+    connectorId: WEB_PAGES_PROVIDER_ID,
+    manifest,
+    resolveTenant: (input) => Promise.resolve({
+      principalRef: input.principalSub,
+      tenantRef: input.tenantRef,
+      connectorInstanceId: input.connectorInstanceId,
+      ...(input.workspaceRef === undefined ? {} : { workspaceRef: input.workspaceRef }),
+    }),
+    listCapabilities: () => Promise.resolve([...manifest.tools]),
+    async invokeTool(req): Promise<AppToolResult> {
+      const auditId = req.ctx.auditId;
+      try {
+        const args = typeof req.input === 'object' && req.input !== null && !Array.isArray(req.input)
+          ? (req.input as Record<string, unknown>)
+          : {};
+        const res = await executor.invoke({
+          tool: req.capabilityRef,
+          actorId: req.ctx.principal.sub,
+          args,
+        });
+        if (res.status >= 200 && res.status < 300) {
+          return { ok: true, output: res.body, auditId, redactionClass: 'low' };
+        }
+        const code = errorCodeOf(res.body);
+        return {
+          ok: false, auditId, redactionClass: 'low',
+          error: { code, message: code, retriable: res.status >= 500 },
+        };
+      } catch {
+        return {
+          ok: false, auditId, redactionClass: 'low',
+          error: { code: 'invalid_request', message: 'invalid_request', retriable: false },
+        };
+      }
+    },
+    readResource: (req) => Promise.resolve({
+      ok: false,
+      auditId: req.ctx.auditId,
+      redactionClass: 'low',
+      error: { code: 'not_found', message: 'not_found', retriable: false },
+    }),
+    validateSecrets: () => Promise.resolve([]),
+  };
+}
+
+export interface WebPagesDefinitionOptions extends WebPagesAdapterOptions {
+  /** Local config-review reference (integrity metadata, never authority). */
+  approvalRef?: string;
+  revision?: string;
+  reviewedBy?: string[];
+}
+
+const EMPTY_TOOL_CONFIG: Schema = { type: 'object', properties: {}, additionalProperties: false };
+
+/** Build the kernel registry definition for sentropic.web-pages (§3). */
+export function createWebPagesRegistryDefinition(
+  options: WebPagesDefinitionOptions,
+): RegistryDefinition {
+  const adapter = createWebPagesAdapter(options);
+  const manifest = adapter.manifest;
+  const handlers: Record<string, { handlerId: string; capabilityRef: string; configSchema: unknown }> = {};
+  const toolValues: Record<string, { handlerId: string; values: Record<string, unknown> }> = {};
+  for (const spec of ARTIFACTS_TOOL_SPECS) {
+    const handlerId = `${spec.name}-handler`;
+    handlers[handlerId] = { handlerId, capabilityRef: spec.name, configSchema: EMPTY_TOOL_CONFIG };
+    toolValues[spec.name] = { handlerId, values: {} };
+  }
+  return {
+    manifest,
+    adapter,
+    parameterSchema: WEB_PAGES_PARAMETER_SCHEMA,
+    handlers,
+    requiredPorts: [],
+    provenance: {
+      approvalRef: options.approvalRef ?? 'web-pages-local-1',
+      revision: options.revision ?? 'rev-1',
+      manifestDigest: computeManifestDigest(manifest),
+      reviewedBy: options.reviewedBy ?? ['host-owner'],
+    },
+    toolValues,
   };
 }
