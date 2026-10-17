@@ -29,7 +29,7 @@ export const createPostgresKernel = async (options: PostgresStorageOptions) => {
   });
 };
 export type { PostgresStorageOptions, InjectedPgDriver, PgSession, PgTransactionOptions, SqlStatement, SqlResult, SqlValue, PgLayout, PgOutboxBinding, PgRegisteredQuery } from './protocol.js';
-export { PostgresStorageError, classifyPgFailure } from './errors.js';
+export { PostgresStorageError, PgSchemaDriftError, classifyPgFailure } from './errors.js';
 export { loadPgAssets, applyPgMigrations, verifyPgInstallation } from './migrations.js';
 export type { PgAsset, PgHostHistory, PgMigrationReceipt } from './migrations.js';
 export type { PgScoped } from './scope.js';

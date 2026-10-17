@@ -1,10 +1,16 @@
 import { isStorageError, StorageCasConflictError, StorageIdempotencyConflictError, StorageInvalidCommandError, StorageUnavailableError } from '../errors.js';
 
-export type PgFailureCondition = 'contention' | 'timeout' | 'unavailable' | 'outcome_unknown' | 'corruption' | 'configuration';
+export type PgFailureCondition = 'contention' | 'timeout' | 'unavailable' | 'outcome_unknown' | 'corruption' | 'configuration' | 'schema-drift';
 export class PostgresStorageError extends StorageUnavailableError {
   constructor(readonly condition: PgFailureCondition, readonly retryable = false, readonly sqlState?: string) {
     super(`Postgres storage ${condition}`);
     this.name = 'PostgresStorageError';
+  }
+}
+export class PgSchemaDriftError extends PostgresStorageError {
+  constructor(readonly expectedFingerprint: string, readonly actualFingerprint: string) {
+    super('schema-drift');
+    this.name = 'PgSchemaDriftError';
   }
 }
 export type PgConstraintMap = Readonly<Record<string, 'cas-conflict' | 'idempotency-conflict' | 'invalid-command'>>;
