@@ -8,12 +8,19 @@ import {
 
 export const LLM_MESH_PACKAGE = '@sentropic/llm-mesh';
 export const LLM_GATEWAY_PACKAGE = '@sentropic/llm-gateway';
+export const MCP_PLATFORM_PACKAGE = '@sentropic/mcp-platform';
+/** Tight bound on the qualified platform candidate (single 0.3.0, no intermediate publication). */
+export const MCP_PLATFORM_RANGE = '>=0.3.0 <0.4.0';
+export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
+/** Single 0.1.0 artifacts candidate covering L-5a–5e (no per-slice train). */
+export const ARTIFACTS_RANGE = '>=0.1.0 <0.2.0';
 export const LLM_MESH_RANGE = '>=0.22.0 <0.27.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.21.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
-/** Follows llm-gateway 0.19.0's declared optional peer range. */
-export const AUTH_HONO_RANGE = '^0.15.0';
+/** Follows llm-gateway 0.19.6's declared optional peer range (parity with #674: admits auth-hono 0.16.0).
+ * Spelled as a bounded interval: the minimal release-range parser has no `||`. */
+export const AUTH_HONO_RANGE = '>=0.15.0 <0.17.0';
 
 export interface PeerRequirement {
   readonly packageName: string;
@@ -59,6 +66,14 @@ const gateway = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembe
   id, owner: 'llm-gateway', packageName: LLM_GATEWAY_PACKAGE, subpath, range: LLM_GATEWAY_RANGE, requiredMembers,
   meshCoherence: true, authPeers, ...(namespace ? { namespace } : {}),
 });
+const mcpPlatform = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembers: readonly string[]): ProviderDescriptor => ({
+  id, owner: 'mcp-platform', packageName: MCP_PLATFORM_PACKAGE, subpath, range: MCP_PLATFORM_RANGE, requiredMembers,
+  meshCoherence: false, authPeers: [],
+});
+const artifacts = (id: ClusterMeshProviderModuleId, subpath: string, requiredMembers: readonly string[]): ProviderDescriptor => ({
+  id, owner: 'artifacts', packageName: ARTIFACTS_PACKAGE, subpath, range: ARTIFACTS_RANGE, requiredMembers,
+  meshCoherence: false, authPeers: [],
+});
 
 export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, ProviderDescriptor>> = {
   'llm-mesh': mesh('llm-mesh', '.', ['createLlmMesh', 'createProviderRegistry'], '/llm-mesh'),
@@ -69,6 +84,15 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
   gateway: gateway('gateway', '.', ['createGatewayRouter'], [], '/gw'),
   'gateway/auth': gateway('gateway/auth', './auth', ['ServiceAuthVerifyToken'], SERVICE_AUTH_PEERS),
   'gateway/auth-hono': gateway('gateway/auth-hono', './auth-hono', ['AuthHonoVerifyToken'], SESSION_AUTH_PEERS),
+  'mcp-platform/registry': mcpPlatform('mcp-platform/registry', './registry', ['createProviderRegistry']),
+  'mcp-platform/entry': mcpPlatform('mcp-platform/entry', './registry/entry', ['buildRegistryEntry', 'resolveRegistryEntry']),
+  'mcp-platform/bridge': mcpPlatform('mcp-platform/bridge', './transport/bridge', ['registerBridgeTools', 'identityFromExtra']),
+  'mcp-platform/hono': mcpPlatform('mcp-platform/hono', './hono', ['createMcpPlatformHono']),
+  'mcp-platform/stdio': mcpPlatform('mcp-platform/stdio', './transport/stdio', ['createStdioTransport', 'extractStdioRequestIdentity']),
+  'mcp/artifacts': artifacts('mcp/artifacts', './mcp', [
+    'createArtifactsRegistryDefinition', 'createArtifactsToolExecutor',
+    'ARTIFACTS_PROVIDER_ID', 'ARTIFACTS_TOOL_NAMES',
+  ]),
 };
 
 const GATED_OWNERS: Readonly<Record<ClusterMeshGatedModuleId, { owner: string; namespace?: ClusterMeshNamespace }>> = {

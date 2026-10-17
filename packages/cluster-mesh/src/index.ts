@@ -7,6 +7,8 @@ export * from './mesh.js';
 export * from './nhi.js';
 export * from './projection.js';
 export * from './trust.js';
+export * from './token-exchange.js';
+export * from './trust/token-exchange-http.js';
 export * from './config.js';
 export * from './hono/plugin.js';
 export * from './hono/health-router.js';

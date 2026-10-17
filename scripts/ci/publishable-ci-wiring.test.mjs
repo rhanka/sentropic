@@ -164,7 +164,7 @@ const TRAIN_VALIDATES = [['validate-llm-mesh', 'llm_mesh'], ['validate-llm-gatew
 const TRAIN_UPSTREAMS = {
   'publish-llm-mesh': [],
   'publish-llm-gateway': [['publish-llm-mesh', 'llm_mesh_publish']],
-  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish']],
+  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish'], ['publish-mcp-platform', 'mcp_platform_publish']],
 };
 
 test('publisher ordering: gateway waits for mesh; N1 lockstep siblings gate mcp-auth and cluster-mesh', () => {
@@ -217,7 +217,24 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,jose@5.10.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/mcp-platform@0.3.0,@sentropic/artifacts@0.1.0,jose@5.10.0';
+
+test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));
+  const required = Object.keys(manifest.peerDependencies).filter((name) =>
+    name.startsWith('@sentropic/') && manifest.peerDependenciesMeta?.[name]?.optional);
+  const steps = [
+    jobs['validate-cluster-mesh'].steps.find((s) => s.name === 'Qualify Cluster Mesh candidate install'),
+    jobs['publish-cluster-mesh'].steps.find((s) => s.run?.includes('make qualify-published-install PKG=')),
+    jobs['bootstrap-publish'].steps.find((s) => s.name === 'Qualify bootstrap-published cluster-mesh'),
+  ];
+  for (const step of steps) {
+    const peers = step.run.match(/\bPEERS=(\S+)/)?.[1].split(',') ?? [];
+    for (const name of required) {
+      assert.ok(peers.some((spec) => spec.startsWith(`${name}@`)), `${step.name}: missing optional peer ${name}`);
+    }
+  }
+});
 
 test('candidate and post-publication qualification for mcp-auth and cluster-mesh', () => {
   for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', CLUSTER_MESH_PEERS]]) {

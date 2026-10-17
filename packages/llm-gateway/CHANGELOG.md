@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 0.20.1: widen the optional `@sentropic/auth-hono` peer to `^0.15.0 || ^0.16.0`
+  (immo token exchange; strictly above main 0.20.0 after the #662 merge).
 - OpenAI Responses ingress (`POST /responses` + `POST /v1/responses`,
   stateless JSON/SSE): strict codec, lossless canonical mapping, native Codex
   execution (custom tools, `reasoning.context`, `text.verbosity`,

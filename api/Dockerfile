@@ -96,6 +96,7 @@ COPY packages/mcp-platform/package.json ./packages/mcp-platform/package.json
 COPY packages/connector-host/package.json ./packages/connector-host/package.json
 COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
 COPY packages/ubo-contracts/package.json ./packages/ubo-contracts/package.json
+COPY packages/artifacts/package.json ./packages/artifacts/package.json
 RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
     else npm install --workspaces --include-workspace-root; fi
 # Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
@@ -113,10 +114,11 @@ RUN npm --workspace @sentropic/contracts run build
 RUN npm --workspace @sentropic/events run build
 RUN npm --workspace @sentropic/chat-core run build
 RUN npm --workspace @sentropic/chat-server run build
+RUN npm --workspace @sentropic/mcp-platform run build
+RUN npm --workspace @sentropic/artifacts run build
 RUN npm --workspace @sentropic/cluster-mesh run build
 RUN npm --workspace @sentropic/flow run build
 RUN npm --workspace @sentropic/comments run build
-RUN npm --workspace @sentropic/mcp-platform run build
 RUN npm --workspace @sentropic/connector-host run build
 RUN npm --workspace @sentropic/mcp-connector-google run build
 RUN npm --workspace @sentropic/ubo-contracts run build
