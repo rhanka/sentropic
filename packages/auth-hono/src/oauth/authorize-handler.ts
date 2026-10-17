@@ -82,9 +82,12 @@ export const createOAuthAuthorizeHandler =
     }
 
     // C1: per-client subject allowlist, enforced before consent. A live session
-    // for a non-listed subject is refused immediately (`access_denied`); without
-    // a session the flow proceeds to login (the owner can still authenticate).
-    if (session && !isSubjectAllowed(session.user.id, validation.client.allowedUserIds)) {
+    // for a non-listed subject is refused immediately (`access_denied`) — UNLESS
+    // a forced re-auth is already in effect (`prompt=login`/`select_account`,
+    // `login_hint` mismatch, insufficient ACR): then the flow proceeds to login
+    // so a different (allowlisted) account can authenticate. The resume path
+    // refuses with `access_denied` if the post-login subject is still listed out.
+    if (session && !forceReauth && !isSubjectAllowed(session.user.id, validation.client.allowedUserIds)) {
       return redirectWithOAuthError(validation.redirectUri, 'access_denied', validation.state, c.req.url, options.issuer);
     }
 
