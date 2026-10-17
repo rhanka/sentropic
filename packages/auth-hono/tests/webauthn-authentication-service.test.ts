@@ -174,6 +174,7 @@ describe('createAuthWebAuthnAuthenticationService', () => {
     expect(result).toEqual({
       credentialId: 'credential-id',
       userId: user.id,
+      userVerified: true,
       verified: true,
     });
     expect(counterUpdate).toEqual({
@@ -182,5 +183,44 @@ describe('createAuthWebAuthnAuthenticationService', () => {
       lastUsedAt: now,
     });
     expect(markedChallenge).toBe('authentication-challenge');
+  });
+
+  it('propagates userVerified=false when the authenticator skips user verification', async () => {
+    const service = createAuthWebAuthnAuthenticationService({
+      ports: createPorts(),
+      rp: {
+        expectedOrigins: ['https://app.example.com'],
+        id: 'app.example.com',
+        name: 'Example App',
+      },
+      verifyAuthenticationResponse: async () => ({
+        authenticationInfo: {
+          newCounter: 6,
+          userVerified: false,
+        },
+        verified: true,
+      }),
+    });
+
+    const result = await service.verifyAuthentication({
+      credential: {
+        id: 'credential-id',
+        rawId: 'credential-id',
+        response: {
+          authenticatorData: 'authenticator-data',
+          clientDataJSON: 'client-data',
+          signature: 'signature',
+        },
+        type: 'public-key',
+      },
+      expectedChallenge: 'authentication-challenge',
+    });
+
+    expect(result).toEqual({
+      credentialId: 'credential-id',
+      userId: user.id,
+      userVerified: false,
+      verified: true,
+    });
   });
 });
