@@ -33,7 +33,7 @@ import {
   type WriterFence,
 } from './contracts.js';
 import { isProfileId, type ProfileId } from './profiles.js';
-import { createKernel, type KernelHandle } from './kernel.js';
+import { createKernel, type KernelRoot } from './kernel.js';
 import { ORDINARY_PROFILES, type ScopedRuntime } from './scope-runtime.js';
 import {
   validateBeginInput,
@@ -205,7 +205,7 @@ export interface StagedKernelHandle {
 }
 
 export const createStagedKernel = (options: StagedKernelOptions): StagedKernelHandle => {
-  const inner: KernelHandle = createKernel(options);
+  const inner: KernelRoot = createKernel(options);
   const scopes = new Map<string, K4ScopeState>();
   const external: ExternalLog = { events: [], seq: 0 };
   const clock = options.now ?? (() => new Date().toISOString());
