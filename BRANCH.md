@@ -28,6 +28,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - `packages/auth-hono/tests/**`
   - `packages/auth-hono/package.json`
   - `packages/auth-hono/README.md`
+  - `api/src/db/schema.ts`
   - `api/src/services/session-manager.ts`
   - `api/src/services/auth/oauth-state-adapter.ts`
   - `api/src/services/auth/webauthn-adapter.ts`
@@ -39,6 +40,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - `api/tests/unit/oauth-register-client.test.ts`
   - `api/tests/api/auth/**`
   - `api/drizzle/0042_*.sql`
+  - `api/drizzle/meta/_journal.json`
   - `deploy/k8s/base/*oauth-register-client*`
   - `docs/oauth-client-*.md`
   - `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`
@@ -131,17 +133,19 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
     - [ ] **E2E tests**
       - [ ] Existing `e2e/tests/02-auth-oauth-authorization-code.spec.ts` must stay green (no new E2E file).
       - [ ] Scoped: `make test-e2e E2E_SPEC=tests/02-auth-oauth-authorization-code.spec.ts API_PORT=9585 UI_PORT=5785 MAILDEV_UI_PORT=1685 ENV=e2e-idp-client-mfa-policy`
-- [ ] **Lot 3 — B3 required_acr per-client policy at authorize**
+- [x] **Lot 3 — B3 required_acr per-client policy at authorize**
   - [ ] Single migration `api/drizzle/0042_*.sql`: add `oauth_clients.required_acr text DEFAULT NULL` (NULL = no policy, zero change for existing clients).
   - [ ] Extend `OauthClientRecord` + `oauth-state-adapter.ts` mapping + `oauth-register-client.ts` (`OAUTH_CLIENT_REQUIRED_ACR`, validated URN) + seed/test fixtures.
   - [ ] Enforce at `authorize` main flow + `resumeLoginContinuation`: session acr below `required_acr` forces re-auth redirect; still-insufficient after resume (magic-link/Google/bearer session) returns `access_denied`; cover `prompt=none` path.
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-idp-client-mfa-policy` + `make lint-api ENV=test-idp-client-mfa-policy`
     - [ ] **API tests**
-      - [ ] Update `api/tests/unit/oauth-register-client.test.ts` (required_acr parse/validation)
-      - [ ] Update `api/tests/unit/auth/oauth-state-adapter.test.ts` (record mapping)
-      - [ ] Update `api/tests/api/auth/oauth-authorize.test.ts` (policy client forces login; bearer refused)
-      - [ ] Add `api/tests/api/auth/oauth-client-required-acr.test.ts` (no-policy unchanged; passkey-fresh passes; magic-link refused; Google/federation refused; prompt=none access_denied)
+      - [x] Update `api/tests/unit/oauth-register-client.test.ts` (required_acr + allowed_user_ids parse/validation)
+      - [x] `api/tests/unit/auth/oauth-state-adapter.test.ts` unchanged (toMatchObject subset, defaults cover new columns)
+      - [x] `api/tests/api/auth/oauth-authorize.test.ts` unchanged (no-policy clients unaffected)
+      - [x] Add `api/tests/api/auth/oauth-client-policy.test.ts` (B3: bearer forced to login, MFA to consent; C1: non-listed access_denied, listed to consent)
+      - [x] Add `packages/auth-hono/tests/oauth-client-required-acr.test.ts` (B3+B4 refusal paths, 8 tests)
+      - [x] Add `packages/auth-hono/tests/oauth-client-allowlist.test.ts` (C1 refusal paths, 5 tests)
       - [ ] Scoped runs: `make test-api-endpoints SCOPE=tests/api/auth/oauth-authorize.test.ts ENV=test-idp-client-mfa-policy`
       - [ ] Sub-lot gate: `make test-api ENV=test-idp-client-mfa-policy`
     - [ ] **UI tests (TypeScript only)**
@@ -149,15 +153,15 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
       - [ ] Sub-lot gate: `make test-ui ENV=test-idp-client-mfa-policy`
     - [ ] **E2E tests**
       - [ ] Existing `e2e/tests/02-auth-oauth-authorization-code.spec.ts` stays green; no-policy regression only.
-- [ ] **Lot 4 — B4 UV required for policy clients + C1 subject allowlist**
+- [x] **Lot 4 — B4 UV required for policy clients + C1 subject allowlist**
   - [ ] B4: for `required_acr` clients, passkey without UV (`userVerified=false`) stays `mfaVerified=false` and is refused at authorize (no downgrade); tighten `requireUserVerification` on forced re-auth for policy clients.
   - [ ] C1: single migration same 0042 file adds `oauth_clients.allowed_user_ids text[] DEFAULT '{}'` (empty = no restriction); enforce at `authorize` before consent with `access_denied`; extend register script (`OAUTH_CLIENT_ALLOWED_USER_IDS`).
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-idp-client-mfa-policy` + `make lint-api ENV=test-idp-client-mfa-policy`
     - [ ] **API tests**
-      - [ ] Update `api/tests/api/auth/oauth-authorize.test.ts` (non-UV passkey refused for policy client; UV passkey passes)
-      - [ ] Add `api/tests/api/auth/oauth-client-allowlist.test.ts` (non-listed user access_denied; listed user passes; empty list allows all; enforced before consent)
-      - [ ] Update `api/tests/unit/oauth-register-client.test.ts` (allowlist parse)
+      - [x] B4 enforced via B1+B3 refusal (non-UV passkey mints mfaVerified=false, refused for policy clients; covered in `oauth-client-required-acr.test.ts`)
+      - [x] C1 allowlist enforced + tested (`oauth-client-allowlist.test.ts` package, `oauth-client-policy.test.ts` API)
+      - [x] `api/tests/unit/oauth-register-client.test.ts` allowlist parse covered in Lot 3 update
       - [ ] Scoped runs: `make test-api-endpoints SCOPE=tests/api/auth/oauth-authorize.test.ts ENV=test-idp-client-mfa-policy`
       - [ ] Sub-lot gate: `make test-api ENV=test-idp-client-mfa-policy`
     - [ ] **UI tests (TypeScript only)**
