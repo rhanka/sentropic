@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { getDefaultOpenAIModel } from '../config/models';
 import fetch from "node-fetch";
 import { callLLMStream } from './llm-runtime';
 import type { StreamEventType } from './llm-runtime';
@@ -1167,7 +1168,7 @@ export const executeWithToolsStream = async (
   options: ExecuteWithToolsStreamOptions = {}
 ): Promise<ExecuteWithToolsStreamResult> => {
   const {
-    model = 'gpt-4.1-nano',
+    model = getDefaultOpenAIModel(),
     userId,
     useWebSearch = false,
     useDocuments = false,
@@ -1176,7 +1177,7 @@ export const executeWithToolsStream = async (
     responseFormat,
     structuredOutput,
     reasoningSummary,
-    reasoningEffort,
+    reasoningEffort = model === getDefaultOpenAIModel() ? 'none' : undefined,
     maxOutputTokens,
     streamId,
     promptId,
@@ -1451,6 +1452,7 @@ export const executeWithToolsStream = async (
       ...(structuredOutput ? { structuredOutput } : (responseFormat ? { responseFormat } : {})),
     reasoningSummary,
     reasoningEffort,
+    maxOutputTokens,
       signal
   })) {
     const data = (event.data ?? {}) as Record<string, unknown>;

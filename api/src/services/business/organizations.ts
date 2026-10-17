@@ -1,5 +1,6 @@
 // Canonical product adapter for the injected Cluster Mesh business transport.
 import { Hono } from 'hono';
+import { getDefaultOpenAIModel } from '../../config/models';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db, pool } from '../../db/client';
@@ -374,7 +375,7 @@ const aiEnrichInput = z.object({
 
 organizationsRouter.post('/ai-enrich', requireEditor, requireWorkspaceEditorRole(), zValidator('json', aiEnrichInput), async (c) => {
   const { name, model } = c.req.valid('json');
-  const selectedModel = model || 'gpt-4.1-nano';
+  const selectedModel = model || getDefaultOpenAIModel();
   const enrichedData = await enrichOrganization(name, selectedModel, undefined, undefined, {
     organizationId: undefined,
     workspaceId: undefined,
