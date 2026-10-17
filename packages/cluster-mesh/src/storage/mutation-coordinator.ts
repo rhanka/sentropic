@@ -71,6 +71,9 @@ export class RootMutationCoordinator {
     if (!validity.ok || !validateCommitOptions(options).ok || Buffer.byteLength(JSON.stringify(merged), 'utf8') > limits.maxEncodedBytes) {
       throw new StorageInvalidCommandError('invalid unit or exceeded atomic work limits');
     }
+    if (!this.hooks.prepare && (merged.relationships.length + merged.barriers.length + merged.purgeIntents.length > 0)) {
+      throw new UnsupportedProfileError('registered-module-effects');
+    }
     const verifyFence = () => {
       if (options.fence) {
         if (!this.hooks.fence) throw new UnsupportedProfileError('fenced-writers-v1');
@@ -83,6 +86,8 @@ export class RootMutationCoordinator {
     const previous = options.idempotencyKey ? base.commits.get(options.idempotencyKey) : undefined;
     if (previous) {
       if (previous.unitHash !== unitHash) throw new StorageIdempotencyConflictError('idempotency key reused with divergent input');
+      revalidate();
+      verifyFence();
       return copy(previous.receipt);
     }
     const prepared = this.prepare(base);
