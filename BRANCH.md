@@ -97,6 +97,7 @@
   - [ ] Verify history/document single, chunk and merge output caps, retained facts, maximum input and cancellation with deterministic contracts.
   - [x] Six budget-refusal failures reproduced offline before adding full-rendered-request admission and finite output validation; document summaries now share the configured model and explicit none.
 - [ ] **Lot 3 — Bounded paired live qualification**
+  - [x] Budget contract tests written before implementation: exact-SCOPE opt-in, shared dollar/call limits, worst-input reservation, missing-usage/cancellation closure and long-tier pricing.
   - [ ] Add `api/tests/ai/nano-replacement-qualification.test.ts` and shared fixture/budget support; offline-test reservation, missing usage, cancellation and refusal before budget overflow.
   - [ ] Exercise BOTH candidates on identical title, effort, compaction, JSON/tool continuation and history/document single/chunk fixtures through product helpers and llm-mesh; retain outputs and usage evidence.
   - [ ] Run `make test-api-ai SCOPE=tests/ai/nano-replacement-qualification.test.ts API_TEST_ARGS="--no-file-parallelism" API_PORT=9450 UI_PORT=5650 MAILDEV_UI_PORT=1550 ENV=test-model-retirement`; record validity, fact retention, latency p50/p95, input/output/reasoning tokens and measured costs per class, with sample sizes.
