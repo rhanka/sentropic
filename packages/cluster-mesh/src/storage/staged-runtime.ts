@@ -1,3 +1,5 @@
+export { createRootStagedKernel as createStagedKernel, type StagedKernelRoot } from './staged-factory.js';
+export type { RootScopedRuntime as StagedScopedRuntime } from './root-facade.js';
 // K4 staged-unit runtime (L3a v4.1 frozen §7, §10, §13, §17.1 K4). Neutral
 // staged coherent units over the K3 kernel: hidden staging, bounded seal
 // validation, single-point publication with visibility-root versions,
@@ -196,44 +198,6 @@ const createK4ScopeState = (scope: StorageScope): K4ScopeState => ({
   policy: 'optional',
 });
 
-export interface StagedKernelHandle {
-  readonly moduleId: string;
-  readonly incarnation: string;
-  bindNew(grant: ScopeGrant<unknown>): StagedScopedRuntime;
-  bind(grant: ScopeGrant<unknown>): StagedScopedRuntime;
-  revoke(token: string): void | Promise<void>;
-}
-
-export const createStagedKernel = (options: StagedKernelOptions): StagedKernelHandle => {
-  const inner: KernelRoot = createKernel(options);
-  const scopes = new Map<string, K4ScopeState>();
-  const external: ExternalLog = { events: [], seq: 0 };
-  const clock = options.now ?? (() => new Date().toISOString());
-
-  const stateFor = (scope: StorageScope): K4ScopeState => {
-    const key = backendScopeKey(scope);
-    const existing = scopes.get(key);
-    if (existing) return existing;
-    const created = createK4ScopeState(scope);
-    scopes.set(key, created);
-    return created;
-  };
-
-  return {
-    moduleId: inner.moduleId,
-    incarnation: inner.incarnation,
-    revoke: (token: string): void | Promise<void> => inner.revoke(token),
-    bindNew: (grant: ScopeGrant<unknown>): StagedScopedRuntime => {
-      const bound = inner.bindNew(grant);
-      return new StagedScopedRuntime(bound, stateFor(bound.scope), { clock, external });
-    },
-    bind: (grant: ScopeGrant<unknown>): StagedScopedRuntime => {
-      const bound = inner.bind(grant);
-      return new StagedScopedRuntime(bound, stateFor(bound.scope), { clock, external });
-    },
-  };
-};
-
 export interface StagedSealStepInput {
   readonly unit: StagedHandle;
   readonly root: StagedCommitRoot;
@@ -241,7 +205,7 @@ export interface StagedSealStepInput {
   readonly fence: WriterFence;
 }
 
-export class StagedScopedRuntime {
+class LegacyStagedScopedRuntime {
   constructor(
     private readonly inner: ScopedRuntime,
     private readonly staged: K4ScopeState,
