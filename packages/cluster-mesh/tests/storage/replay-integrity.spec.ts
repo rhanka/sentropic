@@ -21,6 +21,18 @@ const runMutant = (mutate: (bound: TestStagedStore) => void) => {
 };
 
 describe('K2b r3 replay integrity mutations', () => {
+  it('should kill an external stream exposing a sibling scope', async () => {
+    await expect(runMutant((bound) => {
+      const inner = bound.externalRead.bind(bound);
+      bound.externalRead = (after, limit) => {
+        const result = inner(after, limit);
+        const store = (bound as unknown as { store: TestStagedReferenceStore }).store;
+        const sibling = { ...bound.scope, workspaceId: bound.scope.workspaceId === 'foreign' ? 'workspace-a' : 'foreign' };
+        return { ...result, events: [...result.events, ...store.readExternal(sibling, after)].slice(0, limit) };
+      };
+    })).rejects.toThrow(/C11: an external stream reveals only its own scope/);
+  });
+
   it('should kill resync clearing a stall before snapshot acknowledgement', async () => {
     await expect(runMutant((bound) => {
       const inner = bound.journalResync.bind(bound);

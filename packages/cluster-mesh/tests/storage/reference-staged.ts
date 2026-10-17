@@ -171,8 +171,7 @@ const createStagedScope = (): StagedScope => ({
 export class TestStagedReferenceStore extends TestReferenceStore {
   readonly incarnation = randomUUID();
   private readonly stagedScopes = new Map<string, StagedScope>();
-  private readonly externalLog: StagedJournalEvent[] = [];
-  private externalSeq = 0;
+  private readonly externalLogs = new Map<string, StagedJournalEvent[]>();
   private purgePolicy: PurgePolicy = 'optional';
   private readonly stagedClock: TestClock;
   private failExternalNext = false;
@@ -242,23 +241,27 @@ export class TestStagedReferenceStore extends TestReferenceStore {
     }
   }
 
-  appendExternal(entry: Omit<StagedJournalEvent, 'seq' | 'eventId'>): StagedJournalEvent {
+  appendExternal(entry: StagedJournalEvent): StagedJournalEvent {
     if (this.failExternalNext) {
       this.failExternalNext = false;
       throw new StorageInvalidCommandError('external append failed');
     }
-    this.externalSeq += 1;
-    const stored: StagedJournalEvent = { ...entry, seq: this.externalSeq, eventId: `evt-${this.externalSeq}` };
-    this.externalLog.push(stored);
+    const key = JSON.stringify([entry.scope.tenantId, entry.scope.workspaceId, this.incarnation]);
+    const stream = this.externalLogs.get(key) ?? [];
+    const stored = JSON.parse(JSON.stringify(entry)) as StagedJournalEvent;
+    stream.push(stored);
+    this.externalLogs.set(key, stream);
     return stored;
   }
 
-  readExternal(after: number): readonly StagedJournalEvent[] {
-    return this.externalLog.filter((event) => event.seq > after);
+  readExternal(scope: StorageScope, after: number): readonly StagedJournalEvent[] {
+    const key = JSON.stringify([scope.tenantId, scope.workspaceId, this.incarnation]);
+    return JSON.parse(JSON.stringify((this.externalLogs.get(key) ?? []).filter((event) => event.seq > after)));
   }
 
-  externalWatermark(): number {
-    return this.externalSeq;
+  externalWatermark(scope: StorageScope): number {
+    const key = JSON.stringify([scope.tenantId, scope.workspaceId, this.incarnation]);
+    return this.externalLogs.get(key)?.at(-1)?.seq ?? 0;
   }
 }
 
@@ -479,20 +482,16 @@ export class TestStagedStore {
     this.staged.journalSeq += 1;
     const seq = this.staged.journalSeq;
     const segment = this.pendingSegment ? { operationKey: this.pendingSegment, from: seq, to: seq } : undefined;
-    this.staged.journal.push({
+    const event: StagedJournalEvent = {
       seq,
       eventId: `evt-${seq}`,
       scope: { ...this.scope },
       commitId: receipt.commitId,
       operationKey: options.idempotencyKey,
       segment,
-    });
-    this.store.appendExternal({
-      scope: { ...this.scope },
-      commitId: receipt.commitId,
-      operationKey: options.idempotencyKey,
-      segment,
-    });
+    };
+    this.staged.journal.push(event);
+    this.store.appendExternal(event);
     if (options.idempotencyKey) {
       this.staged.commits.set(options.idempotencyKey, { receipt, unitHash: JSON.stringify(unit) });
     }
@@ -752,8 +751,8 @@ export class TestStagedStore {
     if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
       throw new StorageInvalidCommandError('external reader requires a valid window');
     }
-    const events = this.store.readExternal(after).slice(0, limit);
-    return { events, watermark: this.store.externalWatermark() };
+    const events = this.store.readExternal(this.scope, after).slice(0, limit);
+    return { events, watermark: this.store.externalWatermark(this.scope) };
   }
 
   journalRead(consumer: string, after: number, limit: number): JournalReadResult {
