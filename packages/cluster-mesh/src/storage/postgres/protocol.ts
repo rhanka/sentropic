@@ -2,7 +2,8 @@ import { isStorageModuleId, type StorageModuleId, type StorageScope, type WorkLi
 import type { KernelOptions } from '../kernel.js';
 import type { ModuleDescriptor } from '../descriptor.js';
 import { StorageInvalidCommandError } from '../errors.js';
-import type { PgHostHistory } from './migrations.js';
+import type { PgAsset, PgHostHistory } from './migrations.js';
+import type { AtomicUnit } from '../atomic.js';
 import type { ScopeGrant } from '../authority.js';
 
 export type SqlValue = string | number | boolean | bigint | Uint8Array | null | readonly SqlValue[];
@@ -35,12 +36,16 @@ export interface PgQueryContext {
 }
 export interface PgQueryPage { readonly records: readonly unknown[]; readonly nextCursor: unknown; }
 export type PgRegisteredQuery = (input: unknown, context: PgQueryContext) => Promise<PgQueryPage>;
+export type PgProjectionContext = Pick<PgQueryContext, 'session' | 'root' | 'stream' | 'layout' | 'grant'>;
+export type PgRegisteredProjection = (effects: AtomicUnit, context: PgProjectionContext) => Promise<void>;
 export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 'coordinator' | 'predicates'> {
   readonly moduleId: StorageModuleId; readonly driver: InjectedPgDriver; readonly layout: PgLayout;
   readonly ids?: { next(kind: string): string }; readonly domainClock?: { now(): string };
   readonly outbox?: PgOutboxBinding; readonly budgets?: Partial<PgBudgets>; readonly limits?: WorkLimits;
   readonly descriptor?: ModuleDescriptor; readonly queries?: Readonly<Record<string, PgRegisteredQuery>>;
   readonly history: PgHostHistory;
+  readonly assets?: readonly PgAsset[];
+  readonly projection?: PgRegisteredProjection;
   readonly pgPredicates?: Readonly<Record<string, (dependency: string, context: Pick<PgQueryContext, 'session' | 'stream' | 'root'>) => Promise<boolean>>>;
 }
 export const quotePgIdentifier = (value: string): string => {
