@@ -160,6 +160,7 @@
   - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
   - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
     - [ ] RED `tests/storage/mutation-coordinator.spec.ts`: all ordinary mutation paths, stale-root CAS, failing preparation, authority revalidation and transaction read coverage.
+    - [ ] Shared `prepareUnitsInScope` separates owned sequential preparation from publication, preserving the K3 guard/predicate/effect implementation for the root coordinator.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
   - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
