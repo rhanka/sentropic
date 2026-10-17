@@ -151,7 +151,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] None (synthetic only).
 
-- [ ] **Lot 3 — L1-local inspect helper + node export**
+- [x] **Lot 3 — L1-local inspect helper + node export**
   - [ ] Add `packages/llm-mesh/src/node/cli-seat-store-reader.ts` (bounded reader: explicitly selected lab record only; allowlisted schema/version/capability categories; no refresh/mint/provider call/GitHub write/transfer/activation; unsupported fields/backends return unverified/refused, never raw values).
   - [ ] Add `packages/llm-mesh/seat-tools/Makefile` (`seat-helper-setup`, `seat-inspect`; no root Makefile edit), `packages/llm-mesh/seat-tools/inspect.mjs`, `packages/llm-mesh/seat-tools/package.json`, `packages/llm-mesh/seat-tools/package-lock.json`, `packages/llm-mesh/seat-tools/node-runtime.json` (pins exact reviewed Node patch/checksum + helper deps + built mesh artifact).
   - [ ] Expose bounded reader via `packages/llm-mesh/src/node/index.ts` for L3 reuse.
