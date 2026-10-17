@@ -133,7 +133,16 @@ export const seedServiceClients = async (): Promise<SeededServiceClient[]> => {
   const selfClientId = env.OAUTH_SELF_SERVICE_CLIENT_ID ?? 'sentropic-self-s2s';
   const selfClientSecret = env.OAUTH_SELF_SERVICE_CLIENT_SECRET ?? 'sentropic-self-s2s-secret-dev-only';
 
-  const clients = [
+  const clients: {
+    allowedScopes: string[];
+    clientId: string;
+    clientSecret: string;
+    displayName: string;
+    dpopBoundAccessTokens: boolean;
+    exchangePolicy?: Record<string, unknown> | null;
+    id: string;
+    resourceIndicators?: string[];
+  }[] = [
     {
       allowedScopes: ['service:ping', 'service:read'],
       clientId: 'example-service-rp',
@@ -150,6 +159,29 @@ export const seedServiceClients = async (): Promise<SeededServiceClient[]> => {
       dpopBoundAccessTokens: false,
       id: 'seed-sentropic-self-s2s',
     },
+    // 2-IdP: the Immo MCP workload client (RFC 8693 token exchange only). The secret
+    // below is dev/test-only and must never be used in production; operational
+    // credentials are provisioned through the established protected channel.
+    {
+      allowedScopes: ['immo:search'],
+      clientId: 'immo-mcp-workload',
+      clientSecret: 'immo-mcp-workload-secret-dev-only',
+      displayName: 'Immo MCP workload (token exchange only)',
+      dpopBoundAccessTokens: false,
+      exchangePolicy: {
+        actorSub: 'immo-mcp-workload',
+        allowClientCredentials: false,
+        allowedScopes: ['immo:search'],
+        allowedSubjectAudiences: ['https://immo.sent-tech.ca/mcp'],
+        allowedSubjectClients: ['immo-mcp'],
+        allowedTargetAudiences: ['https://immo.sent-tech.ca'],
+        enabled: true,
+        environment: null,
+        maxTtlSeconds: 300,
+      },
+      id: 'seed-immo-mcp-workload',
+      resourceIndicators: ['https://immo.sent-tech.ca'],
+    },
   ];
 
   const now = new Date();
@@ -163,8 +195,9 @@ export const seedServiceClients = async (): Promise<SeededServiceClient[]> => {
       createdAt: now,
       displayName: client.displayName,
       dpopBoundAccessTokens: client.dpopBoundAccessTokens,
+      exchangePolicy: client.exchangePolicy ?? null,
       id: client.id,
-      resourceIndicators: [resource],
+      resourceIndicators: client.resourceIndicators ?? [resource],
       revokedAt: null,
     };
 
@@ -177,6 +210,7 @@ export const seedServiceClients = async (): Promise<SeededServiceClient[]> => {
           clientSecretHash: values.clientSecretHash,
           displayName: values.displayName,
           dpopBoundAccessTokens: values.dpopBoundAccessTokens,
+          exchangePolicy: values.exchangePolicy,
           resourceIndicators: values.resourceIndicators,
           revokedAt: null,
         },

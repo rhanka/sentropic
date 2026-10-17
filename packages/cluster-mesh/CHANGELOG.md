@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.18.0
+
+- Widen optional peer ranges to the #662 union: llm-mesh `>=0.22.0 <0.27.0`, llm-gateway `>=0.19.0 <0.21.0` (V7-M1). The strict published-tuple install test (`tests/packaging/tuple-strict.spec.ts`) proves a plain `npm install` with no `--legacy-peer-deps` escape.
+- Add the production RFC 8693 exchange binding (`src/trust/token-exchange-http.ts`):
+  authenticated form POST with `client_secret_basic` to the configured issuer,
+  bounded timeout/body, no redirects, redacted errors, and full validation of the
+  returned token (signature, issuer, exact audience, subject, workload `client_id`,
+  mandatory `act`, scope subset, 300-second and subject-expiry TTL ceilings).
+- Harden the exchange client: caller-supplied actors refused, empty requested
+  scopes refused, exact target-audience allowlist and single subject-audience
+  equality required at construction, workload `act`/`client_id` always asserted,
+  `maxTtlSec` hard-capped at 300 seconds.
+- Harden the mandatory cache: identity key (subject fingerprint/`jti`, origin and
+  workload clients, environment, tenant, policy revision), bounded entries with
+  insertion-order eviction, single-flight, subject/tenant invalidation hooks,
+  early-use safety margin, and recomputed `expiresIn` on hits.
+- `createDegenerateClusterMesh({ tokenExchange })` replaces `tokenExchangeIssuer`:
+  `capabilities.tokenExchange` is `'available'` only after the binding plus policy
+  passes its local preflight, `'gated'` otherwise. `available` proves only this
+  trust/egress port, not registry or module delivery.
+- Expose the MCP leaf entries `./mcp/registry`, `./mcp/stdio`, `./compose/mcp`
+  and `./loaders/mcp` (`createMcpNamespaceModule`, `loadMcpPlatform*` loaders)
+  against the optional `@sentropic/mcp-platform >=0.3.0 <0.4.0` peer (plus
+  `@modelcontextprotocol/sdk ^1.31.0` for stdio).
+- Add `./mcp/artifacts` (`createArtifactsBuiltin`) for the `sentropic.artifacts`
+  provider and `loadArtifactsMcp` through `./loaders/mcp`. The selected leaf needs
+  the optional `@sentropic/artifacts >=0.1.0 <0.2.0` peer and the MCP platform
+  peer above; importing the root does not load artifacts.
+
 ## 0.16.0
 
 - Post-#664 version bump strictly greater than npm (0.15.0) and main

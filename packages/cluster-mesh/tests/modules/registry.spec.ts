@@ -78,6 +78,11 @@ describe('module registry', () => {
     expect(evaluations()).toEqual([]);
   });
 
+  it('should admit llm-mesh 0.26.0 inside the #662 union range', async () => {
+    tree.install('app', fakeMesh('mesh', '0.26.0'));
+    await expect(registry().load('llm-mesh')).resolves.toBeDefined();
+  });
+
   it('should refuse unreadable version evidence as incompatible_version', async () => {
     tree.install('app', { name: '@sentropic/llm-mesh', rawManifest: '{ not json' });
     await expect(registry().load('llm-mesh')).rejects.toMatchObject({ reason: 'incompatible_version' });
@@ -191,11 +196,18 @@ describe('release range check', () => {
     ['0.25.0', '>=0.22.0 <0.26.0', true],
     ['0.25.9', '>=0.22.0 <0.26.0', true],
     ['0.26.0', '>=0.22.0 <0.26.0', false],
+    ['0.26.0', '>=0.22.0 <0.27.0', true],
+    ['0.27.0', '>=0.22.0 <0.27.0', false],
+    ['0.20.0', '>=0.19.0 <0.21.0', true],
+    ['0.21.0', '>=0.19.0 <0.21.0', false],
     ['0.21.2', '>=0.22.0 <0.26.0', false],
     ['5.10.3', '^5.10.0', true],
     ['6.0.0', '^5.10.0', false],
     ['0.15.4', '^0.15.0', true],
     ['0.16.0', '^0.15.0', false],
+    ['0.15.2', '>=0.15.0 <0.17.0', true],
+    ['0.16.0', '>=0.15.0 <0.17.0', true],
+    ['0.17.0', '>=0.15.0 <0.17.0', false],
     ['0.19.0-beta.1', '>=0.19.0 <0.20.0', false],
     ['0.19.0+build.7', '>=0.19.0 <0.20.0', true],
     ['0.20.0+build.7', '>=0.19.0 <0.20.0', false],

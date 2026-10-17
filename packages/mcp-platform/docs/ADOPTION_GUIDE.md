@@ -1,11 +1,10 @@
-# Domain provider adoption guide (MOCK-ONLY scaffold)
+# Domain provider adoption guide
 
-> **Status: PRIVATE, unpublished, reversible scaffold.** `@sentropic/mcp-platform`
-> is `"private": true`, is NOT wired into any publish filter / CI publish job /
-> Makefile target / trusted-publisher config, and MUST NOT be published. Everything
-> below describes the **mock** contract built in slices 1+2+3+7 of
+> **Status: published as `@sentropic/mcp-platform@0.3.0`** via the CI publish
+> train (`publish-mcp-platform` job + Makefile target, OIDC trusted publishing).
+> Everything below describes the contract built in slices 1+2+3+7 of
 > `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`).
-> Package activation, publication, and any production wiring are **owner/architect
+> Package activation and any production wiring stay **owner/architect
 > gated** — see [What stays owner/architect-gated](#what-stays-ownerarchitect-gated-before-production).
 
 This is the spec §12 "domain provider adoption guide": how a domain application
@@ -319,13 +318,102 @@ checks.
 
 ---
 
+## 8b. Approved tool configuration (generic compiler, Lot 1a)
+
+Import the additive subpath (preserves the root contract):
+
+```ts
+import { compileToolConfiguration, computeCompatibilityDigest } from '@sentropic/mcp-platform/tool-configuration';
+```
+
+Supply the versioned approved snapshot, the provider manifest, the local handler table and the
+consumer compatibility digest. `computeCompatibilityDigest` covers the generic public
+schemas/result codec (names, descriptions, input/output schemas); a 1b consumer computes its own
+digest over its SDK `tools/list` snapshot plus the `content`/`isError` envelope and passes it as
+`compatibilityDigest` — the compiler compares it, never derives it.
+The compiler validates the whole candidate before activation: schema `v1`, mandatory qualified
+versions (`providerVersion` equals the manifest version, `platformVersion` equals the package
+version), provider/connector refs, revision, manifest digest, consumer compatibility digest, exact
+tool coverage (configuration alone cannot rename, remove, add or change parameters/results), known
+local handlers only (table keys must equal `handlerId`), closed-schema typed per-tool values
+(unsupported keywords rejected, mistyped keyword values rejected), manifest policy merged field by
+field with no weakening (scopes/claims stay supersets, mutability/idempotency equal, freshness keeps
+a finite bound at or below the baseline with `acr`/`amr` supersets, gates merged per gate including
+`requiresPolicy`, redaction monotonic), strict canonical JSON (aligned with `sentropic-json-v1`:
+`undefined`/non-finite/non-plain/cyclic values rejected, explicit `undefined` gates rejected), and
+a closed provenance (`approvalRef`, `revision`, `manifestDigest`, `payloadDigest`, `reviewedBy`
+only) carrying the mandatory payload digest (which binds the manifest, compatibility and
+handler-table shape digests) plus the snapshot-carried handler-table shape digest (`handlersDigest`,
+compared to the local table). Approval, reviewer and overlay strings are inspected
+as bounded heuristics (`reviewedBy` is expected to carry role/review identifiers;
+an opaque `sub`/UUID value cannot be detected by value, so no universal
+secret/PII detection is claimed; known credential/bearer/JWT/email patterns
+and dangerous/`scheme://`/`mailto:`/`ssh:` forms are rejected, `maxTokens`
+excepted as an allowlisted key, `Basic plan`/`Mode: fast`/`immo:cfg-12`
+accepted). The compiled
+configuration is deep-cloned (caller inputs, including overlay arrays, are never frozen) and deeply
+frozen, and exposes `payloadDigest`, `approvalRef`, `providerVersion`/`platformVersion` and
+`handlersDigest` for 1b diagnostics. It performs zero I/O; an invalid candidate retains the active
+generation, `activate` only accepts compiler-branded configurations (generation counter via
+`getGeneration`), and a cold start without valid embedded configuration fails closed. Tests use
+synthetic providers only (`tests/tool-configuration.test.ts`, one discriminating test per control;
+the separate-process test loads the compiled `dist/` package and the clean-consumer probe installs
+the packed tarball via `make probe-mcp-platform-clean-consumer`).
+
+### Scope source of truth for 3-policy
+
+The effective compiled policy is authoritative: a configuration may add `requiredScopes` or
+`requiredClaims` (strengthening only — the manifest baseline stays covered), so 3-policy MUST
+enforce the compiled `requiredScopes`/`requiredClaims` per tool, not the manifest baseline alone.
+Configuration alone can never rename, remove or add tools, nor change parameters or results.
+
+### Configuration provenance and registry contract (spec-v5 §5/§11)
+
+- `approvalRef`/`reviewedBy` are consumer-local opaque review references.
+  No fixed Sentropic approver and no cross-repository equality is required.
+- The compiler is a subordinate per-tool policy/value validator of the
+  future `@sentropic/mcp-platform/registry` (§3.1), not the product registry.
+- A digest establishes integrity, not authorization or a second approval.
+- `handlersDigest` is a shape digest (handler id + capabilityRef + config
+  schema), not executable-code attestation; code identity is bound
+  separately via package/image receipts. `platformVersion` equals the
+  package version under strict equality (snapshots are resealed on each
+  platform patch).
+
+### Provider registry kernel (contract-v3 RC-M2, spec-v8 Lot 4)
+
+- `@sentropic/mcp-platform/registry` (`src/registry.ts`): `register` accepts
+  `LoadedDefinition | LazyDefinition`. Loaded definitions keep Immo's existing
+  shape; lazy definitions carry metadata plus a `load()` returning the heavy
+  payload. The loader is never called on register/catalog/unselected entries —
+  selected entries load only after preflight (compatibility receipt, required
+  ports), and a throwing loader is an atomic refusal.
+- `@sentropic/mcp-platform/registry/entry` (`src/registry-entry.ts`): frozen
+  `RegistryEntry` binding a compiled tool to its canonical request
+  (`canonicalizeRegistryRequest`, RFC 8785 digest) plus `mapEntryArguments`
+  and the one-call `resolveRegistryEntry` wiring.
+- Bounded 2020-12 parameters (`src/registry-parameters.ts`):
+  `validateBoundedSchema` / `validateBoundedValue` enforce finite budgets and
+  refuse unsupported keywords; runtime values map through this profile.
+- R1 remote boundary (`src/registry-remote-binding.ts`, internal-only):
+  `register` accepts `LoadedDefinition | LazyDefinition` only. A `remote-bound`
+  definition kind — or an adapter record claiming that kind — is refused
+  synchronously with `unsupported_definition_kind` and zero state change,
+  including a lazy payload tunneling a remote adapter at compile. The
+  synthetic helper (`RemoteBoundDefinition` / `RemoteClientPortV1` /
+  `resolveRemoteCall`) is internal: absent from supported exports,
+  unreferenced by transports, and excluded from the build. Public
+  remote-bound routing belongs to post-merge R2, not this release.
+
 ## 9. Verifying your connector (mock harness)
 
-This package has no Makefile target by design (it is private and unactivated). Run
-its own ephemeral toolchain inside the repo's Docker node image (see the package
-`README.md` "Running the gates"): a typecheck (`tsc --noEmit`) and the vitest suite
-(80/80 across 10 files at the time of writing). Real validation against Claude.ai or
-another external MCP client is **UAT, not a CI dependency** (spec §11).
+Run the package gates through the repo Makefile (see the package `README.md`
+"Running the gates"): `make typecheck-mcp-platform`, `make test-mcp-platform`
+(builds `dist/` first), `make pack-mcp-platform`,
+`make probe-mcp-platform-clean-consumer` (clean-container install + subpath import)
+and `make api-extract-mcp-platform`, each with `ENV=<env>` last. Real validation
+against Claude.ai or another external MCP client is **UAT, not a CI dependency**
+(spec §11).
 
 ---
 
@@ -347,7 +435,7 @@ MUST NOT be pre-empted by a connector build — they are owner/architect decisio
   on service tokens, refresh-token in token responses — affect pinned prod RPs.
 - **Refresh-token policy for native/MCP clients (P3).** A security-posture reversal.
 - **RS-middleware relocation / auth-hono 1.0 timing (P4).**
-- **`mcp-registry` residence (P5)** and **39h identities-table fusion (P6).**
+- **mcp-registry residence (P5) — settled: consumer-local configuration, Immo embeds the cluster-mesh MCP registry** (no central Sentropic approval/residence requirement; customizations live in Immo per spec-v5 §3/§11) and **39h identities-table fusion (P6).**
 - **Production audit retention + PII policy** and **production secret-store
   selection + rotation policy** (spec §13) — the in-memory `MockSecretStore` /
   `InMemoryAuditSink` are deliberately not production stores.

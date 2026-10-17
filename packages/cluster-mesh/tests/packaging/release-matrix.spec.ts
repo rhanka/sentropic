@@ -41,7 +41,8 @@ describe.skipIf(!enabled)('packed release matrix', () => {
     }
     expect(tuple).toMatchObject({
       ...pinned, '@sentropic/mcp-auth': '0.2.1',
-      '@sentropic/oauth-verify': '0.1.0', jose: '5.10.0', hono: '4.10.7', '@sentropic/auth-hono': 'absent',
+      '@sentropic/oauth-verify': '0.1.0', jose: '5.10.0', hono: '4.10.7',
+      '@sentropic/auth-hono': trainVersion('auth-hono'), '@sentropic/mcp-platform': trainVersion('mcp-platform'),
     });
   });
 
