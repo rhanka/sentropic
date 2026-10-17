@@ -105,11 +105,11 @@ async function ensureAndPublish(executor: ReturnType<typeof makeExecutor>): Prom
 }
 
 describe('web-pages MCP provider', () => {
-  it('exposes sentropic.web-pages with exactly the 15 spec tools', () => {
-    expect(WEB_PAGES_PROVIDER_ID).toBe('sentropic.web-pages');
+  it('exposes sentropic.artifacts with exactly the 15 spec tools', () => {
+    expect(WEB_PAGES_PROVIDER_ID).toBe('sentropic.artifacts');
     expect([...ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
     const manifest = createWebPagesManifest();
-    expect(manifest.providerId).toBe('sentropic.web-pages');
+    expect(manifest.providerId).toBe('sentropic.artifacts');
     expect(manifest.version).toBe('0.1.0');
     expect(manifest.tools.map((tool) => tool.name)).toEqual(SPEC_TOOLS);
     for (const tool of manifest.tools) {
@@ -246,14 +246,14 @@ describe('web-pages MCP provider', () => {
     const registry = createProviderRegistry();
     registry.register(definition);
     expect(() => registry.register(definition)).toThrow(/duplicate provider/);
-    registry.select([WEB_PAGES_PROVIDER_ID]);
-    registry.configure(WEB_PAGES_PROVIDER_ID, { defaultStorageScopeId: 'scope-1' });
+    registry.select(['sentropic.artifacts']);
+    registry.configure('sentropic.artifacts', { defaultStorageScopeId: 'scope-1' });
     const missing = registry.compile({ bindings: {}, compatibility: {} });
     expect(missing.ok).toBe(false);
     const compiled = registry.compile({
       bindings: {},
       compatibility: {
-        [WEB_PAGES_PROVIDER_ID]: { manifestDigest: computeManifestDigest(definition.manifest) },
+        'sentropic.artifacts': { manifestDigest: computeManifestDigest(definition.manifest) },
       },
     });
     if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
@@ -264,6 +264,13 @@ describe('web-pages MCP provider', () => {
     const catalog = registry.catalog();
     expect(catalog).toHaveLength(1);
     expect(catalog[0]).toMatchObject({ providerId: WEB_PAGES_PROVIDER_ID, availability: 'available' });
+  });
+
+  it('refuses the previous provider ID as unknown for selection and configuration', () => {
+    const registry = createProviderRegistry();
+    registry.register(createWebPagesRegistryDefinition({ app: makeApp() }));
+    expect(() => registry.select(['sentropic.web-pages'])).toThrow(/unknown provider/);
+    expect(() => registry.configure('sentropic.web-pages', {})).toThrow(/unknown provider/);
   });
 
   it('invokes through the platform adapter with verified-principal identity', async () => {
