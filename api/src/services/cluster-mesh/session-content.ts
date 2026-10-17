@@ -2462,7 +2462,7 @@ export class SessionContentService {
     )).limit(1);
     const scope = { workspaceId, ownerId, projectId: project?.projectId ?? workspaceId, sourceId: '' };
     const sessionIds = new Set([...bindings.map((row) => row.sessionId), ...grants.map((row) => row.sessionId)]);
-    return { ...scope, projectRevision: project?.projectRevision ?? 0,
+    return { ...scope, projectRevision: project?.projectRevision ?? 0, projectState: project?.state ?? 'off',
       sourceVerified: false, reason: 'unsupported_source', credentials: [], namedHistories: [], eligibleSources: [],
       items: [...sessionIds].map((sessionId) => {
         const binding = bindings.find((row) => row.sessionId === sessionId);
@@ -2490,6 +2490,46 @@ export class SessionContentService {
     return this.requestRetainedPurge(
       `retained:${namespaceIdFor(grant.tenantId, ownerId, grant.authorityEpoch)}:${bindingId}`, ownerId, intent,
     );
+  }
+
+  async denyWorkspaceContent(workspaceId: string, ownerId: string) {
+    await this.checkWorkspaceMembership(db, workspaceId, ownerId);
+    const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+    if (!workspace) throw new SessionContentError('not_found', 'workspace is unavailable');
+    await this.checkMembership(db, workspace.tenantId, ownerId);
+    const jobs = await db.transaction(async (tx) => {
+      const projects = await tx.select().from(sessionContentProjects).where(and(
+        eq(sessionContentProjects.workspaceId, workspaceId), eq(sessionContentProjects.ownerId, ownerId),
+        eq(sessionContentProjects.tenantId, workspace.tenantId),
+      )).orderBy(sessionContentProjects.projectId).for('update');
+      const ids = projects.map((project) => project.projectId);
+      if (!ids.length) return [];
+      await tx.update(sessionContentProjects).set({ state: 'revoked', updatedAt: new Date(this.nowMs()) })
+        .where(inArray(sessionContentProjects.projectId, ids));
+      const grants = await tx.select().from(sessionContentGrants).where(and(
+        inArray(sessionContentGrants.projectId, ids), eq(sessionContentGrants.ownerId, ownerId),
+        eq(sessionContentGrants.tenantId, workspace.tenantId),
+      ));
+      await tx.update(sessionContentGrants).set({ state: 'revoked', version: sql`${sessionContentGrants.version} + 1` })
+        .where(inArray(sessionContentGrants.projectId, ids));
+      await tx.update(sessionContentHistoryAuthorizations).set({ state: 'revoked',
+        version: sql`${sessionContentHistoryAuthorizations.version} + 1` })
+        .where(inArray(sessionContentHistoryAuthorizations.projectId, ids));
+      const jobs: string[] = [];
+      for (const grant of grants) {
+        const namespaceId = namespaceIdFor(grant.tenantId, ownerId, grant.authorityEpoch);
+        const purgeJobId = this.newId();
+        await tx.update(sessionContentObjects).set({ state: 'purge_pending', updatedAt: new Date(this.nowMs()) })
+          .where(and(eq(sessionContentObjects.namespaceId, namespaceId), eq(sessionContentObjects.bindingId, grant.bindingId),
+            inArray(sessionContentObjects.state, ['committed', 'staged'])));
+        await tx.insert(sessionContentPurgeJobs).values({ purgeJobId, namespaceId, bindingId: grant.bindingId, scope: 'binding', state: 'pending' });
+        jobs.push(purgeJobId);
+      }
+      return jobs;
+    });
+    let complete = true;
+    for (const job of jobs) if ((await this.runPurge(job)).remainingObjects !== 0) complete = false;
+    return { complete };
   }
 
   async requestRetainedPurge(retainedScopeId: string, ownerId: string, intent: 'revoke' | 'exclude' = 'revoke') {
