@@ -186,6 +186,7 @@
     - [x] Projection state forks immutable indexed relationship/delta roots; successive changes validate on the successor, descriptor/delta inputs are owned, and delta reads use a bounded window. Projection root probes pass 2/2; publication integration remains pending.
   - [ ] One atomic visibility point: data, barriers, projections, receipt and journal segment switch together under the scope gate with base compare.
   - [ ] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
+    - [ ] `src/storage/staged-effects.ts` prepares module effects, verified purge authorizers, projections, audit and one scoped journal event on the owned root before publication; shared purge fixtures will be aligned with verified principals.
   - [ ] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
   - [ ] G5: imported content and its covering barrier publish in one unit (reference aligned).
   - [ ] Lot gate: copy of Lot 1 gate; tests `visibility.spec.ts`, `staged-units.spec.ts` with interleaved readers.
