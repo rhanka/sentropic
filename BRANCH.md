@@ -187,6 +187,7 @@
   - [ ] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
     - [x] RED `tests/storage/root-seal.spec.ts`: bounded preparation with evolving heads, one root/event at commit, stable receipt retry and a failed seal that cannot reopen staging; 2/2 pass, typecheck passes.
     - [ ] Shared divergent-root cases use independent operations, preserving the frozen `sealing` state on semantic failure; returned seal capabilities survive tampered-root checks instead of being silently stripped by fixtures. Reference state transitions align with N3.
+    - [ ] Rebuilt K4 passes 7/8 original staged-unit tests after fixture alignment. The remaining typed closure mismatch is addressed by explicitly refusing a missing staged dependency before ordinary CAS preparation; K3 missing-head semantics stay unchanged.
     - [ ] `staged-preparation.ts` prepares one measured effect at a time on captured indexed roots and streams the shared v1 root commitments in bounded UTF-8 chunks; the memory backend retains hash progress without a durability claim.
     - [ ] `staged-seal.ts` freezes sealing input, authenticates seals, rechecks authority/current fence after the scheduling hook, publishes one captured successor and preserves terminal receipts independently of hidden fragments.
   - [ ] Lot gate: copy of Lot 1 gate; tests `staged-units.spec.ts` + corpus cases C01-C04 with mutants.

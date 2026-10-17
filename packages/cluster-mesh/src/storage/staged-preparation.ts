@@ -47,6 +47,9 @@ export const prepareNextEffect = (core: StagedCore, bound: ScopedRuntime, progre
     if (cost > byteBudget) throw new StorageCapacityExceededError('a seal item requires a larger declared byte budget');
     if (work.bytes + cost > byteBudget) return false;
     const effect = { ...emptyEffects(), [section]: [values[progress.item]] };
+    if (section === 'appends' && effect.appends[0].expectation.kind === 'head' && !progress.prepared.chains.has(effect.appends[0].chainId)) {
+      throw new StorageInvalidCommandError('staged append dependency is unresolved');
+    }
     prepareUnitsInScope(progress.prepared, [effect], core.context(bound.grant, operation.commitId));
     applyRootModuleEffects(core, core.data(progress.base), progress.data, bound.grant, effect);
     if (section !== 'guards') progress.data.projections.emitDelta({ cause: 'staged-publication',
