@@ -89,6 +89,7 @@
   - [ ] Remove retired catalog/provider entries, regenerate council, update frontend loading defaults and affected seeds/fixtures; bump touched public packages after registry precheck and regenerate locks through Make.
   - [ ] Run `make test-llm-mesh SCOPE=tests/facade.test.ts ENV=test-model-retirement`, then scoped `execution-features.test.ts` and `responses-wire.test.ts`; run `make test-chat-ui ENV=test-model-retirement`.
   - [ ] Verify history/document single, chunk and merge output caps, retained facts, maximum input and cancellation with deterministic contracts.
+  - [x] Six budget-refusal failures reproduced offline before adding full-rendered-request admission and finite output validation; document summaries now share the configured model and explicit none.
 - [ ] **Lot 3 — Bounded paired live qualification**
   - [ ] Add `api/tests/ai/nano-replacement-qualification.test.ts` and shared fixture/budget support; offline-test reservation, missing usage, cancellation and refusal before budget overflow.
   - [ ] Exercise BOTH candidates on identical title, effort, compaction, JSON/tool continuation and history/document single/chunk fixtures through product helpers and llm-mesh; retain outputs and usage evidence.

@@ -25,7 +25,8 @@ import { CLOUDCODE_PA_PROVIDER_ID } from '../providers/cloudcode-pa-provider';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
 import { env } from '../../config/env';
-import { getDefaultOpenAIModel } from '../../config/models';
+import { DEFAULT_MAX_OUTPUT_TOKENS, getDefaultOpenAIModel } from '../../config/models';
+import { validateOpenAIRequestBudget } from './openai-budget';
 import {
   createClaudeCodeAccountAuthInput,
   createCodexAccountAuthInput,
@@ -1342,7 +1343,7 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     } as unknown as OpenAI.Chat.Completions.ChatCompletion;
   }
 
-  const boundedOutputTokens = maxOutputTokens ?? 16_384;
+  const boundedOutputTokens = maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
   const selectedReasoningEffort = reasoningEffort ?? (selection.model === getDefaultOpenAIModel() ? 'none' : undefined);
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model: selection.model,
@@ -1359,6 +1360,7 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   };
 
   // Pass AbortSignal through request options to enable cooperative cancellation
+  validateOpenAIRequestBudget(selection.model, requestOptions, boundedOutputTokens);
   return await dispatchMeshGenerateRaw<OpenAI.Chat.Completions.ChatCompletion>({
     providerId: selection.providerId,
     model: selection.model,
@@ -2212,7 +2214,7 @@ export async function* callLLMStream(
   // The GPT-4.1 family does not support reasoning parameters.
   const supportsReasoningParams = !selectedModel.startsWith('gpt-4.1');
   const selectedReasoningEffort = reasoningEffort ?? (selectedModel === getDefaultOpenAIModel() ? 'none' : undefined);
-  const boundedOutputTokens = maxOutputTokens ?? 16_384;
+  const boundedOutputTokens = maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
 
   const mapReasoningEffort = (effort: CallLLMStreamOptions['reasoningEffort']): unknown => {
     if (!effort) return undefined;
@@ -2317,6 +2319,7 @@ export async function* callLLMStream(
       : {})
   };
 
+  validateOpenAIRequestBudget(selectedModel, previousResponseId ? { ...requestOptions, messages } : requestOptions, boundedOutputTokens);
   let codexOutcome: AccountTransportOutcome = { status: 'success' };
   try {
     yield { type: 'status', data: { state: 'started' } };

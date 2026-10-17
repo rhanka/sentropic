@@ -71,4 +71,18 @@ describe('nano replacement through the product mesh boundary', () => {
       mode: 'responses', requestOptions: { model, reasoning: { effort: 'none' }, max_output_tokens: 64 },
     });
   });
+
+  it.each([0, -1, NaN, Infinity, 128_001])('should refuse an invalid output ceiling %s before dispatch', async (maxOutputTokens) => {
+    const generate = vi.spyOn(runtime, 'generate').mockRejectedValue(new Error('Unexpected provider dispatch'));
+    await expect(callLLM({ model: 'gpt-6-luna', messages, maxOutputTokens })).rejects.toThrow(/output.*budget/i);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('should refuse excessive rendered input including tool schema before dispatch', async () => {
+    const generate = vi.spyOn(runtime, 'generate').mockRejectedValue(new Error('Unexpected provider dispatch'));
+    await expect(callLLM({ model: 'gpt-6-luna', messages, maxOutputTokens: 32,
+      tools: [{ type: 'function', function: { name: 'oversized', description: 'x'.repeat(922_001 * 4), parameters: {} } }],
+    })).rejects.toThrow(/input.*budget/i);
+    expect(generate).not.toHaveBeenCalled();
+  });
 });

@@ -27,7 +27,7 @@ import {
   type ContextBudgetZone as ChatCoreContextBudgetZone,
 } from '../../../packages/chat-core/src/context-budget';
 import { createId } from '../utils/id';
-import { getDefaultOpenAIModel } from '../config/models';
+import { getDefaultOpenAIModel, LUNA_MAX_INPUT_TOKENS } from '../config/models';
 import { callLLM, callLLMStream } from './llm-runtime';
 import {
   getModelCatalogPayload,
@@ -661,8 +661,8 @@ const toBudgetString = (value: unknown): string => {
 /** Per-model context window budgets (total tokens including input + output) */
 const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   // OpenAI
-  'gpt-5.6-luna':  1_050_000,
-  'gpt-6-luna':    922_000, // Maximum input, reserving the remaining 128k for output.
+  'gpt-5.6-luna':  LUNA_MAX_INPUT_TOKENS,
+  'gpt-6-luna':    LUNA_MAX_INPUT_TOKENS,
   'gpt-5.6-sol':   1_050_000,
   'gpt-5.6-terra': 1_050_000,
   'gpt-5.5':       1_000_000,
