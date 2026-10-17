@@ -78,6 +78,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `L2-host-policy-binding` (2026-10-17): the published Node host always supplies the protected affinity store to the mesh planner and obtains launch policy/native session identity from verified durable auth. Control acquisition requires a policy; legacy implicit sessions refuse inference. Real HTTP/restart/revocation host scenarios remain green 3/3.
 - `L2-session-policy` (2026-10-17): sessions persist a frozen trusted launch policy and reject conflicting reacquisition or implicit legacy-policy upgrades; migration rejects a key already bound to any owner. Session policy tests pass 2/2; mesh durable affinity scenarios pass 3/3.
 - `L2-durable-planner` (2026-10-17): mesh persists a first account pin before provider preparation, reloads pins for each plan, refuses deleted pins/unreadable state and awaits consented account-epoch transitions. Durable administrative reset/rebind requires a new acknowledged session policy. Scoped restart/15-session-eviction/rotation/refusal tests pass 3/3.
 - `L0-receipt-tightening` (2026-10-17): registry profile requirements accumulate per delivery; consumer acceptance requires nonempty successful required jobs and exact run/attempt/merge identities. Inherited receipts require the actual current release-lock digest as well as an unchanged external projection. Pure tooling remains 35/35.

@@ -2,6 +2,8 @@ import { InMemoryRoutePlanner, type GenerateRequest, type GenerateResponse, type
 import { stubGatewayConfig } from '../../src/stubs.js';
 import type { MeshBinding } from '../../src/node/host-types.js';
 export const model = 'gpt-6.1-sol';
+export const routingContract = { version: 1 as const, revision: 'p1', ownerScopeRef: 'owner-a', exactModels: [model],
+  authorizedAccountRefs: ['internal-a'], rotateAccounts: false, effortPolicy: { mode: 'preserve' as const } };
 export const durableHostFixture = (key = 'a') => {
   const calls: GenerateRequest[] = [];
   const mesh: MeshBinding = {
@@ -9,8 +11,8 @@ export const durableHostFixture = (key = 'a') => {
     keyring: { getSecret: async () => key.repeat(64) }, unlockKeyring: async () => undefined,
     resolveOwner: (caller, context) => ({ ownerScopeRef: caller.ownerScopeRef, tenantId: 'tenant',
       principalId: 'owner', workspaceId: caller.workspaceRef, source: 'fixture', correlationId: context.requestId }),
-    gateway: { config: stubGatewayConfig, routeMetering: { settleRoute: () => undefined },
-      routePlanner: new InMemoryRoutePlanner({ directory: {
+    gateway: { config: stubGatewayConfig, routeMetering: { settleRoute: () => undefined } },
+      createRoutePlanner: (options) => new InMemoryRoutePlanner({ ...options, directory: {
         listEligible: async () => [{ accountRef: 'internal-a', diagnosticAccountRef: 'account-a', targetProviderId: 'openai', transportProviderId: 'codex',
           supportedModelIds: [model], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1' }],
         prepareAttempt: async () => ({ attemptRef: 'attempt-a',
@@ -23,7 +25,6 @@ export const durableHostFixture = (key = 'a') => {
           releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
         }) as unknown as PreparedRouteAttempt,
       } }),
-    },
   };
   return { mesh, calls };
 };
