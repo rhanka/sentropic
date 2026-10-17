@@ -11,6 +11,7 @@ import { COMMENTS_IMPORT_CONTRACT_DIGEST, appendCommentsKernelCommitment, commen
 import { insertCommentsAcknowledgement, insertCommentsImport, readCommentsAcknowledgement, readCommentsImport, writeCommentsImport } from './import-control.js';
 import { appendCommentsUnitPayload, commentsImportDataEffects, commentsImportReceiptEffects, verifyCommentsTerminal } from './import-effects.js';
 import { CommentsTransportError, type CommentsPrepareImportRequest, type CommentsFragmentAcknowledgement } from './transport-contracts.js';
+import { assertCommentsImportRecord } from './import-authority.js';
 export const prepareCommentsImport = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CommentsFragmentAcknowledgement> => {
   const input = supplied as CommentsPrepareImportRequest; const binding = input?.binding; const fragment = input?.fragment;
   validateCommentsImportBinding(binding);
@@ -41,6 +42,7 @@ export const prepareCommentsImport = async (options: CommentsServiceOptions, con
     state.roots = verifyCommentsTerminal(state, fragment);
     effects = await commentsImportReceiptEffects(state, context);
   } else {
+    for (const record of fragment.payload) assertCommentsImportRecord(binding, record);
     appendCommentsUnitPayload(state, fragment); effects = commentsImportDataEffects(fragment.payload);
   }
   const predecessorHash = state.kernelFrontier;

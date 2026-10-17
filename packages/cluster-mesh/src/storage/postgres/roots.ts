@@ -21,6 +21,7 @@ export class PgRoots {
   }
   key(scope: StorageScope): string { return pgScopeKey(this.options.moduleId, scope); }
   preparing<T>(unitId: string, operation: () => Promise<T>): Promise<T> { return this.#preparation.run(unitId, operation); }
+  preparationUnit(): string | undefined { return this.#preparation.getStore(); }
   async capture(session: PgSession, scope: StorageScope, lock = false): Promise<PgRoot> {
     const key = this.key(scope);
     if (lock) await session.execute({ text: `INSERT INTO ${this.schema}.scopes(key,module,tenant,workspace,incarnation) VALUES($1,$2,$3,$4,$5) ON CONFLICT(key) DO NOTHING`, values: [key, this.options.moduleId, scope.tenantId, scope.workspaceId, this.incarnation] });
