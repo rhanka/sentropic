@@ -149,7 +149,9 @@
     - [ ] CI lifecycle drills on fixtures: valid candidate classifiers + inactive smoke/rehearsal/applicable namespace; corrupt phase/program/index fails before install; published transition executes all legs; withheld workflow or changed base refuses readiness; complete published gate marks ready with merge-commit method; coverage replacement union executes, row removal or old receipt refuses
 
 - [ ] **Lot 1 — Gateway-owned durable sessions and request state**
-  - [ ] Create gateway `src/session-service.ts`, `src/ports/gateway-state.ts`, `src/node/index.ts`, `src/node/gateway-host.ts`, `src/node/gateway-state-store.ts`, `src/node/control-server.ts`, `src/node/control-client.ts`, `src/node/session-migration.ts`, `src/request-receipts.ts`
+  - [x] Create gateway `src/session-service.ts` (+importSession), `src/ports/gateway-state.ts`, `src/request-receipts.ts` (unit green 7+2)
+  - [x] Create `src/node/gateway-state-store.ts` + `control-server.ts` + `control-client.ts` + `session-migration.ts` (unit green 4+4+3)
+  - [ ] Create `src/node/gateway-host.ts` + `src/node/index.ts` + published export map (`./node`, `./node/control-client`)
   - [ ] Wire exports/auth in `src/index.ts`, `src/ports/caller-auth.ts`, `src/router/index.ts`, `package.json` export/files map, README/CHANGELOG; protected mesh storage adapter reuse; optional `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts` change with its test
   - [ ] Wire same published host into private app under GWV-EX1 only: `apps/llm-gateway/src/app.ts`, `apps/llm-gateway/src/config.ts`, `apps/llm-gateway/src/readiness.ts` + manifest/tests; no Compose edit; private app never published
   - [ ] Lot gate:

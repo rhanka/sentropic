@@ -1,0 +1,371 @@
+/**
+ * Gateway-owned session service (L1, spec 6.2).
+ *
+ * Durable caller keys with a 30-day default lifetime: the issuer publishes a
+ * new cryptographically random 256-bit key only after durable commit, a
+ * crash before commit leaves no issued key, and authenticated idempotent
+ * reacquisition returns the same session without reissuing key material.
+ * Only the dedicated authenticated acquisition channel returns keys; every
+ * public result carries opaque references, never secrets.
+ */
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+
+import {
+  GatewayStateError,
+  type GatewayStateStore,
+  type StoredReceipt,
+  type StoredSession,
+  type StoredState,
+} from './ports/gateway-state.js';
+import { isTerminalSettlement } from './request-receipts.js';
+
+export type { GatewayStateStore, StoredReceipt, StoredSession, StoredState };
+
+export type SessionErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'INVALID-KEY'
+  | 'REVOKED'
+  | 'EXPIRED'
+  | 'STORE-FAILED'
+  | 'CORRUPT'
+  | 'CONFLICT'
+  | 'KEY-UNAVAILABLE'
+  | 'AMBIGUOUS'
+  | 'ALREADY-SETTLED'
+  | 'BAD-SETTLEMENT'
+  | 'NOT-FOUND';
+
+export class GatewaySessionError extends GatewayStateError<SessionErrorCode> {
+  constructor(message: string, code: SessionErrorCode) {
+    super(message, code);
+    this.name = 'GatewaySessionError';
+  }
+}
+
+export interface AcquireSessionInput {
+  readonly ownerScopeRef: string;
+  readonly workspaceRef: string;
+  readonly clientSessionRef: string;
+  readonly profiles?: readonly string[];
+  readonly models?: readonly string[];
+  readonly mappingRevision?: string;
+  readonly ttlDays?: number;
+}
+
+export interface IssuedSession {
+  readonly sessionRef: string;
+  /** Present only on first issuance; reacquisition never reissues key material. */
+  readonly key?: string;
+  readonly reacquired: boolean;
+  readonly expiresAt: string;
+  readonly policyRevision: string;
+}
+
+export interface CallerContext {
+  readonly ownerScopeRef: string;
+  readonly workspaceRef: string;
+  readonly clientSessionRef: string;
+  readonly profiles: readonly string[];
+  readonly models: readonly string[];
+  readonly mappingRevision?: string;
+  readonly policyRevision: string;
+  readonly expiresAt: string;
+}
+
+const SCHEMA_VERSION = 1;
+const DEFAULT_TTL_DAYS = 30;
+const POLICY_REVISION = 'l1-exact-v1';
+
+const verifierOf = (key: string): Buffer =>
+  createHash('sha256').update(key, 'utf8').digest();
+
+const validKey = (candidate: string, verifierHex: string): boolean => {
+  const expected = Buffer.from(verifierHex, 'hex');
+  if (expected.length !== 32 || !candidate) return false;
+  return timingSafeEqual(verifierOf(candidate), expected);
+};
+
+const sameTriple = (session: StoredSession, input: AcquireSessionInput): boolean =>
+  session.ownerScopeRef === input.ownerScopeRef
+  && session.workspaceRef === input.workspaceRef
+  && session.clientSessionRef === input.clientSessionRef;
+
+const live = (session: StoredSession, now: number): boolean =>
+  session.revokedAt === undefined && Date.parse(session.expiresAt) > now;
+
+const publicSession = (session: StoredSession) => ({
+  sessionRef: session.sessionRef,
+  workspaceRef: session.workspaceRef,
+  clientSessionRef: session.clientSessionRef,
+  expiresAt: session.expiresAt,
+  revoked: session.revokedAt !== undefined,
+  policyRevision: session.policyRevision,
+});
+
+export class GatewaySessionService {
+  private readonly defaultTtlDays: number;
+  constructor(
+    private readonly store: GatewayStateStore,
+    options: { defaultTtlDays?: number } = {},
+  ) {
+    this.defaultTtlDays = options.defaultTtlDays ?? DEFAULT_TTL_DAYS;
+  }
+
+  async acquireSession(input: AcquireSessionInput): Promise<IssuedSession> {
+    if (!input.ownerScopeRef || !input.workspaceRef || !input.clientSessionRef) {
+      throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
+    }
+    const loaded = await this.store.load();
+    const now = Date.now();
+    const existing = Object.values(loaded.sessions).find(
+      (session) => sameTriple(session, input) && live(session, now),
+    );
+    if (existing) {
+      return {
+        sessionRef: existing.sessionRef,
+        reacquired: true,
+        expiresAt: existing.expiresAt,
+        policyRevision: existing.policyRevision,
+      };
+    }
+    const key = randomBytes(32).toString('base64url');
+    const created = new Date(now).toISOString();
+    const ttlDays = input.ttlDays ?? this.defaultTtlDays;
+    const session: StoredSession = {
+      schemaVersion: SCHEMA_VERSION,
+      sessionRef: randomBytes(16).toString('base64url'),
+      ownerScopeRef: input.ownerScopeRef,
+      workspaceRef: input.workspaceRef,
+      clientSessionRef: input.clientSessionRef,
+      keyVerifier: verifierOf(key).toString('hex'),
+      keyId: randomBytes(8).toString('hex'),
+      createdAt: created,
+      expiresAt: new Date(now + ttlDays * 86_400_000).toISOString(),
+      profiles: [...(input.profiles ?? [])],
+      models: [...(input.models ?? [])],
+      mappingRevision: input.mappingRevision,
+      policyRevision: POLICY_REVISION,
+    };
+    const next: StoredState = {
+      schemaVersion: SCHEMA_VERSION,
+      revision: loaded.revision + 1,
+      sessions: { ...loaded.sessions, [session.sessionRef]: session },
+      receipts: loaded.receipts,
+    };
+    try {
+      await this.store.compareAndSet(loaded.revision, next);
+    } catch (error) {
+      if (error instanceof GatewayStateError && error.code === 'CONFLICT') {
+        const reloaded = await this.store.load();
+        const winner = Object.values(reloaded.sessions).find(
+          (candidate) => sameTriple(candidate, input) && live(candidate, Date.now()),
+        );
+        if (winner) {
+          return {
+            sessionRef: winner.sessionRef,
+            reacquired: true,
+            expiresAt: winner.expiresAt,
+            policyRevision: winner.policyRevision,
+          };
+        }
+      }
+      throw error;
+    }
+    return {
+      sessionRef: session.sessionRef,
+      key,
+      reacquired: false,
+      expiresAt: session.expiresAt,
+      policyRevision: session.policyRevision,
+    };
+  }
+
+  /**
+   * Single-writer migration import: preserves existing key bytes instead of
+   * issuing new material. Rejects short keys, past expiry, and ambiguous
+   * duplicates (including live gateway sessions); the caller quarantines.
+   */
+  async importSession(input: {
+    ownerScopeRef: string;
+    workspaceRef: string;
+    clientSessionRef: string;
+    keyMaterial: string;
+    expiresAt: string;
+    profiles?: readonly string[];
+    models?: readonly string[];
+    mappingRevision?: string;
+  }): Promise<{ sessionRef: string; expiresAt: string }> {
+    if (!input.ownerScopeRef || !input.workspaceRef || !input.clientSessionRef) {
+      throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
+    }
+    if (typeof input.keyMaterial !== 'string' || input.keyMaterial.length < 43) {
+      throw new GatewaySessionError('imported key is too short', 'AMBIGUOUS');
+    }
+    if (!input.expiresAt || Date.parse(input.expiresAt) <= Date.now()) {
+      throw new GatewaySessionError('imported session is expired', 'AMBIGUOUS');
+    }
+    const loaded = await this.store.load();
+    const now = Date.now();
+    const duplicate = Object.values(loaded.sessions).find(
+      (session) =>
+        session.ownerScopeRef === input.ownerScopeRef
+        && session.workspaceRef === input.workspaceRef
+        && session.clientSessionRef === input.clientSessionRef
+        && live(session, now),
+    );
+    if (duplicate) {
+      throw new GatewaySessionError('ambiguous duplicate session', 'AMBIGUOUS');
+    }
+    const session: StoredSession = {
+      schemaVersion: SCHEMA_VERSION,
+      sessionRef: randomBytes(16).toString('base64url'),
+      ownerScopeRef: input.ownerScopeRef,
+      workspaceRef: input.workspaceRef,
+      clientSessionRef: input.clientSessionRef,
+      keyVerifier: verifierOf(input.keyMaterial).toString('hex'),
+      keyId: randomBytes(8).toString('hex'),
+      createdAt: new Date(now).toISOString(),
+      expiresAt: input.expiresAt,
+      profiles: [...(input.profiles ?? [])],
+      models: [...(input.models ?? [])],
+      mappingRevision: input.mappingRevision,
+      policyRevision: POLICY_REVISION,
+    };
+    const next: StoredState = {
+      schemaVersion: SCHEMA_VERSION,
+      revision: loaded.revision + 1,
+      sessions: { ...loaded.sessions, [session.sessionRef]: session },
+      receipts: loaded.receipts,
+    };
+    await this.store.compareAndSet(loaded.revision, next);
+    return { sessionRef: session.sessionRef, expiresAt: session.expiresAt };
+  }
+
+  async resolveCaller(input: { sessionRef: string; key: string }): Promise<CallerContext> {
+    const loaded = await this.store.load();
+    const session = loaded.sessions[input.sessionRef];
+    if (!session || !validKey(input.key, session.keyVerifier)) {
+      throw new GatewaySessionError('unknown session or key', 'INVALID-KEY');
+    }
+    if (session.revokedAt !== undefined) {
+      throw new GatewaySessionError('session revoked', 'REVOKED');
+    }
+    if (Date.parse(session.expiresAt) <= Date.now()) {
+      throw new GatewaySessionError('session expired', 'EXPIRED');
+    }
+    return {
+      ownerScopeRef: session.ownerScopeRef,
+      workspaceRef: session.workspaceRef,
+      clientSessionRef: session.clientSessionRef,
+      profiles: session.profiles,
+      models: session.models,
+      mappingRevision: session.mappingRevision,
+      policyRevision: session.policyRevision,
+      expiresAt: session.expiresAt,
+    };
+  }
+
+  async revokeSession(input: { ownerScopeRef: string; sessionRef: string }): Promise<{ revoked: boolean }> {
+    if (!input.ownerScopeRef) {
+      throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
+    }
+    const loaded = await this.store.load();
+    const session = loaded.sessions[input.sessionRef];
+    if (!session || session.ownerScopeRef !== input.ownerScopeRef) {
+      throw new GatewaySessionError('unknown session', 'NOT-FOUND');
+    }
+    if (session.revokedAt !== undefined) return { revoked: true };
+    const next: StoredState = {
+      ...loaded,
+      revision: loaded.revision + 1,
+      sessions: {
+        ...loaded.sessions,
+        [session.sessionRef]: { ...session, revokedAt: new Date(Date.now()).toISOString() },
+      },
+    };
+    await this.store.compareAndSet(loaded.revision, next);
+    return { revoked: true };
+  }
+
+  async listSessions(input: { ownerScopeRef: string }): Promise<ReturnType<typeof publicSession>[]> {
+    if (!input.ownerScopeRef) {
+      throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
+    }
+    const loaded = await this.store.load();
+    return Object.values(loaded.sessions)
+      .filter((session) => session.ownerScopeRef === input.ownerScopeRef)
+      .map(publicSession);
+  }
+
+  async recordAttempt(input: {
+    ownerScopeRef: string;
+    sessionRef: string;
+    requestId: string;
+    model: string;
+  }): Promise<StoredReceipt> {
+    const loaded = await this.store.load();
+    const session = loaded.sessions[input.sessionRef];
+    if (!session || session.ownerScopeRef !== input.ownerScopeRef) {
+      throw new GatewaySessionError('unknown session', 'NOT-FOUND');
+    }
+    const receipt: StoredReceipt = {
+      schemaVersion: SCHEMA_VERSION,
+      receiptId: randomBytes(16).toString('hex'),
+      sessionRef: session.sessionRef,
+      ownerScopeRef: session.ownerScopeRef,
+      requestId: input.requestId,
+      model: input.model,
+      attempts: 1,
+      settlement: 'pending',
+      createdAt: new Date(Date.now()).toISOString(),
+    };
+    const next: StoredState = {
+      ...loaded,
+      revision: loaded.revision + 1,
+      sessions: loaded.sessions,
+      receipts: { ...loaded.receipts, [receipt.receiptId]: receipt },
+    };
+    await this.store.compareAndSet(loaded.revision, next);
+    return receipt;
+  }
+
+  async settleReceipt(input: {
+    ownerScopeRef: string;
+    receiptId: string;
+    outcome: string;
+  }): Promise<StoredReceipt> {
+    const loaded = await this.store.load();
+    const receipt = loaded.receipts[input.receiptId];
+    if (!receipt || receipt.ownerScopeRef !== input.ownerScopeRef) {
+      throw new GatewaySessionError('unknown receipt', 'NOT-FOUND');
+    }
+    if (receipt.settlement !== 'pending') {
+      throw new GatewaySessionError(`receipt already settled as ${receipt.settlement}`, 'ALREADY-SETTLED');
+    }
+    if (!isTerminalSettlement(input.outcome)) {
+      throw new GatewaySessionError(`unknown settlement outcome: ${input.outcome}`, 'BAD-SETTLEMENT');
+    }
+    const settled: StoredReceipt = {
+      ...receipt,
+      settlement: input.outcome,
+      settledAt: new Date(Date.now()).toISOString(),
+    };
+    const next: StoredState = {
+      ...loaded,
+      revision: loaded.revision + 1,
+      sessions: loaded.sessions,
+      receipts: { ...loaded.receipts, [settled.receiptId]: settled },
+    };
+    await this.store.compareAndSet(loaded.revision, next);
+    return settled;
+  }
+
+  async readReceipt(input: { ownerScopeRef: string; receiptId: string }): Promise<StoredReceipt> {
+    const loaded = await this.store.load();
+    const receipt = loaded.receipts[input.receiptId];
+    if (!receipt || receipt.ownerScopeRef !== input.ownerScopeRef) {
+      throw new GatewaySessionError('unknown receipt', 'NOT-FOUND');
+    }
+    return receipt;
+  }
+}
