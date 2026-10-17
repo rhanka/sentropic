@@ -7,39 +7,100 @@ import { authorizeComments } from './authority.js';
 import { commentsImportBindingDigest, validateCommentsImportBinding } from './binding-codec.js';
 import { validateCommentsFragment, commentsTransportBytes } from './fragment-codec.js';
 import { sameScope } from './storage-schema.js';
-import { COMMENTS_IMPORT_CONTRACT_DIGEST, appendCommentsKernelCommitment, commentsKernelCommitRoot, startCommentsImportDigests, type CommentsImportState } from './import-state.js';
-import { insertCommentsAcknowledgement, insertCommentsImport, readCommentsAcknowledgement, readCommentsImport, writeCommentsImport } from './import-control.js';
-import { appendCommentsUnitPayload, commentsImportDataEffects, commentsImportReceiptEffects, verifyCommentsTerminal } from './import-effects.js';
-import { CommentsTransportError, type CommentsPrepareImportRequest, type CommentsFragmentAcknowledgement } from './transport-contracts.js';
+import {
+  COMMENTS_IMPORT_CONTRACT_DIGEST,
+  appendCommentsKernelCommitment,
+  commentsKernelCommitRoot,
+  startCommentsImportDigests,
+  type CommentsImportState,
+} from './import-state.js';
+import {
+  insertCommentsAcknowledgement,
+  insertCommentsImport,
+  readCommentsAcknowledgement,
+  readCommentsImport,
+  writeCommentsImport,
+} from './import-control.js';
+import {
+  appendCommentsUnitPayload,
+  commentsImportDataEffects,
+  commentsImportReceiptEffects,
+  verifyCommentsTerminal,
+} from './import-effects.js';
+import {
+  CommentsTransportError,
+  type CommentsPrepareImportRequest,
+  type CommentsFragmentAcknowledgement,
+} from './transport-contracts.js';
 import { assertCommentsImportRecord } from './import-authority.js';
-export const prepareCommentsImport = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CommentsFragmentAcknowledgement> => {
-  const input = supplied as CommentsPrepareImportRequest; const binding = input?.binding; const fragment = input?.fragment;
+export const prepareCommentsImport = async (
+  options: CommentsServiceOptions,
+  context: PgInstalledContext,
+  supplied: unknown,
+): Promise<CommentsFragmentAcknowledgement> => {
+  const input = supplied as CommentsPrepareImportRequest;
+  const binding = input?.binding;
+  const fragment = input?.fragment;
   validateCommentsFragment(fragment);
-  if (commentsTransportBytes(input) > 1048576) throw new CommentsTransportError('capacity-exceeded', 'Complete import request exceeds its byte limit');
+  if (commentsTransportBytes(input) > 1048576)
+    throw new CommentsTransportError('capacity-exceeded', 'Complete import request exceeds its byte limit');
   validateCommentsImportBinding(binding);
-  if (!sameScope(binding.request.scope, context.grant.scope)) throw new CommentsTransportError('denied', 'Import scope is unavailable');
+  if (!sameScope(binding.request.scope, context.grant.scope))
+    throw new CommentsTransportError('denied', 'Import scope is unavailable');
   for (const capability of binding.capabilities) await authorizeComments(options, context, capability, binding.targets);
   const bindingDigest = commentsImportBindingDigest(binding);
   const manifest = fragment.manifest;
-  if (!sameScope(manifest.scope, binding.request.scope) || manifest.operationId !== binding.operationId || manifest.bindingDigest !== bindingDigest) throw new CommentsTransportError('conflict', 'Fragment import binding differs');
+  if (
+    !sameScope(manifest.scope, binding.request.scope) ||
+    manifest.operationId !== binding.operationId ||
+    manifest.bindingDigest !== bindingDigest
+  )
+    throw new CommentsTransportError('conflict', 'Fragment import binding differs');
   let state = await readCommentsImport(context, binding.operationId, true);
   if (!state) {
     if (manifest.ordinal !== '0') throw new CommentsTransportError('conflict', 'First fragment ordinal must be zero');
-    const begin = { operationKey: `comments-import-v1:${sha256Hex(binding.operationId)}`, inputDigest: bindingDigest, contractDigest: COMMENTS_IMPORT_CONTRACT_DIGEST, sourceBoundary: binding.sourceBoundary, fence: input.fence };
-    state = { version: 'comments-preparation-v1', binding, bindingDigest, begin, unit: null, issuedAt: options.clock.now(), rootReference: randomUUID(),
-      nextOrdinal: '0', frontier: null, kernelFrontier: null, ...startCommentsImportDigests(binding), root: null, canonical: null, roots: [], terminalHashes: [] } satisfies CommentsImportState;
-    if (!Number.isSafeInteger(state.issuedAt) || state.issuedAt < 0) throw new CommentsTransportError('unavailable', 'Import clock is invalid');
+    const begin = {
+      operationKey: `comments-import-v1:${sha256Hex(binding.operationId)}`,
+      inputDigest: bindingDigest,
+      contractDigest: COMMENTS_IMPORT_CONTRACT_DIGEST,
+      sourceBoundary: binding.sourceBoundary,
+      fence: input.fence,
+    };
+    state = {
+      version: 'comments-preparation-v1',
+      binding,
+      bindingDigest,
+      begin,
+      unit: null,
+      issuedAt: options.clock.now(),
+      rootReference: randomUUID(),
+      nextOrdinal: '0',
+      frontier: null,
+      kernelFrontier: null,
+      ...startCommentsImportDigests(binding),
+      root: null,
+      canonical: null,
+      roots: [],
+      terminalHashes: [],
+    } satisfies CommentsImportState;
+    if (!Number.isSafeInteger(state.issuedAt) || state.issuedAt < 0)
+      throw new CommentsTransportError('unavailable', 'Import clock is invalid');
     await insertCommentsImport(context, state);
   }
-  if (state.bindingDigest !== bindingDigest || canonicalJson(state.begin.fence) !== canonicalJson(input.fence)) throw new CommentsTransportError('conflict', 'Import preparation binding changed');
+  if (state.bindingDigest !== bindingDigest || canonicalJson(state.begin.fence) !== canonicalJson(input.fence))
+    throw new CommentsTransportError('conflict', 'Import preparation binding changed');
   state.unit = await context.beginStaged(state.begin);
-  if (BigInt(manifest.ordinal) > BigInt(state.nextOrdinal)) throw new CommentsTransportError('conflict', 'Fragment frontier differs');
+  if (BigInt(manifest.ordinal) > BigInt(state.nextOrdinal))
+    throw new CommentsTransportError('conflict', 'Fragment frontier differs');
   const prior = await readCommentsAcknowledgement(context, binding.operationId, manifest.ordinal);
   if (prior) {
-    if (prior.transportDigest !== fragment.digest) throw new CommentsTransportError('conflict', 'Accepted fragment bytes changed');
-    context.replayed(); return prior.acknowledgement;
+    if (prior.transportDigest !== fragment.digest)
+      throw new CommentsTransportError('conflict', 'Accepted fragment bytes changed');
+    context.replayed();
+    return prior.acknowledgement;
   }
-  if (state.root || manifest.ordinal !== state.nextOrdinal || manifest.predecessorHash !== state.frontier) throw new CommentsTransportError('conflict', 'Fragment frontier differs');
+  if (state.root || manifest.ordinal !== state.nextOrdinal || manifest.predecessorHash !== state.frontier)
+    throw new CommentsTransportError('conflict', 'Fragment frontier differs');
   let effects;
   if (manifest.terminal) {
     state.roots = verifyCommentsTerminal(state, fragment);
@@ -47,17 +108,42 @@ export const prepareCommentsImport = async (options: CommentsServiceOptions, con
     state.terminalHashes = effects.appends.map((append) => append.record.hash);
   } else {
     for (const record of fragment.payload) assertCommentsImportRecord(binding, record);
-    appendCommentsUnitPayload(state, fragment); effects = commentsImportDataEffects(fragment.payload);
+    appendCommentsUnitPayload(state, fragment);
+    effects = commentsImportDataEffects(fragment.payload);
   }
   const predecessorHash = state.kernelFrontier;
-  const digest = stagedFragmentDigest({ moduleId: 'comments', scope: context.grant.scope, operationId: state.begin.operationKey, contractDigest: state.begin.contractDigest,
-    sourceBoundary: state.begin.sourceBoundary, ordinal: manifest.ordinal, predecessorHash }, effects);
+  const digest = stagedFragmentDigest(
+    {
+      moduleId: 'comments',
+      scope: context.grant.scope,
+      operationId: state.begin.operationKey,
+      contractDigest: state.begin.contractDigest,
+      sourceBoundary: state.begin.sourceBoundary,
+      ordinal: manifest.ordinal,
+      predecessorHash,
+    },
+    effects,
+  );
   appendCommentsKernelCommitment(state, effects, digest, fragment.digest);
   if (manifest.terminal) state.root = commentsKernelCommitRoot(state);
-  const acknowledgement: CommentsFragmentAcknowledgement = { operationId: binding.operationId, ordinal: manifest.ordinal, fragmentDigest: fragment.digest,
-    prepared: state.root ? { operationId: binding.operationId, bindingDigest, rootReference: state.rootReference } : null };
+  const acknowledgement: CommentsFragmentAcknowledgement = {
+    operationId: binding.operationId,
+    ordinal: manifest.ordinal,
+    fragmentDigest: fragment.digest,
+    prepared: state.root
+      ? { operationId: binding.operationId, bindingDigest, rootReference: state.rootReference }
+      : null,
+  };
   await writeCommentsImport(context, state);
   await insertCommentsAcknowledgement(context, binding.operationId, digest, acknowledgement);
-  await context.stageFragment({ unit: state.unit!, ordinal: manifest.ordinal, predecessorHash, fragmentDigest: digest, effects, fence: input.fence });
-  context.replayed(); return acknowledgement;
+  await context.stageFragment({
+    unit: state.unit!,
+    ordinal: manifest.ordinal,
+    predecessorHash,
+    fragmentDigest: digest,
+    effects,
+    fence: input.fence,
+  });
+  context.replayed();
+  return acknowledgement;
 };
