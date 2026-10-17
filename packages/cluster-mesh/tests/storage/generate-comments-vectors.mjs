@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { canonicalJson, hashRecord } from '@sentropic/comments';
+import { createRequire } from 'node:module';
+const { canonicalJson, hashRecord } = createRequire(process.env.CM_COMMENTS_DEPS)('@sentropic/comments');
 const sha = (value) => createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex');
 const scope = { tenantId: 'tenant"', workspaceId: 'workspace\\🦊' }; const unitId = 'unit🦊';
 const envelope = { scope, unitId, manifestHash: 'a'.repeat(64), issuedAt: 1717000000123 };

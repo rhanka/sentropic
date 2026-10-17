@@ -1,5 +1,5 @@
-# Branch-local storage tooling; the repository Makefile and Compose files
-# remain unchanged. Invoke with -f Makefile -f this-file.
+# Isolated PostgreSQL qualification, accepted by BRCM2-EX5/EX9.
+# Source tooling delegates to the root Makefile's disposable workspace.
 .PHONY: cluster-mesh-pg-package-info
 cluster-mesh-pg-package-info:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
@@ -10,18 +10,13 @@ cluster-mesh-pg-package-info:
 		sed -n "1,180p" package/lib/sha256.d.ts'
 
 .PHONY: cluster-mesh-storage-deps cluster-mesh-storage-deps-audit
-cluster-mesh-storage-deps:
+cluster-mesh-storage-deps cluster-mesh-storage-deps-audit:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
-		task_dir=/workspace/.h2a/storage-deps; mkdir -p "$$task_dir" packages/cluster-mesh/node_modules; \
+		task_dir=/tmp/storage-deps; mkdir -p "$$task_dir"; \
 		cp packages/cluster-mesh/tests/storage/storage-deps.package.json "$$task_dir/package.json"; \
 		npm_config_cache=/tmp/npm-cache npm install --prefix "$$task_dir" --ignore-scripts --no-audit --no-fund; \
-		if [ ! -e packages/cluster-mesh/node_modules/@stablelib ] && [ ! -L packages/cluster-mesh/node_modules/@stablelib ]; then \
-			ln -s /workspace/.h2a/storage-deps/node_modules/@stablelib packages/cluster-mesh/node_modules/@stablelib; \
-		fi'
-
-cluster-mesh-storage-deps-audit: cluster-mesh-storage-deps
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
-		'npm_config_cache=/tmp/npm-cache npm audit --prefix .h2a/storage-deps --omit=dev --audit-level=high'
+		mkdir -p .h2a/storage-deps; cp "$$task_dir/package-lock.json" .h2a/storage-deps/; \
+		npm_config_cache=/tmp/npm-cache npm audit --prefix "$$task_dir" --omit=dev --audit-level=high'
 
 .PHONY: cluster-mesh-storage-lock-import
 cluster-mesh-storage-lock-import:
@@ -47,21 +42,15 @@ cluster-mesh-pg-down:
 		docker rm -fv "$(CM_PG_NAME)" >/dev/null; fi
 	@docker network rm "$(CM_PG_NAME)" >/dev/null 2>&1 || true
 
-cluster-mesh-pg-test: cluster-mesh-pg-up cluster-mesh-storage-deps
-	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
-		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
-		-e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
-		-v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
-		tool_dir=/workspace/.h2a/storage-pg-tools; mkdir -p "$$tool_dir"; \
-		npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --ignore-scripts --no-audit --no-fund pg@8.16.3 vitest@4.1.5 typescript@5.4.5 @types/node >/dev/null; \
-		ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; \
-		trap "rm -f node_modules/pg" EXIT; \
-		NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$(if $(SCOPE),$(SCOPE),tests/storage/postgres-)" --environment node --maxWorkers=1'
+cluster-mesh-pg-test: cluster-mesh-pg-up
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=test CM_DOCKER_NETWORK="--network $(CM_PG_NAME)" \
+		CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
+		SCOPE="$(if $(SCOPE),$(SCOPE),tests/storage/postgres-)" ENV=$(ENV)
 
 .PHONY: cluster-mesh-pg-diagnostics
 cluster-mesh-pg-diagnostics:
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
-		'df -h /workspace /tmp; node --version; node .h2a/storage-pg-tools/node_modules/vitest/vitest.mjs --version'
+		'df -h /workspace /tmp; node --version'
 
 .PHONY: cluster-mesh-pg-manifest
 cluster-mesh-pg-manifest:
@@ -78,35 +67,28 @@ cluster-mesh-candidate-version:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e npm_config_cache=/tmp/comments-registry-cache $(LLM_MESH_NODE_IMAGE) sh -lc \
 		'npm view @sentropic/cluster-mesh version dist.integrity --registry=https://registry.npmjs.org --json'
 
-.PHONY: cluster-mesh-comments-deps cluster-mesh-comments-oracle
-cluster-mesh-comments-deps:
+.PHONY: cluster-mesh-comments-deps cluster-mesh-comments-oracle cluster-mesh-comments-deps-audit
+cluster-mesh-comments-deps cluster-mesh-comments-deps-audit cluster-mesh-comments-oracle cluster-mesh-comments-vectors:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
-		task_dir=/workspace/.h2a/comments-deps; mkdir -p "$$task_dir" node_modules/@sentropic; \
+		task_dir=/tmp/comments-deps; mkdir -p "$$task_dir"; \
 		cp packages/cluster-mesh/tests/storage/comments-deps.package.json "$$task_dir/package.json"; \
 		npm_config_cache=/tmp/npm-cache npm install --prefix "$$task_dir" --ignore-scripts --no-audit --no-fund; \
-		if [ ! -e node_modules/@sentropic/comments ] && [ ! -L node_modules/@sentropic/comments ]; then \
-			ln -s /workspace/.h2a/comments-deps/node_modules/@sentropic/comments node_modules/@sentropic/comments; fi'
-
-cluster-mesh-comments-oracle: cluster-mesh-comments-deps
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
-		node packages/cluster-mesh/tests/storage/package-comments-oracle.mjs
+		mkdir -p .h2a/comments-deps; cp "$$task_dir/package-lock.json" .h2a/comments-deps/; \
+		npm_config_cache=/tmp/npm-cache npm audit --prefix "$$task_dir" --omit=dev --audit-level=high; \
+		case "$@" in \
+		  *oracle) CM_COMMENTS_DEPS="$$task_dir/package.json" node packages/cluster-mesh/tests/storage/package-comments-oracle.mjs ;; \
+		  *vectors) CM_COMMENTS_DEPS="$$task_dir/package.json" node packages/cluster-mesh/tests/storage/generate-comments-vectors.mjs ;; \
+		esac'
 
 .PHONY: cluster-mesh-comments-vectors
-cluster-mesh-comments-vectors: cluster-mesh-comments-deps
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
-		node packages/cluster-mesh/tests/storage/generate-comments-vectors.mjs
 
 .PHONY: cluster-mesh-comments-lock-import
 cluster-mesh-comments-lock-import:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
 		node packages/cluster-mesh/tests/storage/import-comments-lock.mjs
 
-.PHONY: cluster-mesh-comments-deps-audit cluster-mesh-comments-test
-cluster-mesh-comments-deps-audit: cluster-mesh-comments-deps
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
-		'npm_config_cache=/tmp/npm-cache npm audit --prefix .h2a/comments-deps --omit=dev --audit-level=high'
-
-cluster-mesh-comments-test: cluster-mesh-comments-deps
+.PHONY: cluster-mesh-comments-test
+cluster-mesh-comments-test:
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=comments- API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 CM_COMMENTS_TARBALL ?= .h2a/build/cm-comments-candidate/sentropic-cluster-mesh-0.19.0.tgz
