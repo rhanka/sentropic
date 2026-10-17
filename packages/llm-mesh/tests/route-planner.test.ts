@@ -368,7 +368,7 @@ describe('opaque route planner', () => {
     }
   });
 
-  it('keeps the stale affinity without migration on commit-then-success', async () => {
+  it('keeps the original exact pin usable after refusing an implicit model upgrade', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -395,30 +395,16 @@ describe('opaque route planner', () => {
       routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
     )).complete();
 
-    const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-success',
-    });
-    const attempt = await planner.prepareAttempt(
-      routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
-    );
-    await attempt.markCommitted();
-    // The first validated frame must not migrate the stale affinity.
-    expect(planner.describeAffinity(routingSubject(), 'stale-commit-success')?.target.providerId)
-      .toBe('anthropic');
-    await attempt.complete();
-
-    const kept = planner.describeAffinity(routingSubject(), 'stale-commit-success');
-    expect(kept).toMatchObject({
-      revision: 1, diagnosticAccountRef: 'anthropic-redacted',
-    });
-    expect(kept?.target).toMatchObject({
-      providerId: 'anthropic', modelId: 'claude-opus-5',
-      transportProviderId: 'claude-code',
-    });
+    await expect(planner.plan(routingSubject(), { requestedModel: 'claude-opus-5-5', affinityKey: 'stale-commit-success' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    const same = await planner.plan(routingSubject(), { requestedModel: 'claude-opus-5', affinityKey: 'stale-commit-success' });
+    const attempt = await planner.prepareAttempt(routingSubject(), same.planRef, same.candidateRefs[0]!, 'req-2', 0);
+    await attempt.markCommitted(); await attempt.complete();
+    expect(planner.describeAffinity(routingSubject(), 'stale-commit-success')?.target.modelId).toBe('claude-opus-5');
     expect(events).toEqual([]);
   });
 
-  it('keeps the sticky model without promotion on a same-account switch', async () => {
+  it('serves the newly requested exact model on a same-account switch', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
@@ -439,19 +425,19 @@ describe('opaque route planner', () => {
     )).complete();
 
     const fresh = await planner.plan(routingSubject(), {
-      requestedModel: 'claude-opus-5-5', affinityKey: 'same-account',
+      requestedModel: 'gpt-6.1-sol', affinityKey: 'same-account', policyOverride: { fallbackMode: 'one-way' },
     });
     expect(fresh.diagnostics[0]).toMatchObject({
-      actualModelId: 'gpt-6-sol', reason: 'sticky',
+      actualModelId: 'gpt-6.1-sol', reason: 'sticky',
     });
     await (await planner.prepareAttempt(
       routingSubject(), fresh.planRef, fresh.candidateRefs[0]!, 'req-2', 0,
     )).complete();
 
     expect(planner.describeAffinity(routingSubject(), 'same-account')).toMatchObject({
-      revision: 1, diagnosticAccountRef: 'codex-redacted',
+      revision: 2, diagnosticAccountRef: 'codex-redacted',
     });
-    expect(events).toEqual([]);
+    expect(events).toContainEqual(expect.objectContaining({ operation: 'promote', cacheContinuityRisk: false }));
   });
 
   it.each(['route', 'account', 'transport', 'provider-model'] as const)(
@@ -607,7 +593,7 @@ describe('opaque route planner', () => {
     });
   });
 
-  it('serves only Sol on permitted rotation without rebinding the affinity', async () => {
+  it('records a permitted account rotation without changing the selected model', async () => {
     const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
     const directory = new FakeRouteDirectory([
       {
@@ -644,11 +630,11 @@ describe('opaque route planner', () => {
     await (await planner.prepareAttempt(
       routingSubject(), fallback.planRef, fallback.candidateRefs[1]!, 'req-2', 1,
     )).complete();
-    // Same-triple rotation keeps the established affinity without an audit event.
+    // Same-model account rotation is still a cache-continuity change.
     expect(planner.describeAffinity(routingSubject(), 'rotate-astra')).toMatchObject({
-      diagnosticAccountRef: 'acct_new', revision: 1,
+      diagnosticAccountRef: 'acct_old', revision: 2,
     });
-    expect(events).toEqual([]);
+    expect(events).toContainEqual(expect.objectContaining({ operation: 'rebind', cacheContinuityRisk: true }));
   });
 
   it('suppresses a failed preferred route until the injected clock reaches TTL', async () => {
@@ -706,7 +692,7 @@ describe('opaque route planner', () => {
     expect(degraded.diagnostics[0]?.diagnosticAccountRef).toBe('acct_old');
   });
 
-  it('auto-drops a sticky affinity whose account is gone instead of failing closed', async () => {
+  it('refuses a deleted account pin without silently replacing it', async () => {
     const directory = new FakeRouteDirectory();
     const planner = new InMemoryRoutePlanner({ directory });
     const first = await planner.plan(routingSubject(), {
@@ -726,22 +712,13 @@ describe('opaque route planner', () => {
     expect(removed).toBeGreaterThanOrEqual(0);
     directory.accounts.splice(removed, 1);
 
-    const next = await planner.plan(routingSubject(), {
-      ...request, affinityKey: 'session-gone',
-    });
-    expect(next.diagnostics.map((entry) => entry.diagnosticAccountRef)).toEqual(['acct_new']);
-    expect(planner.describeAffinity(routingSubject(), 'session-gone')).toBeNull();
-
-    // The replacement plan must prepare on the first request: the dropped
-    // pin carries no revision into the stored plan.
-    const replacement = await planner.prepareAttempt(
-      routingSubject(), next.planRef, next.candidateRefs[0]!, 'req-2', 0,
-    );
-    await replacement.complete();
-    expect(directory.prepared.at(-1)?.accountRef).toBe('internal-new');
+    await expect(planner.plan(routingSubject(), { ...request, affinityKey: 'session-gone' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'session-gone')?.diagnosticAccountRef).toBe('acct_old');
+    expect(directory.prepared).toHaveLength(1);
   });
 
-  it('prepares the replacement on the first request under round-robin after an affinity auto-drop', async () => {
+  it('refuses a deleted account pin under round-robin', async () => {
     const directory = new FakeRouteDirectory();
     const planner = new InMemoryRoutePlanner({ directory });
     const roundRobin = {
@@ -763,16 +740,10 @@ describe('opaque route planner', () => {
     expect(removed).toBeGreaterThanOrEqual(0);
     directory.accounts.splice(removed, 1);
 
-    // The dropped pin must not linger in the stored revision or the
-    // round-robin reservation: the replacement prepares immediately.
-    const next = await planner.plan(routingSubject(), {
-      ...roundRobin, affinityKey: 'session-rr-gone',
-    });
-    const replacement = await planner.prepareAttempt(
-      routingSubject(), next.planRef, next.candidateRefs[0]!, 'req-2', 0,
-    );
-    await replacement.complete();
-    expect(directory.prepared.at(-1)?.accountRef).toBe('internal-new');
+    await expect(planner.plan(routingSubject(), { ...roundRobin, affinityKey: 'session-rr-gone' }))
+      .rejects.toMatchObject({ code: 'no-route' });
+    expect(planner.describeAffinity(routingSubject(), 'session-rr-gone')?.diagnosticAccountRef).toBe('acct_old');
+    expect(directory.prepared).toHaveLength(1);
   });
 
   it('shares new-affinity round-robin and sticky affinity across authenticated sessions', async () => {
