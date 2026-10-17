@@ -17,8 +17,6 @@ describe.skipIf(!pgEnabled)('installed comments binding on a single transaction 
       const module = createCommentsModule({ storage: root.adapter(), capacity: conformanceCapacity() });
       await module.withContext(grant, () => module.store.transaction().run(async () => {
         expect(await module.store.getAnnotationHead(scope, 'missing')).toBeNull();
-        // This is a read-only transaction; make its no-op intentional through
-        // a trusted installed operation in the separately qualified service path.
         throw new Error('expected caller rollback');
       })).then(() => { throw new Error('rollback was swallowed'); }, (error) => { expect(error.message).toBe('expected caller rollback'); });
     } finally { await fixture.close(); }
