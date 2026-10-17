@@ -4,7 +4,9 @@
 
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
+import type { AtomicUnit } from '../../src/storage/atomic.js';
 import { isStorageError } from '../../src/storage/errors.js';
+import { stagedCommitRoots, stagedFragmentDigest } from '../../src/storage/staged-codec.js';
 import { expectCode, runAtomicCorpus } from './atomic-corpus.js';
 import { grantFor } from './authority-corpus.js';
 import { runStagedCorpus } from './staged-corpus.js';
@@ -124,7 +126,23 @@ class GapBlindStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
     const inner = bound.stageFragment.bind(bound);
-    bound.stageFragment = (input) => inner({ ...input, ordinal: input.ordinal === '2' ? '1' : input.ordinal });
+    bound.stageFragment = (input) => {
+      if (input.ordinal !== '2') return inner(input);
+      const op = stagedUnitsOf(bound).get(input.unit.operationKey);
+      const fragmentDigest = stagedFragmentDigest(
+        {
+          moduleId: input.unit.moduleId,
+          scope: input.unit.scope,
+          operationId: input.unit.operationKey,
+          contractDigest: op?.beginContractDigest ?? '',
+          sourceBoundary: op?.beginSourceBoundary ?? '',
+          ordinal: '1',
+          predecessorHash: input.predecessorHash,
+        },
+        input.effects,
+      );
+      return inner({ ...input, ordinal: '1', fragmentDigest });
+    };
     return bound;
   }
 }
@@ -208,7 +226,7 @@ class DigestTrustStore extends TestStagedReferenceStore {
       try {
         return await inner(input);
       } catch (error) {
-        if (isStorageError(error) && error.code === 'idempotency-conflict' && input.fragmentDigest === 'digest-0') {
+        if (isStorageError(error) && error.code === 'idempotency-conflict' && input.fragmentDigest !== 'digest-changed') {
           return { unitId: input.unit.unitId, ordinal: input.ordinal, fragmentDigest: input.fragmentDigest };
         }
         throw error;
@@ -244,7 +262,7 @@ class BeginBlindStore extends TestStagedReferenceStore {
         return inner(input);
       } catch (error) {
         if (isStorageError(error) && error.code === 'idempotency-conflict') {
-          return { unitId: 'unit-blind', operationKey: input.operationKey };
+          return { unitId: 'unit-blind', operationKey: input.operationKey, moduleId: 'comments', scope: bound.scope };
         }
         throw error;
       }
@@ -257,18 +275,59 @@ class SealBlindStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
     const inner = bound.sealStaged.bind(bound);
-    bound.sealStaged = (input) =>
-      inner({
+    bound.sealStaged = (input) => {
+      const op = stagedUnitsOf(bound).get(input.unit.operationKey);
+      const roots = stagedCommitRoots((op?.fragments ?? []).map((entry) => ({ ordinal: entry.ordinal, effects: entry.effects })));
+      return inner({
         unit: input.unit,
-        root: {
-          ...input.root,
-          operationId: input.unit.operationKey,
-          contractDigest: 'contract-k2b',
-          sourceBoundary: 'boundary-k2b',
-          dependencyRoot: 'dep-root-k2b',
-          effectRoot: 'eff-root-k2b',
-        },
+        root: { ...input.root, operationId: input.unit.operationKey, contractDigest: 'contract-k2b', sourceBoundary: 'boundary-k2b', ...roots },
       });
+    };
+    return bound;
+  }
+}
+
+type ReferenceStagedUnits = Map<
+  string,
+  { fragments: { ordinal: string; effects: AtomicUnit }[]; beginContractDigest?: string; beginSourceBoundary?: string }
+>;
+
+const stagedUnitsOf = (bound: TestStagedStore): ReferenceStagedUnits =>
+  (bound as unknown as { staged: { units: ReferenceStagedUnits } }).staged.units;
+
+// MAJEUR-N1 mutant: a new ordinal stores the backend's own digest and echoes
+// the caller's declared digest instead of rejecting the mismatch.
+class NewOrdinalDigestTrustStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    const inner = bound.stageFragment.bind(bound);
+    bound.stageFragment = async (input) => {
+      const op = stagedUnitsOf(bound).get(input.unit.operationKey);
+      if (!op || op.fragments.some((entry) => entry.ordinal === input.ordinal)) return inner(input);
+      const recomputed = stagedFragmentDigest(
+        {
+          moduleId: input.unit.moduleId,
+          scope: input.unit.scope,
+          operationId: input.unit.operationKey,
+          contractDigest: op.beginContractDigest ?? '',
+          sourceBoundary: op.beginSourceBoundary ?? '',
+          ordinal: input.ordinal,
+          predecessorHash: input.predecessorHash,
+        },
+        input.effects,
+      );
+      const receipt = await inner({ ...input, fragmentDigest: recomputed });
+      return { ...receipt, fragmentDigest: input.fragmentDigest };
+    };
+    return bound;
+  }
+}
+
+// MAJEUR-N1 mutant: sealing skips dependency closure.
+class ClosureBlindStore extends TestStagedReferenceStore {
+  override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
+    const bound = super.bindStaged(grant);
+    bound.verifyDependencyClosure = () => undefined;
     return bound;
   }
 }
@@ -513,6 +572,20 @@ describe('K2b discriminating mutations: staged', () => {
     const { store, bound } = bindStaged(new RecordLeakStore('comments'));
     await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
       /staged records stay invisible to direct lookup/,
+    );
+  });
+
+  it('S14-new-ordinal-digest-trust is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new NewOrdinalDigestTrustStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /a declared digest of other effects cannot stage a new ordinal/,
+    );
+  });
+
+  it('S15-closure-blind is killed by the staged corpus', async () => {
+    const { store, bound } = bindStaged(new ClosureBlindStore('comments'));
+    await expect(runStagedCorpus(bound, stagedHooks(store, bound))).rejects.toThrow(
+      /a self-consistent fragment with an unresolved dependency cannot seal/,
     );
   });
 });
@@ -807,6 +880,8 @@ export const K2B_MUTATION_RECORDS: readonly K2bMutationRecord[] = [
   { id: 'S11-cross-blind', brokenSemantic: 'foreign handles stage across scopes', corpus: 'staged', verdict: 'killed' },
   { id: 'S12-overlay-blind', brokenSemantic: 'successive fragments drop intermediate history', corpus: 'staged', verdict: 'killed' },
   { id: 'S13-record-leak', brokenSemantic: 'staged records leak before publication', corpus: 'staged', verdict: 'killed' },
+  { id: 'S14-new-ordinal-digest-trust', brokenSemantic: 'a mismatching declared digest is accepted on a new ordinal', corpus: 'staged', verdict: 'killed' },
+  { id: 'S15-closure-blind', brokenSemantic: 'sealing skips dependency closure', corpus: 'staged', verdict: 'killed' },
   { id: 'J1-no-checkpoint-cas', brokenSemantic: 'checkpoints skip CAS protection', corpus: 'replay', verdict: 'killed' },
   { id: 'J2-poison-blind-journal', brokenSemantic: 'poisoned events never stall the consumer', corpus: 'replay', verdict: 'killed' },
   { id: 'J3-resync-advancing-checkpoint', brokenSemantic: 'resync manufactures progress before snapshot consumption', corpus: 'replay', verdict: 'killed' },
@@ -853,6 +928,8 @@ describe('K2b discriminating mutations: disposal and base', () => {
 
   it('records every K2b discriminating mutation as killed', () => {
     expect(K2B_MUTATION_RECORDS.map((entry) => entry.verdict)).toEqual([
+      'killed',
+      'killed',
       'killed',
       'killed',
       'killed',
