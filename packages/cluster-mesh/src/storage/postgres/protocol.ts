@@ -38,7 +38,7 @@ export interface PgQueryContext {
 }
 export interface PgQueryPage { readonly records: readonly unknown[]; readonly nextCursor: unknown; }
 export type PgRegisteredQuery = (input: unknown, context: PgQueryContext) => Promise<PgQueryPage>;
-export type PgProjectionContext = Pick<PgQueryContext, 'session' | 'root' | 'stream' | 'layout' | 'grant'>;
+export type PgProjectionContext = Pick<PgQueryContext, 'session' | 'root' | 'stream' | 'layout' | 'grant'> & { readonly stagedUnitId?: string; readonly coverageRoot?: string | null };
 export type PgRegisteredProjection = (effects: AtomicUnit, context: PgProjectionContext) => Promise<void>;
 export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 'coordinator' | 'predicates'> {
   readonly moduleId: StorageModuleId; readonly driver: InjectedPgDriver; readonly layout: PgLayout;
