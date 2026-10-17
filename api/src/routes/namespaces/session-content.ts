@@ -7,7 +7,7 @@ import { resolveSessionContentIssuer, SessionContentError, SessionContentService
 import { validateSession } from '../../services/session-manager';
 
 /** Product-only metadata and denial surface. No server claim substitutes for
- * CM2-F2/F7 source ownership, first-byte boundaries or locally enrolled keys. */
+ * CM2-F2 source ownership/consent, or CM2-N5-AUTH/CONTROL native IdP verification. */
 export function createSessionContentRouter(options: { content?: SessionContentService; websiteOrigin?: string } = {}) {
   const router = new Hono();
   const content = options.content ?? new SessionContentService({ issuer: resolveSessionContentIssuer() });
@@ -44,7 +44,8 @@ export function createSessionContentRouter(options: { content?: SessionContentSe
   router.delete('/workspaces/:workspaceId/consent', async (c) =>
     c.json(await content.denyWorkspaceContent(c.req.param('workspaceId'), c.get('sessionContentIdentity').ownerId)));
   const unavailable = (c: Context) =>
-    c.json({ error: 'unsupported_source', dispatch: 'not_attempted', blockers: ['CM2-F2', 'CM2-F7'] }, 503);
+    c.json({ error: 'unsupported_source', dispatch: 'not_attempted',
+      blockers: ['CM2-F2', 'CM2-N5-AUTH', 'CM2-N5-CONTROL'], targetRuntime: '0.98.10-cm2-f2.1' }, 503);
   router.delete('/:bindingId/consent', async (c) => {
     const retainedScopeId = c.req.query('retainedScopeId');
     const ownerId = c.get('sessionContentIdentity').ownerId;
