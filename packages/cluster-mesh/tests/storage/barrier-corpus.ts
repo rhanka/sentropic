@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { expectCode, type Awaitable } from './atomic-corpus.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 import type { WorkLimits, WriterFence } from '../../src/storage/contracts.js';
-import type { StagedCorpusHandle, StagedCorpusSeal } from './staged-corpus.js';
+import { stagedDigestOf, stagedSealRoot, type StagedCorpusHandle, type StagedCorpusSeal } from './staged-corpus.js';
 import type { StagedCommitRoot } from '../../src/storage/staged-units.js';
 
 export interface BarrierCorpusStore {
@@ -70,36 +70,29 @@ export const runBarrierCorpus = async (bound: BarrierCorpusStore): Promise<void>
     fence: FENCE,
   });
   const fragments = [
-    { ordinal: '0', digest: 'digest-thread-0', appends: [commentAppend(0), commentAppend(1)] },
-    { ordinal: '1', digest: 'digest-thread-1', appends: [commentAppend(2), commentAppend(3)] },
-    { ordinal: '2', digest: 'digest-thread-2', appends: [commentAppend(4), commentAppend(5)] },
-    { ordinal: '3', digest: 'digest-thread-3', appends: [commentAppend(6), commentAppend(7)] },
-    { ordinal: '4', digest: 'digest-thread-4', appends: [commentAppend(8), commentAppend(9)] },
-    { ordinal: '5', digest: 'digest-thread-5', appends: [commentAppend(10), commentAppend(11)] },
+    { ordinal: '0', appends: [commentAppend(0), commentAppend(1)] },
+    { ordinal: '1', appends: [commentAppend(2), commentAppend(3)] },
+    { ordinal: '2', appends: [commentAppend(4), commentAppend(5)] },
+    { ordinal: '3', appends: [commentAppend(6), commentAppend(7)] },
+    { ordinal: '4', appends: [commentAppend(8), commentAppend(9)] },
+    { ordinal: '5', appends: [commentAppend(10), commentAppend(11)] },
   ];
-  for (const fragment of fragments) {
+  const threadEffects = fragments.map((fragment): AtomicUnit => ({ ...emptyUnit(), appends: fragment.appends }));
+  let threadPredecessor: string | null = null;
+  for (const [index, fragment] of fragments.entries()) {
+    const digest = stagedDigestOf(publishing, fragment.ordinal, threadPredecessor, threadEffects[index]);
     await bound.stageFragment({
       unit: publishing,
       ordinal: fragment.ordinal,
-      predecessorHash: fragment.ordinal === '0' ? null : `digest-thread-${Number(fragment.ordinal) - 1}`,
-      fragmentDigest: fragment.digest,
-      effects: { ...emptyUnit(), appends: fragment.appends },
+      predecessorHash: threadPredecessor,
+      fragmentDigest: digest,
+      effects: threadEffects[index],
       fence: FENCE,
       limits: LIMITS,
     });
+    threadPredecessor = digest;
   }
-  const threadSeal = await bound.sealStaged({
-    unit: publishing,
-    root: {
-      operationId: 'op-barrier-thread',
-      contractDigest: 'contract-k2b',
-      sourceBoundary: 'boundary-k2b',
-      finalFragmentHash: 'digest-thread-5',
-      fragmentCount: '6',
-      dependencyRoot: 'dep-root-k2b',
-      effectRoot: 'eff-root-k2b',
-    },
-  });
+  const threadSeal = await bound.sealStaged({ unit: publishing, root: stagedSealRoot(publishing, threadEffects) });
   await bound.commitStaged({ seal: threadSeal, fence: FENCE });
   for (let n = 0; n < 12; n += 1) {
     await bound.declareCoverage('thread-1', `comment-${n}`);
