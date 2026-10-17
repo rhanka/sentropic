@@ -6,7 +6,7 @@ import type { CommentsRevisionRequest, CommentsRevisionRecord } from './command-
 import { chainIdentity, commandKey, sameScope, invalid } from './storage-schema.js';
 import { readCommentsPgRecord } from './postgres-records.js';
 import { commentsRecordResources } from './export-readers.js';
-import { authorizeComments } from './authority.js';
+import { authorizeComments, authorizeCommentsRevisionDecision } from './authority.js';
 import { commentsRecordEffects } from './record-effects.js';
 import { validateCommentsRecord } from './record-validation.js';
 import { validateCommentsAdmission } from './admission.js';
@@ -31,6 +31,7 @@ export const executeCommentsRevision = async (options: CommentsServiceOptions, c
   const capability = request.kind === 'annotation' || (request.kind === 'comment' && previous) ? 'revise' as const : 'comment' as const;
   await authorizeComments(options, context, capability, targets);
   if (previous) await authorizeComments(options, context, capability, await commentsRecordResources(previous, lookup));
+  await authorizeCommentsRevisionDecision(options, context, request, capability);
   const digest = commandPayloadDigest(request); const key = commandKey(request.idempotencyKey); const committed = await context.index(key);
   if (committed) {
     if (committed.digest !== digest) throw new CanonicalCommandError('idempotency-conflict', 'Revision command identity changed');

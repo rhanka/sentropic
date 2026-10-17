@@ -1,5 +1,5 @@
 import { CanonicalCommandError, checkDecisionEvidence, computeProposedContentDigest, validateCapacityDescriptor } from '@sentropic/comments';
-import type { CanonicalLifecycleRequest, CommandCapability, ResourceRef } from '@sentropic/comments';
+import type { CanonicalLifecycleRequest, CommandCapability, ResourceRef, ExpectedState } from '@sentropic/comments';
 import type { PgInstalledContext } from '../storage/postgres/installed-contracts.js';
 import type { ScopeGrant } from '../storage/authority.js';
 import type { CommentsServiceOptions } from './lifecycle-contracts.js';
@@ -30,5 +30,15 @@ export const assertCommentsAuthority = async (options: CommentsServiceOptions, g
 export const authorizeComments = async (options: CommentsServiceOptions, context: PgInstalledContext, capability: CommandCapability, supplied: readonly ResourceRef[], request?: CanonicalLifecycleRequest): Promise<void> => {
   const targets = own(supplied);
   const check = () => assertCommentsAuthority(options, context.grant, capability, targets, request);
+  await check(); context.revalidate(check);
+};
+export const authorizeCommentsRevisionDecision = async (options: CommentsServiceOptions, context: PgInstalledContext, input: { readonly decisionRef: string; readonly scope: CanonicalLifecycleRequest['scope']; readonly expected: ExpectedState; readonly content: unknown }, action: string): Promise<void> => {
+  if (!input.decisionRef) return;
+  const check = async () => {
+    const evidence = await options.decisions?.resolve(input.decisionRef) ?? null;
+    checkDecisionEvidence(evidence, { actor: context.grant.principalId, action, scope: input.scope, now: options.clock.now(), binding: input.expected.kind === 'revision'
+      ? { kind: 'existing-revision', revisionHash: input.expected.revisionHash }
+      : { kind: 'creation', aggregateVersion: input.expected.aggregateVersion, proposedContentDigest: computeProposedContentDigest(input.content as Record<string, unknown>) } });
+  };
   await check(); context.revalidate(check);
 };

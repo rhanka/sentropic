@@ -24,7 +24,7 @@ export const createCanonicalCommentsRouter: CanonicalRouterFactory<Hono> = (port
       const result = await binding.services.read({ scope, selection: selection(id), ...(suffix ? { page: { limit, cursor: query.cursor ?? null } } : {}) });
       return commentsHttpResponse(context, result);
     });
-    for (const suffix of ['', '/:id/revisions'] as const) router.post(`${family.path}${suffix || '/'}`, async (context) => {
+    for (const suffix of ['', '/:id/revisions'] as const) router.post(`${family.path}${suffix || (family.path ? '' : '/')}`, async (context) => {
       const body = await readCommentsHttpBody(context); assertCommentsHttpKeys(body, ['scope', 'content', 'expected', 'idempotencyKey', 'decisionRef']);
       const request = { ...body, kind: family.kind } as CommentsRevisionRequest;
       if (suffix) {
