@@ -1,7 +1,7 @@
 import { canonicalJson, hashRecord, sha256Hex } from '@sentropic/comments';
 import type { CanonicalChainRecord, CanonicalBatchReceiptSnapshot, CanonicalUnitReceipt } from '@sentropic/comments';
 import type { AtomicUnit } from '../storage/atomic.js';
-import { EFFECT_SECTIONS, emptyEffects } from '../storage/staged-preparation.js';
+import { EFFECT_SECTIONS } from '../storage/staged-preparation.js';
 import type { PgInstalledContext } from '../storage/postgres/installed-contracts.js';
 import { updatePortableDigest, finishPortableDigest } from '../storage/postgres/digest.js';
 import { commentsRecordEffects } from './record-effects.js';
