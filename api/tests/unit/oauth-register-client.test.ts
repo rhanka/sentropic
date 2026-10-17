@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { buildOAuthClientRegistration } from '../../src/scripts/oauth-register-client';
+import { buildOAuthClientRegistration, resolvePolicyUpdate } from '../../src/scripts/oauth-register-client';
 
 const baseEnv: NodeJS.ProcessEnv = {
   OAUTH_CLIENT_ID: 'immo-mcp',
@@ -119,5 +119,33 @@ describe('buildOAuthClientRegistration', () => {
     expect(() =>
       buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_REQUIRED_ACR: 'urn:example:gold' }),
     ).toThrow(/OAUTH_CLIENT_REQUIRED_ACR/);
+  });
+});
+
+describe('resolvePolicyUpdate (F5: never wipe policy on rotation)', () => {
+  const stored = { allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:passkey-fresh' };
+
+  it('takes incoming values as-is for a new client', () => {
+    expect(
+      resolvePolicyUpdate(null, { allowedUserIds: [], requiredAcr: null })
+    ).toEqual({ allowedUserIds: [], requiredAcr: null });
+  });
+
+  it('preserves stored policy when rotation omits both env vars', () => {
+    expect(
+      resolvePolicyUpdate(stored, { allowedUserIds: [], requiredAcr: null })
+    ).toEqual(stored);
+  });
+
+  it('replaces policy when rotation provides both env vars', () => {
+    expect(
+      resolvePolicyUpdate(stored, { allowedUserIds: ['owner-2'], requiredAcr: 'urn:sentropic:loa:bearer' })
+    ).toEqual({ allowedUserIds: ['owner-2'], requiredAcr: 'urn:sentropic:loa:bearer' });
+  });
+
+  it('merges per-field: provided ACR wins, omitted allowlist stays', () => {
+    expect(
+      resolvePolicyUpdate(stored, { allowedUserIds: [], requiredAcr: 'urn:sentropic:loa:bearer' })
+    ).toEqual({ allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:bearer' });
   });
 });
