@@ -40,6 +40,7 @@ export interface CliSeatProfileInput {
   generation: number;
   operationId: string;
   issuedAt?: string;
+  providerExpiry?: string;
   accessRef?: string;
   accessKind?: 'access' | 'static-key' | 'unavailable';
   credentialFormatVersion?: string;
@@ -95,6 +96,7 @@ export function parseCliSeatProfile(input: CliSeatProfileInput): SeatBundleV1 {
       issuedAt: input.issuedAt ?? new Date().toISOString(),
       localExpiryPolicy: 'seat-consumer-policy-v1',
       refreshAuthority: 'none',
+      ...(input.providerExpiry !== undefined ? { providerExpiry: input.providerExpiry } : {}),
     },
     ...(accessKind === 'unavailable'
       ? { meshUse: { kind: 'unavailable', reason: 'serialized-only-native' } }
