@@ -18,10 +18,7 @@ export const STAGED_PROFILES: readonly ProfileClaim[] = Object.freeze(Object.ent
   profile: profile as ProfileId, version: '1', digest: createHash('sha256').update(JSON.stringify(['storage-profile', 'v1', profile, meaning])).digest('hex'),
 })));
 
-export const rootCapability = (runtime: RootScopedRuntime, profile: ProfileId) => {
-  const claim = STAGED_PROFILES.find((entry) => entry.profile === profile);
-  if (!claim) throw new UnsupportedProfileError(String(profile));
-  const ports = {
+const profilePorts = (runtime: RootScopedRuntime) => ({
     'atomic-units-v1': { commitAtomic: runtime.commitAtomic.bind(runtime), transact: runtime.transact.bind(runtime) },
     'immutable-chains-v1': { appendChain: runtime.appendChain.bind(runtime), readChain: runtime.readChain.bind(runtime) },
     'immutable-boundaries-v1': { readPage: runtime.readPage.bind(runtime), captureManifest: runtime.captureManifest.bind(runtime), verifyManifest: runtime.verifyManifest.bind(runtime), readManifestPage: runtime.manifestReadPage.bind(runtime) },
@@ -31,6 +28,12 @@ export const rootCapability = (runtime: RootScopedRuntime, profile: ProfileId) =
     'staged-units-v1': { begin: runtime.beginStaged.bind(runtime), stage: runtime.stageFragment.bind(runtime), sealStep: runtime.sealStep.bind(runtime),
       commit: runtime.commitStaged.bind(runtime), inspect: runtime.inspectStaged.bind(runtime), abort: runtime.abortStaged.bind(runtime) },
     'fenced-writers-v1': { journalFence: runtime.journalFence.bind(runtime), commitStaged: runtime.commitStaged.bind(runtime) },
-  };
-  return Object.freeze({ ...claim, port: Object.freeze(ports[profile as keyof typeof ports]) });
+});
+export type RootProfilePorts = ReturnType<typeof profilePorts>;
+export type RootCapability<P extends ProfileId> = ProfileClaim & { readonly profile: P; readonly port: P extends keyof RootProfilePorts ? Readonly<RootProfilePorts[P]> : never };
+export const rootCapability = <P extends ProfileId>(runtime: RootScopedRuntime, profile: P): RootCapability<P> => {
+  const claim = STAGED_PROFILES.find((entry) => entry.profile === profile);
+  if (!claim) throw new UnsupportedProfileError(String(profile));
+  const ports = profilePorts(runtime);
+  return Object.freeze({ ...claim, port: Object.freeze(ports[profile as keyof RootProfilePorts]) }) as RootCapability<P>;
 };

@@ -25,7 +25,7 @@ export class RootScopedRuntime {
   get scope() { return this.#inner.scope; }
   get moduleId() { return this.#inner.moduleId; }
   get profiles() { return STAGED_PROFILES; }
-  capability(profile: ProfileId) { this.#core.kernel.bind(this.grant); return rootCapability(this, profile); }
+  capability<P extends ProfileId>(profile: P) { this.#core.kernel.bind(this.grant); return rootCapability(this, profile); }
   async query(name: string, input: unknown, options: RootQueryRequest) { return queryRoot(this.#core, this.#inner, name, input, options); }
   requireOperation(...args: Parameters<ScopedRuntime['requireOperation']>) { return this.#inner.requireOperation(...args); }
   appendChain(...args: Parameters<ScopedRuntime['appendChain']>) { return this.#inner.appendChain(...args); }
