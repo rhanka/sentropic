@@ -140,7 +140,7 @@
   - [x] MINEUR-9/10: `read-corpus.ts` header corrected at `655f13a46`. Historical K1 `R3-MUT1` overstated the evidence at its original date: actual targeted M6/M11 proofs are carried at `6d3d0f6aa`; exact assertion pins are at `a5ea9b226`. Stale source-branch reports are superseded by this branch/report, with current ancestry and version 0.19.0.
   - [x] Lot gate (K2b passes; the carried K4 failures remain assigned to Lots 2–5):
     - [x] `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`: typecheck/lint pass, 65 files pass, 3 K4 files fail (9 tests), 5 packaging files skip; 698 tests pass, 9 fail, 34 skip. Evidence `.h2a/build/lot1-gates.log` and RTK recall `12990cbff865`, code head `d85c394da`.
-    - [ ] **Package tests (cluster-mesh, Vitest)**
+    - [x] **Package tests (cluster-mesh, Vitest)**
       - [x] Updated: `packages/cluster-mesh/tests/storage/{staged-corpus,barrier-corpus,replay-corpus,lifecycle-corpus,read-corpus,reference-staged,reference-store}.ts`
       - [x] Updated: `packages/cluster-mesh/tests/storage/{reference,mutations,profile-mutations}.spec.ts`
       - [x] New: `packages/cluster-mesh/src/storage/staged-codec.ts`, `packages/cluster-mesh/tests/storage/{staged-codec,staged-integrity,replay-integrity,lifecycle-integrity}.spec.ts`, `packages/cluster-mesh/tests/storage/staged-integrity-corpus.ts`.
@@ -151,6 +151,7 @@
     - [x] **E2E tests**: not impacted (no app surface change).
 
 - [ ] **Lot 2 — K4 rebuild on K3 (O4:B1, O4:m7, O4:MAJ-9)**
+  - [ ] Indexed successors: `tests/storage/indexed-state.spec.ts` qualifies version preservation and capture without historical enumeration before coordinator integration.
   - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
   - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
