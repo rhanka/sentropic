@@ -1,0 +1,84 @@
+# Immo host integration with the comments M2 candidate
+
+The candidate pair is `@sentropic/cluster-mesh@0.19.0` and the unchanged optional peer `@sentropic/comments@0.3.0`. Keep the exact archive and installed lock with the [qualification evidence](evidence/installed-module.md). Publication and real-data delivery are separate owner actions.
+
+## Inject execution and migrate through the host
+
+Import `createCommentsModule` and `createCommentsPostgresStorage` from `@sentropic/cluster-mesh/comments`, and `loadPgAssets`, `applyPgMigrations` from `@sentropic/cluster-mesh/storage/postgres`.
+
+The host implements `InjectedPgDriver.transaction(options, operation)`. It acquires one SQL session, begins the requested serializable read-only/read-write transaction, invokes `operation({execute(statement)})`, and commits or rolls back. Enforce `deadlineMs`, release the session, and preserve an uncertain COMMIT outcome as such. Each statement is `{text, values}` with bound parameters. A single connection is sufficient; the module reuses an active same-scope session. Driver dependencies belong to the host.
+
+Use existing host migration ownership and history. `PgHostHistory.read(session)` returns ordered package migration receipts; `complete(session, receipt)` records each receipt in that same transaction. Under the host's migration lock:
+
+```ts
+const assets = await loadPgAssets({ comments: true });
+await driver.transaction({ readOnly: false, deadlineMs: 5000 }, session =>
+  applyPgMigrations(session, layout, assets, hostHistory,
+    { id: hostMigrationId, checksum: hostMigrationChecksum }));
+```
+
+`layout` supplies `dataSchema`, `projectionSchemas: {comments: ...}` and `outboxSchema`. Schemas must already exist. The package does not schedule migrations or maintain a parallel host ledger. It verifies asset hashes, dependency/order receipts and actual schemas before opening storage. The qualified fixture uses one schema; split data/projection schemas are separately covered by source tests.
+
+```ts
+const storage = await createCommentsPostgresStorage({
+  driver, layout, history: hostHistory,
+  services: { capacity, capabilities, resolver, decisions, clock },
+});
+const module = createCommentsModule({ storage: storage.adapter(), capacity });
+```
+
+Use the same frozen `capacity` and authority ports for storage/module/HTTP composition. The selected internal work profile requires 1024 records, 128 appends and 4 MiB for one native operation; smaller hosts explicitly refuse this profile. Transport limits remain independently smaller. Capability checks must implement the host policy against every complete resource tuple; synthetic fixtures granting all capabilities are test-only.
+
+## Bind verified invocation authority
+
+Only the host issues grants with `storage.bindNew(grant)`. A grant includes token, `moduleId: 'comments'`, exact tenant/workspace scope, verified principal, operations, issuer/policy/authority revisions, module authority and invocation/lease lifetime. Persisted issuance survives runtime reconstruction; `storage.revoke(token)` remains effective after reopening. Never derive a grant from request-body scope or let a client choose grant operations.
+
+```ts
+await storage.bindNew(grant);
+await module.withContext(grant, async () => {
+  const head = await module.store.getAnnotationHead(grant.scope, annotationId);
+  // Native services use the same issued context and recheck final authority.
+});
+```
+
+All 24 frozen store methods remain available. The raw store is a trusted persistence port; expose operational services/HTTP to clients. M1 transactions use `module.store.transaction().run(async () => ...)`, with pending reads and rollback-only error propagation. Barrier-covered/disposed full getters throw `denied`.
+
+For HTTP, compose `createCanonicalCommentsNamespaceModule` from `@sentropic/cluster-mesh/compose/comments` using a real `createClusterMeshModules()`, full `createClusterMeshRuntime()` and `createClusterMeshPlugin()`. Supply `{enabled, generationId, module, ports, router: {capacity}, resolveGrant}`. `ports` is `{store: module.store, capabilities, resolver, decisions}`. `resolveGrant(verifiedInvocation)` resolves/issues host authority; the namespace checks principal, workspace, generation and invocation lifetime on every route. Disabled composition does not evaluate the optional peer. The installed fixture is an executable example: `packages/cluster-mesh/tests/storage/installed-namespace.mjs`.
+
+The exact frozen `createCanonicalCommentsRouter(ports, {capacity})` factory is also exported from `./comments` and `./comments/hono`. Its caller must establish an issued module context. It offers annotation/thread/comment revision/head/page routes and lifecycle commands, with server registration and full-envelope byte limits. There is no raw append or caller-supplied physical purge completion. Dedicated review/submission/assignment service APIs remain outside this delivery scope.
+
+## Prepare, commit and recover an import
+
+Freeze the source inventory and mapping before sending fragments. Build the unchanged M1 `CanonicalBatchImportRequest`: scope, batch ID, canonical import manifest/hash, admitted unit metadata/dependencies/payload digests, expected mapping version and stable command idempotency key. `commentsAdmissibleManifestDigest(units)` commits sorted declared unit identities/dependencies; `commentsUnitPayloadDigest(unitId, records)` commits ordered typed M1 hashes. Every full M1 record hash is checked independently. Source completeness remains the converter's responsibility.
+
+Bind `CommentsImportBinding` with version `comments-transport-v1`, stable operation ID, exact request, selected `unitIds`, immutable source boundary, actual target resource tuples and required capabilities. `commentsImportBindingDigest(binding)` binds all fields. One coherent group contains at most 50 selected units; dependencies outside it require previously committed receipts for this same frozen request. A history may span many fragments.
+
+The trusted writer provisions a `WriterFence` through `storage.provisionFence(grant, fence)`. Persist this fence with the conversion operation; a superseded fence cannot accept even an identical fragment retry.
+
+For each bounded payload, call `createCommentsFragment(manifest, records)` and `module.services.prepareImportFragment({binding, fragment, fence})` inside `withContext`. Manifest fields are scope, operation ID, binding digest, unit ID, decimal ordinal, predecessor fragment hash and `terminal: null`. Ordinals start at `'0'`. An identical retry returns its original acknowledgement; changed bytes/binding/gaps refuse. Progress has no canonical visibility.
+
+The last fragment has empty payload, `unitId: null`, and `terminal: {fragmentCount, unitRoots}`. `fragmentCount` includes this terminal fragment; each root is `{unitId, records, payloadDigest}`. Only this verified terminal acknowledgement yields a `CommentsPreparedReference`. Persist it together with the original request and fence. `inspectPreparedImport({scope, operationId, bindingDigest})` recovers accepted progress/reference.
+
+```ts
+const result = await module.withContext(grant, () =>
+  module.services.commitPreparedImport({ request, prepared, fence,
+    limits: { maxRecords: 64, maxAppends: 16, maxEncodedBytes: 524288 } }));
+if (result.state === 'preparing') {
+  // Persist/requeue another bounded call; nothing has published yet.
+} else {
+  const receipt = result.receipt; // CommentsCompleteReceipt
+  // Retain canonical unit receipts/snapshot, typed roots and kernel receipt.
+}
+```
+
+Schedule another bounded call while preparing. Runtime restart preserves progress. A publication atomically exposes data, bindings, receipts, operation audit and journal. After commit-before-response loss, call `recoverBatchReceipts({scope, batchId, manifestHash})` under a current read grant for the original principal. It returns complete original receipts including registration/root evidence. Never count fragment acknowledgements, a partial group or a historical imported purge claim as successful physical completion.
+
+## Export and authorized readback
+
+Call `prepareExportBoundary({scope, exportId, selections, operationKeys?}, continuation?)` until `state === 'prepared'`, persisting the returned preparation continuation between bounded calls. The result contains actual frozen root/heads through `boundaryDigest`, a typed `unitRoot`, and an unchanged M1 export `request`. New writes do not extend that boundary.
+
+Use `readExportFragments(boundary.request, cursor, limit)` for whole transport fragments or `continueExport(boundary.request, cursor, limit)` for M1 canonical-record pages. Pass each returned `nextCursor` separately; do not alter frozen DTO fields. Preserve ordinal/predecessor/digest order and verify the final terminal root/count. End-of-page alone is not proof of a complete source export. Retained boundaries/cursors have no time-only expiry; missing erased bytes explicitly report incomplete/denied instead of silently truncating.
+
+Operational reads, export pages and receipt recovery recheck current scope/resource authority; personal lifecycle preferences and restricted audit audiences are enforced. A source-to-destination copy/transfer requires explicit mapped identities/hashes and preserved attribution/derivation audit. Confirm destination commit/readback first. Source retirement is a separate authorized lifecycle command; destination success grants no source deletion authority.
+
+The [transport vectors](contract/transport-v1.json) pin escaped/multibyte framing. Manifest/root limit is 64 KiB; payload 512 KiB; batch manifest 256 KiB; complete request/page 1 MiB; default/maximum page count 50/100. Whole logical histories have no fragment-sized ceiling. Oversized individual records, deep profiles and excess targets/segments are explicit admission refusals. The [installed evidence](evidence/installed-module.md) records the tested tuple and practical bounds.
