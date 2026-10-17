@@ -303,6 +303,7 @@
     - [ ] Added real-PG execution of the shared atomic, staged and dependent-barrier corpora. The test-only client drives bounded seal calls and trusted fence provisioning; production handles expose neither the loop nor provisioning.
     - [ ] Added owner-bound durable staged inspection after the shared corpus identified the missing port method. Inspection returns copied status/seal data and never reveals another principal's progress.
     - [x] Shared atomic and staged corpora pass on Postgres. Dependent-barrier corpus caught covered reparenting's error classification; it now returns the required `invalid-command` without changing coverage. Added RED retained-manifest restart/head/owner/current-denial qualification.
+    - [ ] Retained Postgres manifests derive real heads/allocation/sequence and committed unit roots, bind owner/incarnation/root version and reopen without TTL. Current coverage is checked separately before any retained payload page.
     - [x] Current Postgres gate: typecheck/lint pass; 8 files / 19 tests pass, including reopening between all seal steps and one bounded metadata publication (`16e25021b` code head).
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
     - [ ] Added an isolated test-only pinned Postgres service/network and a neutral one-client bridge; real tests require backend PID continuity, rollback and finite SQL cancellation. No host port or production driver dependency is introduced.
