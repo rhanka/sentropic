@@ -17,6 +17,8 @@ import type { RootStageInput } from '../staged-operations.js';
 import type { StagedBeginInput } from '../staged-units.js';
 import type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from '../staged-state.js';
 import type { WriterFence } from '../contracts.js';
+import { configurePgLifecycle, declarePgCoverage, holdPgTarget, completePgPurge } from './lifecycle.js';
+import type { PurgePolicy } from '../staged-state.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -76,6 +78,10 @@ export class PgScoped {
   readRecord(key: string) { return this.#read((view) => view.readRecord(key)); }
   readAggregate(key: string) { return this.#read((view) => view.readAggregate(key)); }
   beginStaged(input: StagedBeginInput) { return beginPgStaged(this.#core, this.#grant, input); }
+  configureLifecycle(policy: PurgePolicy) { return configurePgLifecycle(this.#core, this.#grant, policy); }
+  declareCoverage(parent: string, child: string) { return declarePgCoverage(this.#core, this.#grant, parent, child); }
+  holdTarget(target: string, reason: string | null) { return holdPgTarget(this.#core, this.#grant, target, reason); }
+  completePurge(intentId: string) { return completePgPurge(this.#core, this.#grant, intentId); }
   stageFragment(input: RootStageInput) { return stagePgFragment(this.#core, this.#grant, input); }
   sealStep(input: PgSealRequest) { return sealPgStep(this.#core, this.#grant, input); }
   commitStaged(seal: AuthenticatedStagedSeal, fence: WriterFence) { return commitPgStaged(this.#core, this.#grant, seal, fence); }
