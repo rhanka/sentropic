@@ -33,10 +33,11 @@ export const writeLifecycleControl = async (context: PgInstalledContext, target:
   await context.apply({ ...emptyEffects(), guards: version ? [{ kind: 'aggregate-version', key, version }] : [], updates: [{ key, version: version + 1, value: { format: 'utf8', data: canonicalJson(value) } }] });
 };
 export const appendLifecycleAudit = async (context: PgInstalledContext, options: CommentsServiceOptions, target: string, request: CanonicalLifecycleRequest): Promise<void> => {
-  const selection = { kind: 'operation-audit-events' as const, subject: 'archive' as const, subjectId: target };
+  const subjectId = JSON.stringify(['comments-object', request.objectKind, request.objectId]);
+  const selection = { kind: 'operation-audit-events' as const, subject: 'archive' as const, subjectId };
   const previous = await retainedHead<OperationAuditEventRecord>(context, selection);
-  const record = createOperationAuditEvent(previous ? [previous] : [], { scope: request.scope, subject: selection.subject, subjectId: target, operation: request.action,
+  const record = createOperationAuditEvent(previous ? [previous] : [], { scope: request.scope, subject: selection.subject, subjectId, operation: request.action,
     principal: context.grant.principalId, audience: [context.grant.principalId], detail: null }, options.capacity);
-  await installedLifecycleStore(context).appendOperationAuditEvent(request.scope, selection.subject, target, record, previous ? { kind: 'revision', revisionHash: previous.hash } : { kind: 'creation', aggregateVersion: 0 });
+  await installedLifecycleStore(context).appendOperationAuditEvent(request.scope, selection.subject, subjectId, record, previous ? { kind: 'revision', revisionHash: previous.hash } : { kind: 'creation', aggregateVersion: 0 });
   await context.apply({ ...emptyEffects(), relationships: [{ kind: 'add', relation: 'coverage-parent-v1', from: target, to: chainIdentity(selection).key }] });
 };
