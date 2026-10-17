@@ -7,6 +7,16 @@ import { getApiAuthToken } from '@sentropic/cowork-bridge/core';
 vi.mock('$lib/utils/api', () => ({ apiRequest: vi.fn(async () => ({ items: [] })) }));
 vi.mock('@sentropic/cowork-bridge/core', () => ({ getApiAuthToken: vi.fn(() => null) }));
 
+const challenge = () => ({ native: { protocol: 'h2a.session-content' as const, protocolVersion: 2 as const,
+  kind: 'confirmation-challenge' as const, challengeDigest: 'a'.repeat(64), challenge: {
+    id: crypto.randomUUID(), owner: { issuer: 'https://idp.example', subject: 'owner' },
+    project: { tenantId: 'tenant', workspaceId: 'workspace', workspaceIncarnation: 'wi', projectId: 'project' },
+    source: { workstationId: 'ws', bindingId: 'binding', bindingVersion: 1, sourceId: 'source',
+      sourceGeneration: 'source', sourceBootId: 'boot' }, clientId: 'confirmation',
+    purpose: 'share' as const, target: { kind: 'policy' as const, policyDigest: 'b'.repeat(64) },
+    random: 'r'.repeat(43), issuedAt: Date.now(), expiresAt: Date.now() + 60000,
+  } }, authorization: { url: 'https://idp.example/authorize', state: 's'.repeat(43) } });
+
 const scope = { ownerId: 'owner', workspaceId: 'workspace', projectId: 'project', sourceId: 'source' };
 const session = {
   ...scope, bindingId: 'binding', sessionId: 'session', status: 'attached' as const,
@@ -16,6 +26,24 @@ const session = {
 };
 
 describe('session content authorization', () => {
+  it.each(['share', 'amend'] as const)('should require native-bound %s confirmation then explicit acceptance without a risk receipt', async (purpose) => {
+    const prepared = challenge(); prepared.native.challenge.purpose = purpose;
+    const proof = { challengeId: prepared.native.challenge.id,
+      challengeDigest: prepared.native.challengeDigest, idToken: 'synthetic-idp-proof' };
+    const offer = createOffer(scope); offer.channels['terminal.live'] = true; offer.futureSessions = true;
+    const api = { prepare: vi.fn(async () => prepared), prove: vi.fn(async () => proof),
+      accept: vi.fn(), available: () => true };
+    const flow = new ConsentFlow(offer, api);
+    await flow.confirm(); expect(api.accept).not.toHaveBeenCalled();
+    await flow.prepare(); await flow.confirm(); expect(api.accept).not.toHaveBeenCalled();
+    await flow.authenticate(); expect(api.accept).not.toHaveBeenCalled();
+    await flow.confirm(); await flow.confirm();
+    expect(api.prove).toHaveBeenCalledTimes(1); expect(api.accept).toHaveBeenCalledTimes(1);
+    expect(api.accept).toHaveBeenCalledWith(offer, prepared, proof);
+    flow.edit({ ...offer, futureSessions: false }); await flow.confirm();
+    expect(api.accept).toHaveBeenCalledTimes(1);
+  });
+
   it('should use first-party cookies, a CSRF header and no-store for scoped requests', async () => {
     await contentApi.prepareOffer(createOffer(scope));
     expect(apiRequest).toHaveBeenCalledWith('/auth/session/content/workspaces/workspace/consent/prepare',
@@ -39,7 +67,7 @@ describe('session content authorization', () => {
     expect(Object.values(offer.channels)).toEqual([false, false, false, false]);
     expect(offer.namedHistories).toEqual([]);
     expect(offer.selectedSessionIds).toEqual([]);
-    expect(offer.offlineReadAccepted).toBe(false);
+    expect(offer).not.toHaveProperty('offlineReadAccepted');
   });
 
   it('should project only scope fields from metadata into a consent policy or access comparison', () => {
@@ -50,7 +78,7 @@ describe('session content authorization', () => {
   });
 
   it('should cancel an offer without activation and invalidate an in-flight preparation', async () => {
-    let resolve!: (value: unknown) => void;
+    let resolve!: (value: ReturnType<typeof challenge>) => void;
     const accept = vi.fn();
     const flow = new ConsentFlow(createOffer(scope), {
       prepare: vi.fn(() => new Promise((r) => { resolve = r; })), accept,
@@ -58,13 +86,13 @@ describe('session content authorization', () => {
     });
     const pending = flow.prepare();
     flow.cancel();
-    resolve({ challenge: 'late' });
+    resolve(challenge());
     await pending;
     expect(flow.prepared).toBeNull();
     expect(accept).not.toHaveBeenCalled();
   });
 
-  it('should refuse preparation without a verified source or usable browser key', async () => {
+  it('should refuse preparation without a verified source or available IdP confirmation integration', async () => {
     const prepare = vi.fn();
     const flow = new ConsentFlow(createOffer(scope), {
       prepare, accept: vi.fn(), prove: vi.fn(), available: () => false,
@@ -89,10 +117,10 @@ describe('session content authorization', () => {
   });
 
   it('should offer distinct history authorization only for a current eligible owner and retained scope', () => {
-    expect(canRequestHistory({ ...session, status: 'ended' }, scope)).toBe(true);
+    expect(canRequestHistory({ ...session, status: 'ended', sourceAvailable: false, excluded: true }, scope)).toBe(true);
     for (const change of [{ ownerId: 'other' }, { sourceId: 'other' }, { workspaceId: 'other' },
-      { projectId: 'other' }, { excluded: true }, { revoked: true }, { membershipActive: false },
-      { sourceAvailable: false }, { historyAuthorized: true }, { expiresAt: 0 }]) {
+      { projectId: 'other' }, { revoked: true }, { membershipActive: false },
+      { historyAuthorized: true }, { expiresAt: 0 }]) {
       expect(canRequestHistory({ ...session, ...change }, scope)).toBe(false);
     }
   });
@@ -100,7 +128,7 @@ describe('session content authorization', () => {
   it('should keep controller metadata disabled across owner, binding and project mismatches', () => {
     const control = { ownerId: scope.ownerId, workspaceId: scope.workspaceId, bindingId: session.bindingId,
       bindingVersion: 1, sourceGeneration: 'source', incarnation: 'incarnation', projectRevision: 2,
-      controllerEpoch: 1, sourceAvailable: true, liveAuthorized: true, credentialUsable: true };
+      controllerEpoch: 1, sourceAvailable: true, liveAuthorized: true, authenticationState: 'step_up_required' as const, confirmationAvailable: true };
     expect(keyboardContext(session, scope, control, true)).toEqual(control);
     expect(keyboardContext(session, scope, control, false)).toBeNull();
     for (const change of [{ ownerId: 'other' }, { workspaceId: 'other' }, { bindingId: 'other' }, { projectRevision: 1 }]) {
@@ -111,11 +139,11 @@ describe('session content authorization', () => {
   });
 
   it.each(['ownerId', 'workspaceId', 'sourceId', 'projectId'] as const)(
-    'should deny a mismatched %s and let exclusion dominate every capability', (field) => {
+    'should deny a mismatched %s and keep capture exclusion independent from retained reads', (field) => {
       expect(viewAccess({ ...session, [field]: 'elsewhere' }, scope))
         .toMatchObject({ live: false, stored: false });
       expect(viewAccess({ ...session, excluded: true }, scope))
-        .toMatchObject({ live: false, stored: false, reason: 'session_excluded' });
+        .toMatchObject({ live: false, stored: true, reason: 'session_excluded' });
     },
   );
 });
