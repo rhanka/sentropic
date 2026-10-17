@@ -1,4 +1,4 @@
-import type { CanonicalBatchImportRequest, CanonicalBatchImportResponse, CanonicalChainRecord, CanonicalReadSelection, CanonicalStoreScope, CommandCapability, ResourceRef } from '@sentropic/comments';
+import type { CanonicalBatchImportRequest, CanonicalBatchImportResponse, CanonicalBatchExportRequest, CanonicalChainRecord, CanonicalReadSelection, CanonicalStoreScope, CommandCapability, ResourceRef } from '@sentropic/comments';
 import type { CommitReceipt } from '../storage/atomic.js';
 import type { WorkLimits, WriterFence } from '../storage/contracts.js';
 export const COMMENTS_TRANSPORT_VERSION = 'comments-transport-v1' as const;
@@ -43,6 +43,13 @@ export interface CommentsCompleteReceipt {
 }
 export interface CommentsCommitImportRequest { readonly request: CanonicalBatchImportRequest; readonly prepared: CommentsPreparedReference; readonly fence: WriterFence; readonly limits: WorkLimits; }
 export interface CommentsExportSelection { readonly scope: CanonicalStoreScope; readonly exportId: string; readonly selections: readonly CanonicalReadSelection[]; readonly operationKeys?: readonly string[]; }
+export interface CommentsExportBoundary {
+  readonly version: typeof COMMENTS_TRANSPORT_VERSION; readonly boundaryDigest: string;
+  readonly unitRoot: CommentsUnitRoot; readonly request: CanonicalBatchExportRequest;
+}
+export type CommentsExportPreparation = { readonly state: 'preparing'; readonly continuation: string; readonly work: { readonly records: number; readonly bytes: number } }
+  | { readonly state: 'prepared'; readonly boundary: CommentsExportBoundary };
+export interface CommentsExportFragmentPage { readonly fragments: readonly CommentsFragment[]; readonly nextCursor: string | null; }
 export class CommentsTransportError extends Error {
   constructor(readonly condition: 'invalid-request' | 'conflict' | 'capacity-exceeded' | 'incomplete' | 'denied' | 'unavailable', message: string) { super(message); this.name = 'CommentsTransportError'; }
 }
