@@ -33,7 +33,7 @@ it('persists a consented pre-commit rotation and increments the account epoch', 
   const f = fixture(); const planner = f.planner();
   const plan = await planner.plan(routingSubject(), request('rotating', true));
   const first = await planner.prepareAttempt(routingSubject(), plan.planRef, plan.candidateRefs[0]!, 'r', 0);
-  await first.recordOutcome({ kind: 'rate-limit', retryable: true, committed: false });
+  await first.recordOutcome({ reason: 'rate-limited', healthScope: 'provider-model', retryable: true, committed: false });
   const second = await planner.prepareAttempt(routingSubject(), plan.planRef, plan.candidateRefs[1]!, 'r', 1);
   await second.markCommitted(); await second.complete();
   expect((await f.planner().plan(routingSubject(), request('rotating', true))).diagnostics[0]?.diagnosticAccountRef).toBe('acct_old');
