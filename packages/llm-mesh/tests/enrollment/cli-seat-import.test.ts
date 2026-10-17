@@ -21,6 +21,7 @@ const profile = (cli: SeatCli) => ({
   epoch: 1,
   generation: 2,
   operationId: `op-synth-${cli}-01`,
+  issuedAt: '2026-10-17T00:00:00Z',
   accessRef: `access-synth-${cli}-01`,
 });
 
@@ -40,6 +41,11 @@ describe('cli-seat-import', () => {
       ownerScope: 'owner-synth-01',
     });
     expect(sameSeatLineage(fromCli, fromToken)).toBe(true);
+  });
+
+  it('refuses a profile without a custodian-observed issuedAt', () => {
+    const { issuedAt: _dropped, ...dateless } = profile('claude');
+    expect(() => parseCliSeatProfile(dateless)).toThrow(/issuedAt/);
   });
 
   it('refuses a token envelope above the 48 KiB secret bound', () => {
