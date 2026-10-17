@@ -17,10 +17,10 @@ export const applyPgTransaction = async (core: PgCore, grant: ScopeGrant<unknown
     const unit = ownPgValue(input); const limits = core.work(options.limits);
     if (!validateAtomicUnit(unit, limits).ok || !validateCommitOptions(options).ok) throw new StorageInvalidCommandError('invalid atomic input');
     const bytes = Buffer.byteLength(JSON.stringify(unit), 'utf8');
-    if (tx.encodedBytes + bytes > limits.maxEncodedBytes || tx.appends + unit.appends.length > limits.maxAppends) throw new StorageInvalidCommandError('transaction exceeds work limits');
+    if (tx.encodedBytes + bytes > limits.maxEncodedBytes || tx.appends + unit.appends.length > limits.maxAppends || tx.recordWrites + unit.records.length > limits.maxRecords) throw new StorageInvalidCommandError('transaction exceeds work limits');
     await core.check(tx.session, grant, 'write');
     const result = await applyPgEffects(core, tx.session, grant, tx.root, unit, tx.base.root, installed);
-    tx.root = result.root; tx.records += result.records; tx.appends += result.appends; tx.count += 1; tx.encodedBytes += bytes;
+    tx.root = result.root; tx.records += result.records; tx.recordWrites += unit.records.length; tx.appends += result.appends; tx.count += 1; tx.encodedBytes += bytes;
     // Installed operational services enforce their domain policy/authority
     // coherence; generic callers retain the unconditional barrier rule.
     tx.barriers += installed === REGISTERED_PG_EFFECTS ? 0 : unit.barriers.length; tx.purges += unit.purgeIntents.length;
@@ -52,7 +52,7 @@ export const runPgTransaction = async <T>(core: PgCore, grant: ScopeGrant<unknow
       const base = await core.roots.capture(session, grant.scope, true);
       const receipt = pgReceipt(core, grant, (BigInt(base.sequence) + 1n).toString());
       const tx: PgTx = { session, scope: grant.scope, base, root: base.root, receipt, closed: false, failed: null,
-        records: 0, appends: 0, count: 0, encodedBytes: 0, barriers: 0, purges: 0, digests: [], contributors: new Map([[grant.token, grant]]) };
+        records: 0, recordWrites: 0, appends: 0, count: 0, encodedBytes: 0, barriers: 0, purges: 0, digests: [], contributors: new Map([[grant.token, grant]]), revalidators: new Set() };
       await session.execute({ text: 'SAVEPOINT immutable_command', values: [] });
       try {
         let value: T;
@@ -72,6 +72,7 @@ export const runPgTransaction = async <T>(core: PgCore, grant: ScopeGrant<unknow
         if (options.idempotencyKey) tx.root = await core.roots.put(session, tx.root, 'commit', options.idempotencyKey, { digest, receipt: final });
         for (const contributor of tx.contributors.values()) await core.check(session, contributor, 'write', true);
         if (options.fence) await core.fence(session, grant, options.fence);
+        for (const check of tx.revalidators) await check();
         await core.roots.publish(session, grant.scope, base, tx.root, final, options.idempotencyKey);
         return { value, receipt: ownPgValue(final) };
       } finally { tx.closed = true; }

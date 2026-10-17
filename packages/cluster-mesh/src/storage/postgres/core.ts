@@ -18,10 +18,11 @@ const freezeRegistration = (value: unknown): void => { if (value && typeof value
 export interface PgTx {
   readonly session: PgSession; readonly scope: StorageScope; readonly base: PgRoot;
   root: string | null; closed: boolean; failed: unknown; count: number;
-  records: number; appends: number; encodedBytes: number; readonly receipt: CommitReceipt;
+  records: number; recordWrites: number; appends: number; encodedBytes: number; readonly receipt: CommitReceipt;
   barriers: number; purges: number; moduleResult?: EncodedValue; readonly digests: string[];
   noop?: boolean;
   readonly contributors: Map<string, ScopeGrant<unknown>>;
+  readonly revalidators: Set<() => Promise<void>>;
 }
 export class PgCore {
   readonly tx: PgTransactions;
