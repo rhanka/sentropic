@@ -215,7 +215,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
     - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
       - [ ] Synthetic delivery walkthrough: import projection both modes, see one account; expire, see classified unavailable with zero refresh; deliver N+1, see recovery without duplication; wrong-owner and older-generation refusal.
 
-- [ ] **Lot 6 — Mesh version, lock assertion, spec sync**
+- [x] **Lot 6 — Mesh version, lock assertion, spec sync**
   - [ ] Bump `packages/llm-mesh/package.json` patch only (stay 0.26.x inside gateway `^0.26.0`); refresh `package-lock.json` (required mesh metadata only, no unrelated regeneration); assert exactly one llm-mesh copy in the custody harness lock.
   - [ ] Update existing package tests for all five adapters + authority/delivery (`contracts`, `codex`, `cloud-code`, `cloud-code-credential-rotation`, `claude-code`, `mistral-vibe`, `muse`, `facade`, `local-account-transport-service`, `local-account-transport-service-claude`, `local-account-transport-service-muse`) and retain/extend `seat-bundle.test.ts` (no duplicate creation).
   - [ ] Add `packages/llm-mesh/tests/enrollment/cli-seat-import.test.ts`, `packages/llm-mesh/tests/enrollment/agy-cli-import.test.ts`, `packages/llm-mesh/tests/service/external-seat-authority.test.ts`, `packages/llm-mesh/tests/service/seat-projection-delivery.test.ts`.
