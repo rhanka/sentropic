@@ -21,6 +21,7 @@ import { configurePgLifecycle, declarePgCoverage, holdPgTarget, completePgPurge 
 import type { PurgePolicy } from '../staged-state.js';
 import { readPgJournal, checkpointPgJournal, inspectPgConsumer, operatePgConsumer } from './journal.js';
 import type { JournalFence } from '../staged-core.js';
+import { queryPgRoot, type PgQueryRequest } from './queries.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -85,6 +86,7 @@ export class PgScoped {
   holdTarget(target: string, reason: string | null) { return holdPgTarget(this.#core, this.#grant, target, reason); }
   completePurge(intentId: string) { return completePgPurge(this.#core, this.#grant, intentId); }
   journalRead(after: number, limit: number, consumer?: string) { return readPgJournal(this.#core, this.#grant, after, limit, consumer); }
+  query(name: string, input: unknown, request: PgQueryRequest) { return queryPgRoot(this.#core, this.#grant, name, input, request); }
   journalCheckpoint(consumer: string, expected: number, next: number, fence: JournalFence) { return checkpointPgJournal(this.#core, this.#grant, consumer, expected, next, fence); }
   journalInspect(consumer: string) { return inspectPgConsumer(this.#core, this.#grant, consumer); }
   journalPoison(consumer: string, event: string, reason: string) { return operatePgConsumer(this.#core, this.#grant, consumer, 'poison', event, reason); }
