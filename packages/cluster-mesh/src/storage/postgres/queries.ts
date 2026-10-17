@@ -38,8 +38,9 @@ export const queryPgRoot = async (core: PgCore, grant: ScopeGrant<unknown>, name
   if (Buffer.byteLength(JSON.stringify(input), 'utf8') > 65536) throw new StorageInvalidCommandError('query parameters exceed metadata budget');
   return core.tx.run(false, async (session) => {
     await core.check(session, grant, 'read');
-    const captured = request.cursor ? await readPgBoundary(core, session, grant, request.cursor) : await core.roots.capture(session, grant.scope);
-    const metadata = 'metadata' in captured ? captured.metadata : { kind: 'query', name, hash, position: null, contract: core.options.descriptor?.contractDigest };
+    const boundary = request.cursor ? await readPgBoundary(core, session, grant, request.cursor) : undefined;
+    const captured = boundary ?? await core.roots.capture(session, grant.scope);
+    const metadata = boundary?.metadata ?? { kind: 'query', name, hash, position: null, contract: core.options.descriptor?.contractDigest };
     if (metadata.kind !== 'query' || metadata.name !== name || metadata.hash !== hash || metadata.contract !== core.options.descriptor?.contractDigest) throw new StorageInvalidCommandError('query continuation binding differs');
     const result = await executePgQuery(core, session, grant, captured, name, input, metadata.position, request.limit, budget);
     const nextCursor = result.nextCursor === null ? null : await retainPgBoundary(core, session, grant, captured, { ...metadata, position: result.nextCursor });
