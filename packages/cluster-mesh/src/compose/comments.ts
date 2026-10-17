@@ -43,8 +43,10 @@ export async function createCanonicalCommentsNamespaceModule(modules: ClusterMes
       } catch { return http.json({ code: 'unauthenticated', message: 'Verified invocation is required' }, 401); }
       let grant: ScopeGrant<unknown>;
       try { grant = await options.resolveGrant(invocation); } catch { return http.json({ code: 'denied', message: 'Comments scope grant is unavailable' }, 403); }
-      if (grant.principalId !== invocation.principal.principalId || grant.scope.workspaceId !== invocation.workspace.workspaceId) return http.json({ code: 'denied', message: 'Comments scope grant differs from the verified invocation' }, 403);
-      await options.module.withContext(grant, next);
+      if (!grant || grant.principalId !== invocation.principal.principalId || grant.scope?.workspaceId !== invocation.workspace.workspaceId || invocation.generationId !== options.generationId ||
+        (grant.lifetime.kind === 'invocation' && grant.lifetime.invocationId !== invocation.invocationId)) return http.json({ code: 'denied', message: 'Comments scope grant differs from the verified invocation' }, 403);
+      try { await options.module.withContext(grant, next); }
+      catch { return http.json({ code: 'denied', message: 'Issued comments context is unavailable' }, 403); }
     });
     router.route('/', comments.createCanonicalCommentsRouter(options.ports, options.router)); return router;
   } });
