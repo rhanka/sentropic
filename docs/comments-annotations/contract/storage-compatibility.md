@@ -89,7 +89,7 @@ The frozen `CapacityDescriptor` in `@sentropic/comments` is not mutated. Supplem
 
 ### 4.5 Packaging and Conformance Oracle
 - The cluster-mesh archive includes `assets/storage/comments/oracle/{conformance.mjs,revision-hash-v1.json,manifest.json}`. The manifest pins the unchanged M1 corpus source, vector source and packaged artifact SHA-256 values.
-- `@sentropic/comments/conformance` is not an export. The optional peer remains `@sentropic/comments@0.3.0`; no M1 source/export change is required.
+- `@sentropic/comments/conformance` is not an existing export. The optional peer remains `@sentropic/comments@0.3.0`; no M1 source/export change is required.
 - The installed qualification target executes those packaged oracle bytes against the public comments/Postgres leaves in a fresh consumer. It refuses checkout imports and records the installed production lock, audit, archive SHA-256 and SHA-512 integrity. See [installed evidence](../evidence/installed-module.md).
 
 ---
