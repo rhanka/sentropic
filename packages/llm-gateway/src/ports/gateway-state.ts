@@ -6,7 +6,7 @@
  * storage (0600 files, lock ownership, atomic durable writes) or to a
  * transactional application adapter. The service layer never touches bytes.
  */
-import type { RouteAffinityRecord } from '@sentropic/llm-mesh';
+import type { LaunchRoutingContract, RouteAffinityRecord } from '@sentropic/llm-mesh';
 export interface StoredSession {
   readonly schemaVersion: number;
   readonly sessionRef: string;
@@ -25,6 +25,7 @@ export interface StoredSession {
   readonly mappingRevision?: string;
   readonly policyRevision: string;
   readonly affinityRequired?: boolean;
+  readonly routingContract?: LaunchRoutingContract;
 }
 
 export interface StoredReceipt {

@@ -9,6 +9,7 @@
  * public result carries opaque references, never secrets.
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { freezeLaunchRoutingContract, type LaunchRoutingContract } from '@sentropic/llm-mesh';
 
 import {
   GatewayStateError,
@@ -44,6 +45,7 @@ export class GatewaySessionError extends GatewayStateError<SessionErrorCode> {
 }
 
 export interface AcquireSessionInput {
+  readonly routingContract?: LaunchRoutingContract;
   readonly ownerScopeRef: string;
   readonly workspaceRef: string;
   readonly clientSessionRef: string;
@@ -63,6 +65,7 @@ export interface IssuedSession {
 }
 
 export interface CallerContext {
+  readonly routingContract?: LaunchRoutingContract;
   readonly sessionRef: string;
   readonly ownerScopeRef: string;
   readonly workspaceRef: string;
@@ -77,6 +80,16 @@ export interface CallerContext {
 const SCHEMA_VERSION = 1;
 const DEFAULT_TTL_DAYS = 30;
 const POLICY_REVISION = 'l1-exact-v1';
+const trustedContract = (input: Pick<AcquireSessionInput, 'routingContract' | 'ownerScopeRef' | 'models' | 'mappingRevision'>) => {
+  if (!input.routingContract) return undefined;
+  const contract = freezeLaunchRoutingContract(input.routingContract);
+  if (contract.ownerScopeRef !== input.ownerScopeRef
+    || (input.models && JSON.stringify([...input.models].sort()) !== JSON.stringify([...contract.exactModels].sort()))
+    || (input.mappingRevision && input.mappingRevision !== contract.mapping?.revision)) {
+    throw new GatewaySessionError('session routing policy conflicts', 'CONFLICT');
+  }
+  return contract;
+};
 
 const verifierOf = (key: string): Buffer =>
   createHash('sha256').update(key, 'utf8').digest();
@@ -121,6 +134,7 @@ export class GatewaySessionService {
   }
 
   private async acquireCommitted(input: AcquireSessionInput): Promise<IssuedSession> {
+    const routingContract = trustedContract(input);
     if (!input.ownerScopeRef || !input.workspaceRef || !input.clientSessionRef) {
       throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
     }
@@ -130,6 +144,7 @@ export class GatewaySessionService {
       (session) => sameTriple(session, input),
     );
     if (existing) {
+      if (routingContract && JSON.stringify(existing.routingContract) !== JSON.stringify(routingContract)) throw new GatewaySessionError('session policy requires explicit migration', 'CONFLICT');
       if (existing.revokedAt) throw new GatewaySessionError('session revoked', 'REVOKED');
       if (!live(existing, now)) throw new GatewaySessionError('session expired', 'EXPIRED');
       if (!existing.keyMaterial || !validKey(existing.keyMaterial, existing.keyVerifier)) {
@@ -161,9 +176,10 @@ export class GatewaySessionService {
       createdAt: created,
       expiresAt: new Date(now + ttlDays * 86_400_000).toISOString(),
       profiles: [...(input.profiles ?? [])],
-      models: [...(input.models ?? [])],
-      mappingRevision: input.mappingRevision,
-      policyRevision: POLICY_REVISION,
+      models: [...(routingContract?.exactModels ?? input.models ?? [])],
+      mappingRevision: routingContract?.mapping?.revision ?? input.mappingRevision,
+      policyRevision: routingContract?.revision ?? POLICY_REVISION,
+      ...(routingContract ? { routingContract } : {}),
     };
     const next: StoredState = {
       ...loaded,
@@ -214,7 +230,9 @@ export class GatewaySessionService {
     profiles?: readonly string[];
     models?: readonly string[];
     mappingRevision?: string;
+    routingContract?: LaunchRoutingContract;
   }): Promise<{ sessionRef: string; expiresAt: string }> {
+    const routingContract = trustedContract(input);
     if (!input.ownerScopeRef || !input.workspaceRef || !input.clientSessionRef) {
       throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
     }
@@ -227,9 +245,9 @@ export class GatewaySessionService {
     const loaded = await this.store.load();
     const duplicate = Object.values(loaded.sessions).find(
       (session) =>
-        session.ownerScopeRef === input.ownerScopeRef
+        validKey(input.keyMaterial, session.keyVerifier) || (session.ownerScopeRef === input.ownerScopeRef
         && session.workspaceRef === input.workspaceRef
-        && session.clientSessionRef === input.clientSessionRef,
+        && session.clientSessionRef === input.clientSessionRef),
     );
     if (duplicate) {
       throw new GatewaySessionError('ambiguous duplicate session', 'AMBIGUOUS');
@@ -246,9 +264,10 @@ export class GatewaySessionService {
       createdAt: new Date().toISOString(),
       expiresAt: input.expiresAt,
       profiles: [...(input.profiles ?? [])],
-      models: [...(input.models ?? [])],
-      mappingRevision: input.mappingRevision,
-      policyRevision: POLICY_REVISION,
+      models: [...(routingContract?.exactModels ?? input.models ?? [])],
+      mappingRevision: routingContract?.mapping?.revision ?? input.mappingRevision,
+      policyRevision: routingContract?.revision ?? POLICY_REVISION,
+      ...(routingContract ? { routingContract } : {}),
     };
     const next: StoredState = {
       ...loaded,
@@ -275,6 +294,7 @@ export class GatewaySessionService {
     return {
       sessionRef: session.sessionRef,
       ownerScopeRef: session.ownerScopeRef,
+      ...(session.routingContract ? { routingContract: freezeLaunchRoutingContract(session.routingContract) } : {}),
       workspaceRef: session.workspaceRef,
       clientSessionRef: session.clientSessionRef,
       profiles: session.profiles,
