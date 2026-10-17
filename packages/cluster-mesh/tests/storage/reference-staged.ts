@@ -104,6 +104,7 @@ interface StagedFragment {
 interface StagedOp {
   readonly unitId: string;
   readonly operationKey: string;
+  readonly ownerId: string;
   readonly fragments: StagedFragment[];
   state: 'staging' | 'sealed' | 'committed' | 'aborted';
   seal?: { readonly unitId: string; readonly commitRoot: StagedCommitRoot };
@@ -128,6 +129,8 @@ const compareEpoch = (current: string, begin: string): number => {
 };
 
 interface StagedScope {
+  currentFence: WriterFence | null;
+  readonly audit: CommitReceipt[];
   readonly units: Map<string, StagedOp>;
   readonly chains: Set<string>;
   readonly disposed: Set<string>;
@@ -144,6 +147,8 @@ interface StagedScope {
 }
 
 const createStagedScope = (): StagedScope => ({
+  currentFence: null,
+  audit: [],
   units: new Map(),
   chains: new Set(),
   disposed: new Set(),
@@ -198,6 +203,16 @@ export class TestStagedReferenceStore extends TestReferenceStore {
   bindStaged(grant: ScopeGrant<unknown>): TestStagedStore {
     const inner = super.bind(super.issueGrant(grant));
     return new TestStagedStore(inner, this.stagedScope(inner.scope), this);
+  }
+
+  rotateFence(scope: StorageScope, fence: WriterFence): void {
+    const valid = validateWriterFence(fence);
+    if (!valid.ok) throw new StorageInvalidCommandError(valid.errors.join('; '));
+    const state = this.stagedScope(scope);
+    if (state.currentFence && compareEpoch(fence.epoch, state.currentFence.epoch) <= 0) {
+      throw new StorageInvalidCommandError('fence rotation must advance the epoch');
+    }
+    state.currentFence = { ...fence };
   }
 
   armExternalFailure(): void {
@@ -255,6 +270,31 @@ export class TestStagedStore {
 
   get scope(): StorageScope {
     return this.inner.scope;
+  }
+
+  requireCurrentFence(fence: WriterFence): void {
+    const valid = validateWriterFence(fence);
+    if (!valid.ok) throw new StorageInvalidCommandError(valid.errors.join('; '));
+    const current = this.staged.currentFence;
+    if (current && (current.fenceId !== fence.fenceId || current.epoch !== fence.epoch)) {
+      throw new StorageInvalidCommandError('writer fence was superseded');
+    }
+    if (!current) this.staged.currentFence = { ...fence };
+  }
+
+  requireStagedHandle(handle: StagedHandle): StagedOp {
+    const op = this.staged.units.get(handle.operationKey);
+    if (!op || op.unitId !== handle.unitId || op.ownerId !== this.grant.principalId ||
+      handle.moduleId !== this.grant.moduleId || handle.scope.tenantId !== this.scope.tenantId ||
+      handle.scope.workspaceId !== this.scope.workspaceId) {
+      throw new StorageInvalidCommandError('unknown staged capability');
+    }
+    return op;
+  }
+
+  auditRead(): readonly CommitReceipt[] {
+    this.requireOperation('read');
+    return JSON.parse(JSON.stringify(this.staged.audit)) as CommitReceipt[];
   }
 
   // N3 closure: every append expectation resolves to the captured base or
@@ -415,6 +455,7 @@ export class TestStagedStore {
       }
     }
     const receipt = this.inner.commitAtomic({ ...unit, barriers: [], purgeIntents: [] });
+    this.staged.audit.push(JSON.parse(JSON.stringify(receipt)) as CommitReceipt);
     for (const append of unit.appends) this.staged.chains.add(append.chainId);
     for (const barrier of unit.barriers) {
       this.staged.barriers.set(barrier.boundary, { reason: barrier.reason, createdAt: this.store.now() });
@@ -474,8 +515,10 @@ export class TestStagedStore {
     this.requireOperation('write');
     const valid = validateBeginInput(input);
     if (!valid.ok) throw new StorageInvalidCommandError(valid.errors.join('; '));
+    this.requireCurrentFence(input.fence);
     const existing = this.staged.units.get(input.operationKey);
     if (existing) {
+      if (existing.ownerId !== this.grant.principalId) throw new StorageDeniedError('staged operation belongs to another owner');
       if (
         existing.beginInputDigest !== input.inputDigest ||
         existing.beginContractDigest !== input.contractDigest ||
@@ -489,6 +532,7 @@ export class TestStagedStore {
     const op: StagedOp = {
       unitId: `unit-${this.staged.unitSeq}`,
       operationKey: input.operationKey,
+      ownerId: this.grant.principalId,
       fragments: [],
       state: 'staging',
       beginFence: { ...input.fence },
@@ -510,8 +554,8 @@ export class TestStagedStore {
     readonly limits?: WorkLimits;
   }): FragmentReceipt {
     this.requireOperation('write');
-    const op = this.staged.units.get(input.unit.operationKey);
-    if (!op || op.unitId !== input.unit.unitId) throw new StorageInvalidCommandError('unknown staged unit');
+    const op = this.requireStagedHandle(input.unit);
+    this.requireCurrentFence(input.fence);
     if (op.state !== 'staging') throw new StorageInvalidCommandError('fragments only while staging');
     const shape = validateFragmentInput(
       {
@@ -560,8 +604,8 @@ export class TestStagedStore {
     readonly commitRoot: StagedCommitRoot;
   } {
     this.requireOperation('write');
-    const op = this.staged.units.get(input.unit.operationKey);
-    if (!op || op.unitId !== input.unit.unitId) throw new StorageInvalidCommandError('unknown staged unit');
+    const op = this.requireStagedHandle(input.unit);
+    this.requireCurrentFence(op.beginFence!);
     if (op.state !== 'staging') throw new StorageInvalidCommandError('only staging units seal');
     const root = validateCommitRoot(input.root);
     if (!root.ok) throw new StorageInvalidCommandError(root.errors.join('; '));
@@ -621,8 +665,10 @@ export class TestStagedStore {
     this.requireOperation('write');
     const fence = validateWriterFence(input.fence);
     if (!fence.ok) throw new StorageInvalidCommandError(fence.errors.join('; '));
+    this.requireCurrentFence(input.fence);
     const op = [...this.staged.units.values()].find((entry) => entry.unitId === input.seal.unitId);
     if (!op) throw new StorageInvalidCommandError('unknown staged seal');
+    if (op.ownerId !== this.grant.principalId) throw new StorageDeniedError('staged operation belongs to another owner');
     if (op.state === 'committed' && op.receipt) {
       if (!op.seal || JSON.stringify(op.seal) !== JSON.stringify(input.seal)) {
         throw new StorageInvalidCommandError('unknown staged seal');
@@ -687,8 +733,8 @@ export class TestStagedStore {
 
   abortStaged(input: { readonly unit: StagedHandle }): void {
     this.requireOperation('write');
-    const op = this.staged.units.get(input.unit.operationKey);
-    if (!op || op.unitId !== input.unit.unitId) throw new StorageInvalidCommandError('unknown staged unit');
+    const op = this.requireStagedHandle(input.unit);
+    this.requireCurrentFence(op.beginFence!);
     if (op.state === 'committed') throw new StorageInvalidCommandError('committed units cannot abort');
     if (op.state === 'aborted') return;
     op.state = 'aborted';
