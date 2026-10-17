@@ -23,12 +23,12 @@ import { createMemoryStaging, createUploadService } from '../src/server/uploads.
 import { createDefaultTemplateCatalog } from '../src/server/templates.js';
 import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
 import { defineParameters } from '../src/parameters.js';
-import { createWebPagesToolExecutor, type WebPagesInvokeInput } from '../src/mcp.js';
+import { createArtifactsToolExecutor, type ArtifactsInvokeInput } from '../src/mcp.js';
 
 const FARID = 'farid';
 const STEVE = 'steve';
 const THIRD = 'third-party';
-type Executor = ReturnType<typeof createWebPagesToolExecutor>;
+type Executor = ReturnType<typeof createArtifactsToolExecutor>;
 
 function makeWorld() {
   const state = createMemoryStateStore();
@@ -52,7 +52,7 @@ function makeWorld() {
     staging,
     templates: createDefaultTemplateCatalog(),
   });
-  const session = () => createWebPagesToolExecutor({ app, defaultStorageScopeId: 'scope-pilot' });
+  const session = () => createArtifactsToolExecutor({ app, defaultStorageScopeId: 'scope-pilot' });
   return { session };
 }
 
@@ -63,7 +63,7 @@ async function call(
   args: Record<string, unknown>,
   status: number,
 ) {
-  const input: WebPagesInvokeInput = { tool, actorId, args };
+  const input: ArtifactsInvokeInput = { tool, actorId, args };
   const res = await executor.invoke(input);
   expect(res.status, tool).toBe(status);
   return res.body as Record<string, unknown>;
