@@ -187,11 +187,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function diag(
   diagnostics: ToolConfigurationDiagnostic[],
-  code: string,
+  code: ToolConfigurationDiagnostic['code'],
   path: string,
   message: string,
 ): void {
-  diagnostics.push({ code: code as ToolConfigurationDiagnostic['code'], path, message });
+  diagnostics.push({ code, path, message });
 }
 
 function checkParameterValue(
@@ -250,7 +250,7 @@ function checkParameterValue(
     diag(diagnostics, 'invalid_parameter', path, 'unknown parameter type in schema');
     return false;
   }
-  if (spec.enum !== undefined && !(spec.enum as unknown[]).includes(value as never)) {
+  if (spec.enum !== undefined && !(spec.enum as unknown[]).includes(value)) {
     diag(diagnostics, 'invalid_parameter', path, 'value is not an allowed enum member');
     return false;
   }
@@ -381,20 +381,20 @@ export function createProviderRegistry(): ProviderRegistry {
     const prefix = `providers["${providerId}"]`;
     const definition = definitions.get(providerId);
     if (definition === undefined) {
-      return { diagnostics: [{ code: 'unknown_provider' as never, path: prefix, message: 'provider is not registered' }] };
+      return { diagnostics: [{ code: 'unknown_provider', path: prefix, message: 'provider is not registered' }] };
     }
     const manifest = definition.manifest;
     const manifestDigest = computeManifestDigest(manifest);
     const receipt = input.compatibility[providerId];
     if (receipt === undefined) {
-      return { diagnostics: [{ code: 'missing_compatibility' as never, path: prefix, message: 'missing compatibility receipt' }] };
+      return { diagnostics: [{ code: 'missing_compatibility', path: prefix, message: 'missing compatibility receipt' }] };
     }
     if (receipt.manifestDigest !== manifestDigest) {
-      return { diagnostics: [{ code: 'compatibility_mismatch' as never, path: prefix, message: 'compatibility receipt does not match the manifest' }] };
+      return { diagnostics: [{ code: 'compatibility_mismatch', path: prefix, message: 'compatibility receipt does not match the manifest' }] };
     }
     for (const port of definition.requiredPorts) {
       if ((input.bindings as Record<string, unknown>)[port] === undefined) {
-        return { diagnostics: [{ code: 'missing_binding' as never, path: `${prefix}.bindings.${port}`, message: 'missing required port binding' }] };
+        return { diagnostics: [{ code: 'missing_binding', path: `${prefix}.bindings.${port}`, message: 'missing required port binding' }] };
       }
     }
     // Lazy definitions load their heavy payload only here: after preflight,
@@ -407,17 +407,16 @@ export function createProviderRegistry(): ProviderRegistry {
       try {
         payload = definition.load();
       } catch (error) {
-        return { diagnostics: [{ code: 'load_failure' as never, path: prefix, message: `lazy loader failed: ${error instanceof Error ? error.message : String(error)}` }] };
+        return { diagnostics: [{ code: 'load_failure', path: prefix, message: `lazy loader failed: ${error instanceof Error ? error.message : String(error)}` }] };
       }
       if (!isRecord(payload) || !isRecord(payload.toolValues)) {
-        return { diagnostics: [{ code: 'load_failure' as never, path: prefix, message: 'lazy loader returned a malformed payload' }] };
+        return { diagnostics: [{ code: 'load_failure', path: prefix, message: 'lazy loader returned a malformed payload' }] };
       }
       // Contract-v8 §3.1 M6.3: a lazy payload tunneling a remote-claiming
       // adapter is refused before anything is published (`current`
-      // untouched). The `as never` follows the file convention; m5 declares
-      // the code in the diagnostic union.
+      // untouched). The code is declared in the public diagnostic union (m5).
       if (isRecord(payload.adapter as unknown) && (payload.adapter as unknown as Record<string, unknown>).kind === 'remote-bound') {
-        return { diagnostics: [{ code: 'unsupported_definition_kind' as never, path: prefix, message: 'lazy loader returned a remote-claiming adapter' }] };
+        return { diagnostics: [{ code: 'unsupported_definition_kind', path: prefix, message: 'lazy loader returned a remote-claiming adapter' }] };
       }
       toolValues = payload.toolValues as Record<string, LocalToolValues>;
       handlers = payload.handlers;
@@ -431,7 +430,7 @@ export function createProviderRegistry(): ProviderRegistry {
     for (const tool of manifest.tools) {
       const local = toolValues[tool.name];
       if (local === undefined || handlerTable[local.handlerId] === undefined) {
-        return { diagnostics: [{ code: 'missing_handler' as never, path: `${prefix}.tools.${tool.name}`, message: 'tool has no handler binding' }] };
+        return { diagnostics: [{ code: 'missing_handler', path: `${prefix}.tools.${tool.name}`, message: 'tool has no handler binding' }] };
       }
       const binding: ApprovedToolBinding = {
         toolName: tool.name,
@@ -545,7 +544,7 @@ export function createProviderRegistry(): ProviderRegistry {
         return {
           ok: false,
           diagnostics: [
-            { code: 'malformed_snapshot' as never, path: 'config', message: 'compile requires bindings and compatibility objects' },
+            { code: 'malformed_snapshot', path: 'config', message: 'compile requires bindings and compatibility objects' },
           ],
         };
       }
@@ -563,7 +562,7 @@ export function createProviderRegistry(): ProviderRegistry {
           return {
             ok: false,
             diagnostics: [
-              { code: 'unknown_provider' as never, path: `providers["${providerId}"]`, message: 'provider is not registered' },
+              { code: 'unknown_provider', path: `providers["${providerId}"]`, message: 'provider is not registered' },
             ],
           };
         }
@@ -572,7 +571,7 @@ export function createProviderRegistry(): ProviderRegistry {
             return {
               ok: false,
               diagnostics: [
-                { code: 'duplicate_resource' as never, path: `providers["${providerId}"].resources.${resource.name}`, message: 'duplicate resource URI across providers' },
+                { code: 'duplicate_resource', path: `providers["${providerId}"].resources.${resource.name}`, message: 'duplicate resource URI across providers' },
               ],
             };
           }
@@ -583,7 +582,7 @@ export function createProviderRegistry(): ProviderRegistry {
             return {
               ok: false,
               diagnostics: [
-                { code: 'duplicate_prompt' as never, path: `providers["${providerId}"].prompts.${prompt.name}`, message: 'duplicate prompt name across providers' },
+                { code: 'duplicate_prompt', path: `providers["${providerId}"].prompts.${prompt.name}`, message: 'duplicate prompt name across providers' },
               ],
             };
           }
@@ -594,7 +593,7 @@ export function createProviderRegistry(): ProviderRegistry {
             return {
               ok: false,
               diagnostics: [
-                { code: 'duplicate_tool' as never, path: `providers["${providerId}"].tools.${entry.toolName}`, message: 'duplicate tool name across providers' },
+                { code: 'duplicate_tool', path: `providers["${providerId}"].tools.${entry.toolName}`, message: 'duplicate tool name across providers' },
               ],
             };
           }
