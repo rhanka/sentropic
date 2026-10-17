@@ -79,7 +79,7 @@
 - [ ] **Lot 3 — Controlled exchange egress and service proof**
   - [x] Egress RED on missing implementation; frozen profile compiler now validates exact host/method/audience/path and canonical bounded parameters before effects.
   - [x] Egress contracts written before implementation: API-token-only HTTP, tool/scope/path restrictions, bounded outage reuse, retained/cancelled capability refusal.
-  - [ ] Implement oauth-egress using existing exchange/HTTP contracts; tool-bound profiles only, immutable trusted origin/audience/method/path/scopes/params, no URL/header/token getter, no redirects; invalidate retained/cancelled capabilities.
+  - [x] Implemented existing bounded exchange cache + controlled egress: captured verified subject/client/tenant/issuer, tool-bound frozen profile, no redirects/token getter, bounded JSON response, close invalidation and retained/cancelled capability refusal; tests pending.
   - [ ] New tests/mcp-oauth-egress.spec.ts: positive exchanged API bearer, no passthrough, isolation, path attacks, outage/cache bounds, cancellation/redaction; retain all six tests/token-exchange*.spec.ts and O2 races.
   - [ ] New tests/mcp-oauth-http.spec.ts: loopback issuer/MCP/independent API verifier, real Basic RFC8693 + SDK, positive search, inverse audiences, same client automatic reinitialization after restart. Synthetic keys, port 0 inside container.
   - [ ] Scoped gates: Lot 1 command with SCOPE=tests/mcp-oauth-egress.spec.ts and SCOPE=tests/token-exchange; service gate uses SCOPE=tests/mcp-oauth-http.spec.ts and ENV=e2e-feat-cluster-mesh-oauth-o1. No UI tests.
