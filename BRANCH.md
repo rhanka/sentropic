@@ -20,6 +20,8 @@ Render the official multicolor Google "G" logo in AuthProviderGlyph for the goog
   - `packages/auth-ui/tests/**`
   - `packages/auth-ui/package.json`
   - `package-lock.json` (version-sync fallout of the mandatory package bump only)
+  - `apps/auth-idp/web/package-lock.json` (R1 linked-lockfile sync, see BR01-EX1)
+  - `ui/package-lock.json` (R1 linked-lockfile sync, see BR01-EX1)
   - `BRANCH.md` (plan tracker, updated within each commit)
   - `.h2a/build/google_logo_report.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -36,7 +38,9 @@ Render the official multicolor Google "G" logo in AuthProviderGlyph for the goog
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `attention`: CI job test-api-unit-integration (ai, chat-sync, executive-summary-auto, comment-assistant) failed twice on the same HEAD (PR 682 run 38992969211): first run 1 failed / 9 passed (`AssertionError: expected false to be true` at tests/ai/executive-summary-auto.test.ts:104), re-run job 117287823544 5 failed / 5 passed (4x chat-sync.test.ts `expected 'failed' to be 'completed'` = live LLM provider calls failing, plus the same executive-summary timing assert). Analysis: varying failure sets across identical-commit runs = provider-side nondeterminism; branch diff vs origin/main contains zero API files (auth-ui SVG + test + version bump + lockfile + BRANCH.md only), so branch causation is excluded. Covered by AI flaky allowlist (api/tests/ai/**, non-blocking: ci-gate PASS). Needs: owner sign-off before merge.
+- `acknowledge`: BR01-EX1 (R1 linked-lockfile sync, conductor-approved under owner default authorization). Reason: `@sentropic/auth-ui` 0.7.5 bump must propagate to the two `file:` consumers or their locks drift (precedent 0.7.3 -> 0.7.4 commit 5dfdd0b21 refreshed both). Impact: one version line per lockfile (`apps/auth-idp/web/package-lock.json:34`, `ui/package-lock.json:68`); no re-resolution (`file:` links carry no integrity; `npm ci` tolerance already proven green). Rollback: revert the two lines to 0.7.4.
+- `attention`: CI job test-api-unit-integration (ai, chat-sync, executive-summary-auto, comment-assistant) failed twice on PR 682 run 38992969211 (same HEAD 8a7f74b78): first attempt 1 failed / 9 passed (`AssertionError: expected false to be true` at tests/ai/executive-summary-auto.test.ts:104), re-run job 117287823544 5 failed / 5 passed (4x chat-sync.test.ts `expected 'failed' to be 'completed'` = live LLM provider jobs failing, plus the same executive-summary timing assert). Correction to Opus review F7: the re-run did NOT succeed (job 117287823544 conclusion failure, verified via API). Analysis: varying failure sets across identical-commit runs = provider-side nondeterminism; branch diff vs origin/main contains zero API files, so branch causation is excluded. Run 38992969211 final conclusion is success (shard non-blocking; ci-gate PASS). Covered by AI flaky allowlist (api/tests/ai/**). Needs: owner sign-off before merge.
+- `deferred`: R2 latent image-tag gap (`packages/auth-ui/**` in neither API_VERSION nor CI changes.api filter). Forbidden paths for this branch; owner of follow-up is a separate CI-debt branch, not this fix.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -84,7 +88,9 @@ Render the official multicolor Google "G" logo in AuthProviderGlyph for the goog
       - [x] Sub-lot gate: `make test-auth-ui ENV=test-auth-google-logo`
     - [ ] **E2E tests**
       - [ ] None (static SVG asset change; no flow change).
-    - [ ] UAT: open IdP login with google provider in light and dark themes, verify multicolor G on white/neutral button.
+    - [ ] UAT light theme: open IdP login with google provider, verify 4-color G (blue top-right, green bottom, yellow bottom-left, red top-left) on neutral button.
+    - [ ] UAT dark theme: same page in dark theme, verify identical 4-color G (not recolored by theme).
+    - [ ] UAT non-regression: other provider buttons (github/microsoft/apple/facebook) still monochrome; button label still reads Continue with Google.
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Write .h2a/build/google_logo_report.md with screenshot description (untracked).
 - [ ] **Lot N — Final validation**
