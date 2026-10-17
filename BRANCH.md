@@ -462,6 +462,7 @@
   - [x] Combined source gate at `0cba21c59`: typecheck/lint pass, 93 files / 804 tests pass and 43 files / 97 explicit DB/crash/packaging tests skip (RTK `8196c1489674`); K3 remains 56/56.
   - [ ] Added review-import invariants for a forged validation without submission and actual older open contests across withdrawal/resubmission; the fixture explicitly grants every declared synthetic capability, never a production default.
   - [ ] Added indexed actual-root-member review evidence and frozen-constructor validation during bounded hidden preparation. At most six actual records capture current revision state, unresolved-contest existence and exact referenced resolution; no whole review history is replayed at publication.
+  - [x] The forged imported validation was observed RED and both review-history probes now pass on real PG. The exact comments peer joins the CI candidate/install qualification tuple for every newly exported Node leaf (BRCM2-EX5).
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.

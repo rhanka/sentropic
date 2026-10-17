@@ -73,6 +73,11 @@ cluster-mesh-comments-package-info:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(LLM_MESH_NODE_IMAGE) sh -lc \
 		'npm_config_cache=/tmp/npm-cache npm view @sentropic/comments version exports dependencies dist.integrity --json'
 
+.PHONY: cluster-mesh-candidate-version
+cluster-mesh-candidate-version:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e npm_config_cache=/tmp/comments-registry-cache $(LLM_MESH_NODE_IMAGE) sh -lc \
+		'npm view @sentropic/cluster-mesh version dist.integrity --registry=https://registry.npmjs.org --json'
+
 .PHONY: cluster-mesh-comments-deps cluster-mesh-comments-oracle
 cluster-mesh-comments-deps:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
