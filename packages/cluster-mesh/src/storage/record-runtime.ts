@@ -19,6 +19,8 @@ import {
 } from './atomic.js';
 import { validateEncodedValue } from './contracts.js';
 import { incrementBackendAllocation, type BackendScopeState } from './backend.js';
+import { forkIndexedMap } from './indexed-map.js';
+import { IndexedHistory, forkIndexedHistory } from './indexed-history.js';
 import { isUnknownCursorBoundary, type ChainBoundaryProvider } from './tokens.js';
 
 export interface ChainRecordInput {
@@ -61,6 +63,13 @@ export interface CommitContext {
 
 const nonEmpty = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
+const newHistory = <T>(state: BackendScopeState, entries: T[]): T[] | IndexedHistory<T> => {
+  if (!state.indexed) return entries;
+  const history = new IndexedHistory<T>();
+  history.push(...entries);
+  return history;
+};
+
 export const appendChainToScope = (
   state: BackendScopeState,
   chainId: string,
@@ -72,15 +81,15 @@ export const appendChainToScope = (
   if (expectation.kind === 'absent') {
     if (expectation.allocation !== '0') throw new StorageInvalidCommandError('unexpected allocation for creation');
     if (chain) throw new StorageIdempotencyConflictError('chain already exists');
-    state.chains.set(chainId, { allocation: incrementBackendAllocation('0'), head: record.hash, records: [{ ...record, seq: 0 }], disposed: false });
+    state.chains.set(chainId, { allocation: incrementBackendAllocation('0'), head: record.hash, records: newHistory(state, [{ ...record, seq: 0 }]), disposed: false });
     return { seq: 0, hash: record.hash, replayed: false };
   }
   if (!chain) throw new StorageCasConflictError('missing chain for head expectation');
   if (chain.head !== expectation.hash) throw new StorageCasConflictError('stale head');
   const seq = chain.records.length;
-  chain.records.push({ ...record, seq });
-  chain.head = record.hash;
-  chain.allocation = incrementBackendAllocation(chain.allocation);
+  const records = forkIndexedHistory(chain.records);
+  records.push({ ...record, seq });
+  state.chains.set(chainId, { ...chain, records, head: record.hash, allocation: incrementBackendAllocation(chain.allocation) });
   return { seq, hash: record.hash, replayed: false };
 };
 
@@ -100,12 +109,15 @@ export const genesisToScope = (state: BackendScopeState, kind: string, id: strin
 export const disposeChainInScope = (state: BackendScopeState, chainId: string): void => {
   const chain = state.chains.get(chainId);
   if (!chain) throw new StorageInvalidCommandError('unknown chain');
-  chain.disposed = true;
   // Physical disposal erases payload bytes while retaining the permitted
   // status surface: identity, sequence, hashes, head and allocation (§5.3,
   // §5.4). No getter renders disposed content, and commit-time copies can no
   // longer duplicate the erased bytes (m9).
-  chain.records = chain.records.map((entry) => ({ ...entry, bytes: '' }));
+  // Indexed roots may retain referenced historical payload; that disposition
+  // is reported as retained by the operational lifecycle service.
+  state.chains.set(chainId, { ...chain, disposed: true,
+    records: state.indexed ? chain.records : chain.records.map((entry) => ({ ...entry, bytes: '' })),
+  });
 };
 
 const pageBytes = (outcome: string, records: readonly unknown[], nextCursor: unknown): number =>
@@ -152,7 +164,7 @@ export const readPageFromScope = (
   // The immutable boundary is the terminal record sealed at mint time: exact
   // head hash plus sequence plus allocation (§8.2). Without a cursor the
   // boundary is the current terminal record.
-  const terminal = records.length === 0 ? null : records[records.length - 1];
+  const terminal = records.length === 0 ? null : records.at(-1)!;
   const boundHead = cursorHead ?? terminal?.hash ?? null;
   const boundSeq = cursorHead === null ? (terminal?.seq ?? -1) : cursorSeq;
   const boundAllocation = cursorHead === null ? (terminal === null ? null : (chain?.allocation ?? null)) : cursorAllocation;
@@ -164,7 +176,8 @@ export const readPageFromScope = (
   }
   // Exact terminal identity: sequence plus hash. A repeated hash (§9.3
   // CAS-only chains) resolves to its sealed occurrence, never the first one.
-  const boundIdx = records.findIndex((entry) => entry.seq === boundSeq && entry.hash === boundHead);
+  const boundRecord = records.at(boundSeq);
+  const boundIdx = boundRecord?.seq === boundSeq && boundRecord.hash === boundHead ? boundSeq : -1;
   if (boundIdx === -1) {
     // The sealed boundary is absent (resync pending): the retained cursor is
     // the recovery position, kept only when it fits the budget (Sol-6/m5).
@@ -201,7 +214,7 @@ export const readPageFromScope = (
   // of scanning from index 0, and the record after the current one is an
   // O(1) neighbour lookup instead of a slice-plus-find per admitted record.
   for (let index = Math.max(start, 0); index <= boundIdx; index += 1) {
-    const record = records[index];
+    const record = records.at(index)!;
     if (record.seq < start) continue;
     if (page.length >= limit) {
       // The page is full: the current record is the first undelivered one.
@@ -212,7 +225,7 @@ export const readPageFromScope = (
     // Admission is measured with the effective returned cursor: the token of
     // the first record after this one, or null when this record ends the
     // bound. A trailing record that fits with a null cursor is a page.
-    const following = index + 1 <= boundIdx ? records[index + 1] : null;
+    const following = index + 1 <= boundIdx ? records.at(index + 1)! : null;
     const effective = following === null ? null : mint(following.seq);
     if (pageBytes('page', [...page, { ...record }], effective) > maxEncodedBytes) return fit(page, start);
     page.push({ ...record });
@@ -232,12 +245,7 @@ export const mergeAtomicUnits = (units: readonly AtomicUnit[]): AtomicUnit => ({
   ...(units.some((unit) => unit.moduleResult) ? { moduleResult: units.find((unit) => unit.moduleResult)?.moduleResult } : {}),
 });
 
-interface StagedCommit {
-  readonly chains: Map<string, { allocation: string; head: string | null; records: PageRecord[]; disposed: boolean }>;
-  readonly index: Map<string, { digest: string; resultIds: readonly string[]; resultHash: string | null }>;
-  readonly records: Map<string, { bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; contentHash: string }>;
-  readonly aggregates: Map<string, { version: number; value: { readonly format: 'utf8' | 'base64'; readonly data: string } }>;
-}
+type StagedCommit = Pick<BackendScopeState, 'chains' | 'index' | 'records' | 'aggregates'>;
 
 const stagedView = (staged: StagedCommit): PredicateView => ({
   readHead: (chainId: string): string | null => staged.chains.get(chainId)?.head ?? null,
@@ -300,7 +308,7 @@ const stageEffects = (unit: AtomicUnit, staged: StagedCommit, state: BackendScop
     if (current === undefined || touched.has(chainId)) return current;
     touched.add(chainId);
     if (state.chains.get(chainId) === current) {
-      const detached = { ...current, records: [...current.records] };
+      const detached = { ...current, records: forkIndexedHistory(current.records) };
       staged.chains.set(chainId, detached);
       return detached;
     }
@@ -311,7 +319,7 @@ const stageEffects = (unit: AtomicUnit, staged: StagedCommit, state: BackendScop
     if (append.expectation.kind === 'absent') {
       if (append.expectation.allocation !== '0') throw new StorageInvalidCommandError('unexpected allocation at commit');
       if (chain) throw new StorageIdempotencyConflictError('stale creation expectation');
-      staged.chains.set(append.chainId, { allocation: incrementBackendAllocation('0'), head: append.record.hash, records: [{ id: append.record.id, seq: 0, hash: append.record.hash, bytes: append.record.bytes }], disposed: false });
+      staged.chains.set(append.chainId, { allocation: incrementBackendAllocation('0'), head: append.record.hash, records: newHistory(state, [{ id: append.record.id, seq: 0, hash: append.record.hash, bytes: append.record.bytes }]), disposed: false });
     } else {
       if (!chain) throw new StorageCasConflictError('missing chain for head expectation');
       if (chain.disposed) throw new StorageInvalidCommandError('chain disposed at commit');
@@ -391,23 +399,19 @@ export const commitUnitsToScope = (
   // every append is CAS-checked while staging, never against the base alone.
   // The staging maps share canonical entries until the first touch (m6).
   const staged: StagedCommit = {
-    chains: new Map(state.chains),
-    index: new Map(state.index),
-    records: new Map(state.records),
-    aggregates: new Map(state.aggregates),
+    chains: forkIndexedMap(state.chains),
+    index: forkIndexedMap(state.index),
+    records: forkIndexedMap(state.records),
+    aggregates: forkIndexedMap(state.aggregates),
   };
   for (const unit of units) {
     checkGuards(unit.guards, staged, ctx);
     stageEffects(unit, staged, state);
   }
-  state.chains.clear();
-  for (const [id, chain] of staged.chains) state.chains.set(id, chain);
-  state.index.clear();
-  for (const [key, entry] of staged.index) state.index.set(key, entry);
-  state.records.clear();
-  for (const [key, entry] of staged.records) state.records.set(key, entry);
-  state.aggregates.clear();
-  for (const [key, entry] of staged.aggregates) state.aggregates.set(key, entry);
+  state.chains = staged.chains;
+  state.index = staged.index;
+  state.records = staged.records;
+  state.aggregates = staged.aggregates;
   const receipt: CommitReceipt = { commitId: ctx.commitId, moduleId: ctx.moduleId, scope: { ...ctx.scope }, committedAt: ctx.clock(), effectiveRecords: merged.appends.length + merged.records.length + merged.updates.length, effectiveAppends: merged.appends.length, journalCursor: `cursor-${ctx.commitId}` };
   if (options.idempotencyKey) {
     state.commits.set(options.idempotencyKey, { receipt: { ...receipt, scope: { ...receipt.scope } }, unitHash });
