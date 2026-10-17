@@ -19,6 +19,8 @@ import {
   type StoredState,
 } from './ports/gateway-state.js';
 import { isTerminalSettlement } from './request-receipts.js';
+import type { StoredRequestAttempt } from './ports/gateway-state.js';
+import type { RouteAttemptSettlement } from './route-flow-core.js';
 
 export type { GatewayStateStore, StoredReceipt, StoredSession, StoredState };
 
@@ -379,7 +381,11 @@ export class GatewaySessionService {
       ownerScopeRef: session.ownerScopeRef,
       requestId: input.requestId,
       model: input.model,
-      attempts: 1,
+      attempts: 0,
+      physicalAttempts: [],
+      policyRevision: session.policyRevision,
+      mappingRevision: session.routingContract?.mapping?.revision,
+      mappingContentSha256: session.routingContract?.mapping?.contentSha256,
       settlement: 'pending',
       createdAt: new Date(Date.now()).toISOString(),
     };
@@ -397,6 +403,7 @@ export class GatewaySessionService {
     ownerScopeRef: string;
     receiptId: string;
     outcome: string;
+    attempts?: readonly RouteAttemptSettlement[];
   }): Promise<StoredReceipt> {
     const result = this.acquisition.then(() => this.settleCommitted(input));
     this.acquisition = result.catch(() => undefined);
@@ -417,6 +424,13 @@ export class GatewaySessionService {
     }
     const settled: StoredReceipt = {
       ...receipt,
+      physicalAttempts: receipt.physicalAttempts?.map((attempt) => {
+        const result = input.attempts?.find((row) => row.candidateRef === attempt.candidateRef);
+        return result ? { ...attempt, outcome: result.outcome,
+          usage: result.usage.estimated ? null : { inputTokens: result.usage.inputTokens ?? 0, outputTokens: result.usage.outputTokens ?? 0 },
+          observedServedModel: result.observedServedModel ?? null,
+          modelEvidence: result.observedServedModel ? 'provider-reported' as const : 'selection-only' as const } : attempt;
+      }),
       settlement: input.outcome,
       settledAt: new Date(Date.now()).toISOString(),
     };
@@ -428,6 +442,18 @@ export class GatewaySessionService {
     };
     await this.store.compareAndSet(loaded.revision, next);
     return settled;
+  }
+
+  async appendAttempt(input: { ownerScopeRef: string; receiptId: string; attempt: StoredRequestAttempt }): Promise<void> {
+    const run = this.acquisition.then(async () => {
+      const state = await this.store.load(); const receipt = state.receipts[input.receiptId];
+      if (!receipt || receipt.ownerScopeRef !== input.ownerScopeRef || receipt.settlement !== 'pending') throw new GatewaySessionError('receipt is unavailable', 'NOT-FOUND');
+      if (receipt.physicalAttempts?.some((row) => row.attemptRef === input.attempt.attemptRef)) throw new GatewaySessionError('attempt already recorded', 'CONFLICT');
+      const attempts = [...(receipt.physicalAttempts ?? []), input.attempt];
+      await this.store.compareAndSet(state.revision, { ...state, revision: state.revision + 1,
+        receipts: { ...state.receipts, [receipt.receiptId]: { ...receipt, attempts: attempts.length, physicalAttempts: attempts } } });
+    });
+    this.acquisition = run.catch(() => undefined); return run;
   }
 
   async readReceipt(input: { ownerScopeRef: string; receiptId: string }): Promise<StoredReceipt> {
