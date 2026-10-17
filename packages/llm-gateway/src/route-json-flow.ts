@@ -175,7 +175,8 @@ export const runRouteJsonFlow = async (
     request.bodyLease?.detach();
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
-      outcome: 'success', usage, ...((nativeServedModelId ?? observedServedModel) ? { observedServedModel: nativeServedModelId ?? observedServedModel } : {}) });
+      outcome: 'success', usage, reportedUsage: typeof response?.usage?.inputTokens === 'number' && typeof response?.usage?.outputTokens === 'number',
+      ...((nativeServedModelId ?? observedServedModel) ? { observedServedModel: nativeServedModelId ?? observedServedModel } : {}) });
     // Operational and financial callbacks are outside provider retry handling.
     try { await attempt.complete(attemptUsage(usage)); }
     finally { await settle('success'); }

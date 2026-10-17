@@ -33,6 +33,7 @@ import {
 } from '../ports/gateway-state.js';
 
 const STATE_FILE = 'gateway-state.enc';
+const INITIALIZED_FILE = '.initialized';
 const LOCK_FILE = '.lock';
 const AAD = 'gateway-state/v1';
 const STATE_SCHEMA = 1;
@@ -119,6 +120,8 @@ const unsealStateEnvelope = (dekHex: string, raw: string): StoredState => {
     || !Number.isSafeInteger(state.revision) || state.revision < 0
     || typeof state.sessions !== 'object' || state.sessions === null
     || typeof state.receipts !== 'object' || state.receipts === null
+    || Array.isArray(state.sessions) || Array.isArray(state.receipts)
+    || (state.affinities !== undefined && (!state.affinities || typeof state.affinities !== 'object' || Array.isArray(state.affinities)))
   ) {
     throw corrupt('schema mismatch');
   }
@@ -186,11 +189,20 @@ export class FileGatewayStateStore implements GatewayStateStore {
     try {
       raw = await readFile(join(this.stateDir, STATE_FILE), 'utf8');
     } catch (error) {
-      if (isCode(error, 'ENOENT')) return emptyState();
+      if (isCode(error, 'ENOENT')) {
+        try { await readFile(join(this.stateDir, INITIALIZED_FILE)); }
+        catch (markerError) {
+          if (isCode(markerError, 'ENOENT')) return emptyState();
+          throw new GatewayStateError('state initialization evidence unreadable', 'STORE-FAILED');
+        }
+        throw corrupt('committed state missing');
+      }
       throw new GatewayStateError('state file unreadable', 'STORE-FAILED');
     }
     try {
-      return unsealStateEnvelope(await this.dek(), raw);
+      const state = unsealStateEnvelope(await this.dek(), raw);
+      await this.markInitialized();
+      return state;
     } catch (error) {
       if (error instanceof GatewayStateError && error.code === 'CORRUPT') {
         await this.quarantine(error.message);
@@ -202,6 +214,19 @@ export class FileGatewayStateStore implements GatewayStateStore {
   async load(): Promise<StoredState> {
     await this.dek();
     return this.readRaw();
+  }
+
+  private async markInitialized(): Promise<void> {
+    let handle;
+    try { handle = await open(join(this.stateDir, INITIALIZED_FILE), 'wx', 0o600); }
+    catch (error) {
+      if (!isCode(error, 'EEXIST')) throw new GatewayStateError('state initialization evidence unavailable', 'STORE-FAILED');
+      if (await readFile(join(this.stateDir, INITIALIZED_FILE), 'utf8') !== 'gateway-state/v1\n') throw corrupt('initialization evidence invalid');
+      return;
+    }
+    try { await handle.writeFile('gateway-state/v1\n'); await handle.sync(); } finally { await handle.close(); }
+    const directory = await open(this.stateDir, 'r');
+    try { await directory.sync(); } finally { await directory.close(); }
   }
 
   private async acquireLock(name = LOCK_FILE): Promise<string> {
@@ -261,6 +286,7 @@ export class FileGatewayStateStore implements GatewayStateStore {
         throw new GatewayStateError('concurrent write', 'CONFLICT');
       }
       const sealed = sealStateEnvelope(await this.dek(), next);
+      await this.markInitialized();
       const destination = join(this.stateDir, STATE_FILE);
       const temporary = `${destination}.${token}.tmp`;
       const handle = await open(temporary, 'w', 0o600);

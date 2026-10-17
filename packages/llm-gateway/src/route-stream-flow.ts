@@ -67,6 +67,7 @@ const trackedExecution = (input: {
   let firstObserved = false;
   let priming = true;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
+  let reportedComplete = input.first.type === 'done' && typeof input.first.data.usage?.inputTokens === 'number' && typeof input.first.data.usage?.outputTokens === 'number';
   const isCancelled = () => terminal === 'cancelled';
   const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined)
     .finally(() => request.bodyLease?.release());
@@ -81,7 +82,7 @@ const trackedExecution = (input: {
     const finalUsage = usage();
     input.attempts.push({ candidateRef: input.candidateRef, providerId: target.providerId,
       modelId: target.model, transportProviderId: target.transportProviderId,
-      outcome: terminal, usage: finalUsage });
+      outcome: terminal, usage: finalUsage, reportedUsage: reportedComplete });
     finishing = (async () => {
       try {
         if (terminal === 'success') await attempt.complete(attemptUsage(finalUsage));
@@ -108,6 +109,7 @@ const trackedExecution = (input: {
         if (event.type === 'error') throw event.data;
         if (event.type === 'done') {
           if (event.data.usage) reported = routeUsage(event.data.usage);
+          reportedComplete = typeof event.data.usage?.inputTokens === 'number' && typeof event.data.usage?.outputTokens === 'number';
           if (!priming) await finish(doneClassification(event.data.finishReason));
           firstObserved = true;
           yield event;

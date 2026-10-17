@@ -8,7 +8,7 @@
  * old minting writer is companion-owned (h-cond); no dual writer remains
  * after cutover. Rollback reads the gateway's committed records.
  */
-import { GatewaySessionService } from '../session-service.js';
+import { GatewaySessionError, GatewaySessionService } from '../session-service.js';
 
 export interface OldSessionEntry {
   readonly ownerScopeRef: string;
@@ -52,7 +52,7 @@ export const migrateOldSessions = async (options: {
   const receiptIds: string[] = [];
   const seen = new Set<string>();
   for (const entry of entries) {
-    const triple = `${entry.ownerScopeRef}${entry.workspaceRef}${entry.clientSessionRef}`;
+    const triple = JSON.stringify([entry.ownerScopeRef, entry.workspaceRef, entry.clientSessionRef]);
     if (!entry.ownerScopeRef || !entry.workspaceRef || !entry.clientSessionRef) {
       quarantined.push({ entry, reason: 'invalid-owner' });
       continue;
@@ -61,7 +61,7 @@ export const migrateOldSessions = async (options: {
       quarantined.push({ entry, reason: 'short-key' });
       continue;
     }
-    if (!entry.expiresAt || Date.parse(entry.expiresAt) <= Date.now()) {
+    if (!Number.isFinite(Date.parse(entry.expiresAt)) || Date.parse(entry.expiresAt) <= Date.now()) {
       quarantined.push({ entry, reason: 'expired' });
       continue;
     }
@@ -71,7 +71,7 @@ export const migrateOldSessions = async (options: {
     }
     seen.add(triple);
     try {
-      const { sessionRef } = await service.importSession({
+      const { sessionRef, receiptId } = await service.importSession({
         ownerScopeRef: entry.ownerScopeRef,
         workspaceRef: entry.workspaceRef,
         clientSessionRef: entry.clientSessionRef,
@@ -81,20 +81,10 @@ export const migrateOldSessions = async (options: {
         models: entry.models,
         mappingRevision: entry.mappingRevision,
       });
-      const ack = await service.recordAttempt({
-        ownerScopeRef: entry.ownerScopeRef,
-        sessionRef,
-        requestId: 'migration',
-        model: '',
-      });
-      const settled = await service.settleReceipt({
-        ownerScopeRef: entry.ownerScopeRef,
-        receiptId: ack.receiptId,
-        outcome: 'migration-ack',
-      });
       imported.push(sessionRef);
-      receiptIds.push(settled.receiptId);
-    } catch {
+      receiptIds.push(receiptId);
+    } catch (error) {
+      if (!(error instanceof GatewaySessionError) || error.code !== 'AMBIGUOUS') throw error;
       quarantined.push({ entry, reason: 'ambiguous-duplicate' });
     }
   }
