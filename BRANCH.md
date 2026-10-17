@@ -362,6 +362,7 @@
   - [ ] Installed canonical payload/chain/object coverage in the same root mutation. Discussion containment covers comments; annotation pins remain references, while lifecycle/review derivatives follow their owning object.
   - [x] Dependent coverage probe passed; comments suites pass 57 tests including the carried C0 boundary suite. Added RED registered resource/index/header queries with complete resource identity, retained roots/current denial and comments assets attached to the existing host migration history.
   - [ ] Added trusted same-session projection preparation and selected module asset loading to the existing backend/history bridge. Asset SQL and predecessor chains are verified; installation fingerprints include configured projection schemas.
+  - [ ] Added comments projection assets under the shared PG inventory and same-session immutable metadata/resource rows. They retain explicit headers/links only; canonical bodies remain in kernel payload storage and captured roots determine membership.
   - [ ] Prepare the frozen optional peer and digest-pinned conformance/vector artifact through branch-local Docker/Make tooling; inspect the published peer before selecting its compatible range. Root/disabled imports must evaluate neither comments nor a database client.
   - [ ] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
   - [ ] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).
