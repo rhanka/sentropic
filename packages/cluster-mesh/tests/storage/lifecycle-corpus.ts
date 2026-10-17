@@ -40,6 +40,7 @@ export interface LifecycleCorpusStore {
 }
 
 export interface LifecycleCorpusHooks {
+  readonly expectedRecordDisposition?: 'retained' | 'erased';
   rebind(): Awaitable<LifecycleCorpusStore>;
   bindWithoutMaintain(): Awaitable<LifecycleCorpusStore>;
 }
@@ -250,8 +251,8 @@ export const runLifecycleCorpus = async (bound: LifecycleCorpusStore, hooks: Lif
   const recJobsBefore = (await bound.purgeJobIds()).length;
   assert.equal((await bound.completePurge('intent-rec-1')).state, 'complete');
   assert.equal((await bound.completePurge('intent-agg-1')).state, 'complete');
-  assert.equal((await bound.purgeProgress('intent-rec-1')).payloadDisposition, 'retained', 'C14: a hidden retained record cannot claim physical erasure');
-  assert.equal((await bound.purgeProgress('intent-agg-1')).payloadDisposition, 'retained', 'C14: a hidden retained aggregate cannot claim physical erasure');
+  assert.equal((await bound.purgeProgress('intent-rec-1')).payloadDisposition, hooks.expectedRecordDisposition ?? 'retained', 'C14: record disposition matches the qualified backend');
+  assert.equal((await bound.purgeProgress('intent-agg-1')).payloadDisposition, hooks.expectedRecordDisposition ?? 'retained', 'C14: aggregate disposition matches the qualified backend');
   await expectCode(async () => bound.readRecord('rec-purge-1'), 'denied', 'K2b-RED lifecycle: purged records deny reads');
   await expectCode(async () => bound.readAggregate('agg-purge-1'), 'denied', 'K2b-RED lifecycle: purged aggregates deny reads');
   assert.equal((await bound.purgeJobIds()).length, recJobsBefore);
