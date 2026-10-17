@@ -4,6 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
+import { stagedDigestOf, stagedSealRoot } from './staged-corpus.js';
 import { createStagedTestKernel as createStagedKernel } from './staged-client.js';
 import { ScopeVisibilityRoot } from '../../src/storage/visibility-root.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
@@ -73,29 +74,16 @@ describe('K4 visibility root: versions and base conflicts', () => {
       sourceBoundary: 'boundary-k4v',
       fence: FENCE,
     });
-    await bound.stageFragment({
-      unit,
-      ordinal: '0',
-      predecessorHash: null,
-      fragmentDigest: 'digest-vis-0',
-      effects: {
+    const effects: AtomicUnit = {
         ...emptyUnit(),
         guards: [{ kind: 'head', chainId: 'vis-base', hash: 'hash-vis-base-1' }],
         appends: appendUnit('vis-guarded', 'g1', 'hash-vis-g1').appends,
-      },
-      fence: FENCE,
-    });
+      };
+    const digest = stagedDigestOf(unit, '0', null, effects, 'contract-k4v', 'boundary-k4v');
+    await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: digest, effects, fence: FENCE });
     const seal = await bound.sealStaged({
       unit,
-      root: {
-        operationId: 'op-vis-base',
-        contractDigest: 'contract-k4v',
-        sourceBoundary: 'boundary-k4v',
-        finalFragmentHash: 'digest-vis-0',
-        fragmentCount: '1',
-        dependencyRoot: 'dep-root-k4v',
-        effectRoot: 'eff-root-k4v',
-      },
+      root: stagedSealRoot(unit, [effects], 'contract-k4v', 'boundary-k4v'),
     });
     await bound.appendChain(
       'vis-base',
@@ -125,29 +113,16 @@ describe('K4 visibility root: versions and base conflicts', () => {
       sourceBoundary: 'boundary-k4v',
       fence: FENCE,
     });
-    await bound.stageFragment({
-      unit,
-      ordinal: '0',
-      predecessorHash: null,
-      fragmentDigest: 'digest-rebase-0',
-      effects: {
+    const effects: AtomicUnit = {
         ...emptyUnit(),
         guards: [{ kind: 'head', chainId: 'vis-rebase', hash: 'hash-vis-rebase-2' }],
         appends: appendUnit('vis-rebased', 'r1', 'hash-vis-r1').appends,
-      },
-      fence: FENCE,
-    });
+      };
+    const digest = stagedDigestOf(unit, '0', null, effects, 'contract-k4v', 'boundary-k4v');
+    await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: digest, effects, fence: FENCE });
     const seal = await bound.sealStaged({
       unit,
-      root: {
-        operationId: 'op-vis-rebase',
-        contractDigest: 'contract-k4v',
-        sourceBoundary: 'boundary-k4v',
-        finalFragmentHash: 'digest-rebase-0',
-        fragmentCount: '1',
-        dependencyRoot: 'dep-root-k4v',
-        effectRoot: 'eff-root-k4v',
-      },
+      root: stagedSealRoot(unit, [effects], 'contract-k4v', 'boundary-k4v'),
     });
     await bound.commitStaged({ seal, fence: FENCE });
     assert.equal(await bound.readHead('vis-rebased'), 'hash-vis-r1');
