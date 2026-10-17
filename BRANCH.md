@@ -64,6 +64,8 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-EX4 — authorized package delivery needs public `storage`, `storage/postgres`, `comments` and selected composition/router leaves in `packages/cluster-mesh/package.json`; assets join the package files list. Impact: additive optional leaves, no root peer evaluation. Rollback: remove those new exports/assets entries together.
+- [ ] `attention` BRCM2-EX5 — real Postgres and portable-digest qualification will be wired into the existing cluster-mesh CI workflow, using a branch-local `tests/storage/postgres.mk` include. Makefile/Compose remain unchanged; rollback: remove the added workflow steps and include invocation.
 - [ ] `attention` BRCM2-PORT6 — immutable insert replay now compares canonical bytes as well as the declared hash; exact replays retain the record and count zero new records, while conflicting representation is refused. Projection creation deltas omit duplicate immutable records. This aligns §5.4 and remains subject to gr-conductor co-review.
 - [ ] `attention` BRCM2-PORT5 — issuance/revocation records are retained in the backend module/incarnation namespace so recreating a runtime on the same backend cannot revive a revoked token. K3's default fresh backend remains isolated; co-review pending.
 - [ ] `attention` BRCM2-PORT4 — `CommitReceipt` carries the optional K1 encoded `moduleResult`; ordinary/staged recovery owns it deeply. Existing receipt fields and K3 unfenced behavior remain compatible; co-review by gr-conductor pending.
@@ -256,6 +258,11 @@
   - [ ] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
 
 - [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
+  - [ ] Driver protocol/codec: one injected session, parameterized statements, SERIALIZABLE finite transactions, strict lossless decoding and typed operational/uncertain outcomes.
+  - [ ] Immutable SQL map nodes and canonical payload bytes; scope root/version CAS and package journal share the transaction. No scope clone or history replay at publication.
+  - [ ] Durable staged intake, prepared roots, fenced ownership and bounded progress; qualify a published SHA-256 implementation with documented state save/restore instead of persisting native Node hash objects.
+  - [ ] Scope/incarnation journal, captured snapshot queries, poison-preserving consumers and actual lifecycle dispositions.
+  - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
   - [ ] Structural driver port (parameterized query + transaction on one connection), serializable atomic ops, fences, error mapping in `src/storage/postgres/*.ts`; no `pg` import.
   - [ ] Assets `assets/storage/postgres/00N-*.sql` and `manifest.json`; host-owned migration history attachment.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/storage/postgres-{core,readers,staged,replay,migrations,barriers}.spec.ts` (BRCM2-PG).
