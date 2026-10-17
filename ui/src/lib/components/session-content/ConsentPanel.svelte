@@ -88,7 +88,14 @@
     } catch { if (!disposed) failed = true; }
     finally { if (!disposed) busy = false; }
   }
-  onMount(() => { mounted = true; if (cleanup) void loadRetained(); });
+  onMount(() => {
+    mounted = true;
+    if (cleanup) { void loadRetained(); return; }
+    const expiry = setInterval(() => {
+      if (flow?.prepared && flow.prepared.expiresAt <= Date.now()) { flow.cancel(); flow = flow; }
+    }, 500);
+    return () => clearInterval(expiry);
+  });
   onDestroy(() => { disposed = true; handles = []; flow?.cancel(); });
 </script>
 
