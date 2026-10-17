@@ -53,12 +53,13 @@ export function getWebAuthnConfig(): WebAuthnConfig {
     // 'none' = no attestation verification (recommended for most use cases)
     attestation: (env.WEBAUTHN_ATTESTATION as AttestationConveyancePreference) || 'none',
     
-    // User Verification requirements by role
-    // 'required' = enforce UV (PIN/biometric), 'preferred' = request but allow fallback, 'discouraged' = don't request
+    // User Verification requirements by role.
+    // F3/B4: IdP passkeys are 2FA credentials — every role requires UV at the
+    // login ceremony. Magic-link stays the UV-less fallback, so nobody is locked out.
     userVerification: {
-      admin: 'required',     // Admins must use UV
-      editor: 'preferred',   // Editors should use UV when available
-      guest: 'preferred',    // Guests should use UV when available
+      admin: 'required',
+      editor: 'required',
+      guest: 'required',
     },
   };
 }

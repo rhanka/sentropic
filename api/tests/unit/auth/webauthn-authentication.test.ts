@@ -47,7 +47,6 @@ describe('WebAuthn Authentication Service', () => {
     it('should generate valid authentication options', async () => {
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       expect(options).toBeDefined();
@@ -61,26 +60,31 @@ describe('WebAuthn Authentication Service', () => {
       expect(options.allowCredentials![0].transports).toEqual(['usb', 'nfc']);
     });
 
-    it('should handle user verification policy based on role', async () => {
-      // Test with editor role (preferred)
+    it('should require user verification for every role (F3: IdP passkeys are 2FA)', async () => {
+      // Editor role requires UV (was preferred before F3).
       const optionsEditor = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
-      expect(optionsEditor.userVerification).toBe('preferred');
+      expect(optionsEditor.userVerification).toBe('required');
 
-      // Update user to admin role
+      // Update user to admin role — still required.
       await db.update(users)
         .set({ role: 'admin_app' })
         .where(eq(users.id, testUserId));
 
       const optionsAdmin = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred', // Will be overridden to 'required'
       });
 
       expect(optionsAdmin.userVerification).toBe('required');
+    });
+
+    it('should require user verification for discoverable logins (F3 fail-closed)', async () => {
+      const options = await generateWebAuthnAuthenticationOptions({});
+
+      expect(options.userVerification).toBe('required');
+      expect(options.allowCredentials).toBeUndefined();
     });
 
     it('should include all user credentials in allowCredentials', async () => {
@@ -98,7 +102,6 @@ describe('WebAuthn Authentication Service', () => {
 
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       expect(options.allowCredentials).toBeDefined();
@@ -125,7 +128,6 @@ describe('WebAuthn Authentication Service', () => {
 
       const options = await generateWebAuthnAuthenticationOptions({
         userId: userIdNoCreds,
-        userVerification: 'preferred',
       });
 
       expect(options.allowCredentials).toBeUndefined(); // No credentials to allow
@@ -134,7 +136,6 @@ describe('WebAuthn Authentication Service', () => {
     it('should generate challenge and store it', async () => {
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       // Challenge should be stored in database
@@ -149,7 +150,6 @@ describe('WebAuthn Authentication Service', () => {
       // First generate options to get challenge
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       // Mock WebAuthn authentication response
@@ -211,7 +211,6 @@ describe('WebAuthn Authentication Service', () => {
     it('should reject invalid origin', async () => {
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       const mockResponse = {
@@ -243,7 +242,6 @@ describe('WebAuthn Authentication Service', () => {
     it('should reject wrong response type', async () => {
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       const mockResponse = {
@@ -275,7 +273,6 @@ describe('WebAuthn Authentication Service', () => {
     it('should reject unknown credential', async () => {
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       const mockResponse = {
@@ -330,7 +327,6 @@ describe('WebAuthn Authentication Service', () => {
 
       const options = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
-        userVerification: 'preferred',
       });
 
       const mockResponse = {

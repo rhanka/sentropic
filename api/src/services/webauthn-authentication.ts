@@ -48,7 +48,8 @@ export async function generateWebAuthnAuthenticationOptions(
   const config = getWebAuthnConfig();
   
   let allowCredentials: Array<{ id: string; transports?: AuthenticatorTransportFuture[] }> = [];
-  let userVerification: UserVerificationRequirement = 'preferred';
+  // F3/B4: discoverable logins (no userId) cannot resolve a role — fail closed with UV required.
+  let userVerification: UserVerificationRequirement = 'required';
   
   // If user ID provided, get their credentials and role
   if (userId) {
@@ -169,15 +170,9 @@ export async function verifyWebAuthnAuthentication(
     // Convert base64url back to Uint8Array
     const credentialPublicKey = Buffer.from(storedCredential.publicKeyCose, 'base64url');
     
-    // Get user role to determine UV requirement
-    const [user] = await db
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, storedCredential.userId))
-      .limit(1);
-    
-    const userRole = user?.role as 'admin_app' | 'admin_org' | 'editor' | 'guest' || 'guest';
-    const requireUV = userRole === 'admin_app' || userRole === 'admin_org';
+    // F3/B4: IdP passkeys are 2FA credentials — UV is required for every login,
+    // regardless of role. No per-role lookup: fail closed by construction.
+    const requireUV = true;
     
     // Create WebAuthnCredential object (v11.0.0+ API change)
     // transportsJson est maintenant inclus dans le select, plus besoin de cast
@@ -207,8 +202,8 @@ export async function verifyWebAuthnAuthentication(
       expectedChallenge,
       expectedOrigin: Array.isArray(config.origin) ? config.origin : [config.origin],
       expectedRPID: config.rpID,
-      credential: webAuthnCredential, // Changed from 'authenticator' to 'credential'
-      requireUserVerification: requireUV, // Required for admins, optional for others
+      credential: webAuthnCredential,
+      requireUserVerification: requireUV,
     });
     
     if (!verification.verified) {
@@ -216,13 +211,12 @@ export async function verifyWebAuthnAuthentication(
       return { verified: false };
     }
     
-    // Additional check: for admin roles, verify UV was actually performed
-    if (requireUV && !verification.authenticationInfo.userVerified) {
-      logger.warn({ 
-        userId: storedCredential.userId, 
-        role: userRole 
-      }, 'User verification required for admin role but not performed');
-      return { verified: false };
+    // Fail-closed belt-and-braces: the UV bit must be set, whatever the library decided.
+    if (!verification.authenticationInfo.userVerified) {
+      logger.warn({
+        userId: storedCredential.userId,
+      }, 'User verification required but not performed');
+      return { verified: false, userVerified: false };
     }
     
     const { authenticationInfo } = verification;
