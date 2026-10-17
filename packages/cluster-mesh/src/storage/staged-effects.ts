@@ -67,9 +67,15 @@ export const prepareStagedRootNotice = (core: StagedCore, base: BackendScopeStat
     for (const key of notice.keys) if (coveredBy(before, key) !== null || before.disposed.has(key)) throw new StorageInvalidCommandError('covered mutation refused');
   }
   if (notice.kind === 'dispose') for (const key of notice.keys) data.disposed.set(key, true);
+  const seenRecords = new Set<string>();
   for (const unit of notice.units) {
     applyRootModuleEffects(core, before, data, grant, unit);
-    data.projections.emitDelta({ cause: 'atomic', records: [...unit.records.map((entry) => entry.key), ...unit.appends.map((entry) => entry.chainId)],
+    const created = unit.records.filter((entry) => {
+      const fresh = !base.records.has(entry.key) && !seenRecords.has(entry.key);
+      seenRecords.add(entry.key); return fresh;
+    });
+    if (created.length + unit.appends.length + unit.updates.length + unit.relationships.length + unit.barriers.length === 0) continue;
+    data.projections.emitDelta({ cause: 'atomic', records: [...created.map((entry) => entry.key), ...unit.appends.map((entry) => entry.chainId)],
       aggregates: unit.updates.map((entry) => entry.key), relationships: unit.relationships.map((entry) => entry.relation),
       barriers: unit.barriers.map((entry) => entry.boundary),
     });
