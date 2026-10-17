@@ -292,6 +292,8 @@
     - [x] Production and selected-consumer locks now pin the same audited `@stablelib/sha256@2.0.1` closure; root imports still do not evaluate the Postgres leaf.
     - [x] Existing cluster-mesh CI validation bootstraps/audits the storage dependency closure before ordinary Make gates (BRCM2-EX5); database qualification wiring remains pending.
   - [ ] Scope/incarnation journal, captured snapshot queries, poison-preserving consumers and actual lifecycle dispositions.
+    - [ ] RED real-PG tests cover competing CAS, uncertain commit responses, dependent getter/page denial, holds and verified byte erasure, plus durable contiguous consumer checkpoints and poison redelivery.
+    - [x] Current Postgres gate: typecheck/lint pass; 8 files / 19 tests pass, including reopening between all seal steps and one bounded metadata publication (`16e25021b` code head).
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
     - [ ] Added an isolated test-only pinned Postgres service/network and a neutral one-client bridge; real tests require backend PID continuity, rollback and finite SQL cancellation. No host port or production driver dependency is introduced.
     - [x] Corrected service startup to inspect containers explicitly: Docker's generic inspect matched the identically named network and skipped container creation. No database test result was inferred from the failed startup.
