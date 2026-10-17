@@ -4,6 +4,7 @@
     "workspace": "Project / workspace",
     "settings": "Create or manage a workspace in settings",
     "refresh": "Refresh sessions",
+    "attach": "Attach this verified session to this workspace",
     "empty": "No shared sessions in this workspace.",
     "unavailable": "This workstation does not yet support secure sharing.",
     "requestFailed": "The request did not complete. Check its status before continuing.",

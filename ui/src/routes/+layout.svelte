@@ -66,6 +66,7 @@
     '/dashboard-tmp',
     '/neutral',
     '/settings',
+    '/sessions',
     '/auth/devices',
   ];
 
