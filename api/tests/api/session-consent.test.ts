@@ -721,10 +721,42 @@ describe('session consent durable lifecycle', () => {
     expect(purged.remainingObjects).toBe(0);
     const physical = await fixture.listPhysical('');
     expect(physical).toHaveLength(0);
+    const [fenced] = await db.select().from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(fenced?.state).toBe('revoked');
     await expectContentError(
       () => service.requestRetainedPurge(handles[0]!.retainedScopeId, other.id),
       'cross_owner_refused',
     );
+  });
+
+  it('should purge product content through its origin handle without membership or source contact', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('product-content-purge');
+    const [binding] = await db.select().from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.bindingId, bindingId));
+    await service.deriveGrant({ projectId: 'sess-content-project-1', sessionId: 'product-content-purge',
+      bindingId, bindingVersion: binding!.version, d1Version: binding!.version, d1Incarnation: 1,
+      d1StartSeq: 0, workspaceId, sessionCreatedAt: now, sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1', nativeStartSeq: 0 }, ctx);
+    const bytes = new TextEncoder().encode('origin-owned-route-copy');
+    const reserved = await service.reserveBeforeUpload('product-content-purge', 'terminal.cache',
+      { raw: bytes.length, encoded: bytes.length }, 'product-content-purge', ctx);
+    await service.publishAfterUpload(reserved.reservationId, bytes, ctx);
+    await db.delete(workspaceMemberships).where(and(
+      eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, owner.id)));
+    const router = productContent();
+    const inventory = await router.request('/api/v1/auth/session/content/retained-content', { headers: browserHeaders() });
+    const { items } = await inventory.json();
+    const response = await router.request(`/api/v1/auth/session/content/${bindingId}/consent?retainedScopeId=${encodeURIComponent(items[0].retainedScopeId)}`,
+      { method: 'DELETE', headers: browserHeaders() });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ complete: true });
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    expect((await db.select().from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'product-content-purge')))[0]?.state).toBe('revoked');
+    expect((await db.select().from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.bindingId, bindingId)))[0]?.status).toBe('attached');
   });
 
   it('should close live on D1 detach/end, retain copies and require history authority', async () => {

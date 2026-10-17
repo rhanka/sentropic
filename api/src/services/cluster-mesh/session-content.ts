@@ -2494,6 +2494,26 @@ export class SessionContentService {
     }
     const purgeJobId = this.newId();
     await db.transaction(async (tx) => {
+      // Participate in the publication/amendment lock order before fencing
+      // grants. A deletion-only pass could otherwise admit a later writer.
+      const grants = await tx.select().from(sessionContentGrants).where(and(
+        eq(sessionContentGrants.bindingId, bindingId as string),
+        eq(sessionContentGrants.tenantId, namespace.tenantId),
+        eq(sessionContentGrants.ownerId, ownerId), eq(sessionContentGrants.authorityEpoch, namespace.epoch),
+      ));
+      const projects = [...new Set(grants.map((grant) => grant.projectId))].sort();
+      for (const projectId of projects) await tx.select().from(sessionContentProjects)
+        .where(eq(sessionContentProjects.projectId, projectId)).limit(1).for('update');
+      await tx.update(sessionContentGrants)
+        .set({ state: 'revoked', version: sql`${sessionContentGrants.version} + 1`, updatedAt: new Date(this.nowMs()) })
+        .where(and(eq(sessionContentGrants.bindingId, bindingId as string),
+          eq(sessionContentGrants.tenantId, namespace.tenantId), eq(sessionContentGrants.ownerId, ownerId),
+          eq(sessionContentGrants.authorityEpoch, namespace.epoch)));
+      if (projects.length) await tx.update(sessionContentHistoryAuthorizations)
+        .set({ state: 'revoked', version: sql`${sessionContentHistoryAuthorizations.version} + 1` })
+        .where(and(eq(sessionContentHistoryAuthorizations.bindingId, bindingId as string),
+          inArray(sessionContentHistoryAuthorizations.sessionId, grants.map((grant) => grant.sessionId)),
+          inArray(sessionContentHistoryAuthorizations.projectId, projects)));
       await tx
         .update(sessionContentObjects)
         .set({ state: 'purge_pending', updatedAt: new Date(this.nowMs()) })
