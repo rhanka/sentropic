@@ -1821,7 +1821,7 @@ describe('session consent durable lifecycle', () => {
 
   it('should resolve the D1 content-hook issuer from configuration (n6)', async () => {
     const { resolveSessionContentIssuer } = await import(
-      '../../src/services/cluster-mesh/session-workspace'
+      '../../src/services/cluster-mesh/session-content'
     );
     const previous = process.env.SESSION_CONTENT_AUTHORITY_ISSUER;
     try {
