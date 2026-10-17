@@ -154,72 +154,32 @@
   - [x] Historical integrated memory gate at `497d40838`: typecheck/lint pass, 85 files / 777 tests pass (RTK `5537ba475ece`); final source gate below supersedes it.
   - [x] Lot gate: shared Lot 1 source command; K3 remains 56/56.
 
-- [x] **Lot 3 — K4 integrity (N1-N3; MAJ-1..3, m2, m3, S4:4, S4:10; C01-C04)**
-  - [x] Kernel-computed fragment digests and roots from the shared codec; owned deep-frozen buffers; divergent begin refused; terminal states kept.
-    - [x] RED `root-intake.spec.ts` refuses malformed canonical records, excess guard/effect items and forged purge authorizers before advancing the accepted ordinal or journal.
-    - [x] Shared atomic structural validation now covers record bytes, guard variants, relationship/barrier/intent fields and index results. Staged intake additionally bounds all guard/effect items and verifies purge authority/authorizer before acceptance.
-    - [x] `src/storage/staged-operations.ts` authenticates backend-held capabilities and current fences, owns canonical fragment bytes, recomputes every ordinal digest, indexes retry receipts and separates operation identities from ordinary commit indexes.
-  - [x] Authenticated unforgeable handles/seals bound to module/tenant/workspace/incarnation/owner; current fence verified at begin/stage/seal/commit/abort and after the publication gate.
-    - [x] `root-capability-mutations.spec.ts` targets scope-blind rebinding with a valid recipient capability, two caller-buffer aliases, hidden audit exposure and omission of the runtime's current-fence registry check; each death is pinned to one shared assertion.
-    - [x] RED `root-recovery.spec.ts` injects lost fragment/commit responses, recreates the runtime on its backend and checks exactly one journal event. Explicit operator ownership recovery must retain frozen intent, record its action and invalidate old handles/seals.
-    - [x] Recovery is a trusted, maintain-authorized compare-and-swap operation with a bounded backend-held operator ledger; it rotates owner capabilities without reopening frozen input. Commit response loss is injected after canonical publication and terminal receipt storage.
-    - [x] Additional recovery probes resume a seal between bounded preparation steps, reject another principal in the same scope at stage/seal/commit/abort, and isolate fence-lease expiry from grant expiry.
-    - [x] `src/storage/staged-state.ts` defines indexed canonical root attachments separately from backend-held hidden operation/consumer/snapshot progress; memory progress makes no durability claim.
-    - [x] `src/storage/staged-core.ts` binds progress to backend identity, verifies provisioned lane ownership/epoch/lease and exposes trusted provisioning/rotation separately from scoped adapter operations.
-    - [x] Shared replay staging reuses the actual maintenance fence issued by its backend, allowing opaque lane ids without a hard-coded reference fence; profile mutations stay 40/40.
-  - [x] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
-    - [x] `root-work.spec.ts` measures actual core preparations for 100 touched chains with fixed two-item/512-byte steps, forbids historical scope/history enumeration and whole-unit replay at commit. `root-journal.spec.ts` rejects a checkpoint over an unread prefix after an arbitrary read-position jump.
-    - [x] Arbitrary journal-position reads remain available for inspection, but only contiguous delivery advances a consumer's verified checkpoint frontier; an unread prefix cannot be acknowledged by reading its final event.
-    - [x] New RED probes require semantic root equality across JSON property ordering and reject asynchronous final preparation hooks before canonical publication.
-    - [x] Commit-root equality/digests share a framed field-order-independent encoding. The coordinator owns/freezes accepted options/effects and refuses asynchronous final hooks so their carriers cannot publish early.
-    - [x] RED `tests/storage/root-seal.spec.ts`: bounded preparation with evolving heads, one root/event at commit, stable receipt retry and a failed seal that cannot reopen staging; 2/2 pass, typecheck passes.
-    - [x] Shared divergent-root cases use independent operations, preserving the frozen `sealing` state on semantic failure; returned seal capabilities survive tampered-root checks instead of being silently stripped by fixtures. Reference state transitions align with N3.
-    - [x] Rebuilt K4 passes 8/8 original staged-unit tests after fixture alignment. The typed closure mismatch was addressed by explicitly refusing a missing staged dependency before ordinary CAS preparation; K3 missing-head semantics stay unchanged.
-    - [x] `staged-preparation.ts` prepares one measured effect at a time on captured indexed roots and streams the shared v1 root commitments in bounded UTF-8 chunks; the memory backend retains hash progress without a durability claim.
-    - [x] `staged-seal.ts` freezes sealing input, authenticates seals, rechecks authority/current fence after the scheduling hook, publishes one captured successor and preserves terminal receipts independently of hidden fragments.
-  - [x] Lot gate: copy of Lot 1 gate; tests `staged-units.spec.ts` + corpus cases C01-C04 with mutants.
+- [x] **Lot 3 — K4 integrity (N1–N3; MAJ-1..3, m2/m3, S4:4/10; C01–C04)**
+  - [x] Kernel recomputes every digest/root, authenticates current scope/owner/incarnation/capability/fence, deeply owns accepted bytes and preserves terminal identities.
+  - [x] Durable intent freezes base B and ordered fragments; bounded seal preparation validates evolving heads and dependencies, streams canonical commitments and never reopens failed sealing.
+  - [x] Root equality is framed/semantic rather than property-order dependent. Preparation owns/finalizes options before atomic publication; asynchronous final hooks refuse.
+  - [x] Trusted maintenance recovery retains input, rotates backend-held handles/seals and records operator action; lost fragment/commit responses recover originals without duplicate journal events.
+  - [x] Files: `tests/storage/{root-intake,root-capability-mutations,root-recovery,root-work,root-journal,root-seal,staged-units}.spec.ts`; shared C01–C04 corpora.
+  - [x] Measured fixed-budget work forbids historical enumeration/whole-unit replay; final publication repeats contributor authority/current-fence checks. Lot 1 source gate passes; historical evidence linked there.
 
-  - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
+- [x] **Lot 4 — K4 publication (N4–N6; MAJ-4..6, S4:1–3/5–6, m13; C05–C09)**
+  - [x] Data, coverage, projections, canonical receipt/moduleResult, audit and journal switch through one real immutable root under scope coordination/base CAS.
+  - [x] Projection deltas validate sequentially on an owned successor; repeated removal or stale rival state refuses with no partial effects.
+  - [x] Interleaved publication probes revoke grants/rotate fences at the actual wait; equal-result rival replacements still invalidate the sealed base.
+  - [x] Exact immutable insert replay preserves original bytes and counts zero new records; changed representation under the same hash refuses.
+  - [x] Imported historical content and its explicit covering barrier publish together. Reparenting cannot evade a current barrier.
+  - [x] Files: `tests/storage/{projection-roots,root-publication-mutations,root-publication,visibility,staged-units}.spec.ts`; C05–C09 and receipt-ownership probes.
+  - [x] Counter-only visibility implementation removed. Lot 1 source gate passes; K3 remains 56/56.
 
-- [x] **Lot 4 — K4 publication (N4-N6; MAJ-4..6, S4:1-3, S4:5-6, m13; C05-C09)**
-  - [x] RED `tests/storage/projection-roots.spec.ts`: relationship changes prepare on an owned successor and nested delta buffers cannot mutate captured projection membership.
-    - [x] Projection state forks immutable indexed relationship/delta roots; successive changes validate on the successor, descriptor/delta inputs are owned, and delta reads use a bounded window. Projection root probes pass 2/2; publication integration is qualified below.
-  - [x] One atomic visibility point: data, barriers, projections, receipt and journal segment switch together under the scope gate with base compare.
-    - [x] `root-publication-mutations.spec.ts` qualifies and mutates barrier-root membership, sequential double-removal validation and sealed-base CAS; the CAS mutant deliberately preserves the rival index values and dies at the exact refusal assertion.
-    - [x] `root-publication.spec.ts` interleaves readers at the actual publication wait, then revokes authority or rotates the fence; another case replaces equal-digest command results after sealing and requires CAS refusal with the rival preserved.
-    - [x] RED receipt probes require ordinary and staged `moduleResult` to survive caller mutation and idempotent recovery. The first integrated lint run found two single-assignment declarations; they now use `const` without exposing wiring.
-  - [x] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
-    - [x] `src/storage/staged-effects.ts` prepares module effects, verified purge authorizers, projections, audit and one scoped journal event on the owned root before publication; shared purge fixtures name their verified principals.
-  - [x] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
-    - [x] RED §5.4 immutable-insert probe distinguishes an identical canonical no-op from changed bytes under the same declared hash and verifies the original representation survives refusal.
-    - [x] Removed the old counter-only `visibility-root.ts`; the initial-version test now captures the actual indexed backend root used by ordinary and staged publication.
-  - [x] G5: imported content and its covering barrier publish in one unit (reference aligned).
-    - [x] Visibility conflict/success fixtures now derive canonical fragment and root commitments; captured-base CAS remains exercised after an actual rival publication.
-  - [x] Lot gate: copy of Lot 1 gate; tests `visibility.spec.ts`, `staged-units.spec.ts` with interleaved readers.
-
-  - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
-
-- [x] **Lot 5 — K4 journal, manifests and ports (N7-N9, N11; MAJ-7..8, m1, m4-m6, S4:7-9, S4:11-12; C10-C18)**
-  - [x] Scoped/incarnated journal streams; resync preserves poison; fenced checkpoints with maintain authority; pause/retry.
-    - [x] `root-journal.ts` reads the canonical root's indexed stream and retains consumer poison/pause state independently; checkpoints require delivered bounds, owner/incarnation/current fences and maintain authority. Snapshot capture retains an actual immutable root under an opaque scoped capability.
-    - [x] Snapshot paging uses order-statistic indexed lookup to visit only the requested canonical rows; RED ordinal-window probe forbids enumerating historical keys.
-    - [x] `root-snapshot.ts` pages five captured canonical indexes, owns returned rows, enforces contiguous consumption and current barriers, and never clears consumer poison or pause state.
-  - [x] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
-    - [x] `manifest-integrity.spec.ts` reintroduces the exact old flattening/shallow-copy transformations and pins four mutation deaths to separate framing, build-input, retained-input and returned-value assertions.
-    - [x] RED manifest probes construct the exact selection/unit-root flattening collision and mutate nested caller/returned heads; all asynchronous rejection assertions are now awaited, and storage fixtures use computed commitments.
-    - [x] Manifest encoding separately frames selected heads, unit roots and terminal metadata; nested head values are owned at build and deeply frozen at retention. The value registry alone grants no storage capability; scoped root retention is qualified below.
-    - [x] RED `root-manifest.spec.ts` captures actual head/sequence/allocation, excludes later writes, rejects unissued/foreign roots and checks current barriers on retained-page reads.
-    - [x] Root manifest retention derives heads and committed unit roots from one captured root, binds incarnation/version and owner, and pages its exact head under fresh authorization/coverage. Caller-selected manifest digests cannot establish storage boundaries.
-    - [x] New RED recovery probes preserve revoked issuance across runtime recreation and prevent a second authorized manifest owner from overwriting the first owner's retained capability.
-    - [x] Initial manifest probe run stopped at a duplicate fixture variable, before semantic assertions. The fixture now distinguishes fragment and manifest digests; the legacy-code mutants now supply the semantic regression evidence.
-    - [x] Awaited rejection assertions exposed an untyped missing-head exception in `verifyAgainst`; it now validates manifest structure before encoding, preserving `invalid-command` for tampering.
-  - [x] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with actual dispositions.
-    - [x] `root-lifecycle.ts` prepares coverage, holds, shared references and disposal on the common root. Completion and notification membership publish together; retained memory payloads report `retained`, including captured older roots.
-    - [x] Lifecycle/atomic fixture authorizers now name the verified fixture principal; a new shared refusal proves that a forged authorizer publishes neither purge work nor its carrier.
-    - [x] Reference verifies the same authorizer binding. External-journal failure is checked at staged publication, including failures armed after sealing; the prepared seal remains retryable while the canonical root stays unchanged.
-  - [x] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
-
-  - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
+- [x] **Lot 5 — K4 journal, manifests and ports (N7–N9/N11; MAJ-7..8, m1/m4–6, S4:7–9/11–12; C10–C18)**
+  - [x] Journal/checkpoint/snapshot authority binds scope/incarnation/owner and current maintenance fence. Only contiguous delivered prefixes can advance checkpoints; resync retains poison/pause.
+  - [x] Snapshot pages visit bounded indexed positions of actual captured roots and recheck current coverage; captures retain real canonical state, not journal approximations.
+  - [x] Manifest codec separately frames selections/heads/unit roots/terminal metadata and deeply owns input/returned heads. Value-only digests grant no storage capability.
+  - [x] Actual root-bound manifests preserve head/sequence/allocation/version/owner and exclude newer writes. Foreign roots/owners and current barriers refuse across reopenings.
+  - [x] Lifecycle verifies authorizers, holds/shared ownership and real dispositions; memory retains old-root bytes and advertises retained dispositions rather than physical erasure.
+  - [x] Files: `tests/storage/{root-journal,root-snapshot,manifest-integrity,root-manifest,manifest,visibility,staged-units}.spec.ts`; C10–C18 and current-fence/poison/disposition mutations.
+  - [x] Semantic profiles expose actual callable protected ports only. External-journal failure rolls back publication and leaves a seal retryable.
+  - [x] Lot 1 source gate passes; detailed RED/GREEN/mutation history stays at the linked execution anchor.
 
 - [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
   - [x] Driver protocol/codec: one injected session, parameterized statements, SERIALIZABLE finite transactions, strict lossless decoding and typed operational/uncertain outcomes.
