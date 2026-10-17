@@ -131,6 +131,7 @@
     - [x] `tests/storage/replay-integrity.spec.ts`: five exact-target mutants killed (5/5): resync clearing stall, write-only maintenance, stale epoch, wrong incarnation and wrong owner.
   - [ ] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
     - [x] Replay RED requires bounded canonical snapshot rows, captured heads/indexes, unissued/foreign-root refusal and one isolated external stream per scope; observed RED on the reference's journal-event response.
+    - [ ] Reference captures owned canonical rows under opaque scope-held snapshot capabilities and pages them with current authorization/coverage; J5 substitutes an actual live captured root.
   - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
   - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header (done with MINEUR-1); corrections recorded here with post-rebase SHAs.
   - [ ] Lot gate:

@@ -7,7 +7,7 @@
 // the positives). Barriers ride with carrier appends (§10.1).
 
 import { randomUUID } from 'node:crypto';
-import type { ReplayFence } from './replay-corpus.js';
+import type { ReplayFence, ReplaySnapshotPage, ReplaySnapshotRow } from './replay-corpus.js';
 import {
   StorageCasConflictError,
   StorageDeniedError,
@@ -131,6 +131,7 @@ const compareEpoch = (current: string, begin: string): number => {
 };
 
 interface StagedScope {
+  readonly snapshots: Map<string, { readonly rows: readonly ReplaySnapshotRow[]; readonly journalSeq: number }>;
   currentFence: WriterFence | null;
   readonly audit: CommitReceipt[];
   readonly units: Map<string, StagedOp>;
@@ -149,6 +150,7 @@ interface StagedScope {
 }
 
 const createStagedScope = (): StagedScope => ({
+  snapshots: new Map(),
   currentFence: null,
   audit: [],
   units: new Map(),
@@ -867,27 +869,21 @@ export class TestStagedStore {
     // pass an undelivered poisoned event after resync. Advancing or clearing
     // here would manufacture progress and lose events on a crash between
     // resync and snapshot consumption.
-    const { tenantId, workspaceId } = this.scope;
-    return { snapshotRoot: `root:${tenantId}:${workspaceId}:${this.staged.journalSeq}`, journalSeq: this.staged.journalSeq };
+    const snapshotRoot = `root:${randomUUID()}`;
+    this.staged.snapshots.set(snapshotRoot, { rows: this.inner.captureSnapshot(), journalSeq: this.staged.journalSeq });
+    return { snapshotRoot, journalSeq: this.staged.journalSeq };
   }
 
-  snapshotRead(snapshotRoot: string, after: number, limit: number): JournalReadResult {
+  snapshotRead(snapshotRoot: string, after: number, limit: number): ReplaySnapshotPage {
     this.requireOperation('read');
     if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit <= 0) {
       throw new StorageInvalidCommandError('snapshot reader requires a valid window');
     }
-    const match = /^root:([^:]+):([^:]+):(\d+)$/.exec(snapshotRoot);
-    if (!match) throw new StorageInvalidCommandError('unknown snapshot root');
-    const [, tenantId, workspaceId, seqRaw] = match;
-    if (tenantId !== this.scope.tenantId || workspaceId !== this.scope.workspaceId) {
-      throw new StorageInvalidCommandError('foreign snapshot root');
-    }
-    const boundary = Number(seqRaw);
-    if (!Number.isSafeInteger(boundary) || boundary < 0 || boundary > this.staged.journalSeq) {
-      throw new StorageInvalidCommandError('stale snapshot root');
-    }
-    const events = this.staged.journal.filter((event) => event.seq > after && event.seq <= boundary).slice(0, limit);
-    return { events, watermark: boundary };
+    const captured = this.staged.snapshots.get(snapshotRoot);
+    if (!captured || after > captured.rows.length) throw new StorageInvalidCommandError('unknown snapshot root or position');
+    const end = Math.min(captured.rows.length, after + limit);
+    const rows = captured.rows.slice(after, end).filter((row) => !this.isCovered(row.key) && !this.staged.disposed.has(row.key));
+    return { rows: JSON.parse(JSON.stringify(rows)), watermark: captured.journalSeq, next: end < captured.rows.length ? end : null };
   }
 
   configureLifecycle(policy: PurgePolicy): void {
