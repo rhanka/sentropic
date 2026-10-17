@@ -21,3 +21,4 @@ export * from './transport-contracts.js';
 export { createCommentsFragment, commentsFragmentDigest, commentsUnitPayloadDigest } from './fragment-codec.js';
 export { commentsImportBindingDigest, commentsAdmissibleManifestDigest } from './binding-codec.js';
 export { COMMENTS_STORAGE_LIMITS } from './limits.js';
+export { COMMENTS_ADMISSION } from './admission.js';

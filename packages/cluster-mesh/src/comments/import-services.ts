@@ -6,6 +6,7 @@ import { completeCommentsReceipt } from './import-recovery.js';
 import type { CommentsCommitImportRequest, CommentsPrepareImportRequest, CommentsFragmentAcknowledgement, CommentsCompleteReceipt } from './transport-contracts.js';
 import type { StagedUnitStatus } from '../storage/staged-units.js';
 import type { CommentsPreparedReference } from './transport-contracts.js';
+import { validateCommentsFragment } from './fragment-codec.js';
 export const createCommentsImportServices = (context: CommentsContext) => ({
   inspectPreparedImport: (input: { readonly scope: CanonicalStoreScope; readonly operationId: string; readonly bindingDigest: string }) => context.invoke(input.scope, async ({ storage }) => {
     if (!storage.invoke) throw new UnsupportedProfileError('comments-import-v1');
@@ -13,6 +14,7 @@ export const createCommentsImportServices = (context: CommentsContext) => ({
   }),
   prepareImportFragment: (input: CommentsPrepareImportRequest): Promise<CommentsFragmentAcknowledgement> => context.invoke(input.binding.request.scope, async ({ storage }) => {
     if (!storage.invoke) throw new UnsupportedProfileError('comments-import-v1');
+    validateCommentsFragment(input.fragment);
     return await storage.invoke('comments.import.prepare', input) as CommentsFragmentAcknowledgement;
   }),
   commitPreparedImport: (input: CommentsCommitImportRequest) => context.invoke(input.request.scope, async ({ storage }) => {

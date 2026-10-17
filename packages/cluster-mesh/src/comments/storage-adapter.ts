@@ -6,6 +6,7 @@ import { CommentsContext, StoredGenesisReplay, type CommentsRequest } from './co
 import { canonicalRecordKey, chainIdentity, commandKey, decodeRecord, invalid, own, validateRecordIdentity } from './storage-schema.js';
 import { validateCommentsRecord } from './record-validation.js';
 import { commentsRecordEffects } from './record-effects.js';
+import { validateCommentsAdmission } from './admission.js';
 export class CommentsAdapter {
   constructor(readonly context: CommentsContext, readonly capacity: CapacityDescriptor) {}
   async lookup(request: CommentsRequest, tx: KernelTransaction | null, selection: CanonicalReadSelection, hash?: string): Promise<CanonicalChainRecord | null> {
@@ -24,6 +25,7 @@ export class CommentsAdapter {
   }
   append<T extends CanonicalChainRecord>(scope: CanonicalStoreScope, selection: CanonicalReadSelection, supplied: T, expected?: ExpectedState): Promise<T> {
     return this.context.invoke(scope, (request) => this.context.mutate(async (tx, standalone) => {
+      validateCommentsAdmission(supplied);
       const record = own(supplied); validateRecordIdentity(scope, selection, record);
       const previous = await this.lookup(request, tx, selection);
       if (expected === undefined && previous) {
