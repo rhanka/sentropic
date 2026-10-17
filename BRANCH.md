@@ -185,6 +185,7 @@
     - [x] Shared replay staging reuses the actual maintenance fence issued by its backend, allowing opaque lane ids without a hard-coded reference fence; profile mutations stay 40/40.
   - [ ] Seal binds base B, ordered fragment set, recomputed roots; bounded sealing steps honoring limits; failure does not reopen staging; distinct staged/commit/command-index namespaces.
     - [x] RED `tests/storage/root-seal.spec.ts`: bounded preparation with evolving heads, one root/event at commit, stable receipt retry and a failed seal that cannot reopen staging; 2/2 pass, typecheck passes.
+    - [ ] Shared divergent-root cases use independent operations, preserving the frozen `sealing` state on semantic failure; returned seal capabilities survive tampered-root checks instead of being silently stripped by fixtures. Reference state transitions align with N3.
     - [ ] `staged-preparation.ts` prepares one measured effect at a time on captured indexed roots and streams the shared v1 root commitments in bounded UTF-8 chunks; the memory backend retains hash progress without a durability claim.
     - [ ] `staged-seal.ts` freezes sealing input, authenticates seals, rechecks authority/current fence after the scheduling hook, publishes one captured successor and preserves terminal receipts independently of hidden fragments.
   - [ ] Lot gate: copy of Lot 1 gate; tests `staged-units.spec.ts` + corpus cases C01-C04 with mutants.
