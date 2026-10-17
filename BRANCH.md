@@ -213,6 +213,8 @@
   - [x] Cleanup: `make down API_PORT=9381 UI_PORT=5581 MAILDEV_UI_PORT=1481 ENV=test-feat-session-content-consent`.
 
   - [ ] [D] N5 updates to historical Lots 1/2: native IdP verification for share/amend, first-durable-admission expiry for new objects without rewriting stored deadlines, capture/read/both denial separation, and source-independent current retained-read authority. Remove mandatory offline-risk receipts; resolve CM2-N5-MAP before positive capture.
+  - [ ] [D] N5 API test-first update: capture exclusion and capture/read revocation retain committed bytes/deadlines with no purge job; exclusion permits only separately authorized retained reads, explicit purge retains its physical-deletion witness, and read-authorization revocation preserves independently authorized copies.
+  - [x] [D] N5 physical API red: 4 failures reproduced unwanted deletion on session/project denial and history-read revocation; explicit purge/pending cases pass. Numbered browser expectations remove the key/receipt prerequisite; the gated real lane now requires the delivered capsule and deployed OIDC policy pins.
 
 - [ ] **Lot 3a — Source streaming, active limiters and native-verified IdP confirmation**
   - [x] Fix3 P3 test-first: domain 49/50 (new binding-version refusal fails); API `API_TEST_ARGS='-t P3'` 1 pass/1 fail (same-ID reattachment after an injected detach-fence failure accepts refresh). Tests require the stored grant tuple and zero objects; both failures observed before production edits.
