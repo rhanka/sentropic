@@ -1,5 +1,5 @@
 import type { ScopeGrant } from '../authority.js';
-import { StorageDeniedError, StorageIdempotencyConflictError, StorageInvalidCommandError } from '../errors.js';
+import { StorageDeniedError, StorageIdempotencyConflictError, StorageInvalidCommandError, UnsupportedProfileError } from '../errors.js';
 import { validateBeginInput, validateFragmentInput, type StagedBeginInput, type FragmentReceipt, type StagedUnitStatus } from '../staged-units.js';
 import { deriveStagedDependencies, stagedEffectDigest, stagedFragmentDigest } from '../staged-codec.js';
 import { EFFECT_SECTIONS } from '../staged-preparation.js';
@@ -11,6 +11,7 @@ import { pgJsonBytes } from './roots.js';
 import { decodePgJson, decodePgText } from './codec.js';
 import { pgUnitHandle, readPgUnit, resolvePgUnit, savePgUnit, type PgUnit } from './units.js';
 export const beginPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: StagedBeginInput): Promise<AuthenticatedStagedHandle> => {
+  if (core.options.moduleId !== 'comments') throw new UnsupportedProfileError('staged-units-v1');
   const input = ownPgValue(supplied);
   if (!validateBeginInput(input).ok || pgJsonBytes(input).length > core.work().maxEncodedBytes) throw new StorageInvalidCommandError('invalid staged begin');
   return core.tx.run(false, async (session) => {

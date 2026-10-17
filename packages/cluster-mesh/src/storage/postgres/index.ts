@@ -26,3 +26,4 @@ export { PostgresStorageError, classifyPgFailure } from './errors.js';
 export { loadPgAssets, applyPgMigrations, verifyPgInstallation } from './migrations.js';
 export type { PgAsset, PgHostHistory, PgMigrationReceipt } from './migrations.js';
 export type { PgScoped } from './scope.js';
+export type { PgCapability, PgProfilePorts } from './profiles.js';
