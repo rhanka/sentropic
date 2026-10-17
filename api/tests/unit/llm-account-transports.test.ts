@@ -234,6 +234,42 @@ describe('provider-owned llm account transports', () => {
     expect(claudeAcquire).toBeNull();
   });
 
+  it('stores an external Claude seat without any refresh token and serves it unrenewed', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    await storeClaudeCodeAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'claude-external-1',
+      accountLabel: 'Claude external',
+      accessToken: 'claude-external-access',
+      expiresAt,
+      seatPolicy: {
+        seatRef: 'seat-synth-claude-01',
+        ownerScope: 'owner-seat-01',
+        epoch: 1,
+        generation: 1,
+        operationId: 'op-external-01',
+      },
+    });
+    // A missing refresh token without the trusted policy is still refused.
+    expect(await storeClaudeCodeAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'claude-external-2',
+      accessToken: 'claude-external-access',
+      expiresAt,
+    })).toBeNull();
+
+    const acquired = await acquireClaudeCodeAccountTransport({
+      userId: user.id,
+      modelId: 'claude-sonnet-4-6',
+      requestId: 'claude-external-req-1',
+    });
+    expect(acquired?.accessToken).toBe('claude-external-access');
+    expect(acquired?.refreshToken).toBeNull();
+    await acquired?.recordOutcome({ status: 'success' });
+  });
+
   it('stores and acquires Cloud Code account transport with multi-tenant userId isolation and project metadata', async () => {
     const user1 = await createAuthenticatedUser('admin_app');
     const user2 = await createAuthenticatedUser('admin_app');
