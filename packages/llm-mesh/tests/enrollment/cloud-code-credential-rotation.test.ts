@@ -67,9 +67,28 @@ describe('Cloud Code OAuth credential rotation', () => {
 });
 
 describe('seat consumer rotation refusal', () => {
+  // Realistic consumer seat material: identifiers and access handles only,
+  // never a custodian OAuth block.
+  const seatMaterial = JSON.stringify({
+    cli: 'cloud-code',
+    seatRef: 'seat-agy-01',
+    ownerScope: 'owner-seat-01',
+    accessRef: 'access-reg-01',
+    entitlementClass: 'lab-seat',
+    epoch: 1,
+    generation: 1,
+    operationId: 'op-agy-01',
+  });
+
   it('finds no OAuth credential to rotate in consumer seat material', () => {
-    expect(() => parseCredential('seat access handle: access-reg-01')).toThrow(
-      'OAuth credential markers are missing',
-    );
+    // Positive control: a real OAuth block is detected, so the refusal
+    // below is discriminating rather than vacuous.
+    expect(parseCredential(renderCredentialBlock(credentialA))).toBe(credentialA);
+    expect(() => parseCredential(seatMaterial)).toThrow('OAuth credential markers are missing');
+  });
+
+  it('detects a smuggled OAuth block inside seat material', () => {
+    const smuggled = `${seatMaterial}\n${renderCredentialBlock(credentialB)}`;
+    expect(parseCredential(smuggled)).toBe(credentialB);
   });
 });

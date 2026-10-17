@@ -308,7 +308,11 @@ describe('CodexEnrollmentProvider', () => {
 
 describe('Codex seat consumer mapping', () => {
   it('parses a codex consumer profile under the codex package id without provider calls', async () => {
-    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('provider call forbidden during seat parse'));
+    try {
+      const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
     const bundle = parseCliSeatProfile({
       cli: 'codex',
       seatRef: 'seat-codex-01',
@@ -325,7 +329,11 @@ describe('Codex seat consumer mapping', () => {
       providerExpiry: '2099-01-01T00:00:00Z',
       accessRef: 'access-codex-01',
     });
-    expect(bundle.identity.packageProviderId).toBe('codex');
-    expect(bundle.lifecycle.refreshAuthority).toBe('none');
+      expect(bundle.identity.packageProviderId).toBe('codex');
+      expect(bundle.lifecycle.refreshAuthority).toBe('none');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
