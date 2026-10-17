@@ -213,7 +213,8 @@ describe('session consent durable lifecycle', () => {
     await db.delete(sessionContentTombstones);
     await db.delete(sessionContentNamespaces);
     await db.delete(sessionContentProjects);
-    await db.delete(sessionWorkspaceBindings);
+    await db.delete(sessionWorkspaceBindings)
+      .where(inArray(sessionWorkspaceBindings.tenantId, [TENANT_A, TENANT_B]));
     await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await db.delete(tenantMemberships).where(
