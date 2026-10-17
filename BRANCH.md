@@ -483,6 +483,7 @@
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
 
 - [ ] **Lot N-1 — Docs consolidation**
+  - [x] Refreshed the evidence index to current SPEC/compatibility/host-guide byte identities and the installed candidate report; historical review provenance remains unchanged.
   - [x] Updated both evolution specifications with the consolidated shared root, host-owned PG installation, bounded trusted module SPI, delivered comments/transport/HTTP candidate and explicit remaining service/SQLite/application boundaries.
   - [x] Recorded actual installed archive SHA-256/SRI, production lock/audit, unchanged corpus, full-runtime HTTP, independent long-history/receipt/revocation and measured hidden-preparation command evidence in `evidence/installed-module.md`.
   - [ ] The full source gate passed typecheck/lint and all runtime checks but found a stale C0 documentation assertion requiring oracle packaging to stay unverified. Updated it to the now-executable installed qualification boundary, preserving the absent M1 conformance-export assertion.
