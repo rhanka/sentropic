@@ -568,6 +568,10 @@ load-api-tool: ## Load the toolbox from a CI artifact
 publish-api-tool-image: docker-login ## Publish the non-shipping toolbox for reuse across CI runs
 	@docker push $(API_TOOL_IMAGE)
 
+.PHONY: pack-immo-exchange-issuer-fixture
+pack-immo-exchange-issuer-fixture: ## Build the checkpoint-pinned real-issuer fixture bundle (M3, I861-EX13; fixture config baked in the script per spec-v8)
+	bash scripts/ci/pack-immo-exchange-issuer-fixture.sh
+
 # -----------------------------------------------------------------------------
 # Docker helpers
 # -----------------------------------------------------------------------------
