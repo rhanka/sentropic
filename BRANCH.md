@@ -293,6 +293,7 @@
     - [ ] Qualification runner exited with SIGBUS before collecting tests; a Make diagnostic target isolates Node/tool installation and filesystem evidence before any runner change.
   - [ ] Structural driver port (parameterized query + transaction on one connection), serializable atomic ops, fences, error mapping in `src/storage/postgres/*.ts`; no `pg` import.
   - [ ] Assets `assets/storage/postgres/00N-*.sql` and `manifest.json`; host-owned migration history attachment.
+    - [ ] RED `postgres-migrations.spec.ts`: a host-owned history links every transactional asset receipt to the host migration; schema drift and applied-checksum drift must both refuse opening. Asset manifest generation is explicit Make tooling.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/storage/postgres-{core,readers,staged,replay,migrations,barriers}.spec.ts` (BRCM2-PG).
 
 - [ ] **Lot 7 — Comments module C1a/C1b/C2 (`src/comments/`)**
