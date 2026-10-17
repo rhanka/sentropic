@@ -66,6 +66,8 @@ describe('seat-sidecar-file-backend', () => {
     expect(() => parseSeatSidecar('x'.repeat(5000))).toThrow(/bounded size/);
     expect(() => parseSeatSidecar(validSidecar({ credentialClass: CANARY }))).toThrow(/credential class/);
     expect(() => parseSeatSidecar(validSidecar({ schemaVersion: 'v'.repeat(65) }))).toThrow(/schema version/);
+    expect(() => parseSeatSidecar(validSidecar({ schemaVersion: 'v1 hostile' }))).toThrow(/schema version/);
+    expect(() => parseSeatSidecar(validSidecar({ schemaVersion: `v1\n${CANARY}` }))).toThrow(/schema version/);
     try {
       parseSeatSidecar(validSidecar({ schemaVersion: CANARY.repeat(4) }));
       expect.unreachable();
