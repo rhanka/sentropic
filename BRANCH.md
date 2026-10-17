@@ -159,11 +159,12 @@
     - [x] Ordinary record preparation uses indexed forks when supplied, clones only touched history paths, and installs successor map pointers without replaying every scope entry; exact cursor sequence uses indexed lookup. Typecheck passes; K3 kernel suite stays 56/56.
   - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
   - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
-    - [ ] RED `tests/storage/mutation-coordinator.spec.ts`: all ordinary mutation paths, stale-root CAS, failing preparation, authority revalidation and transaction read coverage.
-    - [ ] Shared `prepareUnitsInScope` separates owned sequential preparation from publication, preserving the K3 guard/predicate/effect implementation for the root coordinator.
-    - [ ] `RootMutationCoordinator` captures indexed roots, prepares owned core/module effects, revalidates and switches the root conditionally; ordinary kernel wiring follows.
-    - [ ] Kernel root options now accept the trusted backend/coordinator; scoped adapters retain private wiring and frozen binding surfaces. Mutation/read paths are being routed through it.
-    - [ ] Append/genesis/index/dispose/commit and ordinary reads now participate in the configured root coordinator; transaction routing and its contributor checks follow.
+    - [x] RED `tests/storage/mutation-coordinator.spec.ts`: ordinary mutations, stale-root CAS, preparation failure, authority revalidation, transaction coverage and unsupported-effect refusal; all 6 cases pass after wiring.
+    - [x] Shared `prepareUnitsInScope` separates owned sequential preparation from publication, preserving the K3 guard/predicate/effect implementation for the root coordinator.
+    - [x] `RootMutationCoordinator` captures indexed roots, prepares owned core/module effects, revalidates and switches the root conditionally.
+    - [x] Kernel root options accept the trusted backend/coordinator; scoped adapters retain private wiring and frozen binding surfaces.
+    - [x] Append/genesis/index/dispose/commit and ordinary reads participate in the configured root coordinator.
+    - [x] Transactions publish through that coordinator and revalidate every contributing grant after preparation; transactional getters honor current coverage. K4 runtime composition remains the next step.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
   - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.

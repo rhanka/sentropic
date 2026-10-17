@@ -281,19 +281,19 @@ export class ScopedRuntime {
   async indexPut(key: string, entry: { readonly digest: string; readonly resultIds: readonly string[]; readonly resultHash: string | null }): Promise<'insert' | 'replace'> {
     this.requireOperation('write');
     return this.change('index', [key], (state) => {
-    const stored = state.index.get(key);
-    // Detached copies: the caller's entry object never aliases canonical
-    // state (Sol-3/m4).
-    const detached = { digest: entry.digest, resultIds: [...entry.resultIds], resultHash: entry.resultHash };
-    if (!stored) {
-      state.index.set(key, detached);
-      return 'insert';
-    }
-    if (stored.digest === entry.digest) {
-      state.index.set(key, detached);
-      return 'replace';
-    }
-    throw new StorageIdempotencyConflictError('index digest conflict');
+      const stored = state.index.get(key);
+      // Detached copies: the caller's entry object never aliases canonical
+      // state (Sol-3/m4).
+      const detached = { digest: entry.digest, resultIds: [...entry.resultIds], resultHash: entry.resultHash };
+      if (!stored) {
+        state.index.set(key, detached);
+        return 'insert';
+      }
+      if (stored.digest === entry.digest) {
+        state.index.set(key, detached);
+        return 'replace';
+      }
+      throw new StorageIdempotencyConflictError('index digest conflict');
     });
   }
 
@@ -407,23 +407,24 @@ export class ScopedRuntime {
       // Commit-time revalidation of every contributor (§4.3 m3): a handle
       // revoked or expired between its apply and the outer commit cannot
       // smuggle its units in.
-      for (const grant of overlay.contributors.values()) {
-        const validity = validateScopeGrant(grant, { nowIso: this.#deps.clock() });
-        if (!validity.ok) throw new StorageDeniedError(validity.errors.join('; '));
-        if (this.#deps.revoked.has(grant.token)) throw new StorageDeniedError('grant revoked');
-        this.#deps.authority.attest(grant);
-        if (!canOperate(grant, 'write')) throw new StorageDeniedError('grant lacks write');
-        if (grant.scope.tenantId !== overlay.scope.tenantId || grant.scope.workspaceId !== overlay.scope.workspaceId) {
-          throw new StorageDeniedError('cross-scope handle');
+      const revalidate = () => {
+        this.requireOperation('write');
+        for (const grant of overlay.contributors.values()) {
+          const validity = validateScopeGrant(grant, { nowIso: this.#deps.clock() });
+          if (!validity.ok) throw new StorageDeniedError(validity.errors.join('; '));
+          if (this.#deps.revoked.has(grant.token)) throw new StorageDeniedError('grant revoked');
+          this.#deps.authority.attest(grant);
+          if (!canOperate(grant, 'write')) throw new StorageDeniedError('grant lacks write');
+          if (grant.scope.tenantId !== overlay.scope.tenantId || grant.scope.workspaceId !== overlay.scope.workspaceId) {
+            throw new StorageDeniedError('cross-scope handle');
+          }
         }
-      }
-      const committed = commitUnitsToScope(this.#deps.backend.scopeState(this.boundScope), overlay.units, options, {
-        moduleId: this.moduleId,
-        scope: this.boundScope,
-        clock: this.#deps.clock,
-        commitId,
-        predicates: this.#deps.predicates,
-      });
+      };
+      revalidate();
+      const context = this.commitContext(commitId);
+      const committed = this.#deps.coordinator
+        ? this.#deps.coordinator.commit(this.grant, overlay.units, options, context, revalidate)
+        : commitUnitsToScope(this.#deps.backend.scopeState(this.boundScope), overlay.units, options, context);
       Object.assign(overlay.receipt, committed);
       // Final receipt copy (m2): the outer commit returns its own frozen
       // snapshot, so a joined contributor holding a provisional copy can
@@ -560,11 +561,13 @@ export class ScopedRuntime {
       },
       readHead: async (chainId: string): Promise<string | null> => {
         txReadGuard();
+        this.assertAccessible('chain', chainId);
         if (backendState().chains.get(chainId)?.disposed) throw new StorageDeniedError('chain disposed');
         return effectiveHead(chainId);
       },
       readAggregate: async (key: string): Promise<{ readonly version: number; readonly value: { readonly format: 'utf8' | 'base64'; readonly data: string } } | null> => {
         txReadGuard();
+        this.assertAccessible('aggregate', key);
         const pending = overlay.aggregateWrites.get(key);
         if (pending) return { version: pending.version, value: { ...pending.value } };
         const stored = backendState().aggregates.get(key);
@@ -573,6 +576,7 @@ export class ScopedRuntime {
       },
       readRecord: async (key: string): Promise<{ readonly bytes: { readonly format: 'utf8' | 'base64'; readonly data: string }; readonly contentHash: string } | null> => {
         txReadGuard();
+        this.assertAccessible('record', key);
         const pending = overlay.recordWrites.get(key);
         if (pending) return { bytes: { ...pending.bytes }, contentHash: pending.contentHash };
         const stored = backendState().records.get(key);
@@ -585,6 +589,7 @@ export class ScopedRuntime {
         const { chainId, limit, maxEncodedBytes } = input;
         const cursor = input.cursor ?? null;
         if (!nonEmpty(chainId)) throw new StorageInvalidCommandError('chain read requires a chainId');
+        if (!this.accessible('chain', chainId)) return { outcome: 'inaccessible', records: [], nextCursor: null };
         if (!Number.isSafeInteger(limit) || limit <= 0) throw new StorageInvalidCommandError('invalid limit');
         if (!Number.isSafeInteger(maxEncodedBytes) || maxEncodedBytes <= 0) {
           throw new StorageInvalidCommandError('invalid byte budget');
@@ -619,6 +624,7 @@ export class ScopedRuntime {
       },
       findIdempotency: async (selector: IdempotencySelector): Promise<IdempotencyEntry | null> => {
         txReadGuard();
+        this.assertAccessible('index', selector.key);
         // K1 command index (§5.4) with read-your-writes: pending index
         // writes of this transaction win over committed state (R-MAJ-7).
         const pending = overlay.indexAppends.get(selector.key);
@@ -637,6 +643,7 @@ export class ScopedRuntime {
         }
         const rows: RecordRead[] = [];
         for (const key of keys) {
+          this.assertAccessible('record', key);
           const pending = overlay.recordWrites.get(key);
           if (pending) {
             rows.push({ key, bytes: { ...pending.bytes }, contentHash: pending.contentHash });
