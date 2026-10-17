@@ -166,7 +166,7 @@ export class GatewaySessionService {
       policyRevision: POLICY_REVISION,
     };
     const next: StoredState = {
-      schemaVersion: SCHEMA_VERSION,
+      ...loaded,
       revision: loaded.revision + 1,
       sessions: { ...loaded.sessions, [session.sessionRef]: session },
       receipts: loaded.receipts,
@@ -251,7 +251,7 @@ export class GatewaySessionService {
       policyRevision: POLICY_REVISION,
     };
     const next: StoredState = {
-      schemaVersion: SCHEMA_VERSION,
+      ...loaded,
       revision: loaded.revision + 1,
       sessions: { ...loaded.sessions, [session.sessionRef]: session },
       receipts: loaded.receipts,
