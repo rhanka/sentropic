@@ -4,7 +4,7 @@ import type { CanonicalRouterFactory, CanonicalLifecycleRequest, CanonicalReadSe
 import { commentsRouterBinding } from '../comments/router-binding.js';
 import type { CommentsRevisionRequest } from '../comments/command-contracts.js';
 import { commentsHttpError, readCommentsHttpBody, assertCommentsHttpKeys, commentsHttpId, commentsHttpResponse } from '../comments/http-boundary.js';
-import { checkCommentsHttpTargets, commentsHttpRevisionTargets } from '../comments/http-authority.js';
+import { checkCommentsHttpTargets, checkCommentsHttpDecision, commentsHttpRevisionTargets } from '../comments/http-authority.js';
 export const createCanonicalCommentsRouter: CanonicalRouterFactory<Hono> = (ports, options) => {
   validateCapacityDescriptor(options.capacity);
   const binding = commentsRouterBinding(ports.store);
@@ -37,7 +37,9 @@ export const createCanonicalCommentsRouter: CanonicalRouterFactory<Hono> = (port
       const result = await ports.store.transaction(async () => {
         const authority = await commentsHttpRevisionTargets(binding, request);
         await checkCommentsHttpTargets(ports, binding, authority.capability, authority.targets);
+        await checkCommentsHttpDecision(ports, binding, request, authority.capability);
         const record = await binding.services.revise(request);
+        await checkCommentsHttpDecision(ports, binding, request, authority.capability);
         await checkCommentsHttpTargets(ports, binding, authority.capability, authority.targets); return record;
       });
       return commentsHttpResponse(context, result);
@@ -52,7 +54,9 @@ export const createCanonicalCommentsRouter: CanonicalRouterFactory<Hono> = (port
       const result = await ports.store.transaction(async () => {
         const targets = await binding.services.targets({ scope: request.scope, selection: selection(id), capability });
         await checkCommentsHttpTargets(ports, binding, capability, targets);
+        await checkCommentsHttpDecision(ports, binding, request, request.action);
         const value = await binding.services.lifecycle(request);
+        await checkCommentsHttpDecision(ports, binding, request, request.action);
         await checkCommentsHttpTargets(ports, binding, capability, targets); return value;
       });
       return commentsHttpResponse(context, result);
