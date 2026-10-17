@@ -46,6 +46,7 @@
   - `packages/llm-mesh/tests/**`
   - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
   - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `scripts/llm-model-equivalences/council.source.json`
   - `package-lock.json`
   - `api/package-lock.json`
@@ -86,6 +87,11 @@
 - [x] Scoped API fixture repair gate: `chat-tools.test.ts` and `me.test.ts`, all 12 passed with comment authorization, proposal and continuation assertions intact.
 - [x] CI AI evidence exposed inherited hardcoded high-effort generation defaults in executive summary / initiative / matrix callers. Two offline A/B failures reproduced; preserve former nano none in their shared `getReasoningParamsForModel` helper while leaving explicit per-message runtime reasoning and unrelated models intact. Deterministic document AI fixture repair passes all seven tests, including real chunk/merge caps.
 - [x] BRNANO-EX3: make the existing 800-token comment proposal helper explicitly nonreasoning and remove model-identity effort inference from the generic API boundary. This preserves omitted-effort contracts for explicitly selected Luna/gateway calls; helper wire shapes stay unchanged. Roll back the helper and inference changes together.
+- [x] BRNANO-EX4: packed cluster-mesh qualification correctly rejects its frozen selected lock (mesh 0.26.1) against the verified same-PR 0.26.2 sibling. Allow only that fixture lock; regenerate via the existing Make refresh target and verified sibling archives. No public cluster manifest/source change; rollback with the mesh bump.
+- [x] Regenerated selected lock through `refresh-lazy-package-lock` with guarded same-PR sibling receipts; candidate mesh SHA-256 `520d34a4d0d51bb0d4cc3ac8f4bc839aca8f5164aaf2ece48b87bb35bf8aada6` matches CI. Full `test-lazy-package` gate passed: 10 files, 63 tests; only version, registry URL and integrity changed.
+- [x] Final reasoning-boundary correction at `0517ead57`: two red regressions preceded the fix; 176 focused contracts pass. Generic omitted effort remains omitted; the existing comment proposal explicitly sends none with its 800-token cap.
+- [x] Final offline gates before the boundary correction: API unit 133 files / 1,316 passed / one skipped; endpoints 127 files / 1,304 passed; queue 26, security 49; UI 83 files / 489 passed. CI validates the final source separately.
+- [x] Initial CI AI failure signature: `initiative-generation-async` exceeded the unchanged 120,000ms workflow limit and executive summary returned no response. Corrected the inherited high-effort factory; both CI AI groups now pass at `4540e81b5`. No retry, timeout increase or AI-flake acceptance.
 
 ## AI Flaky tests
 - [x] No provider failure in the paired campaign; 30/30 cases and all 38 requests completed without retry, repair, fallback or timeout inflation. Raw outputs/usage retained externally with no credentials.
@@ -114,24 +120,25 @@
   - [x] Run full `make test-llm-mesh ENV=test-model-retirement` (42 files, 808 passed), including facade, execution features and Responses wire; `make test-chat-ui ENV=test-model-retirement` passed.
   - [x] Verify history/document single, chunk and merge caps and all chunks with existing deterministic `api/tests/unit/history-analyze-tool.test.ts`, `documents-tool-service.test.ts`, `api/tests/ai/documents-tool.test.ts`; native runtime and financial contracts cover refusal, cancellation and raw usage.
   - [x] Six budget-refusal failures reproduced offline before adding full-rendered-request admission and finite output validation; document summaries now share the configured model and explicit none.
-- [ ] **Lot 3 — Bounded paired live qualification**
+- [x] **Lot 3 — Bounded paired live qualification**
   - [x] Budget contract tests written before implementation: exact-SCOPE opt-in, shared dollar/call limits, worst-input reservation, missing-usage/cancellation closure and long-tier pricing.
   - [x] Physical-fetch contracts written before implementation: exact endpoint/model/none/cap/Standard tier, no hosted paid tools or redirects, durable reservation before any send; API typecheck and lint pass.
   - [x] Evidence contracts written first: an exclusive, fsynced journal prevents a rerun from resetting spending; capture raw Chat Completions and Responses counters before mesh normalization.
   - [x] Add `api/tests/ai/nano-replacement-qualification.test.ts` and shared fixture/budget support; offline-test reservation, missing usage, cancellation and refusal before budget overflow; real SDK tool/schema continuation passes with zero network egress.
   - [x] Baseline gates: full API unit run passed 132 files / 1,304 tests (one skipped); scoped stream contracts passed 181 tests; API/UI typecheck and lint passed.
   - [x] Native qualification injection keeps real product/mesh dispatch, pins Standard API with SDK retries zero, records served model and raw usage, and aborts timed-out work without increasing test timeouts.
-  - [x] Exercise BOTH candidates on identical fixtures through product helpers and llm-mesh: 15/15 valid each, all 15 paired hashes identical, exact served IDs, zero reasoning/cached tokens, no clipped output.
+  - [x] Initial batch: BOTH candidates through product helpers and llm-mesh, 15/15 valid each, all 15 paired hashes identical, exact served IDs, zero reasoning/cached-read tokens, no clipped output; nonzero cache writes priced explicitly.
   - [x] Freeze paired synthetic fixtures and short-call validity/fact checks; facts are absent from long-document questions; UI typecheck and lint pass.
   - [x] Add two real Responses tool-continuation loops (JSON object/schema) and unchanged history/document single/chunk/merge helpers; one forced chunk plus merge is a bounded stage proof, not multi-chunk throughput qualification.
   - [x] Run `make test-api-ai SCOPE=tests/ai/nano-replacement-qualification.test.ts API_TEST_ARGS="--no-file-parallelism" API_PORT=9450 UI_PORT=5650 MAILDEV_UI_PORT=1550 ENV=test-model-retirement`: 31 passed in 127.47s; 20/20 long-fact answers per model, all continuation/schema checks pass. Ledger and raw files preserved externally; never reset or rerun this journal.
-  - [ ] Complete one supplementary paired history/document batch using unchanged production thresholds, three chunks plus merge per case (16 additional requests maximum). Preserve the original evidence, pin its exact hashes, and reserve only USD 15 minus the prior USD 0.619189 ledger; exclusive supplementary journal, no retries or budget reset.
+  - [x] Supplement at `4540e81b5`: unchanged production thresholds, three chunks plus merge, four valid cases / 16 requests / five tests passed in 51.01s. Verify initial hashes and subtract USD 0.619189 before admission; exclusive journal, no retries or budget reset.
   - [x] Supplement preflight: remaining-allowance regression failed before the runtime limit option; 13 offline tests now pass, including three real text chunks with facts in distinct chunks and merge. Unarmed supplementary suite skips all five tests with zero egress.
   - [x] Add a separate fixed supplementary journal, gated by exact SCOPE/private SHA pin; verify both original evidence SHA-256 hashes and subtract its settled ledger before constructing the shared A/B allowance (16 sends, no retry).
+  - [x] Combined sealed evidence: 17/17 cases per candidate, 54 requests, all 17 paired fixture hashes match; 30/30 long-fact answers each. A USD 0.303924350, B USD 0.608196500, total USD 0.912120850; conservative ledger USD 0.912415 / 15, no pending reservation. Both original journals remain immutable; do not rerun.
 - [ ] **Lot 4 — UAT and documentation consolidation**
   - [ ] Web: load saved nano choice, inspect replacement provider/model, generate/reload title, inspect in-memory compact summary and retained facts, tool/JSON result, history/document single/chunk/merge usage. Durable DB summary persistence is not asserted by this branch.
   - [ ] Chrome/VSCode: verify shared catalog selection and captured tool-continuation behavior; report any unavailable live surface explicitly.
-  - [ ] Write tables-first `.tmp/model-retirement/qualification-results.md` and French `.tmp/model-retirement/dossier-remplacement-nano.html` with exact matching title/H1, verbatim owner quote, measured evidence and one decision question.
+  - [x] Write external tables-first `qualification-results.md` and French `dossier-remplacement-nano.html` under `/home/antoinefa/src/sentropic/.tmp/model-retirement/`, with exact matching title/H1, verbatim owner quote, all 34 measured cases and one decision question; final gate status remains explicit.
   - [x] UI files: existing `ui/tests/stores/initiatives.test.ts`, `ui/tests/utils/user-ai-settings-events.test.ts`, `packages/chat-ui/tests/chat-loop-controller.spec.ts` plus version assertions; no new UI test scenario.
   - [x] E2E inventory: existing `e2e/tests/00-ai-generation.spec.ts`, `03-chat.spec.ts`, `03-chat-chrome-extension.spec.ts`, `05-executive-summary.spec.ts`, `06-settings.spec.ts`, `06-settings-codex-provider.spec.ts`, `09-chat-multitool-demo.spec.ts`, `09-chat-org-update-tool.spec.ts`, `vscode/01-vscode-chat-streaming.spec.ts`; no new E2E scenario.
 - [ ] **Lot 5 — Final validation and draft handoff**
