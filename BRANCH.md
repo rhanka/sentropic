@@ -174,7 +174,7 @@
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
     - [ ] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
     - [ ] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
-    - [ ] The legacy `staged-runtime.ts` factory is replaced by the coordinated factory. Its unreachable legacy implementation is being retired by cohesive method groups within the 150-line commit limit. Completed: remove duplicated legacy protocol types. Completed: remove legacy scope state access. Completed: retire legacy ordinary mutation wrappers. Completed: retire legacy split publication. Completed: retire legacy staged publication and terminal methods. Completed: retire legacy seal validation and seal loops. Completed: retire legacy staging intake. Completed: retire legacy lifecycle and blob methods. Completed: retire legacy journal and consumer methods.
+    - [x] The legacy `staged-runtime.ts` implementation is fully removed; the entry point only re-exports the coordinated factory and shared protocol types. Removal commits stayed under 150 lines.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
     - [ ] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
     - [ ] G5 and seal-step fixtures use canonical computed commitments. The large-step case explicitly requests eight items instead of relying on an undocumented internal constant; no timeout or budget inflation.
@@ -212,7 +212,7 @@
     - [ ] Snapshot paging uses order-statistic indexed lookup to visit only the requested canonical rows; RED ordinal-window probe forbids enumerating historical keys.
     - [ ] `root-snapshot.ts` pages five captured canonical indexes, owns returned rows, enforces contiguous consumption and current barriers, and never clears consumer poison or pause state.
   - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
-  - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with honest dispositions.
+  - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with actual dispositions.
     - [ ] `root-lifecycle.ts` prepares coverage, holds, shared references and disposal on the common root. Completion and notification membership publish together; retained memory payloads report `retained`, including captured older roots.
     - [ ] Lifecycle/atomic fixture authorizers now name the verified fixture principal; a new shared refusal proves that a forged authorizer publishes neither purge work nor its carrier.
     - [ ] Reference verifies the same authorizer binding. External-journal failure is checked at staged publication, including failures armed after sealing; the prepared seal remains retryable while the canonical root stays unchanged.
