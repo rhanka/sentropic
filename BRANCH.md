@@ -181,6 +181,7 @@
     - [ ] Trusted descriptor/query/limit registration is owned and frozen; ordinary request limits cannot exceed the configured coordinator ceiling. K4 SHA-256 staging is qualified for comments only; private-live staging fails explicitly pending its required keyed/disposable commitment policy. K3 remains generic.
     - [ ] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
     - [ ] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
+    - [ ] Literal profile acquisition now preserves its specific public port type, so hosts can call staged/outbox/boundary methods without unsafe casts.
     - [x] The legacy `staged-runtime.ts` implementation is fully removed; the entry point only re-exports the coordinated factory and shared protocol types. Removal commits stayed under 150 lines.
     - [x] Removed the obsolete syntax-only seal validator; bounded state-dependent preparation and its progress are exclusively handled by `staged-preparation.ts` / `staged-seal.ts`.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
