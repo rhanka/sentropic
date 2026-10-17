@@ -161,6 +161,8 @@
     - [x] Ordinary record preparation uses indexed forks when supplied, clones only touched history paths, and installs successor map pointers without replaying every scope entry; exact cursor sequence uses indexed lookup. Typecheck passes; K3 kernel suite stays 56/56.
   - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
     - [ ] `root-facade.ts` delegates ordinary/transaction operations to the coordinated K3 runtime and exposes staged, journal, snapshot and lifecycle methods through frozen handles with private slots. Factory replacement follows.
+    - [ ] `staged-factory.ts` composes the coordinated K3 kernel and separates trusted issuance/fence/failure controls from its binding-only adapter; all K3 options are forwarded.
+    - [x] Factory/facade helpers typecheck; indexed ordinal probes pass 4/4. Public replacement and shared corpora are still pending.
   - [ ] Internal root-aware mutation coordinator in K3 (captured read view, prepared overlay, conditional publication hook) used by both ordinary commits and K4; no fence passed to public `commitAtomic`.
     - [x] RED `tests/storage/mutation-coordinator.spec.ts`: ordinary mutations, stale-root CAS, preparation failure, authority revalidation, transaction coverage and unsupported-effect refusal; all 6 cases pass after wiring.
     - [x] Shared `prepareUnitsInScope` separates owned sequential preparation from publication, preserving the K3 guard/predicate/effect implementation for the root coordinator.

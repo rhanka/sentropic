@@ -1,6 +1,7 @@
 import type { ScopeGrant } from './authority.js';
 import { StorageCapacityExceededError, StorageDeniedError, StorageInvalidCommandError } from './errors.js';
-import type { ScopedRuntime } from './scope-runtime.js';
+import type { KernelTransaction, ScopedRuntime } from './scope-runtime.js';
+import type { CommitOptions } from './atomic.js';
 import { ownedCopy, type JournalFence, type StagedCore } from './staged-core.js';
 import { beginOperation, stageOperationFragment } from './staged-operations.js';
 import { abortOperation, commitSealedOperation, inspectOperation, sealOperationStep } from './staged-seal.js';
@@ -30,7 +31,7 @@ export class RootScopedRuntime {
   readPage(...args: Parameters<ScopedRuntime['readPage']>) { return this.#inner.readPage(...args); }
   disposeChain(...args: Parameters<ScopedRuntime['disposeChain']>) { return this.#inner.disposeChain(...args); }
   commitAtomic(...args: Parameters<ScopedRuntime['commitAtomic']>) { return this.#inner.commitAtomic(...args); }
-  transact<T>(...args: Parameters<ScopedRuntime['transact']>) { return this.#inner.transact(...args) as Promise<T>; }
+  transact<T>(options: CommitOptions, operation: (tx: KernelTransaction) => Promise<T>) { return this.#inner.transact(options, operation); }
   async beginStaged(input: Parameters<typeof beginOperation>[2]) { return beginOperation(this.#core, this.#inner, input); }
   async stageFragment(input: Parameters<typeof stageOperationFragment>[2]) { return stageOperationFragment(this.#core, this.#inner, input); }
   async sealStep(input: Parameters<typeof sealOperationStep>[2]) { return sealOperationStep(this.#core, this.#inner, input); }
