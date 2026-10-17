@@ -396,11 +396,15 @@ Configuration alone can never rename, remove or add tools, nor change parameters
 - Bounded 2020-12 parameters (`src/registry-parameters.ts`):
   `validateBoundedSchema` / `validateBoundedValue` enforce finite budgets and
   refuse unsupported keywords; runtime values map through this profile.
-- Remote-bound seam (`src/registry-remote-binding.ts`): `remote-bound`
-  definitions name tools served behind a versioned injected client port
-  (`RemoteClientPortV1`). Unknown tools, unselected providers and schema
-  mismatches are rejected before forwarding, with zero resource acquisition
-  on invalid candidates. Shared transport guards close in Lot 5.
+- R1 remote boundary (`src/registry-remote-binding.ts`, internal-only):
+  `register` accepts `LoadedDefinition | LazyDefinition` only. A `remote-bound`
+  definition kind — or an adapter record claiming that kind — is refused
+  synchronously with `unsupported_definition_kind` and zero state change,
+  including a lazy payload tunneling a remote adapter at compile. The
+  synthetic helper (`RemoteBoundDefinition` / `RemoteClientPortV1` /
+  `resolveRemoteCall`) is internal: absent from supported exports,
+  unreferenced by transports, and excluded from the build. Public
+  remote-bound routing belongs to post-merge R2, not this release.
 
 ## 9. Verifying your connector (mock harness)
 
