@@ -91,6 +91,11 @@ cluster-mesh-comments-oracle: cluster-mesh-comments-deps
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
 		node packages/cluster-mesh/tests/storage/package-comments-oracle.mjs
 
+.PHONY: cluster-mesh-comments-vectors
+cluster-mesh-comments-vectors: cluster-mesh-comments-deps
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node packages/cluster-mesh/tests/storage/generate-comments-vectors.mjs
+
 .PHONY: cluster-mesh-comments-lock-import
 cluster-mesh-comments-lock-import:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \

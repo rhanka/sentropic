@@ -1,9 +1,17 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, createAnnotationRevision } from '@sentropic/comments';
 import { createCommentsFragment, validateCommentsFragment, commentsUnitPayloadDigest } from '../src/comments/fragment-codec.js';
 import { conformanceCapacity, conformanceScope, conformanceTarget, conformanceResource, conformanceBody, conformanceProvenance } from '../assets/storage/comments/oracle/conformance.mjs';
 describe('comments transport-v1 fragment framing', () => {
+  it('matches the shipped literal multibyte/escaping and terminal vectors', () => {
+    const bytes = readFileSync(new URL('../assets/storage/comments/transport-v1.json', import.meta.url), 'utf8');
+    expect(bytes).toBe(readFileSync(new URL('../../../docs/comments-annotations/contract/transport-v1.json', import.meta.url), 'utf8'));
+    const vectors = JSON.parse(bytes);
+    for (const fragment of vectors.fragments) { validateCommentsFragment(fragment); expect(createCommentsFragment(fragment.manifest, fragment.payload)).toEqual(fragment); }
+    expect(commentsUnitPayloadDigest(vectors.unitRoot.unitId, vectors.fragments[0].payload)).toBe(vectors.unitRoot.payloadDigest);
+  });
   it('matches an independent framed UTF-8 vector and owns nested payloads', () => {
     const scope = conformanceScope();
     const record = createAnnotationRevision(null, { scope, annotationId: 'a', primary: conformanceTarget(conformanceResource(scope)), secondary: [], visualAnchors: [], body: conformanceBody('quote " slash \\ emoji 🦊'), provenance: conformanceProvenance() }, conformanceCapacity());
