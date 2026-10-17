@@ -1,4 +1,5 @@
 import { executeWithToolsStream } from './tools';
+import { getDefaultOpenAIModel } from '../config/models';
 import { ORGANIZATION_PROMPTS } from '../config/default-chat-system';
 
 const STRUCTURED_JSON_REPAIR_PROMPT = `You are a strict JSON repair engine.
@@ -284,7 +285,7 @@ export const enrichOrganization = async (
 
   const finalStreamId = streamId || `organization_enrich_${Date.now()}`;
   const { content } = await executeWithToolsStream(prompt, {
-    model: model || 'gpt-4.1-nano',
+    model: model || getDefaultOpenAIModel(),
     useWebSearch: true,
     useDocuments: !!opts?.useDocuments,
     documentsContext:
