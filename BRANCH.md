@@ -296,6 +296,7 @@
     - [ ] Added root-atomic lifecycle policy/coverage/holds and bounded durable purge traversal. Payload and staged-item bytes are nulled before a single canonical erased outcome/notification is recorded; terminal retries return the retained result.
     - [ ] Added durable package-journal delivery, bounded diagnostics/actions, contiguous scan tracking, fenced monotonic checkpoint CAS and poison-preserving pause/retry. Tail reads cannot acknowledge an unread prefix.
     - [ ] RED `postgres-queries.spec.ts` requires captured named-query continuations, owner binding, registered-query resync and preserved poison; the next immutable asset supplies lexical seeks and durable operator-action rows.
+    - [ ] Added opaque durable owner/scope/incarnation/query/input/root-bound continuations and trusted registered query contexts with current coverage root, issued grant, validated layout and bounded envelopes. No request-supplied SQL is accepted.
     - [x] Current Postgres gate: typecheck/lint pass; 8 files / 19 tests pass, including reopening between all seal steps and one bounded metadata publication (`16e25021b` code head).
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
     - [ ] Added an isolated test-only pinned Postgres service/network and a neutral one-client bridge; real tests require backend PID continuity, rollback and finite SQL cancellation. No host port or production driver dependency is introduced.
