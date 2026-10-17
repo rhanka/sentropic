@@ -92,6 +92,26 @@
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js"
     },
+    "./content/grants": {
+      "types": "./dist/content/grants.d.ts",
+      "import": "./dist/content/grants.js"
+    },
+    "./content/handler": {
+      "types": "./dist/content/handler.d.ts",
+      "import": "./dist/content/handler.js"
+    },
+    "./content/routing": {
+      "types": "./dist/content/routing.d.ts",
+      "import": "./dist/content/routing.js"
+    },
+    "./content/headers": {
+      "types": "./dist/content/headers.d.ts",
+      "import": "./dist/content/headers.js"
+    },
+    "./content/api-profile": {
+      "types": "./dist/content/api-profile.d.ts",
+      "import": "./dist/content/api-profile.js"
+    },
     "./http": {
       "types": "./dist/http.d.ts",
       "import": "./dist/http.js"
