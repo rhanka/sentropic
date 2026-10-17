@@ -19,6 +19,9 @@ export interface BackendChainRecord {
 export interface BackendChainState {
   allocation: string;
   head: string | null;
+  /** Memory representation only: dense append order, records.at(i).seq === i.
+   * Restoring adapters must preserve positions, including retained disposed bytes.
+   * This is unrelated to DAG topological order or another backend's layout. */
   records: BackendChainRecord[] | IndexedHistory<BackendChainRecord>;
   disposed: boolean;
 }
@@ -92,6 +95,16 @@ export const lockBackendScope = (state: BackendScopeState): BackendScopeState =>
   return Object.freeze(state);
 };
 
+const validateBackendSequences = (state: BackendScopeState): void => {
+  for (const chain of state.chains.values()) {
+    for (let index = 0; index < chain.records.length; index++) {
+      if (chain.records.at(index)?.seq !== index) {
+        throw new StorageInvalidCommandError('memory records require a dense zero-based sequence');
+      }
+    }
+  }
+};
+
 /** Neutral per-kernel store: one map of scopes, no durability claim. */
 export class MemoryBackend {
   readonly scopes = new Map<string, BackendScopeState>();
@@ -101,6 +114,8 @@ export class MemoryBackend {
   constructor(private readonly createScope: () => BackendScopeState = createBackendScopeState) {}
 
   bindIdentity(moduleId: string, incarnation: string | undefined, create: () => string): string {
+    // Validate restored state at composition, never during bounded publication.
+    for (const state of this.scopes.values()) validateBackendSequences(state);
     if (this.identity && (this.identity.moduleId !== moduleId || (incarnation !== undefined && incarnation !== this.identity.incarnation))) {
       throw new StorageInvalidCommandError('backend already belongs to another module or incarnation');
     }
@@ -120,6 +135,7 @@ export class MemoryBackend {
     const existing = this.scopes.get(key);
     if (existing) return existing;
     const created = this.createScope();
+    validateBackendSequences(created);
     this.scopes.set(key, created);
     return created;
   }
