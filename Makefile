@@ -998,7 +998,7 @@ verify-llm-mesh-cloud-code-oauth: build-llm-mesh ## Verify source and dist again
 		$(LLM_MESH_NODE_IMAGE) node scripts/cloud-code-oauth-credential.mjs \
 			--credential-file /run/cloud-code-oauth-client-secret --dist-dir dist
 
-# BRMFA-EX1 (feat/idp-client-mfa-policy D1): governed one-off OAuth client
+# BR45-EX1 (feat/idp-client-mfa-policy D1): governed one-off OAuth client
 # registration Job. Reason: client registration needs a reproducible,
 # secret-safe path (envFrom temp Secret, never CLI literals). Impact: one
 # additive target; no existing target touched. Rollback: delete this target;
