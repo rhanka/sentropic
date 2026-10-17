@@ -41,7 +41,8 @@ export const preparePgStep = async (
       }
       if (p.section === 2 && work.appends >= limits.maxAppends) break;
       const result = await session.execute({
-        text: `SELECT cost, CASE WHEN cost<=$5 THEN bytes ELSE NULL END AS bytes FROM ${core.roots.schema}.staged_items WHERE unit_id=$1 AND ordinal=$2::bigint AND
+        text: `SELECT cost, CASE WHEN cost<=$5 THEN bytes ELSE NULL END AS bytes
+        FROM ${core.roots.schema}.staged_items WHERE unit_id=$1 AND ordinal=$2::bigint AND
         section=$3 AND item=$4`,
         values: [unit.id, String(p.fragment), p.section, p.item, limits.maxEncodedBytes],
       });

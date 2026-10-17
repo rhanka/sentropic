@@ -186,7 +186,8 @@ export const stagePgFragment = async (
           const target =
             typeof fields.chainId === 'string' ? fields.chainId : typeof fields.key === 'string' ? fields.key : null;
           await session.execute({
-            text: `INSERT INTO ${core.roots.schema}.staged_items(scope_key, target, unit_id, ordinal, section, item, bytes, cost) VALUES($1, $2, $3, $4::bigint, $5, $6,
+            text: `INSERT INTO ${core.roots.schema}.staged_items(scope_key, target, unit_id, ordinal, section, item, bytes, cost)
+        VALUES($1, $2, $3, $4::bigint, $5, $6,
         $7, $8)`,
             values: [core.roots.key(grant.scope), target, unit.id, input.ordinal, section, item, bytes, bytes.length],
           });

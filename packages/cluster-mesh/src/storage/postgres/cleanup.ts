@@ -37,7 +37,10 @@ export const cleanupPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, 
         const owner = items || coverage ? 'unit_id' : 'prepared_unit';
         const identity = coverage ? 'child' : 'id';
         const result = await session.execute({
-          text: `SELECT candidate.${identity}::text AS id, ${coverage ? '0' : 'coalesce(octet_length(candidate.bytes),0)'} AS cost FROM ${core.roots.schema}.${table} AS candidate WHERE candidate.${owner}=$1 AND candidate.scope_key=$2 ORDER BY
+          text: `SELECT candidate.${identity}::text AS id,
+        ${coverage ? '0' : 'coalesce(octet_length(candidate.bytes),0)'} AS cost
+        FROM ${core.roots.schema}.${table} AS candidate
+        WHERE candidate.${owner}=$1 AND candidate.scope_key=$2 ORDER BY
         candidate.${identity} LIMIT 1`,
           values: [unit.id, core.roots.key(grant.scope)],
         });
