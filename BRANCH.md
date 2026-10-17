@@ -228,6 +228,7 @@
   - [ ] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
     - [ ] `src/storage/staged-effects.ts` prepares module effects, verified purge authorizers, projections, audit and one scoped journal event on the owned root before publication; shared purge fixtures will be aligned with verified principals.
   - [ ] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
+    - [ ] RED §5.4 immutable-insert probe distinguishes an identical canonical no-op from changed bytes under the same declared hash and verifies the original representation survives refusal.
     - [x] Removed the old counter-only `visibility-root.ts`; the initial-version test now captures the actual indexed backend root used by ordinary and staged publication.
   - [ ] G5: imported content and its covering barrier publish in one unit (reference aligned).
     - [ ] Visibility conflict/success fixtures now derive canonical fragment and root commitments; captured-base CAS remains exercised after an actual rival publication.
