@@ -146,7 +146,7 @@ cluster-mesh-pg-major-upgrade: cluster-mesh-pg-up
 		docker run -d --name "$$next" --network "$(CM_PG_NAME)" --label sentropic.storage-test="$(ENV)" \
 		  -e POSTGRES_PASSWORD=qualification-only -e POSTGRES_DB=storage_test "$(CM_PG_NEXT_IMAGE)" >/dev/null; \
 		trap 'docker rm -fv "'"$$next"'" >/dev/null' EXIT; \
-		attempt=0; until docker exec "$$next" pg_isready -U postgres -d storage_test >/dev/null; do \
+		attempt=0; until docker exec "$$next" pg_isready -h 127.0.0.1 -U postgres -d storage_test >/dev/null; do \
 		  attempt=$$((attempt+1)); [ "$$attempt" -lt 30 ] || exit 1; sleep 1; done; \
 		docker exec "$$next" createdb -U postgres reference_test; \
 		$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-major-phase CM_MAJOR_PHASE=seed ENV=$(ENV); \
