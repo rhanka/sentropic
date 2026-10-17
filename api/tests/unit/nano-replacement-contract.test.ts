@@ -15,6 +15,7 @@ import { callLLM, callLLMStream, resolveRuntimeSelection } from '../../src/servi
 import { providerRegistry } from '../../src/services/provider-registry';
 import { getDefaultOpenAIModel } from '../../src/config/models';
 import { normalizeLegacyModelSelection } from '../../src/services/model-selection-legacy';
+import { validateOpenAIRequestBudget } from '../../src/services/llm-runtime/openai-budget';
 
 const candidates = ['gpt-6-luna', 'gpt-5.6-luna'];
 const messages = [{ role: 'user' as const, content: 'Return a short title.' }];
@@ -74,6 +75,11 @@ describe('nano replacement through the product mesh boundary', () => {
     expect(stream.mock.calls[0]?.[0]).toMatchObject({
       mode: 'responses', requestOptions: { model, reasoning: { effort: 'none' }, max_output_tokens: 64 },
     });
+  });
+
+  it('should keep the Luna output ceiling scoped to Luna candidates', () => {
+    expect(() => validateOpenAIRequestBudget('gpt-5.6', {}, 128_001)).not.toThrow();
+    expect(() => validateOpenAIRequestBudget('gpt-5.6-luna', {}, 128_001)).toThrow(/output.*budget/i);
   });
 
   it.each([0, -1, NaN, Infinity, 128_001])('should refuse an invalid output ceiling %s before dispatch', async (maxOutputTokens) => {
