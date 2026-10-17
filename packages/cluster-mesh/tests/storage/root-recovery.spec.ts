@@ -9,6 +9,46 @@ import { stagedDigestOf } from './staged-corpus.js';
 const effects = { ...emptyEffects(), records: [{ key: 'payload', contentHash: 'hash', bytes: { format: 'utf8' as const, data: 'value' } }] };
 const grant = () => grantFor({ operations: ['read', 'write', 'maintain'] });
 describe('backend-held staged recovery', () => {
+  it('should resume a partially prepared seal after recreating the facade', async () => {
+    const backend = new MemoryBackend(createIndexedBackendScopeState);
+    const root = createStagedKernel({ moduleId: 'comments', backend });
+    const bound = root.bindNew(grant());
+    const input = await stagePublic(root, bound, 'resume-seal', { ...emptyEffects(), records: Array.from({ length: 4 }, (_, n) => ({ ...effects.records[0], key: `record-${n}` })) });
+    const limits = { maxRecords: 1, maxAppends: 1, maxEncodedBytes: 512 };
+    const first = await bound.sealStep({ ...input, limits });
+    expect(first).toMatchObject({ state: 'validating', progress: { checked: '1' } });
+    const resumed = createStagedKernel({ moduleId: 'comments', backend }).bindNew(grant());
+    expect(await resumed.inspectStaged('resume-seal')).toEqual({ state: 'sealing', acceptedFragments: '1' });
+    let result = first;
+    while (result.state === 'validating') result = await resumed.sealStep({ ...input, limits });
+    const receipt = await resumed.commitStaged({ seal: result.seal, fence: FENCE });
+    expect(receipt.effectiveRecords).toBe(4);
+    expect((await resumed.journalRead('resume', 0, 100)).events).toHaveLength(1);
+  });
+  it('should deny another principal in the same scope at every staged mutation', async () => {
+    const root = createStagedKernel({ moduleId: 'comments' });
+    const bound = root.bindNew(grant());
+    const other = root.bindNew(grantFor({ token: 'other-principal', principalId: 'user-2', operations: ['read', 'write', 'maintain'] }));
+    const input = await stagePublic(root, bound, 'principal-bound', effects);
+    const seal = await sealPublic(bound, input);
+    await expect(other.stageFragment({ unit: input.unit, ordinal: '0', predecessorHash: null, fragmentDigest: stagedDigestOf(input.unit, '0', null, effects), effects, fence: FENCE })).rejects.toMatchObject({ code: 'denied' });
+    await expect(other.sealStep(input)).rejects.toMatchObject({ code: 'denied' });
+    await expect(other.commitStaged({ seal, fence: FENCE })).rejects.toMatchObject({ code: 'denied' });
+    await expect(other.abortStaged({ unit: input.unit, fence: FENCE, reason: 'foreign owner' })).rejects.toMatchObject({ code: 'denied' });
+    expect((await bound.commitStaged({ seal, fence: FENCE })).effectiveRecords).toBe(1);
+  });
+  it('should reject an expired fence lease independently of the grant lifetime', async () => {
+    let now = '2026-01-01T00:00:00.000Z';
+    const root = createStagedKernel({ moduleId: 'comments', now: () => now });
+    const bound = root.bindNew(grant());
+    root.provisionFence(bound.scope, bound.grant.principalId, FENCE, '2026-01-01T00:00:01.000Z');
+    const input = await stagePublic(root, bound, 'lease-bound', effects);
+    const seal = await sealPublic(bound, input);
+    now = '2026-01-01T00:00:02.000Z';
+    await expect(bound.commitStaged({ seal, fence: FENCE })).rejects.toMatchObject({ code: 'invalid-command' });
+    await expect(bound.abortStaged({ unit: input.unit, fence: FENCE, reason: 'expired lease' })).rejects.toMatchObject({ code: 'invalid-command' });
+    expect(await bound.readRecord('payload')).toBeNull();
+  });
   it('should recover fragment and commit receipts after response loss and runtime recreation', async () => {
     const backend = new MemoryBackend(createIndexedBackendScopeState);
     const root = createStagedKernel({ moduleId: 'comments', backend });
