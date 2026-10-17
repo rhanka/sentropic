@@ -1,5 +1,5 @@
-import { canonicalJson, createAnnotationRevision, createThreadStructureRevision, createCommentRevision, createPreparedSubmissionManifest, resourceKey } from '@sentropic/comments';
-import type { CanonicalChainRecord, CanonicalReadSelection, CapacityDescriptor, AnnotationRevisionRecord, CommentRevisionRecord, ThreadStructureRevisionRecord } from '@sentropic/comments';
+import { canonicalJson, createAnnotationRevision, createThreadStructureRevision, createCommentRevision, createPreparedSubmissionManifest, createOperationAuditEvent, resourceKey } from '@sentropic/comments';
+import type { CanonicalChainRecord, CanonicalReadSelection, CapacityDescriptor, AnnotationRevisionRecord, CommentRevisionRecord, ThreadStructureRevisionRecord, OperationAuditEventRecord } from '@sentropic/comments';
 import { invalid, validateRecordHash } from './storage-schema.js';
 export type LookupCommentsRecord = (selection: CanonicalReadSelection, hash?: string) => Promise<CanonicalChainRecord | null>;
 export const validateCommentsRecord = async (record: CanonicalChainRecord, previous: CanonicalChainRecord | null, capacity: CapacityDescriptor, lookup: LookupCommentsRecord): Promise<void> => {
@@ -30,6 +30,9 @@ export const validateCommentsRecord = async (record: CanonicalChainRecord, previ
   } else if (record.kind === 'review-event') {
     if (!await lookup({ kind: 'annotation-revisions', annotationId: record.annotationId }, record.revisionHash)) invalid('reviewed annotation revision is missing');
     if (record.referencesEventHash !== null && !await lookup({ kind: 'review-events', annotationId: record.annotationId }, record.referencesEventHash)) invalid('referenced review event is missing');
+  } else if (record.kind === 'operation-audit-event') {
+    const { kind: _kind, hash: _hash, link: _link, ...input } = record;
+    if (createOperationAuditEvent(previous ? [previous as OperationAuditEventRecord] : [], input, capacity).hash !== record.hash) invalid('audit envelope mismatch');
   } else if (record.kind === 'prepared-submission-manifest') {
     const { kind: _kind, hash: _hash, ...input } = record;
     if (createPreparedSubmissionManifest(input, capacity).hash !== record.hash) invalid('submission envelope mismatch');
