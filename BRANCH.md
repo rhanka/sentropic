@@ -409,6 +409,8 @@
   - [ ] Added same-session fragment preparation with durable byte-identical acknowledgement, frozen binding/frontier and terminal root; installed staged policy permits only module-prepared fragment commitments and rechecks current domain authority.
   - [ ] Added bounded commit-step services and complete original receipt recovery from actual committed kernel metadata; receipt recovery rechecks current all-target read authority and preserves the original issue instant/result.
   - [ ] Selected registration now connects import prepare/inspect/recovery and its staged contract; the public selected comments leaf exports separately versioned transport types and codecs.
+  - [x] The initial three real-PG import tests pass: identical-fragment retry, invisible bounded preparation, coherent tombstone publication, complete original receipts after reopening, one journal publication and truncated-terminal refusal.
+  - [ ] Added discriminating import probes for a self-consistent false M1 link sequence, an authorized resource inventory unrelated to the actual payload and revoked authority between terminal intake and preparation.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
