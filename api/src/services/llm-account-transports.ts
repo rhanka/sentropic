@@ -236,11 +236,14 @@ export const readSeatExternalPolicy = (metadata: unknown): SeatExternalPolicy | 
   if (!isPolicyRecord(marker)) {
     return { seatRef: 'unknown', ownerScope: 'unknown', epoch: 0, generation: 0, operationId: 'unknown' };
   }
-  const text = (key: string): string => (typeof marker[key] === 'string' && marker[key].length > 0
-    ? (marker[key] as string)
-    : 'unknown');
-  const integer = (key: string): number =>
-    typeof marker[key] === 'number' && Number.isInteger(marker[key]) ? (marker[key] as number) : 0;
+  const text = (key: string): string => {
+    const raw: unknown = marker[key];
+    return typeof raw === 'string' && raw.length > 0 ? raw : 'unknown';
+  };
+  const integer = (key: string): number => {
+    const raw: unknown = marker[key];
+    return typeof raw === 'number' && Number.isInteger(raw) ? raw : 0;
+  };
   return {
     seatRef: text('seatRef'),
     ownerScope: text('ownerScope'),
@@ -1556,6 +1559,44 @@ export const importSeatProjection = async (input: {
   });
 };
 
+/** Read the newest delivered tuple for a seat, or null when none exists. */
+export const readSeatDeliveryTuple = async (
+  seatRef: string,
+): Promise<(SeatExternalPolicy & { status: string }) | null> => {
+  const rows = (await db.all(sql`
+    SELECT metadata, status FROM llm_provider_accounts
+    WHERE metadata->>'seatExternalPolicy' IS NOT NULL
+      AND metadata->'seatExternalPolicy'->>'seatRef' = ${seatRef}
+    ORDER BY updated_at DESC LIMIT 1
+  `)) as { metadata: unknown; status: string }[];
+  const row = rows[0];
+  if (!row) return null;
+  const policy = readSeatExternalPolicy(row.metadata);
+  if (!policy || policy.seatRef !== seatRef) return null;
+  return { ...policy, status: row.status };
+};
+
+/** Close admission for a seat around maintenance; failed delivery stays closed. */
+export const drainSeatDelivery = async (seatRef: string): Promise<void> => {
+  await db.run(sql`
+    UPDATE llm_provider_accounts SET status = 'disabled', updated_at = ${new Date()}
+    WHERE metadata->'seatExternalPolicy'->>'seatRef' = ${seatRef} AND status = 'active'
+  `);
+};
+
+/** Reopen admission after verified delivery; refused without a tuple. */
+export const reopenSeatDelivery = async (
+  seatRef: string,
+): Promise<(SeatExternalPolicy & { status: string }) | null> => {
+  const tuple = await readSeatDeliveryTuple(seatRef);
+  if (!tuple) return null;
+  await db.run(sql`
+    UPDATE llm_provider_accounts SET status = 'active', updated_at = ${new Date()}
+    WHERE metadata->'seatExternalPolicy'->>'seatRef' = ${seatRef} AND status = 'disabled'
+  `);
+  return readSeatDeliveryTuple(seatRef);
+};
+
 export const storeCloudCodeAccountTransport = async (input: {
   ownerUserId: string;
   accountLabel?: string | null;
@@ -1973,10 +2014,12 @@ const refreshClaudeCodeTokenIfNeeded = async (input: {
   const existing = claudeCodeRefreshes.get(input.accountId);
   if (existing) return existing;
 
+  // Proven non-null above; captured for the async closure below.
+  const refreshToken: string = input.token.refreshToken;
   const refreshPromise = (async () => {
     try {
       const refreshed = await refreshClaudeCodeAccessToken({
-        refreshToken: input.token.refreshToken,
+        refreshToken,
         clientId: input.token.clientId ?? undefined,
       });
       const next = buildClaudeCodeTokenPayload({
