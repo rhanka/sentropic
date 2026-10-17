@@ -17,6 +17,7 @@ import { MemoryBackend } from './backend.js';
 import { ScopedRuntime, type ScopedRuntimeDeps } from './scope-runtime.js';
 import { HmacExactHeadBoundaryProvider, createOpaqueIssuer, type ChainBoundaryProvider } from './tokens.js';
 import type { PredicateEvaluator } from './record-runtime.js';
+import type { RootMutationCoordinator } from './mutation-coordinator.js';
 
 export interface ScopeAuthorityPort {
   attest(grant: ScopeGrant<unknown>): void;
@@ -41,6 +42,9 @@ export const createStaticAuthorityPort = (expectations: {
 });
 
 export interface KernelOptions {
+  /** Trusted composition only: supply a shared root-aware backend/coordinator. */
+  readonly backend?: MemoryBackend;
+  readonly coordinator?: RootMutationCoordinator;
   /** Owning module id (for example 'comments'). */
   readonly moduleId: string;
   /** Stable store incarnation bound into every cursor. Defaults to a random
@@ -83,7 +87,7 @@ export const createKernel = (options: KernelOptions): KernelRoot => {
   // its cursors as an unknown boundary (§8.2), never resume silently under a
   // recycled incarnation (m2).
   const incarnation = options.incarnation ?? `store-${randomBytes(8).toString('hex')}`;
-  const backend = new MemoryBackend();
+  const backend = options.backend ?? new MemoryBackend();
   // Unique owning-kernel identity (Sol-2): two kernels never share a
   // transaction overlay even with equal module and scope.
   const kernelId = `kernel-${randomBytes(8).toString('hex')}`;
@@ -92,7 +96,7 @@ export const createKernel = (options: KernelOptions): KernelRoot => {
   const revoked = new Set<string>();
   const issued = new Map<string, string>();
   const nextCommitId = createOpaqueIssuer('commit');
-  const deps: ScopedRuntimeDeps = { moduleId, kernelId, backend, provider, incarnation, clock, revoked, issued, nextCommitId, authority, predicates: options.predicates };
+  const deps: ScopedRuntimeDeps = { moduleId, kernelId, backend, provider, incarnation, clock, revoked, issued, nextCommitId, authority, predicates: options.predicates, coordinator: options.coordinator };
 
   const admit = (grant: ScopeGrant<unknown>): void => {
     const validity = validateScopeGrant(grant, { nowIso: clock() });
