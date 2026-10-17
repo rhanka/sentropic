@@ -325,7 +325,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
    */
   private visibleCandidates(candidates: RankedRouteCandidate[],
     inQuote: (candidate: RankedRouteCandidate) => boolean,
-    policy: { readonly maxAttempts: number }): RankedRouteCandidate[] {
+    policy: { readonly maxAttempts: number; readonly rotateEquivalentAccounts: boolean }): RankedRouteCandidate[] {
     const quoted = this.keepQuoted(candidates, inQuote);
     const visible = quoted.filter((candidate) => !this.health.isSuppressed(candidate));
     if (visible.length > 0) return (policy.rotateEquivalentAccounts

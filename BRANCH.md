@@ -105,6 +105,7 @@
 - `L2-exact-default` (2026-10-17): aliases, quote and planning now default exact, including provider identity. Cross-model tables require explicit selection; frozen mapping/account/rotation constraints override host policy and conflicting overrides refuse. Scoped exact-routing tests 2/2; broad regression adaptation remains pending.
 - `L1-node-lifecycle` (2026-10-17): host HTTP bridge tracks active requests for drain; authenticated acquisition has a readiness gate. TypeScript stream/header adaptation preserves the repository's TypeScript 5.4 baseline. Shared-host scenarios pass 3/3.
 - `L1-packed-staging` (2026-10-17): exact gateway/mesh archive validation and packed-test staging are implemented; missing artifacts, foreign scopes and zero-test discovery refuse. Pure tooling tests 35/35; actual clean-container packed execution is pending.
+- `L2-static-contract` (2026-10-17): pack build exposed the candidate-visibility helper's former max-attempt-only type; its signature now includes the enforced rotation policy. No runtime rule or timeout weakened.
 
 ## AI Flaky tests
 - Acceptance rule:
