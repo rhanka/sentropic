@@ -15,6 +15,7 @@
   let revision = 0;
   let previousScope = '';
   let abort = new AbortController();
+  const gapReasons = new Set(['excluded', 'not-collected', 'evicted', 'expired', 'partition', 'source-restarted', 'purged', 'incomplete-chunk']);
   $: access = viewAccess(row, scope);
   $: fingerprint = JSON.stringify([scope, row.bindingId, row.projectRevision, row.grantProjectRevision,
     row.status, row.excluded, row.revoked, row.membershipActive, row.purgeStatus]);
@@ -55,7 +56,7 @@
     <p>{$_(`sessionContent.${copy.channel === 'terminal.cache' ? 'cache' : 'mirror'}`)} · {copy.expiresAt === null ? $_('sessionContent.none') : `${$_('sessionContent.deadline')}: ${new Date(copy.expiresAt).toLocaleString()}`}</p>
   {/each}
   {#each [...(output?.gaps ?? row.gaps ?? [])].sort((a, b) => a.from - b.from) as gap}
-    <p class="rounded border border-yellow-200 bg-yellow-50 p-2 text-yellow-800">{$_('sessionContent.gap')}: {gap.from}–{gap.to} · {gap.reason}</p>
+    <p class="rounded border border-yellow-200 bg-yellow-50 p-2 text-yellow-800">{$_('sessionContent.gap')}: {gap.from}–{gap.to} · {$_(`sessionContent.gapReasons.${gapReasons.has(gap.reason) ? gap.reason : 'unknown'}`)}</p>
   {/each}
   {#if output}<pre class="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-100 p-3 text-sm text-slate-900">{output.frames.map((frame) => frame.text).join('')}</pre>{/if}
   {#if failed}<p role="alert" class="text-red-600">{$_('sessionContent.requestFailed')}</p>{/if}
