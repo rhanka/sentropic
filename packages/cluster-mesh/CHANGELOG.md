@@ -24,6 +24,10 @@
   and `./loaders/mcp` (`createMcpNamespaceModule`, `loadMcpPlatform*` loaders)
   against the optional `@sentropic/mcp-platform >=0.3.0 <0.4.0` peer (plus
   `@modelcontextprotocol/sdk ^1.31.0` for stdio).
+- Add `./mcp/web-pages` (`createWebPagesBuiltin`) for the `sentropic.web-pages`
+  provider and `loadWebPagesMcp` through `./loaders/mcp`. The selected leaf needs
+  the optional `@sentropic/artifacts >=0.1.0 <0.2.0` peer and the MCP platform
+  peer above; importing the root does not load artifacts.
 
 ## 0.16.0
 
