@@ -18,13 +18,27 @@ const ENTRY: SeatDeliveryRegistryEntry = {
 const buildApp = () => {
   const app = new Hono();
   app.use('/*', requireSeatDeliveryAuth);
-  app.post('/probe', (c) => c.json({ ok: true, seatRef: c.get('seatRef') }));
-  app.get('/probe', (c) => c.json({ ok: true, seatRef: c.get('seatRef') }));
+  app.post('/probe', (c) =>
+    c.json({
+      ok: true,
+      seatRef: c.get('seatRef'),
+      seat: c.get('seat'),
+      trust: c.get('deliveryTrust'),
+    }),
+  );
+  app.get('/probe', (c) =>
+    c.json({
+      ok: true,
+      seatRef: c.get('seatRef'),
+      seat: c.get('seat'),
+      trust: c.get('deliveryTrust'),
+    }),
+  );
   return app;
 };
 
-const registryEnv = () => {
-  process.env['SEAT_DELIVERY_TRUSTED_HOP'] = '1';
+const registryOnlyEnv = () => {
+  delete process.env['SEAT_DELIVERY_TRUSTED_HOP'];
   process.env['SEAT_DELIVERY_SEATS_JSON'] = JSON.stringify({ 'seat-synth-01': ENTRY });
 };
 
@@ -42,18 +56,30 @@ describe('llm seat delivery auth', () => {
     expect(verifySeatDeliveryBearer('delivery-token-seat-01', '')).toBe(false);
   });
 
-  it('refuses direct access without the trusted hop', async () => {
-    process.env['SEAT_DELIVERY_TRUSTED_HOP'] = '0';
-    const response = await buildApp().request('/probe', {
+  it('decides trust per request and never reads the process environment', async () => {
+    delete process.env['SEAT_DELIVERY_TRUSTED_HOP'];
+    process.env['SEAT_DELIVERY_SEATS_JSON'] = JSON.stringify({ 'seat-synth-01': ENTRY });
+    const admitted = await buildApp().request('/probe', {
       method: 'POST',
       headers: { authorization: `Bearer ${ENTRY.token}`, 'content-type': 'application/json' },
       body: JSON.stringify({ seatRef: 'seat-synth-01' }),
     });
-    expect(response.status).toBe(503);
+    expect(admitted.status).toBe(200);
+    expect(await admitted.json()).toMatchObject({
+      ok: true,
+      seatRef: 'seat-synth-01',
+      trust: { seatRef: 'seat-synth-01' },
+    });
+
+    process.env['SEAT_DELIVERY_TRUSTED_HOP'] = '0';
+    const stillAdmitted = await buildApp().request('/probe?seatRef=seat-synth-01', {
+      headers: { authorization: `Bearer ${ENTRY.token}` },
+    });
+    expect(stillAdmitted.status).toBe(200);
   });
 
-  it('refuses forged bearer tokens on the trusted hop', async () => {
-    registryEnv();
+  it('refuses a forged per-seat credential', async () => {
+    registryOnlyEnv();
     const response = await buildApp().request('/probe', {
       method: 'POST',
       headers: { authorization: 'Bearer forged-token', 'content-type': 'application/json' },
@@ -63,7 +89,7 @@ describe('llm seat delivery auth', () => {
   });
 
   it('refuses seats outside the server-side registry', async () => {
-    registryEnv();
+    registryOnlyEnv();
     const response = await buildApp().request('/probe', {
       method: 'POST',
       headers: { authorization: `Bearer ${ENTRY.token}`, 'content-type': 'application/json' },
@@ -73,7 +99,7 @@ describe('llm seat delivery auth', () => {
   });
 
   it('ignores forged caller-supplied identity headers', async () => {
-    registryEnv();
+    registryOnlyEnv();
     const response = await buildApp().request('/probe?seatRef=seat-synth-01', {
       headers: {
         authorization: `Bearer ${ENTRY.token}`,
@@ -83,11 +109,15 @@ describe('llm seat delivery auth', () => {
       },
     });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ ok: true, seatRef: 'seat-synth-01' });
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      seatRef: 'seat-synth-01',
+      seat: { ownerUserId: 'user-seat-01', ownerScope: 'owner-seat-01' },
+    });
   });
 
-  it('admits a registered seat on the trusted hop', async () => {
-    registryEnv();
+  it('admits a registered seat with a valid per-seat credential', async () => {
+    registryOnlyEnv();
     const response = await buildApp().request('/probe?seatRef=seat-synth-01', {
       headers: { authorization: `Bearer ${ENTRY.token}` },
     });
