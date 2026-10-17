@@ -44,20 +44,21 @@ export interface ControlContext {
 }
 export type KeyboardOutcome = { status: 'submitted' | 'refused' | 'outcome_unknown' };
 interface KeyboardPorts {
-  prepareLease: (context: ControlContext) => Promise<PreparedProof>;
-  acquire: (proof: PreparedProof, assertion: unknown) => Promise<{ controllerEpoch: number; expiresAt: number }>;
+  prepareLease: (context: ControlContext, idempotencyKey: string) => Promise<PreparedProof>;
+  acquire: (proof: PreparedProof, confirmation: ConfirmationProof, idempotencyKey: string) => Promise<{ controllerEpoch: number; expiresAt: number }>;
   prepare: (input: { context: ControlContext; idempotencyKey: string; bytesBase64: string; byteLength: number }) => Promise<PreparedProof>;
   prove: (proof: PreparedProof, signal: AbortSignal) => Promise<ConfirmationProof>;
-  submit: (input: { idempotencyKey: string; bytesBase64: string; proof: PreparedProof; assertion: unknown }, signal: AbortSignal) => Promise<KeyboardOutcome>;
+  submit: (input: { idempotencyKey: string; bytesBase64: string; proof: PreparedProof; confirmation: ConfirmationProof }, signal: AbortSignal) => Promise<KeyboardOutcome>;
   query: (key: string) => Promise<KeyboardOutcome>;
   newKey: () => string;
 }
-type PreparedAction = { proof: PreparedProof; key: string; bytesBase64: string; fingerprint: string };
+type PreparedAction = { kind: 'acquire' | 'input'; proof: PreparedProof; confirmation: ConfirmationProof;
+  key: string; bytesBase64: string; fingerprint: string };
 
-/** One explicit preparation and browser gesture per action. There is no dispatch retry path. */
+/** Each preparation requires a fresh IdP return, then a separate explicit submission. */
 export class KeyboardFlow {
   text = ''; newline = false; lastKey = ''; previousUnknown = false;
-  status: 'idle' | 'prepared' | KeyboardOutcome['status'] = 'idle';
+  status: 'idle' | 'step_up_required' | 'confirmation_returned' | 'authentication_required' | 'confirmation_refused' | 'source_unavailable' | KeyboardOutcome['status'] = 'idle';
   prepared: PreparedAction | null = null;
   lease: { controllerEpoch: number; expiresAt: number } | null = null;
   private revision = 0;
@@ -66,13 +67,21 @@ export class KeyboardFlow {
   private abort = new AbortController();
   constructor(public context: ControlContext, private readonly ports: KeyboardPorts) {}
   get available() {
-    return !this.disposed && this.context.sourceAvailable && this.context.liveAuthorized && this.context.authenticationState !== 'authentication_required' && this.context.confirmationAvailable;
+    return !this.disposed && this.context.sourceAvailable && this.context.liveAuthorized
+      && this.context.authenticationState === 'step_up_required' && this.context.confirmationAvailable;
   }
   get ready() {
     return this.available && !!this.lease && this.lease.expiresAt > Date.now()
       && this.lease.controllerEpoch === this.context.controllerEpoch;
   }
-  private fingerprint() { return JSON.stringify([this.context, exactInput(this.text, this.newline).base64]); }
+  private fingerprint(kind: 'acquire' | 'input') {
+    return JSON.stringify([this.context, kind === 'input' ? exactInput(this.text, this.newline).base64 : null]);
+  }
+  private refusal(error: unknown) {
+    const code = error instanceof Error ? error.message : '';
+    this.status = code === 'authentication_required' || code === 'step_up_required' || code === 'source_unavailable'
+      ? code : 'confirmation_refused';
+  }
   cancel() {
     this.revision++; this.abort.abort(); this.abort = new AbortController();
     this.prepared = null; this.pending = false; this.text = ''; this.newline = false;
@@ -84,52 +93,56 @@ export class KeyboardFlow {
     this.cancel(); this.context = structuredClone(context); this.lease = null; this.lastKey = '';
   }
   dispose() { this.cancel(); this.disposed = true; this.lease = null; this.lastKey = ''; }
-  async acquire() {
-    if (!this.available || this.pending) return;
-    const revision = this.revision; this.pending = true;
-    try {
-      const proof = await this.ports.prepareLease(structuredClone(this.context));
-      if (revision !== this.revision || !this.available || proof.native.challenge.expiresAt <= Date.now()) return;
-      const assertion = await this.ports.prove(proof, this.abort.signal);
-      if (revision !== this.revision || !this.available || proof.native.challenge.expiresAt <= Date.now()) return;
-      const lease = await this.ports.acquire(proof, assertion);
-      if (revision === this.revision && this.available) this.lease = lease;
-    } finally { if (revision === this.revision) this.pending = false; }
-  }
-  async prepare() {
-    if (!this.ready || this.pending) return;
-    const input = exactInput(this.text, this.newline);
-    const revision = this.revision; const fingerprint = this.fingerprint();
+  async acquire() { await this.prepareConfirmation('acquire'); }
+  async prepare() { await this.prepareConfirmation('input'); }
+  private async prepareConfirmation(kind: 'acquire' | 'input') {
+    if (!this.available || this.pending || (kind === 'input' && !this.ready)) return;
+    const bytes = kind === 'input' ? exactInput(this.text, this.newline) : { base64: '', byteLength: 0 };
+    const revision = this.revision; const fingerprint = this.fingerprint(kind);
     const key = this.ports.newKey(); this.pending = true; this.prepared = null;
+    this.status = 'step_up_required';
     try {
-      const proof = await this.ports.prepare({ context: structuredClone(this.context),
-        idempotencyKey: key, bytesBase64: input.base64, byteLength: input.byteLength });
-      if (revision === this.revision && this.ready && fingerprint === this.fingerprint()
-        && proof.native.challenge.expiresAt > Date.now()) {
-        this.prepared = { proof, key, bytesBase64: input.base64, fingerprint }; this.status = 'prepared';
+      const proof = kind === 'acquire' ? await this.ports.prepareLease(structuredClone(this.context), key)
+        : await this.ports.prepare({ context: structuredClone(this.context), idempotencyKey: key,
+          bytesBase64: bytes.base64, byteLength: bytes.byteLength });
+      const valid = () => revision === this.revision && this.available
+        && (kind === 'acquire' || this.ready) && fingerprint === this.fingerprint(kind);
+      if (!valid()) return;
+      if (proof.native.protocol !== 'h2a.session-content' || proof.native.protocolVersion !== 2
+        || proof.native.kind !== 'confirmation-challenge' || proof.native.challenge.purpose !== 'remote-action'
+        || !Number.isSafeInteger(proof.native.challenge.issuedAt) || !Number.isSafeInteger(proofExpiry(proof))
+        || proofExpiry(proof) <= Date.now() || proofExpiry(proof) - proof.native.challenge.issuedAt > 60000) {
+        throw new Error('confirmation_refused');
       }
+      const confirmation = await this.ports.prove(proof, this.abort.signal);
+      if (!valid()) return;
+      if (proofExpiry(proof) <= Date.now() || !matchesConfirmation(proof, confirmation)) throw new Error('confirmation_refused');
+      this.prepared = { kind, proof, confirmation, key, bytesBase64: bytes.base64, fingerprint };
+      this.status = 'confirmation_returned';
+    } catch (error) {
+      if (revision === this.revision) this.refusal(error);
+      throw error;
     } finally { if (revision === this.revision) this.pending = false; }
   }
   async send() {
     const prepared = this.prepared;
-    if (!this.ready || this.pending || !prepared) return;
-    if (prepared.proof.native.challenge.expiresAt <= Date.now() || prepared.fingerprint !== this.fingerprint()) { this.cancel(); return; }
+    if (!this.available || this.pending || !prepared || (prepared.kind === 'input' && !this.ready)) return;
+    if (proofExpiry(prepared.proof) <= Date.now()
+      || prepared.fingerprint !== this.fingerprint(prepared.kind)) { this.cancel(); return; }
     const revision = this.revision; this.pending = true; this.prepared = null;
+    this.lastKey = prepared.key; this.status = 'outcome_unknown';
     try {
-      const assertion = await this.ports.prove(prepared.proof, this.abort.signal);
-      if (revision !== this.revision || !this.ready || prepared.proof.native.challenge.expiresAt <= Date.now()
-        || prepared.fingerprint !== this.fingerprint()) return;
-      this.lastKey = prepared.key; this.status = 'outcome_unknown';
-      try {
+      if (prepared.kind === 'acquire') {
+        const lease = await this.ports.acquire(prepared.proof, prepared.confirmation, prepared.key);
+        if (revision === this.revision && this.available) { this.lease = lease; this.status = 'submitted'; }
+      } else {
         const result = await this.ports.submit({ idempotencyKey: prepared.key,
-          bytesBase64: prepared.bytesBase64, proof: prepared.proof, assertion }, this.abort.signal);
+          bytesBase64: prepared.bytesBase64, proof: prepared.proof, confirmation: prepared.confirmation }, this.abort.signal);
         if (revision === this.revision) this.status = result.status;
-      } catch { /* Any lost response, including 429, leaves the effect unknown. */ }
+      }
+    } catch { /* A lost response, including 429, never permits redispatch. */ }
+    finally {
       this.previousUnknown ||= this.status === 'outcome_unknown';
-    } catch (error) {
-      if (revision === this.revision) this.status = 'refused';
-      throw error;
-    } finally {
       if (revision === this.revision) { this.text = ''; this.newline = false; this.pending = false; }
     }
   }
