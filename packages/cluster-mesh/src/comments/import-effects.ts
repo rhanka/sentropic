@@ -159,13 +159,43 @@ export const commentsImportReceiptEffects = async (
       ]),
     ),
   };
-  const snapshot: CanonicalBatchReceiptSnapshot = { kind: 'batch-receipt-snapshot', ...envelope, hash: hashRecord('batch-receipt-snapshot', envelope) };
+  const snapshot: CanonicalBatchReceiptSnapshot = {
+    kind: 'batch-receipt-snapshot',
+    ...envelope,
+    hash: hashRecord('batch-receipt-snapshot', envelope),
+  };
   parts.push(commentsRecordEffects(selection, snapshot, previous?.hash ?? null));
-  state.canonical = { snapshot, unitOutcomes: receipts.map((receipt) => ({ outcome: 'committed', unitId: receipt.unitId, receipt })) };
+  state.canonical = {
+    snapshot,
+    unitOutcomes: receipts.map((receipt) => ({ outcome: 'committed', unitId: receipt.unitId, receipt })),
+  };
   const effects = mergeCommentsEffects(...parts);
-  const committedUnits = [...batch?.units ?? [], ...state.binding.unitIds];
-  return { ...effects, guards: stored ? [{ kind: 'aggregate-version', key: batchKey, version: stored.version }] : [],
-    updates: [{ key: batchKey, version: (stored?.version ?? 0) + 1, value: { format: 'utf8', data: canonicalJson({ manifestHash: request.manifest.hash, mappingVersion: request.expectedMappingVersion, units: committedUnits }) } }],
-    indexWrites: [{ key: commandKey(request.idempotencyKey), digest: requestDigest, resultIds: committedUnits, resultHash: snapshot.hash }],
-    moduleResult: { format: 'utf8', data: canonicalJson(state.canonical) } };
+  const committedUnits = [...(batch?.units ?? []), ...state.binding.unitIds];
+  return {
+    ...effects,
+    guards: stored ? [{ kind: 'aggregate-version', key: batchKey, version: stored.version }] : [],
+    updates: [
+      {
+        key: batchKey,
+        version: (stored?.version ?? 0) + 1,
+        value: {
+          format: 'utf8',
+          data: canonicalJson({
+            manifestHash: request.manifest.hash,
+            mappingVersion: request.expectedMappingVersion,
+            units: committedUnits,
+          }),
+        },
+      },
+    ],
+    indexWrites: [
+      {
+        key: commandKey(request.idempotencyKey),
+        digest: requestDigest,
+        resultIds: committedUnits,
+        resultHash: snapshot.hash,
+      },
+    ],
+    moduleResult: { format: 'utf8', data: canonicalJson(state.canonical) },
+  };
 };
