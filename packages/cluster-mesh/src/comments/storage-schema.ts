@@ -42,3 +42,8 @@ export const decodeRecord = (bytes: string, hash: string): CanonicalChainRecord 
   if (record.hash !== hash) invalid('stored record envelope mismatch');
   validateRecordHash(record); return record;
 };
+export const selectionForRecord = (record: CanonicalChainRecord): CanonicalReadSelection => {
+  const entry = Object.entries(COMMENTS_CHAIN_KINDS).find(([, definition]) => definition[0] === record.kind);
+  if (!entry) return invalid('unknown canonical record kind');
+  return Object.fromEntries([['kind', entry[0]], ...entry[1].slice(1).map((field) => [field, (record as unknown as Record<string, unknown>)[field]])]) as CanonicalReadSelection;
+};
