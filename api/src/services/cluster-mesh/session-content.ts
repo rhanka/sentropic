@@ -53,6 +53,7 @@ export type SessionContentErrorCode =
   | 'quota_exceeded'
   | 'frame_too_large'
   | 'attempt_conflict'
+  | 'project_revision_changed'
   | 'unknown_outcome'
   | 'grant_not_found'
   | 'grant_revoked'
@@ -1278,6 +1279,33 @@ export class SessionContentService {
       if (grant.state !== 'active') {
         throw new SessionContentError('grant_revoked', 'grant is not active');
       }
+      // N3: reserve and commit share one frozen authorization tuple T.
+      // After an amendment, capture pauses at the last acknowledged
+      // revision until refresh: revision mismatch denies with zero
+      // allocation even if reconciliation has not run.
+      const [reserveParent] = await tx
+        .select()
+        .from(sessionContentProjects)
+        .where(eq(sessionContentProjects.projectId, grant.projectId))
+        .limit(1);
+      if (!reserveParent || reserveParent.state !== 'active') {
+        throw new SessionContentError('project_not_active', 'project is not active');
+      }
+      if (reserveParent.projectRevision !== grant.projectRevision) {
+        throw new SessionContentError(
+          'project_revision_changed',
+          'capture paused while the updated consent is applied',
+        );
+      }
+      if ((reserveParent.excludedSessionIds as string[]).map(String).includes(sessionId)) {
+        throw new SessionContentError('session_excluded', 'session is excluded');
+      }
+      if (reserveParent.requiresFreshAmendment) {
+        throw new SessionContentError('suppressed_scope', 'a fresh amendment is required');
+      }
+      if ((grant.channels as Record<string, boolean>)[channel] !== true) {
+        throw new SessionContentError('ineligible_session', 'channel is not enabled for capture');
+      }
       await this.requireEpochScope(tx, grant.authorityEpoch, namespaceId);
       // N4: serialize on the tenant key so concurrent sessions of one
       // tenant cannot oversubscribe the tenant quota (covers sessions too).
@@ -1326,6 +1354,9 @@ export class SessionContentService {
         namespaceId,
         authorityEpoch: epoch.epoch,
         sessionId,
+        projectRevision: grant.projectRevision,
+        grantVersion: grant.version,
+        retentionSnapshot: grant.retentionSnapshot,
         channel,
         bytesRaw: bytes.raw,
         bytesEncoded: bytes.encoded,
@@ -1384,6 +1415,36 @@ export class SessionContentService {
         throw new SessionContentError('grant_revoked', 'grant is not active; late upload refused');
       }
       await this.requireEpochScope(tx, grant.authorityEpoch, existing.namespaceId);
+      // N3: recheck the frozen tuple T at writer admission, before any
+      // staged row or PUT. If the fence won first, stale the reservation
+      // with zero admitted bytes instead of staging a second row.
+      const [admitParent] = await tx
+        .select()
+        .from(sessionContentProjects)
+        .where(eq(sessionContentProjects.projectId, grant.projectId))
+        .limit(1);
+      const fenceWon = !admitParent
+        || admitParent.state !== 'active'
+        || admitParent.projectRevision !== existing.projectRevision
+        || admitParent.projectRevision !== grant.projectRevision
+        || existing.grantVersion !== grant.version;
+      if (fenceWon) {
+        await tx
+          .update(sessionContentReservations)
+          .set({ state: 'stale', updatedAt: new Date(this.nowMs()) })
+          .where(eq(sessionContentReservations.reservationId, reservationId));
+        await tx
+          .update(sessionContentAttempts)
+          .set({ outcome: 'outcome_unknown' })
+          .where(eq(sessionContentAttempts.attemptId, reservationId));
+        if (!admitParent || admitParent.state !== 'active') {
+          throw new SessionContentError('project_not_active', 'project changed during upload');
+        }
+        throw new SessionContentError(
+          'project_revision_changed',
+          'capture paused while the updated consent is applied',
+        );
+      }
       return { reservation: existing, grant };
     });
     const objectId = this.newId();
@@ -1436,7 +1497,9 @@ export class SessionContentService {
         `upload outcome unknown, purge pending: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-    const snapshot = reservation.grant.retentionSnapshot as RetentionByChannel;
+    // N3: expiry derives from the reservation's frozen retention snapshot,
+    // never from a newer policy adopted after the reservation.
+    const snapshot = reservation.reservation.retentionSnapshot as RetentionByChannel;
     const channel = reservation.reservation.channel as 'terminal.cache' | 'native.mirror';
     const capturedAt = this.nowMs();
     const retention = snapshot[channel] ?? { mode: 'none' as const };
@@ -1463,13 +1526,26 @@ export class SessionContentService {
           throw new SessionContentError('unknown_outcome', 'reservation changed during upload');
         }
         await this.requireEpochScope(tx, freshGrant.authorityEpoch, reservation.reservation.namespaceId);
+        // N3: publication commits before the amendment fence, or the fence
+        // wins and publication refuses. The locked project row shares one
+        // order with the amendment CAS; authority is never reconstructed
+        // from the latest grant but rechecked against the frozen tuple T.
         const [project] = await tx
           .select()
           .from(sessionContentProjects)
           .where(eq(sessionContentProjects.projectId, freshGrant.projectId))
+          .for('update')
           .limit(1);
-        if (!project || project.state !== 'active' || project.projectRevision !== freshGrant.projectRevision) {
+        if (!project || project.state !== 'active') {
           throw new SessionContentError('project_not_active', 'project changed during upload');
+        }
+        if (project.projectRevision !== reservation.reservation.projectRevision
+          || project.projectRevision !== freshGrant.projectRevision
+          || reservation.reservation.grantVersion !== freshGrant.version) {
+          throw new SessionContentError(
+            'project_revision_changed',
+            'capture paused while the updated consent is applied',
+          );
         }
         const [binding] = await tx
           .select()
