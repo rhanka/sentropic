@@ -27,7 +27,7 @@ export const rootCapability = (runtime: RootScopedRuntime, profile: ProfileId) =
     'immutable-boundaries-v1': { readPage: runtime.readPage.bind(runtime) },
     'scope-outbox-v1': { read: runtime.journalRead.bind(runtime), checkpoint: runtime.journalCheckpoint.bind(runtime), inspect: runtime.journalInspect.bind(runtime),
       pause: runtime.journalPause.bind(runtime), retry: runtime.journalRetry.bind(runtime), resync: runtime.journalResync.bind(runtime), snapshotRead: runtime.snapshotRead.bind(runtime) },
-    'visibility-barriers-v1': { declareCoverage: runtime.declareCoverage.bind(runtime), readHead: runtime.readHead.bind(runtime) },
+    'visibility-barriers-v1': { declareCoverage: runtime.declareCoverage.bind(runtime), readHead: runtime.readHead.bind(runtime), query: runtime.query.bind(runtime) },
     'staged-units-v1': { begin: runtime.beginStaged.bind(runtime), stage: runtime.stageFragment.bind(runtime), sealStep: runtime.sealStep.bind(runtime),
       commit: runtime.commitStaged.bind(runtime), inspect: runtime.inspectStaged.bind(runtime), abort: runtime.abortStaged.bind(runtime) },
     'fenced-writers-v1': { journalFence: runtime.journalFence.bind(runtime), commitStaged: runtime.commitStaged.bind(runtime) },

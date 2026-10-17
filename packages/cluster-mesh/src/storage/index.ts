@@ -19,3 +19,4 @@ export { STAGED_PROFILES } from './root-profiles.js';
 export type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from './staged-state.js';
 export type { RootSealStepInput, RootSealOutcome } from './staged-seal.js';
 export type { JournalFence } from './staged-core.js';
+export type { RootQueryView, RootQueryContext, RootQueryPage, RootQueryRequest, RegisteredRootQuery } from './root-query.js';
