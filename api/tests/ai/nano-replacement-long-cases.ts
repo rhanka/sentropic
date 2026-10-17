@@ -26,7 +26,8 @@ export const runNanoLongCase = async (fixture: Extract<NanoCase, { kind: 'histor
       nonempty: result.analysis.trim().length > 0,
       ...Object.fromEntries(LONG_FACTS.map((fact) => [`answers:${fact}`, flat.includes(fact)])),
       unknownNotInvented: /NOT[_ ]STATED|not (stated|specified)|(?:non|pas) (précisé|mentionné)|aucun.{0,30}signataire/i.test(result.analysis),
-      expectedPath: result.chunked === forcedChunk && result.chunkCount === 1,
+      expectedPath: result.chunked === (fixture.estimatedTokens > fixture.singlePassLimit)
+        && result.chunkCount === (fixture.expectedChunks ?? 1),
       notClipped: result.clipped === false,
     } };
 };
