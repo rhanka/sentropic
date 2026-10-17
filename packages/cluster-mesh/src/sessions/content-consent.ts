@@ -359,6 +359,10 @@ export interface RefreshChildInput {
   readonly sessionId: string;
   readonly bindingId: string;
   readonly bindingVersion: number;
+  /** P3/m1: the attested D1 version and accepted policy digest — both must
+   * match the frozen grant/project values, never overwrite them. */
+  readonly d1Version: number;
+  readonly policyDigest: string;
   readonly tenantId: string;
   readonly workspaceId: string;
   readonly ownerId: string;
@@ -821,6 +825,18 @@ export const createContentConsentService = (
     if (!project.sourceTrustVersions.includes(input.sourceTrustVersion)) {
       throw new ContentConsentError('source_reauthorization_required', 'source trust version is not enrolled');
     }
+    // P3/m1: the attested generation, D1 version and accepted digest must
+    // equal the frozen values — a replaced source, a changed D1 version or
+    // a stale scope needs a new derivation, never a refresh overwrite.
+    if (input.sourceGeneration !== existing.sourceGeneration) {
+      throw new ContentConsentError('source_reauthorization_required', 'source generation changed; re-derive');
+    }
+    if (input.d1Version !== existing.d1Version) {
+      throw new ContentConsentError('ineligible_session', 'D1 version changed; a new derivation is required');
+    }
+    if (input.policyDigest !== project.retentionDigest) {
+      throw new ContentConsentError('revision_conflict', 'acknowledged scope is not the accepted one');
+    }
     const selected = project.selectedSessionIds.includes(sessionId);
     const eligibleFuture = project.futureSessions && input.sessionCreatedAt >= project.activatedAt;
     if (!selected && !eligibleFuture) {
@@ -837,8 +853,6 @@ export const createContentConsentService = (
       ...existing,
       projectRevision: project.projectRevision,
       bindingVersion: input.bindingVersion,
-      sourceGeneration: input.sourceGeneration,
-      sourceTrustVersion: input.sourceTrustVersion,
       nativeBoundarySeq: input.nativeBoundarySeq,
       channels: { ...project.channels },
       retentionSnapshot: {
