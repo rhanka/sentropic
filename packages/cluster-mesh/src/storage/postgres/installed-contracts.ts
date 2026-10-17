@@ -9,7 +9,8 @@ import type { ReadPage } from '../readers.js';
 // Only installed module code receives this SPI. Scoped callers select named
 // operations, never SQL, a callback, or an enforcement/bypass parameter.
 export interface PgInstalledContext extends PgProjectionContext {
-  readonly committedRoot: string | null; readonly rootVersion: string;
+  readonly committedRoot: string | null;
+  readonly rootVersion: string;
   readonly policy: PurgePolicy;
   available(target: string): Promise<boolean>;
   head(chain: string): Promise<{ readonly hash: string; readonly sequence: number; readonly bytes: string } | null>;
@@ -24,5 +25,8 @@ export interface PgInstalledContext extends PgProjectionContext {
   inspectStaged(operationKey: string): Promise<StagedUnitStatus>;
   readPage(chain: string, limit: number, cursor: unknown, maxEncodedBytes: number): Promise<ReadPage>;
 }
-export interface PgInstalledOperation { readonly operation: 'read' | 'write' | 'maintain'; execute(input: unknown, context: PgInstalledContext): Promise<unknown>; }
+export interface PgInstalledOperation {
+  readonly operation: 'read' | 'write' | 'maintain';
+  execute(input: unknown, context: PgInstalledContext): Promise<unknown>;
+}
 export type PgPurgeFinalizer = (job: RootPurgeJob, context: PgInstalledContext) => Promise<void>;
