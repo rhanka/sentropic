@@ -1,4 +1,4 @@
-# BRMFA (D1) — versioned one-off Job for prod-safe OIDC client registration.
+# BR45 (D1) — versioned one-off Job for prod-safe OIDC client registration.
 #
 # Runs `node dist/scripts/oauth-register-client.js` (compiled into the api image
 # by `api/package.json` build) as a one-off post-deploy step AGAINST the tier
@@ -10,7 +10,11 @@
 #   kubectl -n sentropic logs job/oauth-register-client
 #   kubectl -n sentropic delete job/oauth-register-client
 # Or via the governed wrapper: `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`
-# (BRMFA-EX1: Makefile exception, additive target only).
+# (BR45-EX1: Makefile exception, additive target only).
+#
+# Network: the baseline is default-deny-ingress, so
+# `allow-oauth-register-client-to-postgres` (15-networkpolicy.yaml) admits this
+# Job's pod to postgres:5432. Without it the registration fails closed.
 #
 # Secrets reach the Job ONLY via `envFrom` secretRefs — never as CLI literals:
 # - `sentropic-api`: tier DB + shared IdP config (reused, operator-owned).
@@ -18,7 +22,7 @@
 #   0600 env file (`kubectl create secret generic oauth-client-registration
 #   --from-env-file=<file>`), holding ONLY the OAUTH_CLIENT_* variables for this
 #   client (names listed in docs/oauth-client-rotation.md, values never in git).
-#   Delete it with the Job when the registration succeeds.
+#   The wrapper (and the recipe trap) deletes it with the Job even on failure.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -35,8 +39,16 @@ spec:
         app.kubernetes.io/name: sentropic
         app.kubernetes.io/component: oauth-register-client
     spec:
+      # enableServiceLinks:false — same pinned rationale as 30-api.yaml: k8s
+      # service env injection shadows app port envs.
+      enableServiceLinks: false
       serviceAccountName: sentropic-app
       restartPolicy: Never
+      # No runAsNonRoot: the api image has no USER stanza (runs as root), so a
+      # non-root constraint would break the Job. seccomp default still applies.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: register
           image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
@@ -48,3 +60,11 @@ spec:
                 name: sentropic-api
             - secretRef:
                 name: oauth-client-registration
+          resources:
+            # Thin one-shot (mirrors 35-auth-idp sizing): migrate+upsert+exit.
+            requests:
+              cpu: 60m
+              memory: 192Mi
+            limits:
+              cpu: 300m
+              memory: 320Mi
