@@ -71,6 +71,21 @@ export function isDeviceFlowSeatAccount(account: AccountLike): boolean {
   return isRecord(metadata) && metadata['auth_type'] === 'device-flow';
 }
 
+/**
+ * True when an externally held seat must not be served: missing, empty, or
+ * unparseable expiry counts as unavailable, exactly like an elapsed one.
+ * Unknown expiry is not infinite validity.
+ */
+export function isExternalSeatUnavailable(
+  account: Pick<AccountTransportAccount, 'expiresAt'>,
+  nowMs: number,
+): boolean {
+  if (!account.expiresAt) return true;
+  const expiresAtMs = new Date(account.expiresAt).getTime();
+  if (!Number.isFinite(expiresAtMs)) return true;
+  return expiresAtMs <= nowMs;
+}
+
 /** Refuse a renewal attempt for an externally held seat. */
 export function throwExternalSeatUnavailable(account: AccountLike): never {
   const authority = readExternalSeatAuthority(account.metadata as Record<string, unknown> | undefined);
