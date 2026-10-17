@@ -39,6 +39,8 @@ import {
   type CommitContext,
 } from './record-runtime.js';
 import type { RootMutationCoordinator, RootMutationKind, RootReadKind } from './mutation-coordinator.js';
+import { forkIndexedMap } from './indexed-map.js';
+import { forkIndexedHistory } from './indexed-history.js';
 import type { ChainBoundaryProvider } from './tokens.js';
 import { validatePageLimits, type PageLimits, type StorageScope } from './contracts.js';
 
@@ -601,16 +603,16 @@ export class ScopedRuntime {
         const state = backendState();
         const committed = state.chains.get(chainId);
         let allocation = committed?.allocation ?? '0';
-        const combined = (committed?.records ?? []).map((entry) => ({ ...entry }));
+        const combined = forkIndexedHistory(committed?.records ?? []);
         for (const record of overlay.chainAppends.get(chainId) ?? []) {
           allocation = incrementBackendAllocation(allocation);
           combined.push({ id: record.id, seq: combined.length, hash: record.hash, bytes: record.bytes });
         }
         const scratch: BackendScopeState = {
           ...state,
-          chains: new Map(state.chains).set(chainId, {
+          chains: forkIndexedMap(state.chains).set(chainId, {
             allocation,
-            head: combined.length === 0 ? null : combined[combined.length - 1].hash,
+            head: combined.length === 0 ? null : combined.at(-1)!.hash,
             records: combined,
             disposed: committed?.disposed ?? false,
           }),
