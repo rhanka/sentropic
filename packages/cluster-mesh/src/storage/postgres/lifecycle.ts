@@ -22,7 +22,8 @@ export const declarePgCoverage = async (core: PgCore, grant: ScopeGrant<unknown>
   name(parent); name(child);
   await runPgTransaction(core, grant, {}, async (tx) => {
     if (await ancestors(core, tx.session, tx.root, parent, async (id) => id === child)) throw new StorageInvalidCommandError('coverage cycle');
-    await core.visible(tx.session, tx.root, child);
+    try { await core.visible(tx.session, tx.root, child); }
+    catch (error) { if (error instanceof StorageDeniedError) throw new StorageInvalidCommandError('covered child cannot be reparented'); throw error; }
     tx.root = await core.roots.put(tx.session, tx.root, 'parents', child, [parent]); tx.count += 1;
   });
 };
