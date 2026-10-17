@@ -218,7 +218,9 @@ const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): Service
 const toAuthCodePayload = (row: typeof authorizationCodes.$inferSelect): AuthCodePayload => {
   const payload = row.payload as Partial<AuthCodePayload> | null;
 
-  const acr = typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:passkey-fresh';
+  // F7: fail closed — a code payload without an ACR is treated as a
+  // single-factor bearer session, never as passkey-fresh.
+  const acr = typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:bearer';
   return {
     acr,
     amr: Array.isArray(payload?.amr) ? payload.amr : (acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
