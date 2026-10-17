@@ -86,6 +86,7 @@ export interface ConsumerView {
 export interface PurgeJobView {
   readonly state: 'pending' | 'held' | 'complete' | 'failed';
   readonly outcomeId: string | null;
+  readonly payloadDisposition: 'retained' | 'erased' | null;
 }
 
 interface PurgeJob {
@@ -94,6 +95,7 @@ interface PurgeJob {
   readonly authorizedBy: string;
   state: 'pending' | 'held' | 'complete' | 'failed';
   outcomeId: string | null;
+  payloadDisposition: 'retained' | 'erased' | null;
 }
 
 interface StagedFragment {
@@ -131,6 +133,8 @@ const compareEpoch = (current: string, begin: string): number => {
 };
 
 interface StagedScope {
+  readonly purgeOutcomes: { readonly intentId: string; readonly outcomeId: string }[];
+  readonly purgeNotifications: { readonly intentId: string; readonly outcomeId: string }[];
   readonly snapshots: Map<string, { readonly rows: readonly ReplaySnapshotRow[]; readonly journalSeq: number }>;
   currentFence: WriterFence | null;
   readonly audit: CommitReceipt[];
@@ -150,6 +154,8 @@ interface StagedScope {
 }
 
 const createStagedScope = (): StagedScope => ({
+  purgeOutcomes: [],
+  purgeNotifications: [],
   snapshots: new Map(),
   currentFence: null,
   audit: [],
@@ -176,6 +182,7 @@ export class TestStagedReferenceStore extends TestReferenceStore {
   private readonly stagedClock: TestClock;
   private failExternalNext = false;
   private failPurgeNext = false;
+  private failPurgeResponseNext = false;
 
   constructor(moduleId: string, clock: TestClock = () => new Date().toISOString(), purgePolicy: PurgePolicy = 'optional') {
     super(moduleId, clock);
@@ -232,6 +239,15 @@ export class TestStagedReferenceStore extends TestReferenceStore {
 
   armPurgeFailure(): void {
     this.failPurgeNext = true;
+  }
+
+  armPurgeResponseFailure(): void { this.failPurgeResponseNext = true; }
+
+  consumePurgeResponseFailure(): void {
+    if (this.failPurgeResponseNext) {
+      this.failPurgeResponseNext = false;
+      throw new StorageInvalidCommandError('purge response interrupted after commit');
+    }
   }
 
   consumePurgeFailure(): void {
@@ -476,6 +492,7 @@ export class TestStagedStore {
           state: 'pending',
           authorizedBy: intent.authorizedBy,
           outcomeId: null,
+          payloadDisposition: null,
         });
       }
     }
@@ -927,17 +944,20 @@ export class TestStagedStore {
     this.requireOperation('maintain');
     const job = this.staged.jobs.get(intentId);
     if (!job) throw new StorageInvalidCommandError('unknown purge intent');
-    if (job.state === 'complete') return { state: job.state, outcomeId: job.outcomeId };
+    if (job.state === 'complete') return { state: job.state, outcomeId: job.outcomeId, payloadDisposition: job.payloadDisposition };
     if (this.staged.holds.has(job.target)) {
       job.state = 'held';
-      return { state: 'held', outcomeId: null };
+      return { state: 'held', outcomeId: null, payloadDisposition: null };
     }
     const hasRecord = this.inner.readRecord(job.target) !== null;
     const hasAggregate = this.inner.readAggregate(job.target) !== null;
     if (!this.staged.chains.has(job.target) && !this.staged.blobs.has(job.target) && !hasRecord && !hasAggregate) {
       job.state = 'failed';
-      return { state: 'failed', outcomeId: null };
+      return { state: 'failed', outcomeId: null, payloadDisposition: null };
     }
+    // The interruption rolls the local completion back before disposal;
+    // successful final disposal/outcome/notification are one synchronous step.
+    this.store.consumePurgeFailure();
     if (this.staged.chains.has(job.target) && !this.staged.disposed.has(job.target)) {
       this.disposeChain(job.target);
     }
@@ -949,21 +969,32 @@ export class TestStagedStore {
       blob.bytes = null;
       blob.owners.clear();
     }
-    this.store.consumePurgeFailure();
     job.state = 'complete';
     job.outcomeId = `purge-outcome-${intentId}`;
-    return { state: job.state, outcomeId: job.outcomeId };
+    job.payloadDisposition = hasRecord || hasAggregate || this.staged.chains.has(job.target) ? 'retained' : 'erased';
+    const outcome = { intentId, outcomeId: job.outcomeId };
+    this.staged.purgeOutcomes.push({ ...outcome });
+    this.staged.purgeNotifications.push({ ...outcome });
+    this.store.consumePurgeResponseFailure();
+    return { state: job.state, outcomeId: job.outcomeId, payloadDisposition: job.payloadDisposition };
   }
 
   armPurgeFailure(): void {
     this.store.armPurgeFailure();
   }
 
+  armPurgeResponseFailure(): void { this.store.armPurgeResponseFailure(); }
+
+  purgeEvidence(): { readonly outcomes: readonly { readonly intentId: string; readonly outcomeId: string }[]; readonly notifications: readonly { readonly intentId: string; readonly outcomeId: string }[] } {
+    this.requireOperation('maintain');
+    return JSON.parse(JSON.stringify({ outcomes: this.staged.purgeOutcomes, notifications: this.staged.purgeNotifications }));
+  }
+
   purgeProgress(intentId: string): PurgeJobView {
     this.requireOperation('read');
     const job = this.staged.jobs.get(intentId);
     if (!job) throw new StorageInvalidCommandError('unknown purge intent');
-    return { state: job.state, outcomeId: job.outcomeId };
+    return { state: job.state, outcomeId: job.outcomeId, payloadDisposition: job.payloadDisposition };
   }
 
   purgeJobIds(): string[] {
