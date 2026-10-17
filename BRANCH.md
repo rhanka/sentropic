@@ -89,6 +89,7 @@
 - `L0-producer-progress` (2026-10-17): all seven gateway/registry deliveries construct digest-indexed bundles with exact manifest/file identity and typed path/missing/extra/altered refusals (29/29 pure tests). Mesh/gateway typecheck and lint pass; transfer/read-path acceptance remains pending.
 - `L0-archive-check` (2026-10-17): bounded gzip/tar inspection rejects traversal, links, sensitive paths, bad checksums/truncation and invalid package identity before installation; pure suite 31/31.
 - `L0-transfer-progress` (2026-10-17): producer validates source HEAD, archive name/version/SHA-256/SHA-512, namespaced sibling receipts and confined files, then copies immutable bytes and writes input last; host wrapper refuses wrong/dirty companion branches, performs no Git write. Synthetic transfer passes; actual companion CI proof remains FL-18. h-cond has no live advertised session, so no acknowledgement/message delivery is claimed.
+- `L1-key-recovery` (2026-10-17): reproduced three session failures, then fixed encrypted key recovery, same-key concurrent acquisition and durable revocation tombstones; scoped session service 8/8. No key appears in public session/receipt reads.
 
 ## AI Flaky tests
 - Acceptance rule:
