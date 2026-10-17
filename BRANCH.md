@@ -136,7 +136,7 @@
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
   - [x] m2/m3: independent migration chains and core-007 upgrade PASS, original comments receipts unchanged; 0.19.0 changelog covers leaves/assets/digest/peer and required merge order.
   - [x] m4/m5: public-root hook assertion observed RED; armFailure/beforePublish/failure state and unused alias removed. Test-side publication/response wrappers and actual async-checkpoint probes PASS: root suites 13 files / 44 tests.
-  - [ ] m6: formatting progress 57/72 atomic groups; TypeScript AST equality checked; SQL reflow changes only unquoted whitespace. Final gates follow.
+  - [ ] m6: formatting progress 58/72 atomic groups; TypeScript AST equality checked; SQL reflow changes only unquoted whitespace. Final gates follow.
   - [x] m7: source/PG/dependency helpers use disposable container dependencies; accepted include documented. Interrupted-run node_modules artifacts removed; self-contained cold typecheck PASS without host dependencies.
   - [x] m8: binding-derivation, terminal-root, receipt-owner SQL and captured-export-root mutants PASS with assertion-specific kill markers; import/receipt refusals assert exact typed conditions. Evidence: comments-transport-mutations.spec.ts 3/3 and comments-export-mutations.spec.ts 1/1.
   - [x] m9: host-owned full-receipt table/audit, finite host 40001 callback retry versus immutable module flush retry, and separate 50-operation recovery cap documented with concrete Immo migration guidance.
