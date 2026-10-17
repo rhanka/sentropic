@@ -319,6 +319,12 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         );
       }
     },
+    async listArtifactIds(): Promise<string[]> {
+      const { rows } = await pool.query<{ id: string }>(
+        `SELECT id FROM artifacts.artifacts ORDER BY created_at ASC, id ASC`,
+      );
+      return rows.map((row) => row.id);
+    },
     async getSource(artifactId: string): Promise<SourceRef | undefined> {
       const { rows } = await pool.query<{
         kind: string;
