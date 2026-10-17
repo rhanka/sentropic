@@ -3,7 +3,7 @@ import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-s
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, retainRouteBody, routeUsage,
-  settleRouteRequest, terminalGatewayError,
+  markDurableAttempt, RequestAuditError, settleRouteRequest, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
@@ -67,6 +67,7 @@ const trackedExecution = (input: {
   let firstObserved = false;
   let priming = true;
   let reported = input.first.type === 'done' && input.first.data.usage ? routeUsage(input.first.data.usage) : undefined;
+  let reportedComplete = input.first.type === 'done' && typeof input.first.data.usage?.inputTokens === 'number' && typeof input.first.data.usage?.outputTokens === 'number';
   const isCancelled = () => terminal === 'cancelled';
   const close = () => closing ??= Promise.resolve().then(() => iterator.return?.()).catch(() => undefined)
     .finally(() => request.bodyLease?.release());
@@ -81,7 +82,7 @@ const trackedExecution = (input: {
     const finalUsage = usage();
     input.attempts.push({ candidateRef: input.candidateRef, providerId: target.providerId,
       modelId: target.model, transportProviderId: target.transportProviderId,
-      outcome: terminal, usage: finalUsage });
+      outcome: terminal, usage: finalUsage, reportedUsage: reportedComplete });
     finishing = (async () => {
       try {
         if (terminal === 'success') await attempt.complete(attemptUsage(finalUsage));
@@ -108,6 +109,7 @@ const trackedExecution = (input: {
         if (event.type === 'error') throw event.data;
         if (event.type === 'done') {
           if (event.data.usage) reported = routeUsage(event.data.usage);
+          reportedComplete = typeof event.data.usage?.inputTokens === 'number' && typeof event.data.usage?.outputTokens === 'number';
           if (!priming) await finish(doneClassification(event.data.finishReason));
           firstObserved = true;
           yield event;
@@ -211,6 +213,7 @@ export const runRouteStreamFlow = async (
       const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
       if (nativeInvoked && !native) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
       signal?.throwIfAborted();
+      await markDurableAttempt(deps, prepared.cost, preparedAttempt.attemptRef, diagnostic);
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       if (native) {
@@ -295,7 +298,7 @@ export const runRouteStreamFlow = async (
         try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
         throw execution.refusal ?? error;
       }
-      if (error instanceof BudgetDispatchMarkError) {
+      if (error instanceof BudgetDispatchMarkError || error instanceof RequestAuditError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
       }
       if (error instanceof NativeAttemptRefusal) {

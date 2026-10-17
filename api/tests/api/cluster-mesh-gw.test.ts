@@ -98,6 +98,14 @@ afterAll(async () => {
 });
 
 describe('cluster mesh gateway namespace', () => {
+  it('refuses implicit cross-model routing on the actual product namespace before dispatch', async () => {
+    await activate(R1);
+    const candidate = buildCandidate(); const app = await candidate.build();
+    const response = await app.request('/api/v1/gw/v1/chat/completions', { ...chat,
+      body: JSON.stringify({ model: 'claude-opus-5-5', messages: [{ role: 'user', content: 'synthetic' }] }) });
+    expect(response.status).not.toBe(200);
+    expect(candidate.generate).not.toHaveBeenCalled();
+  });
   it('mounts the real gateway factory on the product root once an operator activated the author', async () => {
     await clear();
     expect((await productApp.request('/api/v1/gw/healthz')).status).toBe(503);

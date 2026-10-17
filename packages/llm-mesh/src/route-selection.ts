@@ -6,7 +6,10 @@ import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './ro
 import {
   createCanonicalTargetCandidatesResolver,
   resolveTargetCapabilitySource,
+  isExactModelTarget,
+  normalizeExactModelId,
 } from './routing-targets.js';
+import { launchTargets, LaunchRoutingContractError } from './launch-routing-contract.js';
 export interface RankedRouteCandidate {
   readonly account: EligibleAccountDescriptor;
   readonly target: PlannedRouteTarget;
@@ -35,6 +38,7 @@ export interface ResolvedRouteTarget {
   readonly reason: PlannedRouteTarget['reason'];
 }
 const resolveCanonicalTargets = createCanonicalTargetCandidatesResolver();
+const resolveMappedTargets = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
 const supportsCapabilities = (
   profile: ModelProfile | undefined,
   required: RoutePlanInput['requiredCapabilities'],
@@ -75,16 +79,17 @@ const sameTarget = (left: {
   && left.model === right.model
   && left.effort === right.effort;
 
-export const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolution => {
+export const resolveRequestedTargets = (request: RoutePlanInput, allowEquivalentModels = false): RequestedTargetResolution => {
   const { requestedModel } = request;
-  const canonicalTargets = resolveCanonicalTargets(requestedModel);
-  const profile = modelProfiles.find((candidate) => candidate.modelId === requestedModel);
-  if (canonicalTargets.length === 0 && !profile) {
+  const selected = request.launchRoutingContract ? launchTargets(request.launchRoutingContract, requestedModel) : undefined;
+  const canonicalTargets = selected ?? (allowEquivalentModels ? resolveMappedTargets : resolveCanonicalTargets)(requestedModel);
+  const profile = modelProfiles.find((candidate) => candidate.modelId === normalizeExactModelId(requestedModel));
+  if (canonicalTargets.length === 0 && !profile && resolveMappedTargets(requestedModel).length === 0) {
     return { kind: 'unknown-model', requestedModel };
   }
   const standardTargets = canonicalTargets.length > 0
     ? canonicalTargets
-    : [{ providerId: profile!.providerId, model: profile!.modelId, transportProviderId: undefined }];
+    : profile ? [{ providerId: profile.providerId, model: profile.modelId, transportProviderId: undefined }] : [];
   const faithfulClaudeTarget = requestedModel.startsWith('claude-')
     ? standardTargets.find((target) => target.providerId === 'anthropic')
     : undefined;
@@ -94,12 +99,15 @@ export const resolveRequestedTargets = (request: RoutePlanInput): RequestedTarge
   // Per-request explicit restrictions apply later as filters and may
   // yield no route.
   const override = request.targetCandidatesOverride;
-  const targets = override && useFaithfulAnthropicTarget
+  if (request.launchRoutingContract && override
+    && JSON.stringify(override) !== JSON.stringify(selected ?? standardTargets)) throw new LaunchRoutingContractError();
+  if (!allowEquivalentModels && !selected && override?.some((target) => !isExactModelTarget(requestedModel, target))) throw new LaunchRoutingContractError();
+  const targets = selected ?? (override && useFaithfulAnthropicTarget
     ? [
       faithfulClaudeTarget,
       ...override.filter((target) => !sameTarget(faithfulClaudeTarget, target)),
     ]
-    : override ?? standardTargets;
+    : override ?? standardTargets);
   return {
     kind: 'known',
     targets: targets.map((target) => ({
@@ -157,7 +165,7 @@ export const resolveRouteTargets = (
   council: ModelEquivalenceCouncil,
   now: Date,
 ): RouteTargetResolution => {
-  const resolution = resolveRequestedTargets(request);
+  const resolution = resolveRequestedTargets(request, policy.allowEquivalentModels);
   if (resolution.kind === 'unknown-model') return resolution;
   const targets: ResolvedRouteTarget[] = resolution.targets.map((resolved) => ({
     providerId: resolved.providerId,
@@ -244,6 +252,7 @@ export const selectRouteCandidates = (input: {
   const { targets, capableTargets, faithfulClaude } = resolution;
   const candidatesFor = (target: ResolvedRouteTarget): RankedRouteCandidate[] => input.accounts
       .filter((account) => account.readiness === 'ready'
+        && (!input.request.launchRoutingContract || input.request.launchRoutingContract.authorizedAccountRefs.includes(account.accountRef))
         && account.targetProviderId === target.providerId
         && account.supportedModelIds.includes(target.modelId)
         && (!target.transportProviderId

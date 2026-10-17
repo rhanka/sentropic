@@ -1,0 +1,317 @@
+# Feature: Gateway PR1 Durable Vibe Muse
+
+## Objective
+- Build Sentropic gateway PR1 per spec-gateway-evolutions-v8 (sha256 a530321eb43171ee3b11605b90aa81699bb2758a0020e43f389a59156642eaf9, VALIDÉ): durable caller keys across restart, exact requested model by default, configurable client order with Vibe and Muse first.
+- Deliver internal lots L0, L1, L2, L4g on one branch; L4 candidate CI and L8 wait for h2a companion feat/gw-thin-consumer-pr1 and immo #679 merge for cluster-mesh widening.
+
+## Scope / Guardrails
+- Scope limited to gateway/mesh durable sessions, exact routing, Muse effort control, tooling contract, product standalone policy.
+- One migration max in `api/drizzle/*.sql` (none planned).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `/home/antoinefa/src/sentropic/tmp/worktrees/gw-durable-vibe-muse`.
+- Automated test campaigns run on dedicated environments (`ENV=test-gw-durable-vibe-muse` / `ENV=e2e-gw-durable-vibe-muse`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
+- In every `make` command, `ENV=<env>` is passed as the last argument.
+- All new text in English.
+- AGPL: no code from free-claude-code; `.tmp/fcc-study/src/` never copied or mounted.
+- 0 Python in jobs; Python clients qualify on owner machine only (GWV-EX6).
+- Test-first; refusal paths tested; versions per Post-Rebase Gate.
+- One Docker build at a time; `make ps-all` checked before builds; ports 9600/5800/1700/19600 free at start.
+- Never merge, never publish on this branch.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `packages/llm-mesh/src/routing-policy.ts`
+  - `packages/llm-mesh/src/index.ts` (BR120-EX8)
+  - `packages/llm-mesh/src/routing-contracts.ts` (BR120-EX8)
+  - `packages/llm-mesh/src/route-planner-state.ts` (BR120-EX8)
+  - `packages/llm-mesh/src/route-attempt.ts` (BR120-EX8)
+  - `packages/llm-mesh/src/routing-targets.ts`
+  - `packages/llm-mesh/src/route-planner.ts`
+  - `packages/llm-mesh/src/route-selection.ts`
+  - `packages/llm-mesh/src/route-quote.ts`
+  - `packages/llm-mesh/src/launch-routing-contract.ts`
+  - `packages/llm-mesh/src/ports/route-affinity-store.ts`
+  - `packages/llm-mesh/src/transport/muse-runtime-client.ts`
+  - `packages/llm-mesh/src/transport/muse-native-responses-client.ts`
+  - `packages/llm-mesh/src/execution-features.ts`
+  - `packages/llm-mesh/src/service/facade.ts`
+  - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`
+  - `packages/llm-mesh/tests/**`
+  - `packages/llm-gateway/src/**`
+  - `packages/llm-gateway/tests/**`
+  - `tools/gateway-evolution/**`
+  - `apps/llm-gateway/src/app.ts` (GWV-EX1)
+  - `apps/llm-gateway/src/config.ts` (GWV-EX1)
+  - `apps/llm-gateway/src/readiness.ts` (GWV-EX1)
+  - `apps/llm-gateway/src/index.ts` (GWV-EX1a)
+  - `apps/llm-gateway/src/lifecycle.ts` (GWV-EX1a)
+  - `apps/llm-gateway/tests/**` (GWV-EX1 only)
+  - `api/src/services/llm-runtime/standalone-ports.ts` (GWV-EX5 only)
+  - `api/tests/unit/gateway-exact-model-policy.test.ts` (GWV-EX5 only)
+  - `api/tests/unit/gateway-wire-adapter.test.ts` (GWV-EX5 only)
+  - `api/tests/api/cluster-mesh-gw.test.ts` (GWV-EX5 only)
+  - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
+  - `packages/llm-mesh/CHANGELOG.md`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-gateway/package.json`
+  - `packages/llm-gateway/README.md`
+  - `BRANCH.md`
+  - `.h2a/build/gw_pr1_report.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `.github/workflows/**`
+  - `packages/cluster-mesh/**` (GWV-EX4 deferred until after immo merge)
+  - `packages/h2a*/**` (h-cond companion owns)
+  - `deploy/**`
+  - `.tmp/fcc-study/src/**`
+  - `credentials/secrets/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `apps/llm-gateway/src/{app,config,readiness}.ts` (GWV-EX1)
+  - `api/src/services/llm-runtime/standalone-ports.ts` (GWV-EX5)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
+
+## Feedback Loop
+- `Final-local-checkpoint`: C1/C2 and diff whitespace checks pass; `make down ps ... ENV=test-gw-durable-vibe-muse` leaves no owned Compose services. Tooling pure/behavior and packed host gates pass. Artifact source remains 22e1d6b24; later commits record tooling/acceptance evidence only. API/private/native/consumer acceptance remains explicitly unchecked.
+- `L1-packed-gate`: actual guarded mesh/gateway archives from `22e1d6b24425629e5d9b64fb407c2aa7d5fa6692` pass clean-container installed imports and strict TypeScript 5.9.3 consumer compilation (1/1), plus real Node process restart/key/receipt/revocation/wrong-key/corruption scenarios (2/2). Installation scripts enabled, Python absent, no repository mount in the consumer. SHA-256: mesh `2585c06699dedeedd0fa1826e6a6dd9c151ea72e665ba5aae100e7df0c9679a6`; gateway `226dffc08e42a180654ef925db0f4c48ce1609a3733ee9c831a53fc4eb3747f5`. This is independent host evidence, not the pending h2a consumer/release receipt.
+- `FL-23-consumer-types`: the clean packed TypeScript 5.4 probe fails in current Hono declarations (`Uint8Array` generic, TS2315). The Hono dependency range is unchanged from main. The packed consumer uses pinned TypeScript 5.9.3 with full declaration checking; repository source gates still use 5.4.5. No skipLibCheck/peer bypass was added. TypeScript 5.4 consumers need separate Hono/type compatibility qualification.
+- `Stop-boundary` (2026-10-17): portable L0/L1/L2 checks are green; full lot acceptance is not claimed. L0 shared freeze/consumer receipt commands need h-cond acknowledgement; private/API gates hit the immo-dependent lock; C admission is absent for the native Muse probe; L4/L8 remain deferred. Preserve all unchecked acceptance items. CI AI key exhaustion is owner-reported and will be reported without workaround.
+- `L1-L2-docs`: gateway README documents the published host/control binding, protected state, keys and receipts; mesh changelog records exact-default migration; canonical routing spec records the v8 amendment and unqualified/deferred surfaces. Registry recheck remains gateway 0.20.0 / mesh 0.26.1; candidate 0.21.0 / 0.27.0 stays above them. Equivalence generation check passes.
+- `L2-control-preservation`: real host tests now prove missing usage remains null and out-of-grant Chat effort returns 400/unsupported_parameter/reasoning.effort with zero provider calls. Chat normalization preserves reasoning controls, rejects invalid/conflicting controls and requires proven transport support. Full gateway gate passes 1327/1327.
+- `L1-storage-final-gate`: reproduced missing committed ciphertext resetting to revision zero; the protected initialization marker now makes that state corrupt across instances. Invalid namespace shapes refuse. Migration key + ack commit atomically; store outages propagate instead of quarantining valid input. Interrupted physical attempts become incomplete, and unreported usage remains null.
+- `L2-gateway-full-gate`: `make typecheck-llm-gateway lint-llm-gateway test-llm-gateway ENV=test-gw-durable-vibe-muse` passes (75 files, 1327 tests). Chat reasoning_effort is preserved and feature-gated, invalid/conflicting controls refuse, and out-of-grant effort returns a named 400 before dispatch. No timeout changed.
+- `L0-archive-semantics`: pure tooling suite now passes 36/36, including PAX extraction-size/sparse overrides and duplicate-field refusals. The extractor and inspector cannot disagree through those metadata fields.
+- `L2-mesh-full-gate`: `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-gw-durable-vibe-muse` passes: 46 files, 819 tests. Refresh tests now request the actual exact model; implicit effort/model upgrades refuse before execution; legacy multi-transport alias tests explicitly authorize equivalence and account rotation.
+- `L4g-blocked-required-controls`: no C-admitted official Responses/effort probe is available. The direct Muse Chat adapter previously dropped reasoning controls; it now refuses them with named 400/unsupported_projection before network I/O (2/2 new effort tests). Vibe is explicitly inventoried as Python/owner-machine-only. Muse qualification and the Vibe/Muse first-pair milestone remain blocked; no native adapter or successful seat evidence is invented.
+- `L2-regression-migration-4`: planner suite now passes 52/52. Exact same-account model switches serve the new model; consented rotation records a rebind/cache-continuity event; deleted pins refuse in ordinary and round-robin strategies instead of selecting a replacement.
+- `L2-regression-migration-3`: refused implicit policy upgrades preserve the prior pin and make no new provider preparation; commit/failure and commit/cancellation on the original exact model preserve it as well. Three more legacy expectations migrated (47/52 planner cases now pass; five remaining expectations under migration).
+- `L2-regression-migration-2`: explicit mapping/health tests pass again; availability diagnostics now resolve the same selected policy as planning. Four former stale-model/explicit-account/withdrawn-model success cases now assert no-route and zero additional preparation (44/52 planner cases pass; remaining eight legacy expectations are being migrated).
+- `L2-product-exact-source`: GWV-EX5 shared standalone/product factory now defaults exact, validates frozen mappings/owner/account authorization/quoted target, binds execution to the selected model and preserves selected effort. Added factory, real namespace and dispatch refusal cases. API execution is blocked by FL-21 (service cannot start); these tests are not reported green.
+- `L2-regression-migration-1`: legacy table/council tests now select equivalence explicitly; the default resolver separately asserts exact identity. Scoped targets 68/68, selection 26/26 and budget quotes 30/30 pass. Quotes no longer let a stale pin serve a different requested model; account rotation in attempt-cap fixtures is explicitly enabled.
+- `FL-22-scope-syntax`: harness C2 does not expand brace paths. C2 reported the unrelated unstaged app paths before receipt commit 3e4c019ff, but the commit was started before inspecting that output. Expanded the already-declared paths; rerun C2 before further commits. No forbidden file was changed.
+- `GWV-EX1a`: bounded process-entry delegation in private app `index.ts` and signal-handler type in `lifecycle.ts`. Reason: exposing an unused wrapper in app.ts would not prove the actual process uses the published host. Impact: an explicitly injected durable binding chooses package-owned listener/control/readiness/stop; existing unconfigured scaffold stays unavailable. Rollback: withdraw that binding, retain encrypted state and keys. Declared before editing these two paths; deployment/Compose unchanged.
+- `L2-physical-receipts` (2026-10-17): every Node-host attempt requires a durable receipt acknowledgement before dispatch; records link requested/selected model, redacted account, policy/mapping revision and terminal outcome. Estimated usage remains null in the receipt; echoed model identity remains selection-only. JSON identity contradictions terminate without retry. Receipt/zero-dispatch tests pass 2/2; host restart remains 3/3.
+- `FL-21-blocked-api-lock` (2026-10-17): `make up-api-test ... ENV=test-gw-durable-vibe-muse` stops at `install-internal-packages`: npm ci reports missing gateway 0.20.0 / mesh 0.26.1 lock rows after candidate version bumps. Root lock and cluster peer widening belong to the immo-dependent L8 gate; no peer/lock bypass or fabricated API pass. GWV-EX5 source/tests can proceed, API/app acceptance remains blocked.
+- `L2-host-policy-binding` (2026-10-17): the published Node host always supplies the protected affinity store to the mesh planner and obtains launch policy/native session identity from verified durable auth. Control acquisition requires a policy; legacy implicit sessions refuse inference. Real HTTP/restart/revocation host scenarios remain green 3/3.
+- `L2-session-policy` (2026-10-17): sessions persist a frozen trusted launch policy and reject conflicting reacquisition or implicit legacy-policy upgrades; migration rejects a key already bound to any owner. Session policy tests pass 2/2; mesh durable affinity scenarios pass 3/3.
+- `L2-durable-planner` (2026-10-17): mesh persists a first account pin before provider preparation, reloads pins for each plan, refuses deleted pins/unreadable state and awaits consented account-epoch transitions. Durable administrative reset/rebind requires a new acknowledged session policy. Scoped restart/15-session-eviction/rotation/refusal tests pass 3/3.
+- `L0-receipt-tightening` (2026-10-17): registry profile requirements accumulate per delivery; consumer acceptance requires nonempty successful required jobs and exact run/attempt/merge identities. Inherited receipts require the actual current release-lock digest as well as an unchanged external projection. Pure tooling remains 35/35.
+- `L2-affinity-storage` (2026-10-17): gateway storage binds mesh-owned affinity records to the encrypted session snapshot; required-but-missing affinity refuses. Session acquisition/import preserve all state namespaces instead of reconstructing and dropping them. Durable planner integration remains pending.
+- `BR120-EX8`: bounded L2 contract/affinity plumbing in mesh `index.ts`, `routing-contracts.ts`, `route-planner-state.ts`, `route-attempt.ts`. Reason: public frozen launch types and awaited durable affinity transitions must reach quote/plan/execute. Impact: trusted policy input and prepared-attempt lifecycle only. Rollback: close admission, preserve committed contracts/affinity/keys, never restore implicit equivalence.
+- `BR120-EX7`: shared tooling/CI-input, committed-candidate and phase-guard exception. Reason: one exact-byte GWRC-CI-V1 contract for gateway and registry; existing Ubuntu execution; candidate-phase inactivity; complete published-head acceptance. Impact: seven opt-in Sentropic targets under `tools/gateway-evolution/`; h2a CI wiring on companion only (this branch creates Sentropic side, records h2a scope for reference). Rollback: remove `tools/gateway-evolution/` targets and restore ordinary job conditions. Status: declared before L0 creates the tooling.
+- `GWV-EX1`: private app delegation `apps/llm-gateway/src/{app,config,readiness}.ts` + tests to package host. Reason: Q2 needs observable restart on the host every consumer uses. Impact: caller admission/readiness. Rollback: disable new admission, retain durable data, restore compatible published host. Status: declared; used in L1 only.
+- `GWV-EX5`: product policy `api/src/services/llm-runtime/standalone-ports.ts` + 1 new + 2 existing API tests. Reason: G hard-codes `allowEquivalentModels: true`, defeats Q3. Impact: standalone and product route planes default exact. Rollback: close affected admission, retain contracts/keys, never restore silent equivalence. Status: declared; used in L2 only.
+- `GWV-EX6`: bounded owner-machine UAT for native CLI qualification. Reason: qualify real clients without prohibited job runtime. Impact: owned test processes/profiles only. Rollback: stop processes, remove overlays, preserve native login. Status: declared; used in L4g/L4 native runs only.
+- `FL-01-attention`: #662 tuple published REPORTED (gateway 0.20.0, mesh 0.26.0, cluster-mesh 0.16.0); H0/native evidence on companion. L0 rechecks artifact identities; no pass invented.
+- `FL-04-blocked-import-only`: C L1 owns `cli-seat-store-reader.ts`; `--from cli|token` returns typed `unavailable` until available. PR1 durable/exact/Vibe/Muse not blocked.
+- `FL-09-attention`: Muse default reasoning controls vs Meta Chat refusal; L4g owns probe/adapter before Muse enablement.
+- `FL-11/FL-13-attention`: cluster-mesh peer widening + bump (GWV-EX4) waits for immo #679 single merge/publication, then PR1 rebase. L8 waits likewise.
+- `FL-14-attention`: h-cond owns draft `feat/gw-thin-consumer-pr1` (`/home/antoinefa/src/h2a/tmp/gw-thin-consumer-pr1`); H0 adopts #662 pins first. No branch created here.
+- `FL-18-attention`: candidate producer/read path await L0 proof; missing bytes are typed blocked.
+- `GW8-m1-done`: base/head tree objects under default depth-1 merge-ref checkout unspecified. `verifyMergeParents` obtains both parents, verifies `mergeSha^1 == baseSha` and `mergeSha^2 == headSha`, treats fetch failure as unreadable base evidence; pure tests pin accept/refuse/unreadable. h2a-side `gateway-consumer-workflows.test.js` parent assertion is h-cond companion scope (FL-14).
+- `FL-20-attention` (2026-10-17): companion is draft h2a #353 at `60816a1c`, clean worktree. Sentropic package rows now use companion v1 `tarballSha256`/`sourceIdentity`; 27/27 pure tests include escaped duplicate keys and closed nested fields. Consumer acknowledgement/read-path CI remains h-cond-owned; no agreement or pass inferred.
+- `L0-producer-progress` (2026-10-17): all seven gateway/registry deliveries construct digest-indexed bundles with exact manifest/file identity and typed path/missing/extra/altered refusals (29/29 pure tests). Mesh/gateway typecheck and lint pass; transfer/read-path acceptance remains pending.
+- `L0-archive-check` (2026-10-17): bounded gzip/tar inspection rejects traversal, links, sensitive paths, bad checksums/truncation and invalid package identity before installation; pure suite 31/31.
+- `L0-transfer-progress` (2026-10-17): producer validates source HEAD, archive name/version/SHA-256/SHA-512, namespaced sibling receipts and confined files, then copies immutable bytes and writes input last; host wrapper refuses wrong/dirty companion branches, performs no Git write. Synthetic transfer passes; actual companion CI proof remains FL-18. h-cond has no live advertised session, so no acknowledgement/message delivery is claimed.
+- `L1-key-recovery` (2026-10-17): reproduced three session failures, then fixed encrypted key recovery, same-key concurrent acquisition and durable revocation tombstones; scoped session service 8/8. No key appears in public session/receipt reads.
+- `L1-store-fencing` (2026-10-17): empty stores require the protected key; CAS operations serialize within one adapter and preserve other live writers regardless of age. Lifetime host-writer claim is available; scoped store 5/5 after reproducing missing-key and conflicting-write failures.
+- `L1-node-http` (2026-10-17): gateway-owned Node bridge preserves request/response bytes and propagates HTTP cancellation with stream backpressure; targeted tests pass. Owner-state resolver validates scope segments and absolute platform state roots.
+- `L1-control-owner` (2026-10-17): reproduced cross-owner issuance through authenticated control, then bound every operation to the host owner; owner refusal test green, zero mutations. Private socket client test also passes with 0600 socket/authenticator and inference-key refusal.
+- `L1-receipt-recovery` (2026-10-17): receipt service checks active session/model grants, serializes admissions/settlements and reconciles interrupted pending requests as incomplete without replay; receipt tests 2/2.
+- `L1-private-socket` (2026-10-17): real authenticated Unix transport/client round trip passes; authenticator rotates at host start and the client reads it through the protected path, without another caller-key store. Windows ACL qualification remains unavailable and the Node host refuses it.
+- `L2-contract-freeze` (2026-10-17): immutable v1 launch contract binds owner, exact model set, authorized account set, independent rotation consent, preserved effort and optional mapping ID/revision/SHA-256 over exact targets. Tampered, absent, unknown or duplicated policy data refuses; mesh typecheck and scoped contract tests 3/3.
+- `L1-shared-host-proof` (2026-10-17): real HTTP + real planner + private control passes 3/3 host runtime tests; key/receipt restart, persistent revocation, second-writer refusal, wrong-key/corruption readiness. Audit tests 2/2 prove failed durable admission makes zero provider calls and one receipt reference reaches settlement. No timeout changed.
+- `L2-exact-default` (2026-10-17): aliases, quote and planning now default exact, including provider identity. Cross-model tables require explicit selection; frozen mapping/account/rotation constraints override host policy and conflicting overrides refuse. Scoped exact-routing tests 2/2; broad regression adaptation remains pending.
+- `L1-node-lifecycle` (2026-10-17): host HTTP bridge tracks active requests for drain; authenticated acquisition has a readiness gate. TypeScript stream/header adaptation preserves the repository's TypeScript 5.4 baseline. Shared-host scenarios pass 3/3.
+- `L1-packed-staging` (2026-10-17): exact gateway/mesh archive validation and packed-test staging are implemented; missing artifacts, foreign scopes and zero-test discovery refuse. Pure tooling tests 35/35; actual clean-container packed execution is pending.
+- `L2-static-contract` (2026-10-17): pack build exposed the candidate-visibility helper's former max-attempt-only type; its signature now includes the enforced rotation policy. No runtime rule or timeout weakened.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Q-B1=B selects three Sentropic delivery PRs in sequence; PR1 uses internal lots L0/L1/L2/L4g/L4/L8 on this single branch, never per-lot branches.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `/home/antoinefa/src/sentropic/tmp/worktrees/gw-durable-vibe-muse`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
+  - Switch back to worktree after UAT.
+
+## Plan / Todo (lot-based)
+- [ ] **Lot 0 — Baseline and test contract freeze**
+  - [x] Re-pin baseline: G `db314a67` is in HEAD; fresh origin/main remains `fb5e92a6a`; immo #679 remains OPEN/DRAFT at `43872522a22467f39d5211c5c59f1eca1ff62a11`; h2a companion #353 remains OPEN/DRAFT at `60816a1cafdb03a923e03f484b221a93efeb4a51`. Published gateway/mesh are 0.20.0/0.26.1; candidates 0.21.0/0.27.0 exceed main/npm/in-flight.
+  - [ ] Freeze LaunchRoutingContract, four 6.1 export paths, host start/readiness/drain/stop, control/session/config/qualification descriptors, receipt import/revoke, recipes with h-cond; register companion `feat/gw-thin-consumer-pr1`
+  - [x] Create `tools/gateway-evolution/clients.json` L0 vendor runtime inventory (BR120-EX7 scope)
+  - [ ] Complete shared verifier CLI (BR120-EX7): pure validators, producer and packed-host commands implemented; consumer/release receipt CLI and native client commands await companion protocol/qualification, no acceptance pass
+  - [x] Create `tools/gateway-evolution/Makefile` with seven targets (BR120-EX7): gateway-candidate-bundle, gateway-consumer-gate, gateway-client-fixtures, gateway-client-e2e, gateway-release-check, gateway-host-packed-test, gateway-harness-test; pinned Python-free runner reaps only its invocation
+  - [x] Create `tools/gateway-evolution/run.mjs` closed v1 input/manifest validation + `tests/run.test.mjs` (pure green 13/13) + `manifests/tool-only.json` (node:24-bookworm-slim digest 0e0ff40c, python-absent)
+  - [x] Create `tools/gateway-evolution/tests/make-contract.test.sh` + `runner-cleanup.test.sh`; behavior green: command-line ENV, root include, project/port refusals, actual runner success/failure/cancellation, unrelated sentinel preserved
+  - [x] Create gateway `tests/client-runtime-admission.test.ts` + `src/client-runtime-admission.ts` (green 9/9, typecheck/lint clean)
+  - [x] Create gateway `tests/evolution-contract.test.ts` + `src/evolution-contract.ts` (green 6/6, typecheck/lint clean)
+  - [x] Implement GW6-M1/RC6-M1 context lock validation + `release bump accepted` + `@sentropic drift refused` (typed `external-row-unpinned`, zero installs) in helper/verifier/tests (pure green 25/25)
+  - [ ] Implement GW8-m1: classifier obtains both parents (fetch-depth 2 or fetch base+head), verifies merge parents equal base/head, fetch failure is unreadable base evidence; add `gateway-consumer-workflows.test.js` parent-resolution assertion (companion file, recorded here)
+  - [x] Inventory every PR-triggered h2a workflow incl `native-host-equipment.yml`; non-overlap recorded: smoke/rehearsal carry consumer-phase guards, native-host-equipment stays unguarded committed-lock host-test (scripts-disabled install, gateway-host-docs.test.js), no candidate-only imports on either side; recheck at scope changes
+  - [ ] Lot gate:
+    - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [ ] **API tests**
+      - [ ] Existing retained only: `api/tests/unit/gateway-count-tokens.test.ts`, `api/tests/unit/gateway-wire-adapter.test.ts`, `api/tests/api/cluster-mesh-gw.test.ts` (no recode, release evidence)
+      - [ ] No new API files in L0
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None in L0
+    - [ ] **E2E tests**
+      - [ ] None in L0 (native E2E entrypoint lands in L4)
+    - [ ] Package/tooling gates:
+      - [x] `make test-llm-gateway SCOPE=tests/evolution-contract.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-harness-test MODE=pure ARTIFACT_MANIFEST=tmp/gw-tool-only.json ENV=test-gw-durable-vibe-muse`
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-harness-test MODE=behavior ARTIFACT_MANIFEST=tmp/gw-tool-only.json API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 GATEWAY_PORT=19600 ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/client-runtime-admission.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/responses-real-planner.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-mesh SCOPE=tests/routing-targets.test.ts ENV=test-gw-durable-vibe-muse`
+    - [x] `make scope-check ENV=test-gw-durable-vibe-muse`
+  - [ ] UAT L0 synthetic contract drills
+    - [ ] List every client/gap with synthetic route/refusal per wire; required-unavailable starts zero processes; reorder leaves mappings unchanged
+    - [ ] Pack exact closure, inspect inventory/digests/size, prove default checkout reads committed bytes without artifact token
+    - [ ] Corrupt/remove/link one helper file, observe rejection before install; transition to published data with no candidate tree; absent/none leaves CI unchanged
+    - [ ] Record head/base/merge; prove changed base invalidates prior receipt
+    - [ ] CI lifecycle drills on fixtures: valid candidate classifiers + inactive smoke/rehearsal/applicable namespace; corrupt phase/program/index fails before install; published transition executes all legs; withheld workflow or changed base refuses readiness; complete published gate marks ready with merge-commit method; coverage replacement union executes, row removal or old receipt refuses
+
+- [ ] **Lot 1 — Gateway-owned durable sessions and request state**
+  - [x] Create gateway `src/session-service.ts` (+importSession), `src/ports/gateway-state.ts`, `src/request-receipts.ts` (unit green 7+2)
+  - [x] Create `src/node/gateway-state-store.ts` + `control-server.ts` + `control-client.ts` + `session-migration.ts` (unit green 4+4+3)
+  - [x] Create `src/node/gateway-host.ts` + `src/node/index.ts` + published export map (`./node`, `./node/control-client`); one package-owned HTTP/SSE/session/control lifecycle, protected key recovery, readiness/drain/stop
+  - [x] Wire exports/auth in `src/index.ts`, `src/ports/caller-auth.ts`, `src/router/index.ts`, `package.json` export/files map, README/CHANGELOG; protected mesh storage adapter reuse; optional `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts` change with its test
+  - [x] Wire same published host into private app under GWV-EX1/GWV-EX1a (source; process tests blocked by FL-21): `apps/llm-gateway/src/app.ts`, `apps/llm-gateway/src/config.ts`, `apps/llm-gateway/src/readiness.ts` + manifest/tests; no Compose edit; private app never published
+  - [ ] Lot gate:
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [ ] **API tests**
+      - [ ] None in L1
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None in L1
+    - [ ] **E2E tests**
+      - [ ] None in L1 (native client E2E in L4)
+    - [ ] Package gates:
+      - [x] `make test-llm-gateway SCOPE=tests/session-store.test.ts ENV=test-gw-durable-vibe-muse` (7/7 in full gate)
+      - [x] `make test-llm-gateway SCOPE=tests/session-control-auth.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/session-migration.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/request-receipts.test.ts ENV=test-gw-durable-vibe-muse` (2/2)
+      - [x] `make test-llm-gateway SCOPE=tests/host-runtime.test.ts ENV=test-gw-durable-vibe-muse` (3/3 real HTTP/planner restart, revoke, second-writer and corruption)
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-host-packed-test ARTIFACT_MANIFEST=tmp/gw-pr1-packed/manifest.json SCOPE=tools/gateway-evolution/packed/host-exports.test.ts ENV=test-gw-durable-vibe-muse` (strict TS 5.9.3 consumer)
+      - [x] `make -f tools/gateway-evolution/Makefile gateway-host-packed-test ARTIFACT_MANIFEST=tmp/gw-pr1-packed/manifest.json SCOPE=tools/gateway-evolution/packed/session-store-restart.test.ts ENV=test-gw-durable-vibe-muse`
+      - [ ] `make test-llm-gateway-process SCOPE=tests/host-composition.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [ ] `make typecheck-llm-gateway-process lint-llm-gateway-process API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+  - [ ] UAT L1 durable sessions
+    - [ ] Obtain synthetic session through authorized control; infer using it
+    - [ ] Stop/start host against same store; reuse same key
+    - [ ] Refuse another owner session lookup; revoke then restart and show rejection
+    - [ ] Inject failed store write; observe no successful key issuance
+    - [ ] Packed proof imports only published subpaths; start/stop/start real Node process; stable keys/receipts/revocations; readiness fails on key mismatch/corruption
+
+- [ ] **Lot 2 — Exact routing, durable affinity and account policy**
+  - [x] Create mesh `src/launch-routing-contract.ts` + `src/ports/route-affinity-store.ts`; make exact identity default at alias/quote/plan/execute; keep cross-model table behind explicit selection only
+  - [x] Persist authorized account-set/affinity, rotation consent, request/attempt receipt linkage; preserve unknown usage and typed terminal failure
+  - [x] Apply GWV-EX5 (source/tests added; API execution blocked by FL-21): change `api/src/services/llm-runtime/standalone-ports.ts` policy factory to consume trusted LaunchRoutingContract, default exact; cover standalone + product `/gw` planes; document mesh default change in `packages/llm-mesh/CHANGELOG.md` with opt-in migration
+  - [ ] Lot gate:
+    - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [ ] **API tests**
+      - [ ] New `api/tests/unit/gateway-exact-model-policy.test.ts`: exact Claude with only Argon makes zero provider calls; explicit G mapping reaches selected Argon with requested/selected/observed identities + mapping revision; quote/plan/execute, default absence, restart, conflicting override, old implicit session refused
+      - [ ] Update `api/tests/unit/gateway-wire-adapter.test.ts` for real mount + receipt behavior
+      - [ ] Update `api/tests/api/cluster-mesh-gw.test.ts` for real mount + receipt behavior
+      - [ ] `make test-api-unit SCOPE=tests/unit/gateway-exact-model-policy.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [ ] `make test-api-unit SCOPE=tests/unit/gateway-wire-adapter.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [ ] `make test-api-endpoints SCOPE=tests/api/cluster-mesh-gw.test.ts API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+      - [ ] `make typecheck-api lint-api API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None in L2
+    - [ ] **E2E tests**
+      - [ ] None in L2 (native exact-model checks in L4/L5)
+    - [ ] Package gates:
+      - [x] Run mesh policy regressions (`routing-policy.test.ts` retained; exact-default assertions added in exact-routing); update `tests/routing-targets.test.ts`, `tests/route-selection.test.ts`, `tests/budget-quote.test.ts`, `tests/route-planner.test.ts`
+      - [x] Run retained gateway regressions `tests/route-stream-flow.test.ts`, `tests/sticky.test.ts`, `tests/responses-real-planner.test.ts`
+      - [x] New mesh `tests/launch-routing-contract.test.ts` + `tests/durable-affinity.test.ts`
+      - [x] New gateway `tests/request-model-receipt.test.ts`
+      - [x] `make test-llm-mesh SCOPE=tests/launch-routing-contract.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-mesh SCOPE=tests/durable-affinity.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/request-model-receipt.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make test-llm-gateway SCOPE=tests/route-stream-flow.test.ts ENV=test-gw-durable-vibe-muse`
+      - [x] `make check-llm-model-equivalences ENV=test-gw-durable-vibe-muse`
+    - [ ] `make up-api-test API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make down API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+    - [x] `make ps API_PORT=9600 UI_PORT=5800 MAILDEV_UI_PORT=1700 ENV=test-gw-durable-vibe-muse`
+  - [ ] UAT L2 exact routing
+    - [ ] Ask exact Claude with only Argon available; observe zero provider calls
+    - [ ] Explicitly choose G mapping; observe selected Argon + evidence level
+    - [ ] Send unsupported effort; observe named refusal
+    - [ ] Select A/B in separate sessions, restart, retain affinity
+    - [ ] Enable rotation explicitly, inject pre-commit 429, show only authorized same-model B; inject mid-stream failure, show no B call
+
+- [ ] **Lot 4g — Muse required-control probe (same branch, slot, tuple)**
+  - [ ] Run bounded C-admitted probe of official native Meta Responses/effort contract or documented control-preserving transport; freeze verified result; never another model mapping; never delete the field
+  - [ ] If proven: implement smallest transport change, add `src/transport/muse-native-responses-client.ts` only, replay unmodified default request through real planner
+  - [x] If unproven: keep Muse visibly blocked in Feedback Loop; Vibe proceeds; never call first-pair milestone complete
+  - [ ] Update mesh `tests/transport/muse-runtime-client.test.ts` + `tests/execution-features.test.ts` + gateway `tests/responses-real-planner.test.ts`
+  - [x] New mesh `tests/muse-effort-contract.test.ts` (native adapter unproved and not delivered)
+  - [ ] Lot gate:
+    - [x] `make test-llm-mesh SCOPE=tests/muse-effort-contract.test.ts ENV=test-gw-durable-vibe-muse`
+    - [x] `make test-llm-gateway SCOPE=tests/responses-real-planner.test.ts ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
+    - [x] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
+    - [ ] **API tests**
+      - [ ] None in L4g unless newly evidenced host integration separately scoped
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] None in L4g
+    - [ ] **E2E tests**
+      - [ ] Reuse L4 Muse scenario + artifact receipt (no separate harness)
+  - [ ] UAT L4g owner-machine Muse effort (GWV-EX6, C admission)
+    - [ ] Send default Muse request with reasoning controls; observe named 400 or proven control-preserving transport result
+    - [ ] Replay unmodified default request through real planner after adapter; verify effort preserved end to end
+    - [ ] Record probe evidence, transport choice, and enable/block decision
+
+- [ ] **Lot 4 — Thin h2a consumer, Vibe/Muse first, Claude plugins and direct RC (DEFERRED: needs companion + immo merge)**
+  - [ ] Status: deferred until h-cond `feat/gw-thin-consumer-pr1` carries H0 + L4 composition and immo #679 merge/publication lands; Sentropic side files below are not edited in this iteration
+  - [ ] Gateway `src/clients/index.ts`, `src/clients/claude.ts`, `src/clients/vibe.ts`, `src/clients/muse.ts`, `src/clients/codex.ts`, `src/clients/agy.ts`, `src/client-qualification.ts`, `src/node/gateway-config.ts`
+  - [ ] Gateway `tests/gateway-config.test.ts`, `tests/client-qualification.test.ts`, `tests/client-recipe-exports.test.ts`
+  - [ ] h2a runtime `src/gateway-session-client.ts`, `src/gateway-client-launch.ts` + 8 new tests incl `gateway-no-native-reader.test.ts` + `gateway-qualification-commands.test.ts` (companion-owned)
+  - [ ] Native entrypoint `scripts/e2e-gateway-clients.mjs` + `packages/h2a/test/gateway-clients.test.js` (companion-owned)
+  - [ ] Config/qualification commands + Q4 reorder/enable/revoke drills (companion-owned, recorded here at execution)
+
+- [ ] **Lot 8 PR1 — Packaging, integration acceptance and cold rollout (DEFERRED: needs immo merge + published tuple)**
+  - [ ] Status: deferred until immo single merge/publication, PR1 rebase, GWV-EX4 cluster-mesh peer widening + bump, fixtures/locks regeneration, candidate CI receipt, merge/publication
+  - [ ] Consolidate specs, READMEs/CHANGELOGs, client inventory; freeze versions/digests; two independent reviews; h-cond consumer signoff
+  - [ ] New gateway `tests/evolution-acceptance.test.ts`; supplementary `apps/llm-gateway/tests/evolution-restart.test.ts`
+  - [ ] Full gates per 8/L8 with `GW_EVOL_DELIVERY=pr1` row binding; `test-api` includes `test-api-ai` disposition (credential source recorded; missing creds is blocked, never pass)
+  - [ ] Record registry writer window R2/R7a/R3 after PR1 publication
+
+## Environment
+- Candidate feature versions gateway 0.21.0 / mesh 0.27.0: fresh npm 0.20.0 / 0.26.1, main fb5e92a6a unchanged after fetch, immo in-flight 0.20.1 / 0.26.1 and C mesh 0.26.2. Final L8 rechecks versions/peers after the required immo merge/rebase; no publication here.
+- Branch `feat/gw-durable-vibe-muse`; worktree `/home/antoinefa/src/sentropic/tmp/worktrees/gw-durable-vibe-muse`; base `origin/main fb5e92a6a`
+- Candidate index 120 slot 0; API_PORT 9600 UI_PORT 5800 MAILDEV_UI_PORT 1700 GATEWAY_PORT 19600
+- Test ENV `test-gw-durable-vibe-muse`; native E2E ENV `e2e-gw-durable-vibe-muse`; owner UAT host `dev-gw-durable-vibe-muse` after qualification
+- Companion h2a `feat/gw-thin-consumer-pr1` at `/home/antoinefa/src/h2a/tmp/gw-thin-consumer-pr1` (h-cond); immo `feat/immo-861-mcp-registry` at `tmp/worktrees/immo-861-mcp-registry`
+- Spec `spec-gateway-evolutions-v8.md` sha256 `a530321eb43171ee3b11605b90aa81699bb2758a0020e43f389a59156642eaf9`; challenge `challenge-opus-gw-evol-v8.md` VALIDÉ; shared block `b46d3c3c10873b8f5742fd8a4c6349f607d480b907dea899c38f0e8bb4e3b332`
+

@@ -88,7 +88,7 @@ describe('route candidate selection', () => {
         requestedModel: 'claude-opus-5-xhigh',
         requiredCapabilities: ['tools', 'streaming'],
       },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: launchAccounts,
     }));
@@ -99,7 +99,7 @@ describe('route candidate selection', () => {
   it('routes Fable 5.1 max to GPT-6 Astra max when no Anthropic account is enrolled', () => {
     const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-fable-5-1-max' },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: [{
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
@@ -122,7 +122,7 @@ describe('route candidate selection', () => {
         requestedModel: 'claude-sonnet-4-6',
         requiredCapabilities: ['tools', 'streaming'],
       },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: [{
         accountRef: 'codex-internal',
@@ -150,7 +150,7 @@ describe('route candidate selection', () => {
           providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.1-flash-lite',
         }],
       },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: [{
         accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
@@ -304,7 +304,7 @@ describe('route candidate selection', () => {
   it('orders exact routes before same-transport equivalents', () => {
     const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash' },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: {
         ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
         groups: [{
@@ -346,7 +346,7 @@ describe('route candidate selection', () => {
           providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
         }],
       },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: [
         {
@@ -410,7 +410,7 @@ describe('route candidate selection', () => {
         requestedModel: 'claude-opus-5-5',
         requiredCapabilities: ['tools', 'streaming'],
       },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: readyAccounts,
     }));
@@ -445,7 +445,7 @@ describe('route candidate selection', () => {
     }];
     const overridden = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-opus-5-5', targetCandidatesOverride: conflicting },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: overrideAccounts,
     }));
@@ -454,7 +454,7 @@ describe('route candidate selection', () => {
 
     const control = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash', targetCandidatesOverride: conflicting },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: [...accounts, overrideAccounts[1]!],
     }));
@@ -487,14 +487,14 @@ describe('route candidate selection', () => {
     ];
     const expanded = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-opus-5-5' },
-      policy: DEFAULT_ROUTE_POLICY, council, accounts: councilAccounts,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true }, council, accounts: councilAccounts,
     }));
     expect(expanded.map((candidate) => candidate.target.modelId))
       .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
 
     const control = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gpt-6.1-sol' },
-      policy: DEFAULT_ROUTE_POLICY, council, accounts: councilAccounts,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true }, council, accounts: councilAccounts,
     }));
     expect(control.map((candidate) => candidate.target.modelId))
       .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
@@ -525,7 +525,7 @@ describe('route candidate selection', () => {
     ) =>
       selectRouteCandidates({
         request: { requestedModel: 'claude-opus-5-5', ...extra },
-        policy: DEFAULT_ROUTE_POLICY,
+        policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
         council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
         accounts: aliasAccounts,
       });
@@ -580,7 +580,7 @@ describe('route candidate selection', () => {
         requiredCapabilities: ['tools', 'streaming'],
         explicit: { diagnosticAccountRef: 'muse-redacted' },
       },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: trio,
     })).map((candidate) => candidate.target.transportProviderId)).toEqual(['muse']);
@@ -589,14 +589,14 @@ describe('route candidate selection', () => {
         requestedModel: 'claude-opus-5-5',
         requiredCapabilities: [{ capability: 'contextWindowTokens', minimum: 999_999_999 }],
       },
-      policy: DEFAULT_ROUTE_POLICY,
+      policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: trio,
     })).toMatchObject({ kind: 'capabilities-unmet' });
     const ordered = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-opus-5-5' },
       policy: {
-        ...DEFAULT_ROUTE_POLICY,
+        ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true,
         strategy: { kind: 'ordered' as const, preferences: [{ transportProviderId: 'codex' }] },
       },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL, accounts: trio,
@@ -605,7 +605,7 @@ describe('route candidate selection', () => {
     const roundRobin = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-opus-5-5' },
       policy: {
-        ...DEFAULT_ROUTE_POLICY,
+        ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true,
         strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
       },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL, accounts: trio,

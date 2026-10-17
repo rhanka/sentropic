@@ -31,3 +31,6 @@ export {
 export * from './request-body-pool.js';
 export { retainGatewayStreamBody } from './request-body-retention.js';
 export * from './request-body-limit.js';
+export type { AcquireSessionInput, IssuedSession, CallerContext } from './session-service.js';
+export * from './request-receipts.js';
+export * from './ports/gateway-state.js';
