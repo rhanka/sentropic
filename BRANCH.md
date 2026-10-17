@@ -106,7 +106,7 @@
     - [x] Typecheck green at `8fec6302d`.
     - [ ] Tests at `8fec6302d`: 61 files pass, 5 skipped, 3 failed (`staged-units.spec.ts`, `visibility.spec.ts`, `manifest.spec.ts`; 9 K4 tests) — all `UnsupportedProfileError: fenced-writers-v1` from carried K4 passing a fence to K3 `commitAtomic` (O4:B1(b)), owned by Lot 2. K1/K2a/K2b/K3/C0 suites green.
 
-- [ ] **Lot 1 — K2b r3 findings (shared corpus and reference)**
+- [x] **Lot 1 — K2b r3 findings (shared corpus and reference)**
   - [x] MAJEUR-N1: add a shared canonical staged codec (versioned, domain-separated, framed) deriving `fragmentDigest`, `dependencyRoot` and `effectRoot`; reference recomputes on every ordinal and on seal; corpora derive values from the codec instead of `dep-root-k2b` / `eff-root-k2b`.
     - [x] RED spec `packages/cluster-mesh/tests/storage/staged-codec.spec.ts` (independent literal vectors + discrimination).
     - [x] Codec `packages/cluster-mesh/src/storage/staged-codec.ts`; mutants MC1 (dependencies dropped), MC2 (moduleResult always absent), MC3 (null predecessor encoded as empty) each killed at one targeted test.
@@ -137,18 +137,18 @@
     - [x] Lifecycle RED probes require explicit payload dispositions, independent outcome/notification membership, and response-loss recovery after committed disposal; the aggregate fixture now uses the K1 encoded-value contract.
     - [x] Reference records actual retained/erased dispositions and canonical completion/notification membership before simulating a lost response; pre-outcome failure leaves the local disposal uncommitted. Profile mutations pass 40/40; new lifecycle mutants follow.
     - [x] `tests/storage/lifecycle-integrity.spec.ts`: five exact-target mutants killed (5/5): duplicate outcomes, duplicate notifications, false record/aggregate erasure and committed completion lost after response interruption.
-  - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header (done with MINEUR-1); corrections recorded here with post-rebase SHAs.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make lint-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
+  - [x] MINEUR-9/10: `read-corpus.ts` header corrected at `655f13a46`. Historical K1 `R3-MUT1` overstated the evidence at its original date: actual targeted M6/M11 proofs are carried at `6d3d0f6aa`; exact assertion pins are at `a5ea9b226`. Stale source-branch reports are superseded by this branch/report, with current ancestry and version 0.19.0.
+  - [x] Lot gate (K2b passes; the carried K4 failures remain assigned to Lots 2–5):
+    - [x] `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`: typecheck/lint pass, 65 files pass, 3 K4 files fail (9 tests), 5 packaging files skip; 698 tests pass, 9 fail, 34 skip. Evidence `.h2a/build/lot1-gates.log` and RTK recall `12990cbff865`, code head `d85c394da`.
     - [ ] **Package tests (cluster-mesh, Vitest)**
-      - [ ] Updated: `packages/cluster-mesh/tests/storage/{staged-corpus,barrier-corpus,replay-corpus,lifecycle-corpus,read-corpus,reference-staged,reference-store}.ts`
-      - [ ] Updated: `packages/cluster-mesh/tests/storage/{reference,mutations,profile-mutations}.spec.ts`
+      - [x] Updated: `packages/cluster-mesh/tests/storage/{staged-corpus,barrier-corpus,replay-corpus,lifecycle-corpus,read-corpus,reference-staged,reference-store}.ts`
+      - [x] Updated: `packages/cluster-mesh/tests/storage/{reference,mutations,profile-mutations}.spec.ts`
       - [x] New: `packages/cluster-mesh/src/storage/staged-codec.ts`, `packages/cluster-mesh/tests/storage/{staged-codec,staged-integrity,replay-integrity,lifecycle-integrity}.spec.ts`, `packages/cluster-mesh/tests/storage/staged-integrity-corpus.ts`.
-      - [ ] Scoped runs: `make test-packages SCOPE=packages/cluster-mesh/tests/storage/reference.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
-      - [ ] Sub-lot gate: `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
-    - [ ] **API tests**: not impacted (no `api/**` change).
-    - [ ] **UI tests**: not impacted (no `ui/**` change).
-    - [ ] **E2E tests**: not impacted (no app surface change).
+      - [x] Scoped runs: `make test-cluster-mesh SCOPE=<file-filter> API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; mutations 59/59, staged integrity 7/7, replay integrity 6/6, lifecycle integrity 5/5; reference 36/36 and K3 kernel 56/56 also pass in the package gate.
+      - [x] Sub-lot package gate executed above: K2b green; K4 adapters lack full-scope handles, replay maintenance and lifecycle hooks, and still pass fences into K3. These remain release blockers in Lots 2–5.
+    - [x] **API tests**: not impacted (no `api/**` change).
+    - [x] **UI tests**: not impacted (no `ui/**` change).
+    - [x] **E2E tests**: not impacted (no app surface change).
 
 - [ ] **Lot 2 — K4 rebuild on K3 (O4:B1, O4:m7, O4:MAJ-9)**
   - [ ] Compose K3 `KernelRoot` (issuance) vs adapter `KernelHandle`; relay `predicates`, `authority`, `cursorSecret`, `incarnation`.
