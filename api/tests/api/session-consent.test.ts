@@ -2400,4 +2400,126 @@ describe('session consent durable lifecycle', () => {
     expect(await fixture.listPhysical('')).toHaveLength(0);
     void bindingId;
   });
+
+  it('should bind refresh to the accepted digest with a forward boundary and fresh ack (m1)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 7,
+    }, ctx);
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    await expectContentError(() => refreshAck('sess-content-s1', 1, rows[0]!.version, 9, {
+      policyDigest: '0'.repeat(64),
+    }), 'revision_conflict');
+    await expectContentError(
+      () => refreshAck('sess-content-s1', 1, rows[0]!.version, 3),
+      'invalid_request',
+    );
+    const ack = await refreshAck('sess-content-s1', 1, rows[0]!.version, 9);
+    expect(ack.projectRevision).toBe(1);
+    const updated = await db
+      .select()
+      .from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(updated[0]!.nativeBoundarySeq).toBe(9);
+    expect(updated[0]!.lastFreshnessAckAt).toBe(now);
+    void bindingId;
+  });
+
+  it('should refuse refresh and reserve on an unreconciled local deny (m1)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    await service.recordLocalDeny('sess-content-s1', ctx);
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m1-deny', ctx,
+    ), 'invalid_request');
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    await expectContentError(
+      () => refreshAck('sess-content-s1', 1, rows[0]!.version),
+      'invalid_request',
+    );
+    const reconciled = await service.reconcileLocalDeny('sess-content-s1', ctx);
+    expect(reconciled.reconciled).toBe(true);
+    await expectContentError(
+      () => refreshAck('sess-content-s1', 1, rows[0]!.version),
+      'grant_revoked',
+    );
+    void bindingId;
+  });
+
+  it('should pause and resume capture through accept-at-N (m2)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const prepared = service.prepareProject(
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+    );
+    await service.acceptProject({ ...prepared, offlineReadAccepted: true }, ctx);
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m2-acceptn', ctx,
+    ), 'project_revision_changed');
+    await refreshAck('sess-content-s1', 1, rows[0]!.version);
+    await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-m2-acceptn-2', ctx,
+    );
+    void bindingId;
+  });
 });
