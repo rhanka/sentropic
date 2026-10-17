@@ -22,7 +22,7 @@ export class LaunchRoutingContractError extends Error {
 }
 function refuse(): never { throw new LaunchRoutingContractError(); }
 const record = (value: unknown): value is Record<string, any> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-const nonempty = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256;
+const nonempty = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value);
 const keys = (value: Record<string, unknown>, allowed: string[]) => {
   if (Object.keys(value).some((key) => !allowed.includes(key))) refuse();
 };
