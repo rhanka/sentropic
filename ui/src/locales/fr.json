@@ -41,6 +41,7 @@
     "viewer": "Sortie de session",
     "lastReceived": "Dernière sortie reçue",
     "gap": "Intervalle manquant",
+    "gapReasons": { "excluded": "exclu", "not-collected": "non collecté", "evicted": "sortie locale évincée", "expired": "expiré", "partition": "connexion interrompue", "source-restarted": "poste redémarré", "purged": "purgé", "incomplete-chunk": "fragment incomplet", "unknown": "couverture indisponible" },
     "deadline": "Expiration fixée à la capture",
     "read": "Lire les copies autorisées",
     "historyGrant": "Demander une autorisation de lecture historique distincte",

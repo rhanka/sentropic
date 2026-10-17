@@ -41,6 +41,7 @@
     "viewer": "Session output",
     "lastReceived": "Last output received",
     "gap": "Missing interval",
+    "gapReasons": { "excluded": "excluded", "not-collected": "not collected", "evicted": "local output evicted", "expired": "expired", "partition": "connection interrupted", "source-restarted": "workstation restarted", "purged": "purged", "incomplete-chunk": "incomplete fragment", "unknown": "coverage unavailable" },
     "deadline": "Expiry fixed at capture",
     "read": "Read authorized copies",
     "historyGrant": "Request separate history-read authorization",
