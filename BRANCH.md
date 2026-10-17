@@ -98,7 +98,7 @@
   - [x] Consolidation K4: 8 code commits of `origin/feat/cluster-mesh-storage-k4` `1c6249509` cherry-picked (BRANCH.md and report-only commits dropped); NO-GO code carried for rebuild in Lots 2-5.
   - [x] Consolidation C0: 30 commits of `origin/feat/comments-cm-c0` `e19b394e2` and its `spec/comments-annotations-port` intake cherry-picked; C0 paths byte-identical to `e19b394e2`; obsolete K1 duplicates and already-merged M1 commits not replayed.
   - [x] Version bump `@sentropic/cluster-mesh` 0.16.0 -> 0.19.0 with lock and selected packaging fixture (BRCM2-VER).
-  - [ ] O4:B1(a) compile-only adaptation of carried K4 `staged-runtime.ts` to the K3 `KernelRoot` type (typecheck RED: `bindNew`/`revoke` missing on `KernelHandle`); B1(b)/(c) stay in Lot 2.
+  - [x] O4:B1(a) compile-only adaptation of carried K4 `staged-runtime.ts` to the K3 `KernelRoot` type (typecheck RED: `bindNew`/`revoke` missing on `KernelHandle`); B1(b)/(c) stay in Lot 2.
   - [ ] Push, open ONE draft PR, comment-and-close #666, #669, #670, #671, #667 pointing to it.
   - [ ] Lot gate: `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` (carried K4 runtime failures recorded, fixed by Lots 2-5).
 
