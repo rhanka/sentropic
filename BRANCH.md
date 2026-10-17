@@ -1,0 +1,198 @@
+# Feature: IdP per-client MFA policy (passkey acr/amr + required_acr + allowlist + registration Job)
+
+## Objective
+Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in order B1+B2+B3+B4 then C1 then D1, so the owner requirement `je veux toujours un oidc enrole 2fa sur sent-tech.ca` holds for KVM clients without changing existing clients.
+
+## Scope / Guardrails
+- Scope limited to IdP session/OAuth MFA policy, per-client policy columns, registration script/Job, docs/specs.
+- One migration max in `api/drizzle/*.sql` (0042 single file for required_acr + allowed_user_ids).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/idp-client-mfa-policy` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Env mapping for this branch: `ENV=test-idp-client-mfa-policy`, `API_PORT=9585`, `UI_PORT=5785`, `MAILDEV_UI_PORT=1685`.
+- Never merge, never register a real client, never touch prod, no manual SQL.
+- E1 (require_pkce=false for confidential) and E2 (RS256 in addition to EdDSA) only if the kvm session reports PKCE or EdDSA incompatibility; otherwise out of scope.
+- Versions per Post-Rebase Gate: bump every `packages/<pkg>/package.json` whose `src/**` changed.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `packages/auth-hono/src/oauth/**`
+  - `packages/auth-hono/src/session.ts`
+  - `packages/auth-hono/src/ports.ts`
+  - `packages/auth-hono/src/webauthn-authentication*.ts`
+  - `packages/auth-hono/tests/**`
+  - `packages/auth-hono/package.json`
+  - `packages/auth-hono/README.md`
+  - `api/src/services/session-manager.ts`
+  - `api/src/services/auth/oauth-state-adapter.ts`
+  - `api/src/services/auth/webauthn-adapter.ts`
+  - `api/src/services/webauthn-authentication.ts`
+  - `api/src/routes/namespaces/auth/authentication.ts`
+  - `api/src/routes/auth/oauth.ts`
+  - `api/src/scripts/oauth-register-client.ts`
+  - `api/tests/unit/auth/**`
+  - `api/tests/unit/oauth-register-client.test.ts`
+  - `api/tests/api/auth/**`
+  - `api/drizzle/0042_*.sql`
+  - `deploy/k8s/base/*oauth-register-client*`
+  - `docs/oauth-client-*.md`
+  - `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `Makefile` (D1 make target only, via BRMFA-EX1)
+  - `deploy/k8s/**` (D1 Job only)
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+
+## Feedback Loop
+- `BRMFA-EX1` (Makefile D1 target): reason: D1 requires a versioned root make target driving the client-registration Job; impact: one additive `oauth-register-client-job` target only, no other target touched; rollback: delete target, Job yaml remains unused.
+- E1/E2 gated on kvm-session incompatibility report; absent report means skip with `attention` note, no code.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: ONE branch with internal lots per launch packet owner rule against salami slicing; all changes are IdP-scoped and sequential (B1->B2->B3->B4->C1->D1).
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/idp-client-mfa-policy`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/sentropic`, `ENV=dev`).
+  - Switch back to `tmp/worktrees/idp-client-mfa-policy` after UAT.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`.
+  - [x] Confirm isolated worktree `tmp/worktrees/idp-client-mfa-policy` on `feat/idp-client-mfa-policy`.
+  - [x] Capture Makefile targets needed for debug/testing.
+  - [x] Define environment mapping (`ENV=test-idp-client-mfa-policy`, `API_PORT=9585`, `UI_PORT=5785`, `MAILDEV_UI_PORT=1685`).
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRMFA-EX1` for Makefile.
+  - [x] Check `make ps-all ENV=test-idp-client-mfa-policy` single-build discipline.
+- [ ] **Lot 1 — B1 passkey login sets mfaVerified=true with UV**
+  - [ ] Thread `userVerified` from `verifyAuthenticationResponse.authenticationInfo` through `verifyWebAuthnAuthentication` (api) and `verifyAuthentication` (auth-hono + adapter) into `finalizeAuthentication` input.
+  - [ ] Extend `createSession` (`api/src/services/session-manager.ts`) with `mfaVerified` option; pass `true` only for passkey login with `userVerified=true`; keep magic-link/federation/registration at `false`.
+  - [ ] Fix README/code gap on `passkey-fresh` (`packages/auth-hono/README.md`, `spec/WORKFLOW_AUTH.md` if needed).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-idp-client-mfa-policy` + `make lint-api ENV=test-idp-client-mfa-policy`
+    - [ ] **API tests**
+      - [ ] Update `api/tests/unit/auth/webauthn-authentication.test.ts` (userVerified true/false paths)
+      - [ ] Update `api/tests/unit/auth/session-manager.test.ts` (mfaVerified option)
+      - [ ] Update `api/tests/api/auth/authentication.test.ts` (passkey login sets flag; magic-link stays false)
+      - [ ] Add `api/tests/api/auth/passkey-mfa-session.test.ts` (passkey+UV true, passkey w/o UV false, magic-link false, federation false)
+      - [ ] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/auth/webauthn-authentication.test.ts ENV=test-idp-client-mfa-policy`
+      - [ ] Sub-lot gate: `make test-api ENV=test-idp-client-mfa-policy`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] No UI change; no UI test update.
+      - [ ] Sub-lot gate: `make test-ui ENV=test-idp-client-mfa-policy`
+    - [ ] **E2E tests**
+      - [ ] No new E2E file; existing `e2e/tests/02-auth-webauthn.spec.ts` must stay green.
+      - [ ] Sub-lot gate scoped: `make test-e2e E2E_SPEC=tests/02-auth-webauthn.spec.ts API_PORT=9585 UI_PORT=5785 MAILDEV_UI_PORT=1685 ENV=e2e-idp-client-mfa-policy`
+- [ ] **Lot 2 — B2 amr claim (RFC 8176)**
+  - [ ] Derive `amr` from session (`mfaVerified` + UV): `["hwk","user","mfa"]` when passkey+UV else `["pwd"]`-equivalent single-factor value; carry through `AuthCodePayload` + `TokenMeta` + continuation state.
+  - [ ] Emit `amr` in id_token, access_token, userinfo; add `amr` to `claims_supported` in `wellknown-handler.ts`.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-idp-client-mfa-policy` + `make lint-api ENV=test-idp-client-mfa-policy`
+    - [ ] **API tests**
+      - [ ] Update `api/tests/api/auth/oauth-token.test.ts` (id_token/access_token carry amr)
+      - [ ] Update `api/tests/api/auth/oauth-userinfo.test.ts` (userinfo carries amr)
+      - [ ] Update `api/tests/api/auth/oauth-wellknown.test.ts` (claims_supported includes amr)
+      - [ ] Scoped runs while evolving tests: `make test-api-endpoints SCOPE=tests/api/auth/oauth-token.test.ts ENV=test-idp-client-mfa-policy`
+      - [ ] Sub-lot gate: `make test-api ENV=test-idp-client-mfa-policy`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] No UI change.
+      - [ ] Sub-lot gate: `make test-ui ENV=test-idp-client-mfa-policy`
+    - [ ] **E2E tests**
+      - [ ] Existing `e2e/tests/02-auth-oauth-authorization-code.spec.ts` must stay green (no new E2E file).
+      - [ ] Scoped: `make test-e2e E2E_SPEC=tests/02-auth-oauth-authorization-code.spec.ts API_PORT=9585 UI_PORT=5785 MAILDEV_UI_PORT=1685 ENV=e2e-idp-client-mfa-policy`
+- [ ] **Lot 3 — B3 required_acr per-client policy at authorize**
+  - [ ] Single migration `api/drizzle/0042_*.sql`: add `oauth_clients.required_acr text DEFAULT NULL` (NULL = no policy, zero change for existing clients).
+  - [ ] Extend `OauthClientRecord` + `oauth-state-adapter.ts` mapping + `oauth-register-client.ts` (`OAUTH_CLIENT_REQUIRED_ACR`, validated URN) + seed/test fixtures.
+  - [ ] Enforce at `authorize` main flow + `resumeLoginContinuation`: session acr below `required_acr` forces re-auth redirect; still-insufficient after resume (magic-link/Google/bearer session) returns `access_denied`; cover `prompt=none` path.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-idp-client-mfa-policy` + `make lint-api ENV=test-idp-client-mfa-policy`
+    - [ ] **API tests**
+      - [ ] Update `api/tests/unit/oauth-register-client.test.ts` (required_acr parse/validation)
+      - [ ] Update `api/tests/unit/auth/oauth-state-adapter.test.ts` (record mapping)
+      - [ ] Update `api/tests/api/auth/oauth-authorize.test.ts` (policy client forces login; bearer refused)
+      - [ ] Add `api/tests/api/auth/oauth-client-required-acr.test.ts` (no-policy unchanged; passkey-fresh passes; magic-link refused; Google/federation refused; prompt=none access_denied)
+      - [ ] Scoped runs: `make test-api-endpoints SCOPE=tests/api/auth/oauth-authorize.test.ts ENV=test-idp-client-mfa-policy`
+      - [ ] Sub-lot gate: `make test-api ENV=test-idp-client-mfa-policy`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] No UI change.
+      - [ ] Sub-lot gate: `make test-ui ENV=test-idp-client-mfa-policy`
+    - [ ] **E2E tests**
+      - [ ] Existing `e2e/tests/02-auth-oauth-authorization-code.spec.ts` stays green; no-policy regression only.
+- [ ] **Lot 4 — B4 UV required for policy clients + C1 subject allowlist**
+  - [ ] B4: for `required_acr` clients, passkey without UV (`userVerified=false`) stays `mfaVerified=false` and is refused at authorize (no downgrade); tighten `requireUserVerification` on forced re-auth for policy clients.
+  - [ ] C1: single migration same 0042 file adds `oauth_clients.allowed_user_ids text[] DEFAULT '{}'` (empty = no restriction); enforce at `authorize` before consent with `access_denied`; extend register script (`OAUTH_CLIENT_ALLOWED_USER_IDS`).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-idp-client-mfa-policy` + `make lint-api ENV=test-idp-client-mfa-policy`
+    - [ ] **API tests**
+      - [ ] Update `api/tests/api/auth/oauth-authorize.test.ts` (non-UV passkey refused for policy client; UV passkey passes)
+      - [ ] Add `api/tests/api/auth/oauth-client-allowlist.test.ts` (non-listed user access_denied; listed user passes; empty list allows all; enforced before consent)
+      - [ ] Update `api/tests/unit/oauth-register-client.test.ts` (allowlist parse)
+      - [ ] Scoped runs: `make test-api-endpoints SCOPE=tests/api/auth/oauth-authorize.test.ts ENV=test-idp-client-mfa-policy`
+      - [ ] Sub-lot gate: `make test-api ENV=test-idp-client-mfa-policy`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] No UI change.
+      - [ ] Sub-lot gate: `make test-ui ENV=test-idp-client-mfa-policy`
+    - [ ] **E2E tests**
+      - [ ] Existing OAuth E2E specs stay green; allowlist covered at API level (Dex/RP behavior out of scope).
+- [ ] **Lot 5 — D1 versioned Job + make target + rotation runbook**
+  - [ ] Add `deploy/k8s/base/36-oauth-register-client-job.yaml` (versioned Job, secret via `envFrom` temporary Secret, never CLI); root make target `oauth-register-client-job` under `BRMFA-EX1`.
+  - [ ] Rotation runbook `docs/oauth-client-rotation.md` (90-day cycle, mint base64url 32 bytes, sha256 stored, immediate cutover, names only for secrets).
+  - [ ] Update `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` client procedure + `packages/auth-hono/README.md` if behavior docs changed.
+  - [ ] Bump affected `packages/auth-hono/package.json` version (Post-Rebase Gate re-check).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-idp-client-mfa-policy` + `make lint-api ENV=test-idp-client-mfa-policy`
+    - [ ] **API tests**
+      - [ ] Existing `api/tests/unit/oauth-register-client.test.ts` green (new env vars covered in Lot 3/4).
+      - [ ] Sub-lot gate: `make test-api ENV=test-idp-client-mfa-policy`
+    - [ ] **UI tests (TypeScript only)**
+      - [ ] No UI change.
+    - [ ] **E2E tests**
+      - [ ] No E2E change; `e2e/tests/02-auth-s2s-client-credentials.spec.ts` sanity only if touched.
+    - [ ] UAT step-level (IdP surfaces, no real client registration):
+      - [ ] Dry-run Job yaml renders with `kubeconform`/`kustomize build` (no cluster apply).
+      - [ ] Make target prints usage without secret values when env missing.
+      - [ ] Runbook steps readable in order without secret material.
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Integrate behavior changes into `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` (required_acr, allowlist, amr, UV).
+  - [ ] Delete any scratch spec evol file after integration (none planned).
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest UI (cf Lot1, copy checklist)
+  - [ ] Retest API (cf Lot1, copy checklist)
+  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
