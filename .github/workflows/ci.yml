@@ -544,8 +544,6 @@ jobs:
         run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit ENV=test-ci-cluster-mesh
       - name: Prepare and audit the optional frozen comments peer
         run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-deps-audit ENV=test-ci-cluster-mesh
-      - name: Build the unchanged workspace comments peer before root build prerequisites relink it
-        run: make build-comments ENV=test-ci-cluster-mesh
       - name: Qualify Cluster Mesh Postgres storage and server recovery
         run: |
           make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=test-ci-cluster-mesh-pg
@@ -557,11 +555,11 @@ jobs:
       - name: Lint Cluster Mesh
         run: make lint-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Typecheck Cluster Mesh
-        run: make typecheck-cluster-mesh
+        run: make typecheck-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Test Cluster Mesh
-        run: make test-cluster-mesh
+        run: make test-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Build Cluster Mesh
-        run: make build-cluster-mesh
+        run: make build-cluster-mesh ENV=test-ci-cluster-mesh
       # Release train (BRDP-EX10): pack the candidate and its same-PR siblings first so the packed lazy
       # qualification resolves unpublished train siblings from their verified archives.
       - name: Pack Cluster Mesh
