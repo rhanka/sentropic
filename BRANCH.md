@@ -442,6 +442,8 @@
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{fragment-vectors,import,receipts,import-crashes,export,transfer,long-history}.spec.ts`.
 
 - [ ] **Lot 9 — M2-W registration and canonical Hono API**
+  - [x] Imported post-tombstone history and independently authorized subsequent physical purge pass both real-PG probes; no historical purge claim creates a kernel job.
+  - [ ] RED `comments-module.spec.ts` requires metadata-only local discovery, optional-peer range refusal before evaluation and disabled-leaf isolation before namespace startup.
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
