@@ -1,5 +1,5 @@
 /**
- * L-5e (B3) — sentropic.web-pages MCP provider (spec-v8 §9 5e): exact
+ * L-5e (B3) — sentropic.artifacts MCP provider (spec-v8 §9 5e): exact
  * provider ID, the 15 artifacts_* tools with closed schemas, host-bound
  * invocation scope, and dispatch over the same app as HTTP (part 1:
  * identity, manifest, read/write round-trip and refusals).
@@ -25,11 +25,11 @@ import { createMemoryKv, createCryptoUuid } from '../src/server/ports.js';
 import { defineParameters } from '../src/parameters.js';
 import {
   ARTIFACTS_TOOL_NAMES,
-  WEB_PAGES_PROVIDER_ID,
-  createWebPagesAdapter,
-  createWebPagesManifest,
-  createWebPagesRegistryDefinition,
-  createWebPagesToolExecutor,
+  ARTIFACTS_PROVIDER_ID,
+  createArtifactsAdapter,
+  createArtifactsManifest,
+  createArtifactsRegistryDefinition,
+  createArtifactsToolExecutor,
 } from '../src/mcp.js';
 import type { StpConnectorContext } from '@sentropic/mcp-platform';
 import { createProviderRegistry } from '@sentropic/mcp-platform/registry';
@@ -73,7 +73,7 @@ function makeApp() {
 }
 
 function makeExecutor() {
-  return createWebPagesToolExecutor({ app: makeApp(), defaultStorageScopeId: 'scope-1' });
+  return createArtifactsToolExecutor({ app: makeApp(), defaultStorageScopeId: 'scope-1' });
 }
 
 function fakeCtx(sub: string): StpConnectorContext {
@@ -104,11 +104,11 @@ async function ensureAndPublish(executor: ReturnType<typeof makeExecutor>): Prom
   return artifactId;
 }
 
-describe('web-pages MCP provider', () => {
+describe('artifacts MCP provider', () => {
   it('exposes sentropic.artifacts with exactly the 15 spec tools', () => {
-    expect(WEB_PAGES_PROVIDER_ID).toBe('sentropic.artifacts');
+    expect(ARTIFACTS_PROVIDER_ID).toBe('sentropic.artifacts');
     expect([...ARTIFACTS_TOOL_NAMES]).toEqual(SPEC_TOOLS);
-    const manifest = createWebPagesManifest();
+    const manifest = createArtifactsManifest();
     expect(manifest.providerId).toBe('sentropic.artifacts');
     expect(manifest.version).toBe('0.1.0');
     expect(manifest.tools.map((tool) => tool.name)).toEqual(SPEC_TOOLS);
@@ -127,10 +127,10 @@ describe('web-pages MCP provider', () => {
   });
 
   it('binds the host invocation scope only when the host supplies one', () => {
-    const generic = createWebPagesManifest();
+    const generic = createArtifactsManifest();
     expect(generic.tools.every((tool) => tool.requiredScopes.length === 0)).toBe(true);
     expect(generic.authz.scopes).toEqual([]);
-    const bound = createWebPagesManifest({ invocationScope: 'immo:read' });
+    const bound = createArtifactsManifest({ invocationScope: 'immo:read' });
     expect(bound.tools.every((tool) => tool.requiredScopes.join() === 'immo:read')).toBe(true);
     expect(bound.authz.scopes).toEqual(['immo:read']);
   });
@@ -242,7 +242,7 @@ describe('web-pages MCP provider', () => {
   });
 
   it('registers and compiles through the platform kernel (section 3)', () => {
-    const definition = createWebPagesRegistryDefinition({ app: makeApp() });
+    const definition = createArtifactsRegistryDefinition({ app: makeApp() });
     const registry = createProviderRegistry();
     registry.register(definition);
     expect(() => registry.register(definition)).toThrow(/duplicate provider/);
@@ -258,24 +258,24 @@ describe('web-pages MCP provider', () => {
     });
     if (!compiled.ok) throw new Error(`compile refused: ${JSON.stringify(compiled.diagnostics)}`);
     for (const name of SPEC_TOOLS) {
-      expect(compiled.registry.resolveTool(name)?.providerId, name).toBe(WEB_PAGES_PROVIDER_ID);
+      expect(compiled.registry.resolveTool(name)?.providerId, name).toBe(ARTIFACTS_PROVIDER_ID);
     }
     expect(compiled.registry.resolveTool('pages_ensure_site')).toBeUndefined();
     const catalog = registry.catalog();
     expect(catalog).toHaveLength(1);
-    expect(catalog[0]).toMatchObject({ providerId: WEB_PAGES_PROVIDER_ID, availability: 'available' });
+    expect(catalog[0]).toMatchObject({ providerId: ARTIFACTS_PROVIDER_ID, availability: 'available' });
   });
 
   it('refuses the previous provider ID as unknown for selection and configuration', () => {
     const registry = createProviderRegistry();
-    registry.register(createWebPagesRegistryDefinition({ app: makeApp() }));
+    registry.register(createArtifactsRegistryDefinition({ app: makeApp() }));
     expect(() => registry.select(['sentropic.web-pages'])).toThrow(/unknown provider/);
     expect(() => registry.configure('sentropic.web-pages', {})).toThrow(/unknown provider/);
   });
 
   it('invokes through the platform adapter with verified-principal identity', async () => {
-    const adapter = createWebPagesAdapter({ app: makeApp(), defaultStorageScopeId: 'scope-1' });
-    expect(adapter.connectorId).toBe(WEB_PAGES_PROVIDER_ID);
+    const adapter = createArtifactsAdapter({ app: makeApp(), defaultStorageScopeId: 'scope-1' });
+    expect(adapter.connectorId).toBe(ARTIFACTS_PROVIDER_ID);
     const tenant = await adapter.resolveTenant({
       principalSub: OWNER, tenantRef: 'tenant-1', connectorInstanceId: 'inst-1',
       selectorHints: { tenantRef: 'forged' },
