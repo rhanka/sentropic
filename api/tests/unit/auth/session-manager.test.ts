@@ -67,11 +67,33 @@ describe('Session Manager Service', () => {
         ipAddress: '192.168.1.1',
         userAgent: 'Mozilla/5.0',
       });
-      
+
       const sessions = await listUserSessions(testUserId);
       expect(sessions[0].deviceName).toBe('My Laptop');
       expect(sessions[0].ipAddress).toBe('192.168.1.1');
       expect(sessions[0].userAgent).toBe('Mozilla/5.0');
+    });
+
+    it('should default mfaVerified to false', async () => {
+      const session = await createSession(testUserId, 'editor');
+
+      const [row] = await db
+        .select({ mfaVerified: userSessions.mfaVerified })
+        .from(userSessions)
+        .where(eq(userSessions.id, session.sessionId))
+        .limit(1);
+      expect(row.mfaVerified).toBe(false);
+    });
+
+    it('should mint mfaVerified=true only when explicitly requested (B1 passkey+UV)', async () => {
+      const session = await createSession(testUserId, 'editor', undefined, { mfaVerified: true });
+
+      const [row] = await db
+        .select({ mfaVerified: userSessions.mfaVerified })
+        .from(userSessions)
+        .where(eq(userSessions.id, session.sessionId))
+        .limit(1);
+      expect(row.mfaVerified).toBe(true);
     });
   });
 

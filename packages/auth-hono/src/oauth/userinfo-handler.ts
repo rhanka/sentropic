@@ -37,10 +37,16 @@ export const createOAuthUserInfoHandler =
     const user = await options.ports.users.findById(meta.userId);
     if (!user) return unauthorized(c, 'Access token user is invalid.');
 
+    // B2: acr/amr travel in the signed access-token claims; TokenMeta mirrors them
+    // for memory stores, while DB-backed stores rely on the JWT payload.
+    const acr = typeof payload.acr === 'string' ? payload.acr : meta.acr ?? null;
+    const amr = Array.isArray(payload.amr) ? payload.amr : meta.amr ?? null;
     return c.json({
       sub: user.id,
       ...(scopes.includes('profile') ? { name: user.displayName } : {}),
       ...(scopes.includes('email') ? { email: user.email, email_verified: user.emailVerified } : {}),
+      ...(acr ? { acr } : {}),
+      ...(amr ? { amr } : {}),
     });
   };
 

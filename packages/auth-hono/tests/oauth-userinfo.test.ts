@@ -27,6 +27,8 @@ describe('OAuth userinfo handler', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
+      acr: 'urn:sentropic:loa:passkey-fresh',
+      amr: ['hwk', 'user', 'mfa'],
       email: oauthUser.email,
       email_verified: true,
       name: oauthUser.displayName,

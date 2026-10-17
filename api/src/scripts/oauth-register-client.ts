@@ -32,6 +32,10 @@
 //                                client + PKCE, NO secret — e.g. a claude.ai MCP connector using
 //                                Advanced-settings custom credentials). In 'none' mode
 //                                OAUTH_CLIENT_SECRET is neither required nor stored.
+//   OAUTH_CLIENT_REQUIRED_ACR    optional minimum ACR: 'urn:sentropic:loa:passkey-fresh'
+//                                (passkey/2FA enforced at authorize) or empty (no policy, default).
+//   OAUTH_CLIENT_ALLOWED_USER_IDS optional comma-separated user ids (subject allowlist,
+//                                e.g. the owner sub); empty (default) = no restriction.
 //
 // Free auth (sub + email): no tenant, no claim set. authorization_code + PKCE,
 // client_secret_basic — matching the dev seed's `design-system` shape.
@@ -60,8 +64,12 @@ const requireEnv = (source: NodeJS.ProcessEnv, name: string): string => {
   return value.trim();
 };
 
+export const PASSKEY_FRESH_ACR = 'urn:sentropic:loa:passkey-fresh';
+export const BEARER_ACR = 'urn:sentropic:loa:bearer';
+
 export interface OAuthClientRegistrationValues {
   allowedScopes: string[];
+  allowedUserIds: string[];
   clientId: string;
   clientSecretHash: string | null;
   createdAt: Date;
@@ -71,6 +79,7 @@ export interface OAuthClientRegistrationValues {
   name: string;
   redirectUris: string[];
   requirePkce: boolean;
+  requiredAcr: string | null;
   resourceIndicators: string[];
   responseTypes: string[];
   tokenEndpointAuthMethod: string;
@@ -140,8 +149,12 @@ export const buildOAuthClientRegistration = (
     );
   }
 
+  const requiredAcr = parseRequiredAcr(source.OAUTH_CLIENT_REQUIRED_ACR);
+  const allowedUserIds = parseList(source.OAUTH_CLIENT_ALLOWED_USER_IDS ?? '');
+
   return {
     allowedScopes: scopes,
+    allowedUserIds,
     clientId,
     clientSecretHash,
     createdAt: now,
@@ -151,11 +164,24 @@ export const buildOAuthClientRegistration = (
     name,
     redirectUris,
     requirePkce: true,
+    requiredAcr,
     resourceIndicators,
     responseTypes: ['code'],
     tokenEndpointAuthMethod,
     updatedAt: now,
   };
+};
+
+const parseRequiredAcr = (value: string | undefined): string | null => {
+  const normalized = (value ?? '').trim();
+  if (!normalized) return null;
+  if (normalized !== PASSKEY_FRESH_ACR && normalized !== BEARER_ACR) {
+    throw new Error(
+      `Unsupported OAUTH_CLIENT_REQUIRED_ACR '${normalized}'. ` +
+        `Use '${PASSKEY_FRESH_ACR}' (passkey/2FA) or leave empty (no policy).`,
+    );
+  }
+  return normalized;
 };
 
 const isAbsoluteHttpsUri = (value: string): boolean => {
@@ -166,21 +192,60 @@ const isAbsoluteHttpsUri = (value: string): boolean => {
   }
 };
 
+export interface OAuthClientStoredPolicy {
+  allowedUserIds: string[];
+  requiredAcr: string | null;
+}
+
+/**
+ * F5: rotation must never silently strip a client's 2FA policy. An omitted
+ * `OAUTH_CLIENT_REQUIRED_ACR` (null) or an empty `OAUTH_CLIENT_ALLOWED_USER_IDS`
+ * preserves the stored values; an explicit non-empty value replaces them. New
+ * clients (no stored row) take the incoming values as-is.
+ */
+export const resolvePolicyUpdate = (
+  existing: OAuthClientStoredPolicy | null,
+  incoming: OAuthClientStoredPolicy
+): OAuthClientStoredPolicy => {
+  if (!existing) return incoming;
+  return {
+    allowedUserIds: incoming.allowedUserIds.length > 0 ? incoming.allowedUserIds : existing.allowedUserIds,
+    requiredAcr: incoming.requiredAcr ?? existing.requiredAcr,
+  };
+};
+
 const main = async (): Promise<void> => {
   const values = buildOAuthClientRegistration();
 
+  const [stored] = await db
+    .select({
+      allowedUserIds: oauthClients.allowedUserIds,
+      requiredAcr: oauthClients.requiredAcr,
+    })
+    .from(oauthClients)
+    .where(eq(oauthClients.clientId, values.clientId))
+    .limit(1);
+
+  // F5: never wipe policy on rotation when the operator omits the env vars.
+  const policy = resolvePolicyUpdate(
+    stored ? { allowedUserIds: stored.allowedUserIds ?? [], requiredAcr: stored.requiredAcr ?? null } : null,
+    { allowedUserIds: values.allowedUserIds, requiredAcr: values.requiredAcr }
+  );
+
   await db
     .insert(oauthClients)
-    .values(values)
+    .values({ ...values, allowedUserIds: policy.allowedUserIds, requiredAcr: policy.requiredAcr })
     .onConflictDoUpdate({
       set: {
         allowedScopes: values.allowedScopes,
+        allowedUserIds: policy.allowedUserIds,
         clientSecretHash: values.clientSecretHash,
         dpopBoundAccessTokens: values.dpopBoundAccessTokens,
         grantTypes: values.grantTypes,
         name: values.name,
         redirectUris: values.redirectUris,
         requirePkce: values.requirePkce,
+        requiredAcr: policy.requiredAcr,
         resourceIndicators: values.resourceIndicators,
         responseTypes: values.responseTypes,
         tokenEndpointAuthMethod: values.tokenEndpointAuthMethod,
@@ -191,9 +256,11 @@ const main = async (): Promise<void> => {
 
   const [row] = await db
     .select({
+      allowedUserIds: oauthClients.allowedUserIds,
       clientId: oauthClients.clientId,
       name: oauthClients.name,
       redirectUris: oauthClients.redirectUris,
+      requiredAcr: oauthClients.requiredAcr,
       resourceIndicators: oauthClients.resourceIndicators,
     })
     .from(oauthClients)
@@ -203,6 +270,8 @@ const main = async (): Promise<void> => {
   console.log(`Registered OAuth client: ${row?.clientId ?? values.clientId} (${row?.name ?? values.name})`);
   console.log(`  redirect URIs: ${(row?.redirectUris ?? values.redirectUris).join(', ')}`);
   console.log(`  resource indicators: ${(row?.resourceIndicators ?? values.resourceIndicators).join(', ') || '(none)'}`);
+  console.log(`  required ACR: ${row?.requiredAcr ?? policy.requiredAcr ?? '(no policy)'}`);
+  console.log(`  allowed user IDs: ${(row?.allowedUserIds ?? policy.allowedUserIds).join(', ') || '(no restriction)'}`);
   console.log('  client secret was hashed (sha256); plaintext NOT stored.');
 };
 
