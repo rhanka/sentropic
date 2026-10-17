@@ -70,7 +70,7 @@
   - [ ] Scoped gates: `rtk make test-cluster-mesh SCOPE=tests/loaders/mcp-auth.spec.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat for integrations/mcp-auth-surface.spec.ts and tests/modules.
   - [ ] Gate: `rtk make typecheck-cluster-mesh lint-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`. UI/E2E files: none.
 - [ ] **Lot 2 — Metadata, request authority and sessions**
-  - [x] Added real twelve-tool Radar schema fixture and compiled host adapter; composition metadata/verification contracts written first.
+  - [x] Added real twelve-tool Radar schema fixture and compiled host adapter; composition RED on missing factory; public readonly OAuth/egress/session types defined without bearer getters.
   - [ ] Implement oauth-contracts/context/sessions and compose/mcp-oauth; public canonical PRM plus aliases, 401/403 challenges, exact issuer/audience, requiredAcr, per-tool scope/current-account checks and preflight before listen.
   - [ ] Preserve existing compose/mcp. Reuse registry policy/bridge/result codec. Bind immutable request authority with leaf-local AsyncLocalStorage; no trusted headers or captured/shared bearer; defaults idle 30 min/absolute 8 h.
   - [ ] New tests/mcp-oauth-composition.spec.ts and mcp-oauth-sessions.spec.ts: positive/negative ACR, mounts, live scopes/account, owner POST/GET/DELETE uniform 404, overlap, cancellation/SSE, expiry/restart/close. Existing unchanged: mcp-composition.spec.ts and mcp-registry.spec.ts.
