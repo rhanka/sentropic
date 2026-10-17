@@ -51,7 +51,6 @@ const sharedBaseInput = (overrides: Partial<ProjectPrepareInput> = {}): ProjectP
   namedHistories: [] as NamedHistoryDescriptor[],
   retentionByChannel: { 'terminal.cache': { mode: 'none' }, 'native.mirror': { mode: 'none' } },
   authorityEpoch: 'epoch-1',
-  offlineReadAccepted: true,
   ...overrides,
 });
 
@@ -218,7 +217,6 @@ describe('content consent project activation', () => {
       'native.mirror': { mode: 'none' },
     },
     authorityEpoch: 'epoch-1',
-    offlineReadAccepted: true,
   });
 
   const setup = () => {
@@ -239,12 +237,10 @@ describe('content consent project activation', () => {
     expect(accepted.retentionDigest).toBe(prepared.digest);
   });
 
-  it('should refuse preparation without explicit offline-risk acceptance', () => {
+  it('should prepare explicit sharing without a separate offline-risk receipt', () => {
     const { service } = setup();
-    expectConsentCode(
-      () => service.prepareProject({ ...baseInput(), offlineReadAccepted: false }),
-      'invalid_request',
-    );
+    const prepared = service.prepareProject(baseInput());
+    expect(prepared.policy).not.toHaveProperty('offlineReadAccepted');
   });
 
   it('should refuse a non-owner reader with no admin inheritance', () => {
