@@ -55,3 +55,8 @@ cluster-mesh-pg-test: cluster-mesh-pg-up cluster-mesh-storage-deps
 		ln -sfn "$$tool_dir/node_modules/pg" node_modules/pg; \
 		trap "rm -f node_modules/pg" EXIT; \
 		NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$(if $(SCOPE),$(SCOPE),tests/storage/postgres-)" --environment node --maxWorkers=1'
+
+.PHONY: cluster-mesh-pg-diagnostics
+cluster-mesh-pg-diagnostics:
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
+		'df -h /workspace /tmp; node --version; node .h2a/storage-pg-tools/node_modules/vitest/vitest.mjs --version'
