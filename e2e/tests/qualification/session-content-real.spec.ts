@@ -3,8 +3,9 @@ import { expect, test } from '@playwright/test';
 
 // This lane consumes human-prepared, disposable state; it never seeds or manufactures proof.
 test.describe('D2 real-source Sessions witness', () => {
-  test.skip(process.env.SESSION_CONTENT_QUALIFICATION_MODE !== 'real', 'Explicit real qualification only (CM2-F2/F7).');
-  test('reads a post-consent source marker through the delivered page without another consent', async ({ browser }) => {
+  test('reads a post-consent source marker through the delivered page without another consent', async ({ browser }, testInfo) => {
+    expect(process.env.SESSION_CONTENT_QUALIFICATION_MODE, 'Explicit real qualification required (CM2-F2/F7); this lane cannot skip or count as CI denial').toBe('real');
+    expect(testInfo.config.configFile, 'Use the dedicated configuration without seed/global setup').toMatch(/playwright\.session-content-qualification\.config\.ts$/);
     const manifest = JSON.parse(readFileSync('.auth/session-content-qualification/manifest.json', 'utf8'));
     expect(manifest.appSha).toMatch(/^[0-9a-f]{40}$/);
     expect(manifest.runtimeSha).toMatch(/^[0-9a-f]{40}$/);
