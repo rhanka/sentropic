@@ -1620,6 +1620,7 @@ export class SessionContentService {
       authorityEpoch: reservation.grant.authorityEpoch,
       bindingId: reservation.grant.bindingId,
       sessionId: reservation.reservation.sessionId,
+      reservationId: reservation.reservation.reservationId,
       channel: reservation.reservation.channel,
       bucket: config.bucket,
       objectKey: key,
@@ -2037,6 +2038,20 @@ export class SessionContentService {
         .where(eq(sessionContentPurgeJobs.purgeJobId, purgeJobId));
       return { ...existing, state: 'in_progress' as const };
     });
+    // P2: a completed job returns its recorded evidence without executing
+    // again — a re-run settles nothing, not even an empty scope.
+    if (job.state === 'complete') {
+      return {
+        purgeJobId,
+        ...(job.evidence as {
+          deletedObjects: number;
+          deletedBytes: number;
+          deletedKeys: string[];
+          remainingObjects: number;
+          verifiedAt: number;
+        }),
+      };
+    }
     // N1: `object` jobs delete one staged/`purge_pending` row only and
     // never committed copies; other scopes keep real purge-event semantics.
     const isObjectJob = job.scope === 'object' && (job.objectId?.length ?? 0) > 0;
@@ -2074,19 +2089,52 @@ export class SessionContentService {
           .set({ state: 'purged', updatedAt: new Date(this.nowMs()) })
           .where(eq(sessionContentObjects.objectId, object.objectId));
       }
-      const settledSessions = [...new Set(inScope.map((o) => o.sessionId))];
-      await tx
-        .update(sessionContentAttempts)
-        .set({ outcome: 'cancelled' })
-        .where(
-          and(
-            eq(sessionContentAttempts.namespaceId, job.namespaceId),
-            eq(sessionContentAttempts.outcome, 'attempted'),
-            isObjectJob && settledSessions.length > 0
-              ? inArray(sessionContentAttempts.sessionId, settledSessions)
-              : sql`TRUE`,
-          ),
-        );
+      // P2: an object job settles only the writers bound to its own
+      // objects (attemptId = reservation id); an empty scope cancels
+      // nothing. Other scopes keep the namespace-wide settlement.
+      const linkedReservationIds = [
+        ...new Set(
+          inScope
+            .map((o) => o.reservationId)
+            .filter((id: string | null): id is string => (id?.length ?? 0) > 0),
+        ),
+      ];
+      if (!isObjectJob) {
+        await tx
+          .update(sessionContentAttempts)
+          .set({ outcome: 'cancelled' })
+          .where(
+            and(
+              eq(sessionContentAttempts.namespaceId, job.namespaceId),
+              eq(sessionContentAttempts.outcome, 'attempted'),
+            ),
+          );
+      } else if (linkedReservationIds.length > 0) {
+        await tx
+          .update(sessionContentAttempts)
+          .set({ outcome: 'cancelled' })
+          .where(
+            and(
+              eq(sessionContentAttempts.namespaceId, job.namespaceId),
+              eq(sessionContentAttempts.outcome, 'attempted'),
+              inArray(sessionContentAttempts.attemptId, linkedReservationIds),
+            ),
+          );
+      }
+      // P1: when the object job verifies absence, release the paired
+      // reservations from stale — and only from stale, never reserved or
+      // consumed writers.
+      if (isObjectJob && linkedReservationIds.length > 0) {
+        await tx
+          .update(sessionContentReservations)
+          .set({ state: 'cancelled', updatedAt: new Date(this.nowMs()) })
+          .where(
+            and(
+              inArray(sessionContentReservations.reservationId, linkedReservationIds),
+              eq(sessionContentReservations.state, 'stale'),
+            ),
+          );
+      }
       const [remaining] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(sessionContentObjects)
