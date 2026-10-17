@@ -6,13 +6,14 @@ import { StorageDeniedError, StorageInvalidCommandError, UnsupportedProfileError
 import type { PgCore, PgTx } from './core.js';
 import { chainRecordKey, type PgChain, type PgChainRef } from './effects.js';
 import { decodePgJson, decodePgUtf8 } from './codec.js';
-import { applyPgTransaction, ownPgValue, runPgTransaction } from './ordinary-transactions.js';
+import { applyPgTransaction, ownPgValue, pgReceipt, runPgTransaction } from './ordinary-transactions.js';
 import type { PgInstalledContext } from './installed-contracts.js';
 import { REGISTERED_PG_EFFECTS } from './registered-effects.js';
 import { beginPgStaged, stagePgFragment, inspectPgStaged } from './staged.js';
-export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<unknown>, tx: PgTx) => {
+export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<unknown>, tx: PgTx, readOnly = false) => {
   const checks: (() => Promise<void>)[] = []; let closed = false;
   const live = () => { if (closed || tx.closed) throw new StorageInvalidCommandError('installed operation context is closed'); };
+  const writable = () => { live(); if (readOnly) throw new StorageDeniedError('installed read operation cannot prepare canonical effects'); };
   const metadata = async (chain: string) => { live(); return core.roots.get<PgChain>(tx.session, tx.root, 'chain', chain); };
   const context: PgInstalledContext = Object.freeze<PgInstalledContext>({
     session: tx.session, get root() { live(); return tx.root; }, grant, layout: core.options.layout,
@@ -31,20 +32,41 @@ export const createPgInstalledContext = async (core: PgCore, grant: ScopeGrant<u
       return ref ? { version: ref.version, value: decodePgJson<EncodedValue>(decodePgUtf8(await core.roots.readPayload(tx.session, grant.scope, ref.payload))) } : null;
     },
     index: async (key: string) => { live(); return core.roots.get<IdempotencyEntry>(tx.session, tx.root, 'index', key); },
-    apply: async (unit) => { live(); await applyPgTransaction(core, grant, tx, unit, {}, REGISTERED_PG_EFFECTS); },
+    apply: async (unit) => { writable(); await applyPgTransaction(core, grant, tx, unit, {}, REGISTERED_PG_EFFECTS); },
     revalidate: (check) => { live(); checks.push(check); tx.revalidators.add(check); },
     replayed: () => { live(); tx.noop = true; },
-    beginStaged: (input) => { live(); return beginPgStaged(core, grant, input); },
-    stageFragment: (input) => { live(); return stagePgFragment(core, grant, input); },
+    beginStaged: (input) => { writable(); return beginPgStaged(core, grant, input); },
+    stageFragment: (input) => { writable(); return stagePgFragment(core, grant, input); },
     inspectStaged: (operationKey) => { live(); return inspectPgStaged(core, grant, operationKey); },
   });
   return { context, finish: async () => { try { live(); for (const check of checks) await check(); } finally { closed = true; } } };
 };
 export const runPgInstalled = async (core: PgCore, grant: ScopeGrant<unknown>, name: string, supplied: unknown): Promise<unknown> => {
   const definition = core.options.operations && Object.hasOwn(core.options.operations, name) ? core.options.operations[name] : undefined;
-  if (!definition || !['write', 'maintain'].includes(definition.operation) || typeof definition.execute !== 'function') throw new UnsupportedProfileError(`operation:${name}`);
+  if (!definition || !['read', 'write', 'maintain'].includes(definition.operation) || typeof definition.execute !== 'function') throw new UnsupportedProfileError(`operation:${name}`);
   const input = ownPgValue(supplied);
   if (Buffer.byteLength(JSON.stringify(input), 'utf8') > core.work().maxEncodedBytes) throw new StorageInvalidCommandError('installed operation input exceeds work budget');
+  if (definition.operation === 'read') {
+    const read = async (tx: PgTx) => {
+      await core.check(tx.session, grant, 'read');
+      const scope = await createPgInstalledContext(core, grant, tx, true);
+      const check = () => core.check(tx.session, grant, 'read'); tx.revalidators.add(check);
+      try {
+        const result = await definition.execute(input, scope.context); await scope.finish(); await check(); return ownPgValue(result);
+      } finally { tx.revalidators.delete(check); }
+    };
+    const ambient = core.ambient.getStore();
+    if (ambient) {
+      if (ambient.closed || core.roots.key(ambient.scope) !== core.roots.key(grant.scope)) throw new StorageInvalidCommandError('installed read scope differs');
+      try { return await read(ambient); } catch (error) { ambient.failed = error; throw error; }
+    }
+    return core.tx.run(false, async (session) => {
+      const base = await core.roots.capture(session, grant.scope);
+      const tx: PgTx = { session, scope: grant.scope, base, root: base.root, closed: false, failed: null, count: 0, records: 0, recordWrites: 0, appends: 0,
+        encodedBytes: 0, receipt: pgReceipt(core, grant, base.sequence), barriers: 0, purges: 0, digests: [], contributors: new Map(), revalidators: new Set() };
+      try { return await read(tx); } finally { tx.closed = true; }
+    });
+  }
   return (await runPgTransaction(core, grant, {}, async (tx) => {
     await core.check(tx.session, grant, definition.operation, true);
     const scope = await createPgInstalledContext(core, grant, tx);

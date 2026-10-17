@@ -31,7 +31,7 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
     'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) },
     'comments.import.prepare': { operation: 'write', execute: (input, context) => prepareCommentsImport(services, context, input) },
     'comments.import.inspect': { operation: 'write', execute: (input, context) => inspectCommentsImport(services, context, input) },
-    'comments.import.recover': { operation: 'write', execute: (input, context) => recoverCommentsReceipts(services, context, input) },
+    'comments.import.recover': { operation: 'read', execute: (input, context) => recoverCommentsReceipts(services, context, input) },
   } : {});
   return Object.freeze({
   assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR,
