@@ -129,7 +129,7 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Opus corrections — PR #684 NO-GO (2026-10-17)**
-  - [ ] MAJ-1: RED→GREEN host-DDL regression; owned drift raises PgSchemaDriftError. Re-attestation RED: missing operator API refuses; restart/replica and independent-chain probes added before implementation.
+  - [x] MAJ-1: owned-object fingerprints and typed PgSchemaDriftError; host-DDL regression and operator re-attestation PASS. postgres-reattest.spec.ts simulates PostgreSQL catalog-rendering changes, rejects stale approvals/actual drift and reopens after audited host approval.
   - [ ] MAJ-2: required stable comments cursor secret, restart/replica/key-mismatch page tests and host documentation.
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
   - [ ] m2/m3: 0.19.0 changelog and independent comments migration numbering with core-upgrade regression.
