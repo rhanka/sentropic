@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { validateScopeGrant, type ScopeGrant } from '../authority.js';
-import { DEFAULT_WORK_LIMITS, validateWorkLimits, validateWriterFence, type StorageOperation, type StorageScope, type WorkLimits, type WriterFence } from '../contracts.js';
+import { DEFAULT_WORK_LIMITS, validateWorkLimits, validateWriterFence, type EncodedValue, type StorageOperation, type StorageScope, type WorkLimits, type WriterFence } from '../contracts.js';
 import type { CommitReceipt } from '../atomic.js';
 import { StorageDeniedError, StorageInvalidCommandError } from '../errors.js';
 import { createStaticAuthorityPort } from '../kernel.js';
@@ -17,6 +17,7 @@ export interface PgTx {
   readonly session: PgSession; readonly scope: StorageScope; readonly base: PgRoot;
   root: string | null; closed: boolean; failed: unknown; count: number;
   records: number; appends: number; encodedBytes: number; readonly receipt: CommitReceipt;
+  barriers: number; purges: number; moduleResult?: EncodedValue; readonly digests: string[];
   readonly contributors: Map<string, ScopeGrant<unknown>>;
 }
 export class PgCore {
