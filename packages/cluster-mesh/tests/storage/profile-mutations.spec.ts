@@ -415,9 +415,10 @@ class SnapshotBlindStore extends TestStagedReferenceStore {
   override bindStaged(grant: Parameters<TestStagedReferenceStore['bindStaged']>[0]): TestStagedStore {
     const bound = super.bindStaged(grant);
     const inner = bound.snapshotRead.bind(bound);
-    bound.snapshotRead = (_snapshotRoot: string, after: number, limit: number) => {
+    bound.snapshotRead = (snapshotRoot: string, after: number, limit: number) => {
+      const captured = inner(snapshotRoot, after, limit);
       const live = bound.journalResync('snapshot-mutant', bound.journalFence());
-      return inner(live.snapshotRoot, after, limit);
+      return { ...inner(live.snapshotRoot, after, limit), watermark: captured.watermark };
     };
     return bound;
   }

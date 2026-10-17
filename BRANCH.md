@@ -125,13 +125,14 @@
     - [x] RED shared probes: `tests/storage/staged-integrity-corpus.ts` and `staged-integrity.spec.ts` force a colliding recipient id with its valid digest, inspect hidden audit membership, mutate nested bytes and rotate the current fence.
     - [x] Reference checks full-scope/owner handles and the current scope fence at every staged mutation; audit membership is copied and published with canonical effects. The two shared probes now pass; discriminating mutants follow.
     - [x] Mutants: scope-blind colliding handle, nested record alias, nested append alias, premature audit publication and begin-fence-only validation, each killed at its exact assertion in `staged-integrity.spec.ts` (7/7).
-  - [ ] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
+  - [x] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
     - [x] Replay RED port: explicit incarnation/owner/current-fence binding, maintain-only checkpoint/pause/retry/resync, pause-preserving resync and poison redelivery after snapshot consumption.
     - [x] Reference implements maintain/fence checks and pause/retry; replay mutation fixtures forward the original maintenance fence. `profile-mutations.spec.ts` passes 40/40.
     - [x] `tests/storage/replay-integrity.spec.ts`: five exact-target mutants killed (5/5): resync clearing stall, write-only maintenance, stale epoch, wrong incarnation and wrong owner.
-  - [ ] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
+  - [x] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
     - [x] Replay RED requires bounded canonical snapshot rows, captured heads/indexes, unissued/foreign-root refusal and one isolated external stream per scope; observed RED on the reference's journal-event response.
-    - [ ] Reference captures owned canonical rows under opaque scope-held snapshot capabilities and pages them with current authorization/coverage; J5 substitutes an actual live captured root.
+    - [x] Reference captures owned canonical rows under opaque scope-held snapshot capabilities and pages them with current authorization/coverage; J5 substitutes live rows while retaining the captured watermark and dies at the content-boundary assertion. Profile mutations: 40/40.
+    - [x] External reference streams are keyed by full scope/incarnation and copy exact kernel events; the cross-scope exposure mutant targets C11.
   - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
   - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header (done with MINEUR-1); corrections recorded here with post-rebase SHAs.
   - [ ] Lot gate:
