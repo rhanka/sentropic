@@ -34,7 +34,13 @@
     mounted = true; online = navigator.onLine;
     const update = () => { online = navigator.onLine; };
     window.addEventListener('online', update); window.addEventListener('offline', update);
-    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
+    const expiry = setInterval(() => {
+      if (flow && ((flow.lease && flow.lease.expiresAt <= Date.now())
+        || (flow.prepared && flow.prepared.proof.expiresAt <= Date.now()))) {
+        flow.cancel(); flow.lease = null; flow = flow; text = ''; newline = false;
+      }
+    }, 500);
+    return () => { clearInterval(expiry); window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   });
   onDestroy(() => {
     const bindingId = flow?.context.bindingId;
