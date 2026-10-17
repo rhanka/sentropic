@@ -109,6 +109,25 @@ cluster-mesh-comments-deps-audit: cluster-mesh-comments-deps
 cluster-mesh-comments-test: cluster-mesh-comments-deps
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=comments- API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
+CM_COMMENTS_TARBALL ?= .h2a/build/cm-comments-candidate/sentropic-cluster-mesh-0.19.0.tgz
+CM_COMMENTS_REPORT ?= .h2a/build/comments-installed
+.PHONY: cluster-mesh-comments-installed
+cluster-mesh-comments-installed: cluster-mesh-pg-up
+	@test -f "$(CM_COMMENTS_TARBALL)"
+	@mkdir -p "$(CM_COMMENTS_REPORT)"
+	@docker run --rm --init --network "$(CM_PG_NAME)" -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
+		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
+		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
+		npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz >/dev/null; node installed-bare.mjs > /reports/bare.json; \
+		cd /tmp/comments-consumer; cp /probe/installed-*.mjs .; \
+		npm install --omit=optional --ignore-scripts --no-audit --no-fund --save-exact /candidate.tgz @sentropic/comments@0.3.0 >/dev/null; \
+		npm install --save-dev --ignore-scripts --no-audit --no-fund --save-exact pg@8.16.3 >/dev/null; \
+		cp node_modules/@sentropic/cluster-mesh/assets/storage/comments/oracle/conformance.mjs installed-oracle.mjs; \
+		npm ls --all --omit=dev --json > /reports/production-tree.json; cp package-lock.json /reports/consumer-package-lock.json; \
+		npm audit --omit=dev --audit-level=high --json > /reports/audit.json; node installed-qualify.mjs'
+
 .PHONY: cluster-mesh-pg-crash cluster-mesh-pg-crash-test
 cluster-mesh-pg-crash:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
