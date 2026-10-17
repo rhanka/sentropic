@@ -490,6 +490,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
     - [x] C11b: whole-case stable admission and protected quotas; four scoped tests green; pinned container identifies Node 24.21.0.
     - [x] C11c: native-campaign mode, deferred effective day, drain/expiry refusal and no replenishment; red then green scoped tests, with persistent mode/expiry fencing.
     - [x] C11d: red then three green crash/concurrency tests; fsync/atomic writer and later private-handoff settlement validate provenance/expiry/digest, retain unresolved reservations and refuse a second refund.
+    - [x] C12a: red then four green model-specific price/envelope/image/segment tests; examples remain unqualified, owner operation/model map empty.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (splitted by sublist for each env)
