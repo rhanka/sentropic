@@ -9,6 +9,16 @@ vi.mock('../../src/services/settings', () => ({ settingsService: {
   get: vi.fn().mockResolvedValue(null),
 } }));
 
+it('should reserve only the remaining cumulative campaign allowance', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nano-remaining-'));
+  const { createNanoJournal } = await import('../utils/nano-qualification-evidence');
+  const { createNanoRuntime } = await import('../ai/nano-replacement-runtime');
+  const journal = createNanoJournal(dir, {});
+  const runtime = createNanoRuntime(journal, { limitUsd: 0.01, maxCalls: 16 });
+  try { expect(() => runtime.budget.reserve('gpt-6-luna', 32)).toThrow(/budget/i); }
+  finally { runtime.close(); journal.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 it('should exercise the injected native SDK with physical admission and raw usage capture offline', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'nano-native-'));
   const transport = vi.fn(async () => new Response(JSON.stringify({ id: 'offline-response', model: 'gpt-6-luna',
