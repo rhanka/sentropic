@@ -1,9 +1,9 @@
 /**
- * L-5e — reusable web-pages MCP provider (spec-v8 §9 5e, review B3).
+ * L-5e — reusable artifacts MCP provider (spec-v8 §9 5e, review B3).
  *
  * Part 1: identity, the 15 exact `artifacts_*` tool specs with closed input
  * schemas, and the platform manifest. The logical provider ID is
- * `sentropic.web-pages`; the generic provider hardcodes no application
+ * `sentropic.artifacts`; the generic provider hardcodes no application
  * OAuth vocabulary — a host binds its invocation scope through the
  * manifest factory before digests freeze (§3.5). Part 2 adds the tool
  * executor over the same HTTP app direct calls use; part 3 adds the
@@ -19,9 +19,9 @@ import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuratio
 import type { ProviderParameterSchema, RegistryDefinition } from '@sentropic/mcp-platform/registry';
 import type { HttpRequest, HttpResponse } from './http.js';
 
-export const WEB_PAGES_PROVIDER_ID = 'sentropic.web-pages';
-export const WEB_PAGES_APP_ID = 'sentropic-artifacts';
-export const WEB_PAGES_PROVIDER_VERSION = '0.1.0';
+export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
+export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
+export const ARTIFACTS_PROVIDER_VERSION = '0.1.0';
 
 export const ARTIFACTS_TOOL_NAMES = [
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
@@ -86,7 +86,7 @@ export const ARTIFACTS_TOOL_SPECS: readonly ToolSpec[] = [
 ];
 
 /** Kernel provider parameter schema (typed non-secret host settings). */
-export const WEB_PAGES_PARAMETER_SCHEMA: ProviderParameterSchema = {
+export const ARTIFACTS_PARAMETER_SCHEMA: ProviderParameterSchema = {
   properties: {
     defaultStorageScopeId: { type: 'string', minLength: 1, description: 'Fallback storage scope for artifacts_ensure.' },
     uploadBudgetBytes: { type: 'integer', minimum: 1, description: 'Declared bounded-upload budget.' },
@@ -94,15 +94,15 @@ export const WEB_PAGES_PARAMETER_SCHEMA: ProviderParameterSchema = {
   required: [] as string[],
 };
 
-export interface WebPagesManifestOptions {
+export interface ArtifactsManifestOptions {
   /** Host authorization profile: scope bound to every tool invocation. */
   invocationScope?: string;
   displayName?: string;
 }
 
-/** Build the sentropic.web-pages manifest (host scope bound pre-freeze). */
-export function createWebPagesManifest(
-  options: WebPagesManifestOptions = {},
+/** Build the sentropic.artifacts manifest (host scope bound pre-freeze). */
+export function createArtifactsManifest(
+  options: ArtifactsManifestOptions = {},
 ): AppMcpProviderManifest {
   const scopes = options.invocationScope === undefined ? [] : [options.invocationScope];
   const tools: CapabilityTool[] = ARTIFACTS_TOOL_SPECS.map((spec) => ({
@@ -126,10 +126,10 @@ export function createWebPagesManifest(
     },
   }));
   return {
-    appId: WEB_PAGES_APP_ID,
-    providerId: WEB_PAGES_PROVIDER_ID,
-    version: WEB_PAGES_PROVIDER_VERSION,
-    displayName: options.displayName ?? 'Sentropic Web Pages',
+    appId: ARTIFACTS_APP_ID,
+    providerId: ARTIFACTS_PROVIDER_ID,
+    version: ARTIFACTS_PROVIDER_VERSION,
+    displayName: options.displayName ?? 'Sentropic Artifacts',
     resources: [],
     tools,
     prompts: [],
@@ -146,11 +146,11 @@ export function createWebPagesManifest(
 // app call, so a refused invocation has no effects.
 // ---------------------------------------------------------------------------
 
-export interface WebPagesApp {
+export interface ArtifactsApp {
   handle(request: HttpRequest): Promise<HttpResponse>;
 }
 
-export interface WebPagesInvokeInput {
+export interface ArtifactsInvokeInput {
   tool: string;
   actorId: string;
   args: Record<string, unknown>;
@@ -170,8 +170,8 @@ function optString(args: Record<string, unknown>, name: string): string | undefi
 }
 
 /** Create the 15-tool executor over any conforming artifacts HTTP app. */
-export function createWebPagesToolExecutor(deps: {
-  app: WebPagesApp;
+export function createArtifactsToolExecutor(deps: {
+  app: ArtifactsApp;
   defaultStorageScopeId?: string;
 }) {
   const call = (
@@ -208,7 +208,7 @@ export function createWebPagesToolExecutor(deps: {
   }
 
   return {
-    async invoke(input: WebPagesInvokeInput): Promise<HttpResponse> {
+    async invoke(input: ArtifactsInvokeInput): Promise<HttpResponse> {
       const { actorId, args } = input;
       switch (input.tool) {
         case 'artifacts_get_template':
@@ -291,8 +291,8 @@ export function createWebPagesToolExecutor(deps: {
 // no connector-host registry is added.
 // ---------------------------------------------------------------------------
 
-export interface WebPagesAdapterOptions extends WebPagesManifestOptions {
-  app: WebPagesApp;
+export interface ArtifactsAdapterOptions extends ArtifactsManifestOptions {
+  app: ArtifactsApp;
   defaultStorageScopeId?: string;
 }
 
@@ -305,17 +305,17 @@ function errorCodeOf(body: unknown): string {
 }
 
 /** Create the platform adapter driving the 15 tools over the shared app. */
-export function createWebPagesAdapter(
-  options: WebPagesAdapterOptions,
+export function createArtifactsAdapter(
+  options: ArtifactsAdapterOptions,
 ): AppConnectorProviderAdapter {
-  const manifest = createWebPagesManifest(options);
-  const executor = createWebPagesToolExecutor({
+  const manifest = createArtifactsManifest(options);
+  const executor = createArtifactsToolExecutor({
     app: options.app,
     defaultStorageScopeId: options.defaultStorageScopeId,
   });
   return {
-    appId: WEB_PAGES_APP_ID,
-    connectorId: WEB_PAGES_PROVIDER_ID,
+    appId: ARTIFACTS_APP_ID,
+    connectorId: ARTIFACTS_PROVIDER_ID,
     manifest,
     resolveTenant: (input) => Promise.resolve({
       principalRef: input.principalSub,
@@ -360,7 +360,7 @@ export function createWebPagesAdapter(
   };
 }
 
-export interface WebPagesDefinitionOptions extends WebPagesAdapterOptions {
+export interface ArtifactsDefinitionOptions extends ArtifactsAdapterOptions {
   /** Local config-review reference (integrity metadata, never authority). */
   approvalRef?: string;
   revision?: string;
@@ -369,11 +369,11 @@ export interface WebPagesDefinitionOptions extends WebPagesAdapterOptions {
 
 const EMPTY_TOOL_CONFIG: Schema = { type: 'object', properties: {}, additionalProperties: false };
 
-/** Build the kernel registry definition for sentropic.web-pages (§3). */
-export function createWebPagesRegistryDefinition(
-  options: WebPagesDefinitionOptions,
+/** Build the kernel registry definition for sentropic.artifacts (§3). */
+export function createArtifactsRegistryDefinition(
+  options: ArtifactsDefinitionOptions,
 ): RegistryDefinition {
-  const adapter = createWebPagesAdapter(options);
+  const adapter = createArtifactsAdapter(options);
   const manifest = adapter.manifest;
   const handlers: Record<string, { handlerId: string; capabilityRef: string; configSchema: unknown }> = {};
   const toolValues: Record<string, { handlerId: string; values: Record<string, unknown> }> = {};
@@ -385,11 +385,11 @@ export function createWebPagesRegistryDefinition(
   return {
     manifest,
     adapter,
-    parameterSchema: WEB_PAGES_PARAMETER_SCHEMA,
+    parameterSchema: ARTIFACTS_PARAMETER_SCHEMA,
     handlers,
     requiredPorts: [],
     provenance: {
-      approvalRef: options.approvalRef ?? 'web-pages-local-1',
+      approvalRef: options.approvalRef ?? 'artifacts-local-1',
       revision: options.revision ?? 'rev-1',
       manifestDigest: computeManifestDigest(manifest),
       reviewedBy: options.reviewedBy ?? ['host-owner'],
