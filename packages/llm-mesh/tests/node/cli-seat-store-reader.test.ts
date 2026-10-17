@@ -58,6 +58,24 @@ describe('cli-seat-store-reader', () => {
     expect(descriptor).toMatchObject({ supported: false, reason: 'selected lab record not found' });
   });
 
+  it('never forwards backend prose: refusal reasons are reader-fixed', async () => {
+    const proseBackend: SeatStoreBackend = {
+      cli: 'agy',
+      backend: 'synthetic',
+      readSelectedRecord: async () => ({
+        schemaVersion: 'v1-synth',
+        credentialClass: 'unknown' as const,
+        refreshCapable: null,
+        supported: false as const,
+        reason: `refused because ${CANARY}`,
+      }),
+    };
+    const descriptor = await inspectSeatStoreRecord([proseBackend], { cli: 'agy', profileLabel: 'lab-agy-01' });
+    expect(descriptor.supported).toBe(false);
+    expect(JSON.stringify(descriptor)).not.toContain(CANARY);
+    expect(descriptor.reason).toBe('backend refused the selected lab record');
+  });
+
   it('never leaks raw or encoded canary material through results or errors', async () => {
     const encoded = Buffer.from(CANARY, 'utf8').toString('base64');
     const hostile = {
