@@ -807,6 +807,9 @@ export const createContentConsentService = (
     if (existing.bindingId !== bindingId) {
       throw new ContentConsentError('invalid_request', 'binding changed; derive anew instead of refreshing');
     }
+    if (input.bindingVersion !== existing.bindingVersion) {
+      throw new ContentConsentError('ineligible_session', 'binding version changed; a new derivation is required');
+    }
     if (existing.state === 'revoked') throw new ContentConsentError('grant_revoked', 'child grant revoked');
     if (existing.state === 'excluded') throw new ContentConsentError('session_excluded', 'child grant excluded');
     if (existing.state === 'closed') throw new ContentConsentError('grant_closed', 'child grant is closed');
@@ -860,7 +863,6 @@ export const createContentConsentService = (
     const next: SessionContentGrant = {
       ...existing,
       projectRevision: project.projectRevision,
-      bindingVersion: input.bindingVersion,
       nativeBoundarySeq: input.nativeBoundarySeq,
       channels: { ...project.channels },
       retentionSnapshot: {
