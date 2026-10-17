@@ -16,6 +16,8 @@ import { prepareCommentsImport } from './import-prepare.js';
 import { inspectCommentsImport, recoverCommentsReceipts } from './import-recovery.js';
 import { commentsImportPolicy } from './import-policy.js';
 import { validateCommentsImportProjection } from './import-projection.js';
+import { prepareCommentsExport } from './export-prepare.js';
+import { readCommentsExportFragments, continueCommentsExport } from './export-pages.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -32,6 +34,9 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
     'comments.import.prepare': { operation: 'write', execute: (input, context) => prepareCommentsImport(services, context, input) },
     'comments.import.inspect': { operation: 'write', execute: (input, context) => inspectCommentsImport(services, context, input) },
     'comments.import.recover': { operation: 'read', execute: (input, context) => recoverCommentsReceipts(services, context, input) },
+    'comments.export.prepare': { operation: 'read', execute: (input, context) => prepareCommentsExport(services, context, input) },
+    'comments.export.fragments': { operation: 'read', execute: (input, context) => readCommentsExportFragments(services, context, input) },
+    'comments.export.records': { operation: 'read', execute: (input, context) => continueCommentsExport(services, context, input) },
   } : {});
   return Object.freeze({
   assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR,
