@@ -1,5 +1,6 @@
 export interface OAuthContinuationState {
   acr?: string;
+  amr?: string[] | null;
   authTime?: string;
   clientId: string;
   codeChallenge: string;

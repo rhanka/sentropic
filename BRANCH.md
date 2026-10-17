@@ -20,6 +20,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
   - `packages/auth-hono/src/oauth/**`
   - `packages/auth-hono/src/session.ts`
   - `packages/auth-hono/src/ports.ts`
@@ -113,7 +114,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
     - [ ] **E2E tests**
       - [ ] No new E2E file; existing `e2e/tests/02-auth-webauthn.spec.ts` must stay green.
       - [ ] Sub-lot gate scoped: `make test-e2e E2E_SPEC=tests/02-auth-webauthn.spec.ts API_PORT=9585 UI_PORT=5785 MAILDEV_UI_PORT=1685 ENV=e2e-idp-client-mfa-policy`
-- [ ] **Lot 2 — B2 amr claim (RFC 8176)**
+- [x] **Lot 2 — B2 amr claim (RFC 8176)**
   - [ ] Derive `amr` from session (`mfaVerified` + UV): `["hwk","user","mfa"]` when passkey+UV else `["pwd"]`-equivalent single-factor value; carry through `AuthCodePayload` + `TokenMeta` + continuation state.
   - [ ] Emit `amr` in id_token, access_token, userinfo; add `amr` to `claims_supported` in `wellknown-handler.ts`.
   - [ ] Lot gate:
