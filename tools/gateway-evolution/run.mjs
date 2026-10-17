@@ -405,6 +405,13 @@ export const main = async (argv, { fs, out } = {}) => {
     out?.(`manifest ok: ${manifest.kind}\n`);
     return 0;
   }
+  if (command === 'candidate-bundle') {
+    const { transferCandidate } = await import('./transfer.mjs');
+    const result = await transferCandidate({ program: flag('program'), delivery: flag('delivery'),
+      manifestPath: flag('manifest'), worktree: flag('worktree'), mode: flag('mode'), sourceSha: flag('source-sha') });
+    out?.(`${JSON.stringify(result)}\n`);
+    return 0;
+  }
   if (
     command === 'packed-gate' ||
     command === 'consumer-gate' ||

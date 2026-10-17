@@ -243,7 +243,7 @@ describe('run-manifest validation', () => {
 
   it('fails later-lot commands closed until their lot implements them', async () => {
     const fs = { readFile: async () => '{}' };
-    for (const command of ['packed-gate', 'consumer-gate', 'release-check', 'candidate-bundle', 'client-fixtures', 'client-e2e']) {
+    for (const command of ['packed-gate', 'consumer-gate', 'release-check', 'client-fixtures', 'client-e2e']) {
       await assert.rejects(
         main([command], { fs, out: () => {} }),
         (error) => error instanceof GatewayInputError && error.code === 'not-implemented',

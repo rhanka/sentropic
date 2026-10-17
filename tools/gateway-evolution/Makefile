@@ -61,7 +61,7 @@ gateway-release-check:
 gateway-candidate-bundle:
 	$(gw_manifest)
 	@test -n "$(H2A_WORKTREE)" -a -d "$(H2A_WORKTREE)" || { echo 'ERROR: registered H2A_WORKTREE required' >&2; exit 1; }
-	@$(GW_EVOL_RUN) node tools/gateway-evolution/run.mjs candidate-bundle --program "$(PROGRAM)" --delivery "$(DELIVERY)" --manifest "$(ARTIFACT_MANIFEST)" --worktree "$(H2A_WORKTREE)" --mode "$(MODE)"
+	@bash tools/gateway-evolution/candidate-transfer.sh "$(ENV)" "$(GW_EVOL_IMAGE)" "$(PROGRAM)" "$(DELIVERY)" "$(ARTIFACT_MANIFEST)" "$(H2A_WORKTREE)" "$(MODE)"
 
 gateway-client-fixtures:
 	$(gw_manifest)
