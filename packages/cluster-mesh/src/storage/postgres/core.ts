@@ -182,9 +182,20 @@ export class PgCore {
     if (!validateWriterFence(fence).ok) throw new StorageInvalidCommandError('invalid writer fence');
     await this.tx.run(false, async (session) => {
       await this.check(session, grant, 'write', true);
-      const result = await session.execute({ text: `INSERT INTO ${this.roots.schema}.fences(scope_key,lane,owner,incarnation,epoch,lease_until) VALUES($1,$2,$3,$4,$5::bigint,$6::timestamptz)
-        ON CONFLICT(scope_key,lane) DO UPDATE SET owner=excluded.owner,epoch=excluded.epoch,lease_until=excluded.lease_until WHERE ${this.roots.schema}.fences.epoch<excluded.epoch OR (${this.roots.schema}.fences.epoch=excluded.epoch AND ${this.roots.schema}.fences.owner=excluded.owner AND ${this.roots.schema}.fences.lease_until IS NOT DISTINCT FROM excluded.lease_until) RETURNING epoch::text`,
-        values: [this.roots.key(grant.scope), fence.fenceId, grant.principalId, this.incarnation, fence.epoch, leaseUntil] });
+      const result = await session.execute({
+        text: `INSERT INTO ${this.roots.schema}.fences(scope_key, lane, owner, incarnation, epoch, lease_until) VALUES($1, $2, $3, $4, $5::bigint, $6::timestamptz)
+        ON CONFLICT(scope_key, lane) DO UPDATE SET owner=excluded.owner, epoch=excluded.epoch, lease_until=excluded.lease_until WHERE
+        ${this.roots.schema}.fences.epoch<excluded.epoch OR (${this.roots.schema}.fences.epoch=excluded.epoch AND ${this.roots.schema}.fences.owner=excluded.owner AND ${this.roots.schema}.fences.lease_until
+        IS NOT DISTINCT FROM excluded.lease_until) RETURNING epoch::text`,
+        values: [
+          this.roots.key(grant.scope),
+          fence.fenceId,
+          grant.principalId,
+          this.incarnation,
+          fence.epoch,
+          leaseUntil,
+        ],
+      });
       if (result.rows.length !== 1) throw new StorageInvalidCommandError('writer ownership cannot move backwards');
     });
   }
@@ -192,8 +203,12 @@ export class PgCore {
     if (seen.has(target)) return;
     if (seen.size >= 128) throw new PostgresStorageError('corruption');
     seen.add(target);
-    if (await this.roots.get(session, root, 'barrier', target) || await this.roots.get(session, root, 'disposed', target)) throw new StorageDeniedError('target is covered or disposed');
-    const parents = await this.roots.get<readonly string[]>(session, root, 'parents', target) ?? [];
+    if (
+      (await this.roots.get(session, root, 'barrier', target)) ||
+      (await this.roots.get(session, root, 'disposed', target))
+    )
+      throw new StorageDeniedError('target is covered or disposed');
+    const parents = (await this.roots.get<readonly string[]>(session, root, 'parents', target)) ?? [];
     for (const parent of parents) await this.visible(session, root, parent, seen);
   }
 }
@@ -201,18 +216,31 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
   if (!options.history) throw new PostgresStorageError('configuration');
   const provisional = new PgCore(options, options.incarnation ?? `store:${randomUUID()}`);
   options = provisional.options;
-  const assets = options.assets ?? await loadPgAssets();
+  const assets = options.assets ?? (await loadPgAssets());
   const incarnation = await provisional.tx.run(false, async (session) => {
     await verifyPgInstallation(session, options.layout, assets, options.history);
-    await session.execute({ text: `INSERT INTO ${provisional.roots.schema}.modules(module,incarnation) VALUES($1,$2) ON CONFLICT(module) DO NOTHING`, values: [options.moduleId, provisional.incarnation] });
-    const result = await session.execute({ text: `SELECT incarnation,descriptor_digest FROM ${provisional.roots.schema}.modules WHERE module=$1`, values: [options.moduleId] });
+    await session.execute({
+      text: `INSERT INTO ${provisional.roots.schema}.modules(module, incarnation) VALUES($1, $2) ON CONFLICT(module) DO NOTHING`,
+      values: [options.moduleId, provisional.incarnation],
+    });
+    const result = await session.execute({
+      text: `SELECT incarnation, descriptor_digest FROM ${provisional.roots.schema}.modules WHERE module=$1`,
+      values: [options.moduleId],
+    });
     const stored = decodePgText(result.rows[0]?.incarnation);
-    if (options.incarnation !== undefined && options.incarnation !== stored) throw new PostgresStorageError('configuration');
-    const wanted = provisional.options.descriptor ? createHash('sha256').update(JSON.stringify(provisional.options.descriptor), 'utf8').digest('hex') : null;
+    if (options.incarnation !== undefined && options.incarnation !== stored)
+      throw new PostgresStorageError('configuration');
+    const wanted = provisional.options.descriptor
+      ? createHash('sha256').update(JSON.stringify(provisional.options.descriptor), 'utf8').digest('hex')
+      : null;
     const registered = result.rows[0]?.descriptor_digest;
     if (registered !== null && registered !== wanted) throw new PostgresStorageError('configuration');
     if (wanted && registered === null) {
-      const pinned = await session.execute({ text: `UPDATE ${provisional.roots.schema}.modules SET descriptor_digest=$1 WHERE module=$2 AND descriptor_digest IS NULL AND NOT EXISTS(SELECT 1 FROM ${provisional.roots.schema}.scopes WHERE module=$2 AND version>0) RETURNING module`, values: [wanted, options.moduleId] });
+      const pinned = await session.execute({
+        text: `UPDATE ${provisional.roots.schema}.modules SET descriptor_digest=$1 WHERE module=$2 AND descriptor_digest IS NULL AND NOT EXISTS(SELECT 1 FROM ${provisional.roots.schema}.scopes
+        WHERE module=$2 AND version>0) RETURNING module`,
+        values: [wanted, options.moduleId],
+      });
       if (pinned.rows.length !== 1) throw new PostgresStorageError('configuration');
     }
     return stored;
