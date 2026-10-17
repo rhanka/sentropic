@@ -71,19 +71,21 @@ export type CodexTokenSecretPayload = {
   obtainedAt: string;
   expiresAt: string | null;
   source: 'codex-device' | 'legacy-codex-setting' | 'codex-refresh';
+  externalSeatPolicy?: SeatExternalPolicy | null;
 };
 
 export type ClaudeCodeTokenSecretPayload = {
   accessToken: string;
-  refreshToken: string;
+  refreshToken: string | null;
   tokenType: 'bearer';
   obtainedAt: string;
   expiresAt: string | null;
-  source: 'claude-code-import' | 'claude-code-refresh';
+  source: 'claude-code-import' | 'claude-code-refresh' | 'claude-code-external';
   clientId: string | null;
   subscriptionType: string | null;
   rateLimitTier: string | null;
   profile: Record<string, unknown> | null;
+  externalSeatPolicy?: SeatExternalPolicy | null;
 };
 
 export type AntigravityTokenSecretPayload = {
@@ -92,12 +94,13 @@ export type AntigravityTokenSecretPayload = {
   tokenType: 'bearer';
   obtainedAt: string;
   expiresAt: string | null;
-  source: 'antigravity-import' | 'antigravity-refresh';
+  source: 'antigravity-import' | 'antigravity-refresh' | 'antigravity-external';
   // GCP project bound to the Google account (discovered via loadCodeAssist);
   // injected into every cloudcode-pa v1internal request body.
   project: string | null;
   tier: string | null;
   profile: Record<string, unknown> | null;
+  externalSeatPolicy?: SeatExternalPolicy | null;
 };
 
 export type CloudCodeTokenSecretPayload = {
@@ -112,6 +115,7 @@ export type CloudCodeTokenSecretPayload = {
   clientSecret?: string | null;
   authClientConfigVersion?: string | null;
   profile: Record<string, unknown> | null;
+  externalSeatPolicy?: SeatExternalPolicy | null;
 };
 
 export type MuseTokenSecretPayload = {
@@ -123,6 +127,7 @@ export type MuseTokenSecretPayload = {
   source: 'muse-import' | 'muse-cli' | 'muse-refresh';
   apiBaseUrl: string | null;
   accountEmail: string | null;
+  externalSeatPolicy?: SeatExternalPolicy | null;
 };
 
 // Mistral Vibe sign-in mints a long-lived, plan-billed Mistral API key (no
@@ -134,6 +139,7 @@ export type MistralVibeTokenSecretPayload = {
   obtainedAt: string;
   expiresAt: string | null;
   source: 'vibe-sign-in';
+  externalSeatPolicy?: SeatExternalPolicy | null;
 };
 
 export type GeminiCodeAssistTokenSecretPayload = {
@@ -207,6 +213,45 @@ const normalizeOptionalText = (value: unknown): string | null => {
   const normalized = normalizeText(value);
   return normalized.length > 0 ? normalized : null;
 };
+
+/** Row/payload marker for centrally custodied CI seats (L1 external policy). */
+export const SEAT_EXTERNAL_POLICY_KEY = 'seatExternalPolicy';
+
+export type SeatExternalPolicy = {
+  seatRef: string;
+  ownerScope: string;
+  epoch: number;
+  generation: number;
+  operationId: string;
+};
+
+const isPolicyRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Read the trusted external marker; a present-but-malformed marker stays external (fail-closed). */
+export const readSeatExternalPolicy = (metadata: unknown): SeatExternalPolicy | null => {
+  if (!isPolicyRecord(metadata)) return null;
+  const marker = metadata[SEAT_EXTERNAL_POLICY_KEY];
+  if (marker === undefined || marker === null) return null;
+  if (!isPolicyRecord(marker)) {
+    return { seatRef: 'unknown', ownerScope: 'unknown', epoch: 0, generation: 0, operationId: 'unknown' };
+  }
+  const text = (key: string): string => (typeof marker[key] === 'string' && marker[key].length > 0
+    ? (marker[key] as string)
+    : 'unknown');
+  const integer = (key: string): number =>
+    typeof marker[key] === 'number' && Number.isInteger(marker[key]) ? (marker[key] as number) : 0;
+  return {
+    seatRef: text('seatRef'),
+    ownerScope: text('ownerScope'),
+    epoch: integer('epoch'),
+    generation: integer('generation'),
+    operationId: text('operationId'),
+  };
+};
+
+const readSeatPolicyFromPayload = (parsed: Record<string, unknown>): SeatExternalPolicy | null =>
+  readSeatExternalPolicy({ [SEAT_EXTERNAL_POLICY_KEY]: parsed['externalSeatPolicy'] });
 
 const toIso = (value: Date | string | null | undefined): string | null => {
   if (!value) return null;
@@ -299,14 +344,23 @@ const parseClaudeCodeTokenSecret = (
     const parsed = JSON.parse(decrypted) as Partial<ClaudeCodeTokenSecretPayload> | null;
     const accessToken = normalizeOptionalText(parsed?.accessToken);
     const refreshToken = normalizeOptionalText(parsed?.refreshToken);
-    if (!parsed || !accessToken || !refreshToken) return null;
+    if (!parsed || !accessToken) return null;
+    // L1 external variant: no refresh token at all, with the trusted policy
+    // embedded; a missing refresh token without that policy is still refused.
+    const externalSeatPolicy = parsed ? readSeatPolicyFromPayload(parsed as Record<string, unknown>) : null;
+    if (!refreshToken && !externalSeatPolicy) return null;
     return {
       accessToken,
       refreshToken,
       tokenType: 'bearer',
       obtainedAt: normalizeOptionalText(parsed.obtainedAt) ?? new Date().toISOString(),
       expiresAt: normalizeOptionalText(parsed.expiresAt),
-      source: parsed.source === 'claude-code-refresh' ? 'claude-code-refresh' : 'claude-code-import',
+      source: externalSeatPolicy
+        ? 'claude-code-external'
+        : parsed.source === 'claude-code-refresh'
+          ? 'claude-code-refresh'
+          : 'claude-code-import',
+      externalSeatPolicy,
       clientId: normalizeOptionalText(parsed.clientId),
       subscriptionType: normalizeOptionalText(parsed.subscriptionType),
       rateLimitTier: normalizeOptionalText(parsed.rateLimitTier),
@@ -389,6 +443,7 @@ const buildAntigravityTokenPayload = (input: {
   project?: string | null;
   tier?: string | null;
   profile?: Record<string, unknown> | null;
+  externalSeatPolicy?: SeatExternalPolicy | null;
 }): AntigravityTokenSecretPayload => ({
   accessToken: input.accessToken,
   refreshToken: input.refreshToken ?? null,
@@ -399,6 +454,7 @@ const buildAntigravityTokenPayload = (input: {
   project: normalizeOptionalText(input.project),
   tier: normalizeOptionalText(input.tier),
   profile: input.profile ?? null,
+  externalSeatPolicy: input.externalSeatPolicy ?? null,
 });
 
 const isTokenExpiring = (expiresAt: string | null | undefined): boolean => {
@@ -452,16 +508,17 @@ const buildTokenPayload = (input: {
 
 const buildClaudeCodeTokenPayload = (input: {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string | null;
   expiresAt?: string | null;
   source: ClaudeCodeTokenSecretPayload['source'];
   clientId?: string | null;
   subscriptionType?: string | null;
   rateLimitTier?: string | null;
   profile?: Record<string, unknown> | null;
+  externalSeatPolicy?: SeatExternalPolicy | null;
 }): ClaudeCodeTokenSecretPayload => ({
   accessToken: input.accessToken,
-  refreshToken: input.refreshToken,
+  refreshToken: normalizeOptionalText(input.refreshToken),
   tokenType: 'bearer',
   obtainedAt: new Date().toISOString(),
   expiresAt: input.expiresAt ?? null,
@@ -470,6 +527,7 @@ const buildClaudeCodeTokenPayload = (input: {
   subscriptionType: normalizeOptionalText(input.subscriptionType),
   rateLimitTier: normalizeOptionalText(input.rateLimitTier),
   profile: input.profile ?? null,
+  externalSeatPolicy: input.externalSeatPolicy ?? null,
 });
 
 const buildMuseTokenPayload = (input: {
@@ -543,6 +601,8 @@ const parseMistralVibeTokenSecret = (
 const refreshMistralVibeTokenIfNeeded = async (input: {
   token: MistralVibeTokenSecretPayload;
 }): Promise<MistralVibeTokenSecretPayload | null> => {
+  // L1 backstop: externally custodied seats never renew here.
+  if (input.token.externalSeatPolicy) return null;
   return isTokenExpiring(input.token.expiresAt) ? null : input.token;
 };
 
@@ -670,28 +730,34 @@ export const storeClaudeCodeAccountTransport = async (input: {
   accountLabel?: string | null;
   externalAccountId: string;
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string | null;
   expiresAt?: string | null;
   clientId?: string | null;
   subscriptionType?: string | null;
   rateLimitTier?: string | null;
   profile?: Record<string, unknown> | null;
+  /** L1 external/access-only variant: trusted custodian policy, no refresh grant. */
+  seatPolicy?: SeatExternalPolicy | null;
 }): Promise<LlmAccountTransportPublic | null> => {
   const ownerUserId = normalizeOptionalText(input.ownerUserId);
   const externalAccountId = normalizeOptionalText(input.externalAccountId);
   const accessToken = normalizeOptionalText(input.accessToken);
   const refreshToken = normalizeOptionalText(input.refreshToken);
-  if (!ownerUserId || !externalAccountId || !accessToken || !refreshToken) return null;
+  const seatPolicy = input.seatPolicy ?? null;
+  // External rows carry access material only; a missing refresh token without
+  // the trusted policy is still refused. No dummy refresh token is stored.
+  if (!ownerUserId || !externalAccountId || !accessToken || (!refreshToken && !seatPolicy)) return null;
 
   const token = buildClaudeCodeTokenPayload({
     accessToken,
     refreshToken,
     expiresAt: normalizeOptionalText(input.expiresAt),
-    source: 'claude-code-import',
+    source: seatPolicy ? 'claude-code-external' : 'claude-code-import',
     clientId: input.clientId,
     subscriptionType: input.subscriptionType,
     rateLimitTier: input.rateLimitTier,
     profile: input.profile,
+    externalSeatPolicy: seatPolicy,
   });
   const now = new Date();
   const accountId = createId();
@@ -706,6 +772,7 @@ export const storeClaudeCodeAccountTransport = async (input: {
     subscriptionType: token.subscriptionType,
     rateLimitTier: token.rateLimitTier,
     profile: token.profile,
+    ...(seatPolicy ? { [SEAT_EXTERNAL_POLICY_KEY]: seatPolicy } : {}),
   };
 
   await db.run(sql`
@@ -1318,26 +1385,32 @@ export const storeAntigravityAccountTransport = async (input: {
   accountLabel?: string | null;
   externalAccountId: string;
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string | null;
   expiresAt?: string | null;
   project?: string | null;
   tier?: string | null;
   profile?: Record<string, unknown> | null;
+  /** L1 external/access-only variant: trusted custodian policy, no refresh grant. */
+  seatPolicy?: SeatExternalPolicy | null;
 }): Promise<LlmAccountTransportPublic | null> => {
   const ownerUserId = normalizeOptionalText(input.ownerUserId);
   const externalAccountId = normalizeOptionalText(input.externalAccountId);
   const accessToken = normalizeOptionalText(input.accessToken);
   const refreshToken = normalizeOptionalText(input.refreshToken);
-  if (!ownerUserId || !externalAccountId || !accessToken || !refreshToken) return null;
+  const seatPolicy = input.seatPolicy ?? null;
+  // External rows carry access material only; a missing refresh token without
+  // the trusted policy is still refused. No dummy refresh token is stored.
+  if (!ownerUserId || !externalAccountId || !accessToken || (!refreshToken && !seatPolicy)) return null;
 
   const token = buildAntigravityTokenPayload({
     accessToken,
     refreshToken,
     expiresAt: normalizeOptionalText(input.expiresAt),
-    source: 'antigravity-import',
+    source: seatPolicy ? 'antigravity-external' : 'antigravity-import',
     project: input.project,
     tier: input.tier,
     profile: input.profile,
+    externalSeatPolicy: seatPolicy,
   });
 
   const now = new Date();
@@ -1356,6 +1429,7 @@ export const storeAntigravityAccountTransport = async (input: {
     project: token.project,
     tier: token.tier,
     profile: token.profile,
+    ...(seatPolicy ? { [SEAT_EXTERNAL_POLICY_KEY]: seatPolicy } : {}),
   };
 
   await db.run(sql`
@@ -1415,6 +1489,71 @@ export const storeAntigravityAccountTransport = async (input: {
   `);
 
   return getPrimaryAntigravityAccountTransport({ ownerUserId });
+};
+
+/**
+ * L1 trusted projection receiver. Validates a custodian access-only
+ * projection and persists it through the external store variant directly.
+ * It never calls or routes through `importAntigravityEnrollment`, performs
+ * no discovery/refresh/mint side effect, and writes nothing on refusal.
+ */
+export const importSeatProjection = async (input: {
+  cli: 'agy' | 'claude';
+  ownerUserId: string;
+  expectedOwnerScope: string;
+  externalAccountId: string;
+  accountLabel?: string | null;
+  accessToken: string;
+  expiresAt?: string | null;
+  seatPolicy: SeatExternalPolicy;
+  /** Trusted P-BILLING clearance for live use; without it, zero writes. */
+  billingClear: boolean;
+  packageProviderId?: string | null;
+  packageAccountTransport?: string | null;
+  requestedTargetProviderId?: string | null;
+  requestedTransportProviderId?: string | null;
+  issuingClientRef?: string | null;
+  endpointFamily?: string | null;
+  project?: string | null;
+}): Promise<LlmAccountTransportPublic | null> => {
+  if (!input.billingClear) return null;
+  // A refresh-bearing projection is never imported, even from the custodian.
+  if ((input as { refreshToken?: unknown }).refreshToken !== undefined) return null;
+  const policy = input.seatPolicy;
+  if (!policy || normalizeOptionalText(policy.seatRef) === null
+    || normalizeOptionalText(policy.ownerScope) === null
+    || normalizeOptionalText(policy.operationId) === null
+    || !Number.isInteger(policy.epoch) || policy.epoch < 1
+    || !Number.isInteger(policy.generation) || policy.generation < 0) return null;
+  if (policy.ownerScope !== input.expectedOwnerScope) return null;
+  if (normalizeOptionalText(input.accessToken) === null) return null;
+  if (input.cli === 'agy') {
+    // Exact layer mapping: package cloud-code to application
+    // antigravity/cloudcode-pa. The application cloud-code/gemini route,
+    // mixed tuples, and wrong clients are refused before any write.
+    if (input.packageProviderId !== 'cloud-code' || input.packageAccountTransport !== 'cloud-code') return null;
+    if (input.requestedTargetProviderId !== ANTIGRAVITY_TARGET_PROVIDER_ID
+      || input.requestedTransportProviderId !== ANTIGRAVITY_TRANSPORT_PROVIDER_ID) return null;
+    if (normalizeOptionalText(input.issuingClientRef) === null
+      || normalizeOptionalText(input.endpointFamily) === null) return null;
+    return storeAntigravityAccountTransport({
+      ownerUserId: input.ownerUserId,
+      accountLabel: input.accountLabel,
+      externalAccountId: input.externalAccountId,
+      accessToken: input.accessToken,
+      expiresAt: input.expiresAt,
+      project: input.project,
+      seatPolicy: policy,
+    });
+  }
+  return storeClaudeCodeAccountTransport({
+    ownerUserId: input.ownerUserId,
+    accountLabel: input.accountLabel,
+    externalAccountId: input.externalAccountId,
+    accessToken: input.accessToken,
+    expiresAt: input.expiresAt,
+    seatPolicy: policy,
+  });
 };
 
 export const storeCloudCodeAccountTransport = async (input: {
@@ -1750,6 +1889,8 @@ const refreshCodexTokenIfNeeded = async (input: {
   externalAccountId: string | null;
   token: CodexTokenSecretPayload;
 }): Promise<CodexTokenSecretPayload | null> => {
+  // L1 backstop: externally custodied seats never renew here.
+  if (input.token.externalSeatPolicy) return null;
   if (!isTokenExpiring(input.token.expiresAt)) return input.token;
   if (!input.token.refreshToken) {
     await db.run(sql`
@@ -1813,6 +1954,8 @@ const refreshClaudeCodeTokenIfNeeded = async (input: {
   externalAccountId: string | null;
   token: ClaudeCodeTokenSecretPayload;
 }): Promise<ClaudeCodeTokenSecretPayload | null> => {
+  // L1 backstop: externally custodied seats never renew here.
+  if (input.token.externalSeatPolicy) return null;
   if (!isTokenExpiring(input.token.expiresAt)) return input.token;
   if (!input.token.refreshToken) {
     await db.run(sql`
@@ -1913,6 +2056,8 @@ export const refreshMuseTokenIfNeeded = async (
   },
   readAuthFile: (path: string) => Promise<string> = (path) => readFile(path, 'utf8'),
 ): Promise<MuseTokenSecretPayload | null> => {
+  // L1 backstop: externally custodied seats never re-read the CLI store here.
+  if (input.token.externalSeatPolicy) return null;
   if (!isTokenExpiring(input.token.expiresAt)) return input.token;
 
   const existing = museRefreshes.get(input.accountId);
@@ -1969,6 +2114,9 @@ export const refreshCloudCodeTokenIfNeeded = async (
   },
   fetchFn: typeof fetch = fetch,
 ): Promise<CloudCodeTokenSecretPayload | null> => {
+  // L1 backstop: externally custodied seats never renew here. This remains
+  // the application cloud-code/gemini route, forbidden for agy seats.
+  if (input.token.externalSeatPolicy) return null;
   if (!isTokenExpiring(input.token.expiresAt)) return input.token;
   const refreshToken = input.token.refreshToken;
   if (!refreshToken) {
@@ -2096,6 +2244,8 @@ const refreshAntigravityTokenIfNeeded = async (input: {
   externalAccountId: string | null;
   token: AntigravityTokenSecretPayload;
 }): Promise<AntigravityTokenSecretPayload | null> => {
+  // L1 backstop: externally custodied seats never renew here.
+  if (input.token.externalSeatPolicy) return null;
   if (!isTokenExpiring(input.token.expiresAt)) return input.token;
   if (!input.token.refreshToken) {
     await db.run(sql`
@@ -2373,6 +2523,47 @@ const acquireDbAccountTransport = async <TToken extends ParsedAccountTransportTo
       errorMessage: input.invalidTokenMessage,
     });
     return null;
+  }
+
+  // L1 external policy, read ahead of every per-transport refresh hook: an
+  // externally custodied account never renews here. Valid unexpired access is
+  // served directly; expiry becomes a classified access-unavailable outcome
+  // that retains token_secret, owner, lineage, and policy for the next
+  // projection. No missing-token branch may erase an external account.
+  const seatPolicy = readSeatExternalPolicy(acquired.metadata);
+  if (seatPolicy) {
+    if (isTokenExpiring(token.expiresAt)) {
+      await recordLlmAccountTransportOutcome({
+        accountId: acquired.account_id,
+        reservationId: acquired.reservation_id,
+        status: 'auth_failed',
+        errorMessage: `Seat ${seatPolicy.seatRef} access-unavailable; awaiting the next imported projection.`,
+      });
+      return null;
+    }
+    const externalMetadata =
+      acquired.metadata && typeof acquired.metadata === 'object' && !Array.isArray(acquired.metadata)
+        ? acquired.metadata as Record<string, unknown>
+        : null;
+    return {
+      accessToken: token.accessToken,
+      refreshToken: null,
+      expiresAt: token.expiresAt ?? null,
+      accountId: acquired.external_account_id,
+      accountLabel: acquired.account_label,
+      stableSessionId: acquired.stable_session_id,
+      accountTransportAccountId: acquired.account_id,
+      leaseId: acquired.lease_id,
+      reservationId: acquired.reservation_id,
+      transportProviderId: input.transportProviderId,
+      metadata: externalMetadata,
+      recordOutcome: (outcome) =>
+        recordLlmAccountTransportOutcome({
+          ...outcome,
+          accountId: acquired!.account_id,
+          reservationId: acquired!.reservation_id,
+        }),
+    };
   }
 
   const freshToken = await input.refreshTokenIfNeeded({
