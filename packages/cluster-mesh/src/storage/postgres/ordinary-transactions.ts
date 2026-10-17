@@ -26,7 +26,7 @@ export const applyPgTransaction = async (core: PgCore, grant: ScopeGrant<unknown
   } catch (error) { tx.failed = classifyPgFailure(error); throw tx.failed; }
 };
 export const runPgTransaction = async <T>(core: PgCore, grant: ScopeGrant<unknown>, supplied: CommitOptions,
-  operation: (tx: PgTx) => Promise<T>): Promise<{ readonly value: T; readonly receipt: CommitReceipt }> => {
+  operation: (tx: PgTx) => Promise<T>, immutableFlush = false): Promise<{ readonly value: T; readonly receipt: CommitReceipt }> => {
   const options = ownPgValue(supplied);
   if (!validateCommitOptions(options).ok) throw new StorageInvalidCommandError('invalid transaction options');
   core.work(options.limits);
@@ -68,7 +68,7 @@ export const runPgTransaction = async <T>(core: PgCore, grant: ScopeGrant<unknow
         await core.roots.publish(session, grant.scope, base, tx.root, final, options.idempotencyKey);
         return { value, receipt: ownPgValue(final) };
       } finally { tx.closed = true; }
-    });
+    }, immutableFlush);
   } catch (error) {
     if (callbackFailed && !isStorageError(callbackError)) throw callbackError;
     throw error;

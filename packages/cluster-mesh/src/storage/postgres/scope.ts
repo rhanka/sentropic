@@ -71,7 +71,7 @@ export class PgScoped {
         return ownPgValue(replay.receipt);
       }
     }
-    return (await this.transact(options, async (tx) => { await tx.apply(unit); })).receipt;
+    return (await runPgTransaction(core, this.#grant, options, async (tx) => { await applyPgTransaction(core, this.#grant, tx, unit, options); }, true)).receipt;
   }
   async appendChain(chainId: string, record: ChainRecordInput, expectation: ChainExpectation) {
     const owned = ownPgValue({ chainId, record, expectation });
