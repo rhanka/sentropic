@@ -339,6 +339,19 @@ describe('provider registry kernel', () => {
     ).toThrowError(/unsupported_definition_kind/);
     expect(loaderCalls).toBe(0);
     expect(registry.catalog()).toEqual([]);
+    // A client-shaped binding on a remote-bound kind is still refused on the
+    // empty registry: no transport-shaped payload bypasses the boundary.
+    const clientShaped = {
+      kind: 'remote-bound',
+      providerId: 'remote-2',
+      version: '0.0.0',
+      toolNames: ['remote_search'],
+      binding: { endpoint: 'https://mesh.invalid/rpc', protocolVersion: 'v1' },
+    };
+    expect(() =>
+      registry.register(clientShaped as unknown as LocalProviderDefinition),
+    ).toThrowError(/unsupported_definition_kind/);
+    expect(registry.catalog()).toEqual([]);
     // An active selected/configured registry is unchanged by the refusal.
     const alpha = makeDefinition('alpha', ['alpha_search']);
     registry.register(alpha);
