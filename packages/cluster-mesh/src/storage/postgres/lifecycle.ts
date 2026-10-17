@@ -43,7 +43,9 @@ export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, 
     if (!policy || policy === 'unconfigured') throw new StorageDeniedError('purge policy is not configured');
     const previous = await store.get<PgPurgeJob>(session, tx.root, 'purge-job', intentId);
     if (!previous) throw new StorageInvalidCommandError('unknown purge job');
-    if (previous.state === 'complete') { tx.noop = true; return previous; }
+    const authorization = core.options.purgeAuthorize ? await createPgInstalledContext(core, grant, tx) : null;
+    if (authorization) await core.options.purgeAuthorize!(previous, authorization.context);
+    if (previous.state === 'complete') { await authorization?.finish(); tx.noop = true; return previous; }
     let job = { ...previous, phase: previous.phase ?? 'payload', position: previous.position ?? null, found: previous.found ?? false, state: 'pending' as PgPurgeJob['state'] };
     if (await ancestors(core, session, tx.root, job.target, async (id) => Boolean(await store.get(session, tx.root, 'hold', id)))) job.state = 'held';
     let work = 0; let bytes = 0;
@@ -73,13 +75,14 @@ export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, 
     if (job.state === 'complete') {
       if (core.options.purgeFinalizer) {
         const installed = await createPgInstalledContext(core, grant, tx);
-        await core.options.purgeFinalizer(job, installed.context); await installed.finish();
+        await core.options.purgeFinalizer({ ...job, payloadDisposition: 'erased' }, installed.context); await installed.finish();
       }
       job = { ...job, outcomeId: core.id('purge-outcome'), payloadDisposition: 'erased' };
       tx.root = await store.put(session, tx.root, 'disposed', job.target, true);
       tx.root = await store.put(session, tx.root, 'purge-outcome', intentId, { intentId, outcomeId: job.outcomeId, target: job.target, disposition: 'erased' });
       tx.root = await store.put(session, tx.root, 'purge-notification', intentId, { intentId, outcomeId: job.outcomeId });
     }
+    await authorization?.finish();
     tx.root = await store.put(session, tx.root, 'purge-job', intentId, job); tx.count += 1;
     return job;
   })).value;
