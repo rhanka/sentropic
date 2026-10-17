@@ -34,6 +34,7 @@ export class PgCore {
     const descriptor = options.descriptor ? JSON.parse(JSON.stringify(options.descriptor)) as typeof options.descriptor : undefined;
     if (descriptor) { if (!validateModuleDescriptor(descriptor).ok || descriptor.queryNames.some((name) => typeof options.queries?.[name] !== 'function')) throw new StorageInvalidCommandError('invalid registered Postgres descriptor'); freezeRegistration(descriptor); }
     this.options = Object.freeze({ ...options, descriptor, layout: validatePgLayout(options.layout),
+      assets: options.assets ? Object.freeze(options.assets.map((asset) => Object.freeze({ ...asset, requires: Object.freeze([...asset.requires]) }))) : undefined,
       limits: options.limits ? Object.freeze({ ...options.limits }) : undefined, budgets: Object.freeze({ ...options.budgets }),
       queries: Object.freeze({ ...options.queries }), pgPredicates: Object.freeze({ ...options.pgPredicates }) });
     options = this.options;
@@ -104,7 +105,7 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
   if (!options.history) throw new PostgresStorageError('configuration');
   const provisional = new PgCore(options, options.incarnation ?? `store:${randomUUID()}`);
   options = provisional.options;
-  const assets = await loadPgAssets();
+  const assets = options.assets ?? await loadPgAssets();
   const incarnation = await provisional.tx.run(false, async (session) => {
     await verifyPgInstallation(session, options.layout, assets, options.history);
     await session.execute({ text: `INSERT INTO ${provisional.roots.schema}.modules(module,incarnation) VALUES($1,$2) ON CONFLICT(module) DO NOTHING`, values: [options.moduleId, provisional.incarnation] });
