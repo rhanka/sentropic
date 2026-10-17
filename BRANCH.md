@@ -169,7 +169,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
       - [ ] Sub-lot gate: `make test-ui ENV=test-idp-client-mfa-policy`
     - [ ] **E2E tests**
       - [ ] Existing OAuth E2E specs stay green; allowlist covered at API level (Dex/RP behavior out of scope).
-- [ ] **Lot 5 — D1 versioned Job + make target + rotation runbook**
+- [x] **Lot 5 — D1 versioned Job + make target + rotation runbook**
   - [ ] Add `deploy/k8s/base/36-oauth-register-client-job.yaml` (versioned Job, secret via `envFrom` temporary Secret, never CLI); root make target `oauth-register-client-job` under `BRMFA-EX1`.
   - [ ] Rotation runbook `docs/oauth-client-rotation.md` (90-day cycle, mint base64url 32 bytes, sha256 stored, immediate cutover, names only for secrets).
   - [ ] Update `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` client procedure + `packages/auth-hono/README.md` if behavior docs changed.

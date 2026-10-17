@@ -1,0 +1,50 @@
+# BRMFA (D1) — versioned one-off Job for prod-safe OIDC client registration.
+#
+# Runs `node dist/scripts/oauth-register-client.js` (compiled into the api image
+# by `api/package.json` build) as a one-off post-deploy step AGAINST the tier
+# IdP database. Idempotent upsert keyed on `client_id`; re-running is safe.
+#
+# Apply ONE-OFF per registration (never added to kustomization resources):
+#   kubectl -n sentropic apply -f 36-oauth-register-client-job.yaml
+#   kubectl -n sentropic wait --for=condition=complete job/oauth-register-client --timeout=120s
+#   kubectl -n sentropic logs job/oauth-register-client
+#   kubectl -n sentropic delete job/oauth-register-client
+# Or via the governed wrapper: `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`
+# (BRMFA-EX1: Makefile exception, additive target only).
+#
+# Secrets reach the Job ONLY via `envFrom` secretRefs — never as CLI literals:
+# - `sentropic-api`: tier DB + shared IdP config (reused, operator-owned).
+# - `oauth-client-registration`: TEMPORARY per-run Secret created from an operator
+#   0600 env file (`kubectl create secret generic oauth-client-registration
+#   --from-env-file=<file>`), holding ONLY the OAUTH_CLIENT_* variables for this
+#   client (names listed in docs/oauth-client-rotation.md, values never in git).
+#   Delete it with the Job when the registration succeeds.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oauth-register-client
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: oauth-register-client
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentropic
+        app.kubernetes.io/component: oauth-register-client
+    spec:
+      serviceAccountName: sentropic-app
+      restartPolicy: Never
+      containers:
+        - name: register
+          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          imagePullPolicy: Always
+          workingDir: /workspace
+          command: ["node", "dist/scripts/oauth-register-client.js"]
+          envFrom:
+            - secretRef:
+                name: sentropic-api
+            - secretRef:
+                name: oauth-client-registration
