@@ -23,6 +23,8 @@ import { readPgJournal, checkpointPgJournal, inspectPgConsumer, operatePgConsume
 import type { JournalFence } from '../staged-core.js';
 import { queryPgRoot, type PgQueryRequest } from './queries.js';
 import { capturePgSnapshot, readPgSnapshot } from './snapshots.js';
+import { capturePgManifest, verifyPgManifest, readPgManifestPage } from './manifests.js';
+import type { RootManifestRequest } from '../root-manifest.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -91,6 +93,9 @@ export class PgScoped {
   query(name: string, input: unknown, request: PgQueryRequest) { return queryPgRoot(this.#core, this.#grant, name, input, request); }
   journalResync(consumer: string, fence: JournalFence) { return capturePgSnapshot(this.#core, this.#grant, consumer, fence); }
   snapshotRead(token: string, after: number, limit: number) { return readPgSnapshot(this.#core, this.#grant, token, after, limit); }
+  captureManifest(input: RootManifestRequest) { return capturePgManifest(this.#core, this.#grant, input); }
+  verifyManifest(digest: string) { return verifyPgManifest(this.#core, this.#grant, digest); }
+  manifestReadPage(digest: string, chainId: string, limit: number, cursor: unknown, bytes: number) { return readPgManifestPage(this.#core, this.#grant, digest, chainId, limit, cursor, bytes); }
   journalCheckpoint(consumer: string, expected: number, next: number, fence: JournalFence) { return checkpointPgJournal(this.#core, this.#grant, consumer, expected, next, fence); }
   journalInspect(consumer: string) { return inspectPgConsumer(this.#core, this.#grant, consumer); }
   journalPoison(consumer: string, event: string, reason: string) { return operatePgConsumer(this.#core, this.#grant, consumer, 'poison', event, reason); }
