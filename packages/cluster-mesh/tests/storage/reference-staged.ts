@@ -473,6 +473,7 @@ export class TestStagedStore {
     // §5.2 atomicity: a divergent purge-intent reuse must fail before any
     // effect is published, never after appends/records/updates are live.
     for (const intent of unit.purgeIntents) {
+      if (intent.authorizedBy !== this.grant.principalId) throw new StorageDeniedError('purge intent authorizer mismatch');
       const existing = this.staged.jobs.get(intent.intentId);
       if (existing && existing.target !== intent.target) {
         throw new StorageIdempotencyConflictError('purge intent reused for a divergent target');
