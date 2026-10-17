@@ -36,7 +36,9 @@ import {
   type PredicateEvaluator,
   type PredicateView,
   type ReadPageResult,
+  type CommitContext,
 } from './record-runtime.js';
+import type { RootMutationCoordinator, RootMutationKind, RootReadKind } from './mutation-coordinator.js';
 import type { ChainBoundaryProvider } from './tokens.js';
 import { validatePageLimits, type PageLimits, type StorageScope } from './contracts.js';
 
@@ -144,6 +146,7 @@ export interface KernelTransaction {
  * constructor, and the runtime keeps its reference in a true private field,
  * so no issuance, revocation or backend state is reachable from a handle. */
 export interface ScopedRuntimeDeps {
+  readonly coordinator?: RootMutationCoordinator;
   readonly moduleId: string;
   /** Unique owning-kernel identity: transactions never join across kernels. */
   readonly kernelId: string;
@@ -235,6 +238,26 @@ export class ScopedRuntime {
     if (this.grant.scope.tenantId !== this.boundScope.tenantId || this.grant.scope.workspaceId !== this.boundScope.workspaceId) {
       throw new StorageDeniedError('cross-scope handle');
     }
+  }
+
+  private commitContext(commitId = this.#deps.nextCommitId()): CommitContext {
+    return { moduleId: this.moduleId, scope: this.boundScope, clock: this.#deps.clock,
+      commitId, predicates: this.#deps.predicates };
+  }
+
+  private change<T>(kind: RootMutationKind, keys: readonly string[], operation: (state: BackendScopeState) => T): T {
+    const coordinator = this.#deps.coordinator;
+    return coordinator
+      ? coordinator.mutate(this.grant, kind, keys, operation, this.commitContext(), () => this.requireOperation(kind === 'dispose' ? 'maintain' : 'write'))
+      : operation(this.#deps.backend.scopeState(this.boundScope));
+  }
+
+  private accessible(kind: RootReadKind, key: string): boolean {
+    return this.#deps.coordinator?.accessible(this.grant, kind, key) ?? true;
+  }
+
+  private assertAccessible(kind: RootReadKind, key: string): void {
+    if (!this.accessible(kind, key)) throw new StorageDeniedError('current root denies this subject');
   }
 
   async appendChain(chainId: string, record: ChainRecordInput, expectation: { readonly kind: 'absent'; readonly allocation: string } | { readonly kind: 'head'; readonly hash: string }): Promise<{ readonly seq: number; readonly hash: string; readonly replayed: boolean }> {
