@@ -73,7 +73,7 @@ export const commitPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, s
     await validatePgPurgePolicy(core, session, grant, p.prepared, m.barriers, m.purges);
     const receipt: CommitReceipt = { commitId: m.commitId, moduleId: core.options.moduleId, scope: { ...grant.scope }, committedAt: core.now(), effectiveRecords: p.records, effectiveAppends: p.appends, journalCursor: (BigInt(base.sequence) + 1n).toString() };
     await core.check(session, grant, 'write', true); await core.fence(session, grant, fence);
-    await core.roots.publish(session, grant.scope, base, p.prepared, receipt, m.begin.operationKey);
+    await core.roots.publish(session, grant.scope, base, p.prepared, receipt, m.begin.operationKey, true);
     m.state = 'committed'; m.receipt = receipt; m.progress = null;
     await savePgUnit(core, session, grant, unit);
     return fullReceipt(core, session, grant, unit, receipt);

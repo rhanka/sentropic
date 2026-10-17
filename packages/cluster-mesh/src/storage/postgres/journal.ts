@@ -3,7 +3,7 @@ import type { JournalFence } from '../staged-core.js';
 import type { RootConsumer, RootJournalEvent } from '../staged-state.js';
 import { StorageCapacityExceededError, StorageCasConflictError, StorageInvalidCommandError } from '../errors.js';
 import type { PgCore } from './core.js';
-import type { PgSession } from './protocol.js';
+import type { PgJournalDraft, PgSession } from './protocol.js';
 import { decodePgCounter, decodePgJson, decodePgText } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 export const pgSafeCounter = (value: unknown): number => {
@@ -11,6 +11,7 @@ export const pgSafeCounter = (value: unknown): number => {
   if (!Number.isSafeInteger(number)) throw new StorageCapacityExceededError('counter exceeds the negotiated numeric API');
   return number;
 };
+const stream = (core: PgCore, grant: ScopeGrant<unknown>) => ({ moduleId: core.options.moduleId, scope: grant.scope, incarnation: core.incarnation, stream: core.incarnation });
 export const assertPgJournalFence = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, fence: JournalFence): Promise<void> => {
   await core.check(session, grant, 'maintain', true);
   if (fence.incarnation !== core.incarnation || fence.ownerId !== grant.principalId) throw new StorageInvalidCommandError('journal owner or incarnation differs');
@@ -39,11 +40,12 @@ export const readPgJournal = async (core: PgCore, grant: ScopeGrant<unknown>, af
     const state = consumer === undefined ? undefined : await pgConsumer(core, session, grant, consumer);
     const events: RootJournalEvent[] = [];
     if (!state || state.status === 'running') {
-      const result = await session.execute({ text: `SELECT sequence::text,event::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND sequence>$2::bigint ORDER BY sequence LIMIT $3`, values: [core.roots.key(grant.scope), String(after), limit] });
+      const result = core.options.outbox ? { rows: (await core.options.outbox.read(session, stream(core, grant), String(after), limit)).map((event) => ({ sequence: event.seq, event: JSON.stringify(event) })) }
+        : await session.execute({ text: `SELECT sequence::text,event::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND sequence>$2::bigint ORDER BY sequence LIMIT $3`, values: [core.roots.key(grant.scope), String(after), limit] });
       for (const row of result.rows) {
-        const seq = pgSafeCounter(row.sequence); const event = decodePgJson<Omit<RootJournalEvent, 'seq' | 'scope'> & { seq: string }>(decodePgText(row.event));
+        const seq = pgSafeCounter(row.sequence); const event = decodePgJson<PgJournalDraft>(decodePgText(row.event));
         if (seq !== after + events.length + 1 || String(seq) !== event.seq || typeof event.eventId !== 'string') throw new PostgresStorageError('corruption');
-        const value = { ...event, seq, scope: { ...grant.scope } };
+        const value: RootJournalEvent = { ...event, seq, scope: { ...grant.scope }, ...(event.segment ? { segment: { ...event.segment, from: pgSafeCounter(event.segment.from), to: pgSafeCounter(event.segment.to) } } : { segment: undefined }) };
         if (Buffer.byteLength(JSON.stringify({ events: [...events, value], watermark }), 'utf8') > core.work().maxEncodedBytes) break;
         events.push(value);
         if (state) {
@@ -79,7 +81,9 @@ export const operatePgConsumer = async (core: PgCore, grant: ScopeGrant<unknown>
     if (fence) await assertPgJournalFence(core, session, grant, fence);
     const state = await pgConsumer(core, session, grant, consumer);
     if (operation === 'poison') {
-      const rows = await session.execute({ text: `SELECT sequence::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND event_id=$2`, values: [core.roots.key(grant.scope), eventId] });
+      const external = core.options.outbox && eventId ? await core.options.outbox.find(session, stream(core, grant), eventId) : null;
+      const rows = core.options.outbox ? { rows: external?.eventId === eventId ? [{ sequence: external.seq }] : [] }
+        : await session.execute({ text: `SELECT sequence::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND event_id=$2`, values: [core.roots.key(grant.scope), eventId] });
       const seq = rows.rows[0] ? pgSafeCounter(rows.rows[0].sequence) : -1;
       if (seq <= state.cursor || seq > state.scanned || !reason || reason.length > 4096 || (state.failedEvent !== null && state.failedEvent !== eventId)) throw new StorageInvalidCommandError('poison must identify delivered unacknowledged progress');
       state.failedSeq = seq; state.failedEvent = eventId; state.failedReason = reason; state.status = 'stalled'; state.retryAuthorized = false; state.deliveredPoison = false;
