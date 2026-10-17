@@ -39,6 +39,8 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - `api/tests/unit/auth/**`
   - `api/tests/unit/oauth-register-client.test.ts`
   - `api/tests/api/auth/**`
+  - `api/tests/api/cluster-mesh-transfers-cutover.test.ts`
+  - `api/tests/fixtures/historical/transfers-be37d69f6/**`
   - `api/drizzle/0042_*.sql`
   - `api/drizzle/meta/_journal.json`
   - `deploy/k8s/base/*oauth-register-client*`
