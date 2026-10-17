@@ -86,6 +86,11 @@ cluster-mesh-comments-oracle: cluster-mesh-comments-deps
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
 		node packages/cluster-mesh/tests/storage/package-comments-oracle.mjs
 
+.PHONY: cluster-mesh-comments-lock-import
+cluster-mesh-comments-lock-import:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node packages/cluster-mesh/tests/storage/import-comments-lock.mjs
+
 .PHONY: cluster-mesh-pg-crash cluster-mesh-pg-crash-test
 cluster-mesh-pg-crash:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
