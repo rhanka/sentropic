@@ -84,9 +84,13 @@
       "types": "./dist/server/reader-profile.d.ts",
       "import": "./dist/server/reader-profile.js"
     },
-    "./server/pages": {
-      "types": "./dist/server/pages.d.ts",
-      "import": "./dist/server/pages.js"
+    "./server/templates": {
+      "types": "./dist/server/templates.d.ts",
+      "import": "./dist/server/templates.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
     },
     "./http": {
       "types": "./dist/http.d.ts",
