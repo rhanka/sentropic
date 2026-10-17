@@ -52,4 +52,5 @@ export type CommentsExportPreparation = { readonly state: 'preparing'; readonly 
 export interface CommentsExportFragmentPage { readonly fragments: readonly CommentsFragment[]; readonly nextCursor: string | null; }
 export class CommentsTransportError extends Error {
   constructor(readonly condition: 'invalid-request' | 'conflict' | 'capacity-exceeded' | 'incomplete' | 'denied' | 'unavailable', message: string) { super(message); this.name = 'CommentsTransportError'; }
+  get code() { return this.condition === 'invalid-request' ? 'invalid-command' as const : this.condition === 'conflict' ? 'idempotency-conflict' as const : this.condition === 'incomplete' ? 'unavailable' as const : this.condition; }
 }

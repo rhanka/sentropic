@@ -10,6 +10,7 @@ import { readCommentsPgRecord } from './postgres-records.js';
 import { commentsPgValue } from './postgres-records.js';
 import { canonicalRecordKey } from './storage-schema.js';
 import type { CommandCapability, ResourceRef } from '@sentropic/comments';
+import { assertCommentsReadAudience } from './read-audience.js';
 export interface CommentsReadRequest { readonly scope: CanonicalStoreScope; readonly selection: CanonicalReadSelection; readonly page?: CanonicalPageRequest; }
 export interface CommentsTargetsRequest { readonly scope: CanonicalStoreScope; readonly selection: CanonicalReadSelection; readonly capability: CommandCapability; readonly hash?: string; }
 export const executeCommentsTargets = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<readonly ResourceRef[]> => {
@@ -36,10 +37,13 @@ export const executeCommentsRead = async (options: CommentsServiceOptions, conte
     const stored = await context.readPage(chain, page.limit, page.cursor, 1048576);
     const records = stored.records.map((record) => decodeRecord(record.bytes, record.hash));
     for (const record of records) {
+      assertCommentsReadAudience(context.grant.principalId, record);
       const direct = await commentsRecordResources(record, (selection, hash) => readCommentsPgRecord(context, selection, hash));
       await authorizeComments(options, context, 'read', direct.length ? direct : await readCommentsAuthorityTargets(context, request.selection, record.hash));
     }
     context.replayed(); return { outcome: stored.outcome, records, nextCursor: stored.nextCursor };
   }
-  const head = await context.head(chain); context.replayed(); return head ? decodeRecord(head.bytes, head.hash) : null;
+  const head = await context.head(chain); const record = head ? decodeRecord(head.bytes, head.hash) : null;
+  if (record) assertCommentsReadAudience(context.grant.principalId, record);
+  context.replayed(); return record;
 };

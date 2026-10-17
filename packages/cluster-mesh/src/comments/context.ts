@@ -5,11 +5,12 @@ import type { ScopeGrant } from '../storage/authority.js';
 import type { KernelTransaction } from '../storage/scope-runtime.js';
 import type { CommentsStorage, CommentsStorageBinding } from './storage-contracts.js';
 import { sameScope } from './storage-schema.js';
+import { CommentsTransportError } from './transport-contracts.js';
 export interface CommentsRequest { readonly grant: ScopeGrant<unknown>; readonly storage: CommentsStorage; closed: boolean; }
 interface CommentsTransaction { readonly request: CommentsRequest; readonly port: KernelTransaction; failed?: unknown; closed: boolean; }
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export const commentsError = (error: unknown): unknown => {
-  if (error instanceof CanonicalCommandError) return error;
+  if (error instanceof CanonicalCommandError || error instanceof CommentsTransportError) return error;
   const code = (error as { code?: string })?.code;
   if (code === 'denied' || code === 'cas-conflict' || code === 'idempotency-conflict' || code === 'invalid-command') return new CanonicalCommandError(code, 'Comments storage operation refused');
   return error;

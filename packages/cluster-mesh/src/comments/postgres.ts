@@ -22,6 +22,7 @@ import { COMMENTS_STORAGE_LIMITS, requireCommentsStorageLimits } from './limits.
 import { prepareCommentsAuthority } from './authority-projection.js';
 import { executeCommentsRevision } from './revision-command.js';
 import { executeCommentsRead, executeCommentsTargets } from './read-command.js';
+import { CommentsTransportError } from './transport-contracts.js';
 export { COMMENTS_CONTRACT_DIGEST } from './contract.js';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
@@ -49,7 +50,13 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
   return Object.freeze({
   assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR,
   projection: async (effects: Parameters<typeof prepareCommentsProjection>[0], context: Parameters<typeof prepareCommentsProjection>[1]) => {
-    if (services) await validateCommentsImportProjection(services, effects, context);
+    if (services) {
+      try { await validateCommentsImportProjection(services, effects, context); }
+      catch (error) {
+        if (error instanceof Error && error.name.endsWith('ValidationError')) throw new CommentsTransportError('invalid-request', `Invalid imported canonical record: ${error.message}`);
+        throw error;
+      }
+    }
     await prepareCommentsProjection(effects, context);
     await prepareCommentsAuthority(effects, context);
   },
