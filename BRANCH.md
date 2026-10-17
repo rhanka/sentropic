@@ -348,6 +348,7 @@
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/storage/postgres-{core,readers,staged,replay,migrations,barriers}.spec.ts` (BRCM2-PG).
 
 - [ ] **Lot 7 — Comments module C1a/C1b/C2 (`src/comments/`)**
+  - [x] Public registry inspection resolves the frozen peer to `@sentropic/comments@0.3.0`, with root and Hono exports only. Its immutable source corpus/vectors will be compiled into a separate digest-pinned module artifact without adding a comments-package export.
   - [ ] Prepare the frozen optional peer and digest-pinned conformance/vector artifact through branch-local Docker/Make tooling; inspect the published peer before selecting its compatible range. Root/disabled imports must evaluate neither comments nor a database client.
   - [ ] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
   - [ ] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).
