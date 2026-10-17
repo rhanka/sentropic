@@ -114,7 +114,7 @@ describe('external-seat-authority acquisition guard', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('never re-reads the CLI store for an expired device-flow Muse seat', async () => {
+  it('refreshes an expired mesh-managed device-flow account through muse-code, never the CLI store', async () => {
     const deviceCredential = {
       accountId: 'acct-muse-device-09',
       accessToken: 'device-access',
@@ -129,22 +129,85 @@ describe('external-seat-authority acquisition guard', () => {
         ownerScope: 'owner-synth-01',
         credential: deviceCredential,
       })),
+      refresh: vi.fn(async () => ({
+        ...deviceCredential,
+        accessToken: 'device-access-renewed',
+        expiresAt: '2099-01-01T00:00:00Z',
+      })),
     } as unknown as EnrollmentProvider;
-    const refresh = vi.fn();
+    const museRefresh = vi.fn();
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(),
       new Map<string, EnrollmentProvider>([
         ['muse-code', museCode],
-        ['muse', { refresh } as unknown as EnrollmentProvider],
+        ['muse', { refresh: museRefresh } as unknown as EnrollmentProvider],
       ]),
       { async resolveConfig() { return {}; } },
     );
     const completion = await service.completeMuseDeviceImport('enroll-device-01', 'owner-synth-01');
     expect(completion.accountId).toBe(deviceCredential.accountId);
-    await expect(
-      service.acquire({ targetProviderId: 'muse', transportProviderId: 'muse', ownerScopeRef: 'owner-synth-01' }),
-    ).rejects.toMatchObject({ code: 'access-unavailable' });
+    const acquisition = await service.acquire({
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      ownerScopeRef: 'owner-synth-01',
+    });
     expect(museCode.pollForCompletion).toHaveBeenCalledTimes(1);
-    expect(refresh).not.toHaveBeenCalled();
+    expect(museCode.refresh).toHaveBeenCalledTimes(1);
+    expect(museRefresh).not.toHaveBeenCalled();
+    expect(acquisition.material.accessToken).toBe('device-access-renewed');
+  });
+
+  it('refuses renewal of an externally custodied device-flow seat with zero provider calls', async () => {
+    const deviceCredential = {
+      accountId: 'acct-muse-device-10',
+      accessToken: 'device-access',
+      refreshToken: 'device-refresh',
+      expiresAt: '2000-01-01T00:00:00Z',
+      authClientConfigVersion: 'v1.0.0',
+    };
+    const museCode = {
+      pollForCompletion: vi.fn(async () => ({
+        accountId: deviceCredential.accountId,
+        label: 'Muse (device)',
+        ownerScope: 'owner-synth-01',
+        credential: deviceCredential,
+      })),
+      refresh: vi.fn(),
+    } as unknown as EnrollmentProvider;
+    const museRefresh = vi.fn();
+    const keyring = new InMemoryKeyring();
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map<string, EnrollmentProvider>([
+        ['muse-code', museCode],
+        ['muse', { refresh: museRefresh } as unknown as EnrollmentProvider],
+      ]),
+      { async resolveConfig() { return {}; } },
+    );
+    await service.completeMuseDeviceImport('enroll-device-02', 'owner-synth-01');
+    // Custody transfer marks the device grant external after enrollment.
+    const raw = await keyring.getSecret(`sentropic-llm-mesh:${deviceCredential.accountId}:public`);
+    const record = JSON.parse(raw as string) as { account: Record<string, unknown> };
+    record.account['metadata'] = markExternalSeatAuthority(record.account['metadata'] as Record<string, unknown>, {
+      seatRef: 'seat-synth-muse-10',
+      ownerScope: 'owner-synth-01',
+      epoch: 1,
+      generation: 1,
+      operationId: 'op-synth-10',
+    });
+    await keyring.setSecret(`sentropic-llm-mesh:${deviceCredential.accountId}:public`, JSON.stringify(record));
+    const restored = new LocalAccountTransportService(
+      keyring,
+      new Map<string, EnrollmentProvider>([
+        ['muse-code', museCode],
+        ['muse', { refresh: museRefresh } as unknown as EnrollmentProvider],
+      ]),
+      { async resolveConfig() { return {}; } },
+    );
+    await expect(
+      restored.acquire({ targetProviderId: 'muse', transportProviderId: 'muse', ownerScopeRef: 'owner-synth-01' }),
+    ).rejects.toMatchObject({ code: 'access-unavailable' });
+    expect(museCode.refresh).not.toHaveBeenCalled();
+    expect(museRefresh).not.toHaveBeenCalled();
   });
 });
