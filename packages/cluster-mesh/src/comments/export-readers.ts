@@ -9,6 +9,11 @@ import { assertCommentsPgVisible, commentsPgValue, readCommentsPgRecord } from '
 import { commentsTransportBytes } from './fragment-codec.js';
 import { CommentsTransportError } from './transport-contracts.js';
 import type { CommentsExportPosition, CommentsExportState } from './boundary-codec.js';
+const terminalSequence = (state: CommentsExportState, chain: number): bigint => {
+  const sequence = state.manifest.heads[chainIdentity(state.selection.selections[chain]!).key]?.terminalSeq;
+  if (typeof sequence !== 'string' || !/^(0|[1-9][0-9]*)$/.test(sequence)) throw new CommentsTransportError('unavailable', 'Retained terminal sequence is invalid');
+  return BigInt(sequence);
+};
 export const commentsRecordResources = async (record: CanonicalChainRecord, lookup: (selection: CanonicalReadSelection, hash?: string) => Promise<CanonicalChainRecord | null>): Promise<readonly ResourceRef[]> => {
   if (record.kind === 'annotation-revision') return [record.primary, ...record.secondary].map((target) => target.resource);
   if (record.kind === 'thread-structure-revision') return [record.primary.resource];
@@ -29,8 +34,7 @@ export const readCommentsExportRecords = async (options: CommentsServiceOptions,
   while (position.chain < state.selection.selections.length && records.length < maximum) {
     const selection = state.selection.selections[position.chain]!; const chain = chainIdentity(selection).key;
     await assertCommentsPgVisible(context, chain);
-    const head = state.manifest.heads[chain]!;
-    if (BigInt(position.sequence) > BigInt(head.terminalSeq)) { position.chain += 1; position.sequence = 0; continue; }
+    if (BigInt(position.sequence) > terminalSequence(state, position.chain)) { position.chain += 1; position.sequence = 0; continue; }
     const ref = await commentsPgValue<PgChainRef>(captured, 'chain-record', chainRecordKey(chain, position.sequence));
     const record = ref ? await lookup(selection, ref.hash) : null;
     if (!record) throw new CommentsTransportError('incomplete', 'Retained export history is incomplete');
@@ -44,6 +48,6 @@ export const readCommentsExportRecords = async (options: CommentsServiceOptions,
     await authorizeComments(options, context, 'read', targets);
     records.push(record); encoded += cost; position.sequence += 1; position.records = (BigInt(position.records) + 1n).toString();
   }
-  while (position.chain < state.selection.selections.length && BigInt(position.sequence) > BigInt(state.manifest.heads[chainIdentity(state.selection.selections[position.chain]!).key]!.terminalSeq)) { position.chain += 1; position.sequence = 0; }
+  while (position.chain < state.selection.selections.length && BigInt(position.sequence) > terminalSequence(state, position.chain)) { position.chain += 1; position.sequence = 0; }
   return { records, position, bytes: encoded, complete: position.chain === state.selection.selections.length };
 };
