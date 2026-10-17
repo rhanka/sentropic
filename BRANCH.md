@@ -79,7 +79,7 @@
   - [x] Read rules, workflow, studies, template and relevant source; run harness branch check and `make ps-all`.
   - [x] Check all allocated ports before services start; privately provision the existing credential mechanism.
 - [ ] **Lot 1 — Regression tests first and configurable cutover**
-  - [ ] Update `api/tests/unit/model-selection-legacy.test.ts`; add `api/tests/unit/nano-replacement-contract.test.ts` for aliases, dated snapshot, whitespace/case, provider repair, synchronous none/output cap and context budgets.
+  - [x] Update `api/tests/unit/model-selection-legacy.test.ts`; add `api/tests/unit/nano-replacement-contract.test.ts` for aliases, dated snapshot, whitespace/case, provider repair and synchronous none/output cap; context-budget coverage follows with helper contracts.
   - [x] Observe failures with `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/nano-replacement-contract.test.ts" API_PORT=9450 UI_PORT=5650 MAILDEV_UI_PORT=1550 ENV=test-model-retirement`: six expected failures, twelve passes; nano cutovers and synchronous none/caps are missing.
   - [ ] Implement one configuration point, defaults and helper selection; preserve unrelated legacy mappings and explicit user reasoning. Configuration and exact alias cutovers implemented; helper/wire work follows.
   - [ ] Update `api/tests/unit/llm-runtime-stream.test.ts`, `chat-summary-runtime.test.ts`, `provider-mesh-contract-proof.test.ts` and `llm-metering-usage-normalizer.test.ts` only where behavior changes.

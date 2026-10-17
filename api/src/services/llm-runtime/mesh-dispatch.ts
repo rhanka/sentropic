@@ -446,7 +446,6 @@ const toMeshReasoning = (
   options: Pick<MeshDispatchOptions, 'providerId' | 'model' | 'reasoningEffort' | 'reasoningSummary'>,
 ): StreamRequest['reasoning'] => {
   if (!options.reasoningEffort && !options.reasoningSummary) return undefined;
-  if (options.reasoningEffort === 'none' && !options.reasoningSummary) return undefined;
 
   const profile = applicationLlmMesh
     .listModels()
