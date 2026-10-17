@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { createStagedKernel } from '../../src/storage/staged-runtime.js';
+import { createStagedTestKernel as createStagedKernel } from './staged-client.js';
 import { ScopeVisibilityRoot } from '../../src/storage/visibility-root.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 import type { WriterFence } from '../../src/storage/contracts.js';

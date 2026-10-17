@@ -173,6 +173,7 @@
     - [x] Additional RED probes exercise transactional paging without scope/history enumeration and authority revalidation on an equal-result index replacement; both paths use indexed forks and fresh authority checks. Coordinator probes pass 10/10; typecheck passes.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
+    - [ ] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
   - [ ] Lot gate: copy of Lot 1 gate; tests updated `packages/cluster-mesh/tests/storage/{staged-units,visibility,manifest,kernel}.spec.ts`.
 
 - [ ] **Lot 3 — K4 integrity (N1-N3; MAJ-1..3, m2, m3, S4:4, S4:10; C01-C04)**
