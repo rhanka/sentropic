@@ -1,7 +1,7 @@
 import type { CanonicalCommandStore } from '@sentropic/comments';
 import { CommentsContext, commentsError } from './context.js';
 import { CommentsAdapter } from './storage-adapter.js';
-export const createCanonicalStore = (context: CommentsContext, adapter: CommentsAdapter): CanonicalCommandStore => Object.freeze({
+export const createCanonicalStore = (context: CommentsContext, adapter: CommentsAdapter): CanonicalCommandStore => Object.freeze<CanonicalCommandStore>({
   transaction: () => {
     const request = context.current();
     return Object.freeze({ handleKind: 'canonical-transaction' as const, async run<T>(operation: () => Promise<T>): Promise<T> {
