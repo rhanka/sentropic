@@ -5,6 +5,9 @@ import { StorageDeniedError } from '../../src/storage/errors.js';
 import { grantFor } from './authority-corpus.js';
 
 describe('public staged storage ports', () => {
+  it('should refuse an unqualified private-live staging commitment policy', () => {
+    expect(() => createStagedKernel({ moduleId: 'engram-live' })).toThrow();
+  });
   it('should keep issuance, registries and mutation state unreachable from adapters', () => {
     const root = createStagedKernel({ moduleId: 'comments' });
     const grant = grantFor({ operations: ['read', 'write', 'maintain'] });

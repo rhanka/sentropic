@@ -177,6 +177,7 @@
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
     - [ ] RED `root-query.spec.ts` exercises registered bounded query dispatch, retained-root continuation, fresh authority/barriers and sequential projection rollback with independent carrier/journal/relationship reads.
     - [ ] Registered query dispatch uses an owned root-bound continuation, bounded indexed relationship windows and fresh read/coverage checks; raw registries and descriptor mutation remain inaccessible through adapters.
+    - [ ] New RED probes reject descriptor alias escalation, request-side work-ceiling weakening and unqualified private-live staging commitments.
     - [ ] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
     - [ ] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
     - [x] The legacy `staged-runtime.ts` implementation is fully removed; the entry point only re-exports the coordinated factory and shared protocol types. Removal commits stayed under 150 lines.
