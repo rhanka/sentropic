@@ -98,6 +98,7 @@ export class RootMutationCoordinator {
     const prepared = this.prepare(base);
     prepareUnitsInScope(prepared, owned.map((unit) => ({ ...unit, relationships: [], barriers: [], purgeIntents: [] })), ctx);
     const receipt = receiptFor(ctx, merged.records.length + merged.appends.length + merged.updates.length, merged.appends.length);
+    if (merged.moduleResult !== undefined) Object.assign(receipt, { moduleResult: copy(merged.moduleResult) });
     if (options.idempotencyKey) prepared.commits.set(options.idempotencyKey, { receipt: copy(receipt), unitHash });
     this.hooks.prepare?.(base, prepared, grant, { kind: 'commit', keys: [], units: owned, options: copy(options), receipt });
     this.publish(grant.scope, base, prepared, () => { revalidate(); verifyFence(); });
