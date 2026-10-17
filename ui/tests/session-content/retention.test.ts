@@ -45,12 +45,16 @@ describe('owner-controlled retention', () => {
     expect(viewAccess(copy, scope, 124).stored).toBe(false);
   });
 
-  it('should disclose every purge, closed-history and unbounded offline revocation consequence', () => {
+  it('should explain independent capture, read denial, purge and offline delay without a risk receipt', () => {
     const disclosure = fr.sessionContent.disclosures.join(' ');
     for (const phrase of ['sans expiration', 'restauration', 'illisibles', 'désactivation',
       'compte', 'purge', 'sans être membre', 'paramètres', "n'a pas de limite",
-      'autorisation de lecture historique distincte', 'ne prolonge pas']) {
+      'autorisation de lecture', 'ne prolonge pas']) {
       expect(disclosure).toContain(phrase);
     }
+    expect(disclosure).not.toContain('accepté explicitement');
+    expect(disclosure).not.toContain('clé enregistrée sur le poste');
+    expect(disclosure).toContain('première admission');
+    expect(createOffer(scope)).not.toHaveProperty('offlineReadAccepted');
   });
 });
