@@ -232,6 +232,6 @@ export const inspectPgStaged = async (
     const m = unit.metadata;
     if (m.state === 'staging' || m.state === 'sealing') return { state: m.state, acceptedFragments: String(m.count) };
     if (m.state === 'sealed') return { state: 'sealed', seal: ownPgValue(m.seal!) };
-  if (m.state === 'committed') return { state: 'committed', commitId: m.receipt!.commitId };
-  return { state: 'aborted', reason: m.reason! };
-});
+    if (m.state === 'committed') return { state: 'committed', commitId: m.receipt!.commitId };
+    return { state: 'aborted', reason: m.reason! };
+  });
