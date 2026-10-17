@@ -1,4 +1,4 @@
-# SPEC_EVOL — Cluster-mesh generic module storage (K1 scope)
+# SPEC_EVOL — Cluster-mesh generic module storage (consolidated K1–K4 / Postgres)
 
 ## Status
 
@@ -7,6 +7,57 @@ branch adds the shared visibility-root runtime and injected Postgres backend.
 Spec of record: L3a v4.1 frozen. Frozen comments M1 and
 the merged engram L6a identity contract are unchanged and accommodated,
 never modified.
+
+Candidate version is `@sentropic/cluster-mesh@0.19.0`, ordered above npm/main
+0.16.0 and PR #679's 0.18.0. The [comments installed proof](../docs/comments-annotations/evidence/installed-module.md)
+records exact archive/consumer identities. Source and installed checks do not
+substitute for storage co-owner review of the additive port changes.
+
+## Shared root and bounded preparation
+
+The rebuilt K4 runtime shares K3's actual indexed root with ordinary writes,
+transactions, staged units, barriers, journal and purge. Adapters retain
+binding identity; durable backend control owns incarnation, issued/revoked
+grants, fence epochs, accepted fragments, poison/recovery and original receipts.
+There is no adapter-local success store. K3's 56-test validated corpus remains
+unchanged and passes.
+
+Preparation advances through bounded record/append/encoded-byte work steps.
+Final publication checks current base/head/allocation/coverage and CAS rather
+than replaying whole histories. Hidden canonical data and generated receipts
+become visible through one root publication. Staged and ordinary writes share
+the same scope coordination; a superseded writer cannot stage, seal, publish,
+abort or recover writer authority through an old acknowledgement.
+
+Immutable coverage-parent links are indexed and cannot be removed, reparented
+or cyclic. Visibility checks use the unit's captured base while parent/cycle
+validation uses its evolving prepared root, preserving coherent imported
+post-tombstone histories without admitting new writes under committed barriers.
+Physical erasure covers active/hidden/snapshot-retained bytes and cleanup;
+history claims do not prove that disposal occurred.
+
+## Injected PostgreSQL installation
+
+Public leaves `./storage` and `./storage/postgres` are independent of comments
+and database driver evaluation. Hosts inject parameterized execution and
+serializable transaction sessions with finite deadlines. The package imports
+neither `pg`, `drizzle-orm`, application code nor engram implementation code.
+
+Packaged checksum-ordered SQL assets attach to the host's single migration
+history. Installation verifies actual configured schemas, receipts, constraints,
+indexes and functions; runtime startup never creates a second history/scheduler.
+Outbox/profile claims follow the configured host binding. Bounded registered
+queries and trusted installed operations receive a private same-session SPI;
+untrusted inputs supply names/DTOs, never SQL, callbacks or enforcement flags.
+Read operations cannot publish canonical effects. Pending operations and nested
+bindings reuse the ambient session and its final grant/domain revalidators.
+
+The comments descriptor adds six projection/transport/export/authority/evidence
+assets after six core assets. Installed staged contracts authorize actual
+persisted unit facts on every phase; receipt `moduleResult` is owned and retained
+with the original publication. All seventeen additive port changes are listed
+for gr-conductor in BRANCH.md. SQLite, live-generation replacement and application
+cutover retain their separate ownership and qualification.
 
 ## K1 files
 
@@ -75,4 +126,5 @@ Export preparation must retain a real kernel root and derive its boundary
 from actual membership/heads. Continuations reopen that root under current
 scope/resource/availability checks, without a time-based cursor TTL. Only a
 verified terminal chain/count constitutes a complete export. Installed and
-long-history qualification remains the final delivery gate in BRANCH.md.
+long-history qualification is recorded in the linked installed evidence; final
+CI and co-owner review retain their distinct gates in BRANCH.md.
