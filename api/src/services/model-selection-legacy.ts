@@ -1,4 +1,5 @@
 import type { ProviderId } from './provider-runtime';
+import { getDefaultOpenAIModel, RETIRED_NANO_MODEL_IDS } from '../config/models';
 
 export type LegacyModelCutoverRule = {
   providerId: ProviderId;
@@ -70,6 +71,9 @@ export const findLegacyModelCutoverRule = (
 ): LegacyModelCutoverRule | null => {
   const normalizedModelId = normalizeModelId(modelId);
   if (!normalizedModelId) return null;
+  if (RETIRED_NANO_MODEL_IDS.some((retired) => retired === normalizedModelId)) {
+    return { providerId: 'openai', fromModelId: normalizedModelId, toModelId: getDefaultOpenAIModel() };
+  }
   return LEGACY_MODEL_CUTOVER_BY_MODEL.get(normalizedModelId) ?? null;
 };
 
