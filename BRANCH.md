@@ -173,6 +173,7 @@
     - [x] Additional RED probes exercise transactional paging without scope/history enumeration and authority revalidation on an equal-result index replacement; both paths use indexed forks and fresh authority checks. Coordinator probes pass 10/10; typecheck passes.
   - [ ] K4 handles reuse K1 `StagedUnitHandle` / `ProfileClaim`; K4 exported from `src/storage/index.ts`; projections only through authorized ports.
     - [ ] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
+    - [ ] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
     - [ ] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
     - [ ] G5 and seal-step fixtures use canonical computed commitments. The large-step case explicitly requests eight items instead of relying on an undocumented internal constant; no timeout or budget inflation.
