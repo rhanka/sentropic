@@ -419,6 +419,7 @@
   - [ ] BRCM2-PORT-14: installed read operations use the same injected session and immutable root but cannot apply canonical effects or stage writes; read-only issued grants now suffice for receipt recovery and retained export qualification.
   - [ ] Added shared-history export control assets and an authenticated versioned continuation binding exact selection/root, page kind and advancing position; export metadata retains no canonical body copies and has no time-based expiry.
   - [ ] Added owner/incarnation-bound export controls and bounded exact-position reads from the retained kernel root. Each emitted historical record resolves its actual resource references and receives current all-target read checks; missing retained payloads are explicit incomplete outcomes.
+  - [ ] Export preparation captures real heads/allocation/committed operation roots once and hashes typed record inventory in bounded 50-record/512-KiB steps. Its final boundary carries exact complete counts/digest and the unchanged canonical export request shape.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
