@@ -3,6 +3,7 @@ import type {
   AccountTransportProviderId,
   AuthDescriptor,
 } from './auth.js';
+import { isExternalSeatAccount, readExternalSeatAuthority } from './external-seat-marker.js';
 import type { ModelId, ProviderId } from './providers.js';
 
 export type AccountTransportAccountStatus =
@@ -34,6 +35,8 @@ export interface AccountTransportAccount {
   headers?: Record<string, string>;
   metadata?: Record<string, unknown>;
   enrollmentCompletedAt?: string;
+  /** Classified last outcome note; never a secret. Mirrors API last_error. */
+  lastError?: string | null;
 }
 
 export interface AccountTransportAcquireInput {
@@ -463,6 +466,17 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
 
   private applyOutcome(account: StoredAccount, outcome: AccountTransportOutcome): void {
     if (outcome.status === 'auth_failed') {
+      // Externally custodied seats never flip to re-authentication: a 401
+      // on served external access is classified access-unavailable, keeping
+      // status active with the secret and policy retained.
+      if (isExternalSeatAccount(account)) {
+        const authority = readExternalSeatAuthority(
+          account.metadata as Record<string, unknown> | undefined,
+        );
+        account.lastError =
+          `Seat ${authority?.seatRef ?? account.accountId} access-unavailable; awaiting the next imported projection.`;
+        return;
+      }
       account.status = 'reauth_required';
       return;
     }
