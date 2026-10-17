@@ -413,7 +413,7 @@
   // modelCatalogProviders/modelCatalogModels/modelCatalogGroups/selectedProviderId/selectedModelId
   // defaultProviderIdForNewSession/defaultModelIdForNewSession moved to controller (slice 1F).
   // Access via $ctrl.modelCatalog*, $ctrl.selectedProviderId, $ctrl.selectedModelId etc.
-  let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
+  let selectedModelSelectionKey = '';
   let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
   let composerAttachments: ChatComposerAttachmentDraft[] = [];
@@ -2774,7 +2774,7 @@
         content: text,
       };
 
-      if ($ctrl.selectedProviderId) payload.providerId = $ctrl.selectedProviderId;
+      if ($ctrl.selectedModelId && $ctrl.selectedProviderId) payload.providerId = $ctrl.selectedProviderId;
       if ($ctrl.selectedModelId) payload.model = $ctrl.selectedModelId;
 
       if (sessionId) {

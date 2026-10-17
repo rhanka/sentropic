@@ -1,4 +1,5 @@
 import { providerRegistry } from './provider-registry';
+import { getDefaultOpenAIModel } from '../config/models';
 import { isProviderId, type ModelCatalogEntry, type ProviderId } from './provider-runtime';
 import { settingsService } from './settings';
 import { findLegacyModelCutoverRule, normalizeLegacyModelSelection } from './model-selection-legacy';
@@ -38,7 +39,7 @@ export type ModelCatalogPayload = {
 
 const FALLBACK_DEFAULT: ModelSelectionPair = {
   provider_id: 'openai',
-  model_id: 'gpt-4.1-nano',
+  model_id: getDefaultOpenAIModel(),
 };
 
 const toCatalogModel = (entry: ModelCatalogEntry): CatalogModel => {
@@ -133,6 +134,11 @@ export const resolveDefaultSelection = (
     };
   }
 
+  const configuredDefault = findModel(models, providerId, getDefaultOpenAIModel());
+  if (!targetModelId && configuredDefault) {
+    return { provider_id: configuredDefault.provider_id, model_id: configuredDefault.model_id };
+  }
+
   const providerDefault = findProviderDefaultModel(models, providerId);
   if (providerDefault) {
     return {
@@ -187,6 +193,8 @@ export const getReasoningParamsForModel = (
   effort: 'low' | 'medium' | 'high' | 'xhigh' = 'high',
   summary: 'auto' | 'concise' | 'detailed' = 'detailed'
 ): { reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh'; reasoningSummary?: 'auto' | 'concise' | 'detailed' } => {
+  // These inherited generation defaults were nonreasoning on nano; explicit user turns bypass this helper.
+  if (modelId === getDefaultOpenAIModel()) return { reasoningEffort: 'none' };
   if (!modelSupportsReasoning(modelId)) return {};
   return { reasoningEffort: effort, reasoningSummary: summary };
 };

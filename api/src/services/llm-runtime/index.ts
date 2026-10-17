@@ -25,6 +25,8 @@ import { CLOUDCODE_PA_PROVIDER_ID } from '../providers/cloudcode-pa-provider';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
 import { env } from '../../config/env';
+import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../config/models';
+import { validateOpenAIRequestBudget } from './openai-budget';
 import {
   createClaudeCodeAccountAuthInput,
   createCodexAccountAuthInput,
@@ -176,6 +178,7 @@ export interface CallLLMOptions {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   providerId?: ProviderId;
   model?: string;
+  reasoningEffort?: CallLLMStreamOptions['reasoningEffort'];
   credential?: string;
   userId?: string;
   workspaceId?: string;
@@ -986,6 +989,7 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     messages,
     providerId,
     model,
+    reasoningEffort,
     credential,
     userId,
     workspaceId,
@@ -1339,20 +1343,26 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     } as unknown as OpenAI.Chat.Completions.ChatCompletion;
   }
 
+  const boundedOutputTokens = maxOutputTokens ?? (
+    selection.model === 'gpt-6-luna' || selection.model === 'gpt-5.6-luna' ? DEFAULT_MAX_OUTPUT_TOKENS : undefined
+  );
+  const selectedReasoningEffort = reasoningEffort;
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model: selection.model,
     messages,
     ...(filteredTools && { tools: filteredTools }),
     ...(normalizedToolChoice !== 'auto' && { tool_choice: normalizedToolChoice }),
     ...(responseFormat && { response_format: { type: responseFormat } }),
-    ...(typeof maxOutputTokens === 'number' &&
-    Number.isFinite(maxOutputTokens) &&
-    maxOutputTokens > 0
-      ? { max_tokens: Math.floor(maxOutputTokens) }
+    ...(selectedReasoningEffort && !selection.model.startsWith('gpt-4.1') ? { reasoning_effort: selectedReasoningEffort } : {}),
+    ...(typeof boundedOutputTokens === 'number' &&
+    Number.isFinite(boundedOutputTokens) &&
+    boundedOutputTokens > 0
+      ? { max_completion_tokens: Math.floor(boundedOutputTokens) }
       : {}),
   };
 
   // Pass AbortSignal through request options to enable cooperative cancellation
+  validateOpenAIRequestBudget(selection.model, requestOptions, boundedOutputTokens);
   return await dispatchMeshGenerateRaw<OpenAI.Chat.Completions.ChatCompletion>({
     providerId: selection.providerId,
     model: selection.model,
@@ -1363,7 +1373,8 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     tools: filteredTools,
     toolChoice: normalizedToolChoice,
     responseFormat,
-    maxOutputTokens,
+    reasoningEffort: selectedReasoningEffort,
+    maxOutputTokens: boundedOutputTokens,
     signal,
     runtimeRequest: {
       mode: 'chat-completions',
@@ -2202,9 +2213,12 @@ export async function* callLLMStream(
     }
   }
 
-  // Certains modèles (ex: gpt-4.1-nano-*) ne supportent pas `reasoning.summary`.
-  // On désactive complètement `reasoning` pour ces familles afin d'éviter un 400.
+  // The GPT-4.1 family does not support reasoning parameters.
   const supportsReasoningParams = !selectedModel.startsWith('gpt-4.1');
+  const selectedReasoningEffort = reasoningEffort;
+  const boundedOutputTokens = maxOutputTokens ?? (
+    selectedModel === 'gpt-6-luna' || selectedModel === 'gpt-5.6-luna' ? DEFAULT_MAX_OUTPUT_TOKENS : undefined
+  );
 
   const mapReasoningEffort = (effort: CallLLMStreamOptions['reasoningEffort']): unknown => {
     if (!effort) return undefined;
@@ -2281,8 +2295,8 @@ export async function* callLLMStream(
   // - N'envoyer `reasoning.summary`/`reasoning.effort` que si explicitement demandé par l'appelant.
   const reasoning: OpenAI.Responses.ResponseCreateParamsStreaming['reasoning'] | undefined = (() => {
     if (!supportsReasoningParams) return undefined;
-    if (!reasoningSummary && !reasoningEffort) return undefined;
-    const mappedEffort = mapReasoningEffort(reasoningEffort);
+    if (!reasoningSummary && !selectedReasoningEffort) return undefined;
+    const mappedEffort = mapReasoningEffort(selectedReasoningEffort);
     return {
       ...(reasoningSummary ? { summary: reasoningSummary } : {}),
       ...(mappedEffort ? { effort: mappedEffort } : {})
@@ -2302,13 +2316,14 @@ export async function* callLLMStream(
     ...(responseTools ? { tools: responseTools } : {}),
     ...(textConfig ? { text: textConfig } : {}),
     ...(!useCodexTransport &&
-      typeof maxOutputTokens === 'number' &&
-      Number.isFinite(maxOutputTokens) &&
-      maxOutputTokens > 0
-      ? { max_output_tokens: Math.floor(maxOutputTokens) }
+      typeof boundedOutputTokens === 'number' &&
+      Number.isFinite(boundedOutputTokens) &&
+      boundedOutputTokens > 0
+      ? { max_output_tokens: Math.floor(boundedOutputTokens) }
       : {})
   };
 
+  validateOpenAIRequestBudget(selectedModel, previousResponseId ? { ...requestOptions, messages } : requestOptions, boundedOutputTokens);
   let codexOutcome: AccountTransportOutcome = { status: 'success' };
   try {
     yield { type: 'status', data: { state: 'started' } };
@@ -2325,9 +2340,9 @@ export async function* callLLMStream(
       toolChoice: normalizedToolChoice,
       responseFormat: effectiveResponseFormat,
       structuredOutput: effectiveStructuredOutput,
-      reasoningEffort,
+      reasoningEffort: selectedReasoningEffort,
       reasoningSummary,
-      maxOutputTokens,
+      maxOutputTokens: boundedOutputTokens,
       signal,
       previousResponseId,
       runtimeRequest: {

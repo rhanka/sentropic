@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getDefaultOpenAIModel } from '../../src/config/models';
 import { db } from '../../src/db/client';
 import { contextDocuments, documentConnectorAccounts, users, workspaces, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
 import { toolService } from '../../src/services/tool-service';
@@ -66,6 +67,7 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     if (docId) {
       await db.delete(contextDocuments).where(eq(contextDocuments.id, docId));
       docId = '';
@@ -213,13 +215,13 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
     // Per-chunk calls are bounded
     for (let i = 0; i < 3; i += 1) {
       const args = mockCallLLM.mock.calls[i]?.[0];
-      expect(args?.model).toBe('gpt-4.1-nano');
+      expect(args?.model).toBe(getDefaultOpenAIModel());
       expect(args?.maxOutputTokens).toBe(6000);
     }
 
     // Merge call is bounded (avoid truncation)
     const mergeArgs = mockCallLLM.mock.calls[3]?.[0];
-    expect(mergeArgs?.model).toBe('gpt-4.1-nano');
+    expect(mergeArgs?.model).toBe(getDefaultOpenAIModel());
     expect(mergeArgs?.maxOutputTokens).toBe(20000);
 
     estimateSpy.mockRestore();

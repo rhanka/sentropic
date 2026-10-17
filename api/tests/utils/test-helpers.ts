@@ -1,3 +1,5 @@
+import { getDefaultOpenAIModel } from '../../src/config/models';
+
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 
 export interface TestResponse<T = any> {
@@ -54,7 +56,7 @@ export function sleep(ms: number): Promise<void> {
 }
 
 export function getTestModel(): string {
-  return process.env.TEST_MODEL || 'gpt-4.1-nano';
+  return process.env.TEST_MODEL || getDefaultOpenAIModel();
 }
 
 /**
