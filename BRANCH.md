@@ -70,6 +70,7 @@
   - [ ] Scoped gates: `rtk make test-cluster-mesh SCOPE=tests/loaders/mcp-auth.spec.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`; repeat for integrations/mcp-auth-surface.spec.ts and tests/modules.
   - [ ] Gate: `rtk make typecheck-cluster-mesh lint-cluster-mesh API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-cluster-mesh-oauth-o1`. UI/E2E files: none.
 - [ ] **Lot 2 — Metadata, request authority and sessions**
+  - [x] Process-local sessions now bind human/client/tenant/resource/environment, enforce bounded capacity and idle/absolute deadlines, and abort/close owned transports on expiry/shutdown; integration pending.
   - [x] Added real twelve-tool Radar schema fixture and compiled host adapter; composition RED on missing factory; public readonly OAuth/egress/session types defined without bearer getters.
   - [ ] Implement oauth-contracts/context/sessions and compose/mcp-oauth; public canonical PRM plus aliases, 401/403 challenges, exact issuer/audience, requiredAcr, per-tool scope/current-account checks and preflight before listen.
   - [x] Private leaf-local AsyncLocalStorage authority and exact verified subject/audience/client/ACR checks implemented; public contexts exclude bearer material. Existing compose/mcp unchanged; integration pending.
