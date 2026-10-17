@@ -1,11 +1,11 @@
-import { CanonicalCommandError, canonicalJson } from '@sentropic/comments';
+import { CanonicalCommandError } from '@sentropic/comments';
 import type { CanonicalChainRecord, CanonicalReadSelection, CanonicalStoreScope, CanonicalPageRequest, CanonicalReadPage, ExpectedState, CapacityDescriptor, CommittedCommand } from '@sentropic/comments';
 import type { KernelTransaction } from '../storage/scope-runtime.js';
 import { emptyEffects } from '../storage/staged-preparation.js';
 import { CommentsContext, StoredGenesisReplay, type CommentsRequest } from './context.js';
 import { canonicalRecordKey, chainIdentity, commandKey, decodeRecord, invalid, own, validateRecordIdentity } from './storage-schema.js';
 import { validateCommentsRecord } from './record-validation.js';
-import { commentsRelationships } from './relationships.js';
+import { commentsRecordEffects } from './record-effects.js';
 export class CommentsAdapter {
   constructor(readonly context: CommentsContext, readonly capacity: CapacityDescriptor) {}
   async lookup(request: CommentsRequest, tx: KernelTransaction | null, selection: CanonicalReadSelection, hash?: string): Promise<CanonicalChainRecord | null> {
@@ -25,7 +25,7 @@ export class CommentsAdapter {
   append<T extends CanonicalChainRecord>(scope: CanonicalStoreScope, selection: CanonicalReadSelection, supplied: T, expected?: ExpectedState): Promise<T> {
     return this.context.invoke(scope, (request) => this.context.mutate(async (tx, standalone) => {
       const record = own(supplied); validateRecordIdentity(scope, selection, record);
-      const identity = chainIdentity(selection); const previous = await this.lookup(request, tx, selection);
+      const previous = await this.lookup(request, tx, selection);
       if (expected === undefined && previous) {
         if (previous.hash !== record.hash) throw new CanonicalCommandError('idempotency-conflict', 'Genesis identity has different content');
         if (standalone) throw new StoredGenesisReplay(previous);
@@ -34,12 +34,7 @@ export class CommentsAdapter {
       if (expected && (expected.kind === 'creation' ? previous !== null || expected.aggregateVersion !== 0 : expected.kind !== 'revision' || previous?.hash !== expected.revisionHash)) throw new CanonicalCommandError('cas-conflict', 'Canonical head changed');
       if ('link' in record && (record.link.previousHash !== (previous?.hash ?? null) || record.link.sequence !== (previous && 'link' in previous ? previous.link.sequence + 1 : 1))) throw new CanonicalCommandError('cas-conflict', 'Canonical link does not extend the current head');
       await validateCommentsRecord(record, previous, this.capacity, (selected, hash) => this.lookup(request, tx, selected, hash));
-      const bytes = canonicalJson(record);
-      await tx.apply({ ...emptyEffects(),
-        relationships: commentsRelationships(record, identity.key, canonicalRecordKey(identity.key, record.hash)),
-        records: [{ key: canonicalRecordKey(identity.key, record.hash), contentHash: record.hash, bytes: { format: 'utf8', data: bytes } }],
-        appends: [{ chainId: identity.key, record: { id: record.hash, hash: record.hash, bytes }, expectation: previous ? { kind: 'head', hash: previous.hash } : { kind: 'absent', allocation: '0' } }],
-      });
+      await tx.apply(commentsRecordEffects(selection, record, previous?.hash ?? null));
       return own(record);
     }));
   }
