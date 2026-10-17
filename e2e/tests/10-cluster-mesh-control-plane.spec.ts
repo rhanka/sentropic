@@ -50,11 +50,19 @@ test.describe('D2 Sessions navigation and no-source UI', () => {
     // Only metadata is intercepted. The real layout/auth/workspace guards still run.
     await page.route('**/api/v1/auth/session/content/workspaces/*/sessions', async (route) => {
       const workspaceId = new URL(route.request().url()).pathname.split('/').at(-2);
+      const row = (name: string, overrides: Record<string, unknown> = {}) => ({ ownerId: userId,
+        workspaceId, projectId: workspaceId, sourceId: '', bindingId: `ui-${name}`, sessionId: `ui-${name}`,
+        status: 'attached', sourceAvailable: false, liveAuthorized: false, storedAuthorized: true,
+        historyAuthorized: false, retained: true, excluded: false, expiresAt: null,
+        projectRevision: 1, grantProjectRevision: 1, ...overrides });
       await route.fulfill({ json: { ownerId: userId, workspaceId, projectId: workspaceId, sourceId: '',
-        sourceVerified: false, reason: 'unsupported_source', credentials: [], items: [], namedHistories: [], eligibleSources: [] } });
+        sourceVerified: false, reason: 'unsupported_source', credentials: [], namedHistories: [], eligibleSources: [],
+        items: [row('closed', { status: 'ended', gaps: [{ from: 7, to: 8, reason: 'partition' }, { from: 1, to: 2, reason: 'partition' }] }),
+          row('paused', { projectRevision: 2 }), row('excluded', { excluded: true }), row('quota', { pauseReason: 'quota_exceeded' })] } });
     });
     await page.goto('/sessions');
     const offer = page.getByRole('region', { name: 'Partager ce projet et les historiques affichés', exact: true });
+    await expect(offer.getByRole('checkbox')).toHaveCount(10);
     for (const checkbox of await offer.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
     await offer.getByRole('checkbox', { name: 'Conserver les copies du terminal', exact: true }).check();
     await expect(offer.getByRole('combobox', { name: 'Conservation choisie avant confirmation' })).toHaveValue('none');
@@ -64,6 +72,12 @@ test.describe('D2 Sessions navigation and no-source UI', () => {
     await expect(offer.getByRole('spinbutton', { name: 'Durée', exact: true })).toHaveValue('2');
     await expect(offer.getByRole('button', { name: "Préparer l'accord", exact: true })).toBeDisabled();
     await offer.getByRole('button', { name: 'Annuler', exact: true }).click();
+    await expect(page.getByText('Copies conservées mais illisibles sans autorisation de lecture historique', { exact: true })).toBeVisible();
+    await expect(page.getByText("Capture suspendue pendant l'application de l'accord mis à jour", { exact: true })).toBeVisible();
+    await expect(page.getByText('Stockage plein : nouvelles captures suspendues ; copies existantes conservées', { exact: true })).toBeVisible();
+    await expect(page.getByText('Session exclue', { exact: true })).toBeVisible();
+    const gaps = page.getByRole('region', { name: 'Sortie de session', exact: true }).filter({ hasText: 'ui-closed' }).locator('p').filter({ hasText: 'Intervalle manquant' });
+    await expect(gaps.nth(0)).toContainText('1–2'); await expect(gaps.nth(1)).toContainText('7–8');
     expect(effects).toEqual([]);
   });
 });
