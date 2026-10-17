@@ -2,6 +2,7 @@ import type { ScopeGrant } from './authority.js';
 import { StorageCapacityExceededError, StorageDeniedError, StorageInvalidCommandError } from './errors.js';
 import type { KernelTransaction, ScopedRuntime } from './scope-runtime.js';
 import type { CommitOptions } from './atomic.js';
+import type { CommitReceipt } from './atomic.js';
 import { ownedCopy, type JournalFence, type StagedCore } from './staged-core.js';
 import { beginOperation, stageOperationFragment } from './staged-operations.js';
 import { abortOperation, commitSealedOperation, inspectOperation, sealOperationStep } from './staged-seal.js';
@@ -50,6 +51,21 @@ export class RootScopedRuntime {
   async manifestReadPage(digest: string, chainId: string, limit: number, cursor: unknown, bytes: number) { return readManifestRootPage(this.#core, this.#inner, digest, chainId, limit, cursor, bytes); }
   async journalFence() { return this.#core.journalFence(this.grant); }
   async journalRead(consumer: string, after: number, limit: number) { return readRootJournal(this.#core, this.#inner, after, limit, consumer); }
+  async auditRead(after = 0, limit = 100): Promise<readonly Omit<CommitReceipt, 'moduleResult'>[]> {
+    this.requireOperation('maintain'); this.requireOperation('read');
+    const maximum = stagedLimits(this.#core);
+    if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit <= 0 || limit > maximum.maxRecords) throw new StorageInvalidCommandError('invalid audit window');
+    const audit = this.#core.data(this.#core.current(this.scope)).audit;
+    const rows: Omit<CommitReceipt, 'moduleResult'>[] = [];
+    let bytes = 0;
+    for (let index = after; index < Math.min(audit.length, after + limit); index += 1) {
+      const { moduleResult: _moduleResult, ...metadata } = audit.at(index)!;
+      const size = Buffer.byteLength(JSON.stringify(metadata), 'utf8');
+      if (bytes + size > maximum.maxEncodedBytes) throw new StorageCapacityExceededError('request a smaller audit window');
+      rows.push(ownedCopy(metadata)); bytes += size;
+    }
+    return rows;
+  }
   async externalRead(after: number, limit: number) { return readRootJournal(this.#core, this.#inner, after, limit); }
   async journalCheckpoint(consumer: string, expected: number, next: number, fence: JournalFence) { return checkpointRootJournal(this.#core, this.#inner, consumer, expected, next, fence); }
   async journalInspect(consumer: string) { return inspectRootConsumer(this.#core, this.#inner, consumer); }
