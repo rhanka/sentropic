@@ -23,6 +23,10 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `packages/llm-mesh/src/routing-policy.ts`
+  - `packages/llm-mesh/src/index.ts` (BR120-EX8)
+  - `packages/llm-mesh/src/routing-contracts.ts` (BR120-EX8)
+  - `packages/llm-mesh/src/route-planner-state.ts` (BR120-EX8)
+  - `packages/llm-mesh/src/route-attempt.ts` (BR120-EX8)
   - `packages/llm-mesh/src/routing-targets.ts`
   - `packages/llm-mesh/src/route-planner.ts`
   - `packages/llm-mesh/src/route-selection.ts`
@@ -74,6 +78,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR120-EX8`: bounded L2 contract/affinity plumbing in mesh `index.ts`, `routing-contracts.ts`, `route-planner-state.ts`, `route-attempt.ts`. Reason: public frozen launch types and awaited durable affinity transitions must reach quote/plan/execute. Impact: trusted policy input and prepared-attempt lifecycle only. Rollback: close admission, preserve committed contracts/affinity/keys, never restore implicit equivalence.
 - `BR120-EX7`: shared tooling/CI-input, committed-candidate and phase-guard exception. Reason: one exact-byte GWRC-CI-V1 contract for gateway and registry; existing Ubuntu execution; candidate-phase inactivity; complete published-head acceptance. Impact: seven opt-in Sentropic targets under `tools/gateway-evolution/`; h2a CI wiring on companion only (this branch creates Sentropic side, records h2a scope for reference). Rollback: remove `tools/gateway-evolution/` targets and restore ordinary job conditions. Status: declared before L0 creates the tooling.
 - `GWV-EX1`: private app delegation `apps/llm-gateway/src/{app,config,readiness}.ts` + tests to package host. Reason: Q2 needs observable restart on the host every consumer uses. Impact: caller admission/readiness. Rollback: disable new admission, retain durable data, restore compatible published host. Status: declared; used in L1 only.
 - `GWV-EX5`: product policy `api/src/services/llm-runtime/standalone-ports.ts` + 1 new + 2 existing API tests. Reason: G hard-codes `allowEquivalentModels: true`, defeats Q3. Impact: standalone and product route planes default exact. Rollback: close affected admission, retain contracts/keys, never restore silent equivalence. Status: declared; used in L2 only.
@@ -95,6 +100,7 @@
 - `L1-control-owner` (2026-10-17): reproduced cross-owner issuance through authenticated control, then bound every operation to the host owner; owner refusal test green, zero mutations. Private socket client test also passes with 0600 socket/authenticator and inference-key refusal.
 - `L1-receipt-recovery` (2026-10-17): receipt service checks active session/model grants, serializes admissions/settlements and reconciles interrupted pending requests as incomplete without replay; receipt tests 2/2.
 - `L1-private-socket` (2026-10-17): real authenticated Unix transport/client round trip passes; authenticator rotates at host start and the client reads it through the protected path, without another caller-key store. Windows ACL qualification remains unavailable and the Node host refuses it.
+- `L2-contract-freeze` (2026-10-17): immutable v1 launch contract binds owner, exact model set, authorized account set, independent rotation consent, preserved effort and optional mapping ID/revision/SHA-256 over exact targets. Tampered, absent, unknown or duplicated policy data refuses; mesh typecheck and scoped contract tests 3/3.
 
 ## AI Flaky tests
 - Acceptance rule:
