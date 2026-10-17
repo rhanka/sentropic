@@ -182,6 +182,7 @@ export const createOauthStateStoreAdapter = (
 
 const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClientRecord => ({
   allowedScopes: row.allowedScopes,
+  allowedUserIds: row.allowedUserIds ?? [],
   clientId: row.clientId,
   clientSecretHash: row.clientSecretHash,
   createdAt: row.createdAt,
@@ -192,6 +193,7 @@ const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClient
   ownerUserId: row.ownerUserId,
   redirectUris: row.redirectUris,
   requirePkce: row.requirePkce,
+  requiredAcr: row.requiredAcr ?? null,
   resourceIndicators: row.resourceIndicators,
   responseTypes: row.responseTypes,
   tenantId: row.tenantId,
