@@ -18,7 +18,7 @@
     "mermaid": "^11.15.0",
     "uuid": "^11.1.1",
     "ws": "^8.21.0",
-    "fast-uri": "^3.1.7",
+    "fast-uri": "^3.1.8",
     "linkify-it": "^5.0.2",
     "@tiptap/core": "3.31.3",
     "@tiptap/pm": "3.31.3",
