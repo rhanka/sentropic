@@ -29,7 +29,7 @@ test.describe('D2 Sessions navigation and no-source UI', () => {
     await page.goto('/sessions');
     await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sessions', exact: true })).toBeVisible();
-    await expect(page.getByText("Aucune clé d'accès enregistrée utilisable dans ce navigateur.", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Poste hors ligne : direct et clavier indisponibles', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Confirmer et envoyer une seule fois' })).toBeDisabled();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
@@ -56,13 +56,15 @@ test.describe('D2 Sessions navigation and no-source UI', () => {
         historyAuthorized: false, retained: true, excluded: false, expiresAt: null,
         projectRevision: 1, grantProjectRevision: 1, ...overrides });
       await route.fulfill({ json: { ownerId: userId, workspaceId, projectId: workspaceId, sourceId: '',
-        sourceVerified: false, reason: 'unsupported_source', credentials: [], namedHistories: [], eligibleSources: [],
+        sourceVerified: false, reason: 'unsupported_source', authenticationState: 'step_up_required',
+        confirmationAvailable: false, namedHistories: [], eligibleSources: [],
         items: [row('closed', { status: 'ended', gaps: [{ from: 7, to: 8, reason: 'partition' }, { from: 1, to: 2, reason: 'partition' }] }),
           row('paused', { projectRevision: 2 }), row('excluded', { excluded: true }), row('quota', { pauseReason: 'quota_exceeded' })] } });
     });
     await page.goto('/sessions');
     const offer = page.getByRole('region', { name: 'Partager ce projet et les historiques affichés', exact: true });
-    await expect(offer.getByRole('checkbox')).toHaveCount(10);
+    await expect(offer.getByRole('checkbox')).toHaveCount(9);
+    await expect(offer.getByText('Chaque action à distance exige une nouvelle confirmation auprès du fournisseur d’identité.', { exact: false })).toBeVisible();
     for (const checkbox of await offer.getByRole('checkbox').all()) await expect(checkbox).not.toBeChecked();
     await offer.getByRole('checkbox', { name: 'Conserver les copies du terminal', exact: true }).check();
     await expect(offer.getByRole('combobox', { name: 'Conservation choisie avant confirmation' })).toHaveValue('none');
