@@ -383,6 +383,7 @@
   - [x] Combined package gate at `1f004b356`: typecheck/lint pass; 89 files / 791 tests pass, 31 files / 78 tests skip for explicit DB/server-crash/packaging qualification (RTK `448518b12ebc`). Added RED enclosing-transaction domain revalidation and cumulative record-budget probes before C4.
   - [x] Both new probes failed at their intended assertions. Domain revalidators now remain attached to the outer PG transaction until its actual root publication, and cumulative immutable-record admission spans every sequential apply. Captured closed M1 handles remain denied.
   - [ ] C4 preflight RED `postgres-hidden-purge.spec.ts` covers a new hidden descendant whose parent is purged before publication. Both raw staged items and prepared payloads must be erased before a completed disposition.
+  - [x] The preflight found retained hidden descendant bytes behind a completed result. Added an indexed scope/unit-local hidden coverage asset and traversal; it carries no canonical membership and will cover both staged intake and prepared payload erasure.
   - [x] Prepare the frozen optional peer and digest-pinned conformance/vector artifact through branch-local Docker/Make tooling; inspect the published peer before selecting its compatible range. Root/disabled imports must evaluate neither comments nor a database client.
   - [x] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
   - [x] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).
