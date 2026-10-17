@@ -5,7 +5,7 @@ import { stagedFragmentDigest } from '../storage/staged-codec.js';
 import type { CommentsServiceOptions } from './lifecycle-contracts.js';
 import { authorizeComments } from './authority.js';
 import { commentsImportBindingDigest, validateCommentsImportBinding } from './binding-codec.js';
-import { validateCommentsFragment } from './fragment-codec.js';
+import { validateCommentsFragment, commentsTransportBytes } from './fragment-codec.js';
 import { sameScope } from './storage-schema.js';
 import { COMMENTS_IMPORT_CONTRACT_DIGEST, appendCommentsKernelCommitment, commentsKernelCommitRoot, startCommentsImportDigests, type CommentsImportState } from './import-state.js';
 import { insertCommentsAcknowledgement, insertCommentsImport, readCommentsAcknowledgement, readCommentsImport, writeCommentsImport } from './import-control.js';
@@ -14,10 +14,12 @@ import { CommentsTransportError, type CommentsPrepareImportRequest, type Comment
 import { assertCommentsImportRecord } from './import-authority.js';
 export const prepareCommentsImport = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CommentsFragmentAcknowledgement> => {
   const input = supplied as CommentsPrepareImportRequest; const binding = input?.binding; const fragment = input?.fragment;
+  validateCommentsFragment(fragment);
+  if (commentsTransportBytes(input) > 1048576) throw new CommentsTransportError('capacity-exceeded', 'Complete import request exceeds its byte limit');
   validateCommentsImportBinding(binding);
   if (!sameScope(binding.request.scope, context.grant.scope)) throw new CommentsTransportError('denied', 'Import scope is unavailable');
   for (const capability of binding.capabilities) await authorizeComments(options, context, capability, binding.targets);
-  validateCommentsFragment(fragment); const bindingDigest = commentsImportBindingDigest(binding);
+  const bindingDigest = commentsImportBindingDigest(binding);
   const manifest = fragment.manifest;
   if (!sameScope(manifest.scope, binding.request.scope) || manifest.operationId !== binding.operationId || manifest.bindingDigest !== bindingDigest) throw new CommentsTransportError('conflict', 'Fragment import binding differs');
   let state = await readCommentsImport(context, binding.operationId, true);

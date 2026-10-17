@@ -20,4 +20,10 @@ describe('separate comments module admission bounds', () => {
     expect(() => createCommentsFragment(manifest, [record()])).not.toThrow();
     expect(Object.keys(conformanceCapacity())).not.toContain('profileDepth');
   });
+  it('permits acyclic shared profile objects without treating aliases as recursion', () => {
+    const value = record(); const shared = { leaf: 'value' };
+    value.body.profile = { schemaId: 'profile', version: 'v1', digest: 'd', fields: { left: shared, right: shared } };
+    const { kind, hash: _hash, ...envelope } = value; value.hash = hashRecord(kind, envelope);
+    expect(() => createCommentsFragment(manifest, [value])).not.toThrow();
+  });
 });
