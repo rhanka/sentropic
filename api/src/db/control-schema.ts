@@ -1166,6 +1166,9 @@ export const sessionContentNamespaces = controlSchema.table(
  * (D2 Lot 2). Payload bytes live only in the private bucket; rows carry
  * accounting (`bytes_raw`, `bytes_encoded`), the capture-bound immutable
  * `expires_at` (`null` = no expiry) and lifecycle state. No payload bodies.
+ * P2: `reservation_id` links a staged row to its writer reservation so an
+ * object purge settles exactly that writer (nullable: rows predate the link
+ * settle nothing).
  */
 export const sessionContentObjects = controlSchema.table(
   'session_content_objects',
@@ -1174,6 +1177,7 @@ export const sessionContentObjects = controlSchema.table(
     namespaceId: text('namespace_id').notNull(),
     bindingId: text('binding_id').notNull(),
     sessionId: text('session_id').notNull(),
+    reservationId: text('reservation_id'),
     channel: text('channel').notNull(),
     bucket: text('bucket').notNull(),
     objectKey: text('object_key').notNull(),
