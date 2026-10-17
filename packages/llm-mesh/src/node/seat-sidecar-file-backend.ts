@@ -25,14 +25,11 @@ export interface SeatSidecar {
 }
 
 export const SEAT_SIDECAR_MAX_BYTES = 4096;
-const MAX_CATEGORY_CHARS = 64;
+// Schema versions are machine labels, not free text: no spaces, quotes,
+// or control characters that could smuggle content through the category.
+const SCHEMA_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 type Categories = Omit<SeatStoreRecordDescriptor, 'cli' | 'profileLabel' | 'backend'>;
-
-const boundedText = (value: unknown): string | null => {
-  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_CATEGORY_CHARS) return null;
-  return value;
-};
 
 /** Parse and validate sidecar categories; throws SeatStoreReadError without echoing content. */
 export function parseSeatSidecar(raw: string): Categories {
@@ -49,7 +46,11 @@ export function parseSeatSidecar(raw: string): Categories {
     throw new SeatStoreReadError('sidecar has no category record');
   }
   const record = parsed as Record<string, unknown>;
-  const schemaVersion = boundedText(record['schemaVersion']);
+  const rawSchemaVersion = record['schemaVersion'];
+  const schemaVersion =
+    typeof rawSchemaVersion === 'string' && SCHEMA_VERSION_PATTERN.test(rawSchemaVersion)
+      ? rawSchemaVersion
+      : null;
   const credentialClass = record['credentialClass'];
   const refreshCapable = record['refreshCapable'];
   if (!schemaVersion) throw new SeatStoreReadError('sidecar has no bounded schema version');

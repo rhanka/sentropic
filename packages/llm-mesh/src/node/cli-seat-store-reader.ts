@@ -83,8 +83,20 @@ export async function inspectSeatStoreRecord(
       reason: 'selected lab record not found',
     };
   }
-  // Forward allowlisted categories only; a backend must never smuggle
-  // credential material through extra or nested fields.
+  // Forward allowlisted categories only; backend prose is never
+  // forwarded verbatim — a refusal carries the reader-fixed reason.
+  if (!record.supported) {
+    return {
+      cli: selector.cli,
+      profileLabel: selector.profileLabel,
+      backend: backend.backend,
+      schemaVersion: null,
+      credentialClass: 'unknown',
+      refreshCapable: null,
+      supported: false,
+      reason: 'backend refused the selected lab record',
+    };
+  }
   return {
     cli: selector.cli,
     profileLabel: selector.profileLabel,
@@ -92,7 +104,6 @@ export async function inspectSeatStoreRecord(
     schemaVersion: record.schemaVersion,
     credentialClass: record.credentialClass,
     refreshCapable: record.refreshCapable,
-    supported: record.supported,
-    ...(record.reason !== undefined ? { reason: record.reason } : {}),
+    supported: true,
   };
 }
