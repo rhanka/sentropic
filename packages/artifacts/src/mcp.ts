@@ -10,6 +10,7 @@
  * platform adapter and the kernel registry definition (§3).
  */
 import type { AppMcpProviderManifest, CapabilityTool } from '@sentropic/mcp-platform';
+import type { HttpRequest, HttpResponse } from './http.js';
 
 export const WEB_PAGES_PROVIDER_ID = 'sentropic.web-pages';
 export const WEB_PAGES_APP_ID = 'sentropic-artifacts';
@@ -128,5 +129,148 @@ export function createWebPagesManifest(
     authz: { requiredClaims: [], scopes: [...scopes], tenantResolution: 'custom-resolver' },
     audit: { eventKinds: ['invoke'] },
     durability: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Part 2 — tool executor over the shared HTTP app (HTTP/MCP parity by
+// construction: one application layer, one authorization order, stable
+// error codes). Unknown tools and malformed arguments throw before any
+// app call, so a refused invocation has no effects.
+// ---------------------------------------------------------------------------
+
+export interface WebPagesApp {
+  handle(request: HttpRequest): Promise<HttpResponse>;
+}
+
+export interface WebPagesInvokeInput {
+  tool: string;
+  actorId: string;
+  args: Record<string, unknown>;
+}
+
+function needString(args: Record<string, unknown>, name: string): string {
+  const value = args[name];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`invalid request: missing ${name}`);
+  }
+  return value;
+}
+
+function optString(args: Record<string, unknown>, name: string): string | undefined {
+  const value = args[name];
+  return typeof value === 'string' && value.length !== 0 ? value : undefined;
+}
+
+/** Create the 15-tool executor over any conforming artifacts HTTP app. */
+export function createWebPagesToolExecutor(deps: {
+  app: WebPagesApp;
+  defaultStorageScopeId?: string;
+}) {
+  const call = (
+    actorId: string,
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<HttpResponse> => deps.app.handle({ method, path, actorId, body });
+
+  function setAccess(actorId: string, args: Record<string, unknown>): Promise<HttpResponse> {
+    const artifactId = needString(args, 'artifactId');
+    const action = needString(args, 'action');
+    if (action === 'grant') {
+      const grant = needString(args, 'grant');
+      if (grant !== 'read' && grant !== 'source') {
+        throw new Error('invalid request: grant must be read or source');
+      }
+      return call(actorId, 'POST', '/access/grant', {
+        artifactId, principalId: needString(args, 'principalId'), grant,
+      });
+    }
+    if (action === 'revoke') {
+      return call(actorId, 'POST', '/access/revoke', {
+        artifactId, principalId: needString(args, 'principalId'),
+      });
+    }
+    if (action === 'set-public') {
+      if (typeof args['isPublic'] !== 'boolean') {
+        throw new Error('invalid request: isPublic must be a boolean');
+      }
+      return call(actorId, 'POST', '/access/public', { artifactId, isPublic: args['isPublic'] });
+    }
+    throw new Error(`invalid request: unknown set-access action ${action}`);
+  }
+
+  return {
+    async invoke(input: WebPagesInvokeInput): Promise<HttpResponse> {
+      const { actorId, args } = input;
+      switch (input.tool) {
+        case 'artifacts_get_template':
+          return call(actorId, 'GET', `/templates/${needString(args, 'templateId')}`);
+        case 'artifacts_get_api_guide': {
+          const version = optString(args, 'version');
+          return call(actorId, 'GET', version === undefined ? '/api-guide' : `/api-guide/${version}`);
+        }
+        case 'artifacts_ensure':
+          return call(actorId, 'POST', '/ensure', {
+            bindingName: needString(args, 'bindingName'),
+            storageScopeId: optString(args, 'storageScopeId') ?? deps.defaultStorageScopeId
+              ?? needString(args, 'storageScopeId'),
+            idempotencyKey: needString(args, 'idempotencyKey'),
+            paramsHash: optString(args, 'paramsHash') ?? '',
+            parameters: args['parameters'] ?? {},
+          });
+        case 'artifacts_publish':
+          return call(actorId, 'POST', '/publish', {
+            artifactId: needString(args, 'artifactId'),
+            files: args['files'],
+            profile: args['profile'] ?? {},
+            source: args['source'],
+            idempotencyKey: optString(args, 'idempotencyKey'),
+            paramsHash: optString(args, 'paramsHash'),
+          });
+        case 'artifacts_create_upload':
+          return call(actorId, 'POST', '/uploads', {
+            artifactId: needString(args, 'artifactId'),
+            mimeType: needString(args, 'mimeType'),
+            maxSize: args['maxSize'],
+          });
+        case 'artifacts_commit_upload':
+          return call(actorId, 'POST', '/uploads/commit', {
+            artifactId: needString(args, 'artifactId'),
+            uploadId: needString(args, 'uploadId'),
+            path: needString(args, 'path'),
+            mimeType: needString(args, 'mimeType'),
+            digest: needString(args, 'digest'),
+            size: args['size'],
+            profile: args['profile'] ?? {},
+            idempotencyKey: optString(args, 'idempotencyKey'),
+            paramsHash: optString(args, 'paramsHash'),
+          });
+        case 'artifacts_list':
+          return call(actorId, 'POST', '/list', { limit: args['limit'], offset: args['offset'] });
+        case 'artifacts_get':
+          return call(actorId, 'GET', `/meta/${needString(args, 'artifactId')}`);
+        case 'artifacts_get_source':
+          return call(actorId, 'GET', `/source/${needString(args, 'artifactId')}`);
+        case 'artifacts_fork':
+          return call(actorId, 'POST', '/fork', { artifactId: needString(args, 'artifactId') });
+        case 'artifacts_set_access':
+          return setAccess(actorId, args);
+        case 'artifacts_promote':
+          return call(actorId, 'POST', '/promote', {
+            artifactId: needString(args, 'artifactId'),
+            releaseId: needString(args, 'releaseId'),
+            expectedCurrent: needString(args, 'expectedCurrent'),
+          });
+        case 'artifacts_renew':
+          return call(actorId, 'POST', '/renew', { artifactId: needString(args, 'artifactId') });
+        case 'artifacts_delete':
+          return call(actorId, 'POST', '/delete', { artifactId: needString(args, 'artifactId') });
+        case 'artifacts_restore':
+          return call(actorId, 'POST', '/restore', { artifactId: needString(args, 'artifactId') });
+        default:
+          throw new Error(`unknown artifacts tool: ${input.tool}`);
+      }
+    },
   };
 }
