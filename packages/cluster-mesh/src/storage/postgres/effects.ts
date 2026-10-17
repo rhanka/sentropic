@@ -7,11 +7,12 @@ import { pgJsonBytes } from './roots.js';
 import type { PgCore } from './core.js';
 import type { PgSession } from './protocol.js';
 import { applyPgModuleEffects } from './module-effects.js';
+import { REGISTERED_PG_EFFECTS } from './registered-effects.js';
 export interface PgChain { readonly head: string; readonly allocation: string; readonly count: number; readonly disposed: boolean; }
 export interface PgRecordRef { readonly payload: string; readonly contentHash: string; }
 export interface PgChainRef { readonly id: string; readonly seq: number; readonly hash: string; readonly payload: string; }
 export const chainRecordKey = (chain: string, seq: number): string => JSON.stringify([chain, String(seq).padStart(16, '0')]);
-export const applyPgEffects = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, initial: string | null, unit: AtomicUnit, coverageRoot = initial) => {
+export const applyPgEffects = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, initial: string | null, unit: AtomicUnit, coverageRoot = initial, installed?: symbol) => {
   const store = core.roots; const scope = grant.scope; let root = initial; let records = 0;
   for (const guard of unit.guards) {
     let accepted = false;
@@ -28,6 +29,7 @@ export const applyPgEffects = async (core: PgCore, session: PgSession, grant: Sc
     if (!accepted) throw new StorageCasConflictError('registered guard refused');
   }
   for (const target of [...unit.records.map((v) => v.key), ...unit.appends.map((v) => v.chainId), ...unit.updates.map((v) => v.key), ...unit.indexWrites.map((v) => v.key)]) {
+    if (installed === REGISTERED_PG_EFFECTS) continue;
     try { await core.visible(session, coverageRoot, target); }
     catch (error) { if (error instanceof StorageDeniedError) throw new StorageInvalidCommandError('covered mutation refused'); throw error; }
   }
@@ -65,7 +67,7 @@ export const applyPgEffects = async (core: PgCore, session: PgSession, grant: Sc
     if (previous && previous.digest !== write.digest) throw new StorageIdempotencyConflictError('command digest conflict');
     root = await store.put(session, root, 'index', write.key, { digest: write.digest, resultIds: write.resultIds, resultHash: write.resultHash });
   }
-  root = await applyPgModuleEffects(core, session, grant, root, unit);
+  root = await applyPgModuleEffects(core, session, grant, root, unit, installed === REGISTERED_PG_EFFECTS);
   await core.options.projection?.(unit, { session, root, layout: core.options.layout, grant, stream: { moduleId: core.options.moduleId, scope, incarnation: core.incarnation, stream: core.incarnation } });
   return { root, records, appends: unit.appends.length };
 };

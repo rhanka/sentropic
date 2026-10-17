@@ -65,6 +65,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-PORT10 — installed native operations/finalization receive a private same-session SPI for real retained records, metadata and bounded kernel applies. Scoped requests supply only named input DTOs, never callbacks/SQL/enforcement flags. This enables authorized post-barrier intent and proof-gated final lifecycle append while all M1 getters retain denial semantics; co-review pending.
 - [ ] `attention` BRCM2-PORT9 — installed module assets and a same-session projection preparation callback extend the PG registration. The single host-owned history verifies the complete selected asset sequence and actual data/projection schemas; projection rows are visible only through captured kernel membership. No second ledger or request SQL is added; co-review pending.
 - [ ] `attention` BRCM2-PORT8 — reserved neutral `coverage-parent-v1` relationships install immutable indexed parents within ordinary/staged root preparation. Both memory and PG reject removal, cycles, reparenting and covered intake; no descendant enumeration or request-selectable bypass. Co-review pending.
 - [ ] `attention` BRCM2-PORT7 — additive selected Postgres leaf uses asynchronous durable grant binding and the same object-shaped staged commit/abort inputs as K4. SQL session/query/outbox/history interfaces remain host-injected; K3's existing factory and validated behavior stay unchanged. Co-review by gr-conductor remains pending.
@@ -367,6 +368,7 @@
   - [ ] Selected comments registration now installs its frozen descriptor, three queries, same-session projection handler and complete shared asset sequence. The M1 oracle is rerun with this full registration active from scope genesis.
   - [x] Registration execution exposed Postgres text rejection of the frozen helper's NUL-separated resource keys. Projection keys now frame all five resource coordinates as JSON, preserving the M1 helper/hash representation. Atomic error mapping also retains the original extension/driver cause for diagnosis.
   - [x] Registered comments suites pass 58 tests; typecheck/lint pass. Added RED operational lifecycle tests for all-target/current authorization, atomic denial/barrier/index behavior, absence of invented purge authority and actual SQL erasure before canonical completion.
+  - [ ] Added the installed native-operation SPI and a non-exported internal effects capability. Only trusted handlers can prepare post-barrier maintenance successors; ordinary/staged scoped inputs retain coverage enforcement and all CAS/limits/authority checks.
   - [ ] Prepare the frozen optional peer and digest-pinned conformance/vector artifact through branch-local Docker/Make tooling; inspect the published peer before selecting its compatible range. Root/disabled imports must evaluate neither comments nor a database client.
   - [ ] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
   - [ ] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).

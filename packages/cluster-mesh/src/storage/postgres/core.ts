@@ -36,6 +36,7 @@ export class PgCore {
     this.options = Object.freeze({ ...options, descriptor, layout: validatePgLayout(options.layout),
       assets: options.assets ? Object.freeze(options.assets.map((asset) => Object.freeze({ ...asset, requires: Object.freeze([...asset.requires]) }))) : undefined,
       limits: options.limits ? Object.freeze({ ...options.limits }) : undefined, budgets: Object.freeze({ ...options.budgets }),
+      operations: Object.freeze(Object.fromEntries(Object.entries(options.operations ?? {}).map(([key, operation]) => [key, Object.freeze({ ...operation })]))),
       queries: Object.freeze({ ...options.queries }), pgPredicates: Object.freeze({ ...options.pgPredicates }) });
     options = this.options;
     if (options.outbox && ['append', 'read', 'find'].some((name) => typeof options.outbox?.[name as keyof typeof options.outbox] !== 'function')) throw new StorageInvalidCommandError('alternate journal requires append and replay on the same log');
