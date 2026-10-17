@@ -49,6 +49,10 @@ export interface RouteMeteringSink {
 }
 
 export interface RouteFlowDeps {
+  readonly requestAudit?: {
+    admit(input: { cost: CostContext; requestId: string; model: string }): Promise<{ receiptId: string }>;
+    refuse?(receiptId: string): Promise<void>;
+  };
   readonly dispatch?: RouteAttemptDispatchPort;
   readonly config: GatewayConfig;
   readonly routePlanner: RoutePlanner;
@@ -129,14 +133,20 @@ export const prepareRouteFlow = async (
   const nativeFeatures = classifyNativeFeatures(request.wire, request.headers, request.body, canonical, {
     budget: deps.budget, nativeMessagesEnabled: deps.nativeMessagesEnabled,
   });
-  const subject = routingSubjectForCost(auth.cost);
+  let cost = auth.cost;
+  const subject = routingSubjectForCost(cost);
+  if (deps.requestAudit) {
+    const receipt = await deps.requestAudit.admit({ cost: auth.cost, requestId: request.authContext.requestId, model: request.model });
+    request.receiptId = receipt.receiptId;
+    cost = { ...cost, gatewayReceiptId: receipt.receiptId };
+  }
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
-    return prepareAdmittedRouteFlow(deps, request, auth.cost, subject, bounded, nativeFeatures);
+    return prepareAdmittedRouteFlow(deps, request, cost, subject, bounded, nativeFeatures);
   }
   try {
-    const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
+    const routeInput = deps.routeInput?.({ cost, request, canonical });
     const plan = await deps.routePlanner.plan(subject, {
       ...routeInput,
       requestedModel: request.model,
@@ -147,16 +157,16 @@ export const prepareRouteFlow = async (
       // byte-identical.
       ...(canonical.requiredExecutionFeatures
         ? { requiredExecutionFeatures: canonical.requiredExecutionFeatures } : {}),
-      workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
-      affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
+      workspaceId: routeInput?.workspaceId ?? cost.workspaceId,
+      affinityKey: routeInput?.affinityKey ?? cost.correlationId,
       ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost: auth.cost, subject, canonical, plan, nativeFeatures };
+    return { cost, subject, canonical, plan, nativeFeatures };
   } catch (error) {
     if (isRecognizedPlanningRefusal(error)) {
       try {
         await deps.metering.settleRoute({
-          cost: auth.cost,
+          cost,
           wire: request.wire,
           requestedModel: request.model,
           outcome: 'failed',
@@ -167,7 +177,7 @@ export const prepareRouteFlow = async (
       throw error;
     }
     await deps.metering.settleRoute({
-      cost: auth.cost,
+      cost,
       wire: request.wire,
       requestedModel: request.model,
       outcome: 'failed',
