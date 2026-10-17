@@ -71,8 +71,6 @@ export interface ReplayCorpusHooks {
   bindWithoutMaintain(): Awaitable<ReplayCorpusStore>;
 }
 
-const FENCE: WriterFence = { fenceId: 'fence-k2b', epoch: '1' };
-
 const consumeSnapshot = async (bound: ReplayCorpusStore, root: string): Promise<readonly ReplaySnapshotRow[]> => {
   const rows: ReplaySnapshotRow[] = [];
   let after = 0;
@@ -266,7 +264,7 @@ export const runReplayCorpus = async (
     inputDigest: 'input-sealed',
     contractDigest: 'contract-k2b',
     sourceBoundary: 'boundary-k2b',
-    fence: FENCE,
+    fence,
   });
   const sealingEffects: AtomicUnit = {
     guards: [],
@@ -290,7 +288,7 @@ export const runReplayCorpus = async (
     predecessorHash: null,
     fragmentDigest: stagedDigestOf(sealing, '0', null, sealingEffects),
     effects: sealingEffects,
-    fence: FENCE,
+    fence,
   });
   const sealed = await bound.sealStaged({
     unit: sealing,
@@ -302,7 +300,7 @@ export const runReplayCorpus = async (
     false,
     'K2b-RED replay: a sealed segment stays invisible before publication',
   );
-  const sealedReceipt = await bound.commitStaged({ seal: sealed, fence: FENCE });
+  const sealedReceipt = await bound.commitStaged({ seal: sealed, fence });
   const afterCommit = await bound.journalRead('c1', 0, 100);
   const segment = afterCommit.events.find((event) => event.operationKey === 'op-replay-sealed');
   assert.ok(segment);
@@ -316,7 +314,7 @@ export const runReplayCorpus = async (
     inputDigest: 'input-abandoned',
     contractDigest: 'contract-k2b',
     sourceBoundary: 'boundary-k2b',
-    fence: FENCE,
+    fence,
   });
   const abandonedEffects: AtomicUnit = {
     guards: [],
@@ -340,7 +338,7 @@ export const runReplayCorpus = async (
     predecessorHash: null,
     fragmentDigest: stagedDigestOf(abandoned, '0', null, abandonedEffects),
     effects: abandonedEffects,
-    fence: FENCE,
+    fence,
   });
   await bound.abortStaged({ unit: abandoned });
   const afterAbort = await bound.journalRead('c1', 0, 100);
@@ -415,7 +413,7 @@ export const runReplayCorpus = async (
     inputDigest: 'input-fail',
     contractDigest: 'contract-k2b',
     sourceBoundary: 'boundary-k2b',
-    fence: FENCE,
+    fence,
   });
   const failingEffects: AtomicUnit = {
     guards: [],
@@ -439,7 +437,7 @@ export const runReplayCorpus = async (
     predecessorHash: null,
     fragmentDigest: stagedDigestOf(failing, '0', null, failingEffects),
     effects: failingEffects,
-    fence: FENCE,
+    fence,
   });
   const failingSeal = await bound.sealStaged({
     unit: failing,
@@ -447,7 +445,7 @@ export const runReplayCorpus = async (
   });
   await bound.armExternalFailure();
   await expectCode(
-    async () => bound.commitStaged({ seal: failingSeal, fence: FENCE }),
+    async () => bound.commitStaged({ seal: failingSeal, fence }),
     'invalid-command',
     'K2b-RED replay: an external failure leaves no canonical effects',
   );
@@ -456,7 +454,7 @@ export const runReplayCorpus = async (
   assert.equal(afterFail.events.some((event) => event.operationKey === 'op-replay-fail'), false);
   const afterFailExternal = await bound.externalRead(0, 100);
   assert.equal(afterFailExternal.events.some((event) => event.operationKey === 'op-replay-fail'), false);
-  const failReceipt = await bound.commitStaged({ seal: failingSeal, fence: FENCE });
+  const failReceipt = await bound.commitStaged({ seal: failingSeal, fence });
   const failJournal = (await bound.journalRead('c1', 0, 100)).events.find(
     (event) => event.operationKey === 'op-replay-fail',
   );
