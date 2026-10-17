@@ -1659,11 +1659,17 @@ export class SessionContentService {
         await tx
           .update(sessionContentReservations)
           .set({ state: 'cancelled', updatedAt: new Date(this.nowMs()) })
-          .where(eq(sessionContentReservations.reservationId, reservationId));
+          .where(and(
+            eq(sessionContentReservations.reservationId, reservationId),
+            eq(sessionContentReservations.state, 'reserved'),
+          ));
         await tx
           .update(sessionContentAttempts)
           .set({ outcome: 'cancelled' })
-          .where(eq(sessionContentAttempts.attemptId, reservationId));
+          .where(and(
+            eq(sessionContentAttempts.attemptId, reservationId),
+            eq(sessionContentAttempts.outcome, 'attempted'),
+          ));
       });
       if (admitted.inactive) {
         throw new SessionContentError('project_not_active', 'project changed during upload');
