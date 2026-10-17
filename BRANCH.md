@@ -77,6 +77,7 @@
   - [ ] New tests/mcp-oauth-composition.spec.ts and mcp-oauth-sessions.spec.ts: positive/negative ACR, mounts, live scopes/account, owner POST/GET/DELETE uniform 404, overlap, cancellation/SSE, expiry/restart/close. Existing unchanged: mcp-composition.spec.ts and mcp-registry.spec.ts.
   - [ ] Scoped gate: Lot 1 test command with SCOPE=tests/mcp-oauth-composition.spec.ts, then sessions, existing composition and registry; same typecheck/lint gate. UI files: none.
 - [ ] **Lot 3 — Controlled exchange egress and service proof**
+  - [x] Egress RED on missing implementation; frozen profile compiler now validates exact host/method/audience/path and canonical bounded parameters before effects.
   - [x] Egress contracts written before implementation: API-token-only HTTP, tool/scope/path restrictions, bounded outage reuse, retained/cancelled capability refusal.
   - [ ] Implement oauth-egress using existing exchange/HTTP contracts; tool-bound profiles only, immutable trusted origin/audience/method/path/scopes/params, no URL/header/token getter, no redirects; invalidate retained/cancelled capabilities.
   - [ ] New tests/mcp-oauth-egress.spec.ts: positive exchanged API bearer, no passthrough, isolation, path attacks, outage/cache bounds, cancellation/redaction; retain all six tests/token-exchange*.spec.ts and O2 races.
