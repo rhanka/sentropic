@@ -108,7 +108,7 @@
 - [ ] **Lot 1 — K2b r3 findings (shared corpus and reference)**
   - [ ] MAJEUR-N1: add a shared canonical staged codec (versioned, domain-separated, framed) deriving `fragmentDigest`, `dependencyRoot` and `effectRoot`; reference recomputes on every ordinal and on seal; corpora derive values from the codec instead of `dep-root-k2b` / `eff-root-k2b`.
     - [x] RED spec `packages/cluster-mesh/tests/storage/staged-codec.spec.ts` (independent literal vectors + discrimination).
-    - [ ] Codec `packages/cluster-mesh/src/storage/staged-codec.ts`; mutants MC1 (dependencies dropped), MC2 (moduleResult always absent), MC3 (null predecessor encoded as empty) each killed at one targeted test.
+    - [x] Codec `packages/cluster-mesh/src/storage/staged-codec.ts`; mutants MC1 (dependencies dropped), MC2 (moduleResult always absent), MC3 (null predecessor encoded as empty) each killed at one targeted test.
   - [ ] MAJEUR-N1: C01 case with a self-consistent but wrong digest on a NEW ordinal and a changed-dependency-only retry; mutant "trust caller digest on new ordinal" killed at its targeted assertion.
   - [ ] MINEUR-1: read corpus accepts `null` or a fitting recovery cursor on empty `incomplete` pages; cross-validate missing-head, disposed-chain and empty pages through `validateReadPage`.
   - [ ] MINEUR-2: M18 mutant measures the candidate cursor instead of the effective cursor (no budget inflation).
