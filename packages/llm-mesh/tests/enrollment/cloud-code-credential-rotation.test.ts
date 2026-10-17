@@ -65,3 +65,11 @@ describe('Cloud Code OAuth credential rotation', () => {
     await expect(verifyDist(root, credentialA)).rejects.toThrow('leaked outside');
   });
 });
+
+describe('seat consumer rotation refusal', () => {
+  it('finds no OAuth credential to rotate in consumer seat material', () => {
+    expect(() => parseCredential('seat access handle: access-reg-01')).toThrow(
+      'OAuth credential markers are missing',
+    );
+  });
+});
