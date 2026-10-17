@@ -1537,7 +1537,7 @@ export class SessionContentService {
   ) {
     requireContext(ctx);
     const { client, config } = this.storage();
-    const reservation = await db.transaction(async (tx) => {
+    const admitted = await db.transaction(async (tx) => {
       const [existing] = await tx
         .select()
         .from(sessionContentReservations)
@@ -1573,7 +1573,15 @@ export class SessionContentService {
         || admitParent.projectRevision !== existing.projectRevision
         || admitParent.projectRevision !== grant.projectRevision
         || existing.grantVersion !== grant.version;
+      // A throw below would roll this read-only transaction back, so the
+      // stale-marking persists in its own transaction after admission.
       if (fenceWon) {
+        return { fenced: true as const, inactive: !admitParent || admitParent.state !== 'active' };
+      }
+      return { fenced: false as const, reservation: existing, grant };
+    });
+    if (admitted.fenced) {
+      await db.transaction(async (tx) => {
         await tx
           .update(sessionContentReservations)
           .set({ state: 'stale', updatedAt: new Date(this.nowMs()) })
@@ -1582,16 +1590,16 @@ export class SessionContentService {
           .update(sessionContentAttempts)
           .set({ outcome: 'outcome_unknown' })
           .where(eq(sessionContentAttempts.attemptId, reservationId));
-        if (!admitParent || admitParent.state !== 'active') {
-          throw new SessionContentError('project_not_active', 'project changed during upload');
-        }
-        throw new SessionContentError(
-          'project_revision_changed',
-          'capture paused while the updated consent is applied',
-        );
+      });
+      if (admitted.inactive) {
+        throw new SessionContentError('project_not_active', 'project changed during upload');
       }
-      return { reservation: existing, grant };
-    });
+      throw new SessionContentError(
+        'project_revision_changed',
+        'capture paused while the updated consent is applied',
+      );
+    }
+    const reservation = { reservation: admitted.reservation, grant: admitted.grant };
     const objectId = this.newId();
     const key = objectKeyFor(
       reservation.reservation.namespaceId,
