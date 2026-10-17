@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
 
+import { db } from '../../src/db/client';
 import { createSeatDeliveryRouter } from '../../src/routes/namespaces/llm-seat-delivery';
-import { acquireClaudeCodeAccountTransport } from '../../src/services/llm-account-transports';
+import { acquireClaudeCodeAccountTransport, readSeatExternalPolicy } from '../../src/services/llm-account-transports';
 import { cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 
 const SEAT_REF = 'seat-delivery-01';
@@ -39,7 +41,7 @@ describe('llm seat delivery', () => {
 
   beforeEach(async () => {
     userId = (await createAuthenticatedUser('admin_app')).id;
-    process.env['SEAT_DELIVERY_TRUSTED_HOP'] = '1';
+    delete process.env['SEAT_DELIVERY_TRUSTED_HOP'];
     process.env['SEAT_DELIVERY_SEATS_JSON'] = JSON.stringify({
       [SEAT_REF]: {
         ownerUserId: userId,
@@ -58,7 +60,12 @@ describe('llm seat delivery', () => {
 
   it('imports a projection, acknowledges it, and replays idempotently', async () => {
     const app = createSeatDeliveryRouter();
-    const first = await post(app, '/import', { seatRef: SEAT_REF, ...projection(userId) });
+    // Absent body identity: the admitted tuple carries the registry values.
+    const { ownerUserId, expectedOwnerScope, externalAccountId, ...accessOnly } = projection(userId);
+    void ownerUserId;
+    void expectedOwnerScope;
+    void externalAccountId;
+    const first = await post(app, '/import', { seatRef: SEAT_REF, ...accessOnly });
     expect(first.status).toBe(200);
     expect(await first.json()).toMatchObject({ acknowledged: true, idempotent: false });
 
@@ -66,10 +73,54 @@ describe('llm seat delivery', () => {
       headers: { authorization: `Bearer ${TOKEN}` },
     });
     expect(ack.status).toBe(200);
-    expect(await ack.json()).toMatchObject({ acknowledged: true });
+    expect(await ack.json()).toMatchObject({
+      acknowledged: true,
+      tuple: { seatRef: SEAT_REF, ownerScope: 'owner-seat-01', generation: 1, operationId: 'op-delivery-01' },
+    });
+
+    // Admission used the registry identity: the stored row carries the
+    // registry owner, scope, and access material even though the body
+    // omitted every identity field.
+    const storedRows = (await db.all(
+      sql`SELECT owner_user_id, metadata FROM llm_provider_accounts WHERE metadata->'seatExternalPolicy'->>'seatRef' = ${SEAT_REF} AND owner_user_id = ${userId}`,
+    )) as Array<{ owner_user_id: string; metadata: unknown }>;
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]?.owner_user_id).toBe(userId);
+    // The stored secret is proven through the serving path instead: the drain
+    // step below serves sk-ant-delivery-01, and the R1 API 401 test serves
+    // the external token to the provider.
+    const storedPolicy = readSeatExternalPolicy((storedRows[0]?.metadata ?? {}) as Record<string, unknown>);
+    expect(storedPolicy?.seatRef).toBe(SEAT_REF);
+    expect(storedPolicy?.generation).toBe(1);
+    expect(storedRows[0]?.metadata).toMatchObject({
+      seatExternalPolicy: { seatRef: SEAT_REF, ownerScope: 'owner-seat-01', generation: 1, operationId: 'op-delivery-01' },
+    });
 
     const replay = await post(app, '/import', { seatRef: SEAT_REF, ...projection(userId) });
     expect(await replay.json()).toMatchObject({ acknowledged: true, idempotent: true });
+  });
+
+  it('refuses a same-generation lineage conflict with a different operationId', async () => {
+    const app = createSeatDeliveryRouter();
+    const first = await post(app, '/import', { seatRef: SEAT_REF, ...projection(userId) });
+    expect(first.status).toBe(200);
+
+    const conflict = await post(app, '/import', {
+      seatRef: SEAT_REF,
+      ...projection(userId, {
+        accessToken: 'sk-ant-conflict',
+        seatPolicy: { seatRef: SEAT_REF, ownerScope: 'owner-seat-01', epoch: 1, generation: 1, operationId: 'op-other' },
+      }),
+    });
+    expect(conflict.status).toBe(409);
+
+    const ack = await app.request(`/ack?seatRef=${SEAT_REF}`, {
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(await ack.json()).toMatchObject({
+      acknowledged: true,
+      tuple: { seatRef: SEAT_REF, generation: 1, operationId: 'op-delivery-01' },
+    });
   });
 
   it('refuses forged headers, direct access, and stale generations', async () => {
