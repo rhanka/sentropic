@@ -4,7 +4,7 @@ import type { MeshBinding } from '../../src/node/host-types.js';
 export const model = 'gpt-6.1-sol';
 export const routingContract = { version: 1 as const, revision: 'p1', ownerScopeRef: 'owner-a', exactModels: [model],
   authorizedAccountRefs: ['internal-a'], rotateAccounts: false, effortPolicy: { mode: 'preserve' as const } };
-export const durableHostFixture = (key = 'a') => {
+export const durableHostFixture = (key = 'a', noUsage = false) => {
   const calls: GenerateRequest[] = [];
   const mesh: MeshBinding = {
     ownerScopeRef: 'owner-a',
@@ -19,7 +19,7 @@ export const durableHostFixture = (key = 'a') => {
           generate: async (request: GenerateRequest): Promise<GenerateResponse> => {
             calls.push(request);
             return { id: 'response', providerId: 'openai', modelId: model, message: { role: 'assistant', content: 'synthetic' },
-              text: 'synthetic', toolCalls: [], finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+              text: 'synthetic', toolCalls: [], finishReason: 'stop', ...(noUsage ? {} : { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }) };
           }, stream: async () => { throw new Error('fixture stream unused'); },
           markCommitted: async () => undefined, complete: async () => undefined,
           releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
