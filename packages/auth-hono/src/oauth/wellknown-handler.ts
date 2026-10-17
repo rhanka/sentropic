@@ -39,7 +39,7 @@ export const buildAuthorizationServerMetadata = (
   // RFC 9207 (authorization-response `iss`): advertised so a mix-up-defending client (claude.ai)
   // knows this AS emits, and it can validate, the `iss` parameter on the authorization response.
   authorization_response_iss_parameter_supported: true,
-  claims_supported: ['sub', 'aud', 'iss', 'exp', 'iat', 'nonce', 'auth_time', 'acr', 'email', 'email_verified', 'name', 'tid'],
+  claims_supported: ['sub', 'aud', 'iss', 'exp', 'iat', 'nonce', 'auth_time', 'acr', 'amr', 'email', 'email_verified', 'name', 'tid'],
   code_challenge_methods_supported: ['S256'],
   dpop_signing_alg_values_supported: ['EdDSA'],
   end_session_endpoint: `${issuer}${oauthPrefix}/end_session`,

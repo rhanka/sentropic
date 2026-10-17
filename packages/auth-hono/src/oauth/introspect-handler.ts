@@ -32,8 +32,12 @@ export const createOAuthIntrospectHandler =
       return c.json({ active: false });
     }
 
+    const acr = typeof payload.acr === 'string' ? payload.acr : meta.acr ?? null;
+    const amr = Array.isArray(payload.amr) ? payload.amr : meta.amr ?? null;
     return c.json({
       active: true,
+      ...(acr ? { acr } : {}),
+      ...(amr ? { amr } : {}),
       aud: meta.audience,
       client_id: meta.clientId,
       ...(meta.dpopJkt ? { cnf: { jkt: meta.dpopJkt } } : {}),

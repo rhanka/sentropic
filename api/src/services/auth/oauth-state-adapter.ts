@@ -216,8 +216,10 @@ const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): Service
 const toAuthCodePayload = (row: typeof authorizationCodes.$inferSelect): AuthCodePayload => {
   const payload = row.payload as Partial<AuthCodePayload> | null;
 
+  const acr = typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:passkey-fresh';
   return {
-    acr: typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:passkey-fresh',
+    acr,
+    amr: Array.isArray(payload?.amr) ? payload.amr : (acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
     authTime: toDate(payload?.authTime) ?? row.createdAt,
     clientId: row.clientId,
     codeChallenge: row.codeChallenge,
