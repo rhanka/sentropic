@@ -178,6 +178,7 @@
     - [ ] RED `root-query.spec.ts` exercises registered bounded query dispatch, retained-root continuation, fresh authority/barriers and sequential projection rollback with independent carrier/journal/relationship reads.
     - [ ] Registered query dispatch uses an owned root-bound continuation, bounded indexed relationship windows and fresh read/coverage checks; raw registries and descriptor mutation remain inaccessible through adapters.
     - [ ] New RED probes reject descriptor alias escalation, request-side work-ceiling weakening and unqualified private-live staging commitments.
+    - [ ] Trusted descriptor/query/limit registration is owned and frozen; ordinary request limits cannot exceed the configured coordinator ceiling. K4 SHA-256 staging is qualified for comments only; private-live staging fails explicitly pending its required keyed/disposable commitment policy. K3 remains generic.
     - [ ] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
     - [ ] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
     - [x] The legacy `staged-runtime.ts` implementation is fully removed; the entry point only re-exports the coordinated factory and shared protocol types. Removal commits stayed under 150 lines.
