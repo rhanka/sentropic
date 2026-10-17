@@ -203,6 +203,7 @@ const prepareAdmittedRouteFlow = async (
     requestId: request.authContext.requestId, cost, subject, wire: request.wire,
     requestedModel: request.model, canonical,
     route: {
+      ...(routeInput?.launchRoutingContract ? { launchRoutingContract: routeInput.launchRoutingContract } : {}),
       ...(routeInput?.targetCandidatesOverride ? { targetCandidatesOverride: routeInput.targetCandidatesOverride } : {}),
       ...(routeInput?.intent ? { intent: routeInput.intent } : {}),
       ...(routeInput?.policyProfile ? { policyProfile: routeInput.policyProfile } : {}),

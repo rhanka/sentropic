@@ -21,9 +21,10 @@ export const createSessionAuth = (options: {
       }
       throw error;
     }
-    if (caller.ownerScopeRef !== options.ownerScopeRef) return { ok: false, reason: 'session owner refused' };
+    if (caller.ownerScopeRef !== options.ownerScopeRef || !caller.routingContract) return { ok: false, reason: 'session policy refused' };
     const cost = await options.resolveOwner(caller, context);
     if (cost.ownerScopeRef !== caller.ownerScopeRef || cost.workspaceId !== caller.workspaceRef) return { ok: false, reason: 'session scope refused' };
-    return { ok: true, cost: { ...cost, correlationId: context.requestId, gatewaySessionRef: caller.sessionRef } };
+    return { ok: true, cost: { ...cost, correlationId: context.requestId, gatewaySessionRef: caller.sessionRef,
+      gatewayClientSessionRef: caller.clientSessionRef, launchRoutingContract: caller.routingContract } };
   },
 });
