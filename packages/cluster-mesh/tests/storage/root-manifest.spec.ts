@@ -10,6 +10,9 @@ describe('storage-bound manifest ports', () => {
     await bound.appendChain('a', { id: 'a0', hash: 'h0', bytes: '{}' }, { kind: 'absent', allocation: '0' });
     await bound.appendChain('a', { id: 'a1', hash: 'h1', bytes: '{}' }, { kind: 'head', hash: 'h0' });
     const captured = await bound.captureManifest({ selections: ['a'] });
+    const secondOwner = root.bindNew(grantFor({ token: 'second-owner', principalId: 'user-2', operations: ['read'] }));
+    await secondOwner.captureManifest({ selections: ['a'] });
+    expect((await bound.verifyManifest(captured.digest)).heads.a.head).toBe('h1');
     expect(captured.manifest.heads.a).toEqual({ head: 'h1', allocation: '2', terminalSeq: '1' });
     await bound.appendChain('a', { id: 'a2', hash: 'h2', bytes: '{}' }, { kind: 'head', hash: 'h1' });
     const first = await bound.manifestReadPage(captured.digest, 'a', 1, null, 4096);
