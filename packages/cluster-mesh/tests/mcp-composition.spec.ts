@@ -203,28 +203,96 @@ describe('mesh mcp composition', () => {
         scopes: [...(identity?.scopes ?? [])],
       }),
       invocation: { authorize: async () => ({ allowed: true as const }) },
-      createTransport: () =>
-        new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() }),
-      stateful: true,
+      createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+      generationId: 'test-generation',
     });
     expect(module.namespace).toBe('/mcp');
     expect(module.enabled).toBe(true);
-    const router = module.createRouter(ports);
-    const headers = { 'x-mcp-client-id': 'codex', 'x-mcp-tenant-ref': 't-1' };
-    const sessionId = await initialize(router, headers);
+    const router = module.createRouter(ports(verifiedContext()));
+    const forged = {
+      'x-mcp-client-id': 'mallory',
+      'x-mcp-tenant-ref': 't-9',
+      'x-mcp-scopes': 'admin:*',
+    };
+    await initialize(router, forged);
     const called = await parseBody(
-      await rpc(router, sessionId, {
+      await rpc(router, {
         jsonrpc: '2.0',
         id: 'call-1',
         method: 'tools/call',
         params: { name: 'immo_search', arguments: { surface: 80 } },
-      }, headers),
+      }, forged),
     );
     expect(called).toMatchObject({
       result: { isError: false, content: [{ type: 'text', text: '{"echo":{"surface":80}}' }] },
     });
     expect(effects).toBe(1);
-    expect(seen).toEqual([{ clientId: 'codex', tenantRef: 't-1', scopes: [], hasBearer: false }]);
+    expect(seen).toEqual([{ clientId: 'user-1', tenantRef: 'tenant-1', scopes: ['probe:use'], hasBearer: true }]);
+  });
+
+  it('refuses unverified invocations on /mcp with 401 before any effect', async () => {
+    let effects = 0;
+    const module = await createMcpNamespaceModule(kernelModules(), {
+      registry: await compiledRegistry(),
+      tools: [{ name: 'immo_search', schema: SCHEMA }],
+      runner: {
+        run: async () => {
+          effects += 1;
+          return { ok: true, output: {}, auditId: 'a', redactionClass: 'low' };
+        },
+      },
+      auth: auth() as never,
+      contextResolver: async () => ({ sub: 'x', clientId: 'x', tid: null, scopes: [] }),
+      invocation: { authorize: async () => ({ allowed: true as const }) },
+      createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+      generationId: 'test-generation',
+    });
+    const router = module.createRouter(ports(verifiedContext({ fail: true })));
+    const response = await rpc(router, {
+      jsonrpc: '2.0',
+      id: 'init-1',
+      method: 'initialize',
+      params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'c', version: '0' } },
+    });
+    expect(response.status).toBe(401);
+    expect(effects).toBe(0);
+  });
+
+  it('refuses forged scopes with insufficient_scope and no tool effect', async () => {
+    let effects = 0;
+    const module = await createMcpNamespaceModule(kernelModules(), {
+      registry: await compiledRegistry(),
+      tools: [{ name: 'immo_search', schema: SCHEMA }],
+      runner: {
+        run: async () => {
+          effects += 1;
+          return { ok: true, output: {}, auditId: 'a', redactionClass: 'low' };
+        },
+      },
+      auth: auth() as never,
+      contextResolver: async (identity) => ({
+        sub: identity?.clientId ?? 'anonymous',
+        clientId: identity?.clientId ?? 'anonymous',
+        tid: identity?.tenantRef ?? null,
+        scopes: [...(identity?.scopes ?? [])],
+      }),
+      invocation: { authorize: async () => ({ allowed: true as const }) },
+      createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+      generationId: 'test-generation',
+    });
+    const router = module.createRouter(ports(verifiedContext({ scopes: [] })));
+    const forged = { 'x-mcp-scopes': 'probe:use' };
+    await initialize(router, forged);
+    const called = await parseBody(
+      await rpc(router, {
+        jsonrpc: '2.0',
+        id: 'call-1',
+        method: 'tools/call',
+        params: { name: 'immo_search', arguments: { surface: 80 } },
+      }, forged),
+    );
+    expect(called).toMatchObject({ result: { isError: true, _meta: { errorCode: 'insufficient_scope' } } });
+    expect(effects).toBe(0);
   });
 
   it('stops a refused call before any tool effect', async () => {
@@ -239,16 +307,15 @@ describe('mesh mcp composition', () => {
         },
       },
       auth: auth() as never,
-      contextResolver: async () => ({ sub: 'x', clientId: 'x', tid: null, scopes: [] }),
+      contextResolver: async () => ({ sub: 'x', clientId: 'x', tid: null, scopes: ['probe:use'] }),
       invocation: { authorize: async () => ({ allowed: false as const, reason: 'denied' }) },
-      createTransport: () =>
-        new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() }),
-      stateful: true,
+      createTransport: () => new WebStandardStreamableHTTPServerTransport(),
+      generationId: 'test-generation',
     });
-    const router = module.createRouter(ports);
-    const sessionId = await initialize(router);
+    const router = module.createRouter(ports(verifiedContext()));
+    await initialize(router);
     const called = await parseBody(
-      await rpc(router, sessionId, {
+      await rpc(router, {
         jsonrpc: '2.0',
         id: 'call-1',
         method: 'tools/call',
