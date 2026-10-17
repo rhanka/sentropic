@@ -51,7 +51,19 @@ export type ToolConfigurationDiagnosticCode =
   | 'policy_weakening'
   | 'forbidden_content'
   | 'invalid_provenance'
-  | 'malformed_snapshot';
+  | 'malformed_snapshot'
+  // m5: kernel/registry-produced codes, previously forged with `as never`.
+  | 'unknown_provider'
+  | 'missing_compatibility'
+  | 'compatibility_mismatch'
+  | 'load_failure'
+  | 'unsupported_definition_kind'
+  | 'missing_handler'
+  | 'duplicate_resource'
+  | 'duplicate_prompt'
+  | 'duplicate_tool'
+  | 'invalid_parameter'
+  | 'unknown_parameter';
 
 export type ToolConfigurationDiagnostic = {
   code: ToolConfigurationDiagnosticCode;

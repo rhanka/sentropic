@@ -6,9 +6,9 @@
  * compilation. The facade owns its synchronous state (definitions, selection,
  * configurations) and delegates to the platform kernel — acquired through
  * the module registry, never an eager import — only at `compile` time.
- * Mesh-supplied builtins are static descriptors plus loaders: unknown
- * providers (e.g. `sentropic.web-pages` before delivery) fail explicitly,
- * never as silent stubs. Selected builtins materialize at compile; loader
+ * Mesh-supplied builtins are static descriptors plus loaders (e.g. the
+ * `sentropic.web-pages` builtin): unknown providers fail explicitly, never
+ * as silent stubs. Selected builtins materialize at compile; loader
  * failures refuse atomically.
  */
 import '../modules/topology-guard-mcp.js';

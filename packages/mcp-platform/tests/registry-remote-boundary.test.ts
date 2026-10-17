@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import type { ToolConfigurationDiagnosticCode } from '../src/tool-configuration.js';
 
 function read(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -38,5 +39,25 @@ describe('remote-bound boundary structure', () => {
   it('is excluded from the build', () => {
     const tsconfig = JSON.parse(read('../tsconfig.json')) as { exclude?: string[] };
     expect(tsconfig.exclude ?? []).toContain('src/registry-remote-binding.ts');
+  });
+
+  it('m5 declares every kernel-produced diagnostic code in the public union', () => {
+    // Genuine RED while the casts below exist: the kernel must produce only
+    // declared codes, never `as never` forgeries of the public union.
+    expect(read('../src/registry.ts')).not.toContain('as never');
+    const kernelCodes: ToolConfigurationDiagnosticCode[] = [
+      'unknown_provider',
+      'missing_compatibility',
+      'compatibility_mismatch',
+      'load_failure',
+      'unsupported_definition_kind',
+      'missing_handler',
+      'duplicate_resource',
+      'duplicate_prompt',
+      'duplicate_tool',
+      'invalid_parameter',
+      'unknown_parameter',
+    ];
+    expect(kernelCodes).toHaveLength(11);
   });
 });
