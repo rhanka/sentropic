@@ -38,7 +38,7 @@ export class ControlServer {
   private readonly controlDigest: Buffer;
   private readonly ownerScopeRef: string;
 
-  constructor(options: { service: GatewaySessionService; controlToken: string; ownerScopeRef: string }) {
+  constructor(private readonly options: { service: GatewaySessionService; controlToken: string; ownerScopeRef: string; beforeAcquire?: () => Promise<void> }) {
     if (!options.controlToken || options.controlToken.length < 16) {
       throw new ControlAuthError();
     }
@@ -61,6 +61,7 @@ export class ControlServer {
     const input = { ...supplied, ownerScopeRef: this.ownerScopeRef };
     switch (op) {
       case 'acquireSession':
+        await this.options.beforeAcquire?.();
         return this.service.acquireSession(input as never);
       case 'revokeSession':
         return this.service.revokeSession(input as never);
