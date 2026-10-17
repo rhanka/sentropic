@@ -25,7 +25,8 @@ export interface ProjectOffer extends ContentScope {
   offlineReadAccepted: boolean;
 }
 export const createOffer = (scope: ContentScope): ProjectOffer => ({
-  ...scope, expectedRevision: 0,
+  ownerId: scope.ownerId, workspaceId: scope.workspaceId, projectId: scope.projectId,
+  sourceId: scope.sourceId, expectedRevision: 0,
   channels: { 'terminal.live': false, 'terminal.cache': false, 'native.mirror': false, 'keyboard.control': false },
   futureSessions: false, selectedSessionIds: [], namedHistories: [],
   retentionByChannel: { 'terminal.cache': { mode: 'none' }, 'native.mirror': { mode: 'none' } },
@@ -65,7 +66,7 @@ export interface SessionView extends ContentScope {
 
 export function viewAccess(row: SessionView, scope: ContentScope, now = Date.now()) {
   const denied = (reason: string) => ({ live: false, stored: false, reason });
-  if (Object.keys(scope).some((key) => row[key as keyof ContentScope] !== scope[key as keyof ContentScope])) {
+  if ((['ownerId', 'workspaceId', 'projectId', 'sourceId'] as const).some((key) => row[key] !== scope[key])) {
     return denied('scope_mismatch');
   }
   if (row.excluded) return denied('session_excluded');
