@@ -122,7 +122,7 @@
   - [x] Create gateway `tests/evolution-contract.test.ts` + `src/evolution-contract.ts` (green 6/6, typecheck/lint clean)
   - [x] Implement GW6-M1/RC6-M1 context lock validation + `release bump accepted` + `@sentropic drift refused` (typed `external-row-unpinned`, zero installs) in helper/verifier/tests (pure green 25/25)
   - [ ] Implement GW8-m1: classifier obtains both parents (fetch-depth 2 or fetch base+head), verifies merge parents equal base/head, fetch failure is unreadable base evidence; add `gateway-consumer-workflows.test.js` parent-resolution assertion (companion file, recorded here)
-  - [ ] Inventory every PR-triggered h2a workflow incl `native-host-equipment.yml`; classify committed-lock host-test vs candidate; extend BR120-EX7 conditionally or record non-overlap evidence
+  - [x] Inventory every PR-triggered h2a workflow incl `native-host-equipment.yml`; non-overlap recorded: smoke/rehearsal carry consumer-phase guards, native-host-equipment stays unguarded committed-lock host-test (scripts-disabled install, gateway-host-docs.test.js), no candidate-only imports on either side; recheck at scope changes
   - [ ] Lot gate:
     - [ ] `make typecheck-llm-mesh lint-llm-mesh ENV=test-gw-durable-vibe-muse`
     - [ ] `make typecheck-llm-gateway lint-llm-gateway ENV=test-gw-durable-vibe-muse`
