@@ -4,13 +4,13 @@
     {
       "id": "cluster-mesh-pg/comments/001-projections@1",
       "file": "comments/001-projections.sql",
-      "order": 6,
+      "order": 7,
       "dialect": "postgresql",
       "mode": "transactional",
-      "fromVersion": 5,
-      "toVersion": 6,
+      "fromVersion": 6,
+      "toVersion": 7,
       "requires": [
-        "cluster-mesh-pg/005-cleanup@1"
+        "cluster-mesh-pg/006-staged-coverage@1"
       ],
       "schemaRole": "comments",
       "checksum": "de0689eec0c3c172bc36e4a4a54b6b800fc9f291efcfecd121e9663f9d5cd60b"
