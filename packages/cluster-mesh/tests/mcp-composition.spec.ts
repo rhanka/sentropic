@@ -1,9 +1,12 @@
 /**
  * Lot 7 — mesh composition over the compiled plan: `createMcpNamespaceModule`
- * preflights the platform leaves, then serves `/mcp` through the shared
- * bridge with host-owned auth, context, invocation guard and runner.
- * Identity flows headers → runner → contextResolver → guard; a refusal
- * stops before any tool effect. A missing platform fails startup.
+ * preflights the platform leaves, then serves `/mcp` through per-request
+ * verified servers. B1: every request is verified through the mesh
+ * verified-invocation context port (401 when unverified); the runner chain
+ * uses the verified-derived identity only — client headers are never
+ * authority. `authorizeDispatch` enforces the compiled plan before the host
+ * invocation guard and runner; a refusal stops before any tool effect.
+ * A missing platform fails startup.
  */
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
@@ -109,10 +112,42 @@ const auth = () => {
   };
 };
 
-const ports = {
-  context: {} as VerifiedInvocationContextPort,
+const ports = (context: VerifiedInvocationContextPort) => ({
+  context,
   receipts: {} as InvocationReceiptPort,
-};
+});
+
+/** Controllable verified-invocation context double (B1: authenticity failures throw). */
+const verifiedContext = (options: {
+  scopes?: string[];
+  principalId?: string;
+  workspaceId?: string;
+  fail?: boolean;
+} = {}): VerifiedInvocationContextPort =>
+  ({
+    verify: async (input: unknown) => {
+      void input;
+      if (options.fail === true) throw new Error('unverified-test');
+      return {
+        invocationId: 'inv-1',
+        correlationId: 'corr-1',
+        generationId: 'test-generation',
+        principal: {
+          principalId: options.principalId ?? 'user-1',
+          kind: 'human',
+          verifierId: 'test-verifier',
+        },
+        workspace: {
+          bindingId: 'b-1',
+          workspaceId: options.workspaceId ?? 'tenant-1',
+          revision: 'r-1',
+        },
+        scopes: [...(options.scopes ?? ['probe:use'])],
+        policyRevision: 'rev-1',
+        issuedAt: new Date(1_700_000_000_000).toISOString(),
+      };
+    },
+  }) as unknown as VerifiedInvocationContextPort;
 
 const parseBody = async (response: Response): Promise<unknown> => {
   const contentType = response.headers.get('content-type') ?? '';
@@ -123,35 +158,31 @@ const parseBody = async (response: Response): Promise<unknown> => {
   return JSON.parse(dataLine.slice('data:'.length).trim());
 };
 
-const rpc = (router: Hono, sessionId: string | null, body: unknown, headers: Record<string, string> = {}) =>
+const rpc = (router: Hono, body: unknown, headers: Record<string, string> = {}) =>
   router.request('/mcp', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
-      ...(sessionId === null ? {} : { 'mcp-session-id': sessionId }),
       ...headers,
     },
     body: JSON.stringify(body),
   });
 
 async function initialize(router: Hono, headers: Record<string, string> = {}) {
-  const response = await rpc(router, null, {
+  const response = await rpc(router, {
     jsonrpc: '2.0',
     id: 'init-1',
     method: 'initialize',
     params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'c', version: '0' } },
   }, headers);
   expect(response.status).toBe(200);
-  const sessionId = response.headers.get('mcp-session-id');
-  if (sessionId === null) throw new Error('missing session id');
-  const notified = await rpc(router, sessionId, { jsonrpc: '2.0', method: 'notifications/initialized' }, headers);
+  const notified = await rpc(router, { jsonrpc: '2.0', method: 'notifications/initialized' }, headers);
   expect([200, 202]).toContain(notified.status);
-  return sessionId;
 }
 
 describe('mesh mcp composition', () => {
-  it('serves the compiled plan over /mcp with identity-chained authorization', async () => {
+  it('serves the compiled plan over /mcp with verified identity only', async () => {
     const seen: unknown[] = [];
     let effects = 0;
     const module = await createMcpNamespaceModule(kernelModules(), {
