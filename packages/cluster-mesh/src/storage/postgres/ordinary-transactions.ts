@@ -10,7 +10,7 @@ import { classifyPgFailure } from './errors.js';
 export const ownPgValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 export const pgUnitDigest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
 export const pgReceipt = (core: PgCore, grant: ScopeGrant<unknown>, sequence: string): CommitReceipt => ({ commitId: core.id('commit'), moduleId: core.options.moduleId, scope: { ...grant.scope }, committedAt: core.now(), effectiveRecords: 0, effectiveAppends: 0, journalCursor: sequence });
-export const applyPgTransaction = async (core: PgCore, grant: ScopeGrant<unknown>, tx: PgTx, input: AtomicUnit, options: CommitOptions): Promise<void> => {
+export const applyPgTransaction = async (core: PgCore, grant: ScopeGrant<unknown>, tx: PgTx, input: AtomicUnit, options: CommitOptions, installed?: symbol): Promise<void> => {
   if (tx.closed) throw new StorageInvalidCommandError('transaction is closed');
   try {
     const unit = ownPgValue(input); const limits = core.work(options.limits);
@@ -18,7 +18,7 @@ export const applyPgTransaction = async (core: PgCore, grant: ScopeGrant<unknown
     const bytes = Buffer.byteLength(JSON.stringify(unit), 'utf8');
     if (tx.encodedBytes + bytes > limits.maxEncodedBytes || tx.appends + unit.appends.length > limits.maxAppends) throw new StorageInvalidCommandError('transaction exceeds work limits');
     await core.check(tx.session, grant, 'write');
-    const result = await applyPgEffects(core, tx.session, grant, tx.root, unit, tx.base.root);
+    const result = await applyPgEffects(core, tx.session, grant, tx.root, unit, tx.base.root, installed);
     tx.root = result.root; tx.records += result.records; tx.appends += result.appends; tx.count += 1; tx.encodedBytes += bytes;
     tx.barriers += unit.barriers.length; tx.purges += unit.purgeIntents.length;
     if (unit.moduleResult !== undefined) tx.moduleResult = unit.moduleResult;

@@ -12,12 +12,12 @@ export const validatePgPurgePolicy = async (core: PgCore, session: PgSession, gr
   }
   if (policy === 'required' && barriers > 0 && purges === 0) throw new StorageInvalidCommandError('purge intent required with barrier');
 };
-export const applyPgModuleEffects = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, initial: string | null, unit: AtomicUnit): Promise<string | null> => {
+export const applyPgModuleEffects = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, initial: string | null, unit: AtomicUnit, installed = false): Promise<string | null> => {
   const store = core.roots; let root = initial;
   for (const change of unit.relationships) {
     if (change.relation === 'coverage-parent-v1') {
       if (change.kind !== 'add') throw new StorageInvalidCommandError('coverage removal is not supported');
-      root = await linkPgCoverage(core, session, root, change.from, change.to);
+      root = await linkPgCoverage(core, session, root, change.from, change.to, installed);
     }
     const id = JSON.stringify([change.relation, change.from]);
     const relation = await store.get<{ root: string | null; count: number }>(session, root, 'relation', id) ?? { root: null, count: 0 };
