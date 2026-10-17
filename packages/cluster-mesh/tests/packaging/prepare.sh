@@ -163,10 +163,10 @@ tuple mcp-consumer
 # load only when selected; the installed artifacts version must satisfy the declared range.
 (cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)
 artifacts_tgz="$(ls "$work"/src/sentropic-artifacts-*.tgz)"
-consumer "$work/web-pages-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
-sources "$work/web-pages-consumer"
-(cd "$work/web-pages-consumer" && npm install $quiet >/dev/null)
-tuple web-pages-consumer
+consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/mcp-platform=file:$platform_tgz" "@sentropic/artifacts=file:$artifacts_tgz"
+sources "$work/artifacts-consumer"
+(cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
+tuple artifacts-consumer
 
 # installed DIR: installed versions of the candidate and both train packages in DIR.
 installed() {
