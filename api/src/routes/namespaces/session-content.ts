@@ -1,4 +1,6 @@
 import { Hono, type Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { z } from 'zod';
 import { env } from '../../config/env';
 import { createSessionContentRateLimiters } from '../../middleware/session-content-rate-limiters';
 import { SessionContentError, SessionContentService } from '../../services/cluster-mesh/session-content';
@@ -28,6 +30,7 @@ export function createSessionContentRouter(options: { content?: SessionContentSe
   });
   router.onError((error, c) => {
     if (error instanceof SessionContentError) {
+      if (error.code === 'storage_unavailable') return c.json({ complete: false, status: 'purge_pending' }, 202);
       const status = error.code === 'membership_required' ? 403
         : ['not_found', 'cross_owner_refused'].includes(error.code) ? 404 : 503;
       return c.json({ error: error.code }, status);
@@ -43,13 +46,22 @@ export function createSessionContentRouter(options: { content?: SessionContentSe
     c.json({ error: 'unsupported_source', dispatch: 'not_attempted', blockers: ['CM2-F2', 'CM2-F7'] }, 503);
   router.delete('/:bindingId/consent', async (c) => {
     const retainedScopeId = c.req.query('retainedScopeId');
-    if (!retainedScopeId) return unavailable(c);
     const ownerId = c.get('sessionContentIdentity').ownerId;
+    if (!retainedScopeId) {
+      const result = await content.denyBindingContent(c.req.param('bindingId'), ownerId, 'revoke');
+      return c.json({ complete: result.remainingObjects === 0 });
+    }
     const handles = await content.listRetainedHandles(ownerId);
     if (!handles.some((handle) => handle.bindingId === c.req.param('bindingId') && handle.retainedScopeId === retainedScopeId)) {
       return c.json({ error: 'not_found' }, 404);
     }
     const result = await content.requestRetainedPurge(retainedScopeId, ownerId);
+    return c.json({ complete: result.remainingObjects === 0 });
+  });
+  router.put('/:bindingId/exclusion', bodyLimit({ maxSize: 128 }), async (c) => {
+    const parsed = z.object({ excluded: z.literal(true) }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'invalid_request' }, 400);
+    const result = await content.denyBindingContent(c.req.param('bindingId'), c.get('sessionContentIdentity').ownerId, 'exclude');
     return c.json({ complete: result.remainingObjects === 0 });
   });
   router.on('POST', ['/workspaces/:workspaceId/attachments', '/workspaces/:workspaceId/consent/prepare',
@@ -61,6 +73,6 @@ export function createSessionContentRouter(options: { content?: SessionContentSe
     '/:bindingId/snapshots/:snapshotId', '/:bindingId/keyboard/submissions/:idempotencyKey', '/:bindingId/source/control'], unavailable);
   router.on('DELETE', ['/workspaces/:workspaceId/consent', '/:bindingId/keyboard/lease',
     '/:bindingId/history-authorizations/:authorizationId'], unavailable);
-  router.on('PUT', ['/workspaces/:workspaceId/exclusion', '/:bindingId/exclusion'], unavailable);
+  router.put('/workspaces/:workspaceId/exclusion', unavailable);
   return router;
 }
