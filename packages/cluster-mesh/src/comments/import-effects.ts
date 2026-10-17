@@ -8,7 +8,7 @@ import { commentsRecordEffects } from './record-effects.js';
 import { chainIdentity, commandKey, commentsObjectKey, decodeRecord, selectionForRecord } from './storage-schema.js';
 import { CommentsTransportError, type CommentsFragment, type CommentsUnitRoot } from './transport-contracts.js';
 import type { CommentsImportState } from './import-state.js';
-export const mergeCommentsEffects = (...parts: readonly AtomicUnit[]): AtomicUnit => Object.fromEntries(EFFECT_SECTIONS.map((section) => [section, parts.flatMap((part) => part[section])])) as unknown as AtomicUnit;
+export const mergeCommentsEffects = (...parts: readonly AtomicUnit[]): AtomicUnit => Object.fromEntries(EFFECT_SECTIONS.map((section) => [section, parts.flatMap<unknown>((part) => part[section])])) as unknown as AtomicUnit;
 export const commentsImportDataEffects = (records: readonly CanonicalChainRecord[]): AtomicUnit => {
   const parts = records.map((record) => {
     const effects = commentsRecordEffects(selectionForRecord(record), record, 'link' in record ? record.link.previousHash : null);
