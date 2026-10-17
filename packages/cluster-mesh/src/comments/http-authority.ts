@@ -1,8 +1,19 @@
-import { CanonicalCommandError } from '@sentropic/comments';
-import type { CanonicalHttpPorts, CommandCapability, ResourceRef } from '@sentropic/comments';
+import { CanonicalCommandError, computeProposedContentDigest } from '@sentropic/comments';
+import type { CanonicalHttpPorts, CanonicalLifecycleRequest, CommandCapability, ResourceRef } from '@sentropic/comments';
 import type { CommentsRevisionRequest } from './command-contracts.js';
 import type { commentsRouterBinding } from './router-binding.js';
 type Binding = NonNullable<ReturnType<typeof commentsRouterBinding>>;
+export const checkCommentsHttpDecision = async (ports: CanonicalHttpPorts, binding: Binding, request: CommentsRevisionRequest | CanonicalLifecycleRequest, action: string): Promise<void> => {
+  if (!request.decisionRef) return;
+  const evidence = await ports.decisions.resolve(request.decisionRef);
+  const { decisionRef: _reference, idempotencyKey: _key, expected, ...proposal } = request;
+  const content = 'content' in request ? request.content : proposal;
+  if (!evidence || evidence.revoked || evidence.actor !== binding.context.current().grant.principalId || evidence.action !== action || evidence.scope.tenantId !== request.scope.tenantId || evidence.scope.workspaceId !== request.scope.workspaceId ||
+    (expected.kind === 'revision' ? evidence.binding.kind !== 'existing-revision' || evidence.binding.revisionHash !== expected.revisionHash
+      : evidence.binding.kind !== 'creation' || evidence.binding.aggregateVersion !== expected.aggregateVersion || evidence.binding.proposedContentDigest !== computeProposedContentDigest(content as Record<string, unknown>))) throw new CanonicalCommandError('denied', 'Comments HTTP decision binding is unavailable');
+  // The installed service additionally resolves its pinned authority again and
+  // checks expiry with the injected domain clock at actual publication.
+};
 export const checkCommentsHttpTargets = async (ports: CanonicalHttpPorts, binding: Binding, capability: CommandCapability, targets: readonly ResourceRef[]): Promise<void> => {
   const principal = binding.context.current().grant.principalId;
   if (!targets.length || !await ports.capabilities.check(principal, capability, targets)) throw new CanonicalCommandError('denied', 'Comments HTTP capability is unavailable');
