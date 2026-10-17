@@ -164,7 +164,7 @@ const TRAIN_VALIDATES = [['validate-llm-mesh', 'llm_mesh'], ['validate-llm-gatew
 const TRAIN_UPSTREAMS = {
   'publish-llm-mesh': [],
   'publish-llm-gateway': [['publish-llm-mesh', 'llm_mesh_publish']],
-  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish']],
+  'publish-cluster-mesh': [['publish-llm-mesh', 'llm_mesh_publish'], ['publish-llm-gateway', 'llm_gateway_publish'], ['publish-events', 'events_publish'], ['publish-contracts', 'contracts_publish'], ['publish-mcp-platform', 'mcp_platform_publish']],
 };
 
 test('publisher ordering: gateway waits for mesh; N1 lockstep siblings gate mcp-auth and cluster-mesh', () => {
