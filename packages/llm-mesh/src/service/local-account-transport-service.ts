@@ -21,6 +21,12 @@ import { ClaudeRefreshPreparationError } from '../enrollment/claude-code.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 import { listModelProfilesByProvider } from '../catalog.js';
 import type { LlmMesh } from '../mesh.js';
+import {
+  isDeviceFlowSeatAccount,
+  isExternalSeatAccount,
+  throwDeviceFlowSeatUnavailable,
+  throwExternalSeatUnavailable,
+} from './external-seat-authority.js';
 import type { ProviderId } from '../providers.js';
 import type {
   AccountDirectoryPort, EligibleAccountDescriptor, PlannedRouteTarget,
@@ -696,7 +702,16 @@ export class LocalAccountTransportService {
     // Check if access token is expired
     if (account && account.expiresAt) {
       const expiresAtMs = new Date(account.expiresAt).getTime();
-      if (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId)) {
+      // L1 external policy: custodied and device-flow seats never refresh
+      // here. Expired access becomes access-unavailable; valid access is
+      // returned directly with the owner claim and policy retained.
+      const externallyManaged = isExternalSeatAccount(account) || isDeviceFlowSeatAccount(account);
+      if (expiresAtMs <= nowMs && externallyManaged) {
+        await acquisition.release?.();
+        if (isExternalSeatAccount(account)) throwExternalSeatUnavailable(account);
+        throwDeviceFlowSeatUnavailable(account);
+      }
+      if (!externallyManaged && (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId))) {
         try {
           const version = this.credentialVersions.get(account.accountId) ?? 'v1.0.0';
           const refreshed = await this.refreshToken({
@@ -920,6 +935,13 @@ export class LocalAccountTransportService {
   }
 
   private async refreshToken(input: RefreshInput): Promise<PreparedCredential> {
+    // L1 external policy: custodied seats never renew here; refuse before the
+    // single-flight map so no state mutates and no provider is called.
+    const held = this.accountsMap.get(input.accountId);
+    if (held && isExternalSeatAccount(held)) throwExternalSeatUnavailable(held);
+    // A device-flow Muse grant owns no CLI-store refresh; re-reading the
+    // native login could mint for another session, so refuse instead.
+    if (held && isDeviceFlowSeatAccount(held)) throwDeviceFlowSeatUnavailable(held);
     // P0-5: Single-flight refresh map to prevent parallel refresh races
     if (this.refreshInFlight.has(input.accountId)) {
       return this.refreshInFlight.get(input.accountId)!;
