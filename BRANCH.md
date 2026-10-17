@@ -6,7 +6,7 @@
 - [x] Deliver comments M2 for the Immo host (Radar PR #859): cluster-mesh comments module on the storage port, injected-driver Postgres module, import interface, typed complete receipts and authorized readback (Steve data migration).
 
 ## Scope / Guardrails
-- Scope limited to `packages/cluster-mesh` storage kernel, comments module, Postgres module, M2-W wiring, their specs/docs, and the cluster-mesh version bump.
+- Scope limited to `packages/cluster-mesh` storage kernel, comments module, Postgres module, M2-W wiring, their specs/docs/version bump and the narrow EX7/EX8 CI/build prerequisite corrections.
 <!-- Receipt compatibility: optional moduleResult is recorded in the feedback loop below. -->
 - No migration in `api/drizzle/*.sql`; Postgres assets are package assets under `packages/cluster-mesh/assets/storage/postgres/`.
 - Make-only workflow, no direct Docker commands; one Docker build at a time (`make ps-all` first).
@@ -249,7 +249,7 @@
   - [x] Documentary C0 assertions follow the executable packaged-oracle proof while preserving absent M1 public conformance export. Historical review provenance is unchanged.
 
 - [ ] **Lot N — Final validation**
-  - [ ] CI's 5-second source long-history probe expired while executing 28 redundant source publications. Kept the same timeout and >1-MiB/multibyte/three-plus-fragment/terminal/full-readback assertions, using 14 larger revisions (each body remains below 64 KiB). The separate installed 28-revision proof remains unchanged.
+  - [x] CI's 5-second source long-history probe expired while executing 28 source publications. Kept the same timeout and >1-MiB/multibyte/three-plus-fragment/terminal/full-readback assertions, using 14 larger revisions (each body remains below 64 KiB); scoped real-PG probe PASS in 1.97 seconds. The separate installed 28-revision proof remains unchanged.
   - [ ] CI logs independently reproduce the cold workspace peer-order failure in API typecheck, image and toolbox builds. BRCM2-EX8 now adds comments build prerequisites to all three cluster-mesh Make entry points and moves the existing Docker peer build step before its consumer; no application runtime code changes.
   - [x] CI run 39023730235 exposed the stale exact peer-tuple assertion in `publishable-ci-wiring.test.mjs`; reproduced locally and updated its shared candidate/post-publication/bootstrap expectation with comments@0.3.0. Both `test-publishable-manifests` and `test-qualify-published-install` now PASS (BRCM2-EX7; RTK `10f2a27c5493`).
   - [x] Typecheck/lint PASS; source package suite 93 files / 805 tests PASS, 48 files / 106 explicit PG/crash/installed tests skipped only here and qualified separately below (RTK `24fdf710d026`).
@@ -260,9 +260,9 @@
   - [x] Clean bare/disabled/missing-peer isolation and every exported-leaf import PASS with the exact selected peers. Actual consumer production lock/tree/audit retained; zero vulnerabilities.
   - [x] CI repeats real PG/crash/installed qualification and retains reports, using the manifest guard's exact output archive. It builds the unchanged workspace peer before root prerequisites relink it. No runtime import uses checkout adapters or a host driver dependency.
   - [x] Version 0.19.0 rechecked above public npm and remote main 0.16.0; PR #679's 0.18.0 ordering retained. No rebase occurred during this relaunch.
-  - [x] Mechanical branch C1 and whole-branch scope C2 PASS; `git diff --check` PASS; frozen comments M1, root Makefile/Compose, app and live-generation paths unchanged; linear history has zero merge commits.
+  - [x] Mechanical branch C1 and whole-branch scope C2 PASS; `git diff --check` PASS; frozen comments M1, Compose, application source/schema/routes and live-generation paths unchanged. EX8 changes only root Make prerequisites and an existing Docker build order; linear history has zero merge commits.
   - [x] Isolated PostgreSQL/network/volume removed; `make down ps API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` confirms no remaining branch Compose service.
-  - [x] API/UI/E2E files unchanged; package-local source/PG/installed acceptance completes synthetic host UAT. Actual Immo data/cutover and delivery remain host/owner work.
+  - [x] API/UI/E2E source/tests unchanged; EX8's build definitions are validated through cold API typecheck/image CI. Package-local source/PG/installed acceptance completes synthetic host UAT. Actual Immo data/cutover and delivery remain host/owner work.
   - [x] Final gate step 1: draft PR #684 uses this exact BRANCH.md body; the consolidated linear branch is pushed and supersession links from #666/#669/#670/#671/#667 are preserved. Subsequent corrections refresh the same PR/body.
   - [ ] Final gate step 2: verify completed CI on the pushed candidate and resolve any failure; record the final run/result in `.h2a/build/cm_comments_m2_report.md`.
   - [ ] Final gate step 3: storage co-owner review, BRANCH.md removal, merge/publication and actual delivery remain owner actions. This builder stops after its final validation/handoff and never performs them.
