@@ -5,6 +5,7 @@ import type { PgProjectionContext } from './protocol.js';
 import type { StagedBeginInput, StagedUnitStatus, FragmentReceipt } from '../staged-units.js';
 import type { AuthenticatedStagedHandle } from '../staged-state.js';
 import type { RootStageInput } from '../staged-operations.js';
+import type { ReadPage } from '../readers.js';
 // Only installed module code receives this SPI. Scoped callers select named
 // operations, never SQL, a callback, or an enforcement/bypass parameter.
 export interface PgInstalledContext extends PgProjectionContext {
@@ -21,6 +22,7 @@ export interface PgInstalledContext extends PgProjectionContext {
   beginStaged(input: StagedBeginInput): Promise<AuthenticatedStagedHandle>;
   stageFragment(input: RootStageInput): Promise<FragmentReceipt>;
   inspectStaged(operationKey: string): Promise<StagedUnitStatus>;
+  readPage(chain: string, limit: number, cursor: unknown, maxEncodedBytes: number): Promise<ReadPage>;
 }
 export interface PgInstalledOperation { readonly operation: 'read' | 'write' | 'maintain'; execute(input: unknown, context: PgInstalledContext): Promise<unknown>; }
 export type PgPurgeFinalizer = (job: RootPurgeJob, context: PgInstalledContext) => Promise<void>;
