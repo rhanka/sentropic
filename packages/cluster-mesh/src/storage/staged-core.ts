@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ScopeGrant } from './authority.js';
 import type { BackendScopeState, MemoryBackend } from './backend.js';
-import { isIsoDateString, validateWriterFence, type StorageScope, type WriterFence } from './contracts.js';
+import { isIsoDateString, validateWriterFence, type StorageScope, type WriterFence, type WorkLimits } from './contracts.js';
 import type { ModuleDescriptor } from './descriptor.js';
 import { StorageDeniedError, StorageInvalidCommandError } from './errors.js';
 import type { KernelOptions, KernelRoot } from './kernel.js';
@@ -10,6 +10,7 @@ import type { CommitContext } from './record-runtime.js';
 import { coveredBy, createStagedControl, createStagedRootData, lockStagedRootData, type StagedControl, type StagedRootData } from './staged-state.js';
 
 export interface StagedCoreOptions extends Omit<KernelOptions, 'coordinator'> {
+  readonly limits?: WorkLimits;
   readonly descriptor?: ModuleDescriptor;
   readonly beforePublish?: (scope: StorageScope, unitId: string) => void | Promise<void>;
 }

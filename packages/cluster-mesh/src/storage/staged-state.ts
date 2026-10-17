@@ -6,7 +6,7 @@ import type { ModuleDescriptor } from './descriptor.js';
 import { IndexedHistory } from './indexed-history.js';
 import { IndexedMap } from './indexed-map.js';
 import { ProjectionRuntime } from './projection-runtime.js';
-import type { StagedBeginInput, StagedCommitRoot, StagedState, StagedUnitHandle, StagedUnitSeal } from './staged-units.js';
+import type { FragmentReceipt, StagedBeginInput, StagedCommitRoot, StagedState, StagedUnitHandle, StagedUnitSeal } from './staged-units.js';
 
 export interface AuthenticatedStagedHandle extends StagedUnitHandle { readonly capability: string; }
 export interface AuthenticatedStagedSeal extends StagedUnitSeal { readonly capability: string; }
@@ -77,9 +77,9 @@ export interface RootSealProgress {
   checked: number; bytes: number; effectiveRecords: number; effectiveAppends: number; failed?: string;
 }
 export interface StagedOperation {
-  readonly unitId: string; readonly capability: string; readonly ownerId: string; readonly incarnation: string;
+  readonly unitId: string; capability: string; ownerId: string; readonly incarnation: string; fence: WriterFence;
   readonly begin: StagedBeginInput; readonly scope: StorageScope;
-  readonly fragments: IndexedHistory<OwnedStagedFragment>; readonly commitId: string;
+  fragments: IndexedHistory<OwnedStagedFragment>; readonly commitId: string; readonly receipts: IndexedMap<FragmentReceipt>;
   state: StagedState; progress: RootSealProgress | null; seal: AuthenticatedStagedSeal | null;
   receipt: CommitReceipt | null; moduleResult?: AtomicUnit['moduleResult']; reason?: string;
   totalEffects: number; barrierCount: number; purgeCount: number;
