@@ -1,28 +1,54 @@
 import { describe, expect, it, vi } from 'vitest';
-import { browserAssertion, canUseCredential, exactInput, KeyboardFlow } from '$lib/session-content/proof';
-import { startAuthentication } from '@simplewebauthn/browser';
-vi.mock('@simplewebauthn/browser', () => ({ browserSupportsWebAuthn: vi.fn(() => true),
-  startAuthentication: vi.fn(async () => ({ id: 'key' })), WebAuthnAbortService: { cancelCeremony: vi.fn() } }));
+import { exactInput, KeyboardFlow } from '$lib/session-content/proof';
 
 const context = {
   bindingId: 'binding', bindingVersion: 1, sourceGeneration: 'source', incarnation: 'incarnation',
   projectRevision: 1, ownerId: 'owner', workspaceId: 'workspace', controllerEpoch: 1,
-  sourceAvailable: true, liveAuthorized: true, credentialUsable: true,
+  sourceAvailable: true, liveAuthorized: true, authenticationState: 'step_up_required' as const, confirmationAvailable: true,
 };
-const challenge = () => ({ challengeId: 'nonce', expiresAt: Date.now() + 60000,
-  options: { challenge: 'bm9uY2U', rpId: 'localhost', userVerification: 'required' as const,
-    allowCredentials: [{ id: 'key', type: 'public-key' as const }] } });
+const challenge = () => ({ native: { protocol: 'h2a.session-content' as const, protocolVersion: 2 as const,
+  kind: 'confirmation-challenge' as const, challengeDigest: 'a'.repeat(64), challenge: {
+    id: crypto.randomUUID(), owner: { issuer: 'https://idp.example', subject: 'owner' },
+    project: { tenantId: 'tenant', workspaceId: 'workspace', workspaceIncarnation: 'wi', projectId: 'project' },
+    source: { workstationId: 'ws', bindingId: 'binding', bindingVersion: 1, sourceId: 'source',
+      sourceGeneration: 'source', sourceBootId: 'boot' }, clientId: 'confirmation',
+    purpose: 'remote-action' as const, target: { kind: 'action' as const, scopeDigest: 'b'.repeat(64),
+      operation: 'input', operationId: 'op', connectionId: 'connection', controllerEpoch: 1,
+      byteLength: 1, payloadHash: 'c'.repeat(64) },
+    random: 'r'.repeat(43), issuedAt: Date.now(), expiresAt: Date.now() + 60000,
+  } }, authorization: { url: 'https://idp.example/authorize', state: 's'.repeat(43) } });
+const confirmation = (proof: ReturnType<typeof challenge>) => ({ challengeId: proof.native.challenge.id,
+  challengeDigest: proof.native.challengeDigest, idToken: 'synthetic-idp-proof' });
+const confirmLease = async (flow: KeyboardFlow) => { await flow.acquire(); await flow.send(); };
 const ports = () => ({
   prepareLease: vi.fn(async () => challenge()),
   acquire: vi.fn(async () => ({ controllerEpoch: 1, expiresAt: Date.now() + 60000 })),
   prepare: vi.fn(async () => challenge()),
-  prove: vi.fn(async () => ({ id: 'key' })),
+  prove: vi.fn(async (proof: ReturnType<typeof challenge>) => confirmation(proof)),
   submit: vi.fn(async () => ({ status: 'submitted' as const })),
   query: vi.fn(async () => ({ status: 'submitted' as const })),
   newKey: vi.fn(() => crypto.randomUUID()),
 });
 
 describe('bounded browser-confirmed keyboard', () => {
+  it.each(['authentication_required', 'step_up_required', 'confirmation_refused', 'source_unavailable'])(
+    'should expose %s after a missing, insufficient or failed IdP return with zero effects', async (state) => {
+      const api = ports(); api.prove.mockRejectedValueOnce(new Error(state));
+      const flow = new KeyboardFlow(context, api);
+      await expect(flow.acquire()).rejects.toThrow(state);
+      expect(flow.status).toBe(state);
+      await flow.send();
+      expect(api.acquire).not.toHaveBeenCalled(); expect(api.submit).not.toHaveBeenCalled();
+    });
+
+  it('should refuse a callback correlated to another native challenge', async () => {
+    const api = ports(); api.prove.mockResolvedValueOnce(confirmation(challenge()));
+    const flow = new KeyboardFlow(context, api);
+    await expect(flow.acquire()).rejects.toThrow('confirmation_refused');
+    await flow.send();
+    expect(api.acquire).not.toHaveBeenCalled(); expect(api.submit).not.toHaveBeenCalled();
+  });
+
   it('should return from each fresh IdP ceremony without automatically acquiring or sending', async () => {
     const api = ports(); const flow = new KeyboardFlow(context, api);
     await flow.acquire();
@@ -48,7 +74,7 @@ describe('bounded browser-confirmed keyboard', () => {
     expect(() => exactInput('\ud800', false)).toThrow();
   });
 
-  it.each(['sourceAvailable', 'liveAuthorized', 'credentialUsable'] as const)(
+  it.each(['sourceAvailable', 'liveAuthorized', 'confirmationAvailable'] as const)(
     'should make zero control calls when %s is unavailable', async (field) => {
       const api = ports();
       const flow = new KeyboardFlow({ ...context, [field]: false }, api);
@@ -58,58 +84,35 @@ describe('bounded browser-confirmed keyboard', () => {
     },
   );
 
-  it('should require a usable independently enrolled away credential and supported browser', () => {
-    const key = { id: 'key', rpId: 'localhost', origins: ['http://localhost'],
-      awayUsable: true, locallyEnrolled: true, revoked: false };
-    expect(canUseCredential([key], true, 'http://localhost')).toBe(true);
-    for (const keys of [[], [{ ...key, awayUsable: false }], [{ ...key, revoked: true }],
-      [{ ...key, locallyEnrolled: false }], [{ ...key, origins: ['https://elsewhere'] }]]) {
-      expect(canUseCredential(keys, true, 'http://localhost')).toBe(false);
-    }
-    expect(canUseCredential([key], false, 'http://localhost')).toBe(false);
-  });
-
   it('should acquire separately and invalidate a prepared action when edited or cancelled', async () => {
     const api = ports(); const flow = new KeyboardFlow(context, api);
-    await flow.acquire(); flow.edit('first', false); await flow.prepare();
-    expect(api.prove).toHaveBeenCalledTimes(1);
+    await confirmLease(flow); flow.edit('first', false); await flow.prepare();
+    expect(api.prove).toHaveBeenCalledTimes(2);
     flow.edit('changed', true); await flow.send();
     expect(api.submit).not.toHaveBeenCalled();
     await flow.prepare(); flow.cancel(); await flow.send();
     expect(api.submit).not.toHaveBeenCalled();
   });
 
-  it('should request required UV only for the exact enrolled RP, origin and key', async () => {
-    const key = { id: 'key', rpId: 'localhost', origins: [window.location.origin],
-      locallyEnrolled: true, awayUsable: true, revoked: false };
-    await browserAssertion(challenge(), [key], new AbortController().signal);
-    expect(startAuthentication).toHaveBeenCalledWith(expect.objectContaining({
-      optionsJSON: expect.objectContaining({ rpId: 'localhost', userVerification: 'required' }),
-    }));
-    vi.mocked(startAuthentication).mockClear();
-    await expect(browserAssertion({ ...challenge(), options: { ...challenge().options, rpId: 'elsewhere' } },
-      [key], new AbortController().signal)).rejects.toThrow('invalid_source_challenge');
-    expect(startAuthentication).not.toHaveBeenCalled();
-  });
-
   it('should discard an expired preparation and never dispatch a proof completed after editing', async () => {
     const api = ports(); const flow = new KeyboardFlow(context, api);
     const now = Date.now(); const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
-    await flow.acquire(); flow.edit('expire', false);
-    api.prepare.mockResolvedValueOnce({ ...challenge(), expiresAt: now + 1000 });
+    await confirmLease(flow); flow.edit('expire', false);
+    api.prepare.mockResolvedValueOnce((() => { const proof = challenge(); proof.native.challenge.expiresAt = now + 1000; return proof; })());
     await flow.prepare(); clock.mockReturnValue(now + 2000); await flow.send();
     expect(flow.text).toBe(''); expect(api.submit).not.toHaveBeenCalled();
-    flow.edit('first', false); await flow.prepare();
-    let resolve!: (value: { id: string }) => void;
+    flow.edit('first', false); flow.cancel(); flow.edit('first', false);
+    let resolve!: (value: ReturnType<typeof confirmation>) => void;
     api.prove.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
-    const pending = flow.send(); flow.edit('changed', false); resolve({ id: 'key' }); await pending;
+    const pending = flow.prepare(); await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+    flow.edit('changed', false); resolve(confirmation(challenge())); await pending;
     expect(api.submit).not.toHaveBeenCalled(); expect(flow.text).toBe('changed');
   });
 
   it('should submit once, discard transient bytes and reconcile a lost response without replay', async () => {
     const api = ports(); api.submit.mockRejectedValueOnce({ status: 429 });
     const flow = new KeyboardFlow(context, api);
-    await flow.acquire(); flow.edit('run once', true); await flow.prepare();
+    await confirmLease(flow); flow.edit('run once', true); await flow.prepare();
     await flow.send();
     const key = flow.lastKey;
     expect(flow.status).toBe('outcome_unknown'); expect(flow.text).toBe('');
@@ -121,15 +124,15 @@ describe('bounded browser-confirmed keyboard', () => {
 
   it('should fence stale scope, expiry, logout and a cancelled authentication before any input', async () => {
     const api = ports(); const flow = new KeyboardFlow(context, api);
-    await flow.acquire(); flow.edit('first', false); await flow.prepare();
+    await confirmLease(flow); flow.edit('first', false); await flow.prepare();
     flow.setContext({ ...context, projectRevision: 2 }); await flow.send();
     expect(api.submit).not.toHaveBeenCalled();
-    await flow.acquire(); flow.edit('second', false); await flow.prepare();
+    await confirmLease(flow); flow.edit('second', false);
     api.prove.mockRejectedValueOnce(new DOMException('Cancelled', 'NotAllowedError'));
-    await expect(flow.send()).rejects.toThrow();
-    expect(flow.status).toBe('refused');
+    await expect(flow.prepare()).rejects.toThrow();
+    expect(flow.status).toBe('confirmation_refused');
     expect(api.submit).not.toHaveBeenCalled();
     flow.dispose(); expect(flow.text).toBe('');
-    await flow.acquire(); expect(api.prepareLease).toHaveBeenCalledTimes(2);
+    await confirmLease(flow); expect(api.prepareLease).toHaveBeenCalledTimes(2);
   });
 });
