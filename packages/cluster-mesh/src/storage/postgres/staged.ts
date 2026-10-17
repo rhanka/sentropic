@@ -10,6 +10,7 @@ import { ownPgValue } from './ordinary-transactions.js';
 import { pgJsonBytes } from './roots.js';
 import { decodePgJson, decodePgText } from './codec.js';
 import { pgUnitHandle, readPgUnit, resolvePgUnit, savePgUnit, type PgUnit } from './units.js';
+import { assertPgHiddenVisible, registerPgHiddenCoverage } from './hidden-coverage.js';
 export const beginPgStaged = async (core: PgCore, grant: ScopeGrant<unknown>, supplied: StagedBeginInput): Promise<AuthenticatedStagedHandle> => {
   if (core.options.moduleId !== 'comments') throw new UnsupportedProfileError('staged-units-v1');
   const input = ownPgValue(supplied);
@@ -46,8 +47,10 @@ export const stagePgFragment = async (core: PgCore, grant: ScopeGrant<unknown>, 
     }
     if (metadata.state !== 'staging' || input.ordinal !== String(metadata.count) || input.predecessorHash !== metadata.frontier || input.fragmentDigest !== digest) throw new StorageInvalidCommandError('fragment frontier or state mismatch');
     const current = await core.roots.capture(session, grant.scope);
+    const hidden = { scopeKey: core.roots.key(grant.scope), unitId: unit.id };
+    await registerPgHiddenCoverage(core, session, hidden, effects);
     for (const target of [...effects.records.map((item) => item.key), ...effects.appends.map((item) => item.chainId), ...effects.updates.map((item) => item.key), ...effects.indexWrites.map((item) => item.key)]) {
-      try { await core.visible(session, current.root, target); }
+      try { await assertPgHiddenVisible(core, session, current.root, target, hidden); }
       catch (error) { if (error instanceof StorageDeniedError) throw new StorageInvalidCommandError('covered staged intake refused'); throw error; }
     }
     const dependency = pgJsonBytes([input.ordinal, deriveStagedDependencies(effects)]); const effect = pgJsonBytes([input.ordinal, stagedEffectDigest(effects)]);
