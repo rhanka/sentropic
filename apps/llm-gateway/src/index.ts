@@ -7,19 +7,29 @@
  */
 import { pathToFileURL } from 'node:url';
 
-import { createHostApp, type HostDependencies } from './app';
+import { createHostApp, startDurableGatewayApp, type HostDependencies } from './app';
+import type { StartGatewayHostOptions, GatewayHostHandle } from '@sentropic/llm-gateway/node';
 import { loadHostConfig } from './config';
 import { handleShutdownSignals, startHost, type RunningHost } from './lifecycle';
 
 export interface MainOptions {
+  readonly durable?: Omit<StartGatewayHostOptions, 'listen'>;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly dependencies?: HostDependencies;
   readonly log?: (line: string) => void;
 }
 
-export const main = async (options: MainOptions = {}): Promise<RunningHost> => {
+export function main(options: MainOptions & { durable: NonNullable<MainOptions['durable']> }): Promise<GatewayHostHandle & { port: number }>;
+export function main(options?: MainOptions): Promise<RunningHost>;
+export async function main(options: MainOptions = {}): Promise<RunningHost | (GatewayHostHandle & { port: number })> {
   const log = options.log ?? ((line: string) => process.stdout.write(`${line}\n`));
   const config = loadHostConfig(options.env ?? process.env);
+  if (options.durable) {
+    const host = await startDurableGatewayApp(config, options.durable);
+    const port = Number(new URL(host.endpoint).port);
+    log(`llm-gateway-host listening port=${port} durable=true`);
+    return { ...host, port };
+  }
   const host = await createHostApp({
     config,
     dependencies: options.dependencies ?? {},
@@ -28,7 +38,7 @@ export const main = async (options: MainOptions = {}): Promise<RunningHost> => {
   const running = await startHost(host, config, { log });
   log(`llm-gateway-host listening port=${running.port} pending=${host.pending.join(',') || 'none'}`);
   return running;
-};
+}
 
 const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
 if (import.meta.url === entry) {
