@@ -1921,4 +1921,142 @@ describe('session consent durable lifecycle', () => {
     expect(await fixture.listPhysical('')).toHaveLength(3);
     void o3;
   });
+
+  it('should refuse publication with zero PUT for reservations made before an amendment (N3)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('pre-fence-n3');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: body.length, encoded: body.length }, 'k-n3-fence', ctx,
+    );
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    await expectContentError(() => service.publishAfterUpload(
+      reserved.reservationId, body, ctx,
+    ), 'project_revision_changed');
+    expect(await db
+      .select()
+      .from(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-content-s1'))).toHaveLength(0);
+    const reservations = await db
+      .select()
+      .from(sessionContentReservations)
+      .where(eq(sessionContentReservations.reservationId, reserved.reservationId));
+    expect(reservations[0]!.state).toBe('stale');
+    const attempts = await db
+      .select()
+      .from(sessionContentAttempts)
+      .where(eq(sessionContentAttempts.sessionId, 'sess-content-s1'));
+    expect(attempts[0]!.outcome).toBe('outcome_unknown');
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    const jobs = await db
+      .select()
+      .from(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.bindingId, bindingId));
+    expect(jobs).toHaveLength(0);
+    void bindingId;
+  });
+
+  it('should let the amendment fence win over a writer admitted before it (N3)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s1'));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s1',
+      bindingId,
+      bindingVersion: rows[0]!.version,
+      d1Version: rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    const seed = new TextEncoder().encode('seed-n3');
+    const r0 = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: seed.length, encoded: seed.length }, 'k-n3-seed', ctx,
+    );
+    await service.publishAfterUpload(r0.reservationId, seed, ctx);
+    const body = new TextEncoder().encode('fenced-n3');
+    const reserved = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: body.length, encoded: body.length }, 'k-n3-race', ctx,
+    );
+    const racing = makeService({
+      publishHooks: {
+        beforePut: async () => {
+          await service.amendProject(
+            'sess-content-project-1',
+            basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+            ctx,
+          );
+          await service.acknowledgeGrantRefresh('sess-content-s1', {
+            projectRevision: 1, bindingVersion: rows[0]!.version, nativeBoundarySeq: 3,
+          }, ctx);
+        },
+      },
+    });
+    await expectContentError(() => racing.publishAfterUpload(
+      reserved.reservationId, body, ctx,
+    ), 'project_revision_changed');
+    const objects = await db
+      .select()
+      .from(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-content-s1'));
+    expect(objects.filter((o) => o.state === 'committed')).toHaveLength(1);
+    expect(objects.filter((o) => o.state === 'purge_pending')).toHaveLength(1);
+    await expectContentError(() => service.publishAfterUpload(
+      reserved.reservationId, body, ctx,
+    ), 'unknown_outcome');
+    expect(await db
+      .select()
+      .from(sessionContentObjects)
+      .where(eq(sessionContentObjects.sessionId, 'sess-content-s1'))).toHaveLength(2);
+    await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache',
+      { raw: body.length, encoded: body.length }, 'k-n3-race-2', ctx,
+    );
+    const jobs = await db.select().from(sessionContentPurgeJobs);
+    expect(jobs.length).toBeGreaterThan(0);
+    for (const job of jobs) {
+      expect(job.scope).toBe('object');
+      await service.runPurge(job.purgeJobId);
+    }
+    const bytes = await service.readCommitted('sess-content-s1', 'terminal.cache', ctx);
+    expect(new TextDecoder().decode(bytes)).toBe('seed-n3');
+    expect(await fixture.listPhysical('')).toHaveLength(1);
+    const usage = await service.accountUsage({ sessionId: 'sess-content-s1' });
+    expect(usage.pendingDeletionBytes).toBe(0);
+    expect(usage.committedBytes).toBe(seed.length);
+    void bindingId;
+  });
 });
