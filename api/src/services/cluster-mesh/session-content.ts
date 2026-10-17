@@ -1111,7 +1111,7 @@ export class SessionContentService {
       if (binding.bindingId !== grant.bindingId || binding.workspaceId !== project.workspaceId) {
         throw new SessionContentError('ineligible_session', 'binding changed; a new derivation is required');
       }
-      if (binding.version !== input.bindingVersion) {
+      if (binding.version !== input.bindingVersion || binding.version !== grant.bindingVersion) {
         throw new SessionContentError('ineligible_session', 'binding version mismatch (ABA)');
       }
       if (binding.status !== 'attached') {
