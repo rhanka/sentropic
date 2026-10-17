@@ -80,6 +80,12 @@ export const stageOperationFragment = (core: StagedCore, bound: ScopedRuntime, i
   const limits = stagedLimits(core, input.limits);
   const valid = validateFragmentInput({ ...input, unitId: operation.unitId }, limits);
   if (!valid.ok) throw new StorageInvalidCommandError(valid.errors.join('; '));
+  const items = EFFECT_SECTIONS.reduce((sum, section) => sum + input.effects[section].length, 0);
+  if (items > limits.maxRecords) throw new StorageInvalidCommandError('fragment exceeds its total item budget');
+  if (input.effects.purgeIntents.length > 0) {
+    core.requireMaintain(bound.grant);
+    if (input.effects.purgeIntents.some((intent) => intent.authorizedBy !== bound.grant.principalId)) throw new StorageDeniedError('purge intent authorizer mismatch');
+  }
   const effects = ownedCopy(input.effects);
   if (Buffer.byteLength(JSON.stringify(effects), 'utf8') > limits.maxEncodedBytes) throw new StorageInvalidCommandError('fragment exceeds encoded work limits');
   const digest = stagedFragmentDigest({ moduleId: core.kernel.moduleId as StorageModuleId, scope: bound.scope,
