@@ -249,7 +249,7 @@
   - [x] Documentary C0 assertions follow the executable packaged-oracle proof while preserving absent M1 public conformance export. Historical review provenance is unchanged.
 
 - [ ] **Lot N — Final validation**
-  - [ ] CI logs independently reproduce the cold workspace peer-order failure in API typecheck, image and toolbox builds. BRCM2-EX8 narrowly scopes the two build-definition corrections; no application runtime code changes.
+  - [ ] CI logs independently reproduce the cold workspace peer-order failure in API typecheck, image and toolbox builds. BRCM2-EX8 now adds comments build prerequisites to all three cluster-mesh Make entry points and moves the existing Docker peer build step before its consumer; no application runtime code changes.
   - [x] CI run 39023730235 exposed the stale exact peer-tuple assertion in `publishable-ci-wiring.test.mjs`; reproduced locally and updated its shared candidate/post-publication/bootstrap expectation with comments@0.3.0. Both `test-publishable-manifests` and `test-qualify-published-install` now PASS (BRCM2-EX7; RTK `10f2a27c5493`).
   - [x] Typecheck/lint PASS; source package suite 93 files / 805 tests PASS, 48 files / 106 explicit PG/crash/installed tests skipped only here and qualified separately below (RTK `24fdf710d026`).
   - [x] Real neutral PG 26 files / 47 tests PASS; real comments PG 25 files / 104 tests PASS; both independent server-SIGKILL phases PASS (RTK `e23b89c8a2b4`).
