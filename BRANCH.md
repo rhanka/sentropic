@@ -28,6 +28,7 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
   - `packages/llm-mesh/src/node/index.ts`
   - `packages/llm-mesh/src/node/cli-seat-store-reader.ts`
+  - `packages/llm-mesh/src/node/seat-sidecar-file-backend.ts`
   - `packages/llm-mesh/seat-tools/**`
   - `packages/llm-mesh/tests/**`
   - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
