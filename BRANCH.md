@@ -42,7 +42,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - `packages/mcp-auth/**` (main already holds qualified 0.2.2)
   - Radar repository (separate repo, i-cond owned)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/Dockerfile` (build-order lines only, I861-EX5)
+  - `api/Dockerfile` (build-order lines only, I861-EX5 + I861-EX17)
   - `packages/artifacts/**` (new generic web-pages provider package, I861-EX6)
   - `api/drizzle/*.sql` (max 1 file: 0042)
   - `api/drizzle/meta/_journal.json` (0042 journal entry)
@@ -68,6 +68,7 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - `I861-EX14` (pages-agent EX8 renumbered — EX8 taken by m6): `Makefile` edits limited to the `@sentropic/artifacts` target family and consumers — mcp-platform peer links in build/typecheck/test/test-integration-artifacts, `publish-artifacts` + `publish-artifacts-token`, probe dual-pack, `build-artifacts` prerequisites on cluster-mesh targets, `packages/artifacts` in `install-internal-packages` (cluster-mesh `packaging.mk` same prerequisite, inside Allowed mesh tree). Cherry-picked 43/43 with zero conflicts.
   - `I861-EX15` (pages-agent EX9 renumbered): `.github/workflows/ci.yml` edits limited to `validate-artifacts` test/integration/lint steps (M1) and artifacts publish/bootstrap wiring (M2: workflow_dispatch option, guard case + step, `publish-artifacts` steady job). No branch-wide `changes` filters or other jobs touched.
   - `I861-EX16` (pages-agent EX10 renumbered): `scripts/ci/publishable-manifests.mjs` — `artifacts` appended to `STEADY_STATE_PUBLISHERS` and `BOOTSTRAP_TARGETS` only (already in `PACK_TARGETS`); verified by `test-publishable-manifests` 85/85 post-cherry-pick.
+  - `I861-EX17` (new, M3 bundle-build finding): `api/Dockerfile` — 2 lines: COPY `packages/artifacts/package.json` for the install layer + build `artifacts` before `cluster-mesh`. Reason: the B3 cherry-pick made mesh import `@sentropic/artifacts/mcp`, so the image build failed at mesh tsc (TS2307) — caught by the first M3 bundle run, which builds from a snapshot. Impact: install/build order only; no runtime, layer or registry change. Rollback: drop the 2 lines (image build breaks on any head with the mesh web-pages leaf).
 
 ## Feedback Loop
 - `attention` I861-F1 (recorded, sign-off batched with the final merge request per conductor decision): 2-IdP m10 e2e flake, non-systematic. Test `e2e/tests/05-usecase-detail.spec.ts:690`, command `test-e2e (group-e, 05 07)`, signature `expect(acquiredByA.status()).toBe(201)` got 409. Same job passed on run `38833429815` at identical product code; rerun `gh run rerun --job 116765363067` concluded success. No branch change touches locking/initiatives/UI; no test or timeout touched.
