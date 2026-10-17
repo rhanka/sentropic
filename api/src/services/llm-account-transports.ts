@@ -2680,12 +2680,23 @@ const acquireDbAccountTransport = async <TToken extends ParsedAccountTransportTo
       reservationId: acquired.reservation_id,
       transportProviderId: input.transportProviderId,
       metadata: externalMetadata,
-      recordOutcome: (outcome) =>
-        recordLlmAccountTransportOutcome({
+      recordOutcome: (outcome) => {
+        // L1 external seats never flip to re-authentication: a 401 on
+        // served external access is classified access-unavailable, keeping
+        // status active with the secret and policy retained.
+        if (outcome.status === 'auth_failed') {
+          return recordSeatUnavailableOutcome({
+            accountId: acquired!.account_id,
+            reservationId: acquired!.reservation_id,
+            seatRef: seatPolicy.seatRef,
+          });
+        }
+        return recordLlmAccountTransportOutcome({
           ...outcome,
           accountId: acquired!.account_id,
           reservationId: acquired!.reservation_id,
-        }),
+        });
+      },
     };
   }
 
