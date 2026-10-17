@@ -13,7 +13,7 @@ import type { PgInstalledOperation } from '../storage/postgres/installed-contrac
 export const COMMENTS_CONTRACT_DIGEST = 'e027fdbb4a806df39809326697bf9b60ad5cb977eb1988af3be293da07161ba0';
 export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
   contractVersion: 'contract-v1', contractDigest: COMMENTS_CONTRACT_DIGEST,
-  schemaVersions: Object.freeze(['pg-core-5', 'comments-projections-1']),
+  schemaVersions: Object.freeze(['pg-core-6', 'comments-projections-1']),
   requiredProfiles: Object.freeze(['atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1', 'staged-units-v1', 'visibility-barriers-v1', 'fenced-writers-v1', 'scope-outbox-v1']),
   optionalProfiles: Object.freeze(['purge-jobs-v1']), chainKinds: Object.freeze(Object.keys(COMMENTS_CHAIN_KINDS)),
   queryNames: Object.freeze(['by-resource', 'scope-chain-index', 'retained-headers']), boundaries: Object.freeze(['scope-root', 'exact-head']),
