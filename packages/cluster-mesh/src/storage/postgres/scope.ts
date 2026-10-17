@@ -29,6 +29,7 @@ import { readPgBlob, sharePgBlob } from './blobs.js';
 import { inspectPgPurge, readPgMaintenance, type PgMaintenanceRequest } from './maintenance-readers.js';
 import { pgCapability, pgProfileClaims, type PgCapability } from './profiles.js';
 import type { ProfileClaim, ProfileId } from '../profiles.js';
+import { cleanupPgStaged, type PgCleanupRequest } from './cleanup.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -93,6 +94,7 @@ export class PgScoped {
   readAggregate(key: string) { return this.#read((view) => view.readAggregate(key)); }
   beginStaged(input: StagedBeginInput) { return beginPgStaged(this.#core, this.#grant, input); }
   inspectStaged(key: string) { return inspectPgStaged(this.#core, this.#grant, key); }
+  cleanupStaged(input: PgCleanupRequest) { return cleanupPgStaged(this.#core, this.#grant, input); }
   configureLifecycle(policy: PurgePolicy) { return configurePgLifecycle(this.#core, this.#grant, policy); }
   declareCoverage(parent: string, child: string) { return declarePgCoverage(this.#core, this.#grant, parent, child); }
   holdTarget(target: string, reason: string | null) { return holdPgTarget(this.#core, this.#grant, target, reason); }
