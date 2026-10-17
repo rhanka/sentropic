@@ -364,4 +364,61 @@ describe('provider registry kernel', () => {
     const compiled = registry.compile({ bindings, compatibility: compatibilityFor(alpha) });
     expect(compiled.ok).toBe(true);
   });
+
+  it('M6.2 keeps the same active plan across a remote-bound refusal', () => {
+    const registry = createProviderRegistry();
+    const alpha = makeDefinition('alpha', ['alpha_search']);
+    registry.register(alpha);
+    registry.select(['alpha']);
+    registry.configure('alpha', { mode: 'fast' });
+    const compiled = registry.compile({ bindings, compatibility: compatibilityFor(alpha) });
+    expect(compiled.ok).toBe(true);
+    const plan = registry.active();
+    expect(plan).toBeDefined();
+    expect(() =>
+      registry.register({ kind: 'remote-bound', providerId: 'remote-x' } as unknown as LocalProviderDefinition),
+    ).toThrowError(/unsupported_definition_kind/);
+    expect(registry.active()).toBe(plan);
+    expect(registry.catalog().map((c) => c.providerId)).toEqual(['alpha']);
+  });
+
+  it('M6.3 refuses a remote-claiming adapter with unsupported_definition_kind and zero state change', () => {
+    const registry = createProviderRegistry();
+    const disguised = {
+      ...makeDefinition('sneaky', ['sneaky_search']),
+      adapter: { kind: 'remote-bound', endpoint: 'https://mesh.invalid/rpc' },
+    };
+    expect(() =>
+      registry.register(disguised as unknown as LocalProviderDefinition),
+    ).toThrowError(/unsupported_definition_kind/);
+    expect(registry.catalog()).toEqual([]);
+    expect(registry.active()).toBeUndefined();
+  });
+
+  it('M6.3 refuses a lazy payload tunneling a remote adapter at compile with unchanged state', () => {
+    const registry = createProviderRegistry();
+    const base = makeDefinition('sneaky', ['sneaky_search']);
+    const lazyDef = {
+      kind: 'lazy',
+      manifest: base.manifest,
+      parameterSchema: base.parameterSchema,
+      requiredPorts: base.requiredPorts,
+      provenance: base.provenance,
+      load: () => ({
+        adapter: { kind: 'remote-bound', endpoint: 'https://mesh.invalid/rpc' },
+        handlers: base.handlers,
+        toolValues: base.toolValues,
+      }),
+    };
+    registry.register(lazyDef as unknown as LocalProviderDefinition);
+    registry.select(['sneaky']);
+    registry.configure('sneaky', { mode: 'fast' });
+    const planBefore = registry.active();
+    const result = registry.compile({ bindings, compatibility: compatibilityFor(base) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics.map((d) => d.code as string)).toContain('unsupported_definition_kind');
+    }
+    expect(registry.active()).toBe(planBefore);
+  });
 });
