@@ -2497,6 +2497,74 @@ describe('session consent durable lifecycle', () => {
     void bindingId;
   });
 
+  it('should preserve an unknown writer when a fenced retry releases its hold (N-1)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const [binding] = await db.select().from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.bindingId, bindingId));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1', sessionId: 'sess-content-s1', bindingId,
+      bindingVersion: binding!.version, d1Version: binding!.version,
+      d1Incarnation: 1, d1StartSeq: 0, workspaceId, sessionCreatedAt: now,
+      sourceGeneration: 'gen-1', sourceTrustVersion: 'tv-1', nativeStartSeq: 0,
+    }, ctx);
+    const body = new TextEncoder().encode('n1-writer');
+    const reservation = await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: body.length, encoded: body.length }, 'k-n1', ctx,
+    );
+    let releaseRetry!: () => void;
+    const retryBarrier = new Promise<void>((resolve) => { releaseRetry = resolve; });
+    let retryRead!: () => void;
+    const retryPaused = new Promise<void>((resolve) => { retryRead = resolve; });
+    let retry: Promise<void> | undefined;
+    const readEpoch = fakeEpoch.readCurrent.bind(fakeEpoch);
+    const writer = makeService({ publishHooks: {
+      beforePut: async () => {
+        await service.amendProject('sess-content-project-1', basePolicy({
+          ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0,
+        }), ctx);
+        // The retry has read 'reserved'; hold its admission until A settles.
+        fakeEpoch.readCurrent = async (issuer) => {
+          fakeEpoch.readCurrent = readEpoch;
+          retryRead();
+          await retryBarrier;
+          return readEpoch(issuer);
+        };
+        retry = expectContentError(
+          () => service.publishAfterUpload(reservation.reservationId, body, ctx),
+          'project_revision_changed',
+        );
+        await retryPaused;
+      },
+      afterUpload: async () => { throw new Error('injected writer ACK loss'); },
+    } });
+    try {
+      await expectContentError(
+        () => writer.publishAfterUpload(reservation.reservationId, body, ctx), 'unknown_outcome',
+      );
+      expect(await fixture.listPhysical('')).toHaveLength(1);
+    } finally {
+      releaseRetry();
+      await retry;
+      fakeEpoch.readCurrent = readEpoch;
+    }
+    const [held] = await db.select().from(sessionContentReservations)
+      .where(eq(sessionContentReservations.reservationId, reservation.reservationId));
+    const [attempt] = await db.select().from(sessionContentAttempts)
+      .where(eq(sessionContentAttempts.attemptId, reservation.reservationId));
+    expect(held!.state).toBe('stale');
+    expect(attempt!.outcome).toBe('outcome_unknown');
+    const jobs = await db.select().from(sessionContentPurgeJobs)
+      .where(eq(sessionContentPurgeJobs.bindingId, bindingId));
+    expect(jobs).toHaveLength(1);
+    const evidence = await service.runPurge(jobs[0]!.purgeJobId);
+    expect(evidence.remainingObjects).toBe(0);
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+    const [object] = await db.select().from(sessionContentObjects)
+      .where(eq(sessionContentObjects.reservationId, reservation.reservationId));
+    expect(object!.state).toBe('purged');
+  });
+
   it('should refuse refresh on replaced source generation or changed D1 version (P3)', async () => {
     await acceptProject();
     const bindingId = await adoptSession('sess-content-s1');
