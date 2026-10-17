@@ -129,7 +129,7 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Opus corrections — PR #684 NO-GO (2026-10-17)**
-  - [ ] MAJ-1: module-owned schema fingerprint, typed drift error, tested operator re-attestation after host DDL and PostgreSQL major upgrades.
+  - [ ] MAJ-1: shared-schema host table/function regression added first; module drift must report schema-drift. Operator re-attestation follows separately.
   - [ ] MAJ-2: required stable comments cursor secret, restart/replica/key-mismatch page tests and host documentation.
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
   - [ ] m2/m3: 0.19.0 changelog and independent comments migration numbering with core-upgrade regression.

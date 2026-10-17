@@ -779,16 +779,23 @@ lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned m
 # BRE-EX1: provider leaves need the optional peers' dists at dev time; link them inside the container and remove the links on
 # exit, interrupt or termination (INT/TERM exit through the EXIT trap; `docker run --init` forwards signals to the shell).
 CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2
-CLUSTER_MESH_PEER_LINKS := mkdir -p node_modules/@sentropic ../llm-gateway/node_modules/@sentropic; trap "rm -rf node_modules/@sentropic node_modules/jose ../llm-gateway/node_modules ../oauth-verify/node_modules ../mcp-auth/node_modules ../auth-hono/node_modules" EXIT; trap "exit 143" INT TERM; for pkg in llm-mesh llm-gateway mcp-auth oauth-verify auth-hono; do ln -sfn /workspace/packages/$$pkg node_modules/@sentropic/$$pkg; done; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; for pkg in llm-mesh mcp-auth oauth-verify auth-hono; do ln -sfn /workspace/packages/$$pkg ../llm-gateway/node_modules/@sentropic/$$pkg; done; ln -sfn "$$tool_dir/node_modules/jose" ../llm-gateway/node_modules/jose; for pkg in oauth-verify mcp-auth auth-hono; do mkdir -p ../$$pkg/node_modules/@sentropic; ln -sfn /workspace/packages/oauth-verify ../$$pkg/node_modules/@sentropic/oauth-verify; for peer in hono jose zod @hono @simplewebauthn semver; do ln -sfn "$$tool_dir/node_modules/$$peer" ../$$pkg/node_modules/$$peer; done; done
-typecheck-cluster-mesh: build-events build-llm-gateway build-mcp-platform build-artifacts build-comments ## Run @sentropic/cluster-mesh type checks
-	@docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node $(CLUSTER_MESH_PEER_TOOLS) >/dev/null; $(CLUSTER_MESH_PEER_LINKS); "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.test.json'
+typecheck-cluster-mesh: ## Run self-contained cold @sentropic/cluster-mesh type checks
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=typecheck ENV=$(ENV)
 
-test-cluster-mesh: build-events build-llm-gateway build-mcp-platform build-artifacts build-comments ## Run @sentropic/cluster-mesh tests
-	@docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/cluster-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.5 typescript@5.4.5 @types/node $(CLUSTER_MESH_PEER_TOOLS) >/dev/null; $(CLUSTER_MESH_PEER_LINKS); if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+test-cluster-mesh: ## Run @sentropic/cluster-mesh tests in a disposable workspace
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=test ENV=$(ENV)
 
-build-cluster-mesh: build-events build-llm-gateway build-mcp-platform build-artifacts build-comments ## Build @sentropic/cluster-mesh dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node $(CLUSTER_MESH_PEER_TOOLS) >/dev/null; $(CLUSTER_MESH_PEER_LINKS); "$$tool_dir/node_modules/.bin/tsc" --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
+build-cluster-mesh: ## Build @sentropic/cluster-mesh without persistent dependencies
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=build ENV=$(ENV)
+
+.PHONY: cluster-mesh-workspace
+cluster-mesh-workspace:
+	@docker run --rm --init $(CM_DOCKER_NETWORK) -u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
+		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
+		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
+		-v "$(CURDIR):/source" $(LLM_MESH_NODE_IMAGE) \
+		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
 
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
 	$(call manifest_guard_pack,cluster-mesh)
