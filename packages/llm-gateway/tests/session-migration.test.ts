@@ -43,6 +43,13 @@ const oldEntry = (overrides = {}) => ({
 });
 
 describe('migrateOldSessions', () => {
+  it('does not classify a storage outage as invalid imported input', async () => {
+    const { store } = liveStore();
+    store.compareAndSet = async () => { throw new Error('store unavailable'); };
+    await expect(migrateOldSessions({ service: new GatewaySessionService(store), entries: [oldEntry()] })).rejects.toThrow('store unavailable');
+    expect((await store.load()).sessions).toEqual({});
+    expect((await store.load()).receipts).toEqual({});
+  });
   it('imports valid entries with stable key bytes and a durable ack', async () => {
     const { store } = liveStore();
     const service = new GatewaySessionService(store);

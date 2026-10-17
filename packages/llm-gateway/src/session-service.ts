@@ -233,7 +233,7 @@ export class GatewaySessionService {
     models?: readonly string[];
     mappingRevision?: string;
     routingContract?: LaunchRoutingContract;
-  }): Promise<{ sessionRef: string; expiresAt: string }> {
+  }): Promise<{ sessionRef: string; expiresAt: string; receiptId: string }> {
     const routingContract = trustedContract(input);
     if (!input.ownerScopeRef || !input.workspaceRef || !input.clientSessionRef) {
       throw new GatewaySessionError('owner identity is required', 'UNAUTHENTICATED');
@@ -271,14 +271,18 @@ export class GatewaySessionService {
       policyRevision: routingContract?.revision ?? POLICY_REVISION,
       ...(routingContract ? { routingContract } : {}),
     };
+    const receipt: StoredReceipt = { schemaVersion: SCHEMA_VERSION, receiptId: randomBytes(16).toString('hex'),
+      sessionRef: session.sessionRef, ownerScopeRef: session.ownerScopeRef, requestId: 'migration', model: '',
+      attempts: 0, physicalAttempts: [], policyRevision: session.policyRevision, settlement: 'migration-ack',
+      createdAt: session.createdAt, settledAt: session.createdAt };
     const next: StoredState = {
       ...loaded,
       revision: loaded.revision + 1,
       sessions: { ...loaded.sessions, [session.sessionRef]: session },
-      receipts: loaded.receipts,
+      receipts: { ...loaded.receipts, [receipt.receiptId]: receipt },
     };
     await this.store.compareAndSet(loaded.revision, next);
-    return { sessionRef: session.sessionRef, expiresAt: session.expiresAt };
+    return { sessionRef: session.sessionRef, expiresAt: session.expiresAt, receiptId: receipt.receiptId };
   }
 
   async resolveCaller(input: { sessionRef: string; key: string }): Promise<CallerContext> {
@@ -319,7 +323,8 @@ export class GatewaySessionService {
     if (!Object.values(loaded.receipts).some((receipt) => receipt.settlement === 'pending')) return;
     await this.store.compareAndSet(loaded.revision, { ...loaded, revision: loaded.revision + 1,
       receipts: Object.fromEntries(Object.entries(loaded.receipts).map(([id, receipt]) => [id,
-        receipt.settlement === 'pending' ? { ...receipt, settlement: 'incomplete', settledAt: new Date().toISOString() } : receipt])) });
+        receipt.settlement === 'pending' ? { ...receipt, settlement: 'incomplete', settledAt: new Date().toISOString(),
+          physicalAttempts: receipt.physicalAttempts?.map((attempt) => attempt.outcome === 'pending' ? { ...attempt, outcome: 'incomplete' } : attempt) } : receipt])) });
   }
 
   async revokeSession(input: { ownerScopeRef: string; sessionRef: string }): Promise<{ revoked: boolean }> {
@@ -427,7 +432,7 @@ export class GatewaySessionService {
       physicalAttempts: receipt.physicalAttempts?.map((attempt) => {
         const result = input.attempts?.find((row) => row.candidateRef === attempt.candidateRef);
         return result ? { ...attempt, outcome: result.outcome,
-          usage: result.usage.estimated ? null : { inputTokens: result.usage.inputTokens ?? 0, outputTokens: result.usage.outputTokens ?? 0 },
+          usage: !result.reportedUsage || result.usage.estimated ? null : { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
           observedServedModel: result.observedServedModel ?? null,
           modelEvidence: result.observedServedModel ? 'provider-reported' as const : 'selection-only' as const } : attempt;
       }),
