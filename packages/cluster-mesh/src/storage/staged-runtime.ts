@@ -523,58 +523,5 @@ class LegacyStagedScopedRuntime {
     return op;
   }
 
-  async commitStaged(input: {
-    readonly seal: StagedUnitSeal;
-    readonly fence: WriterFence;
-  }): Promise<CommitReceipt> {
-    this.requireOperation('write');
-    const fence = validateWriterFence(input.fence);
-    if (!fence.ok) throw new StorageInvalidCommandError(fence.errors.join('; '));
-    const op = [...this.staged.units.values()].find((entry) => entry.unitId === input.seal.unitId);
-    if (!op) throw new StorageInvalidCommandError('unknown staged seal');
-    if (op.state === 'committed' && op.receipt) return op.receipt;
-    if (op.state !== 'sealed' || !op.seal || !op.base) throw new StorageInvalidCommandError('unstaged commit');
-    if (!this.sameRoot(op.seal.commitRoot, input.seal.commitRoot)) {
-      throw new StorageInvalidCommandError('seal substitution rejected');
-    }
-    const current = await this.currentBase(new Set(op.base.chains.keys()));
-    if (!this.staged.root.matches(op.base, current)) {
-      throw new StorageCasConflictError('changed base without publication');
-    }
-    const receipt = await this.publishUnit(this.mergeEffects(op.fragments), {
-      idempotencyKey: op.operationKey,
-      segment: op.operationKey,
-      fence: input.fence,
-    });
-    op.state = 'committed';
-    op.receipt = receipt;
-    return receipt;
-  }
-
-  async inspectStaged(operationKey: string): Promise<StagedUnitStatus> {
-    this.requireOperation('read');
-    const op = this.staged.units.get(operationKey);
-    if (!op) throw new StorageInvalidCommandError('unknown staged operation');
-    if (op.state === 'staging') return { state: 'staging', acceptedFragments: String(op.fragments.length) };
-    if (op.state === 'sealing') return { state: 'sealing', acceptedFragments: String(op.fragments.length) };
-    if (op.state === 'sealed' && op.seal) return { state: 'sealed', seal: op.seal };
-    if (op.state === 'committed' && op.receipt) return { state: 'committed', commitId: op.receipt.commitId };
-    return { state: 'aborted', reason: op.abortReason ?? 'aborted' };
-  }
-
-  async abortStaged(input: { readonly unit: StagedHandle }): Promise<void> {
-    this.requireOperation('write');
-    const op = this.findUnit(input.unit.operationKey, input.unit.unitId);
-    if (op.state === 'committed') throw new StorageInvalidCommandError('committed units cannot abort');
-    if (op.state === 'aborted') return;
-    op.state = 'aborted';
-    op.abortReason = op.operationKey;
-    op.fragments.length = 0;
-    op.validation = null;
-    op.validationRoot = null;
-    op.seal = null;
-    op.base = null;
-  }
-
 
 }
