@@ -95,6 +95,14 @@ describe('gateway wire adapter', () => {
     expect(callLLM).not.toHaveBeenCalled();
   });
 
+  it('refuses selected mapping effort instead of dropping it at product dispatch', async () => {
+    await expect(applicationGatewayRuntime.generate(SUBJECT, 'ws-1', {
+      requestedModel: 'claude-opus-5-5', providerId: 'gemini', modelId: 'gemini-4-argon', transportProviderId: 'application-runtime', reason: 'alias', effort: 'high',
+    }, baseRequest({ providerId: 'gemini', modelId: 'gemini-4-argon', reasoning: { effort: 'high' } })))
+      .rejects.toMatchObject({ status: 400, code: 'unsupported_projection' });
+    expect(callLLM).not.toHaveBeenCalled();
+  });
+
   it('forwards reasoning on stream and preserves the tool_calls terminal', async () => {
     callLLMStream.mockReturnValue(sourceEvents([
       { type: 'status', data: { state: 'started' } },
