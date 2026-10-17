@@ -136,26 +136,48 @@ export const runPgTransaction = async <T,>(
           if (tx.count === 0) {
             if (tx.noop) {
               for (const check of tx.revalidators) await check();
-              return { value, receipt }; }
-          throw new StorageInvalidCommandError('empty transaction');
+              return { value, receipt };
+            }
+            throw new StorageInvalidCommandError('empty transaction');
+          }
+          const digest = pgUnitDigest(tx.digests);
+          const previous = options.idempotencyKey
+            ? await core.roots.get<{ digest: string; receipt: CommitReceipt }>(
+                session,
+                base.root,
+                'commit',
+                options.idempotencyKey,
+              )
+            : null;
+          if (previous) {
+            if (previous.digest !== digest)
+              throw new StorageIdempotencyConflictError('atomic command identity conflict');
+            await session.execute({ text: 'ROLLBACK TO SAVEPOINT immutable_command', values: [] });
+            return { value, receipt: ownPgValue(previous.receipt) };
+          }
+          await validatePgPurgePolicy(core, session, grant, tx.root, tx.barriers, tx.purges);
+          const final: CommitReceipt = {
+            ...receipt,
+            effectiveRecords: tx.records,
+            effectiveAppends: tx.appends,
+            ...(tx.moduleResult === undefined ? {} : { moduleResult: tx.moduleResult }),
+          };
+          if (options.idempotencyKey)
+            tx.root = await core.roots.put(session, tx.root, 'commit', options.idempotencyKey, {
+              digest,
+              receipt: final,
+            });
+          for (const contributor of tx.contributors.values()) await core.check(session, contributor, 'write', true);
+          if (options.fence) await core.fence(session, grant, options.fence);
+          for (const check of tx.revalidators) await check();
+          await core.roots.publish(session, grant.scope, base, tx.root, final, options.idempotencyKey);
+          return { value, receipt: ownPgValue(final) };
+        } finally {
+          tx.closed = true;
         }
-        const digest = pgUnitDigest(tx.digests);
-        const previous = options.idempotencyKey ? await core.roots.get<{ digest: string; receipt: CommitReceipt }>(session, base.root, 'commit', options.idempotencyKey) : null;
-        if (previous) {
-          if (previous.digest !== digest) throw new StorageIdempotencyConflictError('atomic command identity conflict');
-          await session.execute({ text: 'ROLLBACK TO SAVEPOINT immutable_command', values: [] });
-          return { value, receipt: ownPgValue(previous.receipt) };
-        }
-        await validatePgPurgePolicy(core, session, grant, tx.root, tx.barriers, tx.purges);
-        const final: CommitReceipt = { ...receipt, effectiveRecords: tx.records, effectiveAppends: tx.appends, ...(tx.moduleResult === undefined ? {} : { moduleResult: tx.moduleResult }) };
-        if (options.idempotencyKey) tx.root = await core.roots.put(session, tx.root, 'commit', options.idempotencyKey, { digest, receipt: final });
-        for (const contributor of tx.contributors.values()) await core.check(session, contributor, 'write', true);
-        if (options.fence) await core.fence(session, grant, options.fence);
-        for (const check of tx.revalidators) await check();
-        await core.roots.publish(session, grant.scope, base, tx.root, final, options.idempotencyKey);
-        return { value, receipt: ownPgValue(final) };
-      } finally { tx.closed = true; }
-    }, immutableFlush);
+      },
+      immutableFlush,
+    );
   } catch (error) {
     if (callbackFailed && !isStorageError(callbackError)) throw callbackError;
     throw error;
