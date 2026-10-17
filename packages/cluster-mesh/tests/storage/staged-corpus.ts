@@ -346,17 +346,25 @@ export const runStagedCorpus = async (
     'K2b-RED staged: truncated chains cannot seal',
   );
   const foreignRoots = stagedSealRoot(unit, [e0, other]);
-  for (const [label, root] of [
-    ['operation', { ...unitRoot, operationId: 'op-other' }],
-    ['contract', { ...unitRoot, contractDigest: 'contract-other' }],
-    ['boundary', { ...unitRoot, sourceBoundary: 'boundary-other' }],
-    ['dependencies', { ...unitRoot, dependencyRoot: 'dep-other' }],
-    ['effects', { ...unitRoot, effectRoot: 'eff-other' }],
-    ['self-consistent dependencies', { ...unitRoot, dependencyRoot: foreignRoots.dependencyRoot }],
-    ['self-consistent effects', { ...unitRoot, effectRoot: foreignRoots.effectRoot }],
+  for (const [label, changed] of [
+    ['operation', { operationId: 'op-other' }],
+    ['contract', { contractDigest: 'contract-other' }],
+    ['boundary', { sourceBoundary: 'boundary-other' }],
+    ['dependencies', { dependencyRoot: 'dep-other' }],
+    ['effects', { effectRoot: 'eff-other' }],
+    ['self-consistent dependencies', { dependencyRoot: foreignRoots.dependencyRoot }],
+    ['self-consistent effects', { effectRoot: foreignRoots.effectRoot }],
   ] as const) {
+    const candidate = await bound.beginStaged({ operationKey: `bad-seal-${label}`, inputDigest: 'input-1', contractDigest: CONTRACT, sourceBoundary: BOUNDARY, fence: FENCE });
+    let predecessorHash: string | null = null;
+    for (const [index, effects] of [e0, e1].entries()) {
+      const fragmentDigest = stagedDigestOf(candidate, String(index), predecessorHash, effects);
+      await bound.stageFragment({ unit: candidate, ordinal: String(index), predecessorHash, fragmentDigest, effects, fence: FENCE });
+      predecessorHash = fragmentDigest;
+    }
+    const root = { ...stagedSealRoot(candidate, [e0, e1]), ...changed };
     await expectCode(
-      async () => bound.sealStaged({ unit, root }),
+      async () => bound.sealStaged({ unit: candidate, root }),
       'invalid-command',
       `K2b-RED staged: a divergent seal ${label} cannot seal`,
     );
@@ -364,12 +372,12 @@ export const runStagedCorpus = async (
   const seal = await bound.sealStaged({ unit, root: unitRoot });
   const tamperedRoot = { ...seal.commitRoot, dependencyRoot: 'tampered-root' };
   await expectCode(
-    async () => bound.commitStaged({ seal: { unitId: seal.unitId, commitRoot: tamperedRoot }, fence: FENCE }),
+    async () => bound.commitStaged({ seal: { ...seal, commitRoot: tamperedRoot }, fence: FENCE }),
     'invalid-command',
     'K2b-RED staged: a mutated seal cannot publish',
   );
   (seal.commitRoot as { dependencyRoot: string }).dependencyRoot = 'tampered-root';
-  const freshSeal = { unitId: seal.unitId, commitRoot: stagedSealRoot(unit, [e0, e1]) };
+  const freshSeal = { ...seal, commitRoot: stagedSealRoot(unit, [e0, e1]) };
   assert.deepEqual(await bound.inspectStaged('op-staged-1'), { state: 'sealed', seal: freshSeal });
 
   const e3 = appendUnit('chain-s3', 's3', 'hash-s3', null);
