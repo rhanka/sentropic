@@ -28,10 +28,8 @@ export interface AgySeatProjectionInput {
   requestedTransportProviderId: string;
 }
 
-export interface AgyTranslationHooks {
-  persist: (...args: never[]) => unknown;
-  acquire: (...args: never[]) => unknown;
-  providerCall: (...args: never[]) => unknown;
+export interface AgySeatPersistence {
+  persist: (tuple: AgyApplicationTuple, projection: Pick<AgySeatProjectionInput, 'seatRef' | 'accountBinding' | 'ownerScope'>) => Promise<unknown>;
 }
 
 export class AgyMappingError extends Error {
@@ -51,10 +49,7 @@ export class AgyMappingError extends Error {
 }
 
 /** Validate the agy projection and return the exact application tuple. */
-export function translateAgySeatToApplication(
-  input: AgySeatProjectionInput,
-  _hooks: AgyTranslationHooks,
-): AgyApplicationTuple {
+export function translateAgySeatToApplication(input: AgySeatProjectionInput): AgyApplicationTuple {
   if (input.packageProviderId !== 'cloud-code' || input.packageAccountTransport !== 'cloud-code') {
     throw new AgyMappingError('client-mismatch', 'agy package identity must be cloud-code enrollment and transport');
   }
@@ -82,4 +77,22 @@ export function translateAgySeatToApplication(
     throw new AgyMappingError('mixed-tuple', 'agy tuple must be exactly antigravity/cloudcode-pa');
   }
   return { ...SEAT_AGY_APPLICATION_TUPLE };
+}
+
+/**
+ * Persist a validated agy projection. Validation runs first: any refusal
+ * returns before `deps.persist` is touched, so the persistence spy
+ * discriminates acceptance from refusal.
+ */
+export async function persistAgySeatProjection(
+  input: AgySeatProjectionInput,
+  deps: AgySeatPersistence,
+): Promise<AgyApplicationTuple> {
+  const tuple = translateAgySeatToApplication(input);
+  await deps.persist(tuple, {
+    seatRef: input.seatRef,
+    accountBinding: input.accountBinding,
+    ownerScope: input.ownerScope,
+  });
+  return tuple;
 }
