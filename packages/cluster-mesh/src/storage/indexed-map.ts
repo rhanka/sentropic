@@ -1,5 +1,5 @@
 import { StorageInvalidCommandError } from './errors.js';
-import { findIndexed, indexedEntries, putIndexed, removeIndexed, type IndexedNode } from './indexed-tree.js';
+import { findIndexed, indexedAt, indexedEntries, putIndexed, removeIndexed, type IndexedNode } from './indexed-tree.js';
 
 // Internal indexed maps enumerate keys lexically. Forking copies one root
 // pointer; updates copy balanced search paths, never the scope's entries.
@@ -19,6 +19,10 @@ export class IndexedMap<V> extends Map<string, V> {
   }
   override get size(): number { return this.#root?.size ?? 0; }
   override get(key: string): V | undefined { return findIndexed(this.#root, key)?.value; }
+  entryAt(ordinal: number): [string, V] | undefined {
+    const entry = indexedAt(this.#root, ordinal);
+    return entry ? [entry.key, entry.value] : undefined;
+  }
   override has(key: string): boolean { return findIndexed(this.#root, key) !== null; }
   override set(key: string, value: V): this {
     this.writable();

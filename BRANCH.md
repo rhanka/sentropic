@@ -199,6 +199,7 @@
   - [ ] Scoped/incarnated journal streams; resync preserves poison; fenced checkpoints with maintain authority; pause/retry.
     - [ ] `root-journal.ts` reads the canonical root's indexed stream and retains consumer poison/pause state independently; checkpoints require delivered bounds, owner/incarnation/current fences and maintain authority. Snapshot capture retains an actual immutable root under an opaque scoped capability.
     - [ ] Snapshot paging uses order-statistic indexed lookup to visit only the requested canonical rows; RED ordinal-window probe forbids enumerating historical keys.
+    - [ ] `root-snapshot.ts` pages five captured canonical indexes, owns returned rows, enforces contiguous consumption and current barriers, and never clears consumer poison or pause state.
   - [ ] Structurally framed deep-owned manifests bound to captured storage boundaries; awaited rejection assertions.
   - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with honest dispositions.
   - [ ] Lot gate: copy of Lot 1 gate; tests `manifest.spec.ts`, `visibility.spec.ts`, `staged-units.spec.ts`.
