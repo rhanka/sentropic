@@ -220,6 +220,7 @@
     - [ ] RED manifest probes construct the exact selection/unit-root flattening collision and mutate nested caller/returned heads; all asynchronous rejection assertions are now awaited, and storage fixtures use computed commitments.
     - [ ] Manifest encoding separately frames selected heads, unit roots and terminal metadata; nested head values are owned at build and deeply frozen at retention. The value registry alone grants no storage capability; scoped root retention follows.
     - [ ] RED `root-manifest.spec.ts` captures actual head/sequence/allocation, excludes later writes, rejects unissued/foreign roots and checks current barriers on retained-page reads.
+    - [ ] Root manifest retention derives heads and committed unit roots from one captured root, binds incarnation/version and owner, and pages its exact head under fresh authorization/coverage. Caller-selected manifest digests cannot establish storage boundaries.
     - [ ] Initial manifest probe run stopped at a duplicate fixture variable, before semantic assertions. The fixture now distinguishes fragment and manifest digests; discriminating legacy-code mutants will supply the semantic regression evidence.
     - [ ] Awaited rejection assertions exposed an untyped missing-head exception in `verifyAgainst`; it now validates manifest structure before encoding, preserving `invalid-command` for tampering.
   - [ ] Semantic profile digests; advertise only implemented profiles; purge covers records/aggregates with actual dispositions.
