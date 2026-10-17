@@ -23,7 +23,7 @@ export interface PgUnit {
     state: StagedState; count: number; frontier: string | null; barriers: number; purges: number;
     commitId: string; progress: PgSealProgress | null; seal: AuthenticatedStagedSeal | null;
     receipt: CommitReceipt | null; moduleResultPayload?: string; reason?: string;
-    cleanup?: { phase: 'items' | 'payloads'; complete: boolean };
+    cleanup?: { phase: 'items' | 'payloads' | 'coverage'; complete: boolean };
   };
 }
 export const readPgUnit = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, unitId: string): Promise<PgUnit> => {
