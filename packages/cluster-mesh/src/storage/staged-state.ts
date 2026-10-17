@@ -69,12 +69,14 @@ export const coveredBy = (data: StagedRootData, id: string): string | null => {
 export interface OwnedStagedFragment {
   readonly ordinal: string; readonly predecessorHash: string | null; readonly fragmentDigest: string;
   readonly effects: AtomicUnit; readonly dependencyPart: Buffer; readonly effectPart: Buffer;
+  readonly itemCosts: readonly (readonly number[])[];
 }
 export interface RootSealProgress {
   readonly base: BackendScopeState; readonly prepared: BackendScopeState; readonly data: StagedRootData;
   readonly root: StagedCommitRoot; readonly dependencyHash: Hash; readonly effectHash: Hash;
   fragment: number; section: number; item: number; dependencyOffset: number; effectOffset: number;
   checked: number; bytes: number; effectiveRecords: number; effectiveAppends: number; failed?: string;
+  receipt?: CommitReceipt;
 }
 export interface StagedOperation {
   readonly unitId: string; capability: string; ownerId: string; readonly incarnation: string; fence: WriterFence;
