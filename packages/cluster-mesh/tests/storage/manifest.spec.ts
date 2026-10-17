@@ -141,8 +141,8 @@ describe('K4 manifest: binding to committed K4 storage', () => {
           },
         ],
       };
-    const digest = stagedDigestOf(unit, '0', null, effects, 'contract-k4m', 'boundary-k4m');
-    await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: digest, effects, fence: FENCE });
+    const fragmentDigest = stagedDigestOf(unit, '0', null, effects, 'contract-k4m', 'boundary-k4m');
+    await bound.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest, effects, fence: FENCE });
     const seal = await bound.sealStaged({
       unit,
       root: stagedSealRoot(unit, [effects], 'contract-k4m', 'boundary-k4m'),
