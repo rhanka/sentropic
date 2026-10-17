@@ -4,6 +4,8 @@
 // lives in scope-runtime.ts. Public types documented for S1/P1 adapters.
 
 import type { CommitReceipt } from './atomic.js';
+import { IndexedMap, forkIndexedMap } from './indexed-map.js';
+import type { IndexedHistory } from './indexed-history.js';
 
 export interface BackendChainRecord {
   readonly id: string;
@@ -15,7 +17,7 @@ export interface BackendChainRecord {
 export interface BackendChainState {
   allocation: string;
   head: string | null;
-  records: BackendChainRecord[];
+  records: BackendChainRecord[] | IndexedHistory<BackendChainRecord>;
   disposed: boolean;
 }
 
@@ -46,12 +48,15 @@ export interface BackendIdempotencyEntry {
 }
 
 export interface BackendScopeState {
-  readonly chains: Map<string, BackendChainState>;
-  readonly genesis: Map<string, BackendGenesisState>;
-  readonly index: Map<string, BackendIndexEntry>;
-  readonly records: Map<string, BackendAtomicRecord>;
-  readonly aggregates: Map<string, BackendAggregate>;
-  readonly commits: Map<string, BackendIdempotencyEntry>;
+  chains: Map<string, BackendChainState>;
+  genesis: Map<string, BackendGenesisState>;
+  index: Map<string, BackendIndexEntry>;
+  records: Map<string, BackendAtomicRecord>;
+  aggregates: Map<string, BackendAggregate>;
+  commits: Map<string, BackendIdempotencyEntry>;
+  readonly indexed?: boolean;
+  readonly version?: string;
+  readonly attachment?: unknown;
 }
 
 export const backendScopeKey = (scope: { readonly tenantId: string; readonly workspaceId: string }): string =>
@@ -66,15 +71,36 @@ export const createBackendScopeState = (): BackendScopeState => ({
   commits: new Map(),
 });
 
+export const createIndexedBackendScopeState = (): BackendScopeState => ({
+  chains: new IndexedMap(), genesis: new IndexedMap(), index: new IndexedMap(),
+  records: new IndexedMap(), aggregates: new IndexedMap(), commits: new IndexedMap(),
+  indexed: true, version: '0',
+});
+
+export const forkBackendScope = (base: BackendScopeState): BackendScopeState => ({
+  ...base, chains: forkIndexedMap(base.chains), genesis: forkIndexedMap(base.genesis),
+  index: forkIndexedMap(base.index), records: forkIndexedMap(base.records),
+  aggregates: forkIndexedMap(base.aggregates), commits: forkIndexedMap(base.commits),
+});
+
+export const lockBackendScope = (state: BackendScopeState): BackendScopeState => {
+  for (const map of [state.chains, state.genesis, state.index, state.records, state.aggregates, state.commits]) {
+    if (map instanceof IndexedMap) map.lock();
+  }
+  return Object.freeze(state);
+};
+
 /** Neutral per-kernel store: one map of scopes, no durability claim. */
 export class MemoryBackend {
   readonly scopes = new Map<string, BackendScopeState>();
+
+  constructor(private readonly createScope: () => BackendScopeState = createBackendScopeState) {}
 
   scopeState(scope: { readonly tenantId: string; readonly workspaceId: string }): BackendScopeState {
     const key = backendScopeKey(scope);
     const existing = this.scopes.get(key);
     if (existing) return existing;
-    const created = createBackendScopeState();
+    const created = this.createScope();
     this.scopes.set(key, created);
     return created;
   }
