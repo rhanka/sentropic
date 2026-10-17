@@ -12,7 +12,7 @@ import { applyPgEffects } from './effects.js';
 import { updatePortableDigest, finishPortableDigest } from './digest.js';
 import { pgJsonBytes } from './roots.js';
 import { pgUnitDigest } from './ordinary-transactions.js';
-import { validatePgPurgePolicy } from './module-effects.js';
+import { checkPgStagedModule } from './staged-module.js';
 export interface PgStepWork { items: number; appends: number; bytes: number; }
 export const preparePgStep = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, unit: PgUnit, limits: WorkLimits): Promise<PgStepWork> => {
   const p = unit.metadata.progress!; const work = { items: 0, appends: 0, bytes: 0 };
@@ -68,7 +68,7 @@ export const preparePgStep = async (core: PgCore, session: PgSession, grant: Sco
     }
     if (p.phase === 5) {
       if (finishPortableDigest(p.dependency) !== p.root.dependencyRoot || finishPortableDigest(p.effect) !== p.root.effectRoot) throw new StorageInvalidCommandError('staged commitment mismatch');
-      await validatePgPurgePolicy(core, session, grant, p.prepared, unit.metadata.barriers, unit.metadata.purges);
+      await checkPgStagedModule(core, session, grant, unit, 'seal', p.root, undefined, true);
       p.prepared = await core.roots.put(session, p.prepared, 'unit-root', unit.metadata.begin.operationKey, p.root);
       unit.metadata.seal = { unitId: unit.id, commitRoot: p.root, capability: core.id('seal-capability') };
       unit.metadata.state = 'sealed';

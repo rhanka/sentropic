@@ -65,6 +65,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-PORT12 — installed staged contracts register domain authorization and policy handlers. Begin/intake/seal/publication/recovery use actual persisted unit facts; generic contracts retain generic coherence checks. No request supplies a callback/enforcement flag. Publication acquires the scope gate before its unit lock to match native hidden preparation; co-review pending.
 - [ ] `attention` BRCM2-PORT11 — installed hidden preparation reuses kernel begin/stage/inspect on the existing injected session, including rollback-only propagation and outer grant/fence/domain revalidation. Hidden metadata/fragments commit without a canonical root event; no second canonical store or caller SQL is introduced. Co-review pending.
 - [ ] `attention` BRCM2-PORT10 — installed native operations/finalization receive a private same-session SPI for real retained records, metadata and bounded kernel applies. Scoped requests supply only named input DTOs, never callbacks/SQL/enforcement flags. This enables authorized post-barrier intent and proof-gated final lifecycle append while all M1 getters retain denial semantics; co-review pending.
 - [ ] `attention` BRCM2-PORT9 — installed module assets and a same-session projection preparation callback extend the PG registration. The single host-owned history verifies the complete selected asset sequence and actual data/projection schemas; projection rows are visible only through captured kernel membership. No second ledger or request SQL is added; co-review pending.
@@ -400,6 +401,7 @@
   - [x] Observed the missing same-session staging SPI. Kernel hidden operations now join an active scope session, retain contributor/fence revalidation and roll back with module preparation; standalone hidden operations retain their bounded immutable retry behavior.
   - [ ] Added source/mapping/group/resource binding validation and a deterministic admissible-inventory digest. The implementation note records kernel-owned canonical state, same-session hidden intake, terminal receipt derivation and retained authorized export requirements.
   - [ ] RED `postgres-module-policy.spec.ts` requires installed domain authority at fragment intake, final root publication and committed receipt recovery, with the storage grant otherwise unchanged and valid.
+  - [x] The module-authority probe accepted unauthorized intake. Installed contract handlers now revalidate every phase, including terminal receipt recovery; prepared roots still require the same root CAS, grant and current database fence.
   - [ ] Versioned fragment/root/continuation codecs and `transport-v1.json` vectors (C4a).
   - [ ] Import in chained sub-units and atomic groups with mappings; typed complete batch/unit receipts recoverable after commit-before-response (C4b).
   - [ ] Authorized readback/export with terminal completeness and continuation; truncated terminal export rejected (C4c).
