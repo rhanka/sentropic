@@ -7,7 +7,6 @@
 
 ## Scope / Guardrails
 - Scope limited to `packages/cluster-mesh` storage kernel, comments module, Postgres module, M2-W wiring, their specs/docs/version bump and the narrow EX7/EX8 CI/build prerequisite corrections.
-<!-- Receipt compatibility: optional moduleResult is recorded in the feedback loop below. -->
 - No migration in `api/drizzle/*.sql`; Postgres assets are package assets under `packages/cluster-mesh/assets/storage/postgres/`.
 - Make-only workflow, no direct Docker commands; one Docker build at a time (`make ps-all` first).
 - Root workspace `~/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -26,12 +25,13 @@
   - `BRANCH.md`
   - `package-lock.json`
   - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md` (Opus m2)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/cluster-mesh/tests/packaging/types-and-bundlers.spec.ts` (BRCM2-EX6)
   - `packages/cluster-mesh/README.md` (BRCM2-EX6)
   - `scripts/ci/publishable-ci-wiring.test.mjs` (BRCM2-EX7)
-  - `Makefile` (BRCM2-EX8: comments build prerequisites only)
+  - `Makefile` (BRCM2-EX8/EX9: comments prerequisites and ephemeral package tooling)
   - `api/Dockerfile` (BRCM2-EX8: unchanged peer build ordering only)
   - `packages/cluster-mesh/src/storage/**`
   - `packages/cluster-mesh/tests/storage/**`
@@ -71,7 +71,8 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [ ] `attention` BRCM2-EX8 — fresh CI API typecheck/image/toolbox builds compile cluster-mesh before the unchanged optional workspace comments peer, producing TS2307. Add comments as a prerequisite for cluster-mesh build/typecheck/test and move its existing Docker build step before cluster-mesh. Impact: build ordering only in root Makefile and api/Dockerfile; no app source/route/schema, Compose or M1 change. Rollback: restore the prior prerequisite/build order with the comments module removal.
+- [x] `acknowledge` BRCM2-EX8 — comments prerequisites and Docker peer ordering fixed the cold TS2307 failure. Run 39024243221 at 383d48f24 passed API typecheck, API image and toolbox image. Impact: build ordering only; rollback: restore the prior order with comments module removal.
+- [x] `acknowledge` BRCM2-EX9 — owner-requested Opus m7: make cluster-mesh cold build/typecheck/test self-contained and keep dependencies inside disposable containers. Root Makefile tooling and the qualification include may change. CI retains the explicit include under tests/storage as the accepted isolated PostgreSQL harness. Rollback: revert tooling and qualification wiring together.
 - [x] `acknowledge` BRCM2-EX7 — CI's exact Cluster Mesh candidate/post-publication tuple assertion omitted the newly required optional comments peer. Updated its expected tuple to the already qualified comments@0.3.0 configuration. Impact: one workflow wiring regression test; production manifests/guard policy unchanged. Rollback: revert the assertion with the corresponding CI tuple change.
 - [x] `acknowledge` BRCM2-EX6 — packed qualification exposes a hard-coded inventory of eight foreign provider proxy leaves; the new local comments leaf requires an explicit ninth local-export assertion. Also document the delivered storage/comments exports in the shipped README. Impact: one packaging test and package documentation; no runtime contract changes. Rollback: revert these two file changes with the new comments export.
 - [ ] `attention` BRCM2-PORT17 — nested binding revalidation now joins the active same-scope PG session and remains attached to its final revalidation set. This removes a hidden second-connection requirement without weakening issuance, revocation, lifetime or scope checks; installed page reads also honor configured work maxima. Co-review pending.
@@ -98,7 +99,14 @@
   - [ ] PORT-2 root composition: opt-in indexed backend state and a trusted mutation coordinator covers ordinary writes, transactions and current-coverage reads; adapter handles keep binding only. Existing default K3 behavior is qualified by its 56-test suite; co-review required for the additive root options and backend record-history type.
   - [ ] PORT-3 backend identity: an injected backend must retain one module/incarnation identity and hold hidden progress by scope/namespace; cross-module reuse and a conflicting incarnation are rejected before binding.
     - [x] RED identity probes observed; backend pins identity and exposes trusted scoped control storage for resumable hidden preparation. All eight coordinator/identity probes pass.
-- [x] `acknowledge` BRCM2-VER — version ordering: npm `@sentropic/cluster-mesh` 0.16.0 = main 0.16.0; PR #679 holds 0.18.0; this branch takes 0.19.0 so either merge order keeps both strictly above main. `@sentropic/comments` stays 0.3.0 unless `packages/comments/src/**` changes (forbidden here).
+- [x] `acknowledge` BRCM2-VER — required order: merge #679 (0.18.0) first, then rebase #684, resolve overlapping Makefile/CI/Dockerfile/lock edits and re-bump above both main and npm before publication. Current candidate is 0.19.0; it is not cleared for either merge order. `@sentropic/comments` remains frozen at 0.3.0. Never merge from this builder.
+- [ ] `attention` BRCM2-U1 — gr-conductor co-review: validateAtomicUnit now rejects malformed arrays, records, guards, relations, barriers, purge intents and index results, including default K3 callers.
+- [ ] `attention` BRCM2-U2 — gr-conductor co-review: indexed page reads use records.at(seq); adapters must preserve records[i].seq === i.
+- [ ] `attention` BRCM2-U3 — gr-conductor co-review: public KernelOptions.backend/coordinator permit trusted shared-backend composition.
+- [ ] `attention` BRCM2-U4 — gr-conductor co-review: indexed disposeChainInScope retains bytes and reports retained disposition.
+- [ ] `attention` BRCM2-U5 — gr-conductor co-review: coordinated readPage/readChain return inaccessible before validating arguments.
+- [ ] `attention` BRCM2-U6 — gr-conductor co-review: storage/Postgres leaves and staged root/profile exports extend the public port; unused legacy alias will be deleted.
+- [ ] `attention` BRCM2-U7 — gr-conductor co-review: remove armFailure/beforePublish from the shipped root; preserve interruption/interleaving evidence through test helpers.
 - [x] `acknowledge` BRCM2-PG — resolved through the branch-local Make include: real pinned PostgreSQL, all source/installed gates and actual server-SIGKILL recovery pass. No root Makefile/Compose change or infrastructure decision remains.
 
 ## AI Flaky tests
@@ -120,6 +128,18 @@
 - This branch has no UI surface (package-only); no web app, Chrome plugin or VSCode plugin UAT applies. Host acceptance belongs to the Immo host (Radar PR #859).
 
 ## Plan / Todo (lot-based)
+- [ ] **Opus corrections — PR #684 NO-GO (2026-10-17)**
+  - [ ] MAJ-1: module-owned schema fingerprint, typed drift error, tested operator re-attestation after host DDL and PostgreSQL major upgrades.
+  - [ ] MAJ-2: required stable comments cursor secret, restart/replica/key-mismatch page tests and host documentation.
+  - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
+  - [ ] m2/m3: 0.19.0 changelog and independent comments migration numbering with core-upgrade regression.
+  - [ ] m4/m5: delete staged-runtime alias and move public test hooks into test helpers.
+  - [ ] m6: dedicated formatting-only atomic commits for overlong storage/Postgres/comments lines.
+  - [ ] m7: cold self-contained typecheck/build/test, dependency cleanup and accepted qualification include.
+  - [ ] m8: discriminating binding/terminal/receipt-owner/export-root mutants and exact typed refusals.
+  - [ ] m9: host receipts table, bounded 40001 callback retry and 50-operation recovery cap documented and qualified.
+  - [ ] Final: source/PG/crash/installed gates, mutation record, push #684, fresh CI with restored OpenAI credit, report and stop without merging.
+
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `plan/BRANCH_TEMPLATE.md`.
   - [x] Read the integrity design note, K2b Opus r3, K4 Opus, engram Sol K4 co-review, frozen L3a v4.1 §17 and `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`.
@@ -250,7 +270,7 @@
 
 - [ ] **Lot N — Final validation**
   - [x] CI's 5-second source long-history probe expired while executing 28 source publications. Kept the same timeout and >1-MiB/multibyte/three-plus-fragment/terminal/full-readback assertions, using 14 larger revisions (each body remains below 64 KiB); scoped real-PG probe PASS in 1.97 seconds. The separate installed 28-revision proof remains unchanged.
-  - [ ] CI logs independently reproduce the cold workspace peer-order failure in API typecheck, image and toolbox builds. BRCM2-EX8 now adds comments build prerequisites to all three cluster-mesh Make entry points and moves the existing Docker peer build step before its consumer; no application runtime code changes.
+  - [x] CI run 39024243221 at 383d48f24 passed API typecheck, image and toolbox builds after EX8 added comments prerequisites and corrected Docker peer ordering; no application runtime code changes.
   - [x] CI run 39023730235 exposed the stale exact peer-tuple assertion in `publishable-ci-wiring.test.mjs`; reproduced locally and updated its shared candidate/post-publication/bootstrap expectation with comments@0.3.0. Both `test-publishable-manifests` and `test-qualify-published-install` now PASS (BRCM2-EX7; RTK `10f2a27c5493`).
   - [x] Typecheck/lint PASS; source package suite 93 files / 805 tests PASS, 48 files / 106 explicit PG/crash/installed tests skipped only here and qualified separately below (RTK `24fdf710d026`).
   - [x] Real neutral PG 26 files / 47 tests PASS; real comments PG 25 files / 104 tests PASS; both independent server-SIGKILL phases PASS (RTK `e23b89c8a2b4`).
