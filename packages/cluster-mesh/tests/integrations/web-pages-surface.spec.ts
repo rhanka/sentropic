@@ -125,3 +125,61 @@ describe('web-pages mesh leaf', () => {
     expect(entry?.availability).toBe('available');
   });
 
+  it('never loads the artifacts leaf while web-pages stays unselected', async () => {
+    const loads: string[] = [];
+    const facade = facadeWith({ loads });
+    facade.select(['immo']);
+    const compiled = await facade.compile({
+      bindings: {},
+      compatibility: { immo: { manifestDigest: computeManifestDigest(IMMO_MANIFEST) } },
+    });
+    expect(compiled.ok).toBe(true);
+    expect(loads).not.toContain('mcp/web-pages');
+    expect(compiled.ok && compiled.registry.resolveTool('artifacts_list')).toBeUndefined();
+  });
+
+  it('refuses compilation atomically when the artifacts peer is absent', async () => {
+    const facade = facadeWith({ failWebPages: true });
+    facade.select(['sentropic.web-pages']);
+    const compiled = await facade.compile({ bindings: {}, compatibility: {} });
+    expect(compiled.ok).toBe(false);
+    if (!compiled.ok) {
+      expect(compiled.diagnostics[0]?.path).toContain('sentropic.web-pages');
+      expect(compiled.diagnostics[0]?.message).toContain('builtin loader failed');
+    }
+    expect(facade.compiled()).toBeUndefined();
+  });
+
+  it('refuses selecting web-pages without the builtin and colliding tools', async () => {
+    const bare = createMcpRegistry({ modules: modulesWith() });
+    expect(() => bare.select(['sentropic.web-pages'])).toThrow(/unknown provider/);
+    const facade = facadeWith();
+    const colliding = localImmo() as unknown as { manifest: typeof IMMO_MANIFEST };
+    colliding.manifest = {
+      ...IMMO_MANIFEST,
+      providerId: 'other',
+      tools: [{ ...IMMO_MANIFEST.tools[0]!, name: 'artifacts_list' }],
+    };
+    facade.register({
+      ...(localImmo() as object),
+      manifest: colliding.manifest,
+      handlers: {
+        'artifacts_list-handler': {
+          handlerId: 'artifacts_list-handler', capabilityRef: 'artifacts_list', configSchema: LIMIT_SCHEMA,
+        },
+      },
+      toolValues: { artifacts_list: { handlerId: 'artifacts_list-handler', values: { limit: 20 } } },
+    } as never);
+    facade.select(['other', 'sentropic.web-pages']);
+    const builtin = createWebPagesBuiltin({ modules: modulesWith(), definition: { app: fakeApp } });
+    const definition = await builtin.load();
+    const compiled = await facade.compile({
+      bindings: {},
+      compatibility: {
+        other: { manifestDigest: computeManifestDigest(colliding.manifest) },
+        'sentropic.web-pages': { manifestDigest: computeManifestDigest(definition.manifest) },
+      },
+    });
+    expect(compiled.ok).toBe(false);
+  });
+});
