@@ -27,6 +27,7 @@ import {
   type ContextBudgetZone as ChatCoreContextBudgetZone,
 } from '../../../packages/chat-core/src/context-budget';
 import { createId } from '../utils/id';
+import { getDefaultOpenAIModel, LUNA_MAX_INPUT_TOKENS } from '../config/models';
 import { callLLM, callLLMStream } from './llm-runtime';
 import {
   getModelCatalogPayload,
@@ -657,16 +658,16 @@ const toBudgetString = (value: unknown): string => {
   }
 };
 
-/** Per-model context window budgets (total tokens including input + output) */
+/** Context admission budgets; Luna uses its stricter maximum input, other profiles retain their existing windows. */
 const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   // OpenAI
-  'gpt-5.6-luna':  1_050_000,
+  'gpt-5.6-luna':  LUNA_MAX_INPUT_TOKENS,
+  'gpt-6-luna':    LUNA_MAX_INPUT_TOKENS,
   'gpt-5.6-sol':   1_050_000,
   'gpt-5.6-terra': 1_050_000,
   'gpt-5.5':       1_000_000,
   'gpt-5.4-nano':  1_000_000,
   'gpt-4.1':       1_000_000,
-  'gpt-4.1-nano':  1_000_000,
   // Gemini
   'gemini-3.5-flash':              1_000_000,
   'gemini-3.1-flash-lite':  1_000_000,
@@ -805,7 +806,7 @@ const formatConversationForSummary = (messages: ChatRuntimeMessage[]): string =>
     })
     .join('\n\n');
 
-const compactConversationContext = async (input: {
+export const compactConversationContext = async (input: {
   messages: ChatRuntimeMessage[];
   providerId: ProviderId;
   modelId: string | null | undefined;
@@ -851,11 +852,12 @@ const compactConversationContext = async (input: {
   ].join('\n');
 
   const summaryResponse = await callLLM({
-    providerId: input.providerId,
+    providerId: input.providerId === 'gemini' ? 'gemini' : 'openai',
     model:
       input.providerId === 'gemini'
         ? 'gemini-3.1-flash-lite'
-        : 'gpt-4.1-nano',
+        : getDefaultOpenAIModel(),
+    reasoningEffort: 'none',
     userId: input.userId,
     workspaceId: input.workspaceId,
     messages: [{ role: 'user', content: summaryPrompt }],
@@ -1666,7 +1668,8 @@ export class ChatService {
     });
     try {
       const res = await callLLM({
-        model: 'gpt-4.1-nano',
+        model: getDefaultOpenAIModel(),
+        reasoningEffort: 'none',
         messages: [{ role: 'system', content: prompt }],
         maxOutputTokens: 32
       });
@@ -2361,7 +2364,7 @@ export class ChatService {
     // Reasoning-effort evaluation (best effort):
     // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
     // - Evaluator uses a cheap model from the same provider family when available,
-    //   otherwise falls back to OpenAI gpt-4.1-nano.
+    //   otherwise uses the configured OpenAI helper.
     const selectedProviderId = input.selectedProviderId as ProviderId;
     const selectedModel = input.selectedModel;
     const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
@@ -2370,7 +2373,7 @@ export class ChatService {
     const evaluatorModel =
       selectedProviderId === 'gemini'
         ? 'gemini-3.1-flash-lite'
-        : 'gpt-4.1-nano';
+        : getDefaultOpenAIModel();
     if (!shouldEvaluateReasoningEffort) {
       return {
         shouldEvaluate: false,
@@ -2401,6 +2404,7 @@ export class ChatService {
         for await (const ev of callLLMStream({
           providerId: evaluatorProviderId,
           model: evaluatorModel,
+          reasoningEffort: 'none',
           userId: input.userId,
           workspaceId: input.workspaceId ?? undefined,
           messages: [{ role: 'user', content: evalPrompt }],
@@ -2440,6 +2444,8 @@ export class ChatService {
       return {
         shouldEvaluate: true,
         effortLabel: 'medium',
+        ...(selectedProviderId === 'openai' && selectedModel === getDefaultOpenAIModel()
+          ? { effortForMessage: 'medium' as const } : {}),
         evaluatedBy: 'fallback',
         evaluatorModel,
         failure: { message: safeMsg },
@@ -3532,6 +3538,7 @@ When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string l
         });
         if (compacted.summary.trim().length > 0) {
           currentMessages = compacted.compactedMessages;
+          loopState.currentMessages = currentMessages;
         }
         const afterSnapshot = estimateContextBudget({
           messages: currentMessages,

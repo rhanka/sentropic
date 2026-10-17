@@ -27,7 +27,7 @@ export type Initiative = {
   organizationId?: string | null;
   organizationName?: string | null;
   status?: 'draft' | 'generating' | 'detailing' | 'completed';
-  model?: string; // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano')
+  model?: string; // Model used for generation; omitted to use the configured default.
   createdAt: string;
   data: InitiativeData;
   totalValueScore?: number | null;

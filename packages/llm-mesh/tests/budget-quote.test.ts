@@ -724,7 +724,6 @@ describe('execution-feature-bound quotes (spec §16.3)', () => {
 
 // Codex-pinned alias targets plus unpinned OpenAI profiles (codex is OpenAI's only account transport).
 const EXPECTED_UNENFORCED = [
-  'openai/gpt-4.1-nano@*',
   'openai/gpt-5.4-nano@*',
   'openai/gpt-5.5@*',
   'openai/gpt-5.6-luna@codex',

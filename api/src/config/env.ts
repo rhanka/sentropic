@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_OPENAI_MODEL, getDefaultOpenAIModel } from './models';
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -34,7 +35,7 @@ const envSchema = z.object({
   // dev/UAT point it at the gitignored SA key under the workspace bind-mount,
   // e.g. GOOGLE_APPLICATION_CREDENTIALS=/workspace/.secrets/gcp-sa.json.
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
-  OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
+  OPENAI_MODEL: z.string().default(DEFAULT_OPENAI_MODEL).transform(getDefaultOpenAIModel),
   TAVILY_API_KEY: z.string().optional(),
   // ---------------------------------------------------------------------------
   // Document storage (S3-compatible: MinIO dev/test, Scaleway Object Storage prod)
