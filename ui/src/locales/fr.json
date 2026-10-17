@@ -4,6 +4,7 @@
     "workspace": "Projet / espace de travail",
     "settings": "Créer ou gérer un espace dans les paramètres",
     "refresh": "Actualiser les sessions",
+    "attach": "Rattacher cette session vérifiée à cet espace",
     "empty": "Aucune session partagée dans cet espace.",
     "unavailable": "Le poste ne prend pas encore en charge le partage sécurisé.",
     "requestFailed": "La demande n'a pas abouti. Actualisez son état avant de continuer.",
