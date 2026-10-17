@@ -368,6 +368,9 @@ export interface AcknowledgeGrantRefreshInput {
   /** P3: the D1 version the caller attests — must equal the grant's frozen
    * D1 version. A changed D1 version needs a new derivation. */
   readonly d1Version: number;
+  /** m1: the accepted policy digest the caller acknowledges — must equal
+   * the parent's current digest, binding the exact N+1 scope. */
+  readonly policyDigest: string;
 }
 
 export interface SessionContentUsage {
@@ -1047,6 +1050,9 @@ export class SessionContentService {
     if (!Number.isSafeInteger(input.d1Version) || input.d1Version < 0) {
       throw new SessionContentError('invalid_request', 'acknowledged D1 version must be a safe integer');
     }
+    if (typeof input.policyDigest !== 'string' || input.policyDigest.length === 0) {
+      throw new SessionContentError('invalid_request', 'acknowledged policy digest must be set');
+    }
     await this.checkEpoch();
     return db.transaction(async (tx) => {
       await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
@@ -1064,6 +1070,10 @@ export class SessionContentService {
         if (grant.state === 'excluded') throw new SessionContentError('session_excluded', 'grant is excluded');
         if (grant.state === 'closed') throw new SessionContentError('grant_closed', 'grant is closed');
         throw new SessionContentError('grant_revoked', 'grant is not active');
+      }
+      // m1: an unreconciled local deny pauses capture — reconcile first.
+      if (grant.localDenyPending) {
+        throw new SessionContentError('invalid_request', 'unreconciled local deny; reconcile first');
       }
       const [project] = await tx
         .select()
@@ -1128,6 +1138,10 @@ export class SessionContentService {
       if (input.d1Version !== grant.d1Version) {
         throw new SessionContentError('ineligible_session', 'D1 version changed; a new derivation is required');
       }
+      // m1: the ACK binds the exact accepted scope by digest.
+      if (input.policyDigest !== project.retentionDigest) {
+        throw new SessionContentError('revision_conflict', 'acknowledged scope is not the accepted one');
+      }
       const selected = ((policy['selectedSessionIds'] as string[] | undefined) ?? []).map(String);
       const futureEligible =
         (policy['futureSessions'] as boolean | undefined) === true &&
@@ -1140,6 +1154,11 @@ export class SessionContentService {
         grant.authorityEpoch,
         namespaceIdFor(ctx.tenantId, ctx.ownerId, grant.authorityEpoch),
       );
+      // m1: resuming takes only post-boundary bytes — the boundary moves
+      // forward, and the freshness ack advances to the refresh time.
+      if (input.nativeBoundarySeq < grant.nativeBoundarySeq) {
+        throw new SessionContentError('invalid_request', 'acknowledged boundary moved backwards');
+      }
       const [locked] = await tx
         .select()
         .from(sessionContentGrants)
@@ -1158,6 +1177,7 @@ export class SessionContentService {
           channels: project.channels,
           retentionSnapshot: project.retentionByChannel,
           nativeBoundarySeq: input.nativeBoundarySeq,
+          lastFreshnessAckAt: this.nowMs(),
           updatedAt: new Date(this.nowMs()),
         })
         .where(
@@ -1448,6 +1468,10 @@ export class SessionContentService {
       }
       if (grant.state !== 'active') {
         throw new SessionContentError('grant_revoked', 'grant is not active');
+      }
+      // m1: an unreconciled local deny pauses capture — reconcile first.
+      if (grant.localDenyPending) {
+        throw new SessionContentError('invalid_request', 'unreconciled local deny; reconcile first');
       }
       // N3: reserve and commit share one frozen authorization tuple T.
       // After an amendment, capture pauses at the last acknowledged
