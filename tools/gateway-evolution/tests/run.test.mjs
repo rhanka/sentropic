@@ -9,10 +9,14 @@ import { createHash } from 'node:crypto';
 
 import {
   GatewayInputError,
+  buildBundleIndex,
   checkManifest,
+  classifyPhase,
   main,
   parseConsumerInput,
   validateConsumerInput,
+  verifyBundleIndex,
+  verifyMergeParents,
 } from '../run.mjs';
 
 const hex = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
@@ -228,5 +232,91 @@ describe('run-manifest validation', () => {
       );
     }
     await assert.rejects(main(['nope'], { fs, out: () => {} }), { code: 'usage' });
+  });
+});
+
+describe('candidate bundle index', () => {
+  const entries = () => [
+    { path: 'manifest.json', size: 12, sha256: 'a'.repeat(64) },
+    { path: 'sibling/receipts.json', size: 8, sha256: 'b'.repeat(64) },
+  ];
+
+  it('builds a deterministic index whose suffix hashes the exact bytes', () => {
+    const first = buildBundleIndex([...entries()].reverse());
+    const second = buildBundleIndex(entries());
+    assert.equal(first.bundleSha256, second.bundleSha256);
+    assert.deepEqual(
+      first.files.map((file) => file.path),
+      ['manifest.json', 'sibling/receipts.json'],
+    );
+  });
+
+  it('rejects absolute paths, traversal, duplicates, and bad digests', () => {
+    failsWith(() => buildBundleIndex([{ path: '/abs.json', size: 1, sha256: 'a'.repeat(64) }]), 'bad-path');
+    failsWith(() => buildBundleIndex([{ path: '../up.json', size: 1, sha256: 'a'.repeat(64) }]), 'bad-path');
+    failsWith(
+      () => buildBundleIndex([entries()[0], { ...entries()[0], size: 9 }]),
+      'bad-bundle',
+    );
+  });
+
+  it('verifies exact bytes and refuses extra, altered, missing, linked, or LFS members', () => {
+    const index = buildBundleIndex(entries());
+    const listed = entries().map((entry) => ({ ...entry, kind: 'file' }));
+    assert.deepEqual(verifyBundleIndex(index, [...listed, { path: 'bundle-index.json', kind: 'file' }]), { files: 2 });
+    failsWith(
+      () => verifyBundleIndex(index, [...listed, { path: 'rogue.tgz', size: 1, sha256: 'c'.repeat(64), kind: 'file' }]),
+      'bundle-mismatch',
+    );
+    failsWith(
+      () => verifyBundleIndex(index, [{ ...listed[0], size: 13 }, listed[1]]),
+      'bundle-mismatch',
+    );
+    failsWith(() => verifyBundleIndex(index, [listed[0]]), 'bundle-mismatch');
+    failsWith(
+      () => verifyBundleIndex(index, [{ ...listed[0], kind: 'symlink' }, listed[1]]),
+      'unsafe-member',
+    );
+    failsWith(
+      () => verifyBundleIndex(index, [{ ...listed[0], kind: 'lfs' }, listed[1]]),
+      'unsafe-member',
+    );
+  });
+});
+
+describe('phase classifier and merge parents (GW8-m1)', () => {
+  it('leaves committed-lock jobs inactive on every candidate phase', () => {
+    for (const phase of ['pr1-candidate', 'pr2-candidate', 'r5-candidate', 'r7b-candidate']) {
+      const program = phase.startsWith('pr') || phase.startsWith('baseline') ? 'gateway' : 'registry';
+      const decision = classifyPhase(program, phase);
+      assert.equal(decision.buildCommittedLock, false);
+      assert.equal(decision.reason, 'not-applicable (candidate-phase, committed lock)');
+    }
+  });
+
+  it('restores ordinary jobs for published, baseline, and none', () => {
+    assert.equal(classifyPhase('gateway', 'pr1-published').buildCommittedLock, true);
+    assert.equal(classifyPhase('gateway', 'baseline-662').buildCommittedLock, true);
+    assert.equal(classifyPhase('registry', 'none').buildCommittedLock, true);
+  });
+
+  it('accepts matching merge parents and refuses unrelated merges', async () => {
+    const git = { parentOf: async (_sha, n) => (n === 1 ? 'base' : 'head') };
+    assert.deepEqual(
+      await verifyMergeParents({ mergeSha: 'merge', baseSha: 'base', headSha: 'head' }, git),
+      { mergeSha: 'merge', baseSha: 'base', headSha: 'head' },
+    );
+    await assert.rejects(
+      verifyMergeParents({ mergeSha: 'merge', baseSha: 'other', headSha: 'head' }, git),
+      (error) => error instanceof GatewayInputError && error.code === 'unrelated-merge',
+    );
+  });
+
+  it('treats unresolvable parents as unreadable base evidence', async () => {
+    const failing = { parentOf: async () => { throw new Error('fetch failed'); } };
+    await assert.rejects(
+      verifyMergeParents({ mergeSha: 'merge', baseSha: 'base', headSha: 'head' }, failing),
+      (error) => error instanceof GatewayInputError && error.code === 'unreadable-base-evidence',
+    );
   });
 });
