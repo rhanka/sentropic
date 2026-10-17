@@ -286,6 +286,7 @@
   - [ ] Branch-local Make include starts/stops an isolated pinned Postgres container and provides qualification tooling without changing root Makefile/Compose.
     - [ ] Added an isolated test-only pinned Postgres service/network and a neutral one-client bridge; real tests require backend PID continuity, rollback and finite SQL cancellation. No host port or production driver dependency is introduced.
     - [x] Corrected service startup to inspect containers explicitly: Docker's generic inspect matched the identically named network and skipped container creation. No database test result was inferred from the failed startup.
+    - [ ] Qualification runner exited with SIGBUS before collecting tests; a Make diagnostic target isolates Node/tool installation and filesystem evidence before any runner change.
   - [ ] Structural driver port (parameterized query + transaction on one connection), serializable atomic ops, fences, error mapping in `src/storage/postgres/*.ts`; no `pg` import.
   - [ ] Assets `assets/storage/postgres/00N-*.sql` and `manifest.json`; host-owned migration history attachment.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/storage/postgres-{core,readers,staged,replay,migrations,barriers}.spec.ts` (BRCM2-PG).
