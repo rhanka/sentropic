@@ -5,6 +5,7 @@ import type { PgCore } from './core.js';
 import { runPgTransaction } from './ordinary-transactions.js';
 import { decodePgCounter, decodePgText } from './codec.js';
 import type { PgSession } from './protocol.js';
+import { createPgInstalledContext } from './installed.js';
 interface PgPurgeJob extends RootPurgeJob { readonly phase: 'payload' | 'staged'; readonly position: string | null; readonly found: boolean; }
 const ancestors = async (core: PgCore, session: PgSession, root: string | null, target: string, match: (id: string) => Promise<boolean>, seen = new Set<string>()): Promise<boolean> => {
   if (seen.has(target)) return false;
@@ -70,6 +71,10 @@ export const completePgPurge = async (core: PgCore, grant: ScopeGrant<unknown>, 
       job.position = id; work += 1;
     }
     if (job.state === 'complete') {
+      if (core.options.purgeFinalizer) {
+        const installed = await createPgInstalledContext(core, grant, tx);
+        await core.options.purgeFinalizer(job, installed.context); await installed.finish();
+      }
       job = { ...job, outcomeId: core.id('purge-outcome'), payloadDisposition: 'erased' };
       tx.root = await store.put(session, tx.root, 'disposed', job.target, true);
       tx.root = await store.put(session, tx.root, 'purge-outcome', intentId, { intentId, outcomeId: job.outcomeId, target: job.target, disposition: 'erased' });
