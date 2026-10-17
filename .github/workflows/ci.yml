@@ -569,6 +569,11 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-cluster-mesh PACK_DESTINATION=tmp/ci-manifest-guard/candidate/cluster-mesh PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-cluster-mesh
+      - name: Qualify installed comments on an injected single-session Postgres host
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-installed CM_COMMENTS_TARBALL=tmp/ci-manifest-guard/candidate/cluster-mesh/sentropic-cluster-mesh-0.19.0.tgz CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/comments-installed ENV=test-ci-cluster-mesh-pg
+      - name: Remove installed comments qualification Postgres service and volume
+        if: always()
+        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
       - name: Pack Cluster Mesh same-PR BLOCK siblings
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
