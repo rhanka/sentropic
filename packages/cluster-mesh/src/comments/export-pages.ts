@@ -8,11 +8,13 @@ import { createCommentsFragment, commentsTransportBytes } from './fragment-codec
 import { readCommentsExportRecords } from './export-readers.js';
 import { sameScope } from './storage-schema.js';
 import { CommentsTransportError, type CommentsExportFragmentPage, type CommentsFragment } from './transport-contracts.js';
+import { authorizeCommentsExport } from './export-authority.js';
 interface ExportReadInput { readonly request: CanonicalBatchExportRequest; readonly continuation: string | null; readonly limit?: number; }
-const load = async (context: PgInstalledContext, input: ExportReadInput): Promise<CommentsExportState> => {
+const load = async (options: CommentsServiceOptions, context: PgInstalledContext, input: ExportReadInput): Promise<CommentsExportState> => {
   if (!input?.request || !sameScope(input.request.scope, context.grant.scope)) throw new CommentsTransportError('denied', 'Export scope is unavailable');
   const state = await readCommentsExport(context, input.request.exportId);
   if (!state || canonicalJson(commentsExportBoundary(state).request) !== canonicalJson(input.request)) throw new CommentsTransportError('conflict', 'Retained export request differs');
+  await authorizeCommentsExport(options, context, state);
   return state;
 };
 const count = (value = 50): number => {
@@ -20,7 +22,7 @@ const count = (value = 50): number => {
   return value;
 };
 export const readCommentsExportFragments = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CommentsExportFragmentPage> => {
-  const input = supplied as ExportReadInput; const state = await load(context, input); const limit = count(input.limit);
+  const input = supplied as ExportReadInput; const state = await load(options, context, input); const limit = count(input.limit);
   let position = input.continuation === null ? initialCommentsExportPosition() : decodeCommentsExportCursor(state, 'fragments', input.continuation);
   const fragments: CommentsFragment[] = []; let terminal = false;
   while (fragments.length < limit) {
@@ -42,7 +44,7 @@ export const readCommentsExportFragments = async (options: CommentsServiceOption
   context.replayed(); return { fragments, nextCursor: terminal ? null : encodeCommentsExportCursor(state, 'fragments', position) };
 };
 export const continueCommentsExport = async (options: CommentsServiceOptions, context: PgInstalledContext, supplied: unknown): Promise<CanonicalBatchExportResponse> => {
-  const input = supplied as ExportReadInput; const state = await load(context, input); const limit = count(input.limit);
+  const input = supplied as ExportReadInput; const state = await load(options, context, input); const limit = count(input.limit);
   const position = input.continuation === null ? initialCommentsExportPosition() : decodeCommentsExportCursor(state, 'records', input.continuation);
   // Reserve the bounded authenticated continuation before admitting records.
   const page = await readCommentsExportRecords(options, context, state, position, limit, 1048576 - 16384);
