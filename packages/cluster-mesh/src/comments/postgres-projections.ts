@@ -1,11 +1,10 @@
-import { resourceKey } from '@sentropic/comments';
 import type { CanonicalChainRecord } from '@sentropic/comments';
 import type { PgRegisteredProjection } from '../storage/postgres/protocol.js';
 import { quotePgIdentifier } from '../storage/postgres/protocol.js';
-import { chainIdentity, decodeRecord, invalid, selectionForRecord, validateRecordIdentity } from './storage-schema.js';
+import { chainIdentity, commentsResourceKey, decodeRecord, invalid, selectionForRecord, validateRecordIdentity } from './storage-schema.js';
 export const commentsHeaderLinks = (record: CanonicalChainRecord): Record<string, unknown> => {
-  if (record.kind === 'annotation-revision') return { resources: [record.primary, ...record.secondary].map((target) => resourceKey(target.resource)) };
-  if (record.kind === 'thread-structure-revision') return { resources: [resourceKey(record.primary.resource)], annotationId: record.annotationId };
+  if (record.kind === 'annotation-revision') return { resources: [record.primary, ...record.secondary].map((target) => commentsResourceKey(target.resource)) };
+  if (record.kind === 'thread-structure-revision') return { resources: [commentsResourceKey(record.primary.resource)], annotationId: record.annotationId };
   if (record.kind === 'comment-revision') return { threadId: record.threadId, parentCommentId: record.parentCommentId, structureRevision: record.structureRevision, annotationPin: record.annotationPin };
   if (record.kind === 'review-event') return { revisionHash: record.revisionHash, referencesEventHash: record.referencesEventHash };
   if (record.kind === 'lifecycle-event') return { action: record.action, archiveKind: record.archiveKind };
