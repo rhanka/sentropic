@@ -126,6 +126,7 @@
     - [x] Reference checks full-scope/owner handles and the current scope fence at every staged mutation; audit membership is copied and published with canonical effects. The two shared probes now pass; discriminating mutants follow.
     - [x] Mutants: scope-blind colliding handle, nested record alias, nested append alias, premature audit publication and begin-fence-only validation, each killed at its exact assertion in `staged-integrity.spec.ts` (7/7).
   - [ ] MINEUR-6: replay ports gain `fence`, `pauseConsumer`, `maintain` authority; refusal cases for unauthorized principal, stale fence, wrong incarnation; `c-stall` consumes the snapshot then checks poison redelivery; mutant "resync clears stall".
+    - [ ] Replay RED port: explicit incarnation/owner/current-fence binding, maintain-only checkpoint/pause/retry/resync, pause-preserving resync and poison redelivery after snapshot consumption.
   - [ ] MINEUR-7: snapshot returns root state (heads/indexes) not journal events; captured roots authenticated; external journal scoped per stream.
   - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
   - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header (done with MINEUR-1); corrections recorded here with post-rebase SHAs.
