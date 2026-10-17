@@ -10,6 +10,7 @@ import { commentsTransportBytes } from './fragment-codec.js';
 import { CommentsTransportError } from './transport-contracts.js';
 import type { CommentsExportPosition, CommentsExportState } from './boundary-codec.js';
 import { readCommentsAuthorityTargets } from './authority-projection.js';
+import { assertCommentsReadAudience } from './read-audience.js';
 const terminalSequence = (state: CommentsExportState, chain: number): bigint => {
   const sequence = state.manifest.heads[chainIdentity(state.selection.selections[chain]!).key]?.terminalSeq;
   if (typeof sequence !== 'string' || !/^(0|[1-9][0-9]*)$/.test(sequence)) throw new CommentsTransportError('unavailable', 'Retained terminal sequence is invalid');
@@ -39,6 +40,7 @@ export const readCommentsExportRecords = async (options: CommentsServiceOptions,
     const ref = await commentsPgValue<PgChainRef>(captured, 'chain-record', chainRecordKey(chain, position.sequence));
     const record = ref ? await lookup(selection, ref.hash) : null;
     if (!record) throw new CommentsTransportError('incomplete', 'Retained export history is incomplete');
+    assertCommentsReadAudience(context.grant.principalId, record);
     const cost = commentsTransportBytes(record) + (records.length ? 1 : 0);
     if (encoded + cost > bytes) {
       if (!records.length) throw new CommentsTransportError('capacity-exceeded', 'Indivisible export record exceeds its declared page budget');
