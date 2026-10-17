@@ -78,7 +78,7 @@ describe('nano replacement through the product mesh boundary', () => {
   });
 
   it('should keep the Luna output ceiling scoped to Luna candidates', () => {
-    expect(() => validateOpenAIRequestBudget('gpt-5.6', {}, 128_001)).not.toThrow();
+    expect(() => validateOpenAIRequestBudget('gpt-5.6-sol', {}, 128_001)).not.toThrow();
     expect(() => validateOpenAIRequestBudget('gpt-5.6-luna', {}, 128_001)).toThrow(/output.*budget/i);
   });
 

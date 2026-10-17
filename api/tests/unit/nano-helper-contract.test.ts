@@ -54,13 +54,23 @@ describe('former nano product helpers', () => {
     expect(result.compactedMessages).toHaveLength(9);
   });
 
-  it('should forward medium reasoning to the main turn when effort evaluation fails', async () => {
+  it('should return medium for the default OpenAI main-turn handoff when evaluation fails', async () => {
     stream.mockImplementation(async function* () { throw new Error('Offline evaluator failure'); });
     const result = await chat.evaluateReasoningEffortInternal({
       selectedProviderId: 'openai', selectedModel: 'gpt-6-luna', userId: '', workspaceId: '',
       conversation: [{ role: 'user', content: 'Compare these security architectures.' }],
     });
     expect(result).toMatchObject({ effortLabel: 'medium', effortForMessage: 'medium', evaluatedBy: 'fallback' });
+  });
+
+  it('should preserve unrelated provider defaults when the OpenAI evaluator fails', async () => {
+    stream.mockImplementation(async function* () { throw new Error('Offline evaluator failure'); });
+    const result = await chat.evaluateReasoningEffortInternal({
+      selectedProviderId: 'anthropic', selectedModel: 'claude-sonnet-5', userId: '', workspaceId: '',
+      conversation: [{ role: 'user', content: 'Compare these security architectures.' }],
+    });
+    expect(result.evaluatedBy).toBe('fallback');
+    expect(result).not.toHaveProperty('effortForMessage');
   });
 
   it('should retain the same cap on a tool follow-up after rejected extraction arguments', async () => {

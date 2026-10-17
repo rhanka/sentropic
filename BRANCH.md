@@ -81,6 +81,7 @@
 - [x] BRNANO-EX2: CI reproduced two cluster-mesh integration failures that pin mesh 0.26.1 after the planned 0.26.2 bump. Allow only their two named test files; update expected installed versions without changing assertions or production exports. Roll back together with the mesh version.
 - [x] Cluster integration gate after the version-fixture repair: `make test-cluster-mesh -o build-events -o build-llm-gateway SCOPE=tests/integrations ENV=test-model-retirement`, 31 passed.
 - [x] Full API endpoints exposed seven changed fixture assumptions: user defaults still expected nano, and comment-tool streams consumed the newly active classifier. Update the defaults expectation and isolate classification while retaining all comment authorization/continuation assertions.
+- [x] Opus correction review reproduced an unintended non-OpenAI effort fallback change; restrict the explicit medium handoff to the configured OpenAI default and preserve other provider defaults. Pin official numeric financial ceilings independently in tests; document unmeasured main-chat corrections in the runbook.
 
 ## AI Flaky tests
 - [x] No provider failure in the paired campaign; 30/30 cases and all 38 requests completed without retry, repair, fallback or timeout inflation. Raw outputs/usage retained externally with no credentials.
