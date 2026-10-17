@@ -65,6 +65,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-PORT8 — reserved neutral `coverage-parent-v1` relationships install immutable indexed parents within ordinary/staged root preparation. Both memory and PG reject removal, cycles, reparenting and covered intake; no descendant enumeration or request-selectable bypass. Co-review pending.
 - [ ] `attention` BRCM2-PORT7 — additive selected Postgres leaf uses asynchronous durable grant binding and the same object-shaped staged commit/abort inputs as K4. SQL session/query/outbox/history interfaces remain host-injected; K3's existing factory and validated behavior stay unchanged. Co-review by gr-conductor remains pending.
 - [ ] `attention` BRCM2-EX4 — authorized package delivery needs public `storage`, `storage/postgres`, `comments` and selected composition/router leaves in `packages/cluster-mesh/package.json`; assets join the package files list. Impact: additive optional leaves, no root peer evaluation. Rollback: remove those new exports/assets entries together.
 - [ ] `attention` BRCM2-EX5 — real Postgres and portable-digest qualification will be wired into `.github/workflows/ci.yml`, using a branch-local `tests/storage/postgres.mk` include. Impact: isolated package validation steps only; Makefile/Compose remain unchanged. Rollback: remove the added workflow steps and include invocation.
@@ -357,6 +358,7 @@
   - [ ] Exposed the exact frozen 24-method store and explicit issued request/service contexts through the selected comments factory; the root/disabled package remains independent of peer evaluation.
   - [x] First real execution identified reordered grant JSON as a binding mismatch. Context ownership now preserves the issued representation while canonical record encoding remains ordered; TypeScript contextualizes the complete frozen store interface and narrows missing structural references explicitly.
   - [x] The unchanged packaged M1 corpus and both independent request/transaction probes pass on real PG (3 tests). Added RED dependent coverage with five children under a two-record atomic limit, requiring full getter denial and inaccessible pages after one parent barrier.
+  - [ ] Installed canonical payload/chain/object coverage in the same root mutation. Discussion containment covers comments; annotation pins remain references, while lifecycle/review derivatives follow their owning object.
   - [ ] Prepare the frozen optional peer and digest-pinned conformance/vector artifact through branch-local Docker/Make tooling; inspect the published peer before selecting its compatible range. Root/disabled imports must evaluate neither comments nor a database client.
   - [ ] Eleven-kind codecs, exact 24-method store mapping, request/transaction context, authority composition (C1a).
   - [ ] Three named queries, projections, PG projection assets (C1b); lifecycle, coverage, purge, availability (C2).
