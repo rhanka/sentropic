@@ -13,3 +13,9 @@ export { MemoryBackend, backendScopeKey, createBackendScopeState, incrementBacke
 export type { BackendAggregate, BackendAtomicRecord, BackendChainRecord, BackendChainState, BackendGenesisState, BackendIdempotencyEntry, BackendIndexEntry, BackendScopeState } from './backend.js';
 export { appendChainToScope, commitAtomicToScope, commitUnitsToScope, disposeChainInScope, genesisToScope, mergeAtomicUnits, readPageFromScope } from './record-runtime.js';
 export type { ChainRecordInput, CommitContext, PredicateContext, PredicateEvaluator, PredicateView, ReadPageResult } from './record-runtime.js';
+export { createRootStagedKernel as createStagedKernel, type StagedKernelHandle, type StagedKernelOptions, type StagedKernelRoot } from './staged-factory.js';
+export type { RootScopedRuntime as StagedScopedRuntime } from './root-facade.js';
+export { STAGED_PROFILES } from './root-profiles.js';
+export type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from './staged-state.js';
+export type { RootSealStepInput, RootSealOutcome } from './staged-seal.js';
+export type { JournalFence } from './staged-core.js';
