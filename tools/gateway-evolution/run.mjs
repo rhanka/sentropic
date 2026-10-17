@@ -178,6 +178,11 @@ const assertCoverage = (coverage, program, phase, contractSha256, profiles) => {
     if (row.program === 'gateway' && !['gateway-messaging', 'gateway-runtime'].every((p) => row.profiles.includes(p))) {
       throw new GatewayInputError('gateway coverage requires both runtime and messaging', 'bad-profiles');
     }
+    if (row.program === 'registry') {
+      const index = ['r4', 'r5', 'r6', 'r7b'].indexOf(row.phase.split('-')[0]);
+      const required = ['registry-focus', 'registry-runtime', 'registry-renderer', 'registry-hosts'].slice(0, index + 1);
+      if (required.some((profile) => !row.profiles.includes(profile))) throw new GatewayInputError('registry coverage drops a required profile', 'bad-profiles');
+    }
     for (const profile of row.profiles) {
       if (!PROFILE_MAP.has(profile)) {
         throw new GatewayInputError(`unknown coverage profile: ${profile}`, 'unknown-profile');
@@ -612,7 +617,11 @@ export const verifyConsumerReceipt = (receipt, expected) => {
   if (receipt.conclusion !== 'success') {
     throw new GatewayInputError('receipt conclusion is not success', 'incomplete-evidence');
   }
-  for (const job of receipt.jobs ?? []) {
+  if (!Array.isArray(receipt.jobs) || !receipt.jobs.length) throw new GatewayInputError('required job evidence missing', 'incomplete-evidence');
+  for (const name of expected.requiredJobs ?? []) {
+    if (!receipt.jobs.some((job) => job.name === name)) throw new GatewayInputError('required job evidence missing', 'incomplete-evidence');
+  }
+  for (const job of receipt.jobs) {
     if (job.conclusion !== 'success') {
       throw new GatewayInputError(`job not successful: ${job.name}`, 'incomplete-evidence');
     }
@@ -621,10 +630,10 @@ export const verifyConsumerReceipt = (receipt, expected) => {
     throw new GatewayInputError('receipt run/attempt does not match expected', 'stale-receipt');
   }
   if (receipt.headSha !== expected.headSha) throw new GatewayInputError('stale head', 'stale-head');
-  if (receipt.baseSha !== undefined && expected.baseSha !== undefined && receipt.baseSha !== expected.baseSha) {
+  if (expected.baseSha !== undefined && receipt.baseSha !== expected.baseSha) {
     throw new GatewayInputError('stale base', 'stale-base');
   }
-  if (receipt.mergeSha !== undefined && expected.mergeSha !== undefined && receipt.mergeSha !== expected.mergeSha) {
+  if (expected.mergeSha !== undefined && receipt.mergeSha !== expected.mergeSha) {
     throw new GatewayInputError('unrelated merge checkout', 'unrelated-merge');
   }
   if (expected.inputSha256 !== undefined && receipt.inputSha256 !== expected.inputSha256) {
@@ -634,6 +643,10 @@ export const verifyConsumerReceipt = (receipt, expected) => {
     throw new GatewayInputError('manifest digest mismatch', 'digest-mismatch');
   }
   if (expected.allowLockChange === true) {
+    if (!expected.actualReleaseLockSha256 || receipt.releaseLockSha256 !== expected.actualReleaseLockSha256) {
+      throw new GatewayInputError('receipt does not bind the current full lock', 'stale-receipt');
+    }
+    if (receipt.declaredReleaseLockSha256 !== expected.releaseLockSha256) throw new GatewayInputError('declared full-lock hash mismatch', 'lock-mismatch');
     if (!expected.actualProjection || !expected.declaredProjection) {
       throw new GatewayInputError('inherited runs require both projections', 'incomplete-evidence');
     }

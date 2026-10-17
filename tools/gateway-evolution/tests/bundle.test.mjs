@@ -20,6 +20,7 @@ it('constructs all seven delivery bundles with exact index bytes', () => {
   for (const [program, deliveries] of [['gateway', ['pr1', 'pr2', 'pr3']], ['registry', ['r4', 'r5', 'r6', 'r7b']]]) {
     for (const delivery of deliveries) {
       const f = fixture();
+      if (program === 'registry') f.manifest.profiles = ['registry-focus', 'registry-runtime', 'registry-renderer', 'registry-hosts'].slice(0, deliveries.indexOf(delivery) + 1).sort();
       f.manifest.programCoverage = [{ program, phase: `${delivery}-candidate`, contractSha256: f.manifest.contractSha256, profiles: f.manifest.profiles }];
       const result = createCandidateBundle({ ...f, program, delivery, mode: 'aggregate' });
       assert.equal(result.input.candidateBundle.bundleSha256, hash(result.files.get('bundle-index.json')));
