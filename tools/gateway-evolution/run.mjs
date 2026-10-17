@@ -394,6 +394,112 @@ export const main = async (argv, { fs, out } = {}) => {
   return 1;
 };
 
+/** Canonical index bytes: deterministic UTF-8 over sorted relative POSIX paths. */
+export const buildBundleIndex = (entries) => {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new GatewayInputError('bundle entries must be nonempty', 'bad-bundle');
+  }
+  const seen = new Set();
+  const files = entries.map((entry) => {
+    if (!isRecord(entry) || typeof entry.path !== 'string') {
+      throw new GatewayInputError('bundle entry must carry a path', 'bad-bundle');
+    }
+    const { path, size, sha256 } = entry;
+    if (!path || path.startsWith('/') || path.includes('\\') || path.split('/').includes('..')) {
+      throw new GatewayInputError(`unsafe bundle path: ${path}`, 'bad-path');
+    }
+    if (seen.has(path)) throw new GatewayInputError(`duplicate bundle path: ${path}`, 'bad-bundle');
+    seen.add(path);
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new GatewayInputError(`bad bundle size: ${path}`, 'bad-bundle');
+    }
+    assertHex64(sha256, `bundle sha256: ${path}`);
+    return { path, size, sha256 };
+  });
+  files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const canonical = JSON.stringify({ version: 1, files });
+  return { version: 1, files, bundleSha256: sha256Text(canonical) };
+};
+
+/**
+ * Verify a committed candidate bundle against listed directory entries.
+ * listDir(root) yields {path, size, sha256, kind} with kind file|symlink|lfs.
+ * Missing/extra/altered files, symlinks, and LFS pointers fail closed.
+ */
+export const verifyBundleIndex = (index, listed) => {
+  if (!isRecord(index) || index.version !== 1 || !Array.isArray(index.files)) {
+    throw new GatewayInputError('bundle index must be a v1 index', 'bad-index');
+  }
+  const expected = new Map(index.files.map((file) => [file.path, file]));
+  const seen = new Set();
+  for (const entry of listed) {
+    if (entry.path === 'bundle-index.json') continue;
+    if (entry.kind === 'symlink' || entry.kind === 'lfs') {
+      throw new GatewayInputError(`unsafe bundle member: ${entry.path} (${entry.kind})`, 'unsafe-member');
+    }
+    const want = expected.get(entry.path);
+    if (!want) throw new GatewayInputError(`extra bundle file: ${entry.path}`, 'bundle-mismatch');
+    if (want.size !== entry.size || want.sha256 !== entry.sha256) {
+      throw new GatewayInputError(`altered bundle file: ${entry.path}`, 'bundle-mismatch');
+    }
+    seen.add(entry.path);
+  }
+  for (const path of expected.keys()) {
+    if (!seen.has(path)) throw new GatewayInputError(`missing bundle file: ${path}`, 'bundle-mismatch');
+  }
+  return { files: expected.size };
+};
+
+/** Dependency-free phase classifier: candidate phases never build committed-lock jobs. */
+export const classifyPhase = (program, phase) => {
+  phasesFor(program);
+  if (!phasesFor(program).has(phase)) {
+    throw new GatewayInputError(`mismatched program/phase pair: ${program}/${phase}`, 'bad-phase');
+  }
+  if (String(phase).endsWith('-candidate')) {
+    return { buildCommittedLock: false, reason: 'not-applicable (candidate-phase, committed lock)' };
+  }
+  if (phase === 'none') return { buildCommittedLock: true, reason: 'inert (no consumer preparation)' };
+  if (phase === 'baseline-662') return { buildCommittedLock: true, reason: 'h0-baseline (committed lock)' };
+  return { buildCommittedLock: true, reason: 'published (committed lock)' };
+};
+
+const defaultParentOf = async (mergeSha, n) => {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  try {
+    const { stdout } = await promisify(execFile)('git', ['rev-parse', `${mergeSha}^${n}`]);
+    return stdout.trim();
+  } catch {
+    throw new GatewayInputError(`unreadable merge parent ^${n} of ${mergeSha}`, 'unreadable-base-evidence');
+  }
+};
+
+/**
+ * GW8-m1: verify the tested merge commit's parents equal the pinned base and
+ * head before any base/head tree read. Fetch failure (or any unresolvable
+ * parent) is unreadable base evidence and refuses inheritance.
+ */
+export const verifyMergeParents = async ({ mergeSha, baseSha, headSha }, git = {}) => {
+  if (!mergeSha || !baseSha || !headSha) {
+    throw new GatewayInputError('merge/base/head SHAs are all required', 'bad-source');
+  }
+  const parentOf = git.parentOf ?? defaultParentOf;
+  let first;
+  let second;
+  try {
+    first = await parentOf(mergeSha, 1);
+    second = await parentOf(mergeSha, 2);
+  } catch (error) {
+    if (error instanceof GatewayInputError) throw error;
+    throw new GatewayInputError('unreadable base evidence (parent fetch failed)', 'unreadable-base-evidence');
+  }
+  if (first !== baseSha || second !== headSha) {
+    throw new GatewayInputError('merge parents do not match pinned base/head', 'unrelated-merge');
+  }
+  return { mergeSha, baseSha, headSha };
+};
+
 import { pathToFileURL } from 'node:url';
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
