@@ -19,6 +19,7 @@ import type {
 import { computeRouteQuoteRef, isQuotedRouteTarget, quoteRoute, resolveQuotePolicy } from './route-quote.js';
 import { InMemoryRoutePolicyProfiles, resolveRouteStrategy } from './routing-policy.js';
 import { LaunchRoutingContractError } from './launch-routing-contract.js';
+import type { RouteAffinityStore, RouteAffinityKey } from './ports/route-affinity-store.js';
 
 export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
@@ -32,6 +33,7 @@ export interface InMemoryRoutePlannerOptions {
   readonly maximumAffinityEntries?: number;
   readonly maximumRoundRobinEntries?: number;
   readonly affinityAudit?: (event: AffinityMutationEvent) => void;
+  readonly affinityStore?: RouteAffinityStore;
 }
 export class InMemoryRoutePlanner implements RoutePlanner {
   private readonly plans = new Map<string, StoredPlan>();
@@ -131,10 +133,10 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       !quote || isQuotedRouteTarget(quote, target);
     const inQuote = (candidate: RankedRouteCandidate): boolean => inQuoteTarget(candidate.target);
     const strategy = resolveRouteStrategy(policy, input);
-    const affinity = input.affinityKey
+    const affinityStoreKey = await this.readDurableAffinity(subject, input);
+    let affinity = input.affinityKey
       ? this.affinities.get(affinityRef(subject, input.affinityKey, input.workspaceId))
       : undefined;
-    let affinityDropped = false;
     const accounts = await this.options.directory.listEligible(subject);
     const roundRobinKey = `${routingOwnerRef(subject)}\u001f${input.requestedModel}`;
     const roundRobinState = strategy.kind === 'round-robin'
@@ -186,11 +188,10 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     // With a quote, an affinity to an unquoted target is ignored for selection
     // (for example a sticky model the request no longer asks for).
     const stickyAccount = affinity
-      ? accounts.find((entry) => entry.accountRef === affinity.accountRef)
+      ? accounts.find((entry) => entry.accountRef === affinity!.accountRef)
       : undefined;
     if (
       affinity && policy.stickyAccount
-      && inQuoteTarget(affinity.target)
       && (!input.nativeMessages || (
         stickyAccount?.nativeMessages?.contractVersion === 1
         && stickyAccount.nativeMessages.protocol === 'anthropic-messages'
@@ -200,30 +201,18 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     ) {
       const account = stickyAccount;
       if (!account) {
-        // Auto-drop: the affinity account is gone (deleted) — resolve without
-        // the dead pin instead of failing closed on it. The dropped pin is
-        // cleared for the rest of planning so the stored plan carries no
-        // affinity revision and round-robin reservation applies to the
-        // replacement candidates.
-        if (input.affinityKey) {
-          this.affinities.delete(affinityRef(subject, input.affinityKey, input.workspaceId));
-        }
-        affinityDropped = true;
-        candidates = this.visibleCandidates(candidates, inQuote, policy);
+        throw new RoutePlanError('Pinned account is unavailable', 'no-route');
       } else if (account.readiness !== 'ready') {
         candidates = [];
       } else {
         const sameAccount = candidates.filter((candidate) =>
-          candidate.account.accountRef === affinity.accountRef
-          && !this.isAffinityTarget(candidate, affinity));
+          candidate.account.accountRef === affinity!.accountRef);
         const rotated = policy.rotateEquivalentAccounts
-          ? candidates.filter((candidate) => candidate.account.accountRef !== affinity.accountRef)
+          ? candidates.filter((candidate) => candidate.account.accountRef !== affinity!.accountRef)
           : [];
-        const sticky: RankedRouteCandidate = {
-          account,
-          target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
-        };
-        candidates = this.visibleCandidates([sticky, ...sameAccount, ...rotated], inQuote, policy);
+        // A pin selects an account, never an obsolete model or an unauthorized target.
+        candidates = this.visibleCandidates([...sameAccount.map((candidate) => ({ ...candidate,
+          target: { ...candidate.target, reason: 'sticky' as const } })), ...rotated], inQuote, policy);
       }
     } else {
       candidates = this.visibleCandidates(candidates, inQuote, policy);
@@ -242,9 +231,18 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const storedCandidates = candidates.map((candidate) => ({
       ...candidate, candidateRef: this.ids.next('candidate'),
     }));
-    // An auto-dropped pin counts as no affinity from here on: the stored
-    // plan carries no revision and round-robin treats this as a fresh plan.
-    const effectiveAffinity = affinityDropped ? undefined : affinity;
+    const hadAffinity = Boolean(affinity);
+    if (affinityStoreKey && !affinity) {
+      const first = storedCandidates[0]!;
+      affinity = { affinityRef: affinityRef(subject, input.affinityKey!, input.workspaceId),
+        accountRef: first.account.accountRef, diagnosticAccountRef: first.account.diagnosticAccountRef,
+        revision: 1, accountEpoch: 1, target: first.target, promoted: false };
+      await this.options.affinityStore!.compareAndSet(affinityStoreKey, 0, { ...affinityStoreKey,
+        revision: 1, accountEpoch: 1, accountRef: affinity.accountRef,
+        diagnosticAccountRef: affinity.diagnosticAccountRef, target: affinity.target });
+      this.affinities.set(affinity.affinityRef, affinity);
+    }
+    const effectiveAffinity = affinity;
     const plan: RoutePlan = {
       planRef,
       expiresAt: new Date(this.clock.now().getTime() + this.planTtlMs).toISOString(),
@@ -264,7 +262,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     };
     this.plans.set(planRef, {
       plan, subjectRef: subjectRef(subject), candidates: storedCandidates, policy,
-      hadAffinity: Boolean(effectiveAffinity),
+      hadAffinity,
+      ...(affinityStoreKey ? { affinityStoreKey } : {}),
       ...(effectiveAffinity ? { affinityRevision: effectiveAffinity.revision } : {}),
       ...(profile ? {
         policyProfileName: profile.name,
@@ -337,6 +336,10 @@ export class InMemoryRoutePlanner implements RoutePlanner {
   async prepareAttempt(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
     requestId: string, attemptIndex: number): Promise<PreparedRouteAttempt> {
     const stored = this.plans.get(planRef);
+    if (stored?.affinityStoreKey && this.options.affinityStore) {
+      const row = await this.options.affinityStore.read(stored.affinityStoreKey);
+      if (!row || row.revision !== stored.affinityRevision) throw new RoutePlanError('Durable affinity revision changed', 'conflict');
+    }
     if (stored?.plan.councilRevision !== this.council.revision) {
       throw new RoutePlanError('Route council revision changed', 'invalid-plan');
     }
@@ -362,7 +365,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         onCommitted: (activePlan, candidate) => this.bind(activePlan, candidate),
         onSuccess: (activePlan, candidate) => {
           this.health.clear(candidate);
-          this.bind(activePlan, candidate);
+          return this.bind(activePlan, candidate);
         },
         onCancelled: (activePlan) => this.releaseRoundRobin(activePlan),
       });
@@ -390,6 +393,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
 
   resetAffinity(subject: VerifiedRoutingSubject, key: string, expectedRevision?: number,
     workspaceId?: string): boolean {
+    if (this.options.affinityStore) throw new RoutePlanError('Durable reset requires a new acknowledged session policy', 'conflict');
     const ref = affinityRef(subject, key, workspaceId); const current = this.affinities.get(ref);
     if (!current) return false;
     if (expectedRevision !== undefined && current.revision !== expectedRevision) {
@@ -405,6 +409,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
 
   private mutateAffinity(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
     allowRebind: boolean, expectedRevision?: number): AffinityDescription {
+    if (this.options.affinityStore) throw new RoutePlanError('Durable mutation requires a new acknowledged session policy', 'conflict');
     const stored = this.plans.get(planRef);
     if (!stored || stored.subjectRef !== subjectRef(subject) || !stored.affinityRef) {
       throw new RoutePlanError('Invalid affinity plan', 'invalid-plan');
@@ -432,12 +437,35 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     return next;
   }
 
-  private bind(stored: StoredPlan, candidate: RankedRouteCandidate): void {
+  private async readDurableAffinity(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RouteAffinityKey | undefined> {
+    if (!this.options.affinityStore) return undefined;
+    const contract = input.launchRoutingContract;
+    if (!contract || !input.affinityKey || !input.workspaceId) throw new LaunchRoutingContractError();
+    const key = { ownerScopeRef: subject.ownerScopeRef, workspaceRef: input.workspaceId,
+      clientSessionRef: input.affinityKey, policyRevision: contract.revision };
+    const ref = affinityRef(subject, input.affinityKey, input.workspaceId);
+    const row = await this.options.affinityStore.read(key);
+    if (row) this.affinities.set(ref, { ...row, affinityRef: ref, promoted: false });
+    else this.affinities.delete(ref);
+    return key;
+  }
+
+  private async persistAffinity(stored: StoredPlan, next: StoredAffinity): Promise<void> {
+    if (!stored.affinityStoreKey || !this.options.affinityStore) return;
+    await this.options.affinityStore.compareAndSet(stored.affinityStoreKey, next.revision - 1, {
+      ...stored.affinityStoreKey, revision: next.revision, accountRef: next.accountRef,
+      diagnosticAccountRef: next.diagnosticAccountRef, accountEpoch: next.accountEpoch ?? 1,
+      target: next.target,
+    });
+  }
+
+  private async bind(stored: StoredPlan, candidate: RankedRouteCandidate): Promise<void> {
     this.commitRoundRobin(stored);
     if (!stored.affinityRef) return;
     const current = this.affinities.get(stored.affinityRef);
-    if (current && stored.policy.fallbackMode !== 'one-way') return;
-    if (current?.target.providerId === candidate.target.providerId
+    if (current && !stored.affinityStoreKey && stored.policy.fallbackMode !== 'one-way') return;
+    if (current?.accountRef === candidate.account.accountRef
+      && current.target.providerId === candidate.target.providerId
       && current.target.modelId === candidate.target.modelId
       && current.target.transportProviderId === candidate.target.transportProviderId) return;
     const rebind = Boolean(current && current.accountRef !== candidate.account.accountRef);
@@ -445,8 +473,11 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       affinityRef: stored.affinityRef, accountRef: candidate.account.accountRef,
       diagnosticAccountRef: candidate.account.diagnosticAccountRef,
       target: candidate.target, revision: (current?.revision ?? 0) + 1,
+      accountEpoch: (current?.accountEpoch ?? 1) + (rebind ? 1 : 0),
       promoted: Boolean(current && !rebind),
     };
+    await this.persistAffinity(stored, next);
+    stored.affinityRevision = next.revision;
     this.affinities.set(stored.affinityRef, next);
     this.trim(this.affinities, this.maximumAffinityEntries);
     if (current) this.options.affinityAudit?.({
@@ -454,12 +485,6 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       affinityRef: stored.affinityRef, previousRevision: current.revision,
       nextRevision: next.revision, cacheContinuityRisk: rebind,
     });
-  }
-
-  private isAffinityTarget(candidate: RankedRouteCandidate, affinity: StoredAffinity): boolean {
-    return candidate.target.providerId === affinity.target.providerId
-      && candidate.target.modelId === affinity.target.modelId
-      && candidate.target.transportProviderId === affinity.target.transportProviderId;
   }
 
   private evictPlans(): void {
