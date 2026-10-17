@@ -457,6 +457,8 @@
   - [ ] Added canonical namespace composition that verifies every invocation and derives issued scope exclusively through the host's verified-context resolver; principal/workspace mismatches refuse before the module context. The selected comments leaf exports the exact factory.
   - [ ] Added full-runtime namespace probes for disabled startup, verified principal/workspace/generation/invocation binding and forged body-scope refusal with no canonical event.
   - [ ] C4 terminal effects now include an actual M1 import operation audit in the same hidden root as data/bindings/receipts/journal. A bounded list authenticates exactly module-generated terminal hashes; imported historical receipt/audit payloads receive normal capability checks.
+  - [x] Source full-runtime namespace probes pass 2/2; the operational router probe passes 1/1 after using the exact M1 transaction-handle call.
+  - [ ] BRCM2-EX4 delivery exports now include storage, injected Postgres, comments/Hono and lazy loader/composition leaves, with packaged storage assets and the digest-pinned M1 oracle. Installed qualification remains required before acceptance.
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.

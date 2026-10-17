@@ -20,6 +20,30 @@
       "types": "./dist/live-storage/registration.d.ts",
       "import": "./dist/live-storage/registration.js"
     },
+    "./storage": {
+      "types": "./dist/storage/index.d.ts",
+      "import": "./dist/storage/index.js"
+    },
+    "./storage/postgres": {
+      "types": "./dist/storage/postgres/index.d.ts",
+      "import": "./dist/storage/postgres/index.js"
+    },
+    "./comments": {
+      "types": "./dist/integrations/comments/index.d.ts",
+      "import": "./dist/integrations/comments/index.js"
+    },
+    "./comments/hono": {
+      "types": "./dist/hono/comments-router.d.ts",
+      "import": "./dist/hono/comments-router.js"
+    },
+    "./loaders/comments": {
+      "types": "./dist/loaders/comments/index.d.ts",
+      "import": "./dist/loaders/comments/index.js"
+    },
+    "./compose/comments": {
+      "types": "./dist/compose/comments.d.ts",
+      "import": "./dist/compose/comments.js"
+    },
     "./llm-mesh": {
       "types": "./dist/integrations/llm-mesh/index.d.ts",
       "import": "./dist/integrations/llm-mesh/index.js"
@@ -95,6 +119,7 @@
   },
   "files": [
     "dist",
+    "assets/storage",
     "README.md",
     "LICENSE"
   ],
