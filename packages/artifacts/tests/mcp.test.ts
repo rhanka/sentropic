@@ -4,6 +4,7 @@
  * invocation scope, and dispatch over the same app as HTTP (part 1:
  * identity, manifest, read/write round-trip and refusals).
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createHttpArtifactApp } from '../src/http.js';
 import { createArtifactService } from '../src/server/service.js';
@@ -30,7 +31,9 @@ import {
 } from '../src/mcp.js';
 
 const OWNER = 'owner-1';
+const READER = 'reader-1';
 const STRANGER = 'stranger-1';
+const EMPTY_DIGEST = `sha256:${createHash('sha256').update(new Uint8Array(0)).digest('hex')}`;
 const SCHEMA = defineParameters([{ key: 'title', type: 'string', required: true }]);
 const SPEC_TOOLS = [
   'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_ensure',
@@ -143,5 +146,79 @@ describe('web-pages MCP provider', () => {
     await expect(
       executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: {} }),
     ).rejects.toThrow(/missing artifactId/);
+  });
+
+  it('runs share, fork, promote, renew, delete and restore through tools', async () => {
+    const executor = makeExecutor();
+    const id = await ensureAndPublish(executor);
+    const granted = await executor.invoke({
+      tool: 'artifacts_set_access', actorId: OWNER,
+      args: { artifactId: id, action: 'grant', principalId: READER, grant: 'read' },
+    });
+    expect(granted.status).toBe(200);
+    const readerGet = await executor.invoke({ tool: 'artifacts_get', actorId: READER, args: { artifactId: id } });
+    expect(readerGet.status).toBe(200);
+    const readerSource = await executor.invoke({
+      tool: 'artifacts_get_source', actorId: READER, args: { artifactId: id },
+    });
+    expect(readerSource.status).toBe(403);
+    const forked = await executor.invoke({ tool: 'artifacts_fork', actorId: READER, args: { artifactId: id } });
+    expect(forked.status).toBe(201);
+    expect((forked.body as { artifactId: string }).artifactId).not.toBe(id);
+    const v2 = await executor.invoke({
+      tool: 'artifacts_publish', actorId: OWNER,
+      args: {
+        artifactId: id,
+        files: [{ path: 'index.html', mimeType: 'text/html', bytes: [60, 50, 62] }],
+        idempotencyKey: 'p-2', paramsHash: 'h-2',
+      },
+    });
+    const v2Id = (v2.body as { releaseId: string }).releaseId;
+    const meta = await executor.invoke({ tool: 'artifacts_get', actorId: OWNER, args: { artifactId: id } });
+    const current = (meta.body as { currentReleaseId: string }).currentReleaseId;
+    expect(current).toBe(v2Id);
+    const stale = await executor.invoke({
+      tool: 'artifacts_promote', actorId: OWNER,
+      args: { artifactId: id, releaseId: v2Id, expectedCurrent: 'not-current' },
+    });
+    expect(stale.status).toBe(409);
+    const renewed = await executor.invoke({ tool: 'artifacts_renew', actorId: OWNER, args: { artifactId: id } });
+    expect(renewed.status).toBe(200);
+    const deleted = await executor.invoke({ tool: 'artifacts_delete', actorId: OWNER, args: { artifactId: id } });
+    expect(deleted.body).toMatchObject({ state: 'deleted' });
+    const restored = await executor.invoke({
+      tool: 'artifacts_restore', actorId: OWNER, args: { artifactId: id },
+    });
+    expect(restored.body).toMatchObject({ state: 'active' });
+    await expect(
+      executor.invoke({
+        tool: 'artifacts_set_access', actorId: OWNER,
+        args: { artifactId: id, action: 'bogus' },
+      }),
+    ).rejects.toThrow(/unknown set-access action/);
+  });
+
+  it('commits a bounded upload session through tools', async () => {
+    const executor = makeExecutor();
+    const id = await ensureAndPublish(executor);
+    const begun = await executor.invoke({
+      tool: 'artifacts_create_upload', actorId: OWNER,
+      args: { artifactId: id, mimeType: 'text/plain' },
+    });
+    expect(begun.status).toBe(201);
+    const uploadId = (begun.body as { uploadId: string }).uploadId;
+    const committed = await executor.invoke({
+      tool: 'artifacts_commit_upload', actorId: OWNER,
+      args: {
+        artifactId: id, uploadId, path: 'empty.txt', mimeType: 'text/plain',
+        digest: EMPTY_DIGEST, size: 0, idempotencyKey: 'u-1', paramsHash: 'h-1',
+      },
+    });
+    expect(committed.status).toBe(201);
+    const strangerUpload = await executor.invoke({
+      tool: 'artifacts_create_upload', actorId: STRANGER,
+      args: { artifactId: id, mimeType: 'text/plain' },
+    });
+    expect(strangerUpload.status).toBe(404);
   });
 });
