@@ -2059,4 +2059,109 @@ describe('session consent durable lifecycle', () => {
     expect(usage.committedBytes).toBe(seed.length);
     void bindingId;
   });
+
+  it('should keep capture paused across restart and resume siblings independently (N3)', async () => {
+    await acceptProject();
+    const deriveS = async (sessionId: string) => {
+      const bindingId = await adoptSession(sessionId);
+      const rows = await db
+        .select()
+        .from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, sessionId));
+      await service.deriveGrant({
+        projectId: 'sess-content-project-1',
+        sessionId,
+        bindingId,
+        bindingVersion: rows[0]!.version,
+        d1Version: rows[0]!.version,
+        d1Incarnation: 1,
+        d1StartSeq: 0,
+        workspaceId,
+        sessionCreatedAt: now,
+        sourceGeneration: 'gen-1',
+        sourceTrustVersion: 'tv-1',
+        nativeStartSeq: 0,
+      }, ctx);
+      return { bindingVersion: rows[0]!.version };
+    };
+    const s1 = await deriveS('sess-content-s1');
+    const s2 = await deriveS('sess-content-s2');
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    const restarted = makeService();
+    await expectContentError(() => restarted.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-restart', ctx,
+    ), 'project_revision_changed');
+    const ack = await service.acknowledgeGrantRefresh('sess-content-s1', {
+      projectRevision: 1, bindingVersion: s1.bindingVersion, nativeBoundarySeq: 0,
+    }, ctx);
+    expect(ack.version).toBe(2);
+    await service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-n3-resumed', ctx,
+    );
+    await service.closeGrant('sess-content-s2', ctx);
+    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-s2', {
+      projectRevision: 1, bindingVersion: s2.bindingVersion, nativeBoundarySeq: 0,
+    }, ctx), 'grant_closed');
+    const dup = await service.acknowledgeGrantRefresh('sess-content-s1', {
+      projectRevision: 1, bindingVersion: s1.bindingVersion, nativeBoundarySeq: 0,
+    }, ctx);
+    expect(dup.projectRevision).toBe(1);
+    expect(dup.version).toBe(2);
+    void restarted;
+  });
+
+  it('should refuse refresh for excluded, revoked, detached and rotated children (N3)', async () => {
+    await acceptProject();
+    const deriveS = async (sessionId: string) => {
+      const bindingId = await adoptSession(sessionId);
+      const rows = await db
+        .select()
+        .from(sessionWorkspaceBindings)
+        .where(eq(sessionWorkspaceBindings.sessionId, sessionId));
+      await service.deriveGrant({
+        projectId: 'sess-content-project-1',
+        sessionId,
+        bindingId,
+        bindingVersion: rows[0]!.version,
+        d1Version: rows[0]!.version,
+        d1Incarnation: 1,
+        d1StartSeq: 0,
+        workspaceId,
+        sessionCreatedAt: now,
+        sourceGeneration: 'gen-1',
+        sourceTrustVersion: 'tv-1',
+        nativeStartSeq: 0,
+      }, ctx);
+      return { bindingVersion: rows[0]!.version };
+    };
+    const se = await deriveS('sess-content-se');
+    const sr = await deriveS('sess-content-sr');
+    const sd = await deriveS('sess-content-sd');
+    const sp = await deriveS('sess-content-sp');
+    await service.excludeSession('sess-content-project-1', 'sess-content-se', ctx);
+    await service.revokeGrant('sess-content-sr', ctx);
+    await service.fenceSessionOnDetachEnd('sess-content-sd', TENANT_A);
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-se', {
+      projectRevision: 1, bindingVersion: se.bindingVersion, nativeBoundarySeq: 0,
+    }, ctx), 'session_excluded');
+    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-sr', {
+      projectRevision: 1, bindingVersion: sr.bindingVersion, nativeBoundarySeq: 0,
+    }, ctx), 'grant_revoked');
+    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-sd', {
+      projectRevision: 1, bindingVersion: sd.bindingVersion, nativeBoundarySeq: 0,
+    }, ctx), 'grant_closed');
+    fakeEpoch.rotate('epoch-test-2');
+    await expectContentError(() => service.acknowledgeGrantRefresh('sess-content-sp', {
+      projectRevision: 1, bindingVersion: sp.bindingVersion, nativeBoundarySeq: 0,
+    }, ctx), 'epoch_mismatch');
+  });
 });
