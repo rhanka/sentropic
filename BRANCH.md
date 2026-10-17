@@ -133,6 +133,12 @@ Consolidate origin/feat/mcp-registry-config-codec (L-1a), origin/feat/auth-token
   - No Sentropic UI changes in carried lots; hosted-client continuity UAT is owner-executed in 2b.
 
 ## Plan / Todo (lot-based)
+- [ ] **Owner naming correction — artifacts (2026-10-17, before first publication)**
+  - [ ] Test first: `packages/artifacts/tests/mcp.test.ts` and `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` assert new-ID selection/configuration and unknown-old-ID refusal; scoped `make test-artifacts SCOPE=tests/mcp.test.ts` and `make test-cluster-mesh SCOPE=tests/integrations/artifacts-surface.spec.ts`, all with assigned ports and `ENV=test-immo-861-mcp-registry` last.
+  - [ ] Rename provider/API symbols, mesh leaf/loader/catalog/exports, fixtures, packed tests/probe and release documentation to artifacts; retain `@sentropic/artifacts`, version `0.1.0` and the 15 `artifacts_*` tool names; no aliases.
+  - [ ] Gates: artifact and mesh typechecks/lint/full suites, packed artifact probe, sibling integrity refresh and guarded mesh packed qualification; no UI/browser test changes.
+  - [ ] UAT: packed consumer imports `@sentropic/cluster-mesh/mcp/artifacts`, selects/configures `sentropic.artifacts`, lists the same 15 tools and refuses the previous provider/module/export names.
+  - [ ] Close I861-F5 with owner quote, push PR #679, watch final-head CI to completion and record `.h2a/build/immo_861_rename_report.md`; never merge or publish.
 - [ ] **Lot 0 — Baseline, consolidation and constraints (gate pending: Exchange/negatives/metadata rows unchecked)**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`.
   - [x] Read spec-v6 (`/home/antoinefa/src/sentropic/.tmp/immo-mcp-enablers/spec-v6.md`) §§1-13 and the three fix reports (`.h2a/build/immo_1a_fix3_report.md`, `immo_2idp_fix_report.md`, `immo_2a_fix_report.md`).
