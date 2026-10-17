@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConsentFlow, createOffer, viewAccess } from '$lib/session-content/state';
+import { canRequestHistory, ConsentFlow, createOffer, viewAccess } from '$lib/session-content/state';
 import { contentApi } from '$lib/session-content/api';
 import { apiRequest } from '$lib/utils/api';
 import { getApiAuthToken } from '@sentropic/cowork-bridge/core';
@@ -86,6 +86,15 @@ describe('session content authorization', () => {
   it('should pause stale capture while retaining old-copy readability after an amendment', () => {
     expect(viewAccess({ ...session, grantProjectRevision: 1 }, scope))
       .toMatchObject({ live: false, stored: true, reason: 'project_revision_changed' });
+  });
+
+  it('should offer distinct history authorization only for a current eligible owner and retained scope', () => {
+    expect(canRequestHistory({ ...session, status: 'ended' }, scope)).toBe(true);
+    for (const change of [{ ownerId: 'other' }, { sourceId: 'other' }, { workspaceId: 'other' },
+      { projectId: 'other' }, { excluded: true }, { revoked: true }, { membershipActive: false },
+      { sourceAvailable: false }, { historyAuthorized: true }, { expiresAt: 0 }]) {
+      expect(canRequestHistory({ ...session, ...change }, scope)).toBe(false);
+    }
   });
 
   it.each(['ownerId', 'workspaceId', 'sourceId', 'projectId'] as const)(
