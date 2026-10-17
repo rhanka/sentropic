@@ -18,6 +18,7 @@ import {
   type RoutePolicy, type RoutePolicyProfile,
 } from './routing-policy.js';
 import { resolveTargetCapabilitySource } from './routing-targets.js';
+import { validateLaunchRoutingContract, LaunchRoutingContractError } from './launch-routing-contract.js';
 
 export const MAX_ROUTE_QUOTE_CANDIDATES = 16;
 
@@ -47,6 +48,7 @@ export interface RouteQuoteOptions {
 }
 
 type QuoteRouteFields = Pick<RoutePlanInput, 'targetCandidatesOverride' | 'intent'
+  | 'launchRoutingContract'
   | 'requiredCapabilities' | 'requiredExecutionFeatures' | 'policyProfile' | 'policyOverride' | 'explicit' | 'nativeMessages'>;
 type QuoteBody = Omit<RouteQuote, 'quoteRef'>;
 
@@ -83,9 +85,16 @@ export const resolveQuotePolicy = (
     ? profiles.list().find((entry) => entry.name === input.policyProfile)
     : profiles.active();
   if (input.policyProfile && !profile) throw new RoutePlanError('Unknown policy profile', 'no-route');
-  const policy = resolveRoutePolicy(
+  let policy = resolveRoutePolicy(
     mergeRoutePolicy(profile?.policy ?? DEFAULT_ROUTE_POLICY, input.policyOverride), input,
   );
+  if (input.launchRoutingContract) {
+    const contract = validateLaunchRoutingContract(input.launchRoutingContract);
+    if (input.policyOverride?.allowEquivalentModels === true
+      || (input.policyOverride?.rotateEquivalentAccounts === true && !contract.rotateAccounts)) throw new LaunchRoutingContractError();
+    policy = { ...policy, allowEquivalentModels: false, rotateEquivalentAccounts: contract.rotateAccounts,
+      maxAttempts: contract.rotateAccounts ? Math.min(policy.maxAttempts, contract.authorizedAccountRefs.length) : 1 };
+  }
   validateRoutePolicy(policy);
   return { ...(profile ? { profile } : {}), policy };
 };
@@ -119,6 +128,7 @@ export const computeRouteQuoteRef = (
 ): string => `quote_${digest(JSON.stringify(canonical({
   version: 1,
   route: {
+    launchRoutingContract: input.launchRoutingContract,
     targetCandidatesOverride: input.targetCandidatesOverride,
     intent: input.intent,
     // Order-insensitive: the capability filter is a conjunction.

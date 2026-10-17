@@ -18,6 +18,7 @@ import type {
 } from './routing-contracts.js';
 import { computeRouteQuoteRef, isQuotedRouteTarget, quoteRoute, resolveQuotePolicy } from './route-quote.js';
 import { InMemoryRoutePolicyProfiles, resolveRouteStrategy } from './routing-policy.js';
+import { LaunchRoutingContractError } from './launch-routing-contract.js';
 
 export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
@@ -118,6 +119,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     return diagnostics.filter((entry) => transports.has(entry.transportProviderId));
   }
   async plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan> {
+    if (input.launchRoutingContract && input.launchRoutingContract.ownerScopeRef !== subject.ownerScopeRef) throw new LaunchRoutingContractError();
     this.evictPlans();
     const { profile, policy: resolvedPolicy } = resolveQuotePolicy(input, this.profiles);
     const { quote } = input;
@@ -326,7 +328,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     policy: { readonly maxAttempts: number }): RankedRouteCandidate[] {
     const quoted = this.keepQuoted(candidates, inQuote);
     const visible = quoted.filter((candidate) => !this.health.isSuppressed(candidate));
-    if (visible.length > 0) return visible.slice(0, policy.maxAttempts);
+    if (visible.length > 0) return (policy.rotateEquivalentAccounts
+      ? visible : visible.filter((candidate) => candidate.account.accountRef === visible[0]!.account.accountRef)).slice(0, policy.maxAttempts);
     const [only] = quoted;
     if (quoted.length === 1 && only && this.health.suppressedDegradable(only)) return quoted;
     return [];
