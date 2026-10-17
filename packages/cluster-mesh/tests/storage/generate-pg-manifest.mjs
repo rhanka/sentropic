@@ -9,8 +9,10 @@ for (const [index, file] of files.entries()) {
     fromVersion: index, toVersion: index + 1, requires: index === 0 ? [] : [assets[index - 1].id], checksum: createHash('sha256').update(sql).digest('hex') });
 }
 await writeFile(new URL('manifest.json', directory), `${JSON.stringify({ version: 1, assets }, null, 2)}\n`);
-const file = 'comments/001-projections.sql';
-const sql = await readFile(new URL(file, directory));
-const module = { id: 'cluster-mesh-pg/comments/001-projections@1', file, order: assets.length + 1, dialect: 'postgresql', mode: 'transactional',
-  fromVersion: assets.length, toVersion: assets.length + 1, requires: [assets.at(-1).id], schemaRole: 'comments', checksum: createHash('sha256').update(sql).digest('hex') };
-await writeFile(new URL('comments/manifest.json', directory), `${JSON.stringify({ version: 1, assets: [module] }, null, 2)}\n`);
+const modules = [];
+for (const file of ['comments/001-projections.sql', 'comments/002-transport.sql']) {
+  const sql = await readFile(new URL(file, directory)); const version = assets.length + modules.length;
+  modules.push({ id: `cluster-mesh-pg/${file.slice(0, -4)}@1`, file, order: version + 1, dialect: 'postgresql', mode: 'transactional',
+    fromVersion: version, toVersion: version + 1, requires: [(modules.at(-1) ?? assets.at(-1)).id], schemaRole: 'comments', checksum: createHash('sha256').update(sql).digest('hex') });
+}
+await writeFile(new URL('comments/manifest.json', directory), `${JSON.stringify({ version: 1, assets: modules }, null, 2)}\n`);
