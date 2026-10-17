@@ -1,4 +1,4 @@
-import { createAnnotationRevision, hashRecord, commandPayloadDigest, commandIdempotencyKey } from '@sentropic/comments';
+import { createAnnotationRevision, hashRecord, commandPayloadDigest, commandIdempotencyKey, COMMAND_CAPABILITIES } from '@sentropic/comments';
 import type { CanonicalChainRecord } from '@sentropic/comments';
 import { createCommentsModule, createCommentsPostgresRegistration, commentsAdmissibleManifestDigest, commentsImportBindingDigest, createCommentsFragment, commentsUnitPayloadDigest } from '../../src/comments/index.js';
 import { createPgFixture } from './pg-fixture.js';
@@ -20,7 +20,7 @@ export const importRequest = (host: Awaited<ReturnType<typeof commentsHost>>, un
   return { scope: host.scope, batchId: 'batch', manifest: { kind: 'import-manifest' as const, ...envelope, hash: hashRecord('import-manifest', envelope) }, units: declared, expectedMappingVersion: 'mapping-v1', idempotencyKey: commandIdempotencyKey('batch-command') };
 };
 export const prepareImport = async (host: Awaited<ReturnType<typeof commentsHost>>, request: ReturnType<typeof importRequest>, operationId: string, units: readonly { unitId: string; records: readonly CanonicalChainRecord[] }[], chunks?: readonly (readonly CanonicalChainRecord[])[]) => {
-  const binding = { version: 'comments-transport-v1' as const, operationId, request, unitIds: units.map((unit) => unit.unitId), sourceBoundary: 'frozen-source', targets: [conformanceResource(host.scope)], capabilities: ['revise' as const, 'tombstone' as const, 'purge' as const, 'comment' as const, 'review' as const] };
+  const binding = { version: 'comments-transport-v1' as const, operationId, request, unitIds: units.map((unit) => unit.unitId), sourceBoundary: 'frozen-source', targets: [conformanceResource(host.scope)], capabilities: COMMAND_CAPABILITIES };
   const bindingDigest = commentsImportBindingDigest(binding); let ordinal = 0; let predecessorHash = null;
   const send = async (unitId: string, payload: readonly CanonicalChainRecord[]) => {
     const fragment = createCommentsFragment({ scope: host.scope, operationId, bindingDigest, unitId, ordinal: String(ordinal++), predecessorHash, terminal: null }, payload);
