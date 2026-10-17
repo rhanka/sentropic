@@ -82,6 +82,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `L0-archive-semantics`: pure tooling suite now passes 36/36, including PAX extraction-size/sparse overrides and duplicate-field refusals. The extractor and inspector cannot disagree through those metadata fields.
 - `L2-mesh-full-gate`: `make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-gw-durable-vibe-muse` passes: 46 files, 819 tests. Refresh tests now request the actual exact model; implicit effort/model upgrades refuse before execution; legacy multi-transport alias tests explicitly authorize equivalence and account rotation.
 - `L4g-blocked-required-controls`: no C-admitted official Responses/effort probe is available. The direct Muse Chat adapter previously dropped reasoning controls; it now refuses them with named 400/unsupported_projection before network I/O (2/2 new effort tests). Vibe is explicitly inventoried as Python/owner-machine-only. Muse qualification and the Vibe/Muse first-pair milestone remain blocked; no native adapter or successful seat evidence is invented.
 - `L2-regression-migration-4`: planner suite now passes 52/52. Exact same-account model switches serve the new model; consented rotation records a rebind/cache-continuity event; deleted pins refuse in ordinary and round-robin strategies instead of selecting a replacement.
