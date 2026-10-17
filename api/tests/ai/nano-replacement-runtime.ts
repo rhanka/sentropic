@@ -12,8 +12,8 @@ type Journal = ReturnType<typeof createNanoJournal>;
 type Context = { model: NanoCandidate; caseId: string; controller: AbortController };
 
 /** Only the injected provider runtime changes: product helpers and mesh dispatch stay real. */
-export const createNanoRuntime = (journal: Journal) => {
-  const budget = createNanoBudget(journal.append);
+export const createNanoRuntime = (journal: Journal, limits?: { limitUsd?: number; maxCalls?: number }) => {
+  const budget = createNanoBudget(journal.append, limits?.limitUsd, limits?.maxCalls);
   let active: Context | undefined;
   const attempts = new Map<number, { model: NanoCandidate; caseId: string; started: number; endpoint: string }>();
   const receipts: Array<Record<string, any>> = [];

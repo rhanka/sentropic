@@ -3,7 +3,7 @@ export type NanoCase =
   | { id: string; kind: 'effort'; text: string }
   | { id: string; kind: 'compaction'; facts: string[] }
   | { id: string; kind: 'tool_json'; strict: boolean }
-  | { id: string; kind: 'history_document'; surface: 'history' | 'document'; estimatedTokens: number; singlePassLimit: number; chunkTarget: number };
+  | { id: string; kind: 'history_document'; surface: 'history' | 'document'; estimatedTokens: number; singlePassLimit: number; chunkTarget: number; expectedChunks?: number };
 
 export const NANO_CASES: NanoCase[] = [
   { id: 'title/en', kind: 'title', text: 'Plan the Atlas release: define the launch checklist and owner assignments.', terms: ['Atlas'] },
@@ -24,6 +24,10 @@ export const NANO_CASES: NanoCase[] = [
 ];
 
 export const LONG_FACTS = ['ATLAS-729', '2026-10-23', '13750', 'REF-Z915'];
+export const NANO_PRODUCTION_CHUNK_CASES: Array<Extract<NanoCase, { kind: 'history_document' }>> = [
+  { id: 'history/production-chunks', kind: 'history_document', surface: 'history', estimatedTokens: 261_000, singlePassLimit: 240_000, chunkTarget: 120_000, expectedChunks: 3 },
+  { id: 'document/production-chunks', kind: 'history_document', surface: 'document', estimatedTokens: 711_000, singlePassLimit: 700_000, chunkTarget: 300_000, expectedChunks: 3 },
+];
 export const LONG_QUESTIONS = 'Identify the project code, launch deadline, approved budget amount and final reference code. Preserve the exact source identifiers and date format. Who signed the supplier agreement? If absent, answer NOT_STATED. Answer all five questions concisely; do not invent facts.';
 
 /** Facts appear only at the beginning, middle and end; questions never contain their answers. */
