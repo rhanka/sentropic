@@ -8,8 +8,13 @@
 import { createHash } from 'node:crypto';
 import type { AtomicUnit, ChainExpectation, RegisteredGuard } from './atomic.js';
 import type { StorageModuleId, StorageScope } from './contracts.js';
+import type { StagedCommitRoot } from './staged-units.js';
 
 export const STAGED_CODEC_VERSION = 'v1';
+export const encodeStagedCommitRoot = (root: StagedCommitRoot): string => JSON.stringify([
+  'staged-commit-root', STAGED_CODEC_VERSION, root.operationId, root.contractDigest, root.sourceBoundary,
+  root.finalFragmentHash, root.fragmentCount, root.dependencyRoot, root.effectRoot,
+]);
 
 type Frame = readonly unknown[];
 

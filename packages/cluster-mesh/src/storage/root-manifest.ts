@@ -7,6 +7,7 @@ import type { ScopedRuntime } from './scope-runtime.js';
 import { ownedCopy, type StagedCore } from './staged-core.js';
 import { stagedLimits } from './staged-operations.js';
 import { isUnknownCursorBoundary } from './tokens.js';
+import { encodeStagedCommitRoot } from './staged-codec.js';
 
 interface CapturedManifest { readonly root: BackendScopeState; readonly ownerId: string; readonly manifest: ExportManifest; }
 const registry = (core: StagedCore, bound: ScopedRuntime) => core.backend.controlState(bound.scope, 'root-manifests-v1', () => new Map<string, CapturedManifest>());
@@ -29,8 +30,7 @@ export const captureManifestRoot = (core: StagedCore, bound: ScopedRuntime, inpu
   const unitRoots = (input.operationKeys ?? []).map((key) => {
     const committed = core.data(root).unitRoots.get(key);
     if (!committed) throw new StorageInvalidCommandError('manifest operation has no committed unit root');
-    return createHash('sha256').update(JSON.stringify(['staged-commit-root', 'v1', committed.operationId, committed.contractDigest,
-      committed.sourceBoundary, committed.finalFragmentHash, committed.fragmentCount, committed.dependencyRoot, committed.effectRoot])).digest('hex');
+    return createHash('sha256').update(encodeStagedCommitRoot(committed)).digest('hex');
   });
   const manifest = buildManifest({ scope: bound.scope, selections: input.selections, heads, unitRoots,
     descriptorVersion: core.options.descriptor?.contractVersion ?? 'storage-v1', encodingVersion: 'storage-canonical-v1',
