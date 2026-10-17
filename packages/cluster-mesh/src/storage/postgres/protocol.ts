@@ -41,6 +41,8 @@ export type PgRegisteredQuery = (input: unknown, context: PgQueryContext) => Pro
 export type PgProjectionContext = Pick<PgQueryContext, 'session' | 'root' | 'stream' | 'layout' | 'grant'> & { readonly stagedUnitId?: string; readonly coverageRoot?: string | null };
 export type PgRegisteredProjection = (effects: AtomicUnit, context: PgProjectionContext) => Promise<void>;
 export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 'coordinator' | 'predicates'> {
+  /** Stable host-managed key, shared by every runtime/replica of this store. */
+  readonly cursorSecret: string;
   readonly moduleId: StorageModuleId; readonly driver: InjectedPgDriver; readonly layout: PgLayout;
   readonly ids?: { next(kind: string): string }; readonly domainClock?: { now(): string };
   readonly outbox?: PgOutboxBinding; readonly budgets?: Partial<PgBudgets>; readonly limits?: WorkLimits;
@@ -48,6 +50,8 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly history: PgHostHistory;
   readonly assets?: readonly PgAsset[];
   readonly projection?: PgRegisteredProjection;
+  /** Validate the raw plan before projecting only effective creations. */
+  readonly validateEffects?: PgRegisteredProjection;
   readonly operations?: Readonly<Record<string, PgInstalledOperation>>;
   readonly purgeFinalizer?: PgPurgeFinalizer;
   readonly purgeAuthorize?: PgPurgeFinalizer;

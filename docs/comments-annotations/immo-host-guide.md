@@ -36,6 +36,12 @@ successful target-reference attestation, unrelated host DDL and refusal of actua
 
 ## Inject execution and migrate through the host
 
+Every durable Postgres root requires a nonempty `cursorSecret`, including generic storage roots.
+Load it from host secret storage, retain it across restarts and share it between all replicas of the
+same installation. A random key per process breaks retained M1 page cursors. Keep the old key for the
+lifetime of those cursors; changing this single-key configuration invalidates them explicitly as
+`incomplete` with no continuation. Memory K3 retains its existing optional ephemeral configuration.
+
 Import `createCommentsModule` and `createCommentsPostgresStorage` from `@sentropic/cluster-mesh/comments`, and `loadPgAssets`, `applyPgMigrations` from `@sentropic/cluster-mesh/storage/postgres`.
 
 The host implements `InjectedPgDriver.transaction(options, operation)`. It acquires one SQL session, begins the requested serializable read-only/read-write transaction, invokes `operation({execute(statement)})`, and commits or rolls back. Enforce `deadlineMs`, release the session, and preserve an uncertain COMMIT outcome as such. Each statement is `{text, values}` with bound parameters. A single connection is sufficient; the module reuses an active same-scope session. Driver dependencies belong to the host.
@@ -53,7 +59,7 @@ await driver.transaction({ readOnly: false, deadlineMs: 5000 }, session =>
 
 ```ts
 const storage = await createCommentsPostgresStorage({
-  driver, layout, history: hostHistory,
+  driver, layout, history: hostHistory, cursorSecret: hostSecrets.commentsCursorKey,
   services: { capacity, capabilities, resolver, decisions, clock },
 });
 const module = createCommentsModule({ storage: storage.adapter(), capacity });

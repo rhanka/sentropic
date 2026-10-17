@@ -41,7 +41,7 @@ export const installedHost = async () => {
   });
   const capacity = conformanceCapacity(); const scope = conformanceScope(); const authority = { allowed: true };
   const services = { capacity, capabilities: { check: async () => authority.allowed }, resolver: { resolve: async () => 'exact' }, clock: { now: () => 1717000000123 } };
-  const options = { driver, layout, history, services };
+  const options = { driver, layout, history, services, cursorSecret: randomBytes(32).toString('hex') };
   const root = await createCommentsPostgresStorage(options); const grant = grantFor(scope); const bound = await root.bindNew(grant);
   const fence = { fenceId: 'installed-import', epoch: '1' }; await root.provisionFence(grant, fence);
   const module = createCommentsModule({ storage: root.adapter(), capacity });

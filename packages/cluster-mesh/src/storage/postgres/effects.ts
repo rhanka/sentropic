@@ -14,6 +14,7 @@ export interface PgChainRef { readonly id: string; readonly seq: number; readonl
 export const chainRecordKey = (chain: string, seq: number): string => JSON.stringify([chain, String(seq).padStart(16, '0')]);
 export const applyPgEffects = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, initial: string | null, unit: AtomicUnit, coverageRoot = initial, installed?: symbol) => {
   const store = core.roots; const scope = grant.scope; let root = initial; let records = 0;
+  const created: AtomicUnit['records'][number][] = [];
   for (const guard of unit.guards) {
     let accepted = false;
     if (guard.kind === 'head' || guard.kind === 'absent') {
@@ -42,6 +43,7 @@ export const applyPgEffects = async (core: PgCore, session: PgSession, grant: Sc
     }
     const payload = await store.payload(session, scope, record.key, pgJsonBytes(record.bytes), record.contentHash);
     root = await store.put(session, root, 'record', record.key, { payload, contentHash: record.contentHash }); records += 1;
+    created.push(record);
   }
   for (const append of unit.appends) {
     const previous = await store.get<PgChain>(session, root, 'chain', append.chainId);
@@ -68,6 +70,12 @@ export const applyPgEffects = async (core: PgCore, session: PgSession, grant: Sc
     root = await store.put(session, root, 'index', write.key, { digest: write.digest, resultIds: write.resultIds, resultHash: write.resultHash });
   }
   root = await applyPgModuleEffects(core, session, grant, root, unit, installed === REGISTERED_PG_EFFECTS, coverageRoot);
-  await core.options.projection?.(unit, { session, root, coverageRoot, stagedUnitId: core.roots.preparationUnit(), layout: core.options.layout, grant, stream: { moduleId: core.options.moduleId, scope, incarnation: core.incarnation, stream: core.incarnation } });
+  const context = {
+    session, root, coverageRoot, stagedUnitId: core.roots.preparationUnit(),
+    layout: core.options.layout, grant,
+    stream: { moduleId: core.options.moduleId, scope, incarnation: core.incarnation, stream: core.incarnation },
+  };
+  await core.options.validateEffects?.(unit, context);
+  await core.options.projection?.({ ...unit, records: created }, context);
   return { root, records, appends: unit.appends.length };
 };

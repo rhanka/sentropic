@@ -32,6 +32,9 @@ export class PgCore {
   readonly limits: WorkLimits;
   readonly authority;
   constructor(readonly options: PostgresStorageOptions, readonly incarnation: string) {
+    if (typeof options.cursorSecret !== 'string' || !options.cursorSecret.trim()) {
+      throw new StorageInvalidCommandError('durable Postgres storage requires a stable cursorSecret');
+    }
     const descriptor = options.descriptor ? JSON.parse(JSON.stringify(options.descriptor)) as typeof options.descriptor : undefined;
     if (descriptor) { if (!validateModuleDescriptor(descriptor).ok || descriptor.queryNames.some((name) => typeof options.queries?.[name] !== 'function')) throw new StorageInvalidCommandError('invalid registered Postgres descriptor'); freezeRegistration(descriptor); }
     this.options = Object.freeze({ ...options, descriptor, layout: validatePgLayout(options.layout),

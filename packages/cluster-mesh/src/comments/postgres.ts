@@ -49,7 +49,7 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
   } : {});
   return Object.freeze({
   assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR,
-  projection: async (effects: Parameters<typeof prepareCommentsProjection>[0], context: Parameters<typeof prepareCommentsProjection>[1]) => {
+  validateEffects: async (effects: Parameters<typeof prepareCommentsProjection>[0], context: Parameters<typeof prepareCommentsProjection>[1]) => {
     if (services) {
       try { await validateCommentsImportProjection(services, effects, context); }
       catch (error) {
@@ -57,6 +57,8 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
         throw error;
       }
     }
+  },
+  projection: async (effects: Parameters<typeof prepareCommentsProjection>[0], context: Parameters<typeof prepareCommentsProjection>[1]) => {
     await prepareCommentsProjection(effects, context);
     await prepareCommentsAuthority(effects, context);
   },
@@ -67,7 +69,7 @@ export const createCommentsPostgresRegistration = async (options: { readonly ser
   purgeAuthorize: services ? authorizeCommentsPurge(services) : undefined, purgeFinalizer: services ? finalizeCommentsPurge(services) : undefined,
   });
 };
-export const createCommentsPostgresStorage = async (options: Omit<PostgresStorageOptions, 'moduleId' | 'assets' | 'descriptor' | 'projection' | 'queries' | 'operations' | 'purgeAuthorize' | 'purgeFinalizer'> & { readonly services?: CommentsServiceOptions }) => {
+export const createCommentsPostgresStorage = async (options: Omit<PostgresStorageOptions, 'moduleId' | 'assets' | 'descriptor' | 'projection' | 'validateEffects' | 'queries' | 'operations' | 'purgeAuthorize' | 'purgeFinalizer'> & { readonly services?: CommentsServiceOptions }) => {
   const { services, ...storage } = options;
   return createPostgresKernel({ ...storage, moduleId: 'comments', ...await createCommentsPostgresRegistration({ services }), limits: requireCommentsStorageLimits(storage.limits) });
 };
