@@ -34,7 +34,7 @@ describe.skipIf(!pgEnabled)('actual server crash between durable steps', () => {
     const saved = JSON.parse(await readFile(witness, 'utf8')) as { name: string; grant: ReturnType<typeof grantFor>; fence: { fenceId: string; epoch: string }; unit: AuthenticatedStagedHandle; commitRoot: StagedCommitRoot; incarnation: string };
     const schema = quotePgIdentifier(saved.name); const connection = testPgDriver();
     try {
-      const root = await createPostgresKernel({ moduleId: 'comments', driver: connection.driver, layout: { dataSchema: saved.name, projectionSchemas: { comments: saved.name }, outboxSchema: saved.name }, history: {
+      const root = await createPostgresKernel({ moduleId: 'comments', cursorSecret: 'qualification-host-secret', driver: connection.driver, layout: { dataSchema: saved.name, projectionSchemas: { comments: saved.name }, outboxSchema: saved.name }, history: {
         read: async (session) => (await session.execute({ text: `SELECT receipt FROM ${schema}.host_history ORDER BY ordinal`, values: [] })).rows.map((row) => row.receipt as PgMigrationReceipt), complete: async () => { throw new Error('normal requests must not migrate'); },
       } });
       expect(root.incarnation).toBe(saved.incarnation); const bound = await root.bind(saved.grant);

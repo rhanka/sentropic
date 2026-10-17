@@ -88,7 +88,7 @@
 - [ ] `attention` BRCM2-PORT7 — additive selected Postgres leaf uses asynchronous durable grant binding and the same object-shaped staged commit/abort inputs as K4. SQL session/query/outbox/history interfaces remain host-injected; K3's existing factory and validated behavior stay unchanged. Co-review by gr-conductor remains pending.
 - [x] `acknowledge` BRCM2-EX4 — authorized package delivery needs public `storage`, `storage/postgres`, `comments` and selected composition/router leaves in `packages/cluster-mesh/package.json`; assets join the package files list. Impact: additive optional leaves, no root peer evaluation. Rollback: remove those new exports/assets entries together.
 - [x] `acknowledge` BRCM2-EX5 — real Postgres and portable-digest qualification will be wired into `.github/workflows/ci.yml`, using a branch-local `tests/storage/postgres.mk` include. Impact: isolated package validation steps only; Makefile/Compose remain unchanged. Rollback: remove the added workflow steps and include invocation.
-- [ ] `attention` BRCM2-PORT6 — immutable insert replay now compares canonical bytes as well as the declared hash; exact replays retain the record and count zero new records, while conflicting representation is refused. Projection creation deltas omit duplicate immutable records. This aligns §5.4 and remains subject to gr-conductor co-review.
+- [ ] `attention` BRCM2-PORT6 — immutable insert replay compares canonical bytes/hash, counts zero creations and excludes replayed records from PG projection deltas. New trusted validateEffects checks the full raw plan separately, preserving comments import validation. RED probes reproduce duplicate projections before this fix; gr-conductor re-pass required.
 - [ ] `attention` BRCM2-PORT5 — issuance/revocation records are retained in the backend module/incarnation namespace so recreating a runtime on the same backend cannot revive a revoked token. K3's default fresh backend remains isolated; co-review pending.
 - [ ] `attention` BRCM2-PORT4 — `CommitReceipt` carries the optional K1 encoded `moduleResult`; ordinary/staged recovery owns it deeply. Existing receipt fields and K3 unfenced behavior remain compatible; co-review by gr-conductor pending.
 - [x] `acknowledge` BRCM2-EX1 — initial BRANCH.md creation exceeds 150 lines (template-mandated detailed plan); doc-only commit; rollback: none needed.
@@ -129,9 +129,9 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Opus corrections — PR #684 NO-GO (2026-10-17)**
-  - [ ] Engram MAJ-1/2: postgres-effective-records.spec.ts probes effective projection deltas/raw validation and mandatory durable cursor configuration before implementation; comments-cursor.spec.ts covers restart/replica/key mismatch.
+  - [x] Engram MAJ-1/2: effective-record and cursor regressions observed RED; postgres-effective-records.spec.ts 2/2 and comments-cursor.spec.ts restart/replica/key-mismatch 1/1 PASS.
   - [x] MAJ-1: owned-object fingerprints and typed PgSchemaDriftError; host-DDL regression and operator re-attestation PASS. postgres-reattest.spec.ts simulates PostgreSQL catalog-rendering changes, rejects stale approvals/actual drift and reopens after audited host approval.
-  - [ ] MAJ-2: required stable comments cursor secret, restart/replica/key-mismatch page tests and host documentation.
+  - [x] MAJ-2: generic PG cursorSecret is required and rejects empty/missing keys; stable host key, replica continuity and rotation implications documented and qualified.
   - [x] m1/m4/m10: required #679-first ordering, historical CI/EX8 state and complete gr-conductor U1–U7 inventory recorded; final candidate CI remains pending below.
   - [ ] m2/m3: 0.19.0 changelog and independent comments migration numbering with core-upgrade regression.
   - [ ] m4/m5: delete staged-runtime alias and move public test hooks into test helpers.
