@@ -89,7 +89,7 @@ nor `tsx` (pruned by `npm prune --omit=dev`), and need the SQL upsert instead.
 Governed path (D1): the versioned one-off Job
 `deploy/k8s/base/36-oauth-register-client-job.yaml` via
 `make oauth-register-client-job SECRET_FILE=<0600 env file> ENV=<env>`
-(BRMFA-EX1). The secret travels only via the temporary
+(BR45-EX1). The secret travels only via the temporary
 `oauth-client-registration` Secret (`envFrom`), never CLI literals.
 
 Per-client MFA policy (B3/C1): a 2FA-only client sets

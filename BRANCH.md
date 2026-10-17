@@ -53,16 +53,16 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `Makefile` (D1 make target only, via BRMFA-EX1)
-  - `deploy/k8s/**` (D1 Job only, plus sync-shape compat via BRMFA-EX2)
+  - `Makefile` (D1 make target only, via BR45-EX1)
+  - `deploy/k8s/**` (D1 Job only, plus sync-shape compat via BR45-EX2)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `BRMFA-EX1` (Makefile D1 target): reason: D1 requires a versioned root make target driving the client-registration Job; impact: one additive `oauth-register-client-job` target only, no other target touched; rollback: delete target, Job yaml remains unused.
-- `BRMFA-EX2` (sync-shape compat): reason: `client-postcondition.sql` asserts exact `oauth_clients` row shape, so the B3/C1 columns break the idp-sync gate; impact: two column names added to the existing exclusion arrays (same treatment as tier-local `client_secret_hash`, policy stays per-tier and is never synced); rollback: revert one file (gate fails closed until then).
+- `BR45-EX1` (Makefile D1 target): reason: D1 requires a versioned root make target driving the client-registration Job; impact: one additive `oauth-register-client-job` target only, no other target touched; rollback: delete target, Job yaml remains unused.
+- `BR45-EX2` (sync-shape compat): reason: `client-postcondition.sql` asserts exact `oauth_clients` row shape, so the B3/C1 columns break the idp-sync gate; impact: two column names added to the existing exclusion arrays (same treatment as tier-local `client_secret_hash`, policy stays per-tier and is never synced); rollback: revert one file (gate fails closed until then).
 - E1/E2 gated on kvm-session incompatibility report; absent report means skip with `attention` note, no code.
 
 ## AI Flaky tests
@@ -96,7 +96,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - [x] Define environment mapping (`ENV=test-idp-client-mfa-policy`, `API_PORT=9585`, `UI_PORT=5785`, `MAILDEV_UI_PORT=1685`).
   - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRMFA-EX1` for Makefile.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR45-EX1` for Makefile.
   - [x] Check `make ps-all ENV=test-idp-client-mfa-policy` single-build discipline.
 - [x] **Lot 1 — B1 passkey login sets mfaVerified=true with UV**
   - [ ] Thread `userVerified` from `verifyAuthenticationResponse.authenticationInfo` through `verifyWebAuthnAuthentication` (api) and `verifyAuthentication` (auth-hono + adapter) into `finalizeAuthentication` input.
@@ -171,7 +171,7 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
     - [ ] **E2E tests**
       - [ ] Existing OAuth E2E specs stay green; allowlist covered at API level (Dex/RP behavior out of scope).
 - [x] **Lot 5 — D1 versioned Job + make target + rotation runbook**
-  - [ ] Add `deploy/k8s/base/36-oauth-register-client-job.yaml` (versioned Job, secret via `envFrom` temporary Secret, never CLI); root make target `oauth-register-client-job` under `BRMFA-EX1`.
+  - [ ] Add `deploy/k8s/base/36-oauth-register-client-job.yaml` (versioned Job, secret via `envFrom` temporary Secret, never CLI); root make target `oauth-register-client-job` under `BR45-EX1`.
   - [ ] Rotation runbook `docs/oauth-client-rotation.md` (90-day cycle, mint base64url 32 bytes, sha256 stored, immediate cutover, names only for secrets).
   - [ ] Update `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` client procedure + `packages/auth-hono/README.md` if behavior docs changed.
   - [ ] Bump affected `packages/auth-hono/package.json` version (Post-Rebase Gate re-check).
