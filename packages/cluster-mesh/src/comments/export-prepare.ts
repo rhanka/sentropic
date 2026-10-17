@@ -20,25 +20,26 @@ export const prepareCommentsExport = async (options: CommentsServiceOptions, con
     !Array.isArray(selection.selections) || selection.selections.length < 1 || selection.selections.length > 50 || (selection.operationKeys?.length ?? 0) > 50 || commentsTransportBytes(selection) > 262144) throw new CommentsTransportError('invalid-request', 'Invalid bounded export selection');
   const selectionDigest = sha256Hex(canonicalJson(['comments-export-selection', 'v1', selection]));
   let state = await readCommentsExport(context, selection.exportId, true); let fresh = false;
+  const committed = { ...context, root: context.committedRoot };
   if (!state) {
     if (input.continuation !== null) throw new CommentsTransportError('invalid-request', 'Unknown export continuation');
     const heads: Record<string, ManifestChainHead> = Object.create(null) as Record<string, ManifestChainHead>;
     for (const selected of selection.selections) {
       const chain = chainIdentity(selected).key; await assertCommentsPgVisible(context, chain);
-      const metadata = await commentsPgValue<PgChain>(context, 'chain', chain);
+      const metadata = await commentsPgValue<PgChain>(committed, 'chain', chain);
       if (!metadata || metadata.disposed) throw new CommentsTransportError('incomplete', 'Export selection has no retained canonical head');
       if (Object.hasOwn(heads, chain)) throw new CommentsTransportError('invalid-request', 'Duplicate export chain selection');
       heads[chain] = { head: metadata.head, allocation: metadata.allocation, terminalSeq: String(metadata.count - 1) };
     }
     const unitRoots: string[] = [];
     for (const operation of selection.operationKeys ?? []) {
-      const root = await commentsPgValue<StagedCommitRoot>(context, 'unit-root', operation);
+      const root = await commentsPgValue<StagedCommitRoot>(committed, 'unit-root', operation);
       if (!root) throw new CommentsTransportError('incomplete', 'Export operation has no committed root');
       unitRoots.push(sha256Hex(encodeStagedCommitRoot(root)));
     }
     const manifest = buildManifest({ scope: selection.scope, selections: Object.keys(heads), heads, unitRoots, descriptorVersion: 'contract-v1', encodingVersion: 'storage-canonical-v1',
-      storeIncarnation: context.stream.incarnation, rootVersion: context.root ?? '0', terminal: { count: String(selection.selections.length), complete: true } });
-    state = { version: 'comments-export-v1', selection, selectionDigest, root: context.root, manifest, boundaryDigest: digestManifest(manifest), frozenAt: options.clock.now(), secret: randomUUID(),
+      storeIncarnation: context.stream.incarnation, rootVersion: context.rootVersion, terminal: { count: String(selection.selections.length), complete: true } });
+    state = { version: 'comments-export-v1', selection, selectionDigest, root: context.committedRoot, manifest, boundaryDigest: digestManifest(manifest), frozenAt: options.clock.now(), secret: randomUUID(),
       scan: initialCommentsExportPosition(), digest: updatePortableDigest(startPortableDigest(), Buffer.from(`${canonicalJson(['comments-unit-payload', 'v1', selection.exportId]).slice(0, -1)},[`)), payloadDigest: null };
     if (!Number.isSafeInteger(state.frozenAt) || state.frozenAt < 0) throw new CommentsTransportError('unavailable', 'Export clock is invalid');
     await writeCommentsExport(context, state, true); fresh = true;

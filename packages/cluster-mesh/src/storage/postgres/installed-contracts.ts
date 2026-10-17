@@ -8,6 +8,7 @@ import type { RootStageInput } from '../staged-operations.js';
 // Only installed module code receives this SPI. Scoped callers select named
 // operations, never SQL, a callback, or an enforcement/bypass parameter.
 export interface PgInstalledContext extends PgProjectionContext {
+  readonly committedRoot: string | null; readonly rootVersion: string;
   readonly policy: PurgePolicy;
   available(target: string): Promise<boolean>;
   head(chain: string): Promise<{ readonly hash: string; readonly sequence: number; readonly bytes: string } | null>;
