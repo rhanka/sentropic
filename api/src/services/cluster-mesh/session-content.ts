@@ -362,6 +362,12 @@ export interface AcknowledgeGrantRefreshInput {
   readonly projectRevision: number;
   readonly bindingVersion: number;
   readonly nativeBoundarySeq: number;
+  /** P3: the source generation the caller attests — must equal the grant's,
+   * never overwrites it. A replaced source needs a new derivation. */
+  readonly sourceGeneration: string;
+  /** P3: the D1 version the caller attests — must equal the grant's frozen
+   * D1 version. A changed D1 version needs a new derivation. */
+  readonly d1Version: number;
 }
 
 export interface SessionContentUsage {
@@ -1035,6 +1041,12 @@ export class SessionContentService {
     if (!Number.isSafeInteger(input.nativeBoundarySeq) || input.nativeBoundarySeq < 0) {
       throw new SessionContentError('invalid_request', 'acknowledged boundary must be a safe integer');
     }
+    if (typeof input.sourceGeneration !== 'string' || input.sourceGeneration.length === 0) {
+      throw new SessionContentError('invalid_request', 'acknowledged source generation must be set');
+    }
+    if (!Number.isSafeInteger(input.d1Version) || input.d1Version < 0) {
+      throw new SessionContentError('invalid_request', 'acknowledged D1 version must be a safe integer');
+    }
     await this.checkEpoch();
     return db.transaction(async (tx) => {
       await this.checkMembership(tx, ctx.tenantId, ctx.principalId);
@@ -1106,6 +1118,15 @@ export class SessionContentService {
       const trustVersions = ((policy['sourceTrustVersions'] as string[] | undefined) ?? []).map(String);
       if (!trustVersions.includes(grant.sourceTrustVersion)) {
         throw new SessionContentError('source_reauthorization_required', 'source trust version is not covered');
+      }
+      // P3: the attested generation and D1 version must equal the grant's
+      // frozen values — a replaced source or a changed D1 version needs a
+      // separately authorized derivation, never a refresh overwrite.
+      if (input.sourceGeneration !== grant.sourceGeneration) {
+        throw new SessionContentError('source_reauthorization_required', 'source generation changed; re-derive');
+      }
+      if (input.d1Version !== grant.d1Version) {
+        throw new SessionContentError('ineligible_session', 'D1 version changed; a new derivation is required');
       }
       const selected = ((policy['selectedSessionIds'] as string[] | undefined) ?? []).map(String);
       const futureEligible =
