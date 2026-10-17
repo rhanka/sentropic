@@ -41,9 +41,9 @@ describe.skipIf(!pgEnabled)('actual server crash between durable steps', () => {
       expect(await bound.inspectStaged('crash-unit')).toEqual({ state: 'sealing', acceptedFragments: '1' }); expect(await bound.readHead('pending')).toBeNull();
       let seal;
       for (let n = 0; !seal && n < 20; n += 1) seal = (await bound.sealStep({ unit: saved.unit, root: saved.commitRoot, fence: saved.fence, limits: { maxRecords: 1, maxAppends: 1, maxEncodedBytes: 16384 } })).seal;
-      expect(seal).toBeDefined(); const receipt = await bound.commitStaged(seal!, saved.fence);
+      expect(seal).toBeDefined(); const receipt = await bound.commitStaged({ seal: seal!, fence: saved.fence });
       expect(await bound.readChain('pending')).toEqual([{ id: 'p', hash: 'p', seq: 0, bytes: 'durable hidden bytes' }]);
-      expect(await bound.commitStaged(seal!, saved.fence)).toEqual(receipt); expect((await bound.journalRead(0, 10)).watermark).toBe(2);
+      expect(await bound.commitStaged({ seal: seal!, fence: saved.fence })).toEqual(receipt); expect((await bound.journalRead(0, 10)).watermark).toBe(2);
     } finally {
       await connection.driver.transaction({ isolation: 'serializable', readOnly: false, deadlineMs: 2000 }, (session) => session.execute({ text: `DROP SCHEMA ${schema} CASCADE`, values: [] }));
       await connection.close(); await rm(witness);
