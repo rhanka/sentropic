@@ -3,6 +3,7 @@ import type { CanonicalChainRecord } from '@sentropic/comments';
 import { isDecimalCounter, validateStorageScope } from '../storage/contracts.js';
 import { own, validateRecordHash } from './storage-schema.js';
 import { COMMENTS_TRANSPORT_LIMITS as limits, COMMENTS_TRANSPORT_VERSION, CommentsTransportError, type CommentsFragment, type CommentsFragmentManifest } from './transport-contracts.js';
+import { validateCommentsAdmission } from './admission.js';
 export const commentsTransportBytes = (value: unknown): number => Buffer.byteLength(canonicalJson(value), 'utf8');
 const fail = (message: string): never => { throw new CommentsTransportError('invalid-request', message); };
 const id = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256 && !value.includes('\0');
@@ -11,6 +12,7 @@ export const commentsFragmentDigest = (manifest: CommentsFragmentManifest, paylo
 export const commentsUnitPayloadDigest = (unitId: string, records: readonly CanonicalChainRecord[]): string => sha256Hex(canonicalJson(['comments-unit-payload', 'v1', unitId, records.map((record) => [record.kind, record.hash])]));
 export const validateCommentsFragment = (fragment: CommentsFragment): void => {
   if (!fragment || fragment.version !== COMMENTS_TRANSPORT_VERSION || !fragment.manifest || !Array.isArray(fragment.payload)) fail('invalid comments fragment envelope');
+  for (const record of fragment.payload) validateCommentsAdmission(record);
   const manifest = fragment.manifest;
   if (commentsTransportBytes(manifest) > limits.manifestBytes) throw new CommentsTransportError('capacity-exceeded', 'Fragment manifest exceeds its byte limit');
   if (commentsTransportBytes(fragment.payload) > limits.payloadBytes) throw new CommentsTransportError('capacity-exceeded', 'Fragment payload exceeds its byte limit');
@@ -31,6 +33,7 @@ export const validateCommentsFragment = (fragment: CommentsFragment): void => {
   for (const record of fragment.payload) validateRecordHash(record);
 };
 export const createCommentsFragment = (manifest: CommentsFragmentManifest, payload: readonly CanonicalChainRecord[]): CommentsFragment => {
+  for (const record of payload) validateCommentsAdmission(record);
   const owned = own({ manifest, payload });
   const fragment = { version: COMMENTS_TRANSPORT_VERSION, ...owned, digest: commentsFragmentDigest(owned.manifest, owned.payload) };
   validateCommentsFragment(fragment); return fragment;
