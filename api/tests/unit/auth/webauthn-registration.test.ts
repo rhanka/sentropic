@@ -79,23 +79,23 @@ describe('WebAuthn Registration Service', () => {
     });
 
     it('should handle user verification policy', async () => {
-      const optionsPreferred = await generateWebAuthnRegistrationOptions({
+      // F3/B4: known users resolve the role-based UV requirement — every role
+      // requires UV, so enrolled credentials can later satisfy policy clients.
+      const optionsKnown = await generateWebAuthnRegistrationOptions({
         userId: testUserId,
         userName: testEmail,
         userDisplayName: testDisplayName,
       });
 
-      expect(optionsPreferred.authenticatorSelection?.userVerification).toBe('preferred');
+      expect(optionsKnown.authenticatorSelection?.userVerification).toBe('required');
 
-      const optionsRequired = await generateWebAuthnRegistrationOptions({
-        userId: testUserId,
+      // Unknown (pre-registration) users keep the 'preferred' fallback.
+      const optionsUnknown = await generateWebAuthnRegistrationOptions({
         userName: testEmail,
         userDisplayName: testDisplayName,
       });
 
-      // Note: Registration service doesn't enforce userVerification policy
-      // This is handled at the authentication level
-      expect(optionsRequired.authenticatorSelection?.userVerification).toBe('preferred');
+      expect(optionsUnknown.authenticatorSelection?.userVerification).toBe('preferred');
     });
 
     it('should generate challenge and store it', async () => {

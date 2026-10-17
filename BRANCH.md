@@ -166,5 +166,6 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
   - [x] Bumped `packages/auth-hono/package.json` to 0.15.3 (patch: keeps `^0.15.0` dependents; 0.16.0 broke them, fixed in-branch)
   - [x] Pushed; DRAFT PR #683 opened (body = BRANCH.md at push time; refresh pending after Argon fixes)
   - [x] CI run 38998031975 then 39006337986: all green except AI specs failing `no credits remaining` (OpenAI billing, affects main too)
+  - [x] CI run 39038108646 red `test-api-unit-integration`: stale `webauthn-registration.test.ts` asserted pre-F3 `'preferred'` default; updated to F3 contract (`required` for known roles, `'preferred'` fallback pre-registration), 8/8 scoped green
   - [ ] Argon F1–F7 fixes committed test-first; push + refresh PR #683 body from BRANCH.md
   - [ ] CI green (modulo AI-billing external); report, stop; never merge
