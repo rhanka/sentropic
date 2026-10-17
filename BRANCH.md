@@ -477,6 +477,7 @@
   - [ ] RED `postgres-single-session.spec.ts` refuses any nested external driver transaction during an active M1 transaction, requiring binding revalidation to reuse its existing canonical session before installed single-client qualification.
   - [ ] The single-session probe was RED on nested binding. Binding now uses the active same-scope session and final grant checks; no extra connection is acquired while the canonical transaction is active.
   - [ ] Added a fragment-acknowledgement retry probe after a superseding database fence: identical bytes cannot retain writer authority merely because their acknowledgement was persisted earlier.
+  - [ ] The retry probe was RED. Every intake now re-enters the kernel's bound staged operation before returning an acknowledgement, revalidating the current database fence; oversized ordinal gaps refuse before a bigint SQL parameter is issued.
   - [ ] Local module discovery/load/probe in `src/modules/{catalog,registry,contracts}.ts`; `src/compose/comments.ts`, `src/loaders/comments/index.ts`, `src/integrations/comments/index.ts`.
   - [ ] `src/hono/comments-router.ts` with no raw lifecycle bypass; forged HTTP tombstone / `purge-outcome` refused without effects.
   - [ ] Lot gate: copy of Lot 1 gate; new tests `packages/cluster-mesh/tests/comments-{module,router}.spec.ts`; existing `packages/cluster-mesh/tests/modules/{registry,capabilities,namespace-loading,topology,topology-ranges}.spec.ts` and `tests/conformance/h2a-contract.spec.ts` green.
