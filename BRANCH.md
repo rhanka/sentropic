@@ -133,16 +133,17 @@
     - [x] Replay RED requires bounded canonical snapshot rows, captured heads/indexes, unissued/foreign-root refusal and one isolated external stream per scope; observed RED on the reference's journal-event response.
     - [x] Reference captures owned canonical rows under opaque scope-held snapshot capabilities and pages them with current authorization/coverage; J5 substitutes live rows while retaining the captured watermark and dies at the content-boundary assertion. Profile mutations: 40/40.
     - [x] External reference streams are keyed by full scope/incarnation and copy exact kernel events; the cross-scope exposure mutant targets C11.
-  - [ ] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
+  - [x] MINEUR-8: lifecycle interruption after commit before response; outcome/notification counts; record/aggregate disposal reported as `retained` unless physically removed.
     - [x] Lifecycle RED probes require explicit payload dispositions, independent outcome/notification membership, and response-loss recovery after committed disposal; the aggregate fixture now uses the K1 encoded-value contract.
     - [x] Reference records actual retained/erased dispositions and canonical completion/notification membership before simulating a lost response; pre-outcome failure leaves the local disposal uncommitted. Profile mutations pass 40/40; new lifecycle mutants follow.
+    - [x] `tests/storage/lifecycle-integrity.spec.ts`: five exact-target mutants killed (5/5): duplicate outcomes, duplicate notifications, false record/aggregate erasure and committed completion lost after response interruption.
   - [ ] MINEUR-9/10: fix contradictory `read-corpus.ts` header (done with MINEUR-1); corrections recorded here with post-rebase SHAs.
   - [ ] Lot gate:
     - [ ] `make typecheck-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2` + `make lint-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
     - [ ] **Package tests (cluster-mesh, Vitest)**
       - [ ] Updated: `packages/cluster-mesh/tests/storage/{staged-corpus,barrier-corpus,replay-corpus,lifecycle-corpus,read-corpus,reference-staged,reference-store}.ts`
       - [ ] Updated: `packages/cluster-mesh/tests/storage/{reference,mutations,profile-mutations}.spec.ts`
-      - [ ] New: `packages/cluster-mesh/tests/storage/staged-codec.ts`, `packages/cluster-mesh/tests/storage/staged-codec.spec.ts`
+      - [x] New: `packages/cluster-mesh/src/storage/staged-codec.ts`, `packages/cluster-mesh/tests/storage/{staged-codec,staged-integrity,replay-integrity,lifecycle-integrity}.spec.ts`, `packages/cluster-mesh/tests/storage/staged-integrity-corpus.ts`.
       - [ ] Scoped runs: `make test-packages SCOPE=packages/cluster-mesh/tests/storage/reference.spec.ts API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
       - [ ] Sub-lot gate: `make test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`
     - [ ] **API tests**: not impacted (no `api/**` change).
