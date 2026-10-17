@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { PostgresStorageError } from './errors.js';
+import { PostgresStorageError, PgSchemaDriftError } from './errors.js';
 import { decodePgText } from './codec.js';
 import { quotePgIdentifier, validatePgLayout, type PgLayout, type PgSession } from './protocol.js';
 export interface PgAsset {
@@ -40,7 +40,9 @@ export const loadPgAssets = async (selected: { readonly comments?: boolean } = {
   }
   return Object.freeze(assets);
 };
-const fingerprint = async (session: PgSession, layout: PgLayout): Promise<string> => {
+const fingerprint = async (session: PgSession, layout: PgLayout, assets: readonly PgAsset[]): Promise<string> => {
+  const owned = assets.flatMap((asset) => [...asset.sql.matchAll(/CREATE (TABLE|FUNCTION) (__DATA_SCHEMA__|__COMMENTS_SCHEMA__)\.([a-z_]+)/g)]
+    .map((match) => [match[2] === '__DATA_SCHEMA__' ? layout.dataSchema : layout.projectionSchemas.comments, match[3], match[1]]));
   const result = await session.execute({ text: `SELECT jsonb_agg(object ORDER BY object::text COLLATE "C")::text AS objects FROM (
     SELECT jsonb_build_array('column',c.relname,a.attnum,a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attidentity,pg_get_expr(d.adbin,d.adrelid)) AS object
       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid
@@ -48,7 +50,9 @@ const fingerprint = async (session: PgSession, layout: PgLayout): Promise<string
     UNION ALL SELECT jsonb_build_array('constraint',c.relname,k.conname,pg_get_constraintdef(k.oid)) FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1
     UNION ALL SELECT jsonb_build_array('index',c.relname,pg_get_indexdef(i.indexrelid)) FROM pg_index i JOIN pg_class c ON c.oid=i.indrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1
     UNION ALL SELECT jsonb_build_array('function',p.proname,pg_get_functiondef(p.oid)) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.prokind='f'
-  ) AS definitions`.replaceAll('n.nspname=$1', 'n.nspname=ANY($1::text[])').replaceAll("jsonb_build_array('", "jsonb_build_array(n.nspname,'"), values: [[...new Set([layout.dataSchema, ...Object.values(layout.projectionSchemas)])]] });
+  ) AS definitions`.replaceAll('n.nspname=$1', `EXISTS (SELECT 1 FROM jsonb_array_elements($1::jsonb) owned WHERE owned->>0=n.nspname AND owned->>1=c.relname AND owned->>2='TABLE')`)
+    .replace("owned->>1=c.relname AND owned->>2='TABLE') AND p.prokind='f'", "owned->>1=p.proname AND owned->>2='FUNCTION') AND p.prokind='f'")
+    .replaceAll("jsonb_build_array('", "jsonb_build_array(n.nspname,'"), values: [JSON.stringify(owned)] });
   return digest(decodePgText(result.rows[0]?.objects));
 };
 const checkReceipts = (assets: readonly PgAsset[], rows: readonly PgMigrationReceipt[]): void => {
@@ -64,7 +68,9 @@ export const verifyPgInstallation = async (session: PgSession, configured: PgLay
   const layout = validatePgLayout(configured);
   const rows = await history.read(session);
   checkReceipts(assets, rows);
-  if (rows.at(-1)?.schemaFingerprint !== await fingerprint(session, layout)) refuse();
+  const expected = rows.at(-1)?.schemaFingerprint ?? '';
+  const actual = await fingerprint(session, layout, assets);
+  if (expected !== actual) throw new PgSchemaDriftError(expected, actual);
 };
 export const applyPgMigrations = async (session: PgSession, configured: PgLayout, assets: readonly PgAsset[], history: PgHostHistory, host: { readonly id: string; readonly checksum: string }): Promise<void> => {
   const layout = validatePgLayout(configured);
@@ -79,6 +85,6 @@ export const applyPgMigrations = async (session: PgSession, configured: PgLayout
     await session.execute({ text: asset.sql.replaceAll('__DATA_SCHEMA__', schema).replaceAll('__COMMENTS_SCHEMA__', quotePgIdentifier(layout.projectionSchemas.comments ?? layout.dataSchema)), values: [] });
     const { sql: _sql, file: _file, ...identity } = asset;
     await history.complete(session, { ...identity, hostMigrationId: host.id, hostChecksum: host.checksum, appliedChecksum: asset.checksum,
-      schemaFingerprint: await fingerprint(session, layout), status: 'complete', conversionState: 'not-required' });
+      schemaFingerprint: await fingerprint(session, layout, assets), status: 'complete', conversionState: 'not-required' });
   }
 };
