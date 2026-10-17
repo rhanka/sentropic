@@ -293,6 +293,7 @@
     - [ ] Qualification runner exited with SIGBUS before collecting tests; a Make diagnostic target isolates Node/tool installation and filesystem evidence before any runner change.
   - [ ] Structural driver port (parameterized query + transaction on one connection), serializable atomic ops, fences, error mapping in `src/storage/postgres/*.ts`; no `pg` import.
     - [ ] RED `postgres-ordinary.spec.ts` runs shared chain/read corpora and independently requires sequential transactions, exact byte ownership, durable receipt recovery and persisted revocation across new kernel instances.
+    - [ ] Added durable issuance/revocation, backend identity, trusted owner/epoch provisioning, database-clock leases, fresh authority checks and indexed ancestor coverage. The adapter will expose none of these trusted provisioning internals.
   - [ ] Assets `assets/storage/postgres/00N-*.sql` and `manifest.json`; host-owned migration history attachment.
     - [ ] RED `postgres-migrations.spec.ts`: a host-owned history links every transactional asset receipt to the host migration; schema drift and applied-checksum drift must both refuse opening. Asset manifest generation is explicit Make tooling.
     - [ ] Implemented packaged checksum verification and host-session-only application/completion. Opening compares every predecessor/receipt and actual catalog columns, constraints, indexes and function definitions; normal requests never apply migrations.
