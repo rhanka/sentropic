@@ -106,6 +106,13 @@
       "when": 1792165000000,
       "tag": "0015_session_content_reservation_tuple",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792170000000,
+      "tag": "0016_session_content_object_reservation",
+      "breakpoints": true
     }
   ]
 }
