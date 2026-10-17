@@ -16,7 +16,7 @@ export const appendParams = (
 
 export const oauthJsonError = (
   c: Context,
-  status: 400 | 401,
+  status: 400 | 401 | 403,
   code: string,
   message: string
 ): Response =>
