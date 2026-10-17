@@ -21,7 +21,7 @@ export const COMMENTS_DESCRIPTOR: ModuleDescriptor = Object.freeze({
 });
 export const createCommentsPostgresRegistration = async (options: { readonly services?: CommentsServiceOptions } = {}) => {
   const services = options.services ? pinCommentsServices(options.services) : undefined;
-  const operations: Readonly<Record<string, PgInstalledOperation>> = Object.freeze(services ? { 'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) } } : {});
+  const operations = Object.freeze<Record<string, PgInstalledOperation>>(services ? { 'comments.lifecycle': { operation: 'write', execute: (input, context) => executeCommentsLifecycle(services, context, input) } } : {});
   return Object.freeze({
   assets: await loadPgAssets({ comments: true }), descriptor: COMMENTS_DESCRIPTOR, projection: prepareCommentsProjection,
   queries: Object.freeze({ 'by-resource': commentsPgQuery('by-resource'), 'scope-chain-index': commentsPgQuery('scope-chain-index'), 'retained-headers': commentsPgQuery('retained-headers') }),
