@@ -6,10 +6,10 @@ import type { PgRoot } from './roots.js';
 import { decodePgCounter, decodePgJson, decodePgText } from './codec.js';
 import { ownPgValue, pgUnitDigest } from './ordinary-transactions.js';
 export interface PgBoundary extends PgRoot { readonly token: string; metadata: Record<string, unknown>; }
-export const retainPgBoundary = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, base: PgRoot, metadata: Record<string, unknown>): Promise<string> => {
-  const token = core.id('boundary');
+export const retainPgBoundary = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, base: PgRoot, metadata: Record<string, unknown>, knownToken?: string): Promise<string> => {
+  const token = knownToken ?? core.id('boundary');
   if (token.length > 256) throw new StorageInvalidCommandError('opaque identifier exceeds boundary budget');
-  await session.execute({ text: `INSERT INTO ${core.roots.schema}.boundaries(scope_key,token,owner,root,version,sequence,metadata) VALUES($1,$2,$3,$4::bigint,$5::bigint,$6::bigint,$7::jsonb)`, values: [core.roots.key(grant.scope), token, grant.principalId, base.root, base.version, base.sequence, JSON.stringify({ ...metadata, incarnation: core.incarnation })] });
+  await session.execute({ text: `INSERT INTO ${core.roots.schema}.boundaries(scope_key,token,owner,root,version,sequence,metadata) VALUES($1,$2,$3,$4::bigint,$5::bigint,$6::bigint,$7::jsonb)${knownToken ? ' ON CONFLICT(scope_key,token) DO NOTHING' : ''}`, values: [core.roots.key(grant.scope), token, grant.principalId, base.root, base.version, base.sequence, JSON.stringify({ ...metadata, incarnation: core.incarnation })] });
   return token;
 };
 export const readPgBoundary = async (core: PgCore, session: PgSession, grant: ScopeGrant<unknown>, token: string): Promise<PgBoundary> => {
