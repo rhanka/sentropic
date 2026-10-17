@@ -94,6 +94,7 @@
 - `L1-node-http` (2026-10-17): gateway-owned Node bridge preserves request/response bytes and propagates HTTP cancellation with stream backpressure; targeted tests pass. Owner-state resolver validates scope segments and absolute platform state roots.
 - `L1-control-owner` (2026-10-17): reproduced cross-owner issuance through authenticated control, then bound every operation to the host owner; owner refusal test green, zero mutations. Private socket client test also passes with 0600 socket/authenticator and inference-key refusal.
 - `L1-receipt-recovery` (2026-10-17): receipt service checks active session/model grants, serializes admissions/settlements and reconciles interrupted pending requests as incomplete without replay; receipt tests 2/2.
+- `L1-private-socket` (2026-10-17): real authenticated Unix transport/client round trip passes; authenticator rotates at host start and the client reads it through the protected path, without another caller-key store. Windows ACL qualification remains unavailable and the Node host refuses it.
 
 ## AI Flaky tests
 - Acceptance rule:
