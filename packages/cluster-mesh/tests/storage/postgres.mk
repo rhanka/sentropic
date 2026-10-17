@@ -34,15 +34,15 @@ CM_PG_IMAGE := postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a3285
 cluster-mesh-pg-up:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'Postgres qualification requires test-* or e2e-*'; exit 1;; esac
 	@docker network inspect "$(CM_PG_NAME)" >/dev/null 2>&1 || docker network create "$(CM_PG_NAME)" >/dev/null
-	@docker inspect "$(CM_PG_NAME)" >/dev/null 2>&1 || docker run -d --name "$(CM_PG_NAME)" --network "$(CM_PG_NAME)" \
+	@docker container inspect "$(CM_PG_NAME)" >/dev/null 2>&1 || docker run -d --name "$(CM_PG_NAME)" --network "$(CM_PG_NAME)" \
 		--label sentropic.storage-test="$(ENV)" -e POSTGRES_PASSWORD=qualification-only -e POSTGRES_DB=storage_test "$(CM_PG_IMAGE)" >/dev/null
 	@attempt=0; until docker exec "$(CM_PG_NAME)" pg_isready -U postgres -d storage_test >/dev/null; do \
 		attempt=$$((attempt+1)); [ "$$attempt" -lt 30 ] || exit 1; sleep 1; done
 
 cluster-mesh-pg-down:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) exit 1;; esac
-	@if docker inspect "$(CM_PG_NAME)" >/dev/null 2>&1; then \
-		[ "$$(docker inspect --format '{{ index .Config.Labels "sentropic.storage-test" }}' "$(CM_PG_NAME)")" = "$(ENV)" ] || exit 1; \
+	@if docker container inspect "$(CM_PG_NAME)" >/dev/null 2>&1; then \
+		[ "$$(docker container inspect --format '{{ index .Config.Labels "sentropic.storage-test" }}' "$(CM_PG_NAME)")" = "$(ENV)" ] || exit 1; \
 		docker rm -f "$(CM_PG_NAME)" >/dev/null; fi
 	@docker network rm "$(CM_PG_NAME)" >/dev/null 2>&1 || true
 
