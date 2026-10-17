@@ -16,6 +16,7 @@ import {
   acquireMuseAccountTransport,
   acquireOpenAICodexAccountTransport,
   importSeatProjection,
+  refreshMuseTokenIfNeeded,
   storeClaudeCodeAccountTransport,
   storeCodexAccountTransport,
   storeMistralVibeAccountTransport,
@@ -296,6 +297,50 @@ describe('llm seat projection import', () => {
     expect(row?.token_secret).not.toBeNull();
     expect(row?.last_error).toContain('access-unavailable');
     expect(row?.status).toBe('active');
+  });
+
+  it('never renews or wipes an expired externally marked Muse row', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    await storeMuseAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'muse-lab-02',
+      accessToken: 'muse-stale',
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
+    await markExternal(user.id, 'muse-lab-02', 'seat-synth-muse-02');
+    const acquired = await acquireMuseAccountTransport({
+      userId: user.id,
+      modelId: 'muse-spark-1.3-contributor',
+      requestId: 'seat-muse-expired',
+    });
+    expect(acquired).toBeNull();
+    const row = await accountRow(user.id, 'muse-lab-02');
+    expect(row?.token_secret).not.toBeNull();
+    expect(row?.status).toBe('active');
+    expect(row?.last_error).toContain('access-unavailable');
+  });
+
+  it('refuses CLI-store re-reads for policy-marked Muse tokens without touching disk', async () => {
+    const readAuthFile = vi.fn(async (_path: string) => '{}');
+    const refused = await refreshMuseTokenIfNeeded(
+      {
+        accountId: 'acct-muse-seat-01',
+        token: {
+          accessToken: 'muse-access',
+          refreshToken: null,
+          tokenType: 'bearer',
+          obtainedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          source: 'muse-import',
+          apiBaseUrl: null,
+          accountEmail: null,
+          externalSeatPolicy: policy({ seatRef: 'seat-synth-muse-01' }),
+        },
+      },
+      readAuthFile,
+    );
+    expect(refused).toBeNull();
+    expect(readAuthFile).not.toHaveBeenCalled();
   });
 
   it('serves an externally marked Muse row without re-reading the CLI store', async () => {
