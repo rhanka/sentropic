@@ -65,9 +65,19 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 
 ## Feedback Loop
 - `CISEAT-EX2`: status active. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, optional mount in `llm-mesh-router.ts` via `delivery.enabled`, service tuple/drain/reopen in `llm-account-transports.ts`). k8s mTLS manifests (`deploy/k8s/base/seat-delivery-mtls.yaml`, preprod overlay patch) are explicitly deferred to L3 P-DEPLOY, which owns TLS-termination design; no speculative infra is committed (delivery shares the api pod behind existing ingress). Impact: bounded to this integration; router behavior unchanged when `delivery` is unset. Rollback: delete the new route/middleware files, revert the router mount hunk and the service delivery functions.
-- `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`, `seat-reenroll`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper and `src/seat-reenroll.ts` natively; no host test campaign, server, second refresher or whole-home/keyring export. Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
+- `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper natively; no host test campaign, server, second refresher or whole-home/keyring export. No `seat-reenroll` helper exists in L1 (re-enroll stays an L3 concern). Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
 - `R6-1`: status acknowledged. llm-gateway 0.20.0 accepts llm-mesh `^0.26.0`; L1 keeps mesh at 0.26.x (patch only) with single-copy lock assertion, or adds the named gateway bump step (not planned; gateway paths stay forbidden).
 - `CISEAT-EX4`: status active (conductor-approved under owner default authorization). Reason: L1's required mesh patch bump (0.26.1 to 0.26.2) necessarily evolves two installed-version pins in `packages/cluster-mesh/tests/integrations/{llm,gateway}-surface.spec.ts`. Impact: two assertion literals only; published-tarball fixtures stay at 0.26.1. Rollback: revert the two literals.
+
+## Opus review NO-GO rework (PR #681, test-first, red-then-green on spies)
+- `B1`: `CISEAT-EX4` declared above; the two cluster-mesh surface pin updates are committed.
+- `M1`: new modules exported through the package entry (`enrollment/index.ts`, `node/index.ts`); the external marker is applied in real code (`importSeatBundle` canonical `seat-<cli>-<seatRef>` registration, validate consumer authority/owner/expiry, idempotent/stale/conflict/epoch transitions, persist via canonical register/persist for restart); restart and 401 paths covered by tests.
+- `M2`: Muse device-flow refresh routes through `muse-code.refresh` (mesh-managed device accounts keep working; only CI external seats are non-refreshing; external device seats refused with zero provider calls).
+- `M3`: receiver derives identity (owner, scope, billing) from the authenticated server registry (`SEAT_DELIVERY_SEATS_JSON`), never the request body; constant-time bearer compare; trusted-hop marker is per-request, never process-wide env.
+- `M4`: discriminating refusal tests with spies (`refreshAntigravityAccessToken`, `readMuseCliEntry`, `importAntigravityEnrollment`, `fetch`); expired agy and Muse cases; controlled 401 pair (renewable refreshes, external records no-call); explicit-refresh and Muse paths; the 11 listed package test files updated.
+- `M5`: unknown expiry is not infinite validity — mesh `isExternalSeatUnavailable` (missing/empty/unparseable expiry → unavailable) and API-side unavailable outcome (last_error only, status stays `active`, secret retained).
+- Minors: expired seat = `access-unavailable`; inspect helper has an explicit sidecar file backend or returns `unverified` (`seat-tools/README.md` documents inspect-only use); receiver covers all five CLIs; no invented `issuedAt` (custodian-observed `issuedAt` required); commits kept small; automated single-copy lock assertion (`tests/node/mesh-release-invariants.test.ts`).
+- Status: mesh suite 49 files / 881 tests green; mesh typecheck + lint green; API gates pending rerun; push/PR held by conductor (immo #679 runner starvation) — commits stay local until told.
 
 ## Scope notes
 - L1's required mesh patch bump (0.26.1 to 0.26.2, inside gateway `^0.26.0`)
@@ -122,10 +132,10 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 
 - [x] **Lot 1 — Package CLI/token import adapters (five CLIs)**
   - [x] Add shared source-mode/authority contract: `--from cli` registrar path (selected lab profile via provider adapter, custody transfer explicit, original lab profile retired) and `--from token` bounded stdin/FD/SDK-stream path (argv never carries the value); consumer `--from cli` parses a private provider-shaped profile + trusted manifest (parse/validate only, no exchange/mint/reread/refresh).
-  - [ ] Add `packages/llm-mesh/src/enrollment/cli-seat-import.ts` (common enroll/parse entry: `h2a llm-mesh account enroll <provider> --from cli|token`).
-  - [ ] Add `packages/llm-mesh/src/enrollment/agy-cli-import.ts` (agy explicit mapping: package `providerId: cloud-code`, `accountTransport: cloud-code`, adapter/client/entitlement match).
-  - [ ] Extend per-provider enrollment adapters without renaming global IDs (`codex`, `mistral-vibe`, `muse`, `claude-code` unchanged): canonical registration + consumer projection parsing, no second account registry.
-  - [ ] Enforce: unknown expiry is not infinite validity; reimport N idempotent, N-1/another owner fails, new epoch needs controlled replacement; registrar stable opaque seat/account mapping, no secret-derived public identifiers.
+  - [x] Add `packages/llm-mesh/src/enrollment/cli-seat-import.ts` (common enroll/parse entry: `h2a llm-mesh account enroll <provider> --from cli|token`).
+  - [x] Add `packages/llm-mesh/src/enrollment/agy-cli-import.ts` (agy explicit mapping: package `providerId: cloud-code`, `accountTransport: cloud-code`, adapter/client/entitlement match).
+  - [x] Extend per-provider enrollment adapters without renaming global IDs (`codex`, `mistral-vibe`, `muse`, `claude-code` unchanged): canonical registration + consumer projection parsing, no second account registry.
+  - [x] Enforce: unknown expiry is not infinite validity; reimport N idempotent, N-1/another owner fails, new epoch needs controlled replacement; registrar stable opaque seat/account mapping, no secret-derived public identifiers.
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
     - [ ] **API tests**
@@ -143,10 +153,10 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 - [ ] **Lot 2 — Package external refresh policy + Muse/agy corrections**
   - [x] Persist and enforce external-refresh policy across token import, keyring storage, listing/reload, acquisition, explicit refresh APIs, fallback routing, application receiving store.
   - [x] Guard `local-account-transport-service.ts` (`refreshToken` + `acquire` expiry branch): on expiry an external account becomes `access-unavailable` (classified), waits for next imported projection; never erases owner claim, never derives refresh from missing token, never routes through metered key/different account/gateway.
-  - [ ] Remove consumer provider-renewal and Muse key-minting paths (including after restart and 401); Muse key preparation happens in custody before import, never in mesh consumer.
+  - [x] Remove consumer provider-renewal and Muse key-minting paths (including after restart and 401); Muse key preparation happens in custody before import, never in mesh consumer.
   - [x] Fix (a) `completeMuseDeviceImport` mis-route: device-flow grant no longer refreshes by re-reading the CLI login file; expired device access becomes `access-unavailable` with zero CLI-store reads, covered by a dedicated test.
-  - [ ] Check (b) shared refresh authority across consumers (`refreshInFlight` local map, `InMemoryAccountTransportCoordinator`): record coverage by spec 3.4/L3 (serialized-stream single temporal authority) in `.h2a/build/ci_seat_l1_report.md`.
-  - [ ] Keep `cloud-code-credential-rotation.test.ts` covering external consumers refusing rotation; cloud-code fixture never qualifies native agy.
+  - [x] Check (b) shared refresh authority across consumers (`refreshInFlight` local map, `InMemoryAccountTransportCoordinator`): record coverage by spec 3.4/L3 (serialized-stream single temporal authority) in `.h2a/build/ci_seat_l1_report.md`.
+  - [x] Keep `cloud-code-credential-rotation.test.ts` covering external consumers refusing rotation; cloud-code fixture never qualifies native agy.
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
     - [ ] **API tests**
@@ -162,10 +172,10 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
       - [ ] None (synthetic only).
 
 - [x] **Lot 3 — L1-local inspect helper + node export**
-  - [ ] Add `packages/llm-mesh/src/node/cli-seat-store-reader.ts` (bounded reader: explicitly selected lab record only; allowlisted schema/version/capability categories; no refresh/mint/provider call/GitHub write/transfer/activation; unsupported fields/backends return unverified/refused, never raw values).
-  - [ ] Add `packages/llm-mesh/seat-tools/Makefile` (`seat-helper-setup`, `seat-inspect`; no root Makefile edit), `packages/llm-mesh/seat-tools/inspect.mjs`, `packages/llm-mesh/seat-tools/package.json`, `packages/llm-mesh/seat-tools/package-lock.json`, `packages/llm-mesh/seat-tools/node-runtime.json` (pins exact reviewed Node patch/checksum + helper deps + built mesh artifact).
-  - [ ] Expose bounded reader via `packages/llm-mesh/src/node/index.ts` for L3 reuse.
-  - [ ] Add `packages/llm-mesh/tests/node/cli-seat-store-reader.test.ts` (five synthetic backend adapters; selector isolation; no live-home fallback; no refresh/mint; no raw/encoded canary in stdout/stderr/errors).
+  - [x] Add `packages/llm-mesh/src/node/cli-seat-store-reader.ts` (bounded reader: explicitly selected lab record only; allowlisted schema/version/capability categories; no refresh/mint/provider call/GitHub write/transfer/activation; unsupported fields/backends return unverified/refused, never raw values).
+  - [x] Add `packages/llm-mesh/seat-tools/Makefile` (`seat-helper-setup`, `seat-inspect`; no root Makefile edit), `packages/llm-mesh/seat-tools/inspect.mjs`, `packages/llm-mesh/seat-tools/package.json`, `packages/llm-mesh/seat-tools/package-lock.json`, `packages/llm-mesh/seat-tools/node-runtime.json` (pins exact reviewed Node patch/checksum + helper deps + built mesh artifact), plus `seat-tools/README.md` (inspect-only use).
+  - [x] Expose bounded reader via `packages/llm-mesh/src/node/index.ts` for L3 reuse.
+  - [x] Add `packages/llm-mesh/tests/node/cli-seat-store-reader.test.ts` (five synthetic backend adapters; selector isolation; no live-home fallback; no refresh/mint; no raw/encoded canary in stdout/stderr/errors).
   - [ ] Owner dry-run format inspection only after synthetic gates (under CISEAT-EX3, `ENV=dev-ci-seat-import`, never automated): `make seat-inspect -C packages/llm-mesh/seat-tools CLI=agy ENV=dev-ci-seat-import` (repeat `codex`, `vibe`, `muse`, `claude`).
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
@@ -182,13 +192,13 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
       - [ ] Owner dry-run inspect walkthrough (manual, after gates): five CLI labels return categories only.
 
 - [x] **Lot 4 — API persistence/acquisition guard + agy mapping + billed-fallback disable**
-  - [ ] Update `api/src/services/llm-account-transports.ts`: external/access-only store variants for `storeAntigravityAccountTransport` (keep antigravity/cloudcode-pa/productAccountSource=antigravity) and `storeClaudeCodeAccountTransport`; parse/reload external variant in `parseClaudeCodeTokenSecret` without erasing policy or reclassifying as mesh-managed renewable; no refresh material or dummy token in consumer projections.
-  - [ ] Guard `acquireDbAccountTransport:2164` before `refreshTokenIfNeeded` at `:2378` (policy read ahead of hook): external accounts skip every per-transport hook (`refreshAntigravityTokenIfNeeded:2094/:2100/:2104`, `refreshClaudeCodeTokenIfNeeded:1811/:1821`, `refreshCodexTokenIfNeeded:1748/:1758`, `refreshMuseTokenIfNeeded:1908`/`readMuseCliEntry:1927`, `refreshMistralVibeTokenIfNeeded:543`); valid unexpired access returns directly, expiry/401 classifies `access-unavailable`, retains `token_secret`/owner/lineage/policy, releases reservation, awaits next projection; policy also guards explicit refresh and outcome/401 paths; no missing-token branch erases an external account. `refreshCloudCodeTokenIfNeeded:1964/:1974` stays the forbidden cloud-code/gemini route for agy (never its guard).
-  - [ ] Bypass `importAntigravityEnrollment` (`provider-connections.ts:1521`) in the new projection receiver: validate trusted access-only projection, invoke external store variant directly with exact agy tuple, zero discovery/refresh/mint side effect.
-  - [ ] Disable C1 D3.3 billed-key fallback for these accounts (expiry, 401, delivery failure, exhausted seat quota never select a configured billed key).
-  - [ ] Update `api/tests/unit/llm-account-transports.test.ts` (positive agy + Claude Code fixtures with no refresh token at all; import/persist/parse-reload/acquire valid unexpired access via `acquireAntigravityAccountTransport`, `acquireClaudeCodeAccountTransport`, `acquireOpenAICodexAccountTransport`, `acquireMuseAccountTransport` through the real guard; valid/expired/401/explicit-refresh cases; zero `refreshAntigravityAccessToken`/`readMuseCliEntry`/import-hook/renewal/mint/billed-fallback; `token_secret` + owner/lineage/policy preserved; newer-projection recovery; Vibe non-destructive regression).
-  - [ ] Add `api/tests/unit/llm-seat-projection-import.test.ts` (agy package cloud-code to application antigravity/cloudcode-pa + productAccountSource; refuse gemini target, application cloud-code transport, mixed tuples, wrong clients with zero DB mutation/acquisition/provider calls and zero `importAntigravityEnrollment`; refuse refresh-bearing projections and live use lacking trusted billing clearance).
-  - [ ] Start isolated API stack first: `make up-api-test API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
+  - [x] Update `api/src/services/llm-account-transports.ts`: external/access-only store variants for `storeAntigravityAccountTransport` (keep antigravity/cloudcode-pa/productAccountSource=antigravity) and `storeClaudeCodeAccountTransport`; parse/reload external variant in `parseClaudeCodeTokenSecret` without erasing policy or reclassifying as mesh-managed renewable; no refresh material or dummy token in consumer projections.
+  - [x] Guard `acquireDbAccountTransport:2164` before `refreshTokenIfNeeded` at `:2378` (policy read ahead of hook): external accounts skip every per-transport hook (`refreshAntigravityTokenIfNeeded:2094/:2100/:2104`, `refreshClaudeCodeTokenIfNeeded:1811/:1821`, `refreshCodexTokenIfNeeded:1748/:1758`, `refreshMuseTokenIfNeeded:1908`/`readMuseCliEntry:1927`, `refreshMistralVibeTokenIfNeeded:543`); valid unexpired access returns directly, expiry/401 classifies `access-unavailable`, retains `token_secret`/owner/lineage/policy, releases reservation, awaits next projection; policy also guards explicit refresh and outcome/401 paths; no missing-token branch erases an external account. `refreshCloudCodeTokenIfNeeded:1964/:1974` stays the forbidden cloud-code/gemini route for agy (never its guard).
+  - [x] Bypass `importAntigravityEnrollment` (`provider-connections.ts:1521`) in the new projection receiver: validate trusted access-only projection, invoke external store variant directly with exact agy tuple, zero discovery/refresh/mint side effect.
+  - [x] Disable C1 D3.3 billed-key fallback for these accounts (expiry, 401, delivery failure, exhausted seat quota never select a configured billed key).
+  - [x] Update `api/tests/unit/llm-account-transports.test.ts` (positive agy + Claude Code fixtures with no refresh token at all; import/persist/parse-reload/acquire valid unexpired access via `acquireAntigravityAccountTransport`, `acquireClaudeCodeAccountTransport`, `acquireOpenAICodexAccountTransport`, `acquireMuseAccountTransport` through the real guard; valid/expired/401/explicit-refresh cases; zero `refreshAntigravityAccessToken`/`readMuseCliEntry`/import-hook/renewal/mint/billed-fallback; `token_secret` + owner/lineage/policy preserved; newer-projection recovery; Vibe non-destructive regression).
+  - [x] Add `api/tests/unit/llm-seat-projection-import.test.ts` (agy package cloud-code to application antigravity/cloudcode-pa + productAccountSource; refuse gemini target, application cloud-code transport, mixed tuples, wrong clients with zero DB mutation/acquisition/provider calls and zero `importAntigravityEnrollment`; refuse refresh-bearing projections and live use lacking trusted billing clearance).
+  - [x] Start isolated API stack first: `make up-api-test API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
     - [ ] **API tests**
@@ -205,11 +215,11 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
       - [ ] None (synthetic API only).
 
 - [x] **Lot 5 — Seat-delivery receiver (conditional CISEAT-EX2)**
-  - [ ] Declare `CISEAT-EX2` before editing conditional paths (exact overlay files, rationale, impact, rollback).
-  - [ ] Add `api/src/routes/namespaces/llm-seat-delivery.ts` + `api/src/middleware/llm-seat-delivery-auth.ts`; mount in `api/src/routes/namespaces/llm-mesh-router.ts` (existing mount edit only).
+  - [x] Declare `CISEAT-EX2` before editing conditional paths (exact overlay files, rationale, impact, rollback).
+  - [x] Add `api/src/routes/namespaces/llm-seat-delivery.ts` + `api/src/middleware/llm-seat-delivery-auth.ts`; mount in `api/src/routes/namespaces/llm-mesh-router.ts` (existing mount edit only).
   - [ ] Add `deploy/k8s/base/seat-delivery-mtls.yaml` + `deploy/k8s/base/kustomization.yaml` + selected target overlay patch only (P-DEPLOY resolves target; no infra changes beyond selection).
-  - [ ] Implement: scoped identity, wrong-owner refusal, forged-header/direct-access refusal, drain/ack/reload, monotonic import/ack, seat drain/reopen, zero billed-key fallback.
-  - [ ] Add `api/tests/unit/llm-seat-delivery-auth.test.ts` + `api/tests/api/llm-seat-delivery.test.ts`.
+  - [x] Implement: scoped identity, wrong-owner refusal, forged-header/direct-access refusal, drain/ack/reload, monotonic import/ack, seat drain/reopen, zero billed-key fallback.
+  - [x] Add `api/tests/unit/llm-seat-delivery-auth.test.ts` + `api/tests/api/llm-seat-delivery.test.ts`.
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
     - [ ] **API tests**
@@ -226,10 +236,10 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
       - [ ] Synthetic delivery walkthrough: import projection both modes, see one account; expire, see classified unavailable with zero refresh; deliver N+1, see recovery without duplication; wrong-owner and older-generation refusal.
 
 - [x] **Lot 6 — Mesh version, lock assertion, spec sync**
-  - [ ] Bump `packages/llm-mesh/package.json` patch only (stay 0.26.x inside gateway `^0.26.0`); refresh `package-lock.json` (required mesh metadata only, no unrelated regeneration); assert exactly one llm-mesh copy in the custody harness lock.
-  - [ ] Update existing package tests for all five adapters + authority/delivery (`contracts`, `codex`, `cloud-code`, `cloud-code-credential-rotation`, `claude-code`, `mistral-vibe`, `muse`, `facade`, `local-account-transport-service`, `local-account-transport-service-claude`, `local-account-transport-service-muse`) and retain/extend `seat-bundle.test.ts` (no duplicate creation).
-  - [ ] Add `packages/llm-mesh/tests/enrollment/cli-seat-import.test.ts`, `packages/llm-mesh/tests/enrollment/agy-cli-import.test.ts`, `packages/llm-mesh/tests/service/external-seat-authority.test.ts`, `packages/llm-mesh/tests/service/seat-projection-delivery.test.ts`.
-  - [ ] Sync `spec/SPEC_EVOL_CI_SEATS.md` (L1 interfaces, supported/unverified table deltas, gates) and `packages/llm-mesh/README.md`.
+  - [x] Bump `packages/llm-mesh/package.json` patch only (stay 0.26.x inside gateway `^0.26.0`); refresh `package-lock.json` (required mesh metadata only, no unrelated regeneration); assert exactly one llm-mesh copy in the custody harness lock.
+  - [x] Update existing package tests for all five adapters + authority/delivery (`contracts`, `codex`, `cloud-code`, `cloud-code-credential-rotation`, `claude-code`, `mistral-vibe`, `muse`, `facade`, `local-account-transport-service`, `local-account-transport-service-claude`, `local-account-transport-service-muse`) and retain/extend `seat-bundle.test.ts` (no duplicate creation).
+  - [x] Add `packages/llm-mesh/tests/enrollment/cli-seat-import.test.ts`, `packages/llm-mesh/tests/enrollment/agy-cli-import.test.ts`, `packages/llm-mesh/tests/service/external-seat-authority.test.ts`, `packages/llm-mesh/tests/service/seat-projection-delivery.test.ts`.
+  - [x] Sync `spec/SPEC_EVOL_CI_SEATS.md` (L1 interfaces, supported/unverified table deltas, gates) and `packages/llm-mesh/README.md`.
   - [ ] Lot gate:
     - [ ] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
     - [ ] **API tests**
