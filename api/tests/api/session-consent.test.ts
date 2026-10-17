@@ -90,12 +90,21 @@ describe('session consent durable lifecycle', () => {
   const makeService = (
     quotasOrOptions?: Record<string, number> | {
       quotas?: Record<string, number>;
-      publishHooks?: { afterUpload?: (key: string) => Promise<void> };
+      publishHooks?: {
+        afterUpload?: (key: string) => Promise<void>;
+        beforePut?: (key: string) => Promise<void>;
+      };
     },
   ): SessionContentService => {
     const options =
       quotasOrOptions && ('quotas' in quotasOrOptions || 'publishHooks' in quotasOrOptions)
-        ? (quotasOrOptions as { quotas?: Record<string, number>; publishHooks?: { afterUpload?: (key: string) => Promise<void> } })
+        ? (quotasOrOptions as {
+          quotas?: Record<string, number>;
+          publishHooks?: {
+            afterUpload?: (key: string) => Promise<void>;
+            beforePut?: (key: string) => Promise<void>;
+          };
+        })
         : { quotas: quotasOrOptions as Record<string, number> | undefined };
     return new SessionContentService({
       nowMs: () => now,
@@ -215,7 +224,7 @@ describe('session consent durable lifecycle', () => {
     );
     const amended = await service.amendProject(
       'sess-content-project-1',
-      basePolicy({ ownerId: owner.id, readers: [owner.id] }),
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId }),
       ctx,
     );
     expect(amended.revision).toBe(1);
@@ -1351,25 +1360,70 @@ describe('session consent durable lifecycle', () => {
     expect(derived.version).toBe(1);
   });
 
-  it('should assign distinct monotonic revisions to concurrent amendments (M4)', async () => {
+  it('should let exactly one concurrent amendment win at the same revision (M4/N2)', async () => {
     await acceptProject();
     const policyFor = () => basePolicy({
       ownerId: owner.id, readers: [owner.id], workspaceId, futureSessions: false,
+      projectRevision: 0,
     });
     const outcomes = await Promise.allSettled([
       service.amendProject('sess-content-project-1', policyFor(), ctx),
       service.amendProject('sess-content-project-1', policyFor(), ctx),
     ]);
-    const revisions = outcomes
-      .filter((o) => o.status === 'fulfilled')
-      .map((o) => (o as PromiseFulfilledResult<{ revision: number }>).value.revision)
-      .sort((a, b) => a - b);
-    expect(revisions).toEqual([1, 2]);
+    const won = outcomes.filter((o) => o.status === 'fulfilled');
+    expect(won).toHaveLength(1);
+    expect((won[0] as PromiseFulfilledResult<{ revision: number }>).value.revision).toBe(1);
+    const lost = outcomes.filter((o) => o.status === 'rejected');
+    expect(lost).toHaveLength(1);
+    expect((((lost[0] as PromiseRejectedResult).reason) as SessionContentError).code).toBe('revision_conflict');
+    const projects = await db
+      .select()
+      .from(sessionContentProjects)
+      .where(eq(sessionContentProjects.projectId, 'sess-content-project-1'));
+    expect(projects[0]!.projectRevision).toBe(1);
+  });
+
+  it('should preserve exclusions across amendments and accept-at-N (N2)', async () => {
+    await acceptProject();
+    const s2binding = await adoptSession('sess-content-s2');
+    const s2rows = await db
+      .select()
+      .from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, 'sess-content-s2'));
+    await service.excludeSession('sess-content-project-1', 'sess-content-s2', ctx);
+    await service.amendProject(
+      'sess-content-project-1',
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0 }),
+      ctx,
+    );
+    const deriveS2 = () => service.deriveGrant({
+      projectId: 'sess-content-project-1',
+      sessionId: 'sess-content-s2',
+      bindingId: s2binding,
+      bindingVersion: s2rows[0]!.version,
+      d1Version: s2rows[0]!.version,
+      d1Incarnation: 1,
+      d1StartSeq: 0,
+      workspaceId,
+      sessionCreatedAt: now,
+      sourceGeneration: 'gen-1',
+      sourceTrustVersion: 'tv-1',
+      nativeStartSeq: 0,
+    }, ctx);
+    await expectContentError(deriveS2, 'session_excluded');
+    const prepared = service.prepareProject(
+      basePolicy({ ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 1 }),
+    );
+    await service.acceptProject({ ...prepared, offlineReadAccepted: true }, ctx);
+    await expectContentError(deriveS2, 'session_excluded');
     const projects = await db
       .select()
       .from(sessionContentProjects)
       .where(eq(sessionContentProjects.projectId, 'sess-content-project-1'));
     expect(projects[0]!.projectRevision).toBe(2);
+    expect(projects[0]!.excludedSessionIds).toContain('sess-content-s2');
+    expect(projects[0]!.exclusionRevision).toBe(1);
+    void s2binding;
   });
 
   it('should increment on accept-at-N so a replayed accept conflicts (M4)', async () => {
