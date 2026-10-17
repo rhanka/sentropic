@@ -135,7 +135,7 @@
   - [ ] m2/m3: 0.19.0 changelog and independent comments migration numbering with core-upgrade regression.
   - [ ] m4/m5: delete staged-runtime alias and move public test hooks into test helpers.
   - [ ] m6: dedicated formatting-only atomic commits for overlong storage/Postgres/comments lines.
-  - [ ] m7: cold-workspace probe copies sources without dependencies; typecheck/build/test integration and cleanup pending.
+  - [ ] m7: cold typecheck PASS; root targets and real PG runner now use disposable workspaces. Remaining dependency helper cleanup follows.
   - [ ] m8: discriminating binding/terminal/receipt-owner/export-root mutants and exact typed refusals.
   - [ ] m9: host receipts table, bounded 40001 callback retry and 50-operation recovery cap documented and qualified.
   - [ ] Final: source/PG/crash/installed gates, mutation record, push #684, fresh CI with restored OpenAI credit, report and stop without merging.
