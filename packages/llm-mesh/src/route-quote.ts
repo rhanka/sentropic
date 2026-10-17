@@ -92,7 +92,7 @@ export const resolveQuotePolicy = (
     const contract = validateLaunchRoutingContract(input.launchRoutingContract);
     if (input.policyOverride?.allowEquivalentModels === true
       || (input.policyOverride?.rotateEquivalentAccounts === true && !contract.rotateAccounts)) throw new LaunchRoutingContractError();
-    policy = { ...policy, allowEquivalentModels: false, rotateEquivalentAccounts: contract.rotateAccounts,
+    policy = { ...policy, stickyAccount: true, allowEquivalentModels: false, rotateEquivalentAccounts: contract.rotateAccounts,
       maxAttempts: contract.rotateAccounts ? Math.min(policy.maxAttempts, contract.authorizedAccountRefs.length) : 1 };
   }
   validateRoutePolicy(policy);
