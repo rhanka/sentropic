@@ -2541,6 +2541,52 @@ describe('session consent durable lifecycle', () => {
     void bindingId;
   });
 
+  it('should refuse refresh after detach fencing fails and the same binding is reattached (P3)', async () => {
+    await acceptProject();
+    const bindingId = await adoptSession('sess-content-s1');
+    const [binding] = await db.select().from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.bindingId, bindingId));
+    await service.deriveGrant({
+      projectId: 'sess-content-project-1', sessionId: 'sess-content-s1', bindingId,
+      bindingVersion: binding!.version, d1Version: binding!.version,
+      d1Incarnation: 1, d1StartSeq: 0, workspaceId, sessionCreatedAt: now,
+      sourceGeneration: 'gen-1', sourceTrustVersion: 'tv-1', nativeStartSeq: 0,
+    }, ctx);
+    let fenceCalls = 0;
+    const adopting = new SessionWorkspaceService(undefined, {
+      fenceSessionOnDetachEnd: async () => {
+        fenceCalls += 1;
+        throw new Error('injected detach fence failure');
+      },
+    });
+    const detached = await adopting.detach('sess-content-s1', TENANT_A, owner.id);
+    expect(fenceCalls).toBe(1);
+    const reattached = await adopting.adopt({
+      sessionId: 'sess-content-s1', tenantId: TENANT_A, principalId: owner.id, workspaceId,
+    });
+    expect(reattached.bindingId).toBe(bindingId);
+    expect(reattached.version).toBe(detached.version + 1);
+    const [before] = await db.select().from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(before!.state).toBe('active');
+    expect(before!.bindingVersion).toBe(binding!.version);
+    await service.amendProject('sess-content-project-1', basePolicy({
+      ownerId: owner.id, readers: [owner.id], workspaceId, projectRevision: 0,
+    }), ctx);
+    // Keep the stored d1Version while claiming the new server binding version.
+    await expectContentError(
+      () => refreshAck('sess-content-s1', 1, reattached.version), 'ineligible_session',
+    );
+    const [after] = await db.select().from(sessionContentGrants)
+      .where(eq(sessionContentGrants.sessionId, 'sess-content-s1'));
+    expect(after!.bindingVersion).toBe(binding!.version);
+    expect(after!.projectRevision).toBe(0);
+    await expectContentError(() => service.reserveBeforeUpload(
+      'sess-content-s1', 'terminal.cache', { raw: 4, encoded: 4 }, 'k-p3-aba', ctx,
+    ), 'project_revision_changed');
+    expect(await fixture.listPhysical('')).toHaveLength(0);
+  });
+
   it('should bind refresh to the accepted digest with a forward boundary and fresh ack (m1)', async () => {
     await acceptProject();
     const bindingId = await adoptSession('sess-content-s1');
