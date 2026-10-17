@@ -253,7 +253,7 @@ export const readSeatExternalPolicy = (metadata: unknown): SeatExternalPolicy | 
   };
 };
 
-const readSeatPolicyFromPayload = (parsed: Record<string, unknown>): SeatExternalPolicy | null =>
+export const readSeatPolicyFromPayload = (parsed: Record<string, unknown>): SeatExternalPolicy | null =>
   readSeatExternalPolicy({ [SEAT_EXTERNAL_POLICY_KEY]: parsed['externalSeatPolicy'] });
 
 /**
