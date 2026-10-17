@@ -11,6 +11,12 @@ import { pgJsonBytes } from './roots.js';
 import { decodePgJson, decodePgUtf8 } from './codec.js';
 import type { PgChain } from './effects.js';
 import type { KernelTransaction } from '../scope-runtime.js';
+import { beginPgStaged, stagePgFragment } from './staged.js';
+import { abortPgStaged, commitPgStaged, sealPgStep, type PgSealRequest } from './seals.js';
+import type { RootStageInput } from '../staged-operations.js';
+import type { StagedBeginInput } from '../staged-units.js';
+import type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from '../staged-state.js';
+import type { WriterFence } from '../contracts.js';
 const freeze = (value: unknown): void => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } };
 export class PgScoped {
   readonly #core: PgCore;
@@ -69,6 +75,11 @@ export class PgScoped {
   readHead(chainId: string) { return this.#read((view) => view.readHead(chainId)); }
   readRecord(key: string) { return this.#read((view) => view.readRecord(key)); }
   readAggregate(key: string) { return this.#read((view) => view.readAggregate(key)); }
+  beginStaged(input: StagedBeginInput) { return beginPgStaged(this.#core, this.#grant, input); }
+  stageFragment(input: RootStageInput) { return stagePgFragment(this.#core, this.#grant, input); }
+  sealStep(input: PgSealRequest) { return sealPgStep(this.#core, this.#grant, input); }
+  commitStaged(seal: AuthenticatedStagedSeal, fence: WriterFence) { return commitPgStaged(this.#core, this.#grant, seal, fence); }
+  abortStaged(unit: AuthenticatedStagedHandle, fence: WriterFence, reason: string) { return abortPgStaged(this.#core, this.#grant, unit, fence, reason); }
   indexGet(key: string) { return this.#read((view) => view.findIdempotency({ key })); }
   readPage(chainId: string, limit: number, cursor: unknown, maxEncodedBytes: number) { return this.#read((view) => view.readChain({ chainId, limit, cursor, maxEncodedBytes })); }
   async readChain(chainId: string) {
