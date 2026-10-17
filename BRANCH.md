@@ -66,6 +66,13 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
 - `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`, `seat-reenroll`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper and `src/seat-reenroll.ts` natively; no host test campaign, server, second refresher or whole-home/keyring export. Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
 - `R6-1`: status acknowledged. llm-gateway 0.20.0 accepts llm-mesh `^0.26.0`; L1 keeps mesh at 0.26.x (patch only) with single-copy lock assertion, or adds the named gateway bump step (not planned; gateway paths stay forbidden).
 
+## Scope notes
+- L1's required mesh patch bump (0.26.1 to 0.26.2, inside gateway `^0.26.0`)
+  necessarily evolves two installed-version pins in cluster-mesh surface
+  tests (`llm-surface.spec.ts:62`, `gateway-surface.spec.ts:64`).
+  Published-tarball fixtures (`packaging/fixtures/selected/`) intentionally
+  stay at 0.26.1 until the release publishes 0.26.2.
+
 ## AI Flaky tests
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
