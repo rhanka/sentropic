@@ -1195,6 +1195,7 @@ export const sessionContentObjects = controlSchema.table(
     namespaceIdx: index('session_content_objects_namespace_idx').on(table.namespaceId),
     bindingIdx: index('session_content_objects_binding_idx').on(table.bindingId),
     sessionIdx: index('session_content_objects_session_idx').on(table.sessionId),
+    reservationIdx: index('session_content_objects_reservation_idx').on(table.reservationId),
     bucketKeyUnique: uniqueIndex('session_content_objects_bucket_key_unique').on(
       table.bucket,
       table.objectKey,
