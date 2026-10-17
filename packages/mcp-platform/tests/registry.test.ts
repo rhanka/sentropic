@@ -309,4 +309,46 @@ describe('provider registry kernel', () => {
     expect(compiled.registry.providers.get('alpha')?.values).toEqual({ mode: 'fast' });
     expect(compiled.registry.resolveTool('alpha_search')?.values).toEqual({ limit: 20 });
   });
+
+  it('refuses remote-bound-shaped definitions with unsupported_definition_kind and zero state change', () => {
+    const registry = createProviderRegistry();
+    const remote = {
+      kind: 'remote-bound',
+      providerId: 'remote-1',
+      version: '0.0.0',
+      toolNames: ['remote_search'],
+      clientPort: 'registry.remoteClient/v1',
+    };
+    expect(() => registry.register(remote as unknown as LocalProviderDefinition)).toThrowError(
+      /unsupported_definition_kind/,
+    );
+    expect(registry.catalog()).toEqual([]);
+    // A local-looking adapter with a remote-bound kind (plus a lazy loader
+    // payload) is still refused before any loader call: no lazy bypass.
+    let loaderCalls = 0;
+    const localLooking = {
+      ...makeDefinition('local-look', ['local_search']),
+      kind: 'remote-bound',
+      load: () => {
+        loaderCalls += 1;
+        return {};
+      },
+    };
+    expect(() =>
+      registry.register(localLooking as unknown as LocalProviderDefinition),
+    ).toThrowError(/unsupported_definition_kind/);
+    expect(loaderCalls).toBe(0);
+    expect(registry.catalog()).toEqual([]);
+    // An active selected/configured registry is unchanged by the refusal.
+    const alpha = makeDefinition('alpha', ['alpha_search']);
+    registry.register(alpha);
+    registry.select(['alpha']);
+    registry.configure('alpha', { mode: 'fast' });
+    expect(() => registry.register(remote as unknown as LocalProviderDefinition)).toThrowError(
+      /unsupported_definition_kind/,
+    );
+    expect(registry.catalog().map((c) => c.providerId)).toEqual(['alpha']);
+    const compiled = registry.compile({ bindings, compatibility: compatibilityFor(alpha) });
+    expect(compiled.ok).toBe(true);
+  });
 });
