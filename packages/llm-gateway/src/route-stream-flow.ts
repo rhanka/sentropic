@@ -3,7 +3,7 @@ import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-s
 import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, retainRouteBody, routeUsage,
-  settleRouteRequest, terminalGatewayError,
+  markDurableAttempt, RequestAuditError, settleRouteRequest, terminalGatewayError,
   type RouteAttemptSettlement, type RouteFlowDeps, type PreparedRouteFlow,
 } from './route-flow-core.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
@@ -211,6 +211,7 @@ export const runRouteStreamFlow = async (
       const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
       if (nativeInvoked && !native) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
       signal?.throwIfAborted();
+      await markDurableAttempt(deps, prepared.cost, preparedAttempt.attemptRef, diagnostic);
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
       if (native) {
@@ -295,7 +296,7 @@ export const runRouteStreamFlow = async (
         try { await execution.encoded.return(undefined); } catch { /* Preserve the claimed terminal error. */ }
         throw execution.refusal ?? error;
       }
-      if (error instanceof BudgetDispatchMarkError) {
+      if (error instanceof BudgetDispatchMarkError || error instanceof RequestAuditError) {
         throw await refuseUnmarkedDispatch(attempt, () => settle('failed'));
       }
       if (error instanceof NativeAttemptRefusal) {
