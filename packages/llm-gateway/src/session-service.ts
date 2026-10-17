@@ -33,6 +33,7 @@ export type SessionErrorCode =
   | 'AMBIGUOUS'
   | 'ALREADY-SETTLED'
   | 'BAD-SETTLEMENT'
+  | 'MODEL-NOT-GRANTED'
   | 'NOT-FOUND';
 
 export class GatewaySessionError extends GatewayStateError<SessionErrorCode> {
@@ -62,6 +63,7 @@ export interface IssuedSession {
 }
 
 export interface CallerContext {
+  readonly sessionRef: string;
   readonly ownerScopeRef: string;
   readonly workspaceRef: string;
   readonly clientSessionRef: string;
@@ -241,7 +243,7 @@ export class GatewaySessionService {
       keyVerifier: verifierOf(input.keyMaterial).toString('hex'),
       keyMaterial: input.keyMaterial,
       keyId: randomBytes(8).toString('hex'),
-      createdAt: new Date(now).toISOString(),
+      createdAt: new Date().toISOString(),
       expiresAt: input.expiresAt,
       profiles: [...(input.profiles ?? [])],
       models: [...(input.models ?? [])],
@@ -271,6 +273,7 @@ export class GatewaySessionService {
       throw new GatewaySessionError('session expired', 'EXPIRED');
     }
     return {
+      sessionRef: session.sessionRef,
       ownerScopeRef: session.ownerScopeRef,
       workspaceRef: session.workspaceRef,
       clientSessionRef: session.clientSessionRef,
@@ -280,6 +283,21 @@ export class GatewaySessionService {
       policyRevision: session.policyRevision,
       expiresAt: session.expiresAt,
     };
+  }
+
+  async resolveBearer(key: string): Promise<CallerContext> {
+    const loaded = await this.store.load();
+    const session = Object.values(loaded.sessions).find((entry) => validKey(key, entry.keyVerifier));
+    if (!session) throw new GatewaySessionError('session key refused', 'INVALID-KEY');
+    return this.resolveCaller({ sessionRef: session.sessionRef, key });
+  }
+
+  async reconcilePending(): Promise<void> {
+    const loaded = await this.store.load();
+    if (!Object.values(loaded.receipts).some((receipt) => receipt.settlement === 'pending')) return;
+    await this.store.compareAndSet(loaded.revision, { ...loaded, revision: loaded.revision + 1,
+      receipts: Object.fromEntries(Object.entries(loaded.receipts).map(([id, receipt]) => [id,
+        receipt.settlement === 'pending' ? { ...receipt, settlement: 'incomplete', settledAt: new Date().toISOString() } : receipt])) });
   }
 
   async revokeSession(input: { ownerScopeRef: string; sessionRef: string }): Promise<{ revoked: boolean }> {
@@ -320,11 +338,20 @@ export class GatewaySessionService {
     requestId: string;
     model: string;
   }): Promise<StoredReceipt> {
+    const result = this.acquisition.then(() => this.recordCommitted(input));
+    this.acquisition = result.catch(() => undefined);
+    return result;
+  }
+
+  private async recordCommitted(input: Parameters<GatewaySessionService['recordAttempt']>[0]): Promise<StoredReceipt> {
     const loaded = await this.store.load();
     const session = loaded.sessions[input.sessionRef];
     if (!session || session.ownerScopeRef !== input.ownerScopeRef) {
       throw new GatewaySessionError('unknown session', 'NOT-FOUND');
     }
+    if (session.revokedAt) throw new GatewaySessionError('session revoked', 'REVOKED');
+    if (!live(session, Date.now())) throw new GatewaySessionError('session expired', 'EXPIRED');
+    if (!session.models.includes(input.model)) throw new GatewaySessionError('model is outside the session grant', 'MODEL-NOT-GRANTED');
     const receipt: StoredReceipt = {
       schemaVersion: SCHEMA_VERSION,
       receiptId: randomBytes(16).toString('hex'),
@@ -351,6 +378,12 @@ export class GatewaySessionService {
     receiptId: string;
     outcome: string;
   }): Promise<StoredReceipt> {
+    const result = this.acquisition.then(() => this.settleCommitted(input));
+    this.acquisition = result.catch(() => undefined);
+    return result;
+  }
+
+  private async settleCommitted(input: Parameters<GatewaySessionService['settleReceipt']>[0]): Promise<StoredReceipt> {
     const loaded = await this.store.load();
     const receipt = loaded.receipts[input.receiptId];
     if (!receipt || receipt.ownerScopeRef !== input.ownerScopeRef) {

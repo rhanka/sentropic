@@ -49,6 +49,7 @@ const acquireInput = (overrides = {}) => ({
   ownerScopeRef: 'owner-a',
   workspaceRef: 'workspace-a',
   clientSessionRef: 'client-1',
+  models: ['claude-opus-4-7'],
   ...overrides,
 });
 
