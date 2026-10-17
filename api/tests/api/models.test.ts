@@ -48,7 +48,6 @@ describe('llm-mesh model projections', () => {
         .sort();
 
     expect(modelsByProvider('openai')).toEqual([
-      'gpt-4.1-nano',
       'gpt-5.4-nano',
       'gpt-5.5',
       'gpt-5.6-luna',
@@ -93,7 +92,7 @@ describe('llm-mesh model projections', () => {
       'muse-wonder-1.0',
       'muse-wonder-full-1.0',
     ]);
-    expect(data.models).toHaveLength(35);
+    expect(data.models).toHaveLength(34);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
