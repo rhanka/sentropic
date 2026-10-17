@@ -43,6 +43,7 @@
   - `spec/SPEC_EVOL_CLUSTER_MESH_MODULE_STORAGE.md`
   - `spec/SPEC_EVOL_COMMENTS_ANNOTATIONS.md`
   - `docs/comments-annotations/**`
+  - `.github/workflows/ci.yml` (BRCM2-EX5: storage qualification only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -65,7 +66,7 @@
 
 ## Feedback Loop
 - [ ] `attention` BRCM2-EX4 — authorized package delivery needs public `storage`, `storage/postgres`, `comments` and selected composition/router leaves in `packages/cluster-mesh/package.json`; assets join the package files list. Impact: additive optional leaves, no root peer evaluation. Rollback: remove those new exports/assets entries together.
-- [ ] `attention` BRCM2-EX5 — real Postgres and portable-digest qualification will be wired into the existing cluster-mesh CI workflow, using a branch-local `tests/storage/postgres.mk` include. Makefile/Compose remain unchanged; rollback: remove the added workflow steps and include invocation.
+- [ ] `attention` BRCM2-EX5 — real Postgres and portable-digest qualification will be wired into `.github/workflows/ci.yml`, using a branch-local `tests/storage/postgres.mk` include. Impact: isolated package validation steps only; Makefile/Compose remain unchanged. Rollback: remove the added workflow steps and include invocation.
 - [ ] `attention` BRCM2-PORT6 — immutable insert replay now compares canonical bytes as well as the declared hash; exact replays retain the record and count zero new records, while conflicting representation is refused. Projection creation deltas omit duplicate immutable records. This aligns §5.4 and remains subject to gr-conductor co-review.
 - [ ] `attention` BRCM2-PORT5 — issuance/revocation records are retained in the backend module/incarnation namespace so recreating a runtime on the same backend cannot revive a revoked token. K3's default fresh backend remains isolated; co-review pending.
 - [ ] `attention` BRCM2-PORT4 — `CommitReceipt` carries the optional K1 encoded `moduleResult`; ordinary/staged recovery owns it deeply. Existing receipt fields and K3 unfenced behavior remain compatible; co-review by gr-conductor pending.
@@ -268,6 +269,7 @@
 - [ ] **Lot 6 — Postgres injected-driver module (P1, P2a, P2u, P2b-J, P2b-M, P2c consumed by comments)**
   - [ ] Driver protocol/codec: one injected session, parameterized statements, SERIALIZABLE finite transactions, strict lossless decoding and typed operational/uncertain outcomes.
     - [ ] RED `postgres-transactions.spec.ts` requires one injected session, transaction-local finite settings, preservation of `remote_apply`, bounded retries for explicit immutable flushes and no retry of an arbitrary callback.
+    - [ ] Transaction policy sets finite local settings through the same injected session, closes leaked session handles and bounds explicit immutable-plan retries by attempts and total deadline. Arbitrary callbacks are never automatically rerun.
     - [ ] RED `postgres-protocol.spec.ts` covers layout ownership/injection refusal, exact large counters, owned UTF-8 including BOM/multibyte bytes, malformed encoding refusal and structural SQLSTATE/uncertain-commit classification.
     - [ ] Driver/session/layout/outbox/query interfaces import no Postgres client. Strict codecs preserve bytes/counters; failure mapping uses SQLSTATE, named constraints and explicit transaction outcomes, never error text or empty-data fallback.
   - [ ] Immutable SQL map nodes and canonical payload bytes; scope root/version CAS and package journal share the transaction. No scope clone or history replay at publication.
