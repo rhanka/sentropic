@@ -2424,14 +2424,16 @@ export class SessionContentService {
           ),
         );
       const byBinding = new Map<string, number>();
+      const pendingBindings = new Set<string>();
       for (const object of objects) {
         byBinding.set(object.bindingId, (byBinding.get(object.bindingId) ?? 0) + object.bytesEncoded);
+        if (object.state === 'purge_pending') pendingBindings.add(object.bindingId);
       }
       for (const [bindingId, bytes] of byBinding) {
         handles.push({
           retainedScopeId: `retained:${namespace.namespaceId}:${bindingId}`,
           bindingId,
-          status: namespace.status,
+          status: pendingBindings.has(bindingId) || namespace.status !== 'active' ? 'purge_pending' : 'active',
           bytes,
         });
       }
