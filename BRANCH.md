@@ -225,21 +225,23 @@
 
   - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
 
-- [ ] **Lot 4 — K4 publication (N4-N6; MAJ-4..6, S4:1-3, S4:5-6, m13; C05-C09)**
-  - [ ] RED `tests/storage/projection-roots.spec.ts`: relationship changes prepare on an owned successor and nested delta buffers cannot mutate captured projection membership.
-    - [x] Projection state forks immutable indexed relationship/delta roots; successive changes validate on the successor, descriptor/delta inputs are owned, and delta reads use a bounded window. Projection root probes pass 2/2; publication integration remains pending.
-  - [ ] One atomic visibility point: data, barriers, projections, receipt and journal segment switch together under the scope gate with base compare.
-    - [ ] `root-publication-mutations.spec.ts` qualifies and mutates barrier-root membership, sequential double-removal validation and sealed-base CAS; the CAS mutant deliberately preserves the rival index values and dies at the exact refusal assertion.
-    - [ ] `root-publication.spec.ts` interleaves readers at the actual publication wait, then revokes authority or rotates the fence; another case replaces equal-digest command results after sealing and requires CAS refusal with the rival preserved.
-    - [ ] RED receipt probes require ordinary and staged `moduleResult` to survive caller mutation and idempotent recovery. The first integrated lint run found two single-assignment declarations; they now use `const` without exposing wiring.
-  - [ ] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
-    - [ ] `src/storage/staged-effects.ts` prepares module effects, verified purge authorizers, projections, audit and one scoped journal event on the owned root before publication; shared purge fixtures will be aligned with verified principals.
-  - [ ] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
-    - [ ] RED §5.4 immutable-insert probe distinguishes an identical canonical no-op from changed bytes under the same declared hash and verifies the original representation survives refusal.
+- [x] **Lot 4 — K4 publication (N4-N6; MAJ-4..6, S4:1-3, S4:5-6, m13; C05-C09)**
+  - [x] RED `tests/storage/projection-roots.spec.ts`: relationship changes prepare on an owned successor and nested delta buffers cannot mutate captured projection membership.
+    - [x] Projection state forks immutable indexed relationship/delta roots; successive changes validate on the successor, descriptor/delta inputs are owned, and delta reads use a bounded window. Projection root probes pass 2/2; publication integration is qualified below.
+  - [x] One atomic visibility point: data, barriers, projections, receipt and journal segment switch together under the scope gate with base compare.
+    - [x] `root-publication-mutations.spec.ts` qualifies and mutates barrier-root membership, sequential double-removal validation and sealed-base CAS; the CAS mutant deliberately preserves the rival index values and dies at the exact refusal assertion.
+    - [x] `root-publication.spec.ts` interleaves readers at the actual publication wait, then revokes authority or rotates the fence; another case replaces equal-digest command results after sealing and requires CAS refusal with the rival preserved.
+    - [x] RED receipt probes require ordinary and staged `moduleResult` to survive caller mutation and idempotent recovery. The first integrated lint run found two single-assignment declarations; they now use `const` without exposing wiring.
+  - [x] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
+    - [x] `src/storage/staged-effects.ts` prepares module effects, verified purge authorizers, projections, audit and one scoped journal event on the owned root before publication; shared purge fixtures name their verified principals.
+  - [x] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
+    - [x] RED §5.4 immutable-insert probe distinguishes an identical canonical no-op from changed bytes under the same declared hash and verifies the original representation survives refusal.
     - [x] Removed the old counter-only `visibility-root.ts`; the initial-version test now captures the actual indexed backend root used by ordinary and staged publication.
-  - [ ] G5: imported content and its covering barrier publish in one unit (reference aligned).
-    - [ ] Visibility conflict/success fixtures now derive canonical fragment and root commitments; captured-base CAS remains exercised after an actual rival publication.
-  - [ ] Lot gate: copy of Lot 1 gate; tests `visibility.spec.ts`, `staged-units.spec.ts` with interleaved readers.
+  - [x] G5: imported content and its covering barrier publish in one unit (reference aligned).
+    - [x] Visibility conflict/success fixtures now derive canonical fragment and root commitments; captured-base CAS remains exercised after an actual rival publication.
+  - [x] Lot gate: copy of Lot 1 gate; tests `visibility.spec.ts`, `staged-units.spec.ts` with interleaved readers.
+
+  - [x] Current memory gate: typecheck/lint pass; 85 files and 777 tests pass, 5 packaging files / 34 tests skip. Command: `make -j1 -o build-events -o build-llm-gateway typecheck-cluster-mesh lint-cluster-mesh test-cluster-mesh API_PORT=9620 UI_PORT=5820 MAILDEV_UI_PORT=1720 ENV=test-cm-comments-m2`; code head `497d40838`, gate launch `a14161d66`, RTK evidence `5537ba475ece`. Durable Postgres remains Lot 6.
 
 - [ ] **Lot 5 — K4 journal, manifests and ports (N7-N9, N11; MAJ-7..8, m1, m4-m6, S4:7-9, S4:11-12; C10-C18)**
   - [ ] Scoped/incarnated journal streams; resync preserves poison; fenced checkpoints with maintain authority; pause/retry.
