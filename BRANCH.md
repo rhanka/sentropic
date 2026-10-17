@@ -175,6 +175,7 @@
     - [ ] RED `root-public.spec.ts` exercises the package's public storage entry point, semantic profile digests, callable frozen ports, private adapter state and forwarded authority.
     - [ ] Public storage exports now expose the rebuilt factory and K1-compatible types. Memory claims have semantic SHA-256 digests and working protected ports; physical purge/generations/leased snapshots remain unadvertised.
     - [x] The legacy `staged-runtime.ts` implementation is fully removed; the entry point only re-exports the coordinated factory and shared protocol types. Removal commits stayed under 150 lines.
+    - [x] Removed the obsolete syntax-only seal validator; bounded state-dependent preparation and its progress are exclusively handled by `staged-preparation.ts` / `staged-seal.ts`.
   - [ ] Applicable K2b/K3 corpora run through K4 (`staged-units.spec.ts`).
     - [ ] K4 corpus adapters now use the replacement factory. Unbounded seal-driving loops and failure injection live only in `tests/storage/staged-client.ts`; production provides bounded `sealStep` and trusted root controls separately.
     - [ ] G5 and seal-step fixtures use canonical computed commitments. The large-step case explicitly requests eight items instead of relying on an undocumented internal constant; no timeout or budget inflation.
