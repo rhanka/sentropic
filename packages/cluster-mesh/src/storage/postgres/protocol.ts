@@ -3,6 +3,7 @@ import type { KernelOptions } from '../kernel.js';
 import type { ModuleDescriptor } from '../descriptor.js';
 import { StorageInvalidCommandError } from '../errors.js';
 import type { PgHostHistory } from './migrations.js';
+import type { ScopeGrant } from '../authority.js';
 
 export type SqlValue = string | number | boolean | bigint | Uint8Array | null | readonly SqlValue[];
 export interface SqlStatement { readonly text: string; readonly values: readonly SqlValue[]; }
@@ -26,6 +27,7 @@ export interface PgOutboxBinding {
   append(session: PgSession, stream: PgStreamIdentity, event: PgJournalDraft): Promise<void>;
 }
 export interface PgQueryContext {
+  readonly layout: PgLayout; readonly currentRoot: string | null; readonly grant: ScopeGrant<unknown>;
   readonly session: PgSession; readonly stream: PgStreamIdentity; readonly root: string | null;
   readonly cursor: unknown; readonly limit: number; readonly maxEncodedBytes: number;
 }
@@ -37,7 +39,7 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
   readonly outbox?: PgOutboxBinding; readonly budgets?: Partial<PgBudgets>; readonly limits?: WorkLimits;
   readonly descriptor?: ModuleDescriptor; readonly queries?: Readonly<Record<string, PgRegisteredQuery>>;
   readonly history: PgHostHistory;
-  readonly pgPredicates?: Readonly<Record<string, (dependency: string, context: Omit<PgQueryContext, 'cursor' | 'limit' | 'maxEncodedBytes'>) => Promise<boolean>>>;
+  readonly pgPredicates?: Readonly<Record<string, (dependency: string, context: Pick<PgQueryContext, 'session' | 'stream' | 'root'>) => Promise<boolean>>>;
 }
 export const quotePgIdentifier = (value: string): string => {
   if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value)) throw new StorageInvalidCommandError('invalid Postgres layout identifier');
