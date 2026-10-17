@@ -166,7 +166,6 @@ export interface CanonicalProjectPolicy {
   readonly namedHistories: readonly NamedHistoryDescriptor[];
   readonly retentionByChannel: RetentionByChannel;
   readonly authorityEpoch: string;
-  readonly offlineReadAccepted: true;
 }
 
 export type ProjectConsentState = 'active' | 'revoked' | 'excluded';
@@ -322,7 +321,6 @@ export interface ProjectPrepareInput {
   readonly namedHistories: readonly NamedHistoryDescriptor[];
   readonly retentionByChannel: unknown;
   readonly authorityEpoch: string;
-  readonly offlineReadAccepted: boolean;
   readonly expectedProjectRevision?: number;
 }
 
@@ -571,9 +569,6 @@ export const createContentConsentService = (
     if (!Array.isArray(input.namedHistories)) {
       throw new ContentConsentError('invalid_request', 'namedHistories must be a list');
     }
-    if (input.offlineReadAccepted !== true) {
-      throw new ContentConsentError('invalid_request', 'offlineReadAccepted must be explicitly accepted');
-    }
     const policy: CanonicalProjectPolicy = {
       projectId,
       projectRevision: input.expectedProjectRevision ?? 0,
@@ -590,7 +585,6 @@ export const createContentConsentService = (
       namedHistories: input.namedHistories.map(validateHistoryDescriptor),
       retentionByChannel: validateRetentionByChannel(input.retentionByChannel),
       authorityEpoch: requireId(input.authorityEpoch, 'authorityEpoch'),
-      offlineReadAccepted: true,
     };
     const challenge = challenges.issue(challengeTtlMs, nowMs());
     return {
