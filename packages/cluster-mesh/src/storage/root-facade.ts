@@ -12,6 +12,7 @@ import type { PurgePolicy } from './staged-state.js';
 import { stagedLimits } from './staged-operations.js';
 import { rootCapability, STAGED_PROFILES } from './root-profiles.js';
 import type { ProfileId } from './profiles.js';
+import { captureManifestRoot, readManifestRootPage, verifyManifestRoot, type RootManifestRequest } from './root-manifest.js';
 
 /** Adapter-facing scope: all runtime state stays in true private slots. */
 export class RootScopedRuntime {
@@ -42,6 +43,9 @@ export class RootScopedRuntime {
   async commitStaged(input: Parameters<typeof commitSealedOperation>[2]) { return commitSealedOperation(this.#core, this.#inner, input); }
   async abortStaged(input: Parameters<typeof abortOperation>[2]) { return abortOperation(this.#core, this.#inner, input); }
   async inspectStaged(key: string) { return inspectOperation(this.#core, this.#inner, key); }
+  async captureManifest(input: RootManifestRequest) { return captureManifestRoot(this.#core, this.#inner, input); }
+  async verifyManifest(digest: string) { return verifyManifestRoot(this.#core, this.#inner, digest); }
+  async manifestReadPage(digest: string, chainId: string, limit: number, cursor: unknown, bytes: number) { return readManifestRootPage(this.#core, this.#inner, digest, chainId, limit, cursor, bytes); }
   async journalFence() { return this.#core.journalFence(this.grant); }
   async journalRead(consumer: string, after: number, limit: number) { return readRootJournal(this.#core, this.#inner, after, limit, consumer); }
   async externalRead(after: number, limit: number) { return readRootJournal(this.#core, this.#inner, after, limit); }

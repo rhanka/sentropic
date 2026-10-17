@@ -35,6 +35,8 @@ export interface ExportManifest {
   readonly descriptorVersion: string;
   readonly encodingVersion: string;
   readonly terminal: ManifestTerminal;
+  readonly storeIncarnation?: string;
+  readonly rootVersion?: string;
 }
 
 export interface ManifestBuildInput {
@@ -45,6 +47,8 @@ export interface ManifestBuildInput {
   readonly descriptorVersion: string;
   readonly encodingVersion: string;
   readonly terminal: ManifestTerminal;
+  readonly storeIncarnation?: string;
+  readonly rootVersion?: string;
 }
 
 /**
@@ -55,6 +59,8 @@ export interface ManifestBuildInput {
 export const buildManifest = (input: ManifestBuildInput): ExportManifest => {
   const scope = validateStorageScope(input.scope);
   if (!scope.ok) throw new StorageInvalidCommandError(scope.errors.join('; '));
+  if (input.storeIncarnation !== undefined && !isNonEmptyString(input.storeIncarnation)) throw new StorageInvalidCommandError('manifest requires a store incarnation');
+  if (input.rootVersion !== undefined && !isDecimalCounter(input.rootVersion)) throw new StorageInvalidCommandError('manifest requires a decimal root version');
   const selections = [...new Set(input.selections)].sort();
   if (selections.length === 0) throw new StorageInvalidCommandError('manifest requires at least one selection');
   for (const selection of selections) {
@@ -96,6 +102,8 @@ export const buildManifest = (input: ManifestBuildInput): ExportManifest => {
     descriptorVersion: input.descriptorVersion,
     encodingVersion: input.encodingVersion,
     terminal: { ...input.terminal },
+    ...(input.storeIncarnation === undefined ? {} : { storeIncarnation: input.storeIncarnation }),
+    ...(input.rootVersion === undefined ? {} : { rootVersion: input.rootVersion }),
   };
 };
 
@@ -105,6 +113,7 @@ export const canonicalManifestEncoding = (manifest: ExportManifest): string =>
     'storage-export-manifest',
     manifest.version,
     [manifest.scope.tenantId, manifest.scope.workspaceId],
+    ['storage-boundary', manifest.storeIncarnation ?? null, manifest.rootVersion ?? null],
     ['selections', manifest.selections.map((selection) => [
       selection,
       manifest.heads[selection].head,
