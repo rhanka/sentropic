@@ -13,6 +13,7 @@ export interface RetainedHandle {
 }
 export interface SessionsMetadata extends ContentScope {
   projectRevision?: number;
+  projectState?: string;
   sourceVerified: boolean;
   credentials: EnrolledCredential[];
   namedHistories: NamedHistory[];
@@ -55,6 +56,7 @@ export const contentApi = {
   purge: (handle: Pick<RetainedHandle, 'bindingId' | 'retainedScopeId'>) =>
     request<{ complete: boolean }>(`${binding(handle.bindingId)}/consent?retainedScopeId=${id(handle.retainedScopeId)}`, 'DELETE'),
   revoke: (bindingId: string) => request(`${binding(bindingId)}/consent`, 'DELETE'),
+  revokeProject: (workspaceId: string) => request(`${workspace(workspaceId)}/consent`, 'DELETE'),
   exclude: (bindingId: string) => request(`${binding(bindingId)}/exclusion`, 'PUT', { excluded: true }),
   prepareHistory: (bindingId: string) =>
     request<PreparedProof>(`${binding(bindingId)}/history-authorizations/prepare`, 'POST'),
