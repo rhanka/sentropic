@@ -126,6 +126,7 @@ export const authHonoWebAuthnAuthenticationService: AuthHonoWebAuthnAuthenticati
     return {
       credentialId: result.credentialId,
       userId: result.userId,
+      userVerified: result.userVerified === true,
       verified: true,
     };
   },

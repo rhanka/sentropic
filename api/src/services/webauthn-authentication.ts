@@ -113,7 +113,7 @@ export async function generateWebAuthnAuthenticationOptions(
  */
 export async function verifyWebAuthnAuthentication(
   params: VerifyAuthenticationParams
-): Promise<{ verified: boolean; userId?: string; credentialId?: string }> {
+): Promise<{ verified: boolean; userId?: string; credentialId?: string; userVerified?: boolean }> {
   const { credential, expectedChallenge } = params;
   const config = getWebAuthnConfig();
   
@@ -250,6 +250,7 @@ export async function verifyWebAuthnAuthentication(
       verified: true,
       userId: storedCredential.userId,
       credentialId: storedCredential.credentialId,
+      userVerified: verification.authenticationInfo.userVerified === true,
     };
   } catch (error) {
     logger.error({ err: error }, 'Error verifying WebAuthn authentication');
