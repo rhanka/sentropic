@@ -36,7 +36,7 @@ Render the official multicolor Google "G" logo in AuthProviderGlyph for the goog
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- None.
+- `attention`: CI job test-api-unit-integration (ai, chat-sync, executive-summary-auto, comment-assistant) failed twice on the same HEAD (PR 682 run 38992969211): first run 1 failed / 9 passed (`AssertionError: expected false to be true` at tests/ai/executive-summary-auto.test.ts:104), re-run job 117287823544 5 failed / 5 passed (4x chat-sync.test.ts `expected 'failed' to be 'completed'` = live LLM provider calls failing, plus the same executive-summary timing assert). Analysis: varying failure sets across identical-commit runs = provider-side nondeterminism; branch diff vs origin/main contains zero API files (auth-ui SVG + test + version bump + lockfile + BRANCH.md only), so branch causation is excluded. Covered by AI flaky allowlist (api/tests/ai/**, non-blocking: ci-gate PASS). Needs: owner sign-off before merge.
 
 ## AI Flaky tests
 - Acceptance rule:
