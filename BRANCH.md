@@ -180,6 +180,7 @@
 
 - [ ] **Lot 4 — K4 publication (N4-N6; MAJ-4..6, S4:1-3, S4:5-6, m13; C05-C09)**
   - [ ] RED `tests/storage/projection-roots.spec.ts`: relationship changes prepare on an owned successor and nested delta buffers cannot mutate captured projection membership.
+    - [x] Projection state forks immutable indexed relationship/delta roots; successive changes validate on the successor, descriptor/delta inputs are owned, and delta reads use a bounded window. Projection root probes pass 2/2; publication integration remains pending.
   - [ ] One atomic visibility point: data, barriers, projections, receipt and journal segment switch together under the scope gate with base compare.
   - [ ] Projection preparation on the prepared overlay (two removals of one link fail with no effects); evolving-head validation across fragments (h0 then h1).
   - [ ] Real versioned root over immutable indexed maps; every mutation path (commit/transact/append/genesis/index replace/coverage/disposal) advances it; reparenting cannot escape an active barrier.
