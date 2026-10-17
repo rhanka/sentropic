@@ -20,6 +20,8 @@
 - [x] FL-ACT-READ: `acknowledge` — packet's `.cursor/rules/*.mdc` paths are absent; loaded consolidated equivalents in `rules/`; owner: branch agent, 2026-10-17.
 - [x] Requested delivery report is an ignored runtime artifact at `.h2a/build/artifacts_fl_act_report.md`, outside the committed implementation diff.
 - [x] FL-ACT-NPM: `acknowledge` — container `npm view @sentropic/artifacts version` returned public-registry E404; retain packet's explicit 0.1.1 candidate; owner: branch agent, 2026-10-17.
+- [x] FL-ACT-REVIEW: `attention` — consensus selection failed because exact author model/effort are unattested; no peers dispatched or consensus claimed; dossier: `.h2a/build/artifacts_fl_act_review.md`; owner: branch agent, 2026-10-17; requires author metadata before independent consensus review.
+- [x] FL-ACT-CHECK: `acknowledge` — concurrent package install and harness compilation caused TS2688 during one scope check; serialized retry passed; owner: branch agent, 2026-10-17.
 
 ## AI Flaky tests
 - [x] No AI tests or timeout changes; deterministic in-memory tests only for the affected activation surface.
@@ -57,14 +59,14 @@
   - [x] UAT: issue pinned r1 ticket; attempt stable/channel or r2 redemption; verify denial; retry pinned r1; verify activation and r1 bytes.
   - [x] UAT: change subject/artifact or advance clock to expiry; verify rejection; redeem valid ticket once and refuse replay.
   - [x] Commit regression coverage after `make scope-check ENV=test-artifacts-fl-act`.
-- [ ] **Lot 3 — Docs consolidation**
-  - [ ] Update `packages/artifacts/README.md` to document explicit release/channel ticket binding and expiry; no temporary spec required for this bounded fix.
+- [x] **Lot 3 — Docs consolidation**
+  - [x] Update `packages/artifacts/README.md` to document explicit release/channel ticket binding and expiry; no temporary spec required for this bounded fix.
 - [ ] **Lot 4 — Final validation and delivery**
-  - [ ] `make typecheck-artifacts ENV=test-artifacts-fl-act` and `make lint-artifacts ENV=test-artifacts-fl-act`.
-  - [ ] `make test-artifacts ENV=test-artifacts-fl-act` (all unit tests) and `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` (content journey).
+  - [x] `make typecheck-artifacts lint-artifacts test-artifacts ENV=test-artifacts-fl-act` passed (128 unit tests across 24 files).
+  - [x] `make test-artifacts SCOPE=tests/content.e2e.test.ts ENV=test-artifacts-fl-act` passed (5 content journey tests).
   - [x] Database/S3 integration and application/browser suites are outside the unchanged storage/UI surfaces; CI runs required selected gates.
-  - [ ] Review exact diff, package version and scope; record review evidence or any unavailable review prerequisites.
+  - [x] Review exact diff, package version and scope; record review evidence or any unavailable review prerequisites (FL-ACT-REVIEW); mechanical scope passed, no exceptions.
   - [ ] Push `fix/artifacts-activation-binding` without merging/publishing; create PR using this file as body; post a 3–6 step plan comment.
   - [ ] Watch branch CI to completion and resolve failures within authorized scope.
-  - [ ] `make down ENV=test-artifacts-fl-act` and `make ps ENV=test-artifacts-fl-act`; retain BRANCH.md because merging is forbidden.
+  - [x] `make down ps ENV=test-artifacts-fl-act` passed with no remaining services; retain BRANCH.md because merging is forbidden.
   - [ ] Write `.h2a/build/artifacts_fl_act_report.md`: changes, RED/GREEN, checks/CI, feedback, risks, scope and read set.
