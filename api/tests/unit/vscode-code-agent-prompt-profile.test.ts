@@ -19,6 +19,7 @@ import {
 } from '../../src/db/schema';
 import { callLLMStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
+import { mockDefaultModelEffort } from '../utils/mock-default-model-effort';
 import type { VsCodeCodeAgentRuntimePayload } from '../../src/services/chat-service';
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
@@ -39,6 +40,7 @@ describe('VSCode code-agent prompt profile', () => {
   const mockedCallLLMStream = vi.mocked(callLLMStream);
 
   beforeEach(async () => {
+    mockDefaultModelEffort(chatService);
     userId = createId();
     await db.insert(users).values({
       id: userId,
@@ -85,6 +87,7 @@ describe('VSCode code-agent prompt profile', () => {
       );
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await db.delete(users).where(eq(users.id, userId));
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 

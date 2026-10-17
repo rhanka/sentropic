@@ -1,4 +1,5 @@
 import { db } from '../../src/db/client.js';
+import { getDefaultOpenAIModel } from '../../src/config/models.js';
 import { 
   organizations, 
   folders, 
@@ -494,7 +495,7 @@ export async function seedTestData() {
         folderId: 'e2e-folder-admin',
         organizationId: 'e2e-organization-admin-bombardier',
         status: 'completed',
-        model: 'gpt-4.1-nano',
+        model: getDefaultOpenAIModel(),
         createdAt: now,
         data: mkInitiativeData(
           'Maintenance prédictive flotte',

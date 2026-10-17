@@ -52,6 +52,7 @@ vi.mock('../../src/services/queue-manager', async () => {
 
 import { callLLMStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
+import { mockDefaultModelEffort } from '../utils/mock-default-model-effort';
 
 type StreamEvent = { type: string; data: unknown };
 
@@ -72,6 +73,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
   let folderId: string;
 
   beforeEach(async () => {
+    mockDefaultModelEffort(chatService);
     userId = createId();
     await db.insert(users).values({
       id: userId,
@@ -108,6 +110,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
