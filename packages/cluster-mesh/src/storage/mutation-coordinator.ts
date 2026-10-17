@@ -4,7 +4,7 @@ import type { ScopeGrant } from './authority.js';
 import { backendScopeKey, forkBackendScope, lockBackendScope, type BackendScopeState, type MemoryBackend } from './backend.js';
 import { DEFAULT_WORK_LIMITS, validateWorkLimits, type StorageScope, type WriterFence, type WorkLimits } from './contracts.js';
 import { StorageCasConflictError, StorageIdempotencyConflictError, StorageInvalidCommandError, UnsupportedProfileError } from './errors.js';
-import { mergeAtomicUnits, prepareUnitsInScope, type CommitContext } from './record-runtime.js';
+import { countNewImmutableRecords, mergeAtomicUnits, prepareUnitsInScope, type CommitContext } from './record-runtime.js';
 
 export type RootReadKind = 'chain' | 'record' | 'aggregate' | 'index' | 'genesis';
 export type RootMutationKind = 'append' | 'genesis' | 'index' | 'dispose' | 'commit' | 'coverage' | 'lifecycle' | 'maintenance';
@@ -119,7 +119,7 @@ export class RootMutationCoordinator {
     }
     const prepared = this.prepare(base);
     prepareUnitsInScope(prepared, owned.map((unit) => ({ ...unit, relationships: [], barriers: [], purgeIntents: [] })), ctx);
-    const receipt = receiptFor(ctx, merged.records.length + merged.appends.length + merged.updates.length, merged.appends.length);
+    const receipt = receiptFor(ctx, countNewImmutableRecords(base, owned) + merged.appends.length + merged.updates.length, merged.appends.length);
     if (merged.moduleResult !== undefined) Object.assign(receipt, { moduleResult: copy(merged.moduleResult) });
     if (options.idempotencyKey) prepared.commits.set(options.idempotencyKey, { receipt: copy(receipt), unitHash });
     this.prepareEffects(base, prepared, grant, { kind: 'commit', keys: [], units: owned, options, receipt });

@@ -64,6 +64,7 @@
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [ ] `attention` BRCM2-PORT6 — immutable insert replay now compares canonical bytes as well as the declared hash; exact replays retain the record and count zero new records, while conflicting representation is refused. Projection creation deltas omit duplicate immutable records. This aligns §5.4 and remains subject to gr-conductor co-review.
 - [ ] `attention` BRCM2-PORT5 — issuance/revocation records are retained in the backend module/incarnation namespace so recreating a runtime on the same backend cannot revive a revoked token. K3's default fresh backend remains isolated; co-review pending.
 - [ ] `attention` BRCM2-PORT4 — `CommitReceipt` carries the optional K1 encoded `moduleResult`; ordinary/staged recovery owns it deeply. Existing receipt fields and K3 unfenced behavior remain compatible; co-review by gr-conductor pending.
 - [ ] `attention` BRCM2-EX1 — initial BRANCH.md creation exceeds 150 lines (template-mandated detailed plan); doc-only commit; rollback: none needed.
