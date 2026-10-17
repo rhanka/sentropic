@@ -190,14 +190,14 @@ Implement the IdP changes from `.tmp/kvm-oidc/idp-oidc-answer.md` test-first in 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Integrate behavior changes into `spec/SPEC_DECISION_TIER_AUTH_PATTERN.md` (required_acr, allowlist, amr, UV).
   - [ ] Delete any scratch spec evol file after integration (none planned).
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest UI (cf Lot1, copy checklist)
-  - [ ] Retest API (cf Lot1, copy checklist)
-  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
+- [ ] **Lot N — Final validation (HELD: push/PR frozen by conductor, immo #679 runner starvation)**
+  - [x] Typecheck & Lint (`typecheck-auth-hono`, `typecheck-api`, `lint-api` 0 errors; all with `REGISTRY=local`)
+  - [x] No UI change in branch: `test-ui` not run (no `ui/**`, `apps/**` file touched)
+  - [x] Retest API scoped gates green (units: session-manager 11, register-client 12, state-adapter 4; endpoints: authorize 2, token 1, userinfo 1, wellknown 5, authentication 7, policy 4; auth-hono full 188)
+  - [ ] Retest e2e (not run locally: full image build unaffordable under runner starvation; covered by CI on push)
+  - [x] Flaky record: `oauth-token` 137 OOM + `oauth-userinfo` transient Error 1 under load 25, both green on immediate rerun (infra, unrelated to branch)
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [x] Bumped `packages/auth-hono/package.json` to 0.15.3 (patch: keeps `^0.15.0` dependents; 0.16.0 broke them, fixed in-branch)
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (HELD until push clearance)
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers (HELD)
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge (HELD; never merge per packet)
