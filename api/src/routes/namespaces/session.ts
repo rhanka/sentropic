@@ -8,6 +8,7 @@ import {
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { sessionDeviceHandlers } from './session-device';
 import { sessionLifecycleHandlers } from './session-lifecycle';
+import { createSessionContentRouter } from './session-content';
 
 const AUTHOR = 'cluster-mesh-session-module';
 
@@ -23,6 +24,7 @@ export const SESSION_PATHS = [
   '/session/control/drive',
   '/session/control/wake',
   '/session/control/relaunch',
+  '/session/content',
 ] as const;
 
 const createAuthorPort = (key: NamespaceCutoverKey) => {
@@ -68,7 +70,7 @@ const createModule = (
 ): ClusterMeshHonoNamespaceModule => {
   const control = clusterMeshAdapter.sessionControl;
   if (!control) throw new Error('cluster mesh session control is not configured');
-  return createSessionNamespaceModule({
+  const module = createSessionNamespaceModule({
     handlers: sessionLifecycleHandlers,
     devices: sessionDeviceHandlers,
     projection,
@@ -83,6 +85,17 @@ const createModule = (
       author: createAuthorPort({ compositionRoot, namespace: '/session' }),
     },
   });
+  if (compositionRoot !== 'product') return module;
+  return { ...module, createRouter(ports) {
+    const router = module.createRouter(ports);
+    const author = createAuthorPort({ compositionRoot, namespace: '/session' });
+    for (const path of ['/session/content', '/session/content/*']) router.use(path, async (c, next) => {
+      const result = await author.ensureAuthor();
+      if (!result.ok) return c.json({ error: result.reason }, 503);
+      return next();
+    });
+    return router.route('/session/content', createSessionContentRouter());
+  } };
 };
 
 export const productSessionModule = createModule('product', {
