@@ -38,13 +38,13 @@ describe.skipIf(!pgEnabled)('durable bounded staged preparation', () => {
         expect(await bound.readHead('imported')).toBeNull();
       } while (!seal);
       const offset = statements.length;
-      const receipt = await bound.commitStaged(seal, fence);
+      const receipt = await bound.commitStaged({ seal, fence });
       const publication = statements.slice(offset);
       expect(publication.filter((s) => s.text.startsWith('UPDATE') && s.text.includes('.scopes '))).toHaveLength(1);
       expect(publication.some((s) => s.text.includes('staged_items'))).toBe(false);
       expect((await bound.readChain('imported')).map((record) => record.hash)).toEqual(fragments.map((_, n) => `h${n}`));
       const restarted = await (await open()).bind(grant);
-      expect(await restarted.commitStaged(seal, fence)).toEqual(receipt);
+      expect(await restarted.commitStaged({ seal, fence })).toEqual(receipt);
       expect(await restarted.beginStaged(begin)).toMatchObject({ unitId: unit.unitId, state: 'committed' });
       await expect(restarted.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: 'changed', effects: fragments[0]!.effects, fence })).rejects.toMatchObject({ code: 'idempotency-conflict' });
     } finally { await fixture.close(); }

@@ -31,7 +31,7 @@ describe.skipIf(!pgEnabled)('durable Postgres authority and ownership recovery',
       await expect(next.stageFragment({ unit, ordinal: '0', predecessorHash: null, fragmentDigest: stagedDigestOf(unit, '0', null, effects), effects, fence: fresh })).rejects.toMatchObject({ code: 'invalid-command' });
       let seal;
       do { seal = (await next.sealStep({ unit: recovered.unit, root: stagedSealRoot(unit, [effects]), fence: fresh, limits: { maxRecords: 128, maxAppends: 128, maxEncodedBytes: 524288 } })).seal; } while (!seal);
-      await next.commitStaged(seal, fresh);
+      await next.commitStaged({ seal, fence: fresh });
       expect((await next.readRecord('recovered'))?.bytes.data).toBe('retained');
       await expect(root.recoverStaged(grant, { operationKey: begin.operationKey, expectedOwner: grant.principalId, recipient, fence: fresh, reason: 'repeat' })).rejects.toMatchObject({ code: 'cas-conflict' });
     } finally { await fixture.close(); }
