@@ -275,6 +275,7 @@
     - [ ] Driver/session/layout/outbox/query interfaces import no Postgres client. Strict codecs preserve bytes/counters; failure mapping uses SQLSTATE, named constraints and explicit transaction outcomes, never error text or empty-data fallback.
   - [ ] Immutable SQL map nodes and canonical payload bytes; scope root/version CAS and package journal share the transaction. No scope clone or history replay at publication.
     - [ ] RED `postgres-readers.spec.ts`: real SQL path-copy roots must retain old bytes, rank pages and logarithmic insertion work across 257 keys; missing assets are the initial failure.
+    - [ ] Observed ENOENT for the missing core asset after the runner restart; added canonical bytea tables and immutable SQL AVL functions. Root publication will reference those nodes rather than materialize history.
   - [ ] Durable staged intake, prepared roots, fenced ownership and bounded progress; qualify a published SHA-256 implementation with documented state save/restore instead of persisting native Node hash objects.
     - [ ] Inspected published `@stablelib/sha256@2.0.1` declarations and registry integrity: documented `saveState`/`restoreState` includes chaining state, remainder buffer and byte count. Branch-local Make bootstrap/audit prepares its resolved tree for independent restart vectors; no custom cryptographic implementation.
     - [ ] RED `postgres-digest.spec.ts` compares JSON-restored contexts to independent native SHA-256 across byte/block/multibyte boundaries, branches saved prefixes and refuses malformed persisted state.
